@@ -48,7 +48,7 @@ function analyzeGlossary(text: string) {
   }
 
   // Categorize by content patterns
-  let characters = 0, locations = 0, items = 0, ui = 0, dialogue = 0, combat = 0;
+  let characters = 0, locations = 0, items = 0, ui = 0, dialogue = 0, combat = 0, classes = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -68,7 +68,9 @@ function analyzeGlossary(text: string) {
       items++;
     } else if (/\b(menu|button|option|setting|save|load|screen|tab|select|confirm|cancel|back|next|yes|no|ok|tutorial|hint|tip|guide|help|display|toggle|mode|auto|manual)\b/i.test(eng)) {
       ui++;
-    } else if (/\b(attack|strike|slash|smash|hit|punch|blow|cut|crush|thrust|swing|shot|barrage|assault|charge|launch|burst|combo|chain attack|critical|lethal|finishing|power|buff|debuff|heal|regenerat|cure|protect|barrier|boost|enhance|strengthen|weaken|poison|burn|bleed|stun|sleep|paralyze|slow|haste|regen|resist|immun|aura|blessing|curse|boon|skill|art|talent|class|level|exp|hp|mp|ap|sp|aggro|break|topple|dodge|counter|block|interlink|ouroboros|damage|tank|healer|attacker|defender|evasion|accuracy|defense|arts cancel|fusion arts|smash|daze|lucky seven|elemental|ether|physical|cancel|auto-attack|master art|master skill|role|war medic|soulhacker|flash fencer|zephyr|stalker|strategos|signifer|medic gunner|incursor|full metal jaguar|machine assassin|royal summoner|yumsmith|guardian commander|lone exile|lost vanguard|lifesage|noblesse|troubadour|seraph|martial artist|thaumaturge|monster|crit|accuracy|agility|strength|dexterity|luck|ether power|block rate|physical defense|ether defense|attack speed|recharge)\b/i.test(eng)) {
+    } else if (/\b(war medic|soulhacker|flash fencer|zephyr|stalker|strategos|signifer|medic gunner|incursor|full metal jaguar|machine assassin|royal summoner|yumsmith|guardian commander|lone exile|lost vanguard|lifesage|noblesse|troubadour|seraph|martial artist|thaumaturge|swordfighter|ogre|tactician|heavy guard|healer|attacker|defender|tank|class|role)\b/i.test(eng)) {
+      classes++;
+    } else if (/\b(attack|strike|slash|smash|hit|punch|blow|cut|crush|thrust|swing|shot|barrage|assault|charge|launch|burst|combo|chain attack|critical|lethal|finishing|power|buff|debuff|heal|regenerat|cure|protect|barrier|boost|enhance|strengthen|weaken|poison|burn|bleed|stun|sleep|paralyze|slow|haste|regen|resist|immun|aura|blessing|curse|boon|skill|art|talent|level|exp|hp|mp|ap|sp|aggro|break|topple|dodge|counter|block|interlink|ouroboros|damage|evasion|accuracy|defense|arts cancel|fusion arts|daze|lucky seven|elemental|ether|physical|cancel|auto-attack|master art|master skill|monster|crit|agility|strength|dexterity|luck|ether power|block rate|physical defense|ether defense|attack speed|recharge)\b/i.test(eng)) {
       combat++;
     } else if (eng.includes('...') || eng.includes('!') || eng.includes('?') || eng.length > 40) {
       dialogue++;
@@ -79,12 +81,13 @@ function analyzeGlossary(text: string) {
     { label: "شخصيات", icon: <Users className="w-3.5 h-3.5" />, count: characters, color: "text-blue-500" },
     { label: "مواقع", icon: <MapPin className="w-3.5 h-3.5" />, count: locations, color: "text-green-500" },
     { label: "عناصر ومعدات", icon: <Swords className="w-3.5 h-3.5" />, count: items, color: "text-amber-500" },
+    { label: "كلاسات وأدوار", icon: <Gamepad2 className="w-3.5 h-3.5" />, count: classes, color: "text-orange-500" },
     { label: "قتال وهجمات وبوفات", icon: <Swords className="w-3.5 h-3.5" />, count: combat, color: "text-red-500" },
     { label: "واجهة وقوائم", icon: <Layers className="w-3.5 h-3.5" />, count: ui, color: "text-purple-500" },
     { label: "حوارات", icon: <MessageSquare className="w-3.5 h-3.5" />, count: dialogue, color: "text-cyan-500" },
   ].filter(c => c.count > 0);
 
-  const categorized = characters + locations + items + ui + dialogue + combat;
+  const categorized = characters + locations + items + ui + dialogue + combat + classes;
   const other = totalTerms - categorized;
 
   return {

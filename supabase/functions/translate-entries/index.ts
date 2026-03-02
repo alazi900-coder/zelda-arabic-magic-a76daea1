@@ -673,8 +673,9 @@ async function translateWithAI(
     return { translations: directResult, glossaryStats: stats };
   }
 
-  // --- Step 3: Build prompt with term-locked texts ---
-  const textsBlock = needsAI.map((item, i) => `[${i}] ${item.termLocks.lockedText}`).join('\n');
+  // --- Step 3: Build prompt with KEYED texts (prevents positional misalignment) ---
+  // Use short unique keys like K0, K1, ... so the AI must return a JSON object with the same keys
+  const textsBlock = needsAI.map((item, i) => `"K${i}": "${item.termLocks.lockedText.replace(/"/g, '\\"')}"`).join(',\n');
 
   let glossarySection = '';
   if (glossary?.trim()) {
@@ -716,24 +717,69 @@ async function translateWithAI(
 
 CRITICAL RULES:
 1. Placeholders like ⟪T0⟫, ⟪T1⟫, etc. are LOCKED TERMS — copy them EXACTLY as-is into your translation. Do NOT translate, modify, or remove them.
-2. NEVER remove, modify, merge, or reorder TAG_0, TAG_1, TAG_2 etc. placeholders. They MUST appear in your output EXACTLY as they appear in the input. If the input has TAG_0 and TAG_1, your output MUST also have TAG_0 and TAG_1. Missing even one TAG placeholder will corrupt the game data.
+2. NEVER remove, modify, merge, or reorder TAG_0, TAG_1, TAG_2 etc. placeholders. They MUST appear in your output EXACTLY as they appear in the input.
 3. Keep the translation length close to the original to fit in-game text boxes.
 4. If a glossary term appears, you MUST use its EXACT Arabic translation — no alternatives, no synonyms, no paraphrasing. This is NON-NEGOTIABLE.
-5. CONSISTENCY IS MANDATORY: If a word or phrase was translated a certain way in the "Previously Translated Texts" section, you MUST translate it the same way. Never use different Arabic words for the same English term.
+5. CONSISTENCY IS MANDATORY: If a word or phrase was translated a certain way in the "Previously Translated Texts" section, you MUST translate it the same way.
 6. Use terminology consistent with the Arabic gaming community for Xenoblade Chronicles 3.
 7. Preserve proper nouns (Noah, Mio, Eunie, Taion, Lanz, Sena, Aionios) as-is or use their established Arabic equivalents from the glossary.
-8. Return ONLY a JSON array of strings in the same order. No explanations.${categorySection}${glossarySection}${contextSection}
+8. Return ONLY a JSON object where each key matches the input key (K0, K1, etc.) and the value is the Arabic translation. Example: {"K0": "ترجمة", "K1": "ترجمة"}
+9. You MUST return EXACTLY ${needsAI.length} entries. Do NOT skip, merge, or add extra entries. Each key MUST have its own separate translation.${categorySection}${glossarySection}${contextSection}
 
-Texts:
-${textsBlock}`;
+Input texts (as JSON object — translate each value and return with the SAME keys):
+{
+${textsBlock}
+}`;
 
   const effectiveKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
   
-  const parseAndUnlock = (translations: string[]): Record<string, string> => {
+  /** Detect if the AI response was truncated */
+  function detectTruncation(text: string): boolean {
+    const openBraces = (text.match(/{/g) || []).length;
+    const closeBraces = (text.match(/}/g) || []).length;
+    if (openBraces !== closeBraces) return true;
+    return /\.\.\.$/m.test(text.trim()) || /\[truncated\]/i.test(text) || /\[continued\]/i.test(text);
+  }
+
+  /** Extract JSON object from AI response, handling markdown and malformed output */
+  function extractJsonObject(raw: string): Record<string, string> {
+    let cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    
+    // Try parsing as object first
+    const objMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      let jsonStr = objMatch[0];
+      try {
+        return JSON.parse(jsonStr);
+      } catch {
+        // Fix common issues
+        jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/[\x00-\x1F\x7F]/g, ' ');
+        try { return JSON.parse(jsonStr); } catch {}
+      }
+    }
+    
+    // Fallback: try as array (old format) and convert to keyed object
+    const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (arrMatch) {
+      const sanitized = arrMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
+      const arr: string[] = JSON.parse(sanitized);
+      const obj: Record<string, string> = {};
+      arr.forEach((val, i) => { obj[`K${i}`] = val; });
+      return obj;
+    }
+    
+    throw new Error('فشل في تحليل استجابة الذكاء الاصطناعي — لم يتم العثور على JSON صالح');
+  }
+
+  const parseAndUnlock = (translationsObj: Record<string, string>): Record<string, string> => {
     const result: Record<string, string> = {};
-    for (let i = 0; i < Math.min(needsAI.length, translations.length); i++) {
-      let translated = translations[i]?.trim();
-      if (!translated) continue;
+    for (let i = 0; i < needsAI.length; i++) {
+      const key = `K${i}`;
+      let translated = translationsObj[key]?.trim();
+      if (!translated) {
+        console.warn(`Missing translation for key ${key} (entry: ${needsAI[i].entry.key})`);
+        continue;
+      }
       const item = needsAI[i];
 
       // Safety check: reject suspiciously short translations (likely mismatched)
@@ -758,7 +804,6 @@ ${textsBlock}`;
       for (const tag of expectedTags) {
         if (!translated.includes(tag)) {
           console.warn(`Post-validation: re-inserting missing ${tag} for key ${item.entry.key}`);
-          // Append missing tag at the end (safest fallback)
           translated = translated.trimEnd() + ' ' + tag;
         }
       }
@@ -779,7 +824,7 @@ ${textsBlock}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 3 game text translator. Output only valid JSON arrays. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation.' }] },
+        systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation.' }] },
         generationConfig: { temperature: 0.3 },
       }),
     });
@@ -797,11 +842,12 @@ ${textsBlock}`;
     } else {
       const geminiData = await geminiResponse.json();
       const content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error('فشل في تحليل استجابة Gemini');
-      const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
-      const translations: string[] = JSON.parse(sanitized);
-      const aiResult = parseAndUnlock(translations);
+      if (detectTruncation(content)) {
+        console.warn('Gemini response truncated, results may be incomplete');
+      }
+      const translationsObj = extractJsonObject(content);
+      const aiResult = parseAndUnlock(translationsObj);
+      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
       return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
     }
   }
@@ -817,7 +863,7 @@ ${textsBlock}`;
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output only valid JSON arrays. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation.' },
+          { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation.' },
           { role: 'user', content: prompt },
         ],
         temperature: 0.3,
@@ -834,11 +880,12 @@ ${textsBlock}`;
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('Failed to parse AI response');
-    const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
-    const translations: string[] = JSON.parse(sanitized);
-    const aiResult = parseAndUnlock(translations);
+    if (detectTruncation(content)) {
+      console.warn('Lovable AI response truncated, results may be incomplete');
+    }
+    const translationsObj = extractJsonObject(content);
+    const aiResult = parseAndUnlock(translationsObj);
+    console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
     return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
   }
 }

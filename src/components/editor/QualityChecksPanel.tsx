@@ -3,9 +3,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Wrench, X } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Wrench, X, Sparkles, Search, Loader2, Check, RefreshCw } from "lucide-react";
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { useFeatureFlags } from "@/lib/feature-flags";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface QualityIssue {
   key: string;
@@ -20,6 +22,7 @@ interface QualityChecksPanelProps {
   onApplyFix: (key: string, fixedText: string) => void;
   onFilterByKeys: (keys: Set<string>) => void;
   onNavigateToEntry?: (key: string) => void;
+  glossary?: string;
 }
 
 // === Check functions ===
@@ -28,7 +31,7 @@ function extractNumbers(text: string): string[] {
   return (text.match(/\d+/g) || []).sort();
 }
 
-function checkNumbers(original: string, translation: string): { type: string; message: string } | null {
+function checkNumbers(original: string, translation: string): { type: string; message: string; fix?: string } | null {
   const origNums = extractNumbers(original);
   const transNums = extractNumbers(translation);
   if (origNums.length === 0) return null;
@@ -74,7 +77,6 @@ function checkExtraSpaces(translation: string): { type: string; message: string;
 }
 
 function checkRemainingEnglish(translation: string): { type: string; message: string } | null {
-  // Strip tags, variables, control chars
   const stripped = translation
     .replace(/\[[^\]]*\]/g, '')
     .replace(/\{[^}]*\}/g, '')
@@ -82,7 +84,7 @@ function checkRemainingEnglish(translation: string): { type: string; message: st
     .trim();
   if (!stripped) return null;
   const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(stripped);
-  if (!hasArabic) return null; // pure english text is likely intentional
+  if (!hasArabic) return null;
   const whitelist = new Set([
     'HP', 'MP', 'AP', 'TP', 'EXP', 'ATK', 'DEF', 'NPC', 'HUD', 'FPS', 'XP', 'DLC', 'UI', 'OK', 'NG',
     'NOAH', 'MIO', 'LANZ', 'SENA', 'TAION', 'EUNIE', 'RIKU', 'MANANA',
@@ -116,10 +118,9 @@ function checkLength(entry: ExtractedEntry, translation: string): { type: string
   return null;
 }
 
-function checkPunctuation(original: string, translation: string): { type: string; message: string } | null {
+function checkPunctuation(original: string, translation: string): { type: string; message: string; fix?: string } | null {
   const origEnd = original.trim().slice(-1);
   const transEnd = translation.trim().slice(-1);
-  // Map equivalent punctuation
   const equivMap: Record<string, string[]> = {
     '.': ['.', '。'],
     '!': ['!', '！'],
@@ -130,7 +131,14 @@ function checkPunctuation(original: string, translation: string): { type: string
   if (equivMap[origEnd]) {
     const validEnds = equivMap[origEnd];
     if (!validEnds.includes(transEnd) && transEnd !== origEnd) {
-      return { type: "punctuation_check", message: `علامة الترقيم النهائية مختلفة: "${origEnd}" → "${transEnd}"` };
+      // Auto-fix: append the correct punctuation
+      const arabicEquiv: Record<string, string> = { '?': '؟', ';': '؛' };
+      const fixChar = arabicEquiv[origEnd] || origEnd;
+      const trimmed = translation.trim();
+      const fix = /[.!?؟؛:،]$/.test(trimmed)
+        ? trimmed.slice(0, -1) + fixChar
+        : trimmed + fixChar;
+      return { type: "punctuation_check", message: `علامة الترقيم النهائية مختلفة: "${origEnd}" → "${transEnd}"`, fix };
     }
   }
   return null;
@@ -144,13 +152,11 @@ function checkRepetition(translation: string): { type: string; message: string }
     .trim();
   const words = stripped.split(/\s+/).filter(w => w.length > 2);
   if (words.length < 4) return null;
-  // Check for consecutive repeated words (same word 3+ times)
   for (let i = 0; i < words.length - 2; i++) {
     if (words[i] === words[i + 1] && words[i] === words[i + 2]) {
       return { type: "repetition_check", message: `تكرار متتالي: "${words[i]}" ×3+` };
     }
   }
-  // Check for high frequency of same word
   const freq: Record<string, number> = {};
   for (const w of words) {
     freq[w] = (freq[w] || 0) + 1;
@@ -165,7 +171,6 @@ function checkRepetition(translation: string): { type: string; message: string }
   return null;
 }
 
-// Grammar check is a placeholder — flags obvious patterns
 function checkGrammar(translation: string): { type: string; message: string } | null {
   const stripped = translation
     .replace(/\[[^\]]*\]/g, '')
@@ -173,12 +178,9 @@ function checkGrammar(translation: string): { type: string; message: string } | 
     .replace(/[\uFFF9-\uFFFC\uE000-\uF8FF]/g, '')
     .trim();
   if (!stripped || stripped.length < 5) return null;
-  // Check for common Arabic grammar issues
-  // 1. Double ال (الال)
   if (/الال/.test(stripped)) {
     return { type: "grammar_check", message: 'خطأ نحوي محتمل: "الال" (تعريف مكرر)' };
   }
-  // 2. ة followed by ة without space
   if (/ةة/.test(stripped)) {
     return { type: "grammar_check", message: 'خطأ محتمل: تاء مربوطة مكررة "ةة"' };
   }
@@ -196,11 +198,23 @@ const CHECK_LABELS: Record<string, string> = {
   grammar_check: "📝 قواعد نحوية",
 };
 
-export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry }: QualityChecksPanelProps) {
+// Types that can be auto-fixed without AI
+const FIXABLE_TYPES = new Set(["extra_spaces_check", "punctuation_check"]);
+
+export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry, glossary }: QualityChecksPanelProps) {
   const { isEnabled } = useFeatureFlags();
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  
+  // AI features state
+  const [aiFixing, setAiFixing] = useState<Record<string, boolean>>({});
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({});
+  const [contextChecking, setContextChecking] = useState(false);
+  const [contextResults, setContextResults] = useState<Array<{ key: string; issues: string[]; suggestion?: string }>>([]);
+  const [batchImproving, setBatchImproving] = useState(false);
+  const [improveResults, setImproveResults] = useState<Record<string, string>>({});
+  const [improvementStyle, setImprovementStyle] = useState<string>('natural');
 
   const results = useMemo(() => {
     const issues: QualityIssue[] = [];
@@ -257,15 +271,125 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     return { issues, typeCounts };
   }, [state.entries, state.translations, isEnabled]);
 
+  // === Feature 1: Batch fix by type ===
   const handleFixAll = useCallback((type: string) => {
+    let fixCount = 0;
     for (const issue of results.issues) {
       for (const iss of issue.issues) {
         if (iss.type === type && iss.fix) {
           onApplyFix(issue.key, iss.fix);
+          fixCount++;
         }
       }
     }
+    if (fixCount > 0) {
+      toast({ title: "✅ تم الإصلاح", description: `تم إصلاح ${fixCount} مشكلة من نوع ${CHECK_LABELS[type] || type}` });
+    }
   }, [results.issues, onApplyFix]);
+
+  // === Feature 2: AI Fix suggestion ===
+  const handleAiFix = useCallback(async (issue: QualityIssue) => {
+    setAiFixing(prev => ({ ...prev, [issue.key]: true }));
+    try {
+      const issueDescriptions = issue.issues.map(i => i.message).join('\n');
+      const { data, error } = await supabase.functions.invoke('translation-tools', {
+        body: {
+          style: 'ai-fix',
+          original: issue.original,
+          translation: issue.translation,
+          issues: issueDescriptions,
+        },
+      });
+      if (error) throw error;
+      if (data?.result) {
+        setAiSuggestions(prev => ({ ...prev, [issue.key]: data.result }));
+      }
+    } catch (e) {
+      toast({ title: "خطأ", description: "فشل في الحصول على اقتراح AI", variant: "destructive" });
+    } finally {
+      setAiFixing(prev => ({ ...prev, [issue.key]: false }));
+    }
+  }, []);
+
+  // === Feature 3: Context check ===
+  const handleContextCheck = useCallback(async () => {
+    const issuesToCheck = (activeFilter ? results.issues.filter(i => i.issues.some(iss => iss.type === activeFilter)) : results.issues).slice(0, 20);
+    if (issuesToCheck.length === 0) return;
+    setContextChecking(true);
+    setContextResults([]);
+    try {
+      const entries = issuesToCheck.map(i => ({
+        key: i.key,
+        original: i.original,
+        translation: i.translation,
+      }));
+      const { data, error } = await supabase.functions.invoke('translation-tools', {
+        body: { style: 'context-check', entries, glossary: glossary?.slice(0, 3000) },
+      });
+      if (error) throw error;
+      if (data?.result) {
+        try {
+          const parsed = JSON.parse(data.result.replace(/```json\n?|```/g, ''));
+          setContextResults(Array.isArray(parsed) ? parsed : []);
+          toast({ title: "✅ تم الفحص السياقي", description: `تم فحص ${entries.length} نص — ${parsed.length} مشكلة سياقية` });
+        } catch {
+          toast({ title: "تحذير", description: "تعذر تحليل نتائج الفحص السياقي", variant: "destructive" });
+        }
+      }
+    } catch (e) {
+      toast({ title: "خطأ", description: "فشل الفحص السياقي", variant: "destructive" });
+    } finally {
+      setContextChecking(false);
+    }
+  }, [results.issues, activeFilter, glossary]);
+
+  // === Feature 4: Batch improve ===
+  const handleBatchImprove = useCallback(async () => {
+    const toImprove = (activeFilter ? results.issues.filter(i => i.issues.some(iss => iss.type === activeFilter)) : results.issues).slice(0, 15);
+    if (toImprove.length === 0) return;
+    setBatchImproving(true);
+    setImproveResults({});
+    try {
+      const entries = toImprove.map(i => ({
+        key: i.key,
+        original: i.original,
+        translation: i.translation,
+      }));
+      const { data, error } = await supabase.functions.invoke('translation-tools', {
+        body: { style: 'batch-improve', entries, improvementStyle, glossary: glossary?.slice(0, 3000) },
+      });
+      if (error) throw error;
+      if (data?.result) {
+        try {
+          const parsed = JSON.parse(data.result.replace(/```json\n?|```/g, ''));
+          if (Array.isArray(parsed)) {
+            const map: Record<string, string> = {};
+            for (const item of parsed) {
+              if (item.key && item.improved) map[item.key] = item.improved;
+            }
+            setImproveResults(map);
+            toast({ title: "✅ تم التحسين", description: `${Object.keys(map).length} ترجمة محسّنة جاهزة للمراجعة` });
+          }
+        } catch {
+          toast({ title: "تحذير", description: "تعذر تحليل نتائج التحسين", variant: "destructive" });
+        }
+      }
+    } catch (e) {
+      toast({ title: "خطأ", description: "فشل تحسين الصياغة", variant: "destructive" });
+    } finally {
+      setBatchImproving(false);
+    }
+  }, [results.issues, activeFilter, improvementStyle, glossary]);
+
+  const applyAllImproved = useCallback(() => {
+    let count = 0;
+    for (const [key, improved] of Object.entries(improveResults)) {
+      onApplyFix(key, improved);
+      count++;
+    }
+    setImproveResults({});
+    toast({ title: "✅ تم التطبيق", description: `تم تطبيق ${count} تحسين` });
+  }, [improveResults, onApplyFix]);
 
   // Check if any quality feature is enabled
   const anyEnabled = ["number_check", "variable_check", "extra_spaces_check", "remaining_english", "length_check", "punctuation_check", "repetition_check", "grammar_check"].some(id => isEnabled(id));
@@ -281,6 +405,16 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     : results.issues;
 
   const filteredKeys = new Set(filteredIssues.map(i => i.key));
+
+  // Count fixable issues by type
+  const fixableByType: Record<string, number> = {};
+  for (const issue of results.issues) {
+    for (const iss of issue.issues) {
+      if (iss.fix) {
+        fixableByType[iss.type] = (fixableByType[iss.type] || 0) + 1;
+      }
+    }
+  }
 
   return (
     <Card className="mb-4 border-emerald-500/30 bg-emerald-500/5">
@@ -333,39 +467,189 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
               )}
             </div>
 
-            {/* Fixable types */}
-            {results.typeCounts["extra_spaces_check"] && (
-              <div className="flex items-center justify-between bg-background/50 rounded p-2">
-                <span className="text-xs font-body">⬜ {results.typeCounts["extra_spaces_check"]} مسافات زائدة قابلة للإصلاح</span>
-                <Button size="sm" variant="secondary" className="text-xs h-7" onClick={() => handleFixAll("extra_spaces_check")}>
-                  <Wrench className="w-3 h-3 ml-1" /> إصلاح الكل
+            {/* === Feature 1: Batch fix buttons per type === */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {Object.entries(fixableByType).map(([type, count]) => (
+                <Button key={type} size="sm" variant="secondary" className="text-xs h-7 gap-1" onClick={() => handleFixAll(type)}>
+                  <Wrench className="w-3 h-3" /> إصلاح كل {CHECK_LABELS[type] || type} ({count})
                 </Button>
+              ))}
+            </div>
+
+            {/* === Feature 3 & 4: AI Action Buttons === */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {isEnabled("context_check") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-7 gap-1 border-primary/30 text-primary"
+                  onClick={handleContextCheck}
+                  disabled={contextChecking}
+                >
+                  {contextChecking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                  فحص سياقي ({Math.min(filteredIssues.length, 20)} نص)
+                </Button>
+              )}
+              {isEnabled("batch_improve") && (
+                <div className="flex items-center gap-1">
+                  <select
+                    className="text-xs h-7 rounded border border-border bg-background px-2"
+                    value={improvementStyle}
+                    onChange={(e) => setImprovementStyle(e.target.value)}
+                  >
+                    <option value="natural">طبيعي</option>
+                    <option value="formal">رسمي</option>
+                    <option value="concise">مختصر</option>
+                    <option value="expressive">تعبيري</option>
+                  </select>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7 gap-1 border-accent/30 text-accent"
+                    onClick={handleBatchImprove}
+                    disabled={batchImproving}
+                  >
+                    {batchImproving ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    تحسين الصياغة ({Math.min(filteredIssues.length, 15)} نص)
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* === Feature 3: Context check results === */}
+            {contextResults.length > 0 && (
+              <div className="bg-primary/5 border border-primary/20 rounded p-2 mb-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-primary">🎮 نتائج الفحص السياقي ({contextResults.length} مشكلة)</span>
+                  <Button size="sm" variant="ghost" className="text-xs h-6" onClick={() => setContextResults([])}>
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+                {contextResults.map((cr, idx) => (
+                  <div key={idx} className="bg-background/40 rounded p-2 text-xs space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-muted-foreground truncate max-w-[200px]">{cr.key}</span>
+                      {onNavigateToEntry && (
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-primary" onClick={() => onNavigateToEntry(cr.key)}>
+                          ← انتقل
+                        </Button>
+                      )}
+                    </div>
+                    {cr.issues.map((iss, i) => (
+                      <p key={i} className="text-amber-400">⚠️ {iss}</p>
+                    ))}
+                    {cr.suggestion && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-emerald-400 flex-1" dir="rtl">💡 {cr.suggestion}</p>
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={() => { onApplyFix(cr.key, cr.suggestion!); setContextResults(prev => prev.filter((_, i) => i !== idx)); }}>
+                          <Check className="w-3 h-3" /> تطبيق
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* === Feature 4: Batch improve results === */}
+            {Object.keys(improveResults).length > 0 && (
+              <div className="bg-accent/5 border border-accent/20 rounded p-2 mb-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-accent">✍️ تحسينات الصياغة ({Object.keys(improveResults).length})</span>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="secondary" className="text-xs h-6 gap-1" onClick={applyAllImproved}>
+                      <Check className="w-3 h-3" /> تطبيق الكل
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-xs h-6" onClick={() => setImproveResults({})}>
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+                {Object.entries(improveResults).map(([key, improved]) => {
+                  const original = results.issues.find(i => i.key === key);
+                  return (
+                    <div key={key} className="bg-background/40 rounded p-2 text-xs space-y-1">
+                      <span className="font-mono text-muted-foreground">{original?.entryLabel || key}</span>
+                      <p className="text-muted-foreground line-through" dir="rtl">{original?.translation}</p>
+                      <p className="text-accent" dir="rtl">{improved}</p>
+                      <div className="flex gap-1 mt-1">
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={() => { onApplyFix(key, improved); setImproveResults(prev => { const n = { ...prev }; delete n[key]; return n; }); }}>
+                          <Check className="w-3 h-3" /> قبول
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-destructive" onClick={() => setImproveResults(prev => { const n = { ...prev }; delete n[key]; return n; })}>
+                          <X className="w-3 h-3" /> رفض
+                        </Button>
+                        {onNavigateToEntry && (
+                          <Button size="sm" variant="ghost" className="text-xs h-5 text-primary" onClick={() => onNavigateToEntry(key)}>
+                            ← انتقل
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {/* Issue list */}
             <div className="max-h-80 overflow-y-auto space-y-2">
               {filteredIssues.slice(0, 50).map((issue) => (
-                <div key={issue.key} className={`bg-background/40 rounded p-2 space-y-1 ${onNavigateToEntry ? 'cursor-pointer hover:bg-background/60 transition-colors' : ''}`} onClick={() => onNavigateToEntry?.(issue.key)}>
+                <div key={issue.key} className={`bg-background/40 rounded p-2 space-y-1 ${onNavigateToEntry ? 'cursor-pointer hover:bg-background/60 transition-colors' : ''}`}>
                   <div className="flex items-start justify-between">
-                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">{issue.entryLabel} {onNavigateToEntry && <span className="text-primary">← انتقل</span>}</span>
-                    {issue.issues.some(i => i.fix) && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-xs h-6 text-emerald-400"
-                        onClick={() => {
-                          const fix = issue.issues.find(i => i.fix)?.fix;
-                          if (fix) onApplyFix(issue.key, fix);
-                        }}
-                      >
-                        <Wrench className="w-3 h-3" /> إصلاح
-                      </Button>
-                    )}
+                    <span
+                      className="text-xs font-mono text-muted-foreground truncate max-w-[200px] hover:text-primary cursor-pointer"
+                      onClick={() => onNavigateToEntry?.(issue.key)}
+                    >
+                      {issue.entryLabel} {onNavigateToEntry && <span className="text-primary">← انتقل</span>}
+                    </span>
+                    <div className="flex gap-1">
+                      {/* Auto-fix button */}
+                      {issue.issues.some(i => i.fix) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-6 text-emerald-400"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const fix = issue.issues.find(i => i.fix)?.fix;
+                            if (fix) onApplyFix(issue.key, fix);
+                          }}
+                        >
+                          <Wrench className="w-3 h-3" /> إصلاح
+                        </Button>
+                      )}
+                      {/* === Feature 2: AI Fix button === */}
+                      {isEnabled("ai_fix_suggest") && !issue.issues.every(i => i.fix) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-6 text-primary"
+                          onClick={(e) => { e.stopPropagation(); handleAiFix(issue); }}
+                          disabled={aiFixing[issue.key]}
+                        >
+                          {aiFixing[issue.key] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                          إصلاح AI
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   {(activeFilter ? issue.issues.filter(iss => iss.type === activeFilter) : issue.issues).map((iss, i) => (
                     <p key={i} className="text-xs text-amber-300 font-body">{iss.message}</p>
                   ))}
+                  {/* AI suggestion display */}
+                  {aiSuggestions[issue.key] && (
+                    <div className="mt-1 bg-primary/5 border border-primary/20 rounded p-2 space-y-1">
+                      <p className="text-xs text-primary" dir="rtl">💡 {aiSuggestions[issue.key]}</p>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={(e) => { e.stopPropagation(); onApplyFix(issue.key, aiSuggestions[issue.key]); setAiSuggestions(prev => { const n = { ...prev }; delete n[issue.key]; return n; }); }}>
+                          <Check className="w-3 h-3" /> قبول
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-destructive" onClick={(e) => { e.stopPropagation(); setAiSuggestions(prev => { const n = { ...prev }; delete n[issue.key]; return n; }); }}>
+                          <X className="w-3 h-3" /> رفض
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {filteredIssues.length > 50 && (

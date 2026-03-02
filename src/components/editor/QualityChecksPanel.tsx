@@ -215,6 +215,8 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
   const [batchImproving, setBatchImproving] = useState(false);
   const [improveResults, setImproveResults] = useState<Record<string, string>>({});
   const [improvementStyle, setImprovementStyle] = useState<string>('natural');
+  const [autoFixRunning, setAutoFixRunning] = useState(false);
+  const [autoFixProgress, setAutoFixProgress] = useState('');
 
   const results = useMemo(() => {
     const issues: QualityIssue[] = [];
@@ -286,6 +288,65 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
       toast({ title: "✅ تم الإصلاح", description: `تم إصلاح ${fixCount} مشكلة من نوع ${CHECK_LABELS[type] || type}` });
     }
   }, [results.issues, onApplyFix]);
+
+  // === Comprehensive Auto-Fix: fix all auto-fixable, then AI for the rest ===
+  const handleComprehensiveFix = useCallback(async () => {
+    setAutoFixRunning(true);
+    
+    // Step 1: Apply all auto-fixes
+    let autoFixed = 0;
+    const remainingIssues: QualityIssue[] = [];
+    
+    setAutoFixProgress('⚡ تطبيق الإصلاحات التلقائية...');
+    for (const issue of results.issues) {
+      const fixableIss = issue.issues.filter(i => i.fix);
+      if (fixableIss.length > 0) {
+        // Apply the first available fix
+        onApplyFix(issue.key, fixableIss[0].fix!);
+        autoFixed++;
+        // If there are remaining non-fixable issues, queue for AI
+        const nonFixable = issue.issues.filter(i => !i.fix);
+        if (nonFixable.length > 0) {
+          remainingIssues.push({ ...issue, issues: nonFixable });
+        }
+      } else {
+        remainingIssues.push(issue);
+      }
+    }
+
+    toast({ title: "⚡ إصلاح تلقائي", description: `تم إصلاح ${autoFixed} مشكلة تلقائياً` });
+
+    // Step 2: Request AI fixes for remaining (max 10 at a time)
+    if (remainingIssues.length > 0 && isEnabled("ai_fix_suggest")) {
+      const batch = remainingIssues.slice(0, 10);
+      setAutoFixProgress(`🤖 طلب اقتراحات AI لـ ${batch.length} مشكلة متبقية...`);
+      
+      let aiCount = 0;
+      for (const issue of batch) {
+        try {
+          const issueDescriptions = issue.issues.map(i => i.message).join('\n');
+          const { data, error } = await supabase.functions.invoke('translation-tools', {
+            body: {
+              style: 'ai-fix',
+              original: issue.original,
+              translation: issue.translation,
+              issues: issueDescriptions,
+            },
+          });
+          if (!error && data?.result) {
+            setAiSuggestions(prev => ({ ...prev, [issue.key]: data.result }));
+            aiCount++;
+          }
+        } catch { /* skip failed */ }
+        setAutoFixProgress(`🤖 اقتراحات AI: ${aiCount}/${batch.length}...`);
+      }
+      
+      toast({ title: "🤖 اقتراحات AI", description: `${aiCount} اقتراح جاهز للمراجعة${remainingIssues.length > 10 ? ` (${remainingIssues.length - 10} مشكلة أخرى)` : ''}` });
+    }
+
+    setAutoFixProgress('');
+    setAutoFixRunning(false);
+  }, [results.issues, onApplyFix, isEnabled]);
 
   // === Feature 2: AI Fix suggestion ===
   const handleAiFix = useCallback(async (issue: QualityIssue) => {
@@ -466,6 +527,29 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
                 </Badge>
               )}
             </div>
+
+            {/* === Comprehensive Auto-Fix Button === */}
+            {totalIssues > 0 && (
+              <div className="bg-primary/5 border border-primary/20 rounded p-2 mb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <span className="text-xs font-bold text-primary">🔧 الإصلاح الشامل</span>
+                    <p className="text-[10px] text-muted-foreground">يطبق كل الإصلاحات التلقائية ثم يطلب اقتراحات AI للمشاكل المتبقية</p>
+                    {autoFixProgress && <p className="text-[10px] text-primary mt-1">{autoFixProgress}</p>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="text-xs h-8 gap-1"
+                    onClick={handleComprehensiveFix}
+                    disabled={autoFixRunning}
+                  >
+                    {autoFixRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    إصلاح شامل
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* === Feature 1: Batch fix buttons per type === */}
             <div className="flex flex-wrap gap-2 mb-3">

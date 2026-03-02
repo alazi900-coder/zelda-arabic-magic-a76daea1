@@ -48,7 +48,7 @@ function analyzeGlossary(text: string) {
   }
 
   // Categorize by content patterns
-  let characters = 0, locations = 0, items = 0, ui = 0, dialogue = 0, attacks = 0, buffs = 0, combatGeneral = 0;
+  let characters = 0, locations = 0, items = 0, ui = 0, dialogue = 0, combat = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -59,7 +59,6 @@ function analyzeGlossary(text: string) {
     const eng = trimmed.slice(0, eqIdx).trim().toLowerCase();
     const arb = trimmed.slice(eqIdx + 1).trim();
 
-    // Heuristic categorization
     if (/^(mr\.|ms\.|dr\.|captain|king|queen|lord|lady|chief|elder|colonel|general)\s/i.test(eng) ||
         /^[A-Z][a-z]+$/.test(trimmed.slice(0, eqIdx).trim()) && arb.length < 20) {
       characters++;
@@ -69,12 +68,8 @@ function analyzeGlossary(text: string) {
       items++;
     } else if (/\b(menu|button|option|setting|save|load|screen|tab|select|confirm|cancel|back|next|yes|no|ok|tutorial|hint|tip|guide|help|display|toggle|mode|auto|manual)\b/i.test(eng)) {
       ui++;
-    } else if (/\b(attack|strike|slash|smash|hit|punch|blow|cut|crush|thrust|swing|shot|barrage|assault|charge|launch|burst|combo|chain attack|critical|lethal|finishing|power)\b/i.test(eng)) {
-      attacks++;
-    } else if (/\b(buff|debuff|heal|regenerat|cure|protect|barrier|shield|boost|enhance|strengthen|weaken|poison|burn|bleed|stun|sleep|paralyze|slow|haste|regen|resist|immun|aura|blessing|curse|boon)\b/i.test(eng)) {
-      buffs++;
-    } else if (/\b(skill|art|talent|class|level|exp|hp|mp|ap|sp|aggro|break|topple|dodge|counter|block|interlink|ouroboros|damage|tank|healer|attacker|defender)\b/i.test(eng)) {
-      combatGeneral++;
+    } else if (/\b(attack|strike|slash|smash|hit|punch|blow|cut|crush|thrust|swing|shot|barrage|assault|charge|launch|burst|combo|chain attack|critical|lethal|finishing|power|buff|debuff|heal|regenerat|cure|protect|barrier|boost|enhance|strengthen|weaken|poison|burn|bleed|stun|sleep|paralyze|slow|haste|regen|resist|immun|aura|blessing|curse|boon|skill|art|talent|class|level|exp|hp|mp|ap|sp|aggro|break|topple|dodge|counter|block|interlink|ouroboros|damage|tank|healer|attacker|defender)\b/i.test(eng)) {
+      combat++;
     } else if (eng.includes('...') || eng.includes('!') || eng.includes('?') || eng.length > 40) {
       dialogue++;
     }
@@ -84,14 +79,12 @@ function analyzeGlossary(text: string) {
     { label: "شخصيات", icon: <Users className="w-3.5 h-3.5" />, count: characters, color: "text-blue-500" },
     { label: "مواقع", icon: <MapPin className="w-3.5 h-3.5" />, count: locations, color: "text-green-500" },
     { label: "عناصر ومعدات", icon: <Swords className="w-3.5 h-3.5" />, count: items, color: "text-amber-500" },
-    { label: "هجمات وضربات", icon: <Swords className="w-3.5 h-3.5" />, count: attacks, color: "text-red-500" },
-    { label: "بوفات وتأثيرات", icon: <Gamepad2 className="w-3.5 h-3.5" />, count: buffs, color: "text-orange-500" },
-    { label: "قتال ومهارات", icon: <Gamepad2 className="w-3.5 h-3.5" />, count: combatGeneral, color: "text-rose-500" },
+    { label: "قتال وهجمات وبوفات", icon: <Swords className="w-3.5 h-3.5" />, count: combat, color: "text-red-500" },
     { label: "واجهة وقوائم", icon: <Layers className="w-3.5 h-3.5" />, count: ui, color: "text-purple-500" },
     { label: "حوارات", icon: <MessageSquare className="w-3.5 h-3.5" />, count: dialogue, color: "text-cyan-500" },
   ].filter(c => c.count > 0);
 
-  const categorized = characters + locations + items + ui + dialogue + attacks + buffs + combatGeneral;
+  const categorized = characters + locations + items + ui + dialogue + combat;
   const other = totalTerms - categorized;
 
   return {

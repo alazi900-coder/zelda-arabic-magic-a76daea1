@@ -51,6 +51,28 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Flexible whitespace pattern that also matches invisible Unicode formatting chars */
+const FLEX_WS = '[\\s\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]*';
+
+/**
+ * Make an escaped regex string tolerant of invisible chars between each character.
+ * This handles cases where BiDi processing inserts RTL/LTR marks within tag content.
+ */
+function flexibleEsc(esc: string): string {
+  // Insert optional invisible char match between each character of the escaped string
+  // But be careful not to break escaped sequences like \\[
+  const chars: string[] = [];
+  for (let i = 0; i < esc.length; i++) {
+    if (esc[i] === '\\' && i + 1 < esc.length) {
+      chars.push(esc[i] + esc[i + 1]);
+      i++;
+    } else {
+      chars.push(esc[i]);
+    }
+  }
+  return chars.join('[\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]?');
+}
+
 /**
  * Fix broken/reversed/missing brackets around [Tag:Value] technical tags.
  * Compares the original text's tags with the translation and repairs any mangled versions.
@@ -61,7 +83,8 @@ function escapeRegex(s: string): string {
 export function fixTagBracketsStrict(original: string, translation: string): TagBracketFixResult {
   const stats: TagBracketFixStats = { reversed: 0, mismatched: 0, bare: 0, total: 0 };
 
-  let result = translation;
+  // Strip invisible Unicode formatting chars that break regex matching in Arabic text
+  let result = translation.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '');
 
   // 1. Handle [Tag:Value] style tags
   const colonTags = [...original.matchAll(new RegExp(TAG_COLON_REGEX.source, TAG_COLON_REGEX.flags))].map(m => m[0]);
@@ -73,7 +96,7 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
     const esc = escapeRegex(inner);
 
     // Pattern 1: reversed brackets ]inner[
-    const revPattern = new RegExp(`\\]\\s*${esc}\\s*\\[`);
+    const revPattern = new RegExp(`\\]${FLEX_WS}${esc}${FLEX_WS}\\[`);
     if (revPattern.test(result)) {
       result = result.replace(revPattern, `[${inner}]`);
       stats.reversed++;
@@ -84,8 +107,8 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
     // Pattern 2: mismatched brackets ]inner] or [inner[
     let fixed = false;
     for (const bp of [
-      new RegExp(`\\]\\s*${esc}\\s*\\]`),
-      new RegExp(`\\[\\s*${esc}\\s*\\[`),
+      new RegExp(`\\]${FLEX_WS}${esc}${FLEX_WS}\\]`),
+      new RegExp(`\\[${FLEX_WS}${esc}${FLEX_WS}\\[`),
     ]) {
       if (bp.test(result)) {
         result = result.replace(bp, `[${inner}]`);
@@ -110,8 +133,8 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
     const reversedInner = inner.split('').reverse().join('');
     const escapedReversed = escapeRegex(reversedInner);
     for (const rp of [
-      new RegExp(`\\[\\s*${escapedReversed}\\s*\\]`),
-      new RegExp(`\\]\\s*${escapedReversed}\\s*\\[`),
+      new RegExp(`\\[${FLEX_WS}${escapedReversed}${FLEX_WS}\\]`),
+      new RegExp(`\\]${FLEX_WS}${escapedReversed}${FLEX_WS}\\[`),
     ]) {
       if (rp.test(result)) {
         result = result.replace(rp, `[${inner}]`);
@@ -136,8 +159,8 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
       [new RegExp(`\\]${escName}\\[${escNum}`), 'reversed'],
       [new RegExp(`\\[${escName}\\[${escNum}`), 'mismatched'],
       [new RegExp(`\\]${escName}\\]${escNum}`), 'mismatched'],
-      [new RegExp(`\\[${escName}\\]\\s+${escNum}`), 'mismatched'],
-      [new RegExp(`(?<!\\[)${escName}(?!\\])\\s*${escNum}`), 'bare'],
+      [new RegExp(`\\[${escName}\\]${FLEX_WS}${escNum}`), 'mismatched'],
+      [new RegExp(`(?<!\\[)${escName}(?!\\])${FLEX_WS}${escNum}`), 'bare'],
     ];
     let fixed2 = false;
     for (const [pat, type] of patterns) {
@@ -166,7 +189,7 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
       [new RegExp(`${escNum}\\]${escName}\\[`), 'reversed'],
       [new RegExp(`${escNum}\\[${escName}\\[`), 'mismatched'],
       [new RegExp(`${escNum}\\]${escName}\\]`), 'mismatched'],
-      [new RegExp(`${escNum}\\s*(?<!\\[)${escName}(?!\\])`), 'bare'],
+      [new RegExp(`${escNum}${FLEX_WS}(?<!\\[)${escName}(?!\\])`), 'bare'],
     ];
     let fixed3 = false;
     for (const [pat, type] of patterns) {
@@ -189,9 +212,9 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
     const esc = escapeRegex(inner);
 
     const patterns: [RegExp, 'reversed' | 'mismatched' | 'bare'][] = [
-      [new RegExp(`\\]\\s*${esc}\\s*\\[`), 'reversed'],
-      [new RegExp(`\\]\\s*${esc}\\s*\\]`), 'mismatched'],
-      [new RegExp(`\\[\\s*${esc}\\s*\\[`), 'mismatched'],
+      [new RegExp(`\\]${FLEX_WS}${esc}${FLEX_WS}\\[`), 'reversed'],
+      [new RegExp(`\\]${FLEX_WS}${esc}${FLEX_WS}\\]`), 'mismatched'],
+      [new RegExp(`\\[${FLEX_WS}${esc}${FLEX_WS}\\[`), 'mismatched'],
       [new RegExp(`(?<!\\[)${esc}(?!\\])`), 'bare'],
     ];
     let fixed4 = false;
@@ -215,9 +238,9 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
     const esc = escapeRegex(inner);
 
     const patterns: [RegExp, 'reversed' | 'mismatched' | 'bare'][] = [
-      [new RegExp(`\\}\\s*${esc}\\s*\\{`), 'reversed'],
-      [new RegExp(`\\}\\s*${esc}\\s*\\}`), 'mismatched'],
-      [new RegExp(`\\{\\s*${esc}\\s*\\{`), 'mismatched'],
+      [new RegExp(`\\}${FLEX_WS}${esc}${FLEX_WS}\\{`), 'reversed'],
+      [new RegExp(`\\}${FLEX_WS}${esc}${FLEX_WS}\\}`), 'mismatched'],
+      [new RegExp(`\\{${FLEX_WS}${esc}${FLEX_WS}\\{`), 'mismatched'],
       [new RegExp(`(?<!\\{)${esc}(?!\\})`), 'bare'],
     ];
     let fixed5 = false;

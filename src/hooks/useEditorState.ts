@@ -745,6 +745,11 @@ export function useEditorState() {
     }
 
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: finalValue } } : null);
+
+    // Track translation history for versioning
+    if (finalValue.trim()) {
+      import("@/components/editor/TranslationToolsPanel").then(m => m.addToHistory(key, finalValue)).catch(() => {});
+    }
   };
 
   const handleUndoTranslation = (key: string) => {

@@ -414,7 +414,8 @@ async function translateWithGoogle(
   let charsUsed = 0;
   const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
 
-  const useIndividual = entries.length <= 5;
+  // Always use individual requests to prevent batch displacement via \n separator
+  const useIndividual = true;
 
   if (useIndividual) {
     for (let i = 0; i < entries.length; i++) {

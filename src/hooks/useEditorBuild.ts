@@ -83,7 +83,6 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // Reverse BiDi (self-inverse) then map presentation forms back to standard
       const unReversed = reverseBidi(value);
       newTranslations[key] = removeArabicPresentationForms(unReversed);
-      newTranslations[key] = removeArabicPresentationForms(unReversed);
       revertedCount++;
     }
     setState(prev => prev ? { ...prev, translations: newTranslations } : null);

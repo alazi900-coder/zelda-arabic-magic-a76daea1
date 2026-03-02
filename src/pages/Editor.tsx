@@ -65,6 +65,7 @@ import TagBracketFixPanel from "@/components/editor/TagBracketFixPanel";
 import NewlineSplitPanel from "@/components/editor/NewlineSplitPanel";
 import PageTranslationCompare from "@/components/editor/PageTranslationCompare";
 import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
+import CleanupToolsPanel from "@/components/editor/CleanupToolsPanel";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -549,6 +550,17 @@ const Editor = () => {
               editor.setFilterStatus('problems');
             }}
           />
+
+          {/* Cleanup Tools */}
+          <CleanupToolsPanel
+            state={editor.state}
+            onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
+            onApplyAll={(fixes) => {
+              for (const f of fixes) editor.updateTranslation(f.key, f.value);
+            }}
+          />
+
+          {/* Review Results */}
           <ReviewPanel
             reviewResults={editor.reviewResults}
             shortSuggestions={editor.shortSuggestions}

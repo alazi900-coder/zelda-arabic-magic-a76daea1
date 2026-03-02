@@ -551,10 +551,8 @@ const Editor = () => {
               editor.setFilterStatus('problems');
             }}
             onNavigateToEntry={(key) => {
-              // Reset filters to show all entries so we can find it
               editor.setFilterStatus('all');
               editor.setSearch('');
-              // Wait for filter reset, then find and navigate
               setTimeout(() => {
                 const idx = editor.state.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key);
                 if (idx >= 0) {
@@ -567,6 +565,7 @@ const Editor = () => {
                 }
               }, 50);
             }}
+            glossary={editor.activeGlossary}
           />
 
           {/* Cleanup Tools */}

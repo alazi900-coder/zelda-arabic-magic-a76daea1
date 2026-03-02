@@ -34,6 +34,9 @@ export const ALL_FEATURES: FeatureFlag[] = [
   { id: "quality_score", name: "تقييم جودة شامل", description: "نقاط جودة 1-10 لكل ترجمة بواسطة AI", group: "quality", defaultEnabled: false },
   { id: "quality_report", name: "تقرير جودة شامل", description: "تقرير بإحصائيات الجودة الكاملة", group: "quality", defaultEnabled: false },
   { id: "diff_compare", name: "مقارنة مع ترجمات سابقة", description: "عرض الفرق بين النسخة الحالية والسابقة", group: "quality", defaultEnabled: false },
+  { id: "ai_fix_suggest", name: "اقتراح إصلاح بالـ AI", description: "اقتراح إصلاحات ذكية للمشاكل المكتشفة بنقرة واحدة", group: "quality", defaultEnabled: true },
+  { id: "context_check", name: "فحص سياقي ذكي", description: "فحص الترجمة في سياق اللعبة والتأكد من صحة الأسماء", group: "quality", defaultEnabled: true },
+  { id: "batch_improve", name: "تحسين الصياغة الجماعي", description: "تحسين صياغة مجموعة ترجمات دفعة واحدة بنمط موحد", group: "quality", defaultEnabled: true },
 
   // === أدوات التنظيف (cleanup) ===
   { id: "unicode_fix", name: "إصلاح Unicode", description: "كشف وإصلاح أحرف Unicode غير صحيحة", group: "cleanup", defaultEnabled: true },

@@ -1801,9 +1801,14 @@ export function useEditorState() {
 
       const { text: after, stats } = fixTagBracketsStrict(entry.original, translation);
       
-      // Also try restoreTagsLocally to fix missing/foreign tags
+      // Re-check on the FIXED text, not the original translation
+      const hasMissingAfterFix = allOriginalTags.some((tag) => !after.includes(tag));
+      const afterColonTags = after.match(/\[\w+:[^\]]*?\s*\]/g) ?? [];
+      const hasForeignAfterFix = afterColonTags.some(t => !origTagSet.has(t));
+      
+      // Only run restoreTagsLocally if tags are STILL missing/foreign after bracket fix
       let finalAfter = after;
-      if (hasMissingOriginalTag || hasForeignTag) {
+      if (hasMissingAfterFix || hasForeignAfterFix) {
         finalAfter = restoreTagsLocally(entry.original, after);
       }
       

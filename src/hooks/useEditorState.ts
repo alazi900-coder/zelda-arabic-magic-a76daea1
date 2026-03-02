@@ -1859,11 +1859,12 @@ export function useEditorState() {
     }
   }, [state]);
 
-  const handleApplySentenceOrder = useCallback((key: string) => {
+  const handleApplySentenceOrder = useCallback((key: string, customText?: string) => {
     if (!state || !sentenceOrderResults) return;
     const item = sentenceOrderResults.find(r => r.key === key);
     if (!item) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    const newText = customText || item.after;
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: newText } } : null);
     setSentenceOrderResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'accepted' as const } : r) : null);
   }, [state, sentenceOrderResults]);
 

@@ -66,6 +66,7 @@ import NewlineSplitPanel from "@/components/editor/NewlineSplitPanel";
 import PageTranslationCompare from "@/components/editor/PageTranslationCompare";
 import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
 import CleanupToolsPanel from "@/components/editor/CleanupToolsPanel";
+import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -558,6 +559,14 @@ const Editor = () => {
             onApplyAll={(fixes) => {
               for (const f of fixes) editor.updateTranslation(f.key, f.value);
             }}
+          />
+
+          {/* Translation Tools */}
+          <TranslationToolsPanel
+            state={editor.state}
+            currentEntry={null}
+            currentTranslation=""
+            onApplyTranslation={(key, val) => editor.updateTranslation(key, val)}
           />
 
           {/* Review Results */}

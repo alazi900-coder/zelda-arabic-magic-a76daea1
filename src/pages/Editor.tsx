@@ -55,6 +55,7 @@ import DiacriticsCleanPanel from "@/components/editor/DiacriticsCleanPanel";
 import DuplicateAlefCleanPanel from "@/components/editor/DuplicateAlefCleanPanel";
 import MirrorCharsCleanPanel from "@/components/editor/MirrorCharsCleanPanel";
 import MergeToBundledPanel from "@/components/editor/MergeToBundledPanel";
+import SentenceOrderPanel from "@/components/editor/SentenceOrderPanel";
 import ExportEnglishDialog from "@/components/editor/ExportEnglishDialog";
 import GlossaryStatsPanel from "@/components/editor/GlossaryStatsPanel";
 import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
@@ -641,6 +642,17 @@ const Editor = () => {
             />
           )}
 
+          {/* Sentence Order Results */}
+          {editor.sentenceOrderResults && editor.sentenceOrderResults.length > 0 && (
+            <SentenceOrderPanel
+              results={editor.sentenceOrderResults}
+              onAccept={editor.handleApplySentenceOrder}
+              onReject={editor.handleRejectSentenceOrder}
+              onAcceptAll={editor.handleApplyAllSentenceOrders}
+              onClose={() => editor.setSentenceOrderResults(null)}
+            />
+          )}
+
           {/* Tag Repair Panel */}
           {showTagRepair && editor.state && (
             <TagRepairPanel
@@ -980,6 +992,7 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleScanDuplicateAlef} disabled={editor.translatedCount === 0}>🔤 إزالة الألف المكرر</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanMirrorChars} disabled={editor.translatedCount === 0}>🔄 عكس الأقواس والأسهم</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanTagBrackets} disabled={editor.translatedCount === 0}>🔧 إصلاح أقواس الرموز التقنية</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanSentenceOrder} disabled={editor.translatedCount === 0}>↕️ فحص ترتيب الجمل</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixMixedLanguage} disabled={editor.fixingMixed || editor.needsImproveCount.mixed === 0}>
                     {editor.fixingMixed ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />} إصلاح النصوص المختلطة 🌐
                   </DropdownMenuItem>
@@ -1137,6 +1150,7 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleScanDuplicateAlef} disabled={editor.translatedCount === 0}>🔤 إزالة الألف المكرر</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanMirrorChars} disabled={editor.translatedCount === 0}>🔄 عكس الأقواس والأسهم</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanTagBrackets} disabled={editor.translatedCount === 0}>🔧 إصلاح أقواس الرموز التقنية</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanSentenceOrder} disabled={editor.translatedCount === 0}>↕️ فحص ترتيب الجمل</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixMixedLanguage} disabled={editor.fixingMixed || editor.needsImproveCount.mixed === 0}>
                     {editor.fixingMixed ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />} إصلاح النصوص المختلطة 🌐
                   </DropdownMenuItem>

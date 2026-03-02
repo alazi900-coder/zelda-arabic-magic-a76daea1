@@ -6,6 +6,7 @@ import { scanAllTranslations as scanMergedTranslations } from "@/lib/arabic-sent
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { fixTagBracketsStrict, hasTechnicalBracketTag } from "@/lib/tag-bracket-fix";
+import { detectReversedSentences } from "@/components/editor/SentenceOrderPanel";
 
 import { useEditorGlossary } from "@/hooks/useEditorGlossary";
 import { useEditorFileIO } from "@/hooks/useEditorFileIO";
@@ -56,6 +57,7 @@ export function useEditorState() {
   const [mirrorCharsResults, setMirrorCharsResults] = useState<import("@/components/editor/MirrorCharsCleanPanel").MirrorCharsResult[] | null>(null);
   const [tagBracketFixResults, setTagBracketFixResults] = useState<import("@/components/editor/TagBracketFixPanel").TagBracketFixResult[] | null>(null);
   const [newlineSplitResults, setNewlineSplitResults] = useState<import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] | null>(null);
+  const [sentenceOrderResults, setSentenceOrderResults] = useState<import("@/components/editor/SentenceOrderPanel").SentenceOrderResult[] | null>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string> | null>(null);
   const [isSearchPinned, setIsSearchPinned] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1846,6 +1848,42 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, tagBracketFixResults]);
 
+  // === Sentence Order Fix ===
+  const handleScanSentenceOrder = useCallback(() => {
+    if (!state) return;
+    const results = detectReversedSentences(state.entries, state.translations);
+    setSentenceOrderResults(results);
+    if (results.length === 0) {
+      setLastSaved("✅ لم يتم اكتشاف نصوص متعددة الجمل تحتاج مراجعة");
+      setTimeout(() => setLastSaved(""), 4000);
+    }
+  }, [state]);
+
+  const handleApplySentenceOrder = useCallback((key: string) => {
+    if (!state || !sentenceOrderResults) return;
+    const item = sentenceOrderResults.find(r => r.key === key);
+    if (!item) return;
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setSentenceOrderResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'accepted' as const } : r) : null);
+  }, [state, sentenceOrderResults]);
+
+  const handleRejectSentenceOrder = useCallback((key: string) => {
+    setSentenceOrderResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'rejected' as const } : r) : null);
+  }, []);
+
+  const handleApplyAllSentenceOrders = useCallback(() => {
+    if (!state || !sentenceOrderResults) return;
+    const pending = sentenceOrderResults.filter(r => r.status === 'pending');
+    const newTranslations = { ...state.translations };
+    for (const item of pending) {
+      newTranslations[item.key] = item.after;
+    }
+    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setSentenceOrderResults(prev => prev ? prev.map(r => r.status === 'pending' ? { ...r, status: 'accepted' as const } : r) : null);
+    setLastSaved(`✅ تم عكس ترتيب الجمل في ${pending.length} ترجمة`);
+    setTimeout(() => setLastSaved(""), 4000);
+  }, [state, sentenceOrderResults]);
+
   return {
     // State
     state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace, userGeminiKey, translationProvider, myMemoryEmail, myMemoryCharsUsed, aiRequestsToday, aiRequestsMonth,
@@ -1863,7 +1901,7 @@ export function useEditorState() {
     applyingArabic, improvingTranslations, improveResults,
     fixingMixed, filtersOpen, buildStats, buildPreview, showBuildConfirm, bdatFileStats,
     checkingConsistency, consistencyResults,
-    scanningSentences, sentenceSplitResults, newlineCleanResults, diacriticsCleanResults, duplicateAlefResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults,
+    scanningSentences, sentenceSplitResults, newlineCleanResults, diacriticsCleanResults, duplicateAlefResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults, sentenceOrderResults,
     isSearchPinned, pinnedKeys,
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
@@ -1877,7 +1915,7 @@ export function useEditorState() {
     setCurrentPage, setShowRetranslateConfirm,
     setArabicNumerals, setMirrorPunctuation, setUserGeminiKey, setTranslationProvider, setMyMemoryEmail,
     setReviewResults, setShortSuggestions, setImproveResults, setBuildStats, setShowBuildConfirm,
-    setConsistencyResults, setSentenceSplitResults, setNewlineCleanResults, setDiacriticsCleanResults, setDuplicateAlefResults, setMirrorCharsResults, setTagBracketFixResults, setNewlineSplitResults,
+    setConsistencyResults, setSentenceSplitResults, setNewlineCleanResults, setDiacriticsCleanResults, setDuplicateAlefResults, setMirrorCharsResults, setTagBracketFixResults, setNewlineSplitResults, setSentenceOrderResults,
 
     // Handlers
     toggleProtection, toggleTechnicalBypass,
@@ -1902,6 +1940,7 @@ export function useEditorState() {
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
     handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest,
+    handleScanSentenceOrder, handleApplySentenceOrder, handleRejectSentenceOrder, handleApplyAllSentenceOrders,
     handleTogglePin,
     handleClearTranslations, handleUndoClear, clearUndoBackup, isFilterActive,
     integrityResult, showIntegrityDialog, setShowIntegrityDialog, checkingIntegrity,

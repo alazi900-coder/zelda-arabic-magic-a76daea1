@@ -64,6 +64,7 @@ import TagRepairPanel from "@/components/editor/TagRepairPanel";
 import TagBracketFixPanel from "@/components/editor/TagBracketFixPanel";
 import NewlineSplitPanel from "@/components/editor/NewlineSplitPanel";
 import PageTranslationCompare from "@/components/editor/PageTranslationCompare";
+import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -540,7 +541,14 @@ const Editor = () => {
             translating={editor.translating}
           />
 
-          {/* Review Results */}
+          {/* Advanced Quality Checks */}
+          <QualityChecksPanel
+            state={editor.state}
+            onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
+            onFilterByKeys={() => {
+              editor.setFilterStatus('problems');
+            }}
+          />
           <ReviewPanel
             reviewResults={editor.reviewResults}
             shortSuggestions={editor.shortSuggestions}

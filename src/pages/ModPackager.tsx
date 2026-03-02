@@ -70,7 +70,9 @@ export default function ModPackager() {
   const glyphMapCanvasRef = useRef<HTMLCanvasElement>(null);
   const glyphUploadRef = useRef<HTMLInputElement>(null);
   const selectedGlyphCanvasRef = useRef<HTMLCanvasElement>(null);
+  const scanFolderInputRef = useRef<HTMLInputElement>(null);
   const xbc1FolderInputRef = useRef<HTMLInputElement>(null);
+  const xbc1FileInputRef = useRef<HTMLInputElement>(null);
   const exploreFolderInputRef = useRef<HTMLInputElement>(null);
 
   // Decode and cache the atlas canvas when font changes
@@ -258,15 +260,13 @@ export default function ModPackager() {
   }, [tryExtractFont]);
 
   // Folder scan handler using webkitdirectory
-  const handleScanFolder = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.setAttribute("webkitdirectory", "");
-    input.setAttribute("directory", "");
-    input.addEventListener("change", () => {
-      if (input.files) handleScanDatForFonts(input.files);
-    });
-    input.click();
+  const handleScanFolderSelection = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) {
+      setStatus("⚠️ لم يتم اختيار ملفات");
+      setTimeout(() => setStatus(""), 4000);
+      return;
+    }
+    void handleScanDatForFonts(files);
   }, [handleScanDatForFonts]);
 
   // DAT Explorer: analyze files in a folder
@@ -343,9 +343,6 @@ export default function ModPackager() {
     }
   }, [zstdReady, getMagicString]);
 
-  const handleExploreDatFolder = useCallback(() => {
-    exploreFolderInputRef.current?.click();
-  }, []);
 
   const handleDownloadExploredFile = useCallback((index: number, useDecompressed: boolean) => {
     const file = exploredFiles[index];
@@ -537,23 +534,18 @@ export default function ModPackager() {
     }
   }, [parseXbc1, getMagicString]);
 
-  const handleXbc1ExtractFolder = useCallback(() => {
-    xbc1FolderInputRef.current?.click();
-  }, []);
+  const handleXbc1FileSelection = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) {
+      setXbc1Status("⚠️ لم يتم اختيار ملفات");
+      setTimeout(() => setXbc1Status(""), 4000);
+      return;
+    }
 
-  // Handle single XBC1 file extraction
-  const handleXbc1ExtractFile = useCallback(async () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".dat,.wismt,.wilay,.mot";
-    input.multiple = true;
-    input.addEventListener("change", async () => {
-      const files = input.files;
-      if (!files || files.length === 0) return;
-      setXbc1Extracting(true);
-      setXbc1Progress({ current: 0, total: files.length });
+    setXbc1Extracting(true);
+    setXbc1Progress({ current: 0, total: files.length });
 
-      const results: Xbc1File[] = [...xbc1Files];
+    const results: Xbc1File[] = [...xbc1Files];
+    try {
       for (let i = 0; i < files.length; i++) {
         setXbc1Progress({ current: i + 1, total: files.length });
         setXbc1Status(`🔍 فك ${i + 1}/${files.length}: ${files[i].name}...`);
@@ -574,14 +566,16 @@ export default function ModPackager() {
           } else {
             setXbc1Status(`⚠️ "${files[i].name}" ليس ملف xbc1`);
           }
-        } catch {}
+        } catch {
+          // تجاهل الملف الفاشل مع الاستمرار
+        }
       }
       setXbc1Files(results);
-      setXbc1Extracting(false);
       setXbc1Status(`✅ تم فك ${results.length} ملف`);
       setTimeout(() => setXbc1Status(""), 5000);
-    });
-    input.click();
+    } finally {
+      setXbc1Extracting(false);
+    }
   }, [parseXbc1, getMagicString, xbc1Files]);
 
   const handleDownloadXbc1File = useCallback((index: number) => {
@@ -1256,14 +1250,22 @@ export default function ModPackager() {
                   <span className="text-sm text-muted-foreground">أو ارفع ملف .wifnt أو .dat يدوياً</span>
                   <input type="file" accept=".wifnt,.dat" onChange={handleFontUpload} className="hidden" />
                 </label>
-                <button
-                  type="button"
-                  onClick={handleScanFolder}
-                  className="flex flex-col items-center gap-3 p-4 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-accent/50 transition-colors w-full"
-                >
+                <label htmlFor="scan-font-folder" className="flex flex-col items-center gap-3 p-4 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-accent/50 transition-colors w-full">
                   <Search className="w-5 h-5 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">📁 فحص مجلد كامل للبحث عن الخط</span>
-                </button>
+                </label>
+                <input
+                  id="scan-font-folder"
+                  ref={scanFolderInputRef}
+                  type="file"
+                  className="sr-only"
+                  multiple
+                  onChange={(e) => {
+                    handleScanFolderSelection(e.target.files);
+                    e.currentTarget.value = "";
+                  }}
+                  {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+                />
               </div>
             )}
             <div className="text-xs text-muted-foreground bg-muted/30 rounded p-3 space-y-1">
@@ -1309,7 +1311,7 @@ export default function ModPackager() {
             <label className="flex flex-col items-center gap-3 p-6 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 transition-colors">
               <Upload className="w-6 h-6 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">ارفع ملفات BDAT ({bdatFiles.length} ملف مرفوع)</span>
-              <input type="file" accept=".bdat" multiple onChange={handleBdatUpload} className="hidden" />
+              <input type="file" accept=".bdat,.dat,.BDAT,.DAT" multiple onChange={handleBdatUpload} className="hidden" />
             </label>
 
             {bdatFiles.length > 0 && (
@@ -1595,9 +1597,10 @@ export default function ModPackager() {
           </div>
 
           <input
+            id="xbc1-folder-input"
             ref={xbc1FolderInputRef}
             type="file"
-            className="hidden"
+            className="sr-only"
             multiple
             onChange={(e) => {
               if (e.target.files) void handleXbc1FolderSelection(e.target.files);
@@ -1606,25 +1609,28 @@ export default function ModPackager() {
             {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
           />
 
+          <input
+            id="xbc1-file-input"
+            ref={xbc1FileInputRef}
+            type="file"
+            className="sr-only"
+            accept=".dat,.wismt,.wilay,.mot,.DAT,.WISMT,.WILAY,.MOT"
+            multiple
+            onChange={(e) => {
+              void handleXbc1FileSelection(e.target.files);
+              e.currentTarget.value = "";
+            }}
+          />
+
           <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleXbc1ExtractFolder}
-              disabled={xbc1Extracting}
-            >
+            <label htmlFor="xbc1-folder-input" className={`inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors ${xbc1Extracting ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-accent hover:text-accent-foreground"}`}>
               {xbc1Extracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderArchive className="w-4 h-4" />}
               📁 فك مجلد كامل
-            </Button>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleXbc1ExtractFile}
-              disabled={xbc1Extracting}
-            >
+            </label>
+            <label htmlFor="xbc1-file-input" className={`inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors ${xbc1Extracting ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-accent hover:text-accent-foreground"}`}>
               {xbc1Extracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               📄 فك ملفات محددة
-            </Button>
+            </label>
           </div>
 
           {xbc1Extracting && xbc1Progress.total > 0 && (
@@ -1725,9 +1731,10 @@ export default function ModPackager() {
           </div>
 
           <input
+            id="dat-explorer-folder"
             ref={exploreFolderInputRef}
             type="file"
-            className="hidden"
+            className="sr-only"
             multiple
             onChange={(e) => {
               if (e.target.files) void handleExploreFolderSelection(e.target.files);
@@ -1736,15 +1743,10 @@ export default function ModPackager() {
             {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
           />
 
-          <Button
-            variant="outline"
-            className="w-full gap-2"
-            onClick={handleExploreDatFolder}
-            disabled={exploringFolder}
-          >
+          <label htmlFor="dat-explorer-folder" className={`inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors ${exploringFolder ? "pointer-events-none opacity-50" : "cursor-pointer hover:bg-accent hover:text-accent-foreground"}`}>
             {exploringFolder ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderArchive className="w-4 h-4" />}
             {exploringFolder ? "جارٍ التحليل..." : "📁 اختر مجلد dat لاستكشافه"}
-          </Button>
+          </label>
 
           {exploreStatus && (
             <p className="text-sm text-muted-foreground">{exploreStatus}</p>

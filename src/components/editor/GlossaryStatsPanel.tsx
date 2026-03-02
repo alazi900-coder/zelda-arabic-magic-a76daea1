@@ -1,7 +1,7 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, ChevronDown, ChevronUp, Users, MapPin, Swords, Gamepad2, MessageSquare, Layers, Bug } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Users, MapPin, Swords, Gamepad2, MessageSquare, Layers, Bug, Sparkles } from "lucide-react";
 
 interface GlossaryStatsProps {
   glossaryText: string;
@@ -48,7 +48,7 @@ function analyzeGlossary(text: string) {
   }
 
   // Categorize by content patterns
-  let characters = 0, locations = 0, items = 0, ui = 0, dialogue = 0, combat = 0, classes = 0, monsters = 0;
+  let characters = 0, locations = 0, items = 0, ui = 0, dialogue = 0, combat = 0, classes = 0, monsters = 0, skills = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -72,7 +72,9 @@ function analyzeGlossary(text: string) {
       classes++;
     } else if (/\b(monster|boss|elite|unique monster|enemy|mob|creature|tirkin|gogol|ardun|levnis|ferron|igna|cephalopod|antol|volff|kromar|urchon|eks|fog beast|fog king|moebius|consul|flame clock|annihilator|superboss|lucky|bounty|rare monster|named monster|territorial|guardian|armu)\b/i.test(eng)) {
       monsters++;
-    } else if (/\b(attack|strike|slash|smash|hit|punch|blow|cut|crush|thrust|swing|shot|barrage|assault|charge|launch|burst|combo|chain attack|critical|lethal|finishing|power|buff|debuff|heal|regenerat|cure|protect|barrier|boost|enhance|strengthen|weaken|poison|burn|bleed|stun|sleep|paralyze|slow|haste|regen|resist|immun|aura|blessing|curse|boon|skill|art|talent|level|exp|hp|mp|ap|sp|aggro|break|topple|dodge|counter|block|interlink|ouroboros|damage|evasion|accuracy|defense|arts cancel|fusion arts|daze|lucky seven|elemental|ether|physical|cancel|auto-attack|master art|master skill|crit|agility|strength|dexterity|luck|ether power|block rate|physical defense|ether defense|attack speed|recharge)\b/i.test(eng)) {
+    } else if (/\b(skill|art|talent|master art|master skill|arts cancel|fusion arts|auto-attack|buff|debuff|heal|regenerat|cure|protect|barrier|boost|enhance|strengthen|weaken|poison|burn|bleed|stun|sleep|paralyze|slow|haste|regen|resist|immun|aura|blessing|curse|boon|elemental|ether|physical)\b/i.test(eng)) {
+      skills++;
+    } else if (/\b(attack|strike|slash|smash|hit|punch|blow|cut|crush|thrust|swing|shot|barrage|assault|charge|launch|burst|combo|chain attack|critical|lethal|finishing|power|level|exp|hp|mp|ap|sp|aggro|break|topple|dodge|counter|block|interlink|ouroboros|damage|evasion|accuracy|defense|daze|lucky seven|cancel|crit|agility|strength|dexterity|luck|ether power|block rate|physical defense|ether defense|attack speed|recharge)\b/i.test(eng)) {
       combat++;
     } else if (eng.includes('...') || eng.includes('!') || eng.includes('?') || eng.length > 40) {
       dialogue++;
@@ -86,11 +88,12 @@ function analyzeGlossary(text: string) {
     { label: "كلاسات وأدوار", icon: <Gamepad2 className="w-3.5 h-3.5" />, count: classes, color: "text-orange-500" },
     { label: "وحوش وأعداء", icon: <Bug className="w-3.5 h-3.5" />, count: monsters, color: "text-rose-500" },
     { label: "قتال وهجمات وبوفات", icon: <Swords className="w-3.5 h-3.5" />, count: combat, color: "text-red-500" },
+    { label: "مهارات وتأثيرات", icon: <Sparkles className="w-3.5 h-3.5" />, count: skills, color: "text-yellow-500" },
     { label: "واجهة وقوائم", icon: <Layers className="w-3.5 h-3.5" />, count: ui, color: "text-purple-500" },
     { label: "حوارات", icon: <MessageSquare className="w-3.5 h-3.5" />, count: dialogue, color: "text-cyan-500" },
   ].filter(c => c.count > 0);
 
-  const categorized = characters + locations + items + ui + dialogue + combat + classes + monsters;
+  const categorized = characters + locations + items + ui + dialogue + combat + classes + monsters + skills;
   const other = totalTerms - categorized;
 
   return {

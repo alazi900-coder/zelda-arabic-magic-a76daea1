@@ -704,7 +704,7 @@ async function translateWithAI(
   if (context && context.length > 0) {
     const contextLines = context
       .filter(c => c.translation?.trim())
-      .map(c => `"${c.original}" → "${c.translation}"`)
+      .map(c => `${c.original.replace(/"/g, '')} → ${c.translation!.replace(/"/g, '')}`)
       .slice(0, 15)
       .join('\n');
     if (contextLines) {
@@ -755,13 +755,20 @@ ${textsBlock}
   function extractJsonObject(raw: string): Record<string, string> {
     let cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     
-    // Find the outermost JSON object by matching balanced braces
+    // Find the outermost JSON object by matching balanced braces,
+    // properly skipping content inside quoted strings
     let depth = 0, start = -1, end = -1;
+    let inString = false, escapeNext = false;
     for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i] === '{') {
+      const ch = cleaned[i];
+      if (escapeNext) { escapeNext = false; continue; }
+      if (ch === '\\' && inString) { escapeNext = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue; // Skip everything inside strings
+      if (ch === '{') {
         if (depth === 0) start = i;
         depth++;
-      } else if (cleaned[i] === '}') {
+      } else if (ch === '}') {
         depth--;
         if (depth === 0 && start !== -1) { end = i; break; }
       }
@@ -775,7 +782,7 @@ ${textsBlock}
         // Fix common issues: trailing commas, control characters
         jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/[\x00-\x1F\x7F]/g, ' ');
         try { return JSON.parse(jsonStr); } catch (e2) {
-          console.error('JSON parse failed after cleanup:', (e2 as Error).message, 'Raw length:', jsonStr.length);
+          console.error('JSON parse failed after cleanup:', (e2 as Error).message, 'Raw snippet:', jsonStr.substring(0, 200));
         }
       }
     }

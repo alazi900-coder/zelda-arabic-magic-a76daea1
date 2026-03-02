@@ -116,6 +116,7 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-field", label: "المواقع والخرائط", emoji: "🗺️", icon: "MapPin", color: "text-emerald-400" },
   { id: "bdat-story", label: "حوارات القصة", emoji: "📖", icon: "BookOpen", color: "text-violet-400" },
   { id: "bdat-skill", label: "المهارات والفنون", emoji: "✨", icon: "Sparkles", color: "text-yellow-400" },
+  { id: "bdat-buff", label: "التأثيرات والبوفات", emoji: "🔮", icon: "Zap", color: "text-fuchsia-400" },
   { id: "bdat-gem", label: "الجواهر والإكسسوارات", emoji: "💎", icon: "Gem", color: "text-cyan-400" },
   { id: "bdat-class", label: "الفصائل والأدوار", emoji: "🛡️", icon: "Shield", color: "text-indigo-400" },
   { id: "bdat-tips", label: "النصائح والشروحات", emoji: "💡", icon: "Lightbulb", color: "text-lime-400" },
@@ -197,6 +198,11 @@ export function categorizeByFilename(filename: string): string | null {
     'chr': 'bdat-character',
     'skill': 'bdat-skill',
     'art': 'bdat-skill',
+    'buff': 'bdat-buff',
+    'debuff': 'bdat-buff',
+    'status': 'bdat-buff',
+    'enhance': 'bdat-buff',
+    'aura': 'bdat-buff',
     'gem': 'bdat-gem',
     'class': 'bdat-class',
     'job': 'bdat-class',
@@ -290,6 +296,10 @@ export function categorizeByTableName(tbl: string): string | null {
   // === المهارات ===
   if (/^(skl_|art_|spc_)/i.test(tbl)) return "bdat-skill";
 
+  // === التأثيرات والبوفات ===
+  if (/^(buff_|debuff_|status_|aura_|enhance_|condition_)/i.test(tbl)) return "bdat-buff";
+  if (/^msg_btl_.*(buff|debuff|status|enhance|aura|condition)/i.test(tbl)) return "bdat-buff";
+
   // === الجواهر ===
   if (/^(gem_|acc_|orb_)/i.test(tbl)) return "bdat-gem";
 
@@ -337,6 +347,9 @@ export function categorizeByColumnName(columnName: string): string | null {
 
   // النصائح والشروحات - Tips/Tutorial column patterns
   if (/tutorial|tips?_|howto|hint|help_text|loading_?tip/i.test(col)) return "bdat-tips";
+
+  // التأثيرات والبوفات - Buff/Debuff/Status column patterns
+  if (/buff|debuff|status_?effect|enhance_?effect|aura_?effect|condition_?name/i.test(col)) return "bdat-buff";
 
   // الإعدادات - Settings column patterns
   if (/^(voice|audio|config|option(?!text)|setting|display|brightness|camera|sound|formation|notice|message$)/i.test(columnName)) return "bdat-settings";

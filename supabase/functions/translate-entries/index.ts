@@ -414,11 +414,8 @@ async function translateWithGoogle(
   let charsUsed = 0;
   const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
 
-  // Always use individual requests to prevent batch displacement via \n separator
-  const useIndividual = true;
-
-  if (useIndividual) {
-    for (let i = 0; i < entries.length; i++) {
+  // Individual requests only — batch mode removed to prevent displacement
+  for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const pe = protectedEntries[i];
       const text = pe.cleaned.trim();
@@ -488,94 +485,6 @@ async function translateWithGoogle(
         await new Promise(r => setTimeout(r, 100));
       }
     }
-  } else {
-    // Batch mode
-    const batchSize = 20;
-    for (let start = 0; start < entries.length; start += batchSize) {
-      const batchEntries = entries.slice(start, start + batchSize);
-      const batchProtected = protectedEntries.slice(start, start + batchSize);
-
-      const toTranslate: { idx: number; text: string; termLocks: TermLockResult }[] = [];
-      for (let i = 0; i < batchEntries.length; i++) {
-        const pe = batchProtected[i];
-        const text = pe.cleaned.trim();
-        if (!text) continue;
-
-        // Tag-only/symbolic entries must pass through unchanged
-        if (isTagOnlyOrSymbolic(text)) {
-          result[batchEntries[i].key] = restoreAndEnforce(batchEntries[i].original, text, pe.tags);
-          continue;
-        }
-
-        if (glossaryMap) {
-          const norm = text.toLowerCase();
-          const hit = glossaryMap.get(norm);
-          if (hit) {
-            result[batchEntries[i].key] = restoreAndEnforce(batchEntries[i].original, hit, pe.tags);
-            stats.directMatches++;
-            continue;
-          }
-        }
-        // Term locking per entry
-        let termLocks: TermLockResult = { lockedText: text, locks: [] };
-        if (glossaryMap && glossaryMap.size > 0) {
-          termLocks = lockTermsInText(text, glossaryMap);
-          stats.lockedTerms += termLocks.locks.length;
-        }
-        toTranslate.push({ idx: i, text: termLocks.lockedText, termLocks });
-      }
-
-      if (toTranslate.length === 0) continue;
-
-      // Use a unique separator that won't appear in entries (since \n inside entries is already shielded as NEWLINE_N)
-      const BATCH_SEP = '\n';
-      const joinedText = toTranslate.map(t => t.text).join(BATCH_SEP);
-
-      try {
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(joinedText)}`;
-        const response = await fetchWithRetry(url);
-        if (!response.ok) {
-          console.error(`Google Translate batch error: ${response.status}`);
-          await response.text();
-          continue;
-        }
-        const data = await response.json();
-
-        let fullTranslation = '';
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-          for (const segment of data[0]) {
-            if (Array.isArray(segment) && segment[0]) {
-              fullTranslation += segment[0];
-            }
-          }
-        }
-
-        const translations = fullTranslation.split(BATCH_SEP);
-
-        for (let j = 0; j < Math.min(toTranslate.length, translations.length); j++) {
-          const t = toTranslate[j];
-          let translation = translations[j]?.trim();
-          if (translation) {
-            translation = normalizeTagPlaceholders(translation);
-            translation = normalizeLockedTermPlaceholders(translation);
-            translation = unlockTerms(translation, t.termLocks.locks);
-            translation = stripUnexpectedPlaceholders(translation, new Set(batchProtected[t.idx].tags.keys()));
-            if (glossaryMap) {
-              translation = applyGlossaryPost(translation, glossaryMap);
-            }
-            result[batchEntries[t.idx].key] = restoreAndEnforce(batchEntries[t.idx].original, translation, batchProtected[t.idx].tags);
-            charsUsed += t.text.length;
-          }
-        }
-      } catch (err) {
-        console.error('Google Translate batch error:', err);
-      }
-
-      if (start + batchSize < entries.length) {
-        await new Promise(r => setTimeout(r, 200));
-      }
-    }
-  }
 
   return { translations: result, charsUsed, glossaryStats: stats };
 }

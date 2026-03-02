@@ -33,12 +33,23 @@ export function restoreTagsLocally(original: string, translation: string): strin
   for (const t of transTags) transCount.set(t, (transCount.get(t) || 0) + 1);
 
   let allPresent = true;
+  let hasExtra = false;
   for (const [tag, count] of origCount) {
-    if ((transCount.get(tag) || 0) < count) { allPresent = false; break; }
+    const tc = transCount.get(tag) || 0;
+    if (tc < count) { allPresent = false; break; }
+    if (tc > count) { hasExtra = true; }
+  }
+  // Check for foreign tags (tags in translation not in original)
+  let hasForeign = false;
+  for (const t of transTags) {
+    if (!origCount.has(t)) { hasForeign = true; break; }
+  }
+  if (allPresent && !hasExtra && !hasForeign) {
+    return translation; // Perfect match — nothing to do
   }
   if (allPresent) {
-    // All original tags present — but strip any AI-invented tags not in original
-    return stripForeignTags(original, translation, origTags);
+    // All original tags present but has extras or foreign — enforce exact multiset
+    return enforceExactTagMultiset(original, translation, origTags, origCount);
   }
 
   // Some tags are missing — rebuild
@@ -106,24 +117,43 @@ export function restoreTagsLocally(original: string, translation: string): strin
 }
 
 /**
- * Strip tags from translation that don't exist in the original text.
- * This catches AI-invented tags like [ML:icon icon=btn_a ] when the original has 1[ML].
+ * Enforce exact multiset: remove foreign tags AND extra duplicates of original tags.
+ * Final tag counts must exactly match original counts.
  */
-function stripForeignTags(original: string, translation: string, origTags: string[]): string {
-  const origTagSet = new Set(origTags);
+function enforceExactTagMultiset(original: string, translation: string, origTags: string[], origCount: Map<string, number>): string {
   const transTags = extractTags(translation);
   
-  // Check if there are any foreign tags
-  const hasForeign = transTags.some(t => !origTagSet.has(t));
-  if (!hasForeign) return translation;
-
-  // Remove foreign tags from translation
-  let result = translation;
-  for (const t of transTags) {
-    if (!origTagSet.has(t)) {
-      result = result.replace(t, '');
+  // Build allowed remaining count per tag
+  const remaining = new Map<string, number>();
+  for (const [tag, count] of origCount) remaining.set(tag, count);
+  
+  // Walk through translation tags and decide which to keep
+  const tagsToRemove: { tag: string; index: number }[] = [];
+  
+  // Find all tag matches in translation with their positions
+  const allMatches = [...translation.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))];
+  
+  // Process in order — keep first N occurrences, mark rest for removal
+  for (const m of allMatches) {
+    const tag = m[0];
+    const rem = remaining.get(tag);
+    if (rem !== undefined && rem > 0) {
+      remaining.set(tag, rem - 1); // keep this one
+    } else {
+      // Either foreign or extra duplicate — remove
+      tagsToRemove.push({ tag, index: m.index! });
     }
   }
+  
+  if (tagsToRemove.length === 0) return translation;
+  
+  // Remove from end to start to preserve indices
+  let result = translation;
+  for (let i = tagsToRemove.length - 1; i >= 0; i--) {
+    const { tag, index } = tagsToRemove[i];
+    result = result.slice(0, index) + result.slice(index + tag.length);
+  }
+  
   // Clean up double spaces
   return result.replace(/  +/g, ' ').trim();
 }

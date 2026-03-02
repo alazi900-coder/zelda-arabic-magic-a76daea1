@@ -108,6 +108,40 @@ describe("restoreTagsLocally", () => {
     expect(result).not.toContain("[ML:EnhanceParam");
   });
 
+  // === DUPLICATION PREVENTION (exact multiset enforcement) ===
+
+  it("removes extra duplicate of same original tag", () => {
+    const original = "Score [ML:Dash 4] here";
+    const translation = "النتيجة [ML:Dash 4] هنا [ML:Dash 4]";
+    const result = restoreTagsLocally(original, translation);
+    const count = (result.match(/\[ML:Dash 4\]/g) || []).length;
+    expect(count).toBe(1);
+  });
+
+  it("removes extra duplicate of N[TAG] style", () => {
+    const original = "Press 1[ML] here";
+    const translation = "اضغط 1[ML] هنا 1[ML]";
+    const result = restoreTagsLocally(original, translation);
+    const count = (result.match(/1\[ML\]/g) || []).length;
+    expect(count).toBe(1);
+  });
+
+  it("strips foreign AND extra tags together", () => {
+    const original = "1[ML] text";
+    const translation = "1[ML] 1[ML] [ML:Fake param=1] نص";
+    const result = restoreTagsLocally(original, translation);
+    expect((result.match(/1\[ML\]/g) || []).length).toBe(1);
+    expect(result).not.toContain("[ML:Fake");
+  });
+
+  it("idempotency: running twice produces same result", () => {
+    const original = "Score [ML:Dash 4] end";
+    const translation = "النتيجة [ML:Dash 4] [ML:Dash 4] نهاية";
+    const first = restoreTagsLocally(original, translation);
+    const second = restoreTagsLocally(original, first);
+    expect(second).toBe(first);
+  });
+
   // === Legacy FFF9-FFFC backward compat ===
 
   it("still works with legacy FFF9-FFFC markers", () => {

@@ -1786,29 +1786,37 @@ export function useEditorState() {
       if (!translation?.trim()) continue;
       if (!hasTechnicalBracketTag(entry.original)) continue;
 
-      const colonTags = entry.original.match(/\[\w+:[^\]]*?\s*\]/g) ?? [];
-      const bracketNumTags = entry.original.match(/\[[A-Z]{2,10}\]\d+/g) ?? [];
-      const numBracketTags = entry.original.match(/\d+\[[A-Z]{2,10}\]/g) ?? [];
-      const equalsTags = entry.original.match(/\[\w+=\w[^\]]*\]/g) ?? [];
-      const braceTags = entry.original.match(/\{\w+:\w[^}]*\}/g) ?? [];
-      const allOriginalTags = [...colonTags, ...bracketNumTags, ...numBracketTags, ...equalsTags, ...braceTags];
-      const hasMissingOriginalTag = allOriginalTags.some((tag) => !translation.includes(tag));
-
-      // Detect AI-invented tags: tags in translation that don't exist in original
-      const transColonTags = translation.match(/\[\w+:[^\]]*?\s*\]/g) ?? [];
-      const origTagSet = new Set(allOriginalTags);
-      const hasForeignTag = transColonTags.some(t => !origTagSet.has(t));
+      // Use unified TAG_REGEX from xc3-tag-restoration for comprehensive tag detection
+      const TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\[\s*\w+\s*:[^\]]*?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+      const allOriginalTags = [...entry.original.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))].map(m => m[0]);
+      
+      // Build original tag counts
+      const origTagCount = new Map<string, number>();
+      for (const t of allOriginalTags) origTagCount.set(t, (origTagCount.get(t) || 0) + 1);
+      
+      // Check translation tags
+      const transTagsBefore = [...translation.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))].map(m => m[0]);
+      const transCountBefore = new Map<string, number>();
+      for (const t of transTagsBefore) transCountBefore.set(t, (transCountBefore.get(t) || 0) + 1);
+      
+      const hasMissingOriginalTag = allOriginalTags.some(t => (transCountBefore.get(t) || 0) < (origTagCount.get(t) || 0));
+      const hasForeignTag = transTagsBefore.some(t => !origTagCount.has(t));
+      const hasExtraTag = [...transCountBefore.entries()].some(([t, c]) => origTagCount.has(t) && c > (origTagCount.get(t) || 0));
 
       const { text: after, stats } = fixTagBracketsStrict(entry.original, translation);
       
-      // Re-check on the FIXED text, not the original translation
-      const hasMissingAfterFix = allOriginalTags.some((tag) => !after.includes(tag));
-      const afterColonTags = after.match(/\[\w+:[^\]]*?\s*\]/g) ?? [];
-      const hasForeignAfterFix = afterColonTags.some(t => !origTagSet.has(t));
+      // Re-check on FIXED text with same unified regex
+      const transTagsAfter = [...after.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))].map(m => m[0]);
+      const transCountAfter = new Map<string, number>();
+      for (const t of transTagsAfter) transCountAfter.set(t, (transCountAfter.get(t) || 0) + 1);
       
-      // Only run restoreTagsLocally if tags are STILL missing/foreign after bracket fix
+      const hasMissingAfterFix = allOriginalTags.some(t => (transCountAfter.get(t) || 0) < (origTagCount.get(t) || 0));
+      const hasForeignAfterFix = transTagsAfter.some(t => !origTagCount.has(t));
+      const hasExtraAfterFix = [...transCountAfter.entries()].some(([t, c]) => origTagCount.has(t) && c > (origTagCount.get(t) || 0));
+      
+      // Run restoreTagsLocally if tags are STILL wrong after bracket fix (missing, foreign, OR extra)
       let finalAfter = after;
-      if (hasMissingAfterFix || hasForeignAfterFix) {
+      if (hasMissingAfterFix || hasForeignAfterFix || hasExtraAfterFix) {
         finalAfter = restoreTagsLocally(entry.original, after);
       }
       

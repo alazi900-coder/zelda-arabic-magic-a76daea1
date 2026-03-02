@@ -207,9 +207,14 @@ const Editor = () => {
             <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/70 to-background" />
           </div>
           <div className="relative z-10 w-full max-w-6xl mx-auto">
-            <Link to={processPath} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-3 font-body text-sm">
-              <ArrowRight className="w-4 h-4" /> العودة للمعالجة
-            </Link>
+            <div className="flex items-center justify-between w-full mb-3">
+              <Link to={processPath} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground font-body text-sm">
+                <ArrowRight className="w-4 h-4" /> العودة للمعالجة
+              </Link>
+              <Link to="/settings" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground font-body text-sm bg-background/40 backdrop-blur-sm rounded-lg px-3 py-1.5">
+                ⚙️ الإعدادات
+              </Link>
+            </div>
             <h1 className="text-2xl md:text-3xl font-display font-black mb-1 drop-shadow-lg">محرر الترجمة ✍️</h1>
             <p className="text-sm text-muted-foreground font-body">عدّل النصوص العربية يدوياً أو استخدم الترجمة التلقائية</p>
           </div>

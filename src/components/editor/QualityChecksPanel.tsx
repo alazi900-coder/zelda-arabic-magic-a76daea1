@@ -199,6 +199,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }
   const { isEnabled } = useFeatureFlags();
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   const results = useMemo(() => {
     const issues: QualityIssue[] = [];
@@ -274,6 +275,12 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }
 
   const allIssueKeys = new Set(results.issues.map(i => i.key));
 
+  const filteredIssues = activeFilter
+    ? results.issues.filter(i => i.issues.some(iss => iss.type === activeFilter))
+    : results.issues;
+
+  const filteredKeys = new Set(filteredIssues.map(i => i.key));
+
   return (
     <Card className="mb-4 border-emerald-500/30 bg-emerald-500/5">
       <Collapsible open={open} onOpenChange={setOpen}>
@@ -294,8 +301,8 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }
             </div>
             <div className="flex items-center gap-2">
               {totalIssues > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={(e) => { e.stopPropagation(); onFilterByKeys(allIssueKeys); }}>
-                  فلترة المشاكل
+                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={(e) => { e.stopPropagation(); onFilterByKeys(activeFilter ? filteredKeys : allIssueKeys); }}>
+                  فلترة {activeFilter ? CHECK_LABELS[activeFilter] : 'المشاكل'}
                 </Button>
               )}
               <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setDismissed(true); }}>
@@ -309,10 +316,20 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }
             {/* Summary badges */}
             <div className="flex flex-wrap gap-2 mb-3">
               {Object.entries(results.typeCounts).map(([type, count]) => (
-                <Badge key={type} variant="outline" className="text-xs gap-1">
+                <Badge
+                  key={type}
+                  variant={activeFilter === type ? "default" : "outline"}
+                  className={`text-xs gap-1 cursor-pointer transition-colors ${activeFilter === type ? 'ring-2 ring-primary' : 'hover:bg-accent/20'}`}
+                  onClick={() => setActiveFilter(activeFilter === type ? null : type)}
+                >
                   {CHECK_LABELS[type] || type} <span className="font-bold">{count}</span>
                 </Badge>
               ))}
+              {activeFilter && (
+                <Badge variant="outline" className="text-xs gap-1 cursor-pointer hover:bg-destructive/20" onClick={() => setActiveFilter(null)}>
+                  <X className="w-3 h-3" /> إلغاء الفلتر
+                </Badge>
+              )}
             </div>
 
             {/* Fixable types */}
@@ -327,7 +344,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }
 
             {/* Issue list */}
             <div className="max-h-80 overflow-y-auto space-y-2">
-              {results.issues.slice(0, 50).map((issue) => (
+              {filteredIssues.slice(0, 50).map((issue) => (
                 <div key={issue.key} className="bg-background/40 rounded p-2 space-y-1">
                   <div className="flex items-start justify-between">
                     <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">{issue.entryLabel}</span>
@@ -345,14 +362,14 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }
                       </Button>
                     )}
                   </div>
-                  {issue.issues.map((iss, i) => (
+                  {(activeFilter ? issue.issues.filter(iss => iss.type === activeFilter) : issue.issues).map((iss, i) => (
                     <p key={i} className="text-xs text-amber-300 font-body">{iss.message}</p>
                   ))}
                 </div>
               ))}
-              {results.issues.length > 50 && (
+              {filteredIssues.length > 50 && (
                 <p className="text-xs text-muted-foreground text-center py-2">
-                  و {results.issues.length - 50} مشكلة أخرى...
+                  و {filteredIssues.length - 50} مشكلة أخرى...
                 </p>
               )}
             </div>

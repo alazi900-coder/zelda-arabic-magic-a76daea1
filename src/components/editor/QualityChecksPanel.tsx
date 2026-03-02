@@ -19,6 +19,7 @@ interface QualityChecksPanelProps {
   state: EditorState;
   onApplyFix: (key: string, fixedText: string) => void;
   onFilterByKeys: (keys: Set<string>) => void;
+  onNavigateToEntry?: (key: string) => void;
 }
 
 // === Check functions ===
@@ -195,7 +196,7 @@ const CHECK_LABELS: Record<string, string> = {
   grammar_check: "📝 قواعد نحوية",
 };
 
-export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }: QualityChecksPanelProps) {
+export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry }: QualityChecksPanelProps) {
   const { isEnabled } = useFeatureFlags();
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -345,9 +346,9 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys }
             {/* Issue list */}
             <div className="max-h-80 overflow-y-auto space-y-2">
               {filteredIssues.slice(0, 50).map((issue) => (
-                <div key={issue.key} className="bg-background/40 rounded p-2 space-y-1">
+                <div key={issue.key} className={`bg-background/40 rounded p-2 space-y-1 ${onNavigateToEntry ? 'cursor-pointer hover:bg-background/60 transition-colors' : ''}`} onClick={() => onNavigateToEntry?.(issue.key)}>
                   <div className="flex items-start justify-between">
-                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">{issue.entryLabel}</span>
+                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">{issue.entryLabel} {onNavigateToEntry && <span className="text-primary">← انتقل</span>}</span>
                     {issue.issues.some(i => i.fix) && (
                       <Button
                         size="sm"

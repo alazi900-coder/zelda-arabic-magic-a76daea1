@@ -550,6 +550,23 @@ const Editor = () => {
             onFilterByKeys={() => {
               editor.setFilterStatus('problems');
             }}
+            onNavigateToEntry={(key) => {
+              // Reset filters to show all entries so we can find it
+              editor.setFilterStatus('all');
+              editor.setSearch('');
+              // Wait for filter reset, then find and navigate
+              setTimeout(() => {
+                const idx = editor.state.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key);
+                if (idx >= 0) {
+                  const page = Math.floor(idx / 50);
+                  editor.setCurrentPage(page);
+                  setTimeout(() => {
+                    const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 100);
+                }
+              }, 50);
+            }}
           />
 
           {/* Cleanup Tools */}

@@ -141,7 +141,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   };
 
   return (
-    <Card className={`p-3 md:p-4 border-border/50 hover:border-border transition-colors ${hasProblem ? 'border-destructive/30 bg-destructive/5' : ''}`}>
+    <Card data-entry-key={key} className={`p-3 md:p-4 border-border/50 hover:border-border transition-colors ${hasProblem ? 'border-destructive/30 bg-destructive/5' : ''}`}>
       <div className={`flex ${isMobile ? 'flex-col' : 'items-start'} gap-3 md:gap-4`}>
         <div className="flex-1 min-w-0">
           {/* Table & column context for BDAT entries */}

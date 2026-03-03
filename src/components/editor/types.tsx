@@ -107,7 +107,9 @@ export const FILE_CATEGORIES: FileCategory[] = [
 // === BDAT (Xenoblade) Game Categories ===
 export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-title-menu", label: "القائمة الرئيسية", emoji: "🏠", icon: "Home", color: "text-emerald-400" },
-  { id: "bdat-menu", label: "القوائم والواجهة", emoji: "🖥️", icon: "Monitor", color: "text-sky-400" },
+  { id: "bdat-menu-shop", label: "قوائم المتاجر", emoji: "🛒", icon: "ShoppingCart", color: "text-green-400" },
+  { id: "bdat-menu-status", label: "قوائم الحالة والمعدات", emoji: "📊", icon: "BarChart3", color: "text-cyan-400" },
+  { id: "bdat-menu", label: "قوائم أخرى", emoji: "🖥️", icon: "Monitor", color: "text-sky-400" },
   { id: "bdat-battle", label: "هجمات وإحصائيات", emoji: "⚔️", icon: "Swords", color: "text-red-400" },
   { id: "bdat-character", label: "الشخصيات والأبطال", emoji: "🧑‍🤝‍🧑", icon: "Users", color: "text-blue-400" },
   { id: "bdat-enemy", label: "الأعداء والوحوش", emoji: "👹", icon: "Skull", color: "text-rose-500" },
@@ -218,6 +220,7 @@ export function categorizeByFilename(filename: string): string | null {
     'fld': 'bdat-field',
     'menu': 'bdat-menu',
     'mnu': 'bdat-menu',
+    'shop': 'bdat-menu-shop',
     'hero_quest': 'bdat-hero-quest',
     'hero quest': 'bdat-hero-quest',
     'hro': 'bdat-hero-quest',
@@ -294,9 +297,17 @@ export function categorizeByTableName(tbl: string): string | null {
   if (/^(tip_|hlp_|tut_|mnu_tutorial)/i.test(tbl)) return "bdat-tips";
   if (/^msg_mnu_tutorial/i.test(tbl)) return "bdat-tips";
 
-  // === القوائم والواجهة ===
+  // === قوائم المتاجر ===
+  if (/^mnu_shop/i.test(tbl) || /mnu_shop/i.test(tbl)) return "bdat-menu-shop";
+  if (/^msg_mnu_shop/i.test(tbl)) return "bdat-menu-shop";
+  
+  // === قوائم الحالة والمعدات ===
+  if (/^mnu_(status|equip|class|hero|gem|weapon|armor|item|collect|achievement)/i.test(tbl)) return "bdat-menu-status";
+  if (/^msg_mnu_(status|equip|class|hero|gem|weapon|armor|item|collect|achievement)/i.test(tbl)) return "bdat-menu-status";
+  
+  // === قوائم أخرى ===
   if (/^mnu_/i.test(tbl) || /^menu$/i.test(tbl)) return "bdat-menu";
-  if (/mnu_option|mnu_msg|mnu_name|mnu_shop|mnu_camp|mnu_map|mnu_status|mnu_battle|mnu_quest|mnu_hero|mnu_system|mnu_achievement|mnu_class|mnu_collect|mnu_item|mnu_gem|mnu_filter|mnu_sort|mnu_font|mnu_res|mnu_layer|mnu_text|mnu_weapon/i.test(tbl)) return "bdat-menu";
+  if (/mnu_option|mnu_msg|mnu_name|mnu_camp|mnu_map|mnu_battle|mnu_quest|mnu_system|mnu_filter|mnu_sort|mnu_font|mnu_res|mnu_layer|mnu_text/i.test(tbl)) return "bdat-menu";
 
   // === المهارات والفنون (must check before generic btl_) ===
   if (/^btl_(skill|art|arts|spc|talent|master)/i.test(tbl)) return "bdat-skill";
@@ -336,6 +347,8 @@ export function categorizeByTableName(tbl: string): string | null {
   // === الأحداث والقصة ===
   if (/^(evt_|tlk_|fld_talk|fld_event)/i.test(tbl)) return "bdat-story";
   // msg_ sub-categories (check specific prefixes before generic msg_)
+  if (/^msg_mnu_(shop)/i.test(tbl)) return "bdat-menu-shop";
+  if (/^msg_mnu_(status|equip|class|hero|gem|weapon|armor|item|collect|achievement)/i.test(tbl)) return "bdat-menu-status";
   if (/^msg_mnu_/i.test(tbl)) return "bdat-menu";
   // msg_btl_ sub-categories: skill/buff BEFORE generic battle catch-all
   if (/^msg_btl_.*(skill|art|arts|talent|master|spc)/i.test(tbl)) return "bdat-skill";
@@ -408,6 +421,10 @@ export function categorizeByColumnName(columnName: string): string | null {
   if (!columnName || /^0x[0-9a-f]+$/i.test(columnName)) return null;
   const col = columnName.toLowerCase();
 
+  // قوائم المتاجر
+  if (/shop|price|buy|sell|trade|exchange/i.test(col) && !/enemy/i.test(col)) return "bdat-menu-shop";
+  // قوائم الحالة
+  if (/^(status|equip|loadout|formation)/i.test(columnName)) return "bdat-menu-status";
   // القوائم والواجهة - UI column patterns
   if (/^(msg_caption|msgidcaption|caption|windowtitle|btncaption|menucategory|menugroup|menuicon|menupriority|optiontext|overwritetext|pagetitle|filtern|sortn)/i.test(columnName)) return "bdat-menu";
   if (/window|btn|layout|menu(?!mapimage)/i.test(col) && !/enemy|battle/i.test(col)) return "bdat-menu";

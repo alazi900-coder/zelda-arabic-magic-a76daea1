@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { categorizeBdatTable, categorizeByFilename, isMainMenuText } from "@/components/editor/types";
 
 describe("categorizeBdatTable - table name prefixes", () => {
-  it("classifies MNU_ tables as menu", () => {
-    expect(categorizeBdatTable("MNU_ShopList[0].Msg_Name")).toBe("bdat-menu");
+  it("classifies MNU_ShopList as shop menu", () => {
+    expect(categorizeBdatTable("MNU_ShopList[0].Msg_Name")).toBe("bdat-menu-shop");
   });
   it("classifies BTL_Arts as skill (arts are skills)", () => {
     expect(categorizeBdatTable("BTL_Arts[5].Name")).toBe("bdat-skill");

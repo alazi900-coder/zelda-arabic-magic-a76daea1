@@ -132,7 +132,42 @@ function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<stri
 
 function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>): string {
   const restored = restoreTags(translated, tags);
-  return enforceTagIntegrity(original, restored);
+  const enforced = enforceTagIntegrity(original, restored);
+  return balanceLines(enforced);
+}
+
+/** Split long lines into balanced chunks (~MAX_LINE_WIDTH chars each) */
+const MAX_LINE_WIDTH = 42;
+
+function balanceLines(text: string): string {
+  // Don't touch text that already has newlines (already formatted)
+  if (text.includes('\n')) return text;
+  // Don't touch short text
+  if (text.length <= MAX_LINE_WIDTH) return text;
+  // Don't touch texts with technical tags that could break
+  if (/[\uE000-\uE0FF]|[\uFFF9-\uFFFC]|\[.*?:.*?\]/.test(text)) return text;
+
+  const words = text.split(/\s+/);
+  if (words.length < 2) return text;
+
+  const totalLen = text.length;
+  const numLines = Math.ceil(totalLen / MAX_LINE_WIDTH);
+  const targetLen = Math.ceil(totalLen / numLines);
+
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (currentLine && (currentLine.length + 1 + word.length) > targetLen && lines.length < numLines - 1) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = currentLine ? currentLine + ' ' + word : word;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  return lines.join('\n');
 }
 
 /** Unified regex matching all supported technical tag formats */
@@ -772,7 +807,7 @@ ${textsBlock}
         translated = applyGlossaryPost(translated, glossaryMap);
       }
       const restored = restoreTags(translated, item.pe.tags);
-      result[item.entry.key] = enforceTagIntegrity(item.entry.original, restored);
+      result[item.entry.key] = balanceLines(enforceTagIntegrity(item.entry.original, restored));
     }
     return result;
   };

@@ -763,7 +763,7 @@ export function useEditorState() {
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
     filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest,
   });
-  const { translating, translatingSingle, tmStats, glossarySessionStats, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleStopTranslate, handleRetranslatePage, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations, discardPendingTranslations } = translation;
+  const { translating, translatingSingle, tmStats, glossarySessionStats, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations, discardPendingTranslations } = translation;
 
   // === Local (offline) fix for damaged tags — no AI needed ===
   const handleLocalFixDamagedTag = useCallback((entry: ExtractedEntry) => {
@@ -1940,7 +1940,7 @@ export function useEditorState() {
     toggleProtection, toggleTechnicalBypass,
     handleProtectAllArabic, handleFixReversed, handleFixAllReversed,
     updateTranslation, handleUndoTranslation,
-    handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleStopTranslate,
+    handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate,
     handleRetranslatePage, handleFixDamagedTags, handleLocalFixDamagedTag, handleLocalFixAllDamagedTags, handleLocalFixSelectedTags, handleRedistributeTags, handleReviewTranslations,
     applyPendingTranslations, discardPendingTranslations,
     handleSuggestShorterTranslations, handleApplyShorterTranslation, handleApplyAllShorterTranslations,

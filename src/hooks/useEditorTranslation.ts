@@ -891,6 +891,55 @@ export function useEditorTranslation({
     }
   };
 
+  /** Translate using glossary only — no AI, no TM */
+  const handleTranslateFromGlossaryOnly = () => {
+    if (!state) return;
+    const glossaryMap = parseGlossaryMap(activeGlossary);
+    if (glossaryMap.size === 0) {
+      toast({ title: "⚠️ لا يوجد قاموس", description: "يرجى تحميل قاموس أولاً قبل استخدام هذه الميزة", variant: "destructive" });
+      return;
+    }
+    const arabicRegex = /[\u0600-\u06FF]/;
+    const glossaryTranslations: Record<string, string> = {};
+    let skipEmpty = 0, skipArabic = 0, skipTechnical = 0, skipTranslated = 0, skipNoMatch = 0;
+
+    const targetEntries = filterCategory.length > 0
+      ? state.entries.filter(e => filterCategory.includes(categorizeEntry(e)))
+      : state.entries;
+
+    for (const e of targetEntries) {
+      const key = `${e.msbtFile}:${e.index}`;
+      if (!e.original.trim()) { skipEmpty++; continue; }
+      if (arabicRegex.test(e.original)) { skipArabic++; continue; }
+      if (isTechnicalText(e.original) && !state.technicalBypass?.has(key)) { skipTechnical++; continue; }
+      if (state.translations[key]?.trim()) { skipTranslated++; continue; }
+      const norm = e.original.trim().toLowerCase();
+      const glossaryHit = glossaryMap.get(norm);
+      if (glossaryHit) {
+        glossaryTranslations[key] = glossaryHit;
+      } else {
+        skipNoMatch++;
+      }
+    }
+
+    const count = Object.keys(glossaryTranslations).length;
+    if (count === 0) {
+      const reasons: string[] = [];
+      if (skipTranslated > 0) reasons.push(`${skipTranslated} مترجم بالفعل`);
+      if (skipNoMatch > 0) reasons.push(`${skipNoMatch} بدون تطابق في القاموس`);
+      if (skipArabic > 0) reasons.push(`${skipArabic} نص عربي`);
+      if (skipTechnical > 0) reasons.push(`${skipTechnical} نص تقني`);
+      setTranslateProgress(`⚠️ لم يتم العثور على تطابقات في القاموس${reasons.length > 0 ? ` (${reasons.join('، ')})` : ''}`);
+      setTimeout(() => setTranslateProgress(""), 5000);
+      return;
+    }
+
+    const safeTranslations = autoFixTags(glossaryTranslations);
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...safeTranslations } } : null);
+    setTranslateProgress(`✅ تم ترجمة ${count} نص من القاموس فقط 📖 (بدون ذكاء اصطناعي)${skipNoMatch > 0 ? ` — ${skipNoMatch} بدون تطابق` : ''}`);
+    setTimeout(() => setTranslateProgress(""), 6000);
+  };
+
   return {
     translating,
     translatingSingle,
@@ -906,6 +955,7 @@ export function useEditorTranslation({
     handleAutoTranslate,
     handleTranslatePage,
     handleTranslateAllPages,
+    handleTranslateFromGlossaryOnly,
     handleStopTranslate,
     handleRetranslatePage,
     handleFixDamagedTags,

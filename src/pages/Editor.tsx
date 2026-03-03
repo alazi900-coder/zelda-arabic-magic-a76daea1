@@ -283,6 +283,9 @@ const Editor = () => {
                 <Button size={isMobile ? "default" : "lg"} variant="default" onClick={editor.handleAutoTranslate} disabled={editor.translating} className="font-display font-bold px-4 md:px-6">
                   <Sparkles className="w-4 h-4" /> ترجمة تلقائية 🤖
                 </Button>
+                <Button size={isMobile ? "default" : "lg"} variant="secondary" onClick={editor.handleTranslateFromGlossaryOnly} disabled={editor.translating} className="font-display font-bold px-4 md:px-6">
+                  <BookOpen className="w-4 h-4" /> الترجمة من القاموس 📖
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size={isMobile ? "default" : "lg"} variant="secondary" disabled={editor.translating} className="font-display font-bold px-4 md:px-6">

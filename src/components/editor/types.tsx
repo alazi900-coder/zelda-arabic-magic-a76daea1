@@ -114,6 +114,7 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-item", label: "الأدوات والمعدات", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
   { id: "bdat-hero-quest", label: "مهام الأبطال", emoji: "🦸", icon: "ShieldCheck", color: "text-amber-500" },
   { id: "bdat-quest", label: "المهام والتحديات", emoji: "📜", icon: "ScrollText", color: "text-orange-400" },
+  { id: "bdat-colony", label: "المستعمرات والمعسكرات", emoji: "🏕️", icon: "Tent", color: "text-teal-500" },
   { id: "bdat-field", label: "المواقع والخرائط", emoji: "🗺️", icon: "MapPin", color: "text-emerald-400" },
   { id: "bdat-story", label: "حوارات القصة", emoji: "📖", icon: "BookOpen", color: "text-violet-400" },
   { id: "bdat-skill", label: "المهارات والفنون", emoji: "✨", icon: "Sparkles", color: "text-yellow-400" },
@@ -186,6 +187,8 @@ export function categorizeByFilename(filename: string): string | null {
     'hero_quest': 'bdat-hero-quest',
     'hero quest': 'bdat-hero-quest',
     'hro': 'bdat-hero-quest',
+    'colony': 'bdat-colony',
+    'camp': 'bdat-colony',
     'quest': 'bdat-quest',
     'qst': 'bdat-quest',
     'system': 'bdat-system',
@@ -260,6 +263,9 @@ export function categorizeByTableName(tbl: string): string | null {
   // === نظام القتال (هجمات وإحصائيات) ===
   if (/^btl_/i.test(tbl) || /^(rsc_|wpn_)/i.test(tbl)) return "bdat-battle";
 
+  // === المستعمرات والمعسكرات ===
+  if (/^(colony_|camp_|fld_colony|fld_camp)/i.test(tbl)) return "bdat-colony";
+
   // === الشخصيات ===
   if (/^chr_/i.test(tbl) || /^(fld_npc|fld_mob|fld_kizuna)/i.test(tbl)) return "bdat-character";
 
@@ -285,7 +291,8 @@ export function categorizeByTableName(tbl: string): string | null {
   if (/^msg_qst_/i.test(tbl)) return "bdat-quest";
   if (/^msg_item_/i.test(tbl)) return "bdat-item";
   if (/^msg_enemy_/i.test(tbl)) return "bdat-enemy";
-  if (/^msg_colony_/i.test(tbl)) return "bdat-field";
+  if (/^msg_colony_/i.test(tbl)) return "bdat-colony";
+  if (/^msg_camp_/i.test(tbl)) return "bdat-colony";
   if (/^msg_comspot_/i.test(tbl)) return "bdat-field";
   if (/^msg_extra_/i.test(tbl)) return "bdat-dlc";
   // Dialogue / cutscene files: msg_ev*, msg_fev*, msg_ask*, msg_bev*

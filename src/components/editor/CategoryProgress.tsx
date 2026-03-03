@@ -7,7 +7,7 @@ import {
   Gem, Shield, Lightbulb, Backpack, FolderOpen,
   Home, Settings, MonitorSmartphone, Pause, Sword, Target, ShieldCheck,
   Shirt, FlaskConical, Utensils, Key, BookText, Map, Drama, MessageCircle,
-  Gamepad2, MessageSquare, SlidersHorizontal, Zap,
+  Gamepad2, MessageSquare, SlidersHorizontal, Zap, Tent,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -16,7 +16,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Sparkles, Gem, Shield, Lightbulb, Backpack, FolderOpen,
   Home, Settings, MonitorSmartphone, Pause, Sword, Target, ShieldCheck,
   Shirt, FlaskConical, Utensils, Key, BookText, Map, Drama, MessageCircle,
-  Gamepad2, MessageSquare, Wrench, SlidersHorizontal, Zap,
+  Gamepad2, MessageSquare, Wrench, SlidersHorizontal, Zap, Tent,
 };
 
 interface CategoryProgressProps {

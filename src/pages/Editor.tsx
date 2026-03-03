@@ -68,6 +68,7 @@ import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
 import CleanupToolsPanel from "@/components/editor/CleanupToolsPanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 import MismatchDetectorPanel from "@/components/editor/MismatchDetectorPanel";
+import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -1040,6 +1041,7 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade المدمج</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadUIMenusGlossary}>📋 قاموس القوائم والواجهة</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadFullGlossary}>📚 القاموس الشامل (شخصيات + مواقع + مصطلحات)</DropdownMenuItem>
+                   <DropdownMenuItem onClick={editor.handleLoadCombatGlossary}>⚔️ قاموس القتال والتأثيرات</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">🔄 إنشاء تلقائي</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleGenerateGlossaryFromTranslations}>✨ إنشاء قاموس من الترجمات</DropdownMenuItem>
@@ -1188,6 +1190,7 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade المدمج</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadUIMenusGlossary}>📋 قاموس القوائم والواجهة</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadFullGlossary}>📚 القاموس الشامل (شخصيات + مواقع + مصطلحات)</DropdownMenuItem>
+                   <DropdownMenuItem onClick={editor.handleLoadCombatGlossary}>⚔️ قاموس القتال والتأثيرات</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">🔄 إنشاء تلقائي</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleGenerateGlossaryFromTranslations}>✨ إنشاء قاموس من الترجمات</DropdownMenuItem>
@@ -1582,6 +1585,16 @@ const Editor = () => {
             newTranslations={editor.pendingPageTranslations}
             onApply={(selectedKeys) => editor.applyPendingTranslations(selectedKeys)}
             onDiscard={editor.discardPendingTranslations}
+          />
+        )}
+
+        {editor.pendingMerge && (
+          <GlossaryMergePreviewDialog
+            open={!!editor.pendingMerge}
+            onClose={() => editor.setPendingMerge(null)}
+            onConfirm={(accepted) => editor.applyMergeDiffs(accepted, editor.pendingMerge!.replace)}
+            glossaryName={editor.pendingMerge.name}
+            diffs={editor.pendingMerge.diffs}
           />
         )}
       </div>

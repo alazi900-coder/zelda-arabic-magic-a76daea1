@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { EditorState } from "@/components/editor/types";
+import type { GlossaryMergeDiff } from "@/components/editor/GlossaryMergePreviewDialog";
 
 interface UseEditorGlossaryProps {
   state: EditorState | null;
@@ -11,10 +12,18 @@ interface UseEditorGlossaryProps {
   userId?: string;
 }
 
+export interface PendingGlossaryMerge {
+  name: string;
+  diffs: GlossaryMergeDiff[];
+  rawText: string;
+  replace: boolean;
+}
+
 export function useEditorGlossary({
   state, setState, setLastSaved, setCloudSyncing, setCloudStatus, userId,
 }: UseEditorGlossaryProps) {
   const [glossaryEnabled, setGlossaryEnabled] = useState(true);
+  const [pendingMerge, setPendingMerge] = useState<PendingGlossaryMerge | null>(null);
 
   // === Computed ===
   const glossaryTermCount = useMemo(() => {
@@ -43,6 +52,25 @@ export function useEditorGlossary({
     return map;
   }, []);
 
+  // === Compute diffs between current glossary and incoming text ===
+  const computeGlossaryDiffs = useCallback((incoming: string, currentGlossary: string): GlossaryMergeDiff[] => {
+    const currentMap = parseGlossaryMap(currentGlossary);
+    const incomingMap = parseGlossaryMap(incoming);
+    const diffs: GlossaryMergeDiff[] = [];
+    
+    for (const [key, newVal] of incomingMap) {
+      const oldVal = currentMap.get(key);
+      if (!oldVal) {
+        diffs.push({ key, newValue: newVal, type: 'new' });
+      } else if (oldVal !== newVal) {
+        diffs.push({ key, newValue: newVal, oldValue: oldVal, type: 'changed' });
+      } else {
+        diffs.push({ key, newValue: newVal, type: 'same' });
+      }
+    }
+    return diffs;
+  }, [parseGlossaryMap]);
+
   // === Merge helper ===
   const mergeGlossaryText = (prev: EditorState, newText: string): EditorState => {
     const existing = prev.glossary?.trim() || '';
@@ -59,7 +87,39 @@ export function useEditorGlossary({
     return { ...prev, glossary: Array.from(seen.values()).join('\n') };
   };
 
-  // === Import from file ===
+  // === Apply accepted diffs ===
+  const applyMergeDiffs = useCallback((accepted: GlossaryMergeDiff[], replace: boolean) => {
+    const acceptedText = accepted
+      .filter(d => d.type !== 'same' || replace)
+      .map(d => `${d.key}=${d.newValue}`)
+      .join('\n');
+    
+    if (replace) {
+      // For replace mode, build full text from accepted items
+      const allAccepted = accepted.map(d => `${d.key}=${d.newValue}`).join('\n');
+      setState(prev => prev ? { ...prev, glossary: allAccepted } : null);
+    } else {
+      setState(prev => prev ? mergeGlossaryText(prev, acceptedText) : null);
+    }
+    
+    const count = accepted.filter(d => d.type !== 'same').length;
+    setLastSaved(`📖 تم دمج ${count} مصطلح`);
+    setTimeout(() => setLastSaved(""), 3000);
+    setPendingMerge(null);
+  }, [setState, setLastSaved]);
+
+  // === Clean glossary text ===
+  const cleanGlossaryText = (rawText: string): string => {
+    return rawText.split('\n').map(line => {
+      const trimmed = line.trimEnd();
+      if (/^[#%+=\-.\\/;:]+\s*=\s*[#%+=\-.\\/;:]+\s*$/.test(trimmed)) return null;
+      if (/^#\[ML:/.test(trimmed)) return null;
+      if (/^\+\[ML:/.test(trimmed)) return null;
+      return trimmed;
+    }).filter(l => l !== null).join('\n');
+  };
+
+  // === Import from file (with merge preview) ===
   const handleImportGlossary = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -72,66 +132,62 @@ export function useEditorGlossary({
         let newTerms = '';
         for (const file of Array.from(files)) {
           const rawText = await file.text();
-          // Trim trailing spaces from each line
           const cleaned = rawText.split('\n').map(l => l.trimEnd()).join('\n');
           newTerms += (newTerms ? '\n' : '') + cleaned;
         }
-        setState(prev => {
-          if (!prev) return null;
-          const existing = prev.glossary?.trim() || '';
-          const merged = existing ? existing + '\n' + newTerms : newTerms;
-          const seen = new Map<string, string>();
-          for (const line of merged.split('\n')) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
-            const eqIdx = trimmed.indexOf('=');
-            if (eqIdx < 1) continue;
-            const key = trimmed.slice(0, eqIdx).trim().toLowerCase();
-            seen.set(key, trimmed);
-          }
-          return { ...prev, glossary: Array.from(seen.values()).join('\n') };
-        });
-        const fileNames = Array.from(files).map(f => f.name).join('، ');
-        const newCount = newTerms.split('\n').filter(l => {
-          const t = l.trim();
-          return t && !t.startsWith('#') && !t.startsWith('//') && t.includes('=');
-        }).length;
-        setLastSaved(`📖 تم دمج ${newCount} مصطلح من (${fileNames})`);
-        setTimeout(() => setLastSaved(""), 4000);
+        const currentGlossary = state?.glossary || '';
+        const diffs = computeGlossaryDiffs(newTerms, currentGlossary);
+        const hasChanges = diffs.some(d => d.type !== 'same');
+        
+        if (hasChanges && currentGlossary.trim()) {
+          const fileNames = Array.from(files).map(f => f.name).join('، ');
+          setPendingMerge({ name: fileNames, diffs, rawText: newTerms, replace: false });
+        } else {
+          // No existing glossary or no conflicts — merge directly
+          setState(prev => prev ? mergeGlossaryText(prev, newTerms) : null);
+          const count = newTerms.split('\n').filter(l => {
+            const t = l.trim();
+            return t && !t.startsWith('#') && !t.startsWith('//') && t.includes('=');
+          }).length;
+          setLastSaved(`📖 تم دمج ${count} مصطلح`);
+          setTimeout(() => setLastSaved(""), 4000);
+        }
       } catch { alert('خطأ في قراءة الملف'); }
     };
     input.click();
   };
 
-  // === Load from URL ===
+  // === Load from URL (with merge preview) ===
   const loadGlossary = useCallback(async (url: string, name: string, replace = false) => {
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error('فشل تحميل القاموس');
       const rawText = await response.text();
-      // Clean glossary lines: trim trailing spaces, remove useless technical-only entries
-      const cleanedText = rawText.split('\n').map(line => {
-        const trimmed = line.trimEnd();
-        // Skip pure technical entries like #[ML:...], +=+, -=-, .=., etc.
-        if (/^[#%+=\-.\\/;:]+\s*=\s*[#%+=\-.\\/;:]+\s*$/.test(trimmed)) return null;
-        if (/^#\[ML:/.test(trimmed)) return null;
-        if (/^\+\[ML:/.test(trimmed)) return null;
-        return trimmed;
-      }).filter(l => l !== null).join('\n');
-      const newCount = cleanedText.split('\n').filter(l => { const t = l.trim(); return t && !t.startsWith('#') && !t.startsWith('//') && t.includes('='); }).length;
-      if (replace) {
-        setState(prev => prev ? { ...prev, glossary: cleanedText } : null);
+      const cleanedText = cleanGlossaryText(rawText);
+      const currentGlossary = state?.glossary || '';
+      const diffs = computeGlossaryDiffs(cleanedText, currentGlossary);
+      const hasChanges = diffs.some(d => d.type !== 'same');
+      
+      if (hasChanges && currentGlossary.trim()) {
+        setPendingMerge({ name, diffs, rawText: cleanedText, replace });
       } else {
-        setState(prev => prev ? mergeGlossaryText(prev, cleanedText) : null);
+        // No existing glossary or identical content — apply directly
+        const newCount = cleanedText.split('\n').filter(l => { const t = l.trim(); return t && !t.startsWith('#') && !t.startsWith('//') && t.includes('='); }).length;
+        if (replace) {
+          setState(prev => prev ? { ...prev, glossary: cleanedText } : null);
+        } else {
+          setState(prev => prev ? mergeGlossaryText(prev, cleanedText) : null);
+        }
+        setLastSaved(`📖 تم ${replace ? 'تحميل' : 'دمج'} ${name} (${newCount} مصطلح)`);
+        setTimeout(() => setLastSaved(""), 3000);
       }
-      setLastSaved(`📖 تم ${replace ? 'تحميل' : 'دمج'} ${name} (${newCount} مصطلح)`);
-      setTimeout(() => setLastSaved(""), 3000);
     } catch { alert(`خطأ في تحميل ${name}`); }
-  }, [setState, setLastSaved]);
+  }, [setState, setLastSaved, state?.glossary, computeGlossaryDiffs]);
 
   const handleLoadXC3Glossary = useCallback(() => loadGlossary('/xc3-glossary.txt', 'قاموس Xenoblade Chronicles 3', true), [loadGlossary]);
   const handleLoadUIMenusGlossary = useCallback(() => loadGlossary('/xc3-ui-menus-glossary.txt', 'قاموس القوائم والواجهة', false), [loadGlossary]);
   const handleLoadFullGlossary = useCallback(() => loadGlossary('/xc3-full-glossary.txt', 'القاموس الشامل', true), [loadGlossary]);
+  const handleLoadCombatGlossary = useCallback(() => loadGlossary('/xc3-combat-glossary.txt', 'قاموس القتال والتأثيرات', false), [loadGlossary]);
 
   // === Cloud glossary ===
   const handleSaveGlossaryToCloud = async () => {
@@ -175,14 +231,11 @@ export function useEditorGlossary({
       const original = entry.original.trim();
       if (!original) continue;
 
-      // Only single-word or short single-phrase entries (no line breaks, reasonable length)
-      // Skip entries with control codes like [ML:...] or {color...}
       if (original.includes('\n') || original.includes('[ML:') || original.includes('{')) continue;
-      // Max ~60 chars to keep it to short terms/phrases
       if (original.length > 60) continue;
 
       const normKey = original.toLowerCase();
-      if (existingMap.has(normKey)) continue; // already in glossary
+      if (existingMap.has(normKey)) continue;
 
       lines.push(`${original}=${translation.trim()}`);
       newTerms++;
@@ -194,13 +247,11 @@ export function useEditorGlossary({
       return;
     }
 
-    // Merge into existing glossary
     const newText = lines.join('\n');
     setState(prev => {
       if (!prev) return null;
       const existing = prev.glossary?.trim() || '';
       const merged = existing ? existing + '\n' + newText : newText;
-      // Deduplicate
       const seen = new Map<string, string>();
       for (const line of merged.split('\n')) {
         const trimmed = line.trim();
@@ -221,7 +272,8 @@ export function useEditorGlossary({
     glossaryEnabled, setGlossaryEnabled,
     glossaryTermCount, activeGlossary,
     parseGlossaryMap,
-    handleImportGlossary, handleLoadXC3Glossary, handleLoadUIMenusGlossary, handleLoadFullGlossary,
+    pendingMerge, setPendingMerge, applyMergeDiffs,
+    handleImportGlossary, handleLoadXC3Glossary, handleLoadUIMenusGlossary, handleLoadFullGlossary, handleLoadCombatGlossary,
     handleSaveGlossaryToCloud, handleLoadGlossaryFromCloud,
     handleGenerateGlossaryFromTranslations,
   };

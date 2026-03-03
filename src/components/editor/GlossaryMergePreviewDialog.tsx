@@ -142,18 +142,36 @@ const GlossaryMergePreviewDialog: React.FC<GlossaryMergePreviewDialogProps> = ({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="flex-row-reverse gap-2 pt-2">
+        <DialogFooter className="flex-row-reverse gap-2 pt-2 flex-wrap">
           <Button onClick={handleConfirm} className="font-display gap-1.5">
             <CheckCircle2 className="w-4 h-4" /> دمج ({activeCount} مصطلح)
           </Button>
           <Button variant="outline" onClick={onClose} className="font-display">
             إلغاء
           </Button>
-          {rejected.size > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setRejected(new Set())} className="text-xs">
-              إعادة قبول الكل
+          <div className="flex gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="text-xs font-display gap-1"
+              onClick={() => setRejected(new Set())}
+              disabled={rejected.size === 0}
+            >
+              <CheckCircle2 className="w-3 h-3" /> قبول الكل
             </Button>
-          )}
+            <Button
+              variant="destructive"
+              size="sm"
+              className="text-xs font-display gap-1"
+              onClick={() => {
+                const allKeys = new Set(diffs.filter(d => d.type !== 'same').map(d => d.key));
+                setRejected(allKeys);
+              }}
+              disabled={rejected.size === diffs.filter(d => d.type !== 'same').length}
+            >
+              <X className="w-3 h-3" /> رفض الكل
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

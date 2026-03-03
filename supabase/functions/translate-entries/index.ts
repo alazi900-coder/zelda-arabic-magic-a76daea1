@@ -152,17 +152,58 @@ function balanceLines(text: string): string {
 
   const totalLen = text.length;
   const numLines = Math.ceil(totalLen / MAX_LINE_WIDTH);
-  const targetLen = Math.ceil(totalLen / numLines);
 
+  // Try all possible split points and pick the most balanced distribution
+  // For 2 lines: find the best single split point
+  // For 3+ lines: use dynamic approach
+  
+  if (numLines === 2) {
+    // Find split that minimizes difference between two halves
+    let bestSplit = 1;
+    let bestDiff = Infinity;
+    let cumLen = 0;
+    for (let i = 0; i < words.length - 1; i++) {
+      cumLen += (i > 0 ? 1 : 0) + words[i].length;
+      const remaining = totalLen - cumLen - 1; // -1 for the space replaced by newline
+      const diff = Math.abs(cumLen - remaining);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestSplit = i + 1;
+      }
+    }
+    const line1 = words.slice(0, bestSplit).join(' ');
+    const line2 = words.slice(bestSplit).join(' ');
+    return line1 + '\n' + line2;
+  }
+
+  // For 3+ lines: distribute words so each line is close to totalLen/numLines
+  const targetLen = Math.ceil(totalLen / numLines);
   const lines: string[] = [];
   let currentLine = '';
+  let linesLeft = numLines;
 
-  for (const word of words) {
-    if (currentLine && (currentLine.length + 1 + word.length) > targetLen && lines.length < numLines - 1) {
-      lines.push(currentLine);
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const wordsLeft = words.length - i;
+    
+    if (currentLine === '') {
       currentLine = word;
     } else {
-      currentLine = currentLine ? currentLine + ' ' + word : word;
+      const newLen = currentLine.length + 1 + word.length;
+      // Don't break if we'd leave too few words for remaining lines
+      // or if current line hasn't reached a reasonable length
+      const shouldBreak = linesLeft > 1 
+        && newLen > targetLen 
+        && wordsLeft > (linesLeft - 1)  // ensure remaining lines get at least 1 word each
+        && currentLine.length >= targetLen * 0.5; // don't break if line is too short
+      
+      if (shouldBreak) {
+        lines.push(currentLine);
+        currentLine = word;
+        linesLeft--;
+      } else {
+        currentLine = currentLine + ' ' + word;
+      }
     }
   }
   if (currentLine) lines.push(currentLine);

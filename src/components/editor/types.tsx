@@ -112,6 +112,7 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-character", label: "الشخصيات والأبطال", emoji: "🧑‍🤝‍🧑", icon: "Users", color: "text-blue-400" },
   { id: "bdat-enemy", label: "الأعداء والوحوش", emoji: "👹", icon: "Skull", color: "text-rose-500" },
   { id: "bdat-item", label: "الأدوات والمعدات", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
+  { id: "bdat-hero-quest", label: "مهام الأبطال", emoji: "🦸", icon: "ShieldCheck", color: "text-amber-500" },
   { id: "bdat-quest", label: "المهام والتحديات", emoji: "📜", icon: "ScrollText", color: "text-orange-400" },
   { id: "bdat-field", label: "المواقع والخرائط", emoji: "🗺️", icon: "MapPin", color: "text-emerald-400" },
   { id: "bdat-story", label: "حوارات القصة", emoji: "📖", icon: "BookOpen", color: "text-violet-400" },
@@ -182,6 +183,9 @@ export function categorizeByFilename(filename: string): string | null {
     'fld': 'bdat-field',
     'menu': 'bdat-menu',
     'mnu': 'bdat-menu',
+    'hero_quest': 'bdat-hero-quest',
+    'hero quest': 'bdat-hero-quest',
+    'hro': 'bdat-hero-quest',
     'quest': 'bdat-quest',
     'qst': 'bdat-quest',
     'system': 'bdat-system',
@@ -265,6 +269,9 @@ export function categorizeByTableName(tbl: string): string | null {
   // === الأدوات والمعدات ===
   if (/^(itm_|fld_collect|fld_tbox|fld_salvage)/i.test(tbl)) return "bdat-item";
 
+  // === مهام الأبطال (Hero Quests) - must check before generic quest ===
+  if (/^(qst_hero|qst_hro|hero_quest|hro_)/i.test(tbl)) return "bdat-hero-quest";
+
   // === المهام ===
   if (/^(qst_|tsk_)/i.test(tbl)) return "bdat-quest";
 
@@ -274,6 +281,7 @@ export function categorizeByTableName(tbl: string): string | null {
   if (/^msg_mnu_/i.test(tbl)) return "bdat-menu";
   if (/^msg_btl_/i.test(tbl)) return "bdat-battle";
   if (/^msg_fld_/i.test(tbl)) return "bdat-character";
+  if (/^msg_qst_hero/i.test(tbl)) return "bdat-hero-quest";
   if (/^msg_qst_/i.test(tbl)) return "bdat-quest";
   if (/^msg_item_/i.test(tbl)) return "bdat-item";
   if (/^msg_enemy_/i.test(tbl)) return "bdat-enemy";

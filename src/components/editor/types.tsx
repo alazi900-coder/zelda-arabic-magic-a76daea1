@@ -108,7 +108,7 @@ export const FILE_CATEGORIES: FileCategory[] = [
 export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-title-menu", label: "القائمة الرئيسية", emoji: "🏠", icon: "Home", color: "text-emerald-400" },
   { id: "bdat-menu", label: "القوائم والواجهة", emoji: "🖥️", icon: "Monitor", color: "text-sky-400" },
-  { id: "bdat-battle", label: "نظام القتال", emoji: "⚔️", icon: "Swords", color: "text-red-400" },
+  { id: "bdat-battle", label: "هجمات وإحصائيات", emoji: "⚔️", icon: "Swords", color: "text-red-400" },
   { id: "bdat-character", label: "الشخصيات والأبطال", emoji: "🧑‍🤝‍🧑", icon: "Users", color: "text-blue-400" },
   { id: "bdat-enemy", label: "الأعداء والوحوش", emoji: "👹", icon: "Skull", color: "text-rose-500" },
   { id: "bdat-item", label: "الأدوات والمعدات", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },

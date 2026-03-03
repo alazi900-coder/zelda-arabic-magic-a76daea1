@@ -14,8 +14,8 @@ describe("categorizeBdatTable - table name prefixes", () => {
   it("classifies FLD_MapInfo as field", () => {
     expect(categorizeBdatTable("FLD_MapInfo[2].Name")).toBe("bdat-field");
   });
-  it("classifies ITM_ tables as item", () => {
-    expect(categorizeBdatTable("ITM_Weapon[3].Name")).toBe("bdat-item");
+  it("classifies ITM_Weapon as weapon", () => {
+    expect(categorizeBdatTable("ITM_Weapon[3].Name")).toBe("bdat-weapon");
   });
   it("classifies msg_mnu_option as title-menu", () => {
     expect(categorizeBdatTable("msg_mnu_option[0].caption")).toBe("bdat-title-menu");
@@ -38,8 +38,8 @@ describe("categorizeBdatTable - column name fallback (smart classification)", ()
   it("classifies unknown table with landmark column as field", () => {
     expect(categorizeBdatTable("SomeTable[1].LandmarkName")).toBe("bdat-field");
   });
-  it("classifies unknown table with weapon column as item", () => {
-    expect(categorizeBdatTable("SomeTable[5].WeaponType")).toBe("bdat-item");
+  it("classifies unknown table with weapon column as weapon", () => {
+    expect(categorizeBdatTable("SomeTable[5].WeaponType")).toBe("bdat-weapon");
   });
   it("classifies unknown table with voice column as settings", () => {
     expect(categorizeBdatTable("SomeTable[0].VoiceVolume")).toBe("bdat-settings");

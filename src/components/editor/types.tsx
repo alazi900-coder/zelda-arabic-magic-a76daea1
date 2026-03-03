@@ -111,7 +111,11 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-battle", label: "هجمات وإحصائيات", emoji: "⚔️", icon: "Swords", color: "text-red-400" },
   { id: "bdat-character", label: "الشخصيات والأبطال", emoji: "🧑‍🤝‍🧑", icon: "Users", color: "text-blue-400" },
   { id: "bdat-enemy", label: "الأعداء والوحوش", emoji: "👹", icon: "Skull", color: "text-rose-500" },
-  { id: "bdat-item", label: "الأدوات والمعدات", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
+  { id: "bdat-weapon", label: "الأسلحة", emoji: "⚔️", icon: "Sword", color: "text-red-400" },
+  { id: "bdat-armor", label: "الدروع والإكسسوارات", emoji: "🛡️", icon: "Shield", color: "text-blue-400" },
+  { id: "bdat-collectible", label: "المقتنيات والمواد", emoji: "🧪", icon: "FlaskConical", color: "text-teal-400" },
+  { id: "bdat-food", label: "الطعام والطبخ", emoji: "🍖", icon: "Utensils", color: "text-amber-400" },
+  { id: "bdat-item", label: "أدوات أخرى", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
   { id: "bdat-hero-quest", label: "مهام الأبطال", emoji: "🦸", icon: "ShieldCheck", color: "text-amber-500" },
   { id: "bdat-quest", label: "المهام والتحديات", emoji: "📜", icon: "ScrollText", color: "text-orange-400" },
   { id: "bdat-colony", label: "المستعمرات والمعسكرات", emoji: "🏕️", icon: "Tent", color: "text-teal-500" },
@@ -226,6 +230,16 @@ export function categorizeByFilename(filename: string): string | null {
     'dlc': 'bdat-dlc',
     'enemy': 'bdat-enemy',
     'ene': 'bdat-enemy',
+    'weapon': 'bdat-weapon',
+    'wpn': 'bdat-weapon',
+    'armor': 'bdat-armor',
+    'accessory': 'bdat-armor',
+    'collect': 'bdat-collectible',
+    'material': 'bdat-collectible',
+    'craft': 'bdat-collectible',
+    'cook': 'bdat-food',
+    'food': 'bdat-food',
+    'recipe': 'bdat-food',
     'item': 'bdat-item',
     'itm': 'bdat-item',
     'story': 'bdat-story',
@@ -302,8 +316,16 @@ export function categorizeByTableName(tbl: string): string | null {
   // === الأعداء ===
   if (/^(ene_|emt_|fld_enemy|fld_unique|btl_en)/i.test(tbl)) return "bdat-enemy";
 
-  // === الأدوات والمعدات ===
-  if (/^(itm_|fld_collect|fld_tbox|fld_salvage)/i.test(tbl)) return "bdat-item";
+  // === الأسلحة ===
+  if (/^(itm_weapon|itm_wpn|wpn_)/i.test(tbl)) return "bdat-weapon";
+  // === الدروع والإكسسوارات ===
+  if (/^(itm_armor|itm_acc|itm_equip)/i.test(tbl)) return "bdat-armor";
+  // === المقتنيات والمواد ===
+  if (/^(itm_collect|itm_material|itm_craft|itm_pouch|fld_collect|fld_salvage)/i.test(tbl)) return "bdat-collectible";
+  // === الطعام والطبخ ===
+  if (/^(itm_cook|itm_food|itm_recipe|itm_meal)/i.test(tbl)) return "bdat-food";
+  // === أدوات أخرى ===
+  if (/^(itm_|fld_tbox)/i.test(tbl)) return "bdat-item";
 
   // === مهام الأبطال (Hero Quests) - must check before generic quest ===
   if (/^(qst_hero|qst_hro|hero_quest|hro_)/i.test(tbl)) return "bdat-hero-quest";
@@ -322,6 +344,10 @@ export function categorizeByTableName(tbl: string): string | null {
   if (/^msg_fld_/i.test(tbl)) return "bdat-character";
   if (/^msg_qst_hero/i.test(tbl)) return "bdat-hero-quest";
   if (/^msg_qst_/i.test(tbl)) return "bdat-quest";
+  if (/^msg_item_.*(weapon|wpn|sword|blade)/i.test(tbl)) return "bdat-weapon";
+  if (/^msg_item_.*(armor|acc|equip)/i.test(tbl)) return "bdat-armor";
+  if (/^msg_item_.*(collect|material|craft|pouch)/i.test(tbl)) return "bdat-collectible";
+  if (/^msg_item_.*(cook|food|recipe|meal)/i.test(tbl)) return "bdat-food";
   if (/^msg_item_/i.test(tbl)) return "bdat-item";
   if (/^msg_enemy_/i.test(tbl)) return "bdat-enemy";
   if (/^msg_colony_/i.test(tbl)) return "bdat-colony";
@@ -394,9 +420,16 @@ export function categorizeByColumnName(columnName: string): string | null {
   if (/^(locationname|locationid|locationbdat|colonyid|mapid|mapinfo|mapjump|areainfo|arealist|landmark)/i.test(columnName)) return "bdat-field";
   if (/landmark|colony(?!flag)|area(?!ffect)/i.test(col) && !/enemy/i.test(col)) return "bdat-field";
 
-  // الأدوات والقتال - Items & Battle column patterns
-  if (/^(itm|gem|weapon|armor|accessory|pouch|material|recipe|price|equiptype)/i.test(columnName)) return "bdat-item";
-  if (/skill|weapon|armor|gem(?!ini)/i.test(col) && col.length > 3) return "bdat-item";
+  // الأسلحة
+  if (/^(weapon|wpn|sword|blade)/i.test(columnName)) return "bdat-weapon";
+  // الدروع والإكسسوارات
+  if (/^(armor|accessory|equiptype|shield)/i.test(columnName)) return "bdat-armor";
+  // المقتنيات والمواد
+  if (/^(material|pouch|collect|craft|salvage)/i.test(columnName)) return "bdat-collectible";
+  // الطعام
+  if (/^(recipe|cook|food|meal|ingredient)/i.test(columnName)) return "bdat-food";
+  // أدوات أخرى
+  if (/^(itm|gem|price)/i.test(columnName)) return "bdat-item";
 
   // النصائح والشروحات - Tips/Tutorial column patterns
   if (/tutorial|tips?_|howto|hint|help_text|loading_?tip/i.test(col)) return "bdat-tips";

@@ -1657,6 +1657,15 @@ const Editor = () => {
             diffs={editor.pendingMerge.diffs}
           />
         )}
+
+        <PageRangeDialog
+          open={pageRangeMode !== null}
+          onClose={() => setPageRangeMode(null)}
+          totalPages={editor.totalPages}
+          onConfirm={(startPage, endPage) => {
+            editor.handleTranslateAllPages(pageRangeMode === 'memory', false, startPage, endPage);
+          }}
+        />
       </div>
     </TooltipProvider>
   );

@@ -28,7 +28,7 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
 }) => {
   const [chunkSize, setChunkSize] = useState(1000);
   const [format, setFormat] = useState<ExportFormat>("json");
-  const [scope, setScope] = useState<ExportScope>("untranslated");
+  const [scope, setScope] = useState<ExportScope>(totalCount === 0 ? "all" : "untranslated");
   const [usePageRange, setUsePageRange] = useState(false);
   const [startPage, setStartPage] = useState(1);
   const [endPage, setEndPage] = useState(totalPages);
@@ -37,8 +37,9 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
     if (open) {
       setStartPage(1);
       setEndPage(totalPages);
+      setScope(totalCount === 0 ? "all" : "untranslated");
     }
-  }, [open, totalPages]);
+  }, [open, totalPages, totalCount]);
 
   const effectiveCount = scope === "untranslated" ? totalCount : totalEntries;
   const fileCount = useMemo(() => Math.ceil(effectiveCount / chunkSize), [effectiveCount, chunkSize]);

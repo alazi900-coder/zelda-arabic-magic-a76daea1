@@ -294,11 +294,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     return getUntranslatedGrouped().totalCount;
   };
 
-  const handleExportEnglishOnly = async (chunkSize?: number) => {
+  const handleExportEnglishOnly = async (chunkSize?: number, scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getUntranslatedGrouped();
+    const { groupedByFile, totalCount } = getEntriesGrouped(scope, startPage, endPage);
     if (totalCount === 0) {
-      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
+      setLastSaved(scope === 'untranslated' ? "ℹ️ لا توجد نصوص غير مترجمة للتصدير" : "ℹ️ لا توجد نصوص للتصدير");
       setTimeout(() => setLastSaved(""), 3000);
       return;
     }

@@ -207,15 +207,26 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     }
   };
 
-  /** Build the list of untranslated entries grouped by file */
-  const getUntranslatedGrouped = () => {
+  /** Build the list of entries grouped by file, optionally filtered by scope */
+  const getEntriesGrouped = (scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
     if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0 };
-    const entriesToExport = isFilterActive ? filteredEntries : state.entries;
+    let entriesToExport = isFilterActive ? filteredEntries : state.entries;
+    
+    // Apply page range filter if specified
+    if (startPage !== undefined && endPage !== undefined) {
+      const PAGE_SIZE = 50; // matches types.tsx
+      const fromIdx = startPage * PAGE_SIZE;
+      const toIdx = (endPage + 1) * PAGE_SIZE;
+      entriesToExport = entriesToExport.slice(fromIdx, toIdx);
+    }
+    
     const groupedByFile: Record<string, { index: number; original: string; label: string }[]> = {};
     for (const entry of entriesToExport) {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key]?.trim();
-      if (!translation || translation === entry.original || translation === entry.original.trim()) {
+      const isUntranslated = !translation || translation === entry.original || translation === entry.original.trim();
+      
+      if (scope === 'all' || isUntranslated) {
         if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
         groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
       }
@@ -223,6 +234,9 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     const totalCount = Object.values(groupedByFile).reduce((sum, arr) => sum + arr.length, 0);
     return { groupedByFile, totalCount };
   };
+
+  /** Legacy wrapper */
+  const getUntranslatedGrouped = () => getEntriesGrouped('untranslated');
 
   /** Build text content for a flat list of entries */
   const buildEnglishTxt = (
@@ -280,11 +294,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     return getUntranslatedGrouped().totalCount;
   };
 
-  const handleExportEnglishOnly = async (chunkSize?: number) => {
+  const handleExportEnglishOnly = async (chunkSize?: number, scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getUntranslatedGrouped();
+    const { groupedByFile, totalCount } = getEntriesGrouped(scope, startPage, endPage);
     if (totalCount === 0) {
-      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
+      setLastSaved(scope === 'untranslated' ? "ℹ️ لا توجد نصوص غير مترجمة للتصدير" : "ℹ️ لا توجد نصوص للتصدير");
       setTimeout(() => setLastSaved(""), 3000);
       return;
     }
@@ -328,11 +342,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     setTimeout(() => setLastSaved(""), 4000);
   };
 
-  const handleExportEnglishOnlyJson = async (chunkSize?: number) => {
+  const handleExportEnglishOnlyJson = async (chunkSize?: number, scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getUntranslatedGrouped();
+    const { groupedByFile, totalCount } = getEntriesGrouped(scope, startPage, endPage);
     if (totalCount === 0) {
-      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
+      setLastSaved(scope === 'untranslated' ? "ℹ️ لا توجد نصوص غير مترجمة للتصدير" : "ℹ️ لا توجد نصوص للتصدير");
       setTimeout(() => setLastSaved(""), 3000);
       return;
     }

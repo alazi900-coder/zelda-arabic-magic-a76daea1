@@ -2,8 +2,9 @@ import React, { useState, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter } from "lucide-react";
+import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil } from "lucide-react";
 import { EditorState, categorizeFile, categorizeBdatTable } from "@/components/editor/types";
 import { balanceLines, hasOrphanLines } from "@/lib/balance-lines";
 
@@ -54,6 +55,8 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
   const [results, setResults] = useState<BalanceResult[] | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'file' | 'category'>('all');
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   const handleScan = useCallback(() => {
     setScanning(true);
@@ -319,33 +322,81 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
                         {/* After */}
                         <div className="flex-1 px-3 py-2 bg-primary/5 border-r border-border/30">
                           <span className="text-[10px] text-primary/70 font-semibold block mb-1">بعد ✅</span>
-                          <div className="font-body text-xs leading-relaxed" dir="rtl">
-                            {result.after.split('\n').map((line, i) => (
-                              <div key={i}>{line || '\u00A0'}</div>
-                            ))}
-                          </div>
+                          {editingKey === result.key ? (
+                            <Textarea
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              className="text-xs font-body min-h-[60px] bg-background/80"
+                              dir="rtl"
+                              autoFocus
+                            />
+                          ) : (
+                            <div className="font-body text-xs leading-relaxed" dir="rtl">
+                              {result.after.split('\n').map((line, i) => (
+                                <div key={i}>{line || '\u00A0'}</div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* Action buttons - prominent */}
                         <div className="flex flex-col justify-center gap-1.5 px-2 py-2 bg-muted/30 border-r border-border/30">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-8 px-3 text-xs font-bold gap-1"
-                            onClick={() => handleAccept(result)}
-                          >
-                            <Check className="w-4 h-4" />
-                            موافقة
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 px-3 text-xs font-bold gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
-                            onClick={() => handleReject(result.key)}
-                          >
-                            <X className="w-4 h-4" />
-                            رفض
-                          </Button>
+                          {editingKey === result.key ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-8 px-3 text-xs font-bold gap-1"
+                                onClick={() => {
+                                  onApplyFix(result.key, editText.trim());
+                                  setResults(prev => prev?.filter(r => r.key !== result.key) || null);
+                                  setEditingKey(null);
+                                }}
+                              >
+                                <Check className="w-4 h-4" />
+                                حفظ
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-3 text-xs font-bold gap-1"
+                                onClick={() => setEditingKey(null)}
+                              >
+                                <X className="w-4 h-4" />
+                                إلغاء
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-8 px-3 text-xs font-bold gap-1"
+                                onClick={() => handleAccept(result)}
+                              >
+                                <Check className="w-4 h-4" />
+                                موافقة
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-8 px-3 text-xs font-bold gap-1"
+                                onClick={() => { setEditingKey(result.key); setEditText(result.after); }}
+                              >
+                                <Pencil className="w-4 h-4" />
+                                تعديل
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-3 text-xs font-bold gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
+                                onClick={() => handleReject(result.key)}
+                              >
+                                <X className="w-4 h-4" />
+                                رفض
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

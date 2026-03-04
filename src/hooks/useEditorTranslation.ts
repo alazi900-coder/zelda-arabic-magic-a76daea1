@@ -728,7 +728,7 @@ export function useEditorTranslation({
     // Save previous translations for comparison
     const oldTrans: Record<string, string> = {};
     const originalsMap: Record<string, string> = {};
-    for (let p = 0; p < allPages; p++) {
+    for (let p = fromPage; p <= toPage; p++) {
       const pageEntries = filteredEntries.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
       for (const e of pageEntries) {
         const key = `${e.msbtFile}:${e.index}`;

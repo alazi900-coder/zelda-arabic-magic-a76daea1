@@ -747,7 +747,7 @@ export function useEditorTranslation({
     let pagesCompleted = 0;
 
     try {
-      for (let p = 0; p < allPages; p++) {
+      for (let p = fromPage; p <= toPage; p++) {
         if (abortControllerRef.current.signal.aborted) break;
 
         const pageEntries = filteredEntries.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);

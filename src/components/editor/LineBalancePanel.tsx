@@ -285,41 +285,68 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
                 </div>
 
                 {/* Individual results */}
-                <div className="max-h-[500px] overflow-y-auto space-y-3 pr-1">
+                <div className="max-h-[500px] overflow-y-auto space-y-2 pr-1">
                   {displayResults.slice(0, 100).map((result) => (
-                    <div key={result.key} className="bg-background/50 rounded-lg border border-border/50 p-3 space-y-2">
-                      {/* Header */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]" dir="ltr">
-                            {result.label}
-                          </span>
-                          <Badge variant="outline" className="text-[10px] shrink-0">{result.category}</Badge>
-                        </div>
-                        <div className="flex gap-1.5 shrink-0">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-xs h-7 px-2 text-primary hover:text-primary hover:bg-primary/10"
-                            onClick={() => handleAccept(result)}
-                          >
-                            <Check className="w-3.5 h-3.5 ml-1" /> موافقة
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-xs h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleReject(result.key)}
-                          >
-                            <X className="w-3.5 h-3.5 ml-1" /> رفض
-                          </Button>
-                        </div>
+                    <div key={result.key} className="bg-background/60 rounded-lg border border-border/50 overflow-hidden">
+                      {/* Label row */}
+                      <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                        <span className="text-[11px] font-mono text-muted-foreground truncate max-w-[250px]" dir="ltr">
+                          {result.label}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] shrink-0">{result.category}</Badge>
                       </div>
 
-                      {/* Comparison */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <LinesPreview text={result.before} variant="before" />
-                        <LinesPreview text={result.after} variant="after" />
+                      {/* Main row: Before → After + Actions */}
+                      <div className="flex items-stretch gap-0">
+                        {/* Before */}
+                        <div className="flex-1 px-3 py-2 bg-destructive/5 border-l border-border/30">
+                          <span className="text-[10px] text-destructive/70 font-semibold block mb-1">قبل ⚠️</span>
+                          <div className="font-body text-xs leading-relaxed" dir="rtl">
+                            {result.before.split('\n').map((line, i) => {
+                              const isOrphan = line.trim().split(/\s+/).length <= 1 && result.before.split('\n').length > 1;
+                              return (
+                                <div key={i} className={isOrphan ? 'text-destructive font-bold bg-destructive/10 px-1 rounded inline-block' : ''}>
+                                  {line || '\u00A0'}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Arrow separator */}
+                        <div className="flex items-center px-1 text-muted-foreground/40 text-lg select-none">→</div>
+
+                        {/* After */}
+                        <div className="flex-1 px-3 py-2 bg-primary/5 border-r border-border/30">
+                          <span className="text-[10px] text-primary/70 font-semibold block mb-1">بعد ✅</span>
+                          <div className="font-body text-xs leading-relaxed" dir="rtl">
+                            {result.after.split('\n').map((line, i) => (
+                              <div key={i}>{line || '\u00A0'}</div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Action buttons - prominent */}
+                        <div className="flex flex-col justify-center gap-1.5 px-2 py-2 bg-muted/30 border-r border-border/30">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-8 px-3 text-xs font-bold gap-1"
+                            onClick={() => handleAccept(result)}
+                          >
+                            <Check className="w-4 h-4" />
+                            موافقة
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-3 text-xs font-bold gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
+                            onClick={() => handleReject(result.key)}
+                          >
+                            <X className="w-4 h-4" />
+                            رفض
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}

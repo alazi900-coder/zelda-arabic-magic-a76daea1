@@ -71,6 +71,7 @@ import LineBalancePanel from "@/components/editor/LineBalancePanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 import MismatchDetectorPanel from "@/components/editor/MismatchDetectorPanel";
 import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
+import PageRangeDialog from "@/components/editor/PageRangeDialog";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -87,6 +88,7 @@ const Editor = () => {
   const [showFontTest, setShowFontTest] = React.useState(false);
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
+  const [pageRangeMode, setPageRangeMode] = React.useState<'ai' | 'memory' | null>(null);
   const gameType = "xenoblade";
   const processPath = "/process";
 
@@ -347,11 +349,11 @@ const Editor = () => {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel className="text-xs text-muted-foreground">جميع الصفحات</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => editor.handleTranslateAllPages(false)}>
-                      <Sparkles className="w-4 h-4" /> ترجمة جميع الصفحات بالذكاء 🤖📄
+                    <DropdownMenuItem onClick={() => setPageRangeMode('ai')}>
+                      <Sparkles className="w-4 h-4" /> ترجمة صفحات بالذكاء 🤖📄
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => editor.handleTranslateAllPages(true)}>
-                      <BookOpen className="w-4 h-4" /> ترجمة جميع الصفحات بالذاكرة 📖📄
+                    <DropdownMenuItem onClick={() => setPageRangeMode('memory')}>
+                      <BookOpen className="w-4 h-4" /> ترجمة صفحات بالذاكرة 📖📄
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1655,6 +1657,15 @@ const Editor = () => {
             diffs={editor.pendingMerge.diffs}
           />
         )}
+
+        <PageRangeDialog
+          open={pageRangeMode !== null}
+          onClose={() => setPageRangeMode(null)}
+          totalPages={editor.totalPages}
+          onConfirm={(startPage, endPage) => {
+            editor.handleTranslateAllPages(pageRangeMode === 'memory', false, startPage, endPage);
+          }}
+        />
       </div>
     </TooltipProvider>
   );

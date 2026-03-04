@@ -55,6 +55,8 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
   const [results, setResults] = useState<BalanceResult[] | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'file' | 'category'>('all');
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   const handleScan = useCallback(() => {
     setScanning(true);

@@ -101,6 +101,14 @@ const Editor = () => {
     const handlePopState = () => {
       // Re-push state to block back navigation
       window.history.pushState({ locked: true }, '');
+      // Show toast notification
+      import('@/hooks/use-toast').then(({ toast }) => {
+        toast({
+          title: "🔒 الصفحة مقفلة",
+          description: "قم بإيقاف القفل أولاً للخروج من المحرر",
+          variant: "destructive",
+        });
+      });
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('popstate', handlePopState);

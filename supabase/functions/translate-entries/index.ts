@@ -142,24 +142,69 @@ function restoreAndEnforce(original: string, translated: string, tags: Map<strin
   return balanceLines(enforced);
 }
 
+/** Tag shielding: replace technical tags with short placeholders for balanced splitting */
+const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\[\s*\w+\s*:[^\]]*?\s*\]|[\uFFF9-\uFFFC]+/g;
+
+interface ShieldResult {
+  shielded: string;
+  map: Map<string, { placeholder: string; original: string; displayLen: number }>;
+}
+
+function shieldTagsForBalance(text: string): ShieldResult {
+  const map = new Map<string, { placeholder: string; original: string; displayLen: number }>();
+  let idx = 0;
+  const shielded = text.replace(TAG_SHIELD_PATTERN, (match) => {
+    const placeholder = `◆${idx}◆`;
+    map.set(placeholder, { placeholder, original: match, displayLen: match.length });
+    idx++;
+    return placeholder;
+  });
+  return { shielded, map };
+}
+
+function unshieldTagsAfterBalance(text: string, map: Map<string, { placeholder: string; original: string; displayLen: number }>): string {
+  let result = text;
+  for (const [placeholder, info] of map) {
+    result = result.replace(placeholder, info.original);
+  }
+  return result;
+}
+
 /** Split long lines into balanced chunks using DP optimization */
 const TARGET_MIN = 38;
 const TARGET_MAX = 42;
 const HARD_MAX = 48;
 
 function balanceLines(text: string): string {
-  // Strip AI-inserted newlines and re-balance (AI should not control line breaking)
-  // But preserve newlines that came from original (NEWLINE_N placeholders are already restored at this point)
+  // Strip AI-inserted newlines and re-balance
   const stripped = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-  // Don't touch short text
-  if (stripped.length <= TARGET_MAX) return stripped;
-  // Don't touch texts with technical tags that could break
-  if (/[\uE000-\uE0FF]|[\uFFF9-\uFFFC]|\[.*?:.*?\]/.test(stripped)) return stripped;
 
-  const words = stripped.split(/\s+/).filter(w => w.length > 0);
-  if (words.length < 2) return text;
+  // Shield technical tags so they're treated as atomic tokens
+  const { shielded, map } = shieldTagsForBalance(stripped);
 
-  const totalLen = words.reduce((s, w) => s + w.length, 0) + (words.length - 1);
+  // Don't touch short text (use real display length accounting for tag sizes)
+  let displayLen = shielded.length;
+  for (const [placeholder, info] of map) {
+    // Adjust: placeholder length was counted, replace with real tag display length
+    displayLen += info.displayLen - placeholder.length;
+  }
+  if (displayLen <= TARGET_MAX) return stripped;
+
+  const words = shielded.split(/\s+/).filter(w => w.length > 0);
+  if (words.length < 2) return stripped;
+
+  // Build a display-length function for words that accounts for tag real lengths
+  const wordDisplayLen = (w: string): number => {
+    let len = w.length;
+    for (const [placeholder, info] of map) {
+      if (w.includes(placeholder)) {
+        len += info.displayLen - placeholder.length;
+      }
+    }
+    return len;
+  };
+
+  const totalLen = words.reduce((s, w) => s + wordDisplayLen(w), 0) + (words.length - 1);
   const numLines = Math.max(2, Math.ceil(totalLen / TARGET_MAX));
 
   // Try line counts from numLines to numLines+1, pick the best
@@ -167,9 +212,13 @@ function balanceLines(text: string): string {
   let bestCost = Infinity;
 
   for (let nLines = numLines; nLines <= Math.min(numLines + 1, words.length); nLines++) {
-    const result = dpSplit(words, nLines);
+    const result = dpSplitShielded(words, nLines, wordDisplayLen);
     if (result) {
-      const cost = scoreSplit(result);
+      const cost = scoreSplit(result.map(line => {
+        // For scoring, compute display length
+        const displayLine = line.split(/\s+/).map(w => 'x'.repeat(wordDisplayLen(w))).join(' ');
+        return displayLine;
+      }));
       if (cost < bestCost) {
         bestCost = cost;
         bestResult = result;
@@ -177,12 +226,71 @@ function balanceLines(text: string): string {
     }
   }
 
-  if (!bestResult) return text;
+  if (!bestResult) return stripped;
 
   // Post-pass: fix orphan lines (single-word middle lines)
   bestResult = fixOrphans(bestResult);
 
-  return bestResult.join('\n');
+  // Unshield: restore original tags
+  return bestResult.map(line => unshieldTagsAfterBalance(line, map)).join('\n');
+}
+
+/** DP split that uses display-length function for tag-aware balancing */
+function dpSplitShielded(words: string[], nLines: number, wordDisplayLen: (w: string) => number): string[] | null {
+  const n = words.length;
+  if (n < nLines) return null;
+
+  const lineLen = (from: number, to: number): number => {
+    let len = 0;
+    for (let k = from; k < to; k++) {
+      len += wordDisplayLen(words[k]) + (k > from ? 1 : 0);
+    }
+    return len;
+  };
+
+  const totalLen = lineLen(0, n);
+  const ideal = totalLen / nLines;
+
+  const INF = 1e18;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(nLines + 1).fill(INF));
+  const choice: number[][] = Array.from({ length: n + 1 }, () => new Array(nLines + 1).fill(0));
+
+  dp[0][0] = 0;
+
+  for (let k = 1; k <= nLines; k++) {
+    for (let i = k; i <= n; i++) {
+      for (let j = k - 1; j < i; j++) {
+        const ll = lineLen(j, i);
+        if (ll > HARD_MAX && i - j > 1) continue;
+
+        const deviation = ll - ideal;
+        let cost = deviation * deviation;
+
+        const wordCount = i - j;
+        const isMiddleLine = k > 1 && k < nLines;
+        if (wordCount === 1 && isMiddleLine) cost += 50000;
+        if (ll < ideal * 0.4 && wordCount < 3) cost += 5000;
+
+        const total = dp[j][k - 1] + cost;
+        if (total < dp[i][k]) {
+          dp[i][k] = total;
+          choice[i][k] = j;
+        }
+      }
+    }
+  }
+
+  if (dp[n][nLines] >= INF) return null;
+
+  const lines: string[] = new Array(nLines);
+  let pos = n;
+  for (let k = nLines; k >= 1; k--) {
+    const start = choice[pos][k];
+    lines[k - 1] = words.slice(start, pos).join(' ');
+    pos = start;
+  }
+
+  return lines;
 }
 
 /** DP to find optimal word distribution across exactly nLines lines */

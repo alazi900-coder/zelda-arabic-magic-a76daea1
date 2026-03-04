@@ -315,12 +315,15 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     const suffix = isFilterActive ? `_${filterLabel}` : '';
     const date = new Date().toISOString().slice(0, 10);
+    const pageRangeLabel = startPage !== undefined && endPage !== undefined
+      ? ` • الصفحات ${startPage + 1}-${endPage + 1}`
+      : '';
 
     if (!chunkSize || chunkSize >= totalCount) {
       // تصدير كامل
       const content = buildEnglishTxt(flatEntries, '', 1, 1);
       downloadTxt(content, `english-only${suffix}_${date}.txt`);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي (${sortedFiles.length} ملف)`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي (${sortedFiles.length} ملف)${pageRangeLabel}`);
     } else {
       // تقسيم إلى أجزاء في ZIP
       const totalParts = Math.ceil(totalCount / chunkSize);

@@ -88,6 +88,7 @@ const Editor = () => {
   const [showFontTest, setShowFontTest] = React.useState(false);
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
+  const [pageRangeMode, setPageRangeMode] = React.useState<'ai' | 'memory' | null>(null);
   const gameType = "xenoblade";
   const processPath = "/process";
 

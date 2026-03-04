@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
+import { balanceLines, hasOrphanLines } from "@/lib/balance-lines";
 
 /** Renders text with technical tags highlighted visually */
 function HighlightedOriginal({ text }: { text: string }) {

@@ -433,6 +433,13 @@ function enforceTagIntegrity(original: string, translation: string): string {
 
   let result = translation;
   const origTagSet = new Set(origTags);
+
+  // Remove obvious broken tag shards produced by engines in RTL/LTR mixing
+  // Examples: "ML:icon]" or "[ icon=btn_a ]" when original only has "[ML:icon icon=btn_a ]"
+  result = result
+    .replace(/(?<!\[)\b[A-Za-z_]\w*:[^\s\]]+\]/g, '')
+    .replace(/\[[^\]{}:\n]*=[^\]{}:\n]*\]/g, (m) => (origTagSet.has(m) ? m : ''));
+
   const transTags = extractTechTags(result);
 
   // Strip foreign tags invented by AI

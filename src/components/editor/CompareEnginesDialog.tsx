@@ -5,7 +5,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, Sparkles } from "lucide-react";
 import type { ExtractedEntry } from "./types";
-import { hasTechnicalTags, restoreTagsLocally } from "./types";
 
 interface CompareResult {
   gemini?: string;
@@ -28,6 +27,28 @@ const ENGINE_LABELS: Record<string, { label: string; emoji: string }> = {
   mymemory: { label: "MyMemory", emoji: "🆓" },
   google: { label: "Google Translate", emoji: "🌐" },
 };
+
+const TECH_TAG_RENDER_REGEX = /([\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\[\s*\w+\s*:[^\]]*?\s*\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\})/g;
+
+function renderTranslationWithProtectedTags(text: string) {
+  const parts = text.split(TECH_TAG_RENDER_REGEX).filter(Boolean);
+  return parts.map((part, idx) => {
+    if (TECH_TAG_RENDER_REGEX.test(part)) {
+      TECH_TAG_RENDER_REGEX.lastIndex = 0;
+      return (
+        <span key={`tag-${idx}`} dir="ltr" className="font-mono whitespace-pre-wrap break-all">
+          {part}
+        </span>
+      );
+    }
+    TECH_TAG_RENDER_REGEX.lastIndex = 0;
+    return (
+      <span key={`txt-${idx}`} dir="auto" style={{ unicodeBidi: "plaintext" }}>
+        {part}
+      </span>
+    );
+  });
+}
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
   open, onOpenChange, entry, onSelect, glossary, userGeminiKey, myMemoryEmail,
@@ -63,9 +84,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
         const data = await response.json();
         const raw = data.translations?.[key] || null;
         if (!raw) return null;
-        return hasTechnicalTags(entry.original)
-          ? restoreTagsLocally(entry.original, raw)
-          : raw;
+        return raw;
       } catch {
         return null;
       }
@@ -154,7 +173,9 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                         )}
                       </div>
                       {result ? (
-                        <p className="text-sm font-body whitespace-pre-wrap break-words" dir="auto" style={{ unicodeBidi: 'plaintext' }}>{result}</p>
+                        <p className="text-sm font-body whitespace-pre-wrap break-words">
+                          {renderTranslationWithProtectedTags(result)}
+                        </p>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">فشل في الترجمة أو لا توجد نتيجة</p>
                       )}
@@ -177,3 +198,4 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
 };
 
 export default CompareEnginesDialog;
+

@@ -160,6 +160,7 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
                   سيتم تصدير نصوص {Math.max(0, Math.min(endPage, totalPages) - Math.max(1, startPage) + 1)} صفحة
+                  {" · "}≈ <strong className="text-foreground">{effectiveCount.toLocaleString()}</strong> نص
                 </p>
               </div>
             )}

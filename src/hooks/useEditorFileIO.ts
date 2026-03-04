@@ -207,27 +207,15 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     }
   };
 
-  /** Build the list of entries grouped by file, optionally filtered by scope */
-  const getEntriesGrouped = (scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
+  /** Build the list of untranslated entries grouped by file */
+  const getUntranslatedGrouped = () => {
     if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0 };
-    // Use filteredEntries to respect active filters (category, file, status, etc.)
-    let entriesToExport = filteredEntries;
-    
-    // Apply page range filter if specified
-    if (startPage !== undefined && endPage !== undefined) {
-      const PAGE_SIZE = 50;
-      const fromIdx = startPage * PAGE_SIZE;
-      const toIdx = (endPage + 1) * PAGE_SIZE;
-      entriesToExport = entriesToExport.slice(fromIdx, toIdx);
-    }
-    
+    const entriesToExport = isFilterActive ? filteredEntries : state.entries;
     const groupedByFile: Record<string, { index: number; original: string; label: string }[]> = {};
     for (const entry of entriesToExport) {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key]?.trim();
-      const isUntranslated = !translation || translation === entry.original || translation === entry.original.trim();
-      
-      if (scope === 'all' || isUntranslated) {
+      if (!translation || translation === entry.original || translation === entry.original.trim()) {
         if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
         groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
       }
@@ -235,9 +223,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     const totalCount = Object.values(groupedByFile).reduce((sum, arr) => sum + arr.length, 0);
     return { groupedByFile, totalCount };
   };
-
-  /** Legacy wrapper */
-  const getUntranslatedGrouped = () => getEntriesGrouped('untranslated');
 
   /** Build text content for a flat list of entries */
   const buildEnglishTxt = (
@@ -295,11 +280,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     return getUntranslatedGrouped().totalCount;
   };
 
-  const handleExportEnglishOnly = async (chunkSize?: number, scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
+  const handleExportEnglishOnly = async (chunkSize?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getEntriesGrouped(scope, startPage, endPage);
+    const { groupedByFile, totalCount } = getUntranslatedGrouped();
     if (totalCount === 0) {
-      setLastSaved(scope === 'untranslated' ? "ℹ️ لا توجد نصوص غير مترجمة للتصدير" : "ℹ️ لا توجد نصوص للتصدير");
+      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
       setTimeout(() => setLastSaved(""), 3000);
       return;
     }
@@ -315,15 +300,12 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     const suffix = isFilterActive ? `_${filterLabel}` : '';
     const date = new Date().toISOString().slice(0, 10);
-    const pageRangeLabel = startPage !== undefined && endPage !== undefined
-      ? ` • الصفحات ${startPage + 1}-${endPage + 1}`
-      : '';
 
     if (!chunkSize || chunkSize >= totalCount) {
       // تصدير كامل
       const content = buildEnglishTxt(flatEntries, '', 1, 1);
       downloadTxt(content, `english-only${suffix}_${date}.txt`);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي (${sortedFiles.length} ملف)${pageRangeLabel}`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي (${sortedFiles.length} ملف)`);
     } else {
       // تقسيم إلى أجزاء في ZIP
       const totalParts = Math.ceil(totalCount / chunkSize);
@@ -341,16 +323,16 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.download = `english-only${suffix}_${totalParts}files_${date}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص في ${totalParts} ملفات ZIP (${chunkSize} لكل ملف)${pageRangeLabel}`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص في ${totalParts} ملفات ZIP (${chunkSize} لكل ملف)`);
     }
     setTimeout(() => setLastSaved(""), 4000);
   };
 
-  const handleExportEnglishOnlyJson = async (chunkSize?: number, scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
+  const handleExportEnglishOnlyJson = async (chunkSize?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getEntriesGrouped(scope, startPage, endPage);
+    const { groupedByFile, totalCount } = getUntranslatedGrouped();
     if (totalCount === 0) {
-      setLastSaved(scope === 'untranslated' ? "ℹ️ لا توجد نصوص غير مترجمة للتصدير" : "ℹ️ لا توجد نصوص للتصدير");
+      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
       setTimeout(() => setLastSaved(""), 3000);
       return;
     }
@@ -365,9 +347,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     const suffix = isFilterActive ? `_${filterLabel}` : '';
     const date = new Date().toISOString().slice(0, 10);
-    const pageRangeLabel = startPage !== undefined && endPage !== undefined
-      ? ` • الصفحات ${startPage + 1}-${endPage + 1}`
-      : '';
 
     const buildJsonChunk = (entries: typeof flatEntries) => {
       const obj: Record<string, string> = {};
@@ -387,7 +366,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.download = `english-only${suffix}_${date}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي JSON (${sortedFiles.length} ملف)${pageRangeLabel}`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي JSON (${sortedFiles.length} ملف)`);
     } else {
       const totalParts = Math.ceil(totalCount / chunkSize);
       const JSZip = (await import("jszip")).default;
@@ -403,7 +382,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.download = `english-only${suffix}_${totalParts}files_${date}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص JSON في ${totalParts} ملفات ZIP${pageRangeLabel}`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص JSON في ${totalParts} ملفات ZIP`);
     }
     setTimeout(() => setLastSaved(""), 4000);
   };
@@ -1883,39 +1862,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     }
   }, []);
 
-  /** Quick export: export current page's entries (respects active filter) as JSON */
-  const handleExportCurrentPageEnglish = (currentPage: number) => {
-    if (!state) return;
-    const PAGE_SIZE = 50;
-    const fromIdx = currentPage * PAGE_SIZE;
-    const toIdx = Math.min((currentPage + 1) * PAGE_SIZE, filteredEntries.length);
-    const pageEntries = filteredEntries.slice(fromIdx, toIdx);
-    if (pageEntries.length === 0) return;
-    const obj: Record<string, string> = {};
-    for (const entry of pageEntries) {
-      obj[`${entry.msbtFile}:${entry.index}`] = entry.original;
-    }
-    const data = JSON.stringify(obj, null, 2);
-    const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `english-page${currentPage + 1}_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setLastSaved(`✅ تم تصدير ${pageEntries.length} نص من الصفحة ${currentPage + 1}`);
-    setTimeout(() => setLastSaved(""), 3000);
-  };
-
   return {
     handleExportTranslations,
     handleExportEnglishOnly,
     handleExportEnglishOnlyJson,
     getUntranslatedCount,
-    getEntriesGroupedCount: (scope: 'untranslated' | 'all', startPage?: number, endPage?: number) => getEntriesGrouped(scope, startPage, endPage).totalCount,
-    absoluteTotalEntries: state ? state.entries.length : 0,
-    absoluteTotalPages: state ? Math.ceil(state.entries.length / 50) : 0,
-    handleExportCurrentPageEnglish,
     handleImportTranslations,
     handleDropImport,
     processJsonImport,

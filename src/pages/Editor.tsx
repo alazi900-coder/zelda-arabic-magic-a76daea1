@@ -71,7 +71,6 @@ import LineBalancePanel from "@/components/editor/LineBalancePanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 import MismatchDetectorPanel from "@/components/editor/MismatchDetectorPanel";
 import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
-import PageRangeDialog from "@/components/editor/PageRangeDialog";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -88,7 +87,6 @@ const Editor = () => {
   const [showFontTest, setShowFontTest] = React.useState(false);
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
-  const [pageRangeMode, setPageRangeMode] = React.useState<'ai' | 'memory' | null>(null);
   const gameType = "xenoblade";
   const processPath = "/process";
 
@@ -349,11 +347,11 @@ const Editor = () => {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel className="text-xs text-muted-foreground">جميع الصفحات</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => setPageRangeMode('ai')}>
-                      <Sparkles className="w-4 h-4" /> ترجمة صفحات بالذكاء 🤖📄
+                    <DropdownMenuItem onClick={() => editor.handleTranslateAllPages(false)}>
+                      <Sparkles className="w-4 h-4" /> ترجمة جميع الصفحات بالذكاء 🤖📄
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setPageRangeMode('memory')}>
-                      <BookOpen className="w-4 h-4" /> ترجمة صفحات بالذاكرة 📖📄
+                    <DropdownMenuItem onClick={() => editor.handleTranslateAllPages(true)}>
+                      <BookOpen className="w-4 h-4" /> ترجمة جميع الصفحات بالذاكرة 📖📄
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1003,14 +1001,6 @@ const Editor = () => {
           {/* Cloud & Actions */}
           {isMobile ? (
             <div className="flex flex-wrap gap-2 mb-6">
-              {/* Standalone Export English Button */}
-              <Button variant="outline" size="sm" onClick={() => setShowExportEnglishDialog(true)} className="font-body text-xs border-primary/30 text-primary">
-                <Package className="w-3 h-3" /> تصدير الإنجليزية 📦
-              </Button>
-              {/* Quick Export Current Page */}
-              <Button variant="outline" size="sm" onClick={() => editor.handleExportCurrentPageEnglish(editor.currentPage)} className="font-body text-xs">
-                <FileDown className="w-3 h-3" /> تصدير الصفحة الحالية 📄
-              </Button>
               {/* Cloud Save/Load */}
               <Button variant="outline" size="sm" onClick={editor.handleCloudSave} disabled={!editor.user || editor.cloudSyncing} className="font-body text-xs">
                 {editor.cloudSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} حفظ
@@ -1032,8 +1022,10 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                   <DropdownMenuLabel className="text-xs">📦 تصدير النصوص الإنجليزية</DropdownMenuLabel>
-                   <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}><FileText className="w-4 h-4" /> تصدير مخصص ⚙️</DropdownMenuItem>
+                  <DropdownMenuLabel className="text-xs">📦 تصدير الإنجليزية غير المترجمة ({untranslatedCount})</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => editor.handleExportEnglishOnly()}><FileText className="w-4 h-4" /> TXT ملف واحد</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => editor.handleExportEnglishOnlyJson()}><FileText className="w-4 h-4" /> JSON ملف واحد</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}><FileText className="w-4 h-4" /> تصدير مخصص (تقسيم + ZIP) ⚙️</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">📥 استيراد</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleImportTranslations}><Upload className="w-4 h-4" /> استيراد JSON</DropdownMenuItem>
@@ -1166,14 +1158,6 @@ const Editor = () => {
             </div>
           ) : (
             <div className="mb-6 flex gap-2 flex-wrap">
-              {/* Standalone Export English Button */}
-              <Button variant="outline" onClick={() => setShowExportEnglishDialog(true)} className="font-body border-primary/30 text-primary gap-1.5">
-                <Package className="w-4 h-4" /> تصدير الإنجليزية 📦
-              </Button>
-              {/* Quick Export Current Page */}
-              <Button variant="outline" onClick={() => editor.handleExportCurrentPageEnglish(editor.currentPage)} className="font-body gap-1.5">
-                <FileDown className="w-4 h-4" /> تصدير الصفحة الحالية 📄
-              </Button>
               {/* ── Export/Import ── */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1187,8 +1171,10 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF (memoQ/Trados)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX (ذاكرة ترجمة)</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                   <DropdownMenuLabel className="text-xs">📦 تصدير النصوص الإنجليزية</DropdownMenuLabel>
-                   <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}>⚙️ تصدير مخصص</DropdownMenuItem>
+                  <DropdownMenuLabel className="text-xs">📦 تصدير الإنجليزية غير المترجمة ({untranslatedCount})</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => editor.handleExportEnglishOnly()}>📄 TXT ملف واحد</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => editor.handleExportEnglishOnlyJson()}>📋 JSON ملف واحد</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}>⚙️ تصدير مخصص (تقسيم + ZIP)</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">📥 استيراد</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleImportTranslations}><Upload className="w-4 h-4" /> استيراد JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
@@ -1554,16 +1540,7 @@ const Editor = () => {
           open={showExportEnglishDialog}
           onOpenChange={setShowExportEnglishDialog}
           totalCount={untranslatedCount}
-          totalEntries={editor.filteredEntries.length}
-          totalPages={editor.totalPages}
-          onExport={(chunkSize, format, scope, startPage, endPage) =>
-            format === "json"
-              ? editor.handleExportEnglishOnlyJson(chunkSize, scope, startPage, endPage)
-              : editor.handleExportEnglishOnly(chunkSize, scope, startPage, endPage)
-          }
-          onGetRealCount={(scope, startPage, endPage) =>
-            editor.getEntriesGroupedCount(scope, startPage, endPage)
-          }
+          onExport={(chunkSize, format) => format === "json" ? editor.handleExportEnglishOnlyJson(chunkSize) : editor.handleExportEnglishOnly(chunkSize)}
         />
         <ImportConflictDialog
           open={editor.importConflicts.length > 0}
@@ -1678,15 +1655,6 @@ const Editor = () => {
             diffs={editor.pendingMerge.diffs}
           />
         )}
-
-        <PageRangeDialog
-          open={pageRangeMode !== null}
-          onClose={() => setPageRangeMode(null)}
-          totalPages={editor.totalPages}
-          onConfirm={(startPage, endPage) => {
-            editor.handleTranslateAllPages(pageRangeMode === 'memory', false, startPage, endPage);
-          }}
-        />
       </div>
     </TooltipProvider>
   );

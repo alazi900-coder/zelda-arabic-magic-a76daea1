@@ -686,17 +686,15 @@ export function useEditorTranslation({
     }
   };
 
-  const handleTranslateAllPages = async (memoryOnly = false, forceRetranslate = false, startPage?: number, endPage?: number) => {
+  const handleTranslateAllPages = async (memoryOnly = false, forceRetranslate = false) => {
     if (!state) return;
     const arabicRegex = /[\u0600-\u06FF]/;
-    const fromPage = startPage ?? 0;
-    const toPage = endPage ?? (totalPages - 1);
-    const allPages = toPage - fromPage + 1;
+    const allPages = totalPages;
 
     // Collect ALL translatable candidates across all pages (including already-translated if forced)
     let totalCandidates = 0;
     let totalSkippedTranslated = 0;
-    for (let p = fromPage; p <= toPage; p++) {
+    for (let p = 0; p < allPages; p++) {
       const pageEntries = filteredEntries.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
       for (const e of pageEntries) {
         const key = `${e.msbtFile}:${e.index}`;
@@ -714,7 +712,7 @@ export function useEditorTranslation({
         `✅ جميع الصفحات مترجمة بالكامل (${totalSkippedTranslated} نص مترجم).\n\nهل تريد إعادة ترجمتها؟`
       );
       if (confirmed) {
-        return handleTranslateAllPages(memoryOnly, true, startPage, endPage);
+        return handleTranslateAllPages(memoryOnly, true);
       }
       return;
     }
@@ -728,7 +726,7 @@ export function useEditorTranslation({
     // Save previous translations for comparison
     const oldTrans: Record<string, string> = {};
     const originalsMap: Record<string, string> = {};
-    for (let p = fromPage; p <= toPage; p++) {
+    for (let p = 0; p < allPages; p++) {
       const pageEntries = filteredEntries.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
       for (const e of pageEntries) {
         const key = `${e.msbtFile}:${e.index}`;
@@ -747,7 +745,7 @@ export function useEditorTranslation({
     let pagesCompleted = 0;
 
     try {
-      for (let p = fromPage; p <= toPage; p++) {
+      for (let p = 0; p < allPages; p++) {
         if (abortControllerRef.current.signal.aborted) break;
 
         const pageEntries = filteredEntries.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
@@ -767,7 +765,7 @@ export function useEditorTranslation({
 
         // Navigate to this page visually
         setCurrentPage(() => p);
-        setTranslateProgress(`📄 صفحة ${p + 1}/${toPage + 1} — ترجمة ${candidates.length} نص...`);
+        setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — ترجمة ${candidates.length} نص...`);
 
         if (memoryOnly) {
           // Memory-only: TM + Glossary
@@ -796,7 +794,7 @@ export function useEditorTranslation({
             if (abortControllerRef.current.signal.aborted) break;
             const entry = candidates[i];
             const key = `${entry.msbtFile}:${entry.index}`;
-            setTranslateProgress(`📄 صفحة ${p + 1}/${toPage + 1} — ترجمة ${i + 1}/${candidates.length}...`);
+            setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — ترجمة ${i + 1}/${candidates.length}...`);
 
             const idx = state.entries.indexOf(entry);
             const contextEntries: { key: string; original: string; translation?: string }[] = [];

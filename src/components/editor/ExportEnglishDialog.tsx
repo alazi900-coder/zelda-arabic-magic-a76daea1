@@ -37,8 +37,9 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
     if (open) {
       setStartPage(1);
       setEndPage(totalPages);
+      setScope(totalCount === 0 ? "all" : "untranslated");
     }
-  }, [open, totalPages]);
+  }, [open, totalPages, totalCount]);
 
   const effectiveCount = scope === "untranslated" ? totalCount : totalEntries;
   const fileCount = useMemo(() => Math.ceil(effectiveCount / chunkSize), [effectiveCount, chunkSize]);

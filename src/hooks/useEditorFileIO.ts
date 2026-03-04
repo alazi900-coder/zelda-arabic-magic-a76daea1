@@ -210,12 +210,13 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   /** Build the list of entries grouped by file, optionally filtered by scope */
   const getEntriesGrouped = (scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
     if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0 };
-    // Always use filteredEntries — this matches what the user sees and what totalPages is based on
-    let entriesToExport = filteredEntries;
+    // Always use state.entries (absolute list) for page-range slicing — NOT filteredEntries
+    // This ensures page numbers match the full dataset regardless of active filters
+    let entriesToExport = state.entries;
     
-    // Apply page range filter if specified
+    // Apply page range filter if specified (absolute indices)
     if (startPage !== undefined && endPage !== undefined) {
-      const PAGE_SIZE = 50; // matches types.tsx
+      const PAGE_SIZE = 50;
       const fromIdx = startPage * PAGE_SIZE;
       const toIdx = (endPage + 1) * PAGE_SIZE;
       entriesToExport = entriesToExport.slice(fromIdx, toIdx);

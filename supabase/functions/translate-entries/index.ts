@@ -268,8 +268,11 @@ function dpSplitShielded(words: string[], nLines: number, wordDisplayLen: (w: st
 
         const wordCount = i - j;
         const isMiddleLine = k > 1 && k < nLines;
+        // Count lexical words (excluding tag placeholders and punctuation)
+        const lexicalCount = countLexicalWords(words.slice(j, i).join(' '));
+        if (lexicalCount <= 1 && isMiddleLine) cost += 50000;
         if (wordCount === 1 && isMiddleLine) cost += 50000;
-        if (ll < ideal * 0.4 && wordCount < 3) cost += 5000;
+        if (ll < ideal * 0.4 && lexicalCount < 3) cost += 5000;
 
         const total = dp[j][k - 1] + cost;
         if (total < dp[i][k]) {
@@ -403,9 +406,9 @@ function countLexicalWords(line: string): number {
   return count;
 }
 
-/** Fix orphan lines by merging weak middle lines with neighbors */
+/** Fix orphan lines by merging weak lines with neighbors */
 function fixOrphans(lines: string[]): string[] {
-  if (lines.length <= 2) return lines;
+  if (lines.length <= 1) return lines;
 
   const result = [...lines];
   let changed = true;
@@ -415,19 +418,29 @@ function fixOrphans(lines: string[]): string[] {
     changed = false;
     iterations++;
 
-    for (let i = 1; i < result.length - 1; i++) {
+    for (let i = 0; i < result.length; i++) {
       const lexical = countLexicalWords(result[i]);
-      if (lexical <= 1) {
-        // Merge with shorter neighbor to avoid singleton lexical line
-        const prevLen = result[i - 1].length;
-        const nextLen = i + 1 < result.length ? result[i + 1].length : Infinity;
-
-        if (prevLen <= nextLen) {
+      if (lexical <= 1 && result.length > 1) {
+        // Determine merge target: prefer shorter neighbor
+        if (i === 0) {
+          // First line orphan: merge into next
+          result[1] = `${result[0]} ${result[1]}`.replace(/\s{2,}/g, ' ').trim();
+          result.splice(0, 1);
+        } else if (i === result.length - 1) {
+          // Last line orphan: merge into previous
           result[i - 1] = `${result[i - 1]} ${result[i]}`.replace(/\s{2,}/g, ' ').trim();
           result.splice(i, 1);
         } else {
-          result[i + 1] = `${result[i]} ${result[i + 1]}`.replace(/\s{2,}/g, ' ').trim();
-          result.splice(i, 1);
+          // Middle line orphan: merge with shorter neighbor
+          const prevLen = result[i - 1].length;
+          const nextLen = result[i + 1].length;
+          if (prevLen <= nextLen) {
+            result[i - 1] = `${result[i - 1]} ${result[i]}`.replace(/\s{2,}/g, ' ').trim();
+            result.splice(i, 1);
+          } else {
+            result[i + 1] = `${result[i]} ${result[i + 1]}`.replace(/\s{2,}/g, ' ').trim();
+            result.splice(i, 1);
+          }
         }
         changed = true;
         break; // restart loop after modification

@@ -71,6 +71,7 @@ import LineBalancePanel from "@/components/editor/LineBalancePanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 import MismatchDetectorPanel from "@/components/editor/MismatchDetectorPanel";
 import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
+import PageRangeDialog from "@/components/editor/PageRangeDialog";
 
 const Editor = () => {
   const editor = useEditorState();

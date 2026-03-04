@@ -210,12 +210,13 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   /** Build the list of entries grouped by file, optionally filtered by scope */
   const getEntriesGrouped = (scope: 'untranslated' | 'all' = 'untranslated', startPage?: number, endPage?: number) => {
     if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0 };
-    // Always use filteredEntries — this matches what the user sees and what totalPages is based on
-    let entriesToExport = filteredEntries;
+    // Always use state.entries (absolute list) for page-range slicing — NOT filteredEntries
+    // This ensures page numbers match the full dataset regardless of active filters
+    let entriesToExport = state.entries;
     
-    // Apply page range filter if specified
+    // Apply page range filter if specified (absolute indices)
     if (startPage !== undefined && endPage !== undefined) {
-      const PAGE_SIZE = 50; // matches types.tsx
+      const PAGE_SIZE = 50;
       const fromIdx = startPage * PAGE_SIZE;
       const toIdx = (endPage + 1) * PAGE_SIZE;
       entriesToExport = entriesToExport.slice(fromIdx, toIdx);
@@ -1877,12 +1878,39 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     }
   }, []);
 
+  /** Quick export: export current page's English texts as JSON */
+  const handleExportCurrentPageEnglish = (currentPage: number) => {
+    if (!state) return;
+    const PAGE_SIZE = 50;
+    const fromIdx = currentPage * PAGE_SIZE;
+    const toIdx = Math.min((currentPage + 1) * PAGE_SIZE, state.entries.length);
+    const pageEntries = state.entries.slice(fromIdx, toIdx);
+    if (pageEntries.length === 0) return;
+    const obj: Record<string, string> = {};
+    for (const entry of pageEntries) {
+      obj[`${entry.msbtFile}:${entry.index}`] = entry.original;
+    }
+    const data = JSON.stringify(obj, null, 2);
+    const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `english-page${currentPage + 1}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setLastSaved(`✅ تم تصدير ${pageEntries.length} نص من الصفحة ${currentPage + 1}`);
+    setTimeout(() => setLastSaved(""), 3000);
+  };
+
   return {
     handleExportTranslations,
     handleExportEnglishOnly,
     handleExportEnglishOnlyJson,
     getUntranslatedCount,
     getEntriesGroupedCount: (scope: 'untranslated' | 'all', startPage?: number, endPage?: number) => getEntriesGrouped(scope, startPage, endPage).totalCount,
+    absoluteTotalEntries: state ? state.entries.length : 0,
+    absoluteTotalPages: state ? Math.ceil(state.entries.length / 50) : 0,
+    handleExportCurrentPageEnglish,
     handleImportTranslations,
     handleDropImport,
     processJsonImport,

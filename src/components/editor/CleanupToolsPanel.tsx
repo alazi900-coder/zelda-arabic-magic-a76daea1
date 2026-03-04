@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, Wrench, CheckCircle2, X, Sparkles } from "lucide-react";
 import { EditorState } from "@/components/editor/types";
+import { balanceLines, hasOrphanLines } from "@/lib/balance-lines";
 
 
 interface CleanupResult {
@@ -106,6 +107,7 @@ const TOOL_LABELS: Record<string, { name: string; emoji: string }> = {
   invisible_chars: { name: "أحرف غير مرئية", emoji: "👻" },
   question_mark_fix: { name: "علامة الاستفهام", emoji: "؟" },
   unicode_fix: { name: "إصلاح Unicode", emoji: "🔧" },
+  line_balance: { name: "توازن الأسطر", emoji: "⚖️" },
 };
 
 export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: CleanupToolsPanelProps) {
@@ -154,6 +156,12 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
           const after = fixUnicode(cleaned);
           if (after !== cleaned) { appliedTypes.push("unicode_fix"); cleaned = after; }
         }
+        if (isEnabled("line_balance")) {
+          if (hasOrphanLines(cleaned)) {
+            const after = balanceLines(cleaned);
+            if (after !== cleaned) { appliedTypes.push("line_balance"); cleaned = after; }
+          }
+        }
 
         if (appliedTypes.length > 0) {
           results.push({
@@ -189,7 +197,7 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
   }, []);
 
   // Check if any cleanup feature is enabled
-  const anyEnabled = ["hamza_unify", "quote_fix", "number_unify", "invisible_chars", "question_mark_fix", "unicode_fix"].some(id => isEnabled(id));
+  const anyEnabled = ["hamza_unify", "quote_fix", "number_unify", "invisible_chars", "question_mark_fix", "unicode_fix", "line_balance"].some(id => isEnabled(id));
   if (!anyEnabled || dismissed) return null;
 
   const enabledTools = Object.keys(TOOL_LABELS).filter(id => isEnabled(id));

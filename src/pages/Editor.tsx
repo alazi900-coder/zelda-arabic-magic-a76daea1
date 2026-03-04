@@ -1003,6 +1003,14 @@ const Editor = () => {
           {/* Cloud & Actions */}
           {isMobile ? (
             <div className="flex flex-wrap gap-2 mb-6">
+              {/* Standalone Export English Button */}
+              <Button variant="outline" size="sm" onClick={() => setShowExportEnglishDialog(true)} className="font-body text-xs border-primary/30 text-primary">
+                <Package className="w-3 h-3" /> تصدير الإنجليزية 📦
+              </Button>
+              {/* Quick Export Current Page */}
+              <Button variant="outline" size="sm" onClick={() => editor.handleExportCurrentPageEnglish(editor.currentPage)} className="font-body text-xs">
+                <FileDown className="w-3 h-3" /> تصدير الصفحة الحالية 📄
+              </Button>
               {/* Cloud Save/Load */}
               <Button variant="outline" size="sm" onClick={editor.handleCloudSave} disabled={!editor.user || editor.cloudSyncing} className="font-body text-xs">
                 {editor.cloudSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} حفظ

@@ -89,15 +89,25 @@ const Editor = () => {
   const gameType = "xenoblade";
   const processPath = "/process";
 
-  // Prevent accidental navigation when page is locked
+  // Prevent accidental navigation when page is locked (back button + tab close)
   React.useEffect(() => {
     if (!pageLocked) return;
-    const handler = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = '';
     };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    // Push a dummy history state so back button triggers popstate instead of leaving
+    window.history.pushState({ locked: true }, '');
+    const handlePopState = () => {
+      // Re-push state to block back navigation
+      window.history.pushState({ locked: true }, '');
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [pageLocked]);
 
   // Drag & Drop handlers

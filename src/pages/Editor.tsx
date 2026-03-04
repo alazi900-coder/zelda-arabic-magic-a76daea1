@@ -349,11 +349,11 @@ const Editor = () => {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel className="text-xs text-muted-foreground">جميع الصفحات</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => editor.handleTranslateAllPages(false)}>
-                      <Sparkles className="w-4 h-4" /> ترجمة جميع الصفحات بالذكاء 🤖📄
+                    <DropdownMenuItem onClick={() => setPageRangeMode('ai')}>
+                      <Sparkles className="w-4 h-4" /> ترجمة صفحات بالذكاء 🤖📄
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => editor.handleTranslateAllPages(true)}>
-                      <BookOpen className="w-4 h-4" /> ترجمة جميع الصفحات بالذاكرة 📖📄
+                    <DropdownMenuItem onClick={() => setPageRangeMode('memory')}>
+                      <BookOpen className="w-4 h-4" /> ترجمة صفحات بالذاكرة 📖📄
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

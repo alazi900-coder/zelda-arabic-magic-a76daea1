@@ -265,7 +265,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <SplitSquareHorizontal className="w-4 h-4 text-primary" />
                 </Button>
               )}
-              {translation?.trim() && (translation.includes('\n') || translation.length > 42) && (
+              {translation?.trim() && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
                   const balanced = balanceLines(translation);
                   if (balanced !== translation) {

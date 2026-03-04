@@ -349,7 +349,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
                 </Button>
               </div>
             </div>
-          )
+          )}
           {/* Back-translation result */}
           {backTranslation && (
             <div className="mt-2 p-2 rounded border border-accent/20 bg-accent/5 text-xs space-y-1">

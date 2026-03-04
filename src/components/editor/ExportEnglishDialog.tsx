@@ -16,6 +16,8 @@ interface ExportEnglishDialogProps {
   totalEntries: number;
   totalPages: number;
   onExport: (chunkSize: number, format: ExportFormat, scope: ExportScope, startPage?: number, endPage?: number) => void;
+  /** Returns the real count of entries for given scope and page range (0-indexed pages) */
+  onGetRealCount?: (scope: ExportScope, startPage?: number, endPage?: number) => number;
 }
 
 const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
@@ -25,6 +27,7 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
   totalEntries,
   totalPages,
   onExport,
+  onGetRealCount,
 }) => {
   const [chunkSize, setChunkSize] = useState(1000);
   const [format, setFormat] = useState<ExportFormat>("json");
@@ -41,24 +44,27 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
     }
   }, [open, totalPages, totalCount]);
 
-  const PAGE_SIZE = 50;
-  
-  // Calculate effective count considering page range
+  // Calculate effective count using real data when available
   const effectiveCount = useMemo(() => {
+    if (onGetRealCount) {
+      const sp = usePageRange ? startPage - 1 : undefined;
+      const ep = usePageRange ? endPage - 1 : undefined;
+      return onGetRealCount(scope, sp, ep);
+    }
+    // Fallback: use totals directly
     const baseCount = scope === "untranslated" ? totalCount : totalEntries;
     if (!usePageRange) return baseCount;
     
-    // Estimate entries in the selected page range
+    const PAGE_SIZE = 50;
     const validStart = Math.max(1, startPage);
     const validEnd = Math.min(endPage, totalPages);
     const selectedPages = Math.max(0, validEnd - validStart + 1);
     const rangeEntries = Math.min(selectedPages * PAGE_SIZE, totalEntries);
     
     if (scope === "all") return rangeEntries;
-    // For untranslated, estimate proportionally
     const ratio = totalEntries > 0 ? totalCount / totalEntries : 0;
     return Math.round(rangeEntries * ratio);
-  }, [scope, totalCount, totalEntries, usePageRange, startPage, endPage, totalPages]);
+  }, [scope, totalCount, totalEntries, usePageRange, startPage, endPage, totalPages, onGetRealCount]);
   
   const fileCount = useMemo(() => Math.ceil(Math.max(effectiveCount, 1) / chunkSize), [effectiveCount, chunkSize]);
 
@@ -159,8 +165,7 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  سيتم تصدير نصوص {Math.max(0, Math.min(endPage, totalPages) - Math.max(1, startPage) + 1)} صفحة
-                  {" · "}≈ <strong className="text-foreground">{effectiveCount.toLocaleString()}</strong> نص
+                  سيتم تصدير <strong className="text-foreground">{effectiveCount.toLocaleString()}</strong> نص
                 </p>
               </div>
             )}
@@ -261,10 +266,10 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
           <Button
             onClick={handleExport}
             className="gap-1.5"
-            disabled={usePageRange && (startPage > endPage || startPage < 1 || endPage > totalPages)}
+            disabled={effectiveCount === 0 || (usePageRange && (startPage > endPage || startPage < 1 || endPage > totalPages))}
           >
             <Download className="w-4 h-4" />
-            تصدير {fileCount > 1 ? `${fileCount} ملفات ${ext} (ZIP)` : `ملف ${ext} واحد`}
+            تصدير {effectiveCount.toLocaleString()} نص {fileCount > 1 ? `(${fileCount} ملفات ${ext} ZIP)` : `(${ext})`}
           </Button>
         </DialogFooter>
       </DialogContent>

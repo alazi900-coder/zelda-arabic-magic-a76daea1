@@ -1545,6 +1545,9 @@ const Editor = () => {
               ? editor.handleExportEnglishOnlyJson(chunkSize, scope, startPage, endPage)
               : editor.handleExportEnglishOnly(chunkSize, scope, startPage, endPage)
           }
+          onGetRealCount={(scope, startPage, endPage) =>
+            editor.getEntriesGroupedCount(scope, startPage, endPage)
+          }
         />
         <ImportConflictDialog
           open={editor.importConflicts.length > 0}

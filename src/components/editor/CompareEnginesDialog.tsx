@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, Sparkles, AlertTriangle } from "lucide-react";
+import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 
@@ -54,6 +54,111 @@ function checkTagIntegrity(originalText: string, translatedText: string): { ok: 
     for (let i = 0; i < count - oc; i++) extra.push(tag);
   });
   return { ok: missing.length === 0 && extra.length === 0, missing, extra };
+}
+
+/** Auto-fix broken tags: remove extras, append missing ones at the end */
+function autoFixTags(originalText: string, translatedText: string): string {
+  const origTags = extractTags(originalText);
+  const transTags = extractTags(translatedText);
+
+  // Build multiset counts
+  const origCount = new Map<string, number>();
+  origTags.forEach(t => origCount.set(t, (origCount.get(t) || 0) + 1));
+
+  // Remove extra tags (not in original or exceeding count)
+  const remaining = new Map<string, number>();
+  origCount.forEach((c, t) => remaining.set(t, c));
+
+  let fixed = translatedText;
+
+  // First pass: strip all tags from translation, track which ones we consumed
+  const transTagsInOrder: { tag: string; index: number }[] = [];
+  const r = new RegExp(TECH_TAG_RENDER_REGEX.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = r.exec(translatedText)) !== null) {
+    transTagsInOrder.push({ tag: m[0], index: m.index });
+  }
+
+  // Remove all tags from text
+  const textOnly = translatedText.replace(new RegExp(TECH_TAG_RENDER_REGEX.source, 'g'), '').trim();
+
+  // Re-insert only the original tags in their original order
+  // Strategy: place tags at word boundaries similar to original positions
+  const origTagPositions = origTags; // preserve order from original
+
+  // Simple approach: strip all tags, then append/prepend based on original position pattern
+  const origTextNoTags = originalText.replace(new RegExp(TECH_TAG_RENDER_REGEX.source, 'g'), '§TAG§');
+  const origParts = originalText.split(new RegExp(TECH_TAG_RENDER_REGEX.source, 'g')).filter(Boolean);
+
+  // If original starts with tag(s), prepend them; if ends with tag(s), append them
+  // For middle tags, insert at proportional positions
+  let result = textOnly;
+  const startsWithTag = TECH_TAG_RENDER_REGEX.test(originalText.trimStart().substring(0, 30));
+  TECH_TAG_RENDER_REGEX.lastIndex = 0;
+
+  // Simplest reliable strategy: append all missing tags at end, remove extras
+  const usedCount = new Map<string, number>();
+  // Keep valid tags already in translation
+  const validInTrans: string[] = [];
+  for (const tt of transTags) {
+    const oc = origCount.get(tt) || 0;
+    const uc = usedCount.get(tt) || 0;
+    if (uc < oc) {
+      validInTrans.push(tt);
+      usedCount.set(tt, uc + 1);
+    }
+  }
+
+  // Find missing
+  const missingTags: string[] = [];
+  const finalUsed = new Map<string, number>();
+  validInTrans.forEach(t => finalUsed.set(t, (finalUsed.get(t) || 0) + 1));
+  origCount.forEach((count, tag) => {
+    const have = finalUsed.get(tag) || 0;
+    for (let i = 0; i < count - have; i++) missingTags.push(tag);
+  });
+
+  // Rebuild: strip all tags, re-insert valid ones at first occurrence positions, append missing
+  let rebuilt = translatedText;
+  // Remove extra tags
+  const extraTags: string[] = [];
+  const extraCount = new Map<string, number>();
+  for (const tt of transTags) {
+    const oc = origCount.get(tt) || 0;
+    const ec = extraCount.get(tt) || 0;
+    extraCount.set(tt, ec + 1);
+    if (ec + 1 > oc) {
+      extraTags.push(tt);
+    }
+  }
+  // Remove extras from end to start to preserve indices
+  if (extraTags.length > 0) {
+    const toRemove = new Map<string, number>();
+    extraTags.forEach(t => toRemove.set(t, (toRemove.get(t) || 0) + 1));
+    // Remove last occurrences
+    const allMatches: { tag: string; start: number; end: number }[] = [];
+    const rx = new RegExp(TECH_TAG_RENDER_REGEX.source, 'g');
+    let mx: RegExpExecArray | null;
+    while ((mx = rx.exec(rebuilt)) !== null) {
+      allMatches.push({ tag: mx[0], start: mx.index, end: mx.index + mx[0].length });
+    }
+    // Remove from last to first
+    for (let i = allMatches.length - 1; i >= 0; i--) {
+      const am = allMatches[i];
+      const rem = toRemove.get(am.tag) || 0;
+      if (rem > 0) {
+        rebuilt = rebuilt.substring(0, am.start) + rebuilt.substring(am.end);
+        toRemove.set(am.tag, rem - 1);
+      }
+    }
+  }
+
+  // Append missing tags
+  if (missingTags.length > 0) {
+    rebuilt = rebuilt.trimEnd() + ' ' + missingTags.join(' ');
+  }
+
+  return rebuilt.replace(/\s{2,}/g, ' ').trim();
 }
 
 function renderTranslationWithProtectedTags(text: string) {
@@ -226,6 +331,17 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                                 {integrity!.extra.length > 0 && (
                                   <span dir="ltr" className="block">⚠ زائدة: <code className="font-mono bg-destructive/10 px-1 rounded">{integrity!.extra.join(' ، ')}</code></span>
                                 )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-2 h-7 text-xs border-destructive/30 hover:bg-destructive/10"
+                                  onClick={() => {
+                                    const fixed = autoFixTags(entry!.original, result);
+                                    setResults(prev => ({ ...prev, [engine]: fixed }));
+                                  }}
+                                >
+                                  <Wrench className="w-3 h-3 ml-1" /> إصلاح الوسوم تلقائياً
+                                </Button>
                               </AlertDescription>
                             </Alert>
                           )}

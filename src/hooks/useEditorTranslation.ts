@@ -796,7 +796,7 @@ export function useEditorTranslation({
             if (abortControllerRef.current.signal.aborted) break;
             const entry = candidates[i];
             const key = `${entry.msbtFile}:${entry.index}`;
-            setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — ترجمة ${i + 1}/${candidates.length}...`);
+            setTranslateProgress(`📄 صفحة ${p + 1}/${toPage + 1} — ترجمة ${i + 1}/${candidates.length}...`);
 
             const idx = state.entries.indexOf(entry);
             const contextEntries: { key: string; original: string; translation?: string }[] = [];

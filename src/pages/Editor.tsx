@@ -1542,7 +1542,13 @@ const Editor = () => {
           open={showExportEnglishDialog}
           onOpenChange={setShowExportEnglishDialog}
           totalCount={untranslatedCount}
-          onExport={(chunkSize, format) => format === "json" ? editor.handleExportEnglishOnlyJson(chunkSize) : editor.handleExportEnglishOnly(chunkSize)}
+          totalEntries={editor.filteredEntries.length}
+          totalPages={editor.totalPages}
+          onExport={(chunkSize, format, scope, startPage, endPage) =>
+            format === "json"
+              ? editor.handleExportEnglishOnlyJson(chunkSize, scope, startPage, endPage)
+              : editor.handleExportEnglishOnly(chunkSize, scope, startPage, endPage)
+          }
         />
         <ImportConflictDialog
           open={editor.importConflicts.length > 0}

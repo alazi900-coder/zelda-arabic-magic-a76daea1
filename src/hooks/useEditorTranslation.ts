@@ -686,10 +686,12 @@ export function useEditorTranslation({
     }
   };
 
-  const handleTranslateAllPages = async (memoryOnly = false, forceRetranslate = false) => {
+  const handleTranslateAllPages = async (memoryOnly = false, forceRetranslate = false, startPage?: number, endPage?: number) => {
     if (!state) return;
     const arabicRegex = /[\u0600-\u06FF]/;
-    const allPages = totalPages;
+    const fromPage = startPage ?? 0;
+    const toPage = endPage ?? (totalPages - 1);
+    const allPages = toPage - fromPage + 1;
 
     // Collect ALL translatable candidates across all pages (including already-translated if forced)
     let totalCandidates = 0;

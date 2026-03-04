@@ -265,14 +265,16 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <SplitSquareHorizontal className="w-4 h-4 text-primary" />
                 </Button>
               )}
-              {translation?.trim() && hasOrphanLines(translation) && (
+              {translation?.trim() && (translation.includes('\n') || translation.length > 42) && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
                   const balanced = balanceLines(translation);
                   if (balanced !== translation) {
                     setBalancePreview(balanced);
+                  } else {
+                    toast({ title: "⚖️ متوازن", description: "النص متوازن بالفعل" });
                   }
                 }} title="⚖️ إعادة توازن الأسطر">
-                  <Scale className="w-4 h-4 text-accent" />
+                  <Scale className={`w-4 h-4 ${hasOrphanLines(translation) ? 'text-destructive' : 'text-accent'}`} />
                 </Button>
               )}
               {isDamagedTag && handleLocalFixDamagedTag && (

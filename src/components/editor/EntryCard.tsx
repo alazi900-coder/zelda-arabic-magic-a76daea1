@@ -103,6 +103,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   const [backTranslation, setBackTranslation] = useState<string | null>(null);
   const [backTranslating, setBackTranslating] = useState(false);
   const [showTagPreview, setShowTagPreview] = useState(false);
+  const [balancePreview, setBalancePreview] = useState<string | null>(null);
 
   const tagPreview = useMemo(() => {
     if (!isDamagedTag || !translation?.trim()) return null;
@@ -267,7 +268,9 @@ const EntryCard: React.FC<EntryCardProps> = ({
               {translation?.trim() && hasOrphanLines(translation) && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
                   const balanced = balanceLines(translation);
-                  if (balanced !== translation) updateTranslation(key, balanced);
+                  if (balanced !== translation) {
+                    setBalancePreview(balanced);
+                  }
                 }} title="⚖️ إعادة توازن الأسطر">
                   <Scale className="w-4 h-4 text-accent" />
                 </Button>
@@ -318,6 +321,30 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <Check className="w-3 h-3 ml-1" /> تطبيق
                 </Button>
                 <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setShowTagPreview(false)}>
+                  <X className="w-3 h-3 ml-1" /> إغلاق
+                </Button>
+              </div>
+            </div>
+          )}
+          {/* Balance lines preview */}
+          {balancePreview && (
+            <div className="mt-2 p-2 rounded border border-accent/30 bg-accent/5 text-xs space-y-1.5">
+              <p className="font-semibold text-accent">⚖️ معاينة توازن الأسطر:</p>
+              <div className="space-y-1">
+                <div className="flex gap-2 items-start">
+                  <span className="text-destructive shrink-0">قبل:</span>
+                  <pre dir="rtl" className="break-words whitespace-pre-wrap text-foreground font-body">{translation}</pre>
+                </div>
+                <div className="flex gap-2 items-start">
+                  <span className="text-primary shrink-0">بعد:</span>
+                  <pre dir="rtl" className="break-words whitespace-pre-wrap text-foreground font-body">{balancePreview}</pre>
+                </div>
+              </div>
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="default" className="h-6 text-[10px] px-2" onClick={() => { updateTranslation(key, balancePreview); setBalancePreview(null); }}>
+                  <Check className="w-3 h-3 ml-1" /> تطبيق
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setBalancePreview(null)}>
                   <X className="w-3 h-3 ml-1" /> إغلاق
                 </Button>
               </div>

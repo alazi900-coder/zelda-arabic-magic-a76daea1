@@ -7,41 +7,51 @@ export default function UpdateBanner() {
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    // Listen for SW update events from vite-plugin-pwa
-    const handleSWUpdate = () => setShowUpdate(true);
+    if (!("serviceWorker" in navigator)) return;
 
-    // Check if there's a waiting service worker
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistration().then((reg) => {
-        if (reg?.waiting) {
-          setShowUpdate(true);
-        }
-        reg?.addEventListener("updatefound", () => {
-          const newSW = reg.installing;
-          newSW?.addEventListener("statechange", () => {
-            if (newSW.state === "installed" && navigator.serviceWorker.controller) {
-              setShowUpdate(true);
-            }
-          });
+    const checkForUpdate = () => {
+      navigator.serviceWorker.getRegistration().then((reg) => reg?.update());
+    };
+
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (reg?.waiting) {
+        setShowUpdate(true);
+      }
+      reg?.addEventListener("updatefound", () => {
+        const newSW = reg.installing;
+        newSW?.addEventListener("statechange", () => {
+          if (newSW.state === "installed" && navigator.serviceWorker.controller) {
+            setShowUpdate(true);
+          }
         });
       });
+    });
 
-      // Also listen for controllerchange to auto-reload
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
-      });
-    }
+    // Auto-reload when new SW takes control
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
 
-    // Periodic check every 5 minutes
-    const interval = setInterval(() => {
-      navigator.serviceWorker?.getRegistration().then((reg) => reg?.update());
-    }, 5 * 60 * 1000);
+    // Check immediately on load
+    checkForUpdate();
 
-    return () => clearInterval(interval);
+    // Check on visibility change (when user returns to tab/app)
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") checkForUpdate();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Periodic check every 2 minutes
+    const interval = setInterval(checkForUpdate, 2 * 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   const handleUpdate = () => {

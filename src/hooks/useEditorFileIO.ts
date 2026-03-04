@@ -1884,6 +1884,8 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     handleExportEnglishOnlyJson,
     getUntranslatedCount,
     getEntriesGroupedCount: (scope: 'untranslated' | 'all', startPage?: number, endPage?: number) => getEntriesGrouped(scope, startPage, endPage).totalCount,
+    absoluteTotalEntries: state ? state.entries.length : 0,
+    absoluteTotalPages: state ? Math.ceil(state.entries.length / 50) : 0,
     handleImportTranslations,
     handleDropImport,
     processJsonImport,

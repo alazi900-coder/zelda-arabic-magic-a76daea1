@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, X, Sparkles, Copy, RotateCcw, Loader2, Bookmark, Clock, ArrowLeftRight } from "lucide-react";
 import { EditorState, ExtractedEntry, categorizeFile, categorizeBdatTable } from "@/components/editor/types";
-import { useFeatureFlags } from "@/lib/feature-flags";
+
 import { toast } from "@/hooks/use-toast";
 
 interface TranslationToolsPanelProps {
@@ -62,7 +62,7 @@ export function addToHistory(key: string, value: string) {
 }
 
 export default function TranslationToolsPanel({ state, currentEntry, currentTranslation, onApplyTranslation }: TranslationToolsPanelProps) {
-  const { isEnabled } = useFeatureFlags();
+  const isEnabled = (_id: string) => true;
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 

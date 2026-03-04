@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, Wrench, CheckCircle2, X, Sparkles } from "lucide-react";
 import { EditorState } from "@/components/editor/types";
-import { useFeatureFlags } from "@/lib/feature-flags";
+
 
 interface CleanupResult {
   key: string;
@@ -109,7 +109,7 @@ const TOOL_LABELS: Record<string, { name: string; emoji: string }> = {
 };
 
 export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: CleanupToolsPanelProps) {
-  const { isEnabled } = useFeatureFlags();
+  const isEnabled = (_id: string) => true;
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [numberMode, setNumberMode] = useState<'arabic' | 'western'>('arabic');

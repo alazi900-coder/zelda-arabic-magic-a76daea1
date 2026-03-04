@@ -374,17 +374,36 @@ function scoreSplit(lines: string[]): number {
     const dev = lengths[i] - avg;
     cost += dev * dev;
 
-    // Orphan penalty for middle lines with single word
+    // Orphan penalty for middle lines with weak lexical content
     if (i > 0 && i < lines.length - 1) {
-      const wc = lines[i].split(/\s+/).length;
-      if (wc === 1) cost += 50000;
-      if (wc === 2 && lengths[i] < 8) cost += 5000;
+      const lexical = countLexicalWords(lines[i]);
+      if (lexical <= 1) cost += 50000;
+      if (lexical === 2 && lengths[i] < 10) cost += 5000;
     }
   }
   return cost;
 }
 
-/** Fix orphan lines by merging single-word middle lines with neighbors */
+function countLexicalWords(line: string): number {
+  const tokens = line.split(/\s+/).filter(Boolean);
+  let count = 0;
+
+  for (const token of tokens) {
+    // Shielded technical tags during balancing
+    if (/^◆\d+◆$/.test(token)) continue;
+    if (/^TAG_\d+$/i.test(token)) continue;
+
+    // Ignore punctuation-only fragments
+    if (/^[\p{P}\p{S}]+$/u.test(token)) continue;
+
+    // Count only tokens that contain real letters/numbers (Arabic/Latin/digits)
+    if (/[\p{L}\p{N}]/u.test(token)) count++;
+  }
+
+  return count;
+}
+
+/** Fix orphan lines by merging weak middle lines with neighbors */
 function fixOrphans(lines: string[]): string[] {
   if (lines.length <= 2) return lines;
 
@@ -392,22 +411,22 @@ function fixOrphans(lines: string[]): string[] {
   let changed = true;
   let iterations = 0;
 
-  while (changed && iterations < 5) {
+  while (changed && iterations < 8) {
     changed = false;
     iterations++;
 
     for (let i = 1; i < result.length - 1; i++) {
-      const wc = result[i].split(/\s+/).length;
-      if (wc <= 1) {
-        // Merge with shorter neighbor
+      const lexical = countLexicalWords(result[i]);
+      if (lexical <= 1) {
+        // Merge with shorter neighbor to avoid singleton lexical line
         const prevLen = result[i - 1].length;
         const nextLen = i + 1 < result.length ? result[i + 1].length : Infinity;
 
         if (prevLen <= nextLen) {
-          result[i - 1] = result[i - 1] + ' ' + result[i];
+          result[i - 1] = `${result[i - 1]} ${result[i]}`.replace(/\s{2,}/g, ' ').trim();
           result.splice(i, 1);
         } else {
-          result[i + 1] = result[i] + ' ' + result[i + 1];
+          result[i + 1] = `${result[i]} ${result[i + 1]}`.replace(/\s{2,}/g, ' ').trim();
           result.splice(i, 1);
         }
         changed = true;

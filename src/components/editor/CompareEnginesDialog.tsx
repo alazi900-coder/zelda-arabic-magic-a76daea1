@@ -3,7 +3,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, Sparkles } from "lucide-react";
+import { Loader2, Check, Sparkles, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 
 interface CompareResult {
@@ -30,13 +31,38 @@ const ENGINE_LABELS: Record<string, { label: string; emoji: string }> = {
 
 const TECH_TAG_RENDER_REGEX = /([\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\[\s*\w+\s*:[^\]]*?\s*\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\})/g;
 
+function extractTags(text: string): string[] {
+  const r = new RegExp(TECH_TAG_RENDER_REGEX.source, 'g');
+  return Array.from(text.matchAll(r)).map(m => m[0]);
+}
+
+function checkTagIntegrity(originalText: string, translatedText: string): { ok: boolean; missing: string[]; extra: string[] } {
+  const origTags = extractTags(originalText);
+  const transTags = extractTags(translatedText);
+  const origCount = new Map<string, number>();
+  const transCount = new Map<string, number>();
+  origTags.forEach(t => origCount.set(t, (origCount.get(t) || 0) + 1));
+  transTags.forEach(t => transCount.set(t, (transCount.get(t) || 0) + 1));
+  const missing: string[] = [];
+  const extra: string[] = [];
+  origCount.forEach((count, tag) => {
+    const tc = transCount.get(tag) || 0;
+    for (let i = 0; i < count - tc; i++) missing.push(tag);
+  });
+  transCount.forEach((count, tag) => {
+    const oc = origCount.get(tag) || 0;
+    for (let i = 0; i < count - oc; i++) extra.push(tag);
+  });
+  return { ok: missing.length === 0 && extra.length === 0, missing, extra };
+}
+
 function renderTranslationWithProtectedTags(text: string) {
   const parts = text.split(TECH_TAG_RENDER_REGEX).filter(Boolean);
   return parts.map((part, idx) => {
     if (TECH_TAG_RENDER_REGEX.test(part)) {
       TECH_TAG_RENDER_REGEX.lastIndex = 0;
       return (
-        <span key={`tag-${idx}`} dir="ltr" className="font-mono whitespace-pre-wrap break-all">
+        <span key={`tag-${idx}`} dir="ltr" className="inline-flex items-center px-1 py-0.5 mx-0.5 rounded font-mono text-xs bg-primary/15 text-primary border border-primary/25 whitespace-pre-wrap break-all">
           {part}
         </span>
       );
@@ -149,33 +175,61 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                 {(["gemini", "mymemory", "google"] as const).map((engine) => {
                   const result = results[engine];
                   const info = ENGINE_LABELS[engine];
+                  const integrity = result && entry ? checkTagIntegrity(entry.original, result) : null;
+                  const hasProblem = integrity && !integrity.ok;
                   return (
                     <div
                       key={engine}
-                      className="p-3 rounded-lg border border-border hover:border-primary/40 transition-colors group"
+                      className={`p-3 rounded-lg border transition-colors group ${hasProblem ? 'border-destructive/50 bg-destructive/5' : 'border-border hover:border-primary/40'}`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-display font-bold">
                           {info.emoji} {info.label}
                         </span>
-                        {result && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => {
-                              onSelect(key, result);
-                              onOpenChange(false);
-                            }}
-                          >
-                            <Check className="w-3 h-3 ml-1" /> اختيار
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {hasProblem && (
+                            <span className="text-xs text-destructive flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> وسوم مكسورة
+                            </span>
+                          )}
+                          {result && !hasProblem && (
+                            <span className="text-xs text-emerald-500 flex items-center gap-1">
+                              <Check className="w-3 h-3" /> وسوم سليمة
+                            </span>
+                          )}
+                          {result && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => {
+                                onSelect(key, result);
+                                onOpenChange(false);
+                              }}
+                            >
+                              <Check className="w-3 h-3 ml-1" /> اختيار
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       {result ? (
-                        <p className="text-sm font-body whitespace-pre-wrap break-words">
-                          {renderTranslationWithProtectedTags(result)}
-                        </p>
+                        <>
+                          <p className="text-sm font-body whitespace-pre-wrap break-words">
+                            {renderTranslationWithProtectedTags(result)}
+                          </p>
+                          {hasProblem && (
+                            <Alert variant="destructive" className="mt-2 py-2 px-3">
+                              <AlertDescription className="text-xs">
+                                {integrity!.missing.length > 0 && (
+                                  <span dir="ltr" className="block">⚠ مفقودة: <code className="font-mono bg-destructive/10 px-1 rounded">{integrity!.missing.join(' ، ')}</code></span>
+                                )}
+                                {integrity!.extra.length > 0 && (
+                                  <span dir="ltr" className="block">⚠ زائدة: <code className="font-mono bg-destructive/10 px-1 rounded">{integrity!.extra.join(' ، ')}</code></span>
+                                )}
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                        </>
                       ) : (
                         <p className="text-xs text-muted-foreground italic">فشل في الترجمة أو لا توجد نتيجة</p>
                       )}

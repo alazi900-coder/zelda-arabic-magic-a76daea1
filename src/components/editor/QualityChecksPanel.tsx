@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Wrench, X, Sparkles, Search, Loader2, Check, RefreshCw } from "lucide-react";
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
-import { useFeatureFlags } from "@/lib/feature-flags";
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -202,7 +202,7 @@ const CHECK_LABELS: Record<string, string> = {
 const FIXABLE_TYPES = new Set(["extra_spaces_check", "punctuation_check"]);
 
 export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry, glossary }: QualityChecksPanelProps) {
-  const { isEnabled } = useFeatureFlags();
+  const isEnabled = (_id: string) => true;
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);

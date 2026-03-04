@@ -14,7 +14,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Install from "./pages/Install";
 import ModPackager from "./pages/ModPackager";
-import Settings from "./pages/Settings";
+
 
 const queryClient = new QueryClient();
 
@@ -32,7 +32,7 @@ const App = () => (
               <Route path="/" element={<Xenoblade />} />
               <Route path="/process" element={<ErrorBoundary fallbackTitle="خطأ في المعالجة"><XenobladeProcess /></ErrorBoundary>} />
               <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />
-              <Route path="/settings" element={<Settings />} />
+              
               <Route path="/auth" element={<Auth />} />
               <Route path="/install" element={<Install />} />
               <Route path="/mod-packager" element={<ModPackager />} />

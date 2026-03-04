@@ -263,11 +263,6 @@ const Editor = () => {
                   {pageLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                   {pageLocked ? "الصفحة مقفلة" : "قفل الصفحة"}
                 </Button>
-                {!pageLocked && (
-                  <Link to="/settings" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground font-body text-sm bg-background/40 backdrop-blur-sm rounded-lg px-3 py-1.5">
-                    ⚙️ الإعدادات
-                  </Link>
-                )}
               </div>
             </div>
             <h1 className="text-2xl md:text-3xl font-display font-black mb-1 drop-shadow-lg">محرر الترجمة ✍️</h1>

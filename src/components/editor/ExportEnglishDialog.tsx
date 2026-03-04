@@ -31,8 +31,8 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
 }) => {
   const [chunkSize, setChunkSize] = useState(1000);
   const [format, setFormat] = useState<ExportFormat>("json");
-  const [scope, setScope] = useState<ExportScope>(totalCount === 0 ? "all" : "untranslated");
-  const [usePageRange, setUsePageRange] = useState(false);
+  const [scope, setScope] = useState<ExportScope>("all");
+  const [usePageRange, setUsePageRange] = useState(true);
   const [startPage, setStartPage] = useState(1);
   const [endPage, setEndPage] = useState(totalPages);
 
@@ -40,9 +40,10 @@ const ExportEnglishDialog: React.FC<ExportEnglishDialogProps> = ({
     if (open) {
       setStartPage(1);
       setEndPage(totalPages);
-      setScope(totalCount === 0 ? "all" : "untranslated");
+      setScope("all");
+      setUsePageRange(true);
     }
-  }, [open, totalPages, totalCount]);
+  }, [open, totalPages]);
 
   // Calculate effective count using real data when available
   const effectiveCount = useMemo(() => {

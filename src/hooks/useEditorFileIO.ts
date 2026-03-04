@@ -315,12 +315,15 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     const suffix = isFilterActive ? `_${filterLabel}` : '';
     const date = new Date().toISOString().slice(0, 10);
+    const pageRangeLabel = startPage !== undefined && endPage !== undefined
+      ? ` • الصفحات ${startPage + 1}-${endPage + 1}`
+      : '';
 
     if (!chunkSize || chunkSize >= totalCount) {
       // تصدير كامل
       const content = buildEnglishTxt(flatEntries, '', 1, 1);
       downloadTxt(content, `english-only${suffix}_${date}.txt`);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي (${sortedFiles.length} ملف)`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي (${sortedFiles.length} ملف)${pageRangeLabel}`);
     } else {
       // تقسيم إلى أجزاء في ZIP
       const totalParts = Math.ceil(totalCount / chunkSize);
@@ -338,7 +341,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.download = `english-only${suffix}_${totalParts}files_${date}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص في ${totalParts} ملفات ZIP (${chunkSize} لكل ملف)`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص في ${totalParts} ملفات ZIP (${chunkSize} لكل ملف)${pageRangeLabel}`);
     }
     setTimeout(() => setLastSaved(""), 4000);
   };
@@ -362,6 +365,9 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     const suffix = isFilterActive ? `_${filterLabel}` : '';
     const date = new Date().toISOString().slice(0, 10);
+    const pageRangeLabel = startPage !== undefined && endPage !== undefined
+      ? ` • الصفحات ${startPage + 1}-${endPage + 1}`
+      : '';
 
     const buildJsonChunk = (entries: typeof flatEntries) => {
       const obj: Record<string, string> = {};
@@ -381,7 +387,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.download = `english-only${suffix}_${date}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي JSON (${sortedFiles.length} ملف)`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص إنجليزي JSON (${sortedFiles.length} ملف)${pageRangeLabel}`);
     } else {
       const totalParts = Math.ceil(totalCount / chunkSize);
       const JSZip = (await import("jszip")).default;
@@ -397,7 +403,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.download = `english-only${suffix}_${totalParts}files_${date}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-      setLastSaved(`✅ تم تصدير ${totalCount} نص JSON في ${totalParts} ملفات ZIP`);
+      setLastSaved(`✅ تم تصدير ${totalCount} نص JSON في ${totalParts} ملفات ZIP${pageRangeLabel}`);
     }
     setTimeout(() => setLastSaved(""), 4000);
   };

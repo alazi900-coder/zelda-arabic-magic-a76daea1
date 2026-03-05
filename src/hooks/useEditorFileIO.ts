@@ -1885,6 +1885,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     handleExportEnglishOnly,
     handleExportEnglishOnlyJson,
     getUntranslatedCount,
+    getSkippedTechnicalCount,
     handleImportTranslations,
     handleDropImport,
     processJsonImport,

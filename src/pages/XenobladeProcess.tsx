@@ -336,42 +336,54 @@ const XenobladeProcess = () => {
         bdatTexts[file.name] = await file.text();
       }
 
-      // Auto-detect Arabic entries
+      // Early check: is this a re-uploaded built file? (presentation forms in originals)
+      const { hasArabicPresentationForms } = await import("@/lib/arabic-processing");
+      const isReUploadedBuild = allEntries.some((e: any) => hasArabicPresentationForms(e.original));
+
+      // Auto-detect Arabic entries — but SKIP if this is a re-uploaded built file
+      // because the "originals" contain processed Arabic (reshaped+reversed) which
+      // would produce broken auto-translations that override the correct buildTranslations
       const autoTranslations: Record<string, string> = {};
-      const arabicLetterRegex = /[\u0621-\u064A\u0671-\u06D3\uFB50-\uFDFF\uFE70-\uFEFF]/g;
-      for (const entry of allEntries) {
-        const stripped = entry.original.replace(/[\uE000-\uF8FF\uFFF9-\uFFFC\u0000-\u001F]/g, '').trim();
-        const arabicMatches = stripped.match(arabicLetterRegex);
-        if (arabicMatches && arabicMatches.length >= 2) {
-          const key = `${entry.msbtFile}:${entry.index}`;
-          let cleaned = stripped.normalize("NFKD");
-          cleaned = cleaned.split('\n').map((line: string) => {
-            const segments: { text: string; isLTR: boolean }[] = [];
-            let current = '';
-            let currentIsLTR: boolean | null = null;
-            for (const ch of line) {
-              const code = ch.charCodeAt(0);
-              const charIsArabic = (code >= 0x0600 && code <= 0x06FF) || (code >= 0xFB50 && code <= 0xFDFF) || (code >= 0xFE70 && code <= 0xFEFF);
-              const charIsLTR = /[a-zA-Z0-9]/.test(ch);
-              if (charIsArabic) {
-                if (currentIsLTR === true && current) { segments.push({ text: current, isLTR: true }); current = ''; }
-                currentIsLTR = false; current += ch;
-              } else if (charIsLTR) {
-                if (currentIsLTR === false && current) { segments.push({ text: current, isLTR: false }); current = ''; }
-                currentIsLTR = true; current += ch;
-              } else { current += ch; }
-            }
-            if (current) segments.push({ text: current, isLTR: currentIsLTR === true });
-            return segments.reverse().map(seg => seg.isLTR ? seg.text : [...seg.text].reverse().join('')).join('');
-          }).join('\n');
-          autoTranslations[key] = cleaned;
+      if (!isReUploadedBuild) {
+        const arabicLetterRegex = /[\u0621-\u064A\u0671-\u06D3\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+        for (const entry of allEntries) {
+          const stripped = entry.original.replace(/[\uE000-\uF8FF\uFFF9-\uFFFC\u0000-\u001F]/g, '').trim();
+          const arabicMatches = stripped.match(arabicLetterRegex);
+          if (arabicMatches && arabicMatches.length >= 2) {
+            const key = `${entry.msbtFile}:${entry.index}`;
+            let cleaned = stripped.normalize("NFKD");
+            cleaned = cleaned.split('\n').map((line: string) => {
+              const segments: { text: string; isLTR: boolean }[] = [];
+              let current = '';
+              let currentIsLTR: boolean | null = null;
+              for (const ch of line) {
+                const code = ch.charCodeAt(0);
+                const charIsArabic = (code >= 0x0600 && code <= 0x06FF) || (code >= 0xFB50 && code <= 0xFDFF) || (code >= 0xFE70 && code <= 0xFEFF);
+                const charIsLTR = /[a-zA-Z0-9]/.test(ch);
+                if (charIsArabic) {
+                  if (currentIsLTR === true && current) { segments.push({ text: current, isLTR: true }); current = ''; }
+                  currentIsLTR = false; current += ch;
+                } else if (charIsLTR) {
+                  if (currentIsLTR === false && current) { segments.push({ text: current, isLTR: false }); current = ''; }
+                  currentIsLTR = true; current += ch;
+                } else { current += ch; }
+              }
+              if (current) segments.push({ text: current, isLTR: currentIsLTR === true });
+              return segments.reverse().map(seg => seg.isLTR ? seg.text : [...seg.text].reverse().join('')).join('');
+            }).join('\n');
+            autoTranslations[key] = cleaned;
+          }
         }
+      } else {
+        addLog("📌 ملف مبني سابقاً — تم تخطي الكشف التلقائي واستخدام الترجمات المحفوظة");
       }
       setAutoDetectedCount(Object.keys(autoTranslations).length);
-      addLog(`🎯 كشف تلقائي: ${Object.keys(autoTranslations).length} نص معرّب من أصل ${allEntries.length} نص مستخرج`);
+      if (!isReUploadedBuild) {
+        addLog(`🎯 كشف تلقائي: ${Object.keys(autoTranslations).length} نص معرّب من أصل ${allEntries.length} نص مستخرج`);
+      }
       
       // Diagnostic: show sample character codes from first few entries to debug detection
-      if (Object.keys(autoTranslations).length === 0 && allEntries.length > 0) {
+      if (!isReUploadedBuild && Object.keys(autoTranslations).length === 0 && allEntries.length > 0) {
         const sampleEntries = allEntries.slice(0, 5);
         for (const entry of sampleEntries) {
           const first20 = [...entry.original.slice(0, 20)];

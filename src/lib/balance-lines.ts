@@ -5,6 +5,11 @@
 
 const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\[\s*\w+\s*:[^\]]*?\s*\]|[\uFFF9-\uFFFC]+/g;
 
+/** Calculate visual length: each tag counts as 1 character (renders as single icon in-game) */
+export function visualLength(text: string): number {
+  return text.replace(TAG_SHIELD_PATTERN, '⬚').length;
+}
+
 interface ShieldResult {
   shielded: string;
   map: Map<string, { placeholder: string; original: string; displayLen: number }>;

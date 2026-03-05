@@ -285,11 +285,16 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   const handleExportEnglishOnly = async (chunkSize?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getUntranslatedGrouped();
+    const { groupedByFile, totalCount, skippedTechnical } = getUntranslatedGrouped();
     if (totalCount === 0) {
-      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
-      setTimeout(() => setLastSaved(""), 3000);
+      const skipMsg = skippedTechnical > 0 ? ` (تم استبعاد ${skippedTechnical} نص تقني)` : '';
+      setLastSaved(`ℹ️ لا توجد نصوص غير مترجمة للتصدير${skipMsg}`);
+      setTimeout(() => setLastSaved(""), 4000);
       return;
+    }
+    if (skippedTechnical > 0) {
+      setLastSaved(`🔧 تم استبعاد ${skippedTechnical} نص تقني تلقائياً`);
+      setTimeout(() => setLastSaved(""), 4000);
     }
 
     // Flatten all entries in file order

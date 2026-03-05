@@ -2,6 +2,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, X, XCircle } from "lucide-react";
+import { visualLength } from "@/lib/balance-lines";
 
 export interface NewlineSplitResult {
   key: string;

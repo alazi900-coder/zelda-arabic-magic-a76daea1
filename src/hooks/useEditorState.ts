@@ -2016,7 +2016,7 @@ export function useEditorState() {
     handleScanDuplicateAlef, handleApplyDuplicateAlefClean, handleRejectDuplicateAlefClean, handleApplyAllDuplicateAlefCleans,
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
-    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit,
+    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit, handleScanNpcSplit,
     handleScanSentenceOrder, handleApplySentenceOrder, handleRejectSentenceOrder, handleApplyAllSentenceOrders,
     handleTogglePin,
     handleClearTranslations, handleUndoClear, clearUndoBackup, isFilterActive,

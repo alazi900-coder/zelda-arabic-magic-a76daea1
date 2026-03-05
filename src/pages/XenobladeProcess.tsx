@@ -536,21 +536,32 @@ const XenobladeProcess = () => {
         
         // Try to restore original English texts from saved originals
         const savedOriginals = await idbGet<Record<string, string>>("originalTexts");
-        if (savedOriginals && Object.keys(savedOriginals).length > 0) {
-          let restoredCount = 0;
-          for (let i = 0; i < allEntries.length; i++) {
-            const entry = allEntries[i] as any;
-            const key = `${entry.msbtFile}:${entry.index}`;
-            const savedOriginal = savedOriginals[key];
-            if (savedOriginal && hasArabicPresentationForms(entry.original)) {
-              entry.original = savedOriginal;
-              restoredCount++;
-            }
+        let restoredFromSnapshot = 0;
+        let restoredByDecoding = 0;
+
+        for (let i = 0; i < allEntries.length; i++) {
+          const entry = allEntries[i] as any;
+          if (!hasArabicPresentationForms(entry.original)) continue;
+
+          const key = `${entry.msbtFile}:${entry.index}`;
+          const savedOriginal = savedOriginals?.[key];
+
+          if (savedOriginal) {
+            entry.original = savedOriginal;
+            restoredFromSnapshot++;
+            continue;
           }
-          addLog(`🔄 تم استعادة ${restoredCount} نص أصلي إنجليزي من النسخة المحفوظة`);
-        } else {
-          addLog("⚠️ لا توجد نصوص أصلية محفوظة — استخرج من الملف الأصلي أولاً ثم أعد البناء");
+
+          // Fallback: recover readable logical text from processed built Arabic
+          // (BiDi reverse is self-inverse, then map Presentation Forms back to standard Arabic)
+          entry.original = removeArabicPresentationForms(reverseBidi(entry.original));
+          restoredByDecoding++;
         }
+
+        if (savedOriginals && Object.keys(savedOriginals).length > 0) {
+          addLog(`🔄 تم استعادة ${restoredFromSnapshot} نص أصلي إنجليزي من النسخة المحفوظة`);
+        }
+        addLog(`🧩 تم فك ${restoredByDecoding} نص عربي مبني إلى صيغة قابلة للتحرير`);
         
         // Clear everything EXCEPT originalTexts and buildTranslations
         await idbClearExcept(["originalTexts", "buildTranslations"]);

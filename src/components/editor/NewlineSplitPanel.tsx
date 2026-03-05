@@ -64,8 +64,9 @@ const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({
                   <p className="text-[10px] text-muted-foreground font-mono truncate" dir="ltr">
                     {item.key.split(':').slice(1, 3).join(':')}
                   </p>
-                  <span className="text-[10px] text-muted-foreground">
-                    👁 {visualLength(item.before)} حرف بصري • {item.before.length} حرف خام → {item.originalLines} أسطر
+                  <span className="text-[10px]">
+                    👁 <span className={visualLength(item.before) > 40 ? 'text-destructive font-bold' : 'text-secondary'}>{visualLength(item.before)}</span>
+                    <span className="text-muted-foreground"> حرف بصري • {item.before.length} حرف خام → {item.originalLines} أسطر</span>
                   </span>
                 </div>
 

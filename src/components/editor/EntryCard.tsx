@@ -165,7 +165,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
             }
             return <p className="text-xs text-muted-foreground mb-1 truncate">{entry.msbtFile} • {entry.label}</p>;
           })()}
-          <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'plaintext' }}><HighlightedOriginal text={entry.original} /></p>
+          <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'isolate' }}><HighlightedOriginal text={entry.original} /></p>
           {hasTechnicalTags(entry.original) && (
             <p className="text-[10px] text-muted-foreground mb-2 leading-relaxed">
               💡 الرموز الملونة (⚙ تحكم • 🎨 تنسيق • 📌 متغير) أكواد خاصة بمحرك اللعبة — <span className="font-semibold text-accent">لا تحذفها من الترجمة</span>

@@ -1554,7 +1554,7 @@ export function useEditorState() {
       if (translation.includes('\n')) continue;
       // Skip short translations
       if (visualLength(translation) <= newlineSplitCharLimit) continue;
-      const after = balanceLines(translation);
+      const after = balanceLines(translation, newlineSplitCharLimit);
       if (after === translation) continue;
       const afterLines = after.split('\n').length;
       results.push({

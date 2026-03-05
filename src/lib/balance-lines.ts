@@ -20,7 +20,7 @@ function shieldTagsForBalance(text: string): ShieldResult {
   let idx = 0;
   const shielded = text.replace(TAG_SHIELD_PATTERN, (match) => {
     const placeholder = `◆${idx}◆`;
-    map.set(placeholder, { placeholder, original: match, displayLen: match.length });
+    map.set(placeholder, { placeholder, original: match, displayLen: 1 });
     idx++;
     return placeholder;
   });
@@ -109,7 +109,8 @@ function fixOrphans(lines: string[]): string[] {
 function dpSplitShielded(
   words: string[],
   nLines: number,
-  wordDisplayLen: (w: string) => number
+  wordDisplayLen: (w: string) => number,
+  hardMax: number = HARD_MAX
 ): string[] | null {
   const n = words.length;
   if (n < nLines) return null;
@@ -134,7 +135,7 @@ function dpSplitShielded(
     for (let i = k; i <= n; i++) {
       for (let j = k - 1; j < i; j++) {
         const ll = lineLen(j, i);
-        if (ll > HARD_MAX && i - j > 1) continue;
+        if (ll > hardMax && i - j > 1) continue;
 
         const deviation = ll - ideal;
         let cost = deviation * deviation;
@@ -168,6 +169,7 @@ function dpSplitShielded(
 /** Rebalance text lines to fix orphan words. Client-side mirror of edge function logic. */
 export function balanceLines(text: string, targetMax?: number): string {
   const limit = targetMax ?? TARGET_MAX;
+  const hardMax = Math.max(limit + 6, HARD_MAX);
   const stripped = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
   const { shielded, map } = shieldTagsForBalance(stripped);
 
@@ -197,7 +199,7 @@ export function balanceLines(text: string, targetMax?: number): string {
   let bestCost = Infinity;
 
   for (let nLines = numLines; nLines <= Math.min(numLines + 1, words.length); nLines++) {
-    const result = dpSplitShielded(words, nLines, wordDisplayLen);
+    const result = dpSplitShielded(words, nLines, wordDisplayLen, hardMax);
     if (result) {
       const cost = scoreSplit(
         result.map((line) => {

@@ -296,7 +296,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <Scale className={`w-4 h-4 ${hasOrphanLines(translation) ? 'text-destructive' : 'text-accent'}`} />
                 </Button>
               )}
-              {isDamagedTag && handleLocalFixDamagedTag && (
+              {translation?.trim() && hasArabicContent(translation) && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowGamePreview(prev => !prev)} title="🎮 معاينة كما ستظهر في اللعبة">
+                  <Gamepad2 className={`w-4 h-4 ${showGamePreview ? 'text-primary' : 'text-muted-foreground'}`} />
+                </Button>
+              )}
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowTagPreview(prev => !prev)} title="👁 معاينة الإصلاح قبل التطبيق">
                   <Eye className="w-4 h-4 text-accent" />
                 </Button>

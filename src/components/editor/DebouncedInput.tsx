@@ -68,8 +68,9 @@ const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocu
         placeholder={placeholder}
         className={className}
         autoFocus={autoFocus}
+        dir="auto"
         rows={Math.max(2, (localValue.match(/\n/g) || []).length + 1)}
-        style={{ resize: 'vertical', minHeight: '2.5rem' }}
+        style={{ resize: 'vertical', minHeight: '2.5rem', unicodeBidi: 'plaintext' }}
       />
     );
   }

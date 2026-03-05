@@ -24,6 +24,7 @@ interface NewlineSplitPanelProps {
   charLimit: number;
   onCharLimitChange: (limit: number) => void;
   onRescan: () => void;
+  title?: string;
 }
 
 const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({

@@ -15,16 +15,21 @@ export interface SentenceOrderResult {
 
 /**
  * Detect multi-sentence translations where the sentence order may be reversed.
- * Heuristic: if the text has 2+ sentences and the original English text's first
- * word/phrase appears at the END of the Arabic translation (rather than near the
- * start), the sentences are likely reversed.
  *
- * For simplicity, we offer to reverse sentence order for any multi-sentence
- * translated entry so the user can review.
+ * We split sentences in a way that works for Arabic punctuation and also for
+ * AI outputs that sometimes omit spaces after punctuation (e.g. "جملة.أخرى").
  */
+const SENTENCE_SPLIT_REGEX = /(?<=[.。!؟?\u061F…]+)(?:\s+|(?=[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FFA-Za-z]))/u;
+
+function splitIntoSentences(text: string): string[] {
+  return text
+    .split(SENTENCE_SPLIT_REGEX)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function reverseSentenceOrder(text: string): string {
-  // Split on sentence-ending punctuation followed by space
-  const sentences = text.split(/(?<=[.。!؟?\u061F])\s+/).filter(s => s.trim());
+  const sentences = splitIntoSentences(text);
   if (sentences.length < 2) return text;
   return sentences.reverse().join(' ');
 }
@@ -41,7 +46,7 @@ export function detectReversedSentences(
     if (!translation?.trim()) continue;
 
     // Only check multi-sentence texts
-    const sentences = translation.split(/(?<=[.。!؟?\u061F])\s+/).filter(s => s.trim());
+    const sentences = splitIntoSentences(translation);
     if (sentences.length < 2) continue;
 
     // Must have Arabic content

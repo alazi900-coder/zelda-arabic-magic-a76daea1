@@ -2,6 +2,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, X, XCircle } from "lucide-react";
+import { visualLength } from "@/lib/balance-lines";
 
 export interface NewlineSplitResult {
   key: string;
@@ -64,7 +65,7 @@ const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({
                     {item.key.split(':').slice(1, 3).join(':')}
                   </p>
                   <span className="text-[10px] text-muted-foreground">
-                    {item.before.length} حرف → {item.originalLines} أسطر
+                    👁 {visualLength(item.before)} حرف بصري • {item.before.length} حرف خام → {item.originalLines} أسطر
                   </span>
                 </div>
 

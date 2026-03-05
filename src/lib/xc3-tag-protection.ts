@@ -42,7 +42,7 @@ const TAG_PATTERNS: RegExp[] = [
   /\{[\w]+\}/g,                           // {variable} placeholders
   /[\uFFF9-\uFFFC]/g,                      // Unicode special markers
   /<[\w\/][^>]*>/g,                        // HTML-like tags
-  /\([A-Z][^)]{1,100}\)/g,                 // Standalone descriptive parentheses
+  // Removed: standalone descriptive parentheses - these are translatable content
   ABBREV_PATTERN,                            // Game abbreviations (EXP, CP, SP, etc.)
 ];
 

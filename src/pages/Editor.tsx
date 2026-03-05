@@ -165,6 +165,10 @@ const Editor = () => {
     }).length;
   }, [editor.state, editor.filteredEntries, editor.isFilterActive]);
 
+  const skippedTechnicalCount = React.useMemo(() => {
+    return editor.getSkippedTechnicalCount?.() ?? 0;
+  }, [editor.state, editor.filteredEntries, editor.isFilterActive]);
+
   // Show recovery dialog if saved session exists
   if (editor.pendingRecovery) {
     return (

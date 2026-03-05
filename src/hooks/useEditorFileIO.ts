@@ -698,14 +698,30 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     // and will appear when corresponding BDAT files are loaded later
     let missingFileNames: string[] = [];
     if (!isDemo && unmatchedCount > 0) {
+      const normalizeBdatFileName = (name: string): string => {
+        return name
+          .trim()
+          .replace(/^.*[\\/]/, '') // strip any path just in case
+          .toLowerCase();
+      };
+
       const extractBdatFileName = (key: string): string | null => {
         const parts = key.split(':');
         if (parts.length < 2) return null;
-        if (parts[0] === 'bdat-bin') return parts[1] || null;
+
+        // canonical key: bdat-bin:file.bdat:table:row:col(:idx)
+        if (parts[0] === 'bdat-bin' && parts[1]) {
+          return normalizeBdatFileName(parts[1]);
+        }
+
+        // fallback: sometimes msbtFile can be "file.bdat:table:row:col"
+        const bdatPart = parts.find(p => /\.bdat$/i.test(p));
+        if (bdatPart) return normalizeBdatFileName(bdatPart);
+
         return null;
       };
 
-      const importedFiles = new Map<string, number>(); // fileName → count of unmatched keys
+      const importedFiles = new Map<string, number>(); // normalized fileName → count of unmatched keys
       const loadedFiles = new Set<string>();
 
       // Only count UNMATCHED keys (not all imported keys)

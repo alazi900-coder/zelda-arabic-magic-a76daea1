@@ -42,7 +42,7 @@ const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-bold text-sm">
-            📐 تقسيم النصوص المضغوطة — {results.length} نتيجة
+            {title || '📐 تقسيم النصوص المضغوطة'} — {results.length} نتيجة
             {accepted > 0 && <span className="text-secondary mr-2"> ✅ {accepted}</span>}
             {rejected > 0 && <span className="text-destructive mr-2"> ❌ {rejected}</span>}
           </h3>

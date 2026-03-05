@@ -1505,7 +1505,14 @@ export function useEditorState() {
   }, [state, sentenceSplitResults]);
 
   // === Newline Split (auto-split long translations at character limit) ===
-  const [newlineSplitCharLimit, setNewlineSplitCharLimit] = useState(42);
+  const [newlineSplitCharLimit, setNewlineSplitCharLimit] = useState(() => {
+    const saved = localStorage.getItem('newlineSplitCharLimit');
+    return saved ? Number(saved) : 42;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('newlineSplitCharLimit', String(newlineSplitCharLimit));
+  }, [newlineSplitCharLimit]);
 
   const splitAtWordBoundary = useCallback((text: string, charLimit: number): string => {
     // Don't split text that already has \n

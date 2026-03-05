@@ -663,14 +663,43 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     const isDemo = state?.isDemo === true;
 
     if (!isDemo && matchedCount === 0 && unmatchedCount > 0) {
-      const sampleKey = Object.keys(cleanedImported)[0] || '';
-      const sampleEntry = state?.entries[0];
-      const sampleEntryKey = sampleEntry ? `${sampleEntry.msbtFile}:${sampleEntry.index}` : '';
+      const importedKeys = Object.keys(cleanedImported).slice(0, 5);
+      const entryKeys = [...entryKeySet].slice(0, 5);
+      
+      // Log full diagnostic to console
+      console.log('🔍 تشخيص عدم المطابقة:', {
+        importedKeySamples: importedKeys,
+        editorKeySamples: entryKeys,
+        totalImported: Object.keys(cleanedImported).length,
+        totalEntries: entryKeySet.size,
+      });
+
+      // Try to find partial matches to explain the difference
+      const firstImported = importedKeys[0] || '';
+      const firstEntry = entryKeys[0] || '';
+      
+      // Check if keys differ only by prefix or suffix
+      const importedParts = firstImported.split(':');
+      const entryParts = firstEntry.split(':');
+      let partDiff = '';
+      if (importedParts.length !== entryParts.length) {
+        partDiff = `\n\nعدد أجزاء المفتاح مختلف: الملف=${importedParts.length} vs المحرر=${entryParts.length}`;
+      } else {
+        const diffs: string[] = [];
+        for (let i = 0; i < importedParts.length; i++) {
+          if (importedParts[i] !== entryParts[i]) {
+            diffs.push(`الجزء ${i}: "${importedParts[i]}" ≠ "${entryParts[i]}"`);
+          }
+        }
+        if (diffs.length > 0) partDiff = `\n\nاختلافات: ${diffs.join('، ')}`;
+      }
+
       alert(
         `⚠️ لم يتطابق أي مفتاح من الملف مع المدخلات المحملة!\n\n` +
-        `مثال مفتاح في الملف: "${sampleKey}"\n` +
-        `مثال مفتاح في المحرر: "${sampleEntryKey}"\n\n` +
-        `تأكد أن الملف المستورد صادر من نفس ملفات BDAT المرفوعة حالياً، أو ارفع ملفات BDAT أولاً من صفحة المعالجة.`
+        `🔑 أمثلة مفاتيح في الملف:\n${importedKeys.map(k => `  • ${k}`).join('\n')}\n\n` +
+        `📂 أمثلة مفاتيح في المحرر:\n${entryKeys.map(k => `  • ${k}`).join('\n')}` +
+        partDiff +
+        `\n\n💡 افتح Console (F12) لمزيد من التفاصيل`
       );
       return;
     }

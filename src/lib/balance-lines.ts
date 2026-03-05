@@ -199,7 +199,7 @@ export function balanceLines(text: string, targetMax?: number): string {
   let bestCost = Infinity;
 
   for (let nLines = numLines; nLines <= Math.min(numLines + 1, words.length); nLines++) {
-    const result = dpSplitShielded(words, nLines, wordDisplayLen);
+    const result = dpSplitShielded(words, nLines, wordDisplayLen, hardMax);
     if (result) {
       const cost = scoreSplit(
         result.map((line) => {

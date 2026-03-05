@@ -677,8 +677,22 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     // No longer block import for low match rate — all keys are saved regardless
     // and will appear when corresponding BDAT files are loaded later
-    if (!isDemo && matchedCount > 0 && unmatchedCount > 0) {
-      console.log(`ℹ️ Import: ${matchedCount} matched, ${unmatchedCount} unmatched (saved for later)`);
+    let missingFileNames: string[] = [];
+    if (!isDemo && unmatchedCount > 0) {
+      const importedFiles = new Set<string>();
+      const loadedFiles = new Set<string>();
+      for (const key of Object.keys(cleanedImported)) {
+        const parts = key.split(':');
+        if (parts.length >= 2) importedFiles.add(parts.slice(0, 2).join(':'));
+      }
+      for (const ek of entryKeySet) {
+        const parts = ek.split(':');
+        if (parts.length >= 2) loadedFiles.add(parts.slice(0, 2).join(':'));
+      }
+      missingFileNames = [...importedFiles].filter(f => !loadedFiles.has(f)).map(f => f.replace('bdat-bin:', ''));
+      if (missingFileNames.length > 0) {
+        console.log(`📂 ملفات في JSON غير محملة في المحرر (${missingFileNames.length}):`, missingFileNames);
+      }
     }
 
     const appliedCount = Object.keys(cleanedImported).length;
@@ -692,6 +706,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       msg = `✅ تم استيراد ${appliedCount} ترجمة — ستظهر عند رفع ملفات BDAT من صفحة المعالجة`;
     } else if (matchedCount > 0 && unmatchedCount > 0) {
       msg = `✅ تم استيراد ${appliedCount} ترجمة${statsInfo} — ${matchedCount} تظهر الآن، ${unmatchedCount} محفوظة لملفات BDAT أخرى`;
+      if (missingFileNames.length > 0) {
+        const preview = missingFileNames.slice(0, 5).join('\n• ');
+        const extra = missingFileNames.length > 5 ? `\n... و${missingFileNames.length - 5} ملف آخر` : '';
+        msg += `\n\n📂 ملفات غير محملة في المحرر:\n• ${preview}${extra}\n\nارفع هذه الملفات من صفحة المعالجة لإظهار باقي الترجمات.`;
+      }
     } else if (isFilterActive) {
       msg = `✅ تم استيراد ${appliedCount} من ${totalInFile} ترجمة${statsInfo} (${filterLabel})`;
     } else {

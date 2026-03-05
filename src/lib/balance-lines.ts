@@ -168,6 +168,7 @@ function dpSplitShielded(
 /** Rebalance text lines to fix orphan words. Client-side mirror of edge function logic. */
 export function balanceLines(text: string, targetMax?: number): string {
   const limit = targetMax ?? TARGET_MAX;
+  const hardMax = Math.max(limit + 6, HARD_MAX);
   const stripped = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
   const { shielded, map } = shieldTagsForBalance(stripped);
 

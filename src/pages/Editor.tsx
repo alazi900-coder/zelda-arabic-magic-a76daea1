@@ -1162,6 +1162,9 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleScanNewlineSplit} disabled={editor.translatedCount === 0}>
                     📐 تقسيم النصوص المضغوطة
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanNpcSplit} disabled={editor.translatedCount === 0}>
+                    💬 تقسيم محادثات NPC (37 حرف)
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFlattenAllNewlines} disabled={editor.translatedCount === 0 || editor.multiLineCount === 0}>
                     📏 دمج الأسطر المتعددة (سطر واحد) {editor.multiLineCount > 0 && <span className="text-muted-foreground text-[10px]">({editor.multiLineCount})</span>}
                   </DropdownMenuItem>
@@ -1324,6 +1327,9 @@ const Editor = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanNewlineSplit} disabled={editor.translatedCount === 0}>
                     📐 تقسيم النصوص المضغوطة
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanNpcSplit} disabled={editor.translatedCount === 0}>
+                    💬 تقسيم محادثات NPC (37 حرف)
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFlattenAllNewlines} disabled={editor.translatedCount === 0 || editor.multiLineCount === 0}>
                     📏 دمج الأسطر المتعددة (سطر واحد) {editor.multiLineCount > 0 && <span className="text-muted-foreground text-[10px]">({editor.multiLineCount})</span>}

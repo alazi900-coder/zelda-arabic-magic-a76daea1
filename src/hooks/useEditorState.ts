@@ -1602,6 +1602,56 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, newlineSplitResults]);
 
+  // === NPC Dialogue Split (37 chars for msg_nq files) ===
+  const NPC_FILE_RE = /msg_nq/i;
+  const NPC_CHAR_LIMIT = 37;
+
+  const handleScanNpcSplit = useCallback(() => {
+    if (!state) return;
+    const results: import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] = [];
+    const entriesToScan = isFilterActive ? filteredEntries : state.entries;
+    for (const entry of entriesToScan) {
+      const key = `${entry.msbtFile}:${entry.index}`;
+      // Only target NPC dialogue files (msg_nq)
+      if (!NPC_FILE_RE.test(key)) continue;
+      const translation = state.translations[key];
+      if (!translation?.trim()) continue;
+      // Flatten existing newlines first, then re-split at 37
+      const flat = translation.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      if (visualLength(flat) <= NPC_CHAR_LIMIT) {
+        // If already has newlines but fits in 37, flatten it
+        if (translation !== flat && translation.includes('\n')) {
+          results.push({
+            key,
+            originalLines: 1,
+            translationLines: translation.split('\n').length,
+            before: translation,
+            after: flat,
+            original: entry.original,
+            status: 'pending',
+          });
+        }
+        continue;
+      }
+      const after = balanceLines(translation, NPC_CHAR_LIMIT);
+      if (after === translation) continue;
+      results.push({
+        key,
+        originalLines: after.split('\n').length,
+        translationLines: translation.split('\n').length,
+        before: translation,
+        after,
+        original: entry.original,
+        status: 'pending',
+      });
+    }
+    setNewlineSplitResults(results);
+    if (results.length === 0) {
+      setLastSaved("✅ لا توجد نصوص NPC تحتاج إعادة تقسيم عند 37 حرف");
+      setTimeout(() => setLastSaved(""), 4000);
+    }
+  }, [state, isFilterActive, filteredEntries]);
+
   /** Split a single entry's translation at word boundaries (per-entry inline button) */
   const handleSplitSingleEntry = useCallback((key: string) => {
     if (!state) return;
@@ -1966,7 +2016,7 @@ export function useEditorState() {
     handleScanDuplicateAlef, handleApplyDuplicateAlefClean, handleRejectDuplicateAlefClean, handleApplyAllDuplicateAlefCleans,
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
-    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit,
+    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit, handleScanNpcSplit,
     handleScanSentenceOrder, handleApplySentenceOrder, handleRejectSentenceOrder, handleApplyAllSentenceOrders,
     handleTogglePin,
     handleClearTranslations, handleUndoClear, clearUndoBackup, isFilterActive,

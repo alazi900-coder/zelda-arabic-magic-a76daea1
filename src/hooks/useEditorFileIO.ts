@@ -209,13 +209,14 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   /** Build the list of untranslated entries grouped by file */
   const getUntranslatedGrouped = () => {
-    if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0 };
+    if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0, skippedTechnical: 0 };
     const entriesToExport = isFilterActive ? filteredEntries : state.entries;
     const groupedByFile: Record<string, { index: number; original: string; label: string }[]> = {};
+    let skippedTechnical = 0;
     for (const entry of entriesToExport) {
       const key = `${entry.msbtFile}:${entry.index}`;
       // Skip technical/code entries from export
-      if (isTechnicalText(entry.original)) continue;
+      if (isTechnicalText(entry.original)) { skippedTechnical++; continue; }
       const translation = state.translations[key]?.trim();
       if (!translation || translation === entry.original || translation === entry.original.trim()) {
         if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
@@ -223,7 +224,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       }
     }
     const totalCount = Object.values(groupedByFile).reduce((sum, arr) => sum + arr.length, 0);
-    return { groupedByFile, totalCount };
+    return { groupedByFile, totalCount, skippedTechnical };
   };
 
   /** Build text content for a flat list of entries */
@@ -282,13 +283,23 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     return getUntranslatedGrouped().totalCount;
   };
 
+  const getSkippedTechnicalCount = (): number => {
+    if (!state) return 0;
+    return getUntranslatedGrouped().skippedTechnical;
+  };
+
   const handleExportEnglishOnly = async (chunkSize?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getUntranslatedGrouped();
+    const { groupedByFile, totalCount, skippedTechnical } = getUntranslatedGrouped();
     if (totalCount === 0) {
-      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
-      setTimeout(() => setLastSaved(""), 3000);
+      const skipMsg = skippedTechnical > 0 ? ` (تم استبعاد ${skippedTechnical} نص تقني)` : '';
+      setLastSaved(`ℹ️ لا توجد نصوص غير مترجمة للتصدير${skipMsg}`);
+      setTimeout(() => setLastSaved(""), 4000);
       return;
+    }
+    if (skippedTechnical > 0) {
+      setLastSaved(`🔧 تم استبعاد ${skippedTechnical} نص تقني تلقائياً`);
+      setTimeout(() => setLastSaved(""), 4000);
     }
 
     // Flatten all entries in file order
@@ -332,11 +343,16 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   const handleExportEnglishOnlyJson = async (chunkSize?: number) => {
     if (!state) return;
-    const { groupedByFile, totalCount } = getUntranslatedGrouped();
+    const { groupedByFile, totalCount, skippedTechnical } = getUntranslatedGrouped();
     if (totalCount === 0) {
-      setLastSaved("ℹ️ لا توجد نصوص غير مترجمة للتصدير");
-      setTimeout(() => setLastSaved(""), 3000);
+      const skipMsg = skippedTechnical > 0 ? ` (تم استبعاد ${skippedTechnical} نص تقني)` : '';
+      setLastSaved(`ℹ️ لا توجد نصوص غير مترجمة للتصدير${skipMsg}`);
+      setTimeout(() => setLastSaved(""), 4000);
       return;
+    }
+    if (skippedTechnical > 0) {
+      setLastSaved(`🔧 تم استبعاد ${skippedTechnical} نص تقني تلقائياً`);
+      setTimeout(() => setLastSaved(""), 4000);
     }
 
     const sortedFiles = Object.keys(groupedByFile).sort();
@@ -1869,6 +1885,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     handleExportEnglishOnly,
     handleExportEnglishOnlyJson,
     getUntranslatedCount,
+    getSkippedTechnicalCount,
     handleImportTranslations,
     handleDropImport,
     processJsonImport,

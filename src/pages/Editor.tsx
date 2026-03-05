@@ -165,6 +165,10 @@ const Editor = () => {
     }).length;
   }, [editor.state, editor.filteredEntries, editor.isFilterActive]);
 
+  const skippedTechnicalCount = React.useMemo(() => {
+    return editor.getSkippedTechnicalCount?.() ?? 0;
+  }, [editor.state, editor.filteredEntries, editor.isFilterActive]);
+
   // Show recovery dialog if saved session exists
   if (editor.pendingRecovery) {
     return (
@@ -1025,7 +1029,7 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs">📦 تصدير الإنجليزية غير المترجمة ({untranslatedCount})</DropdownMenuLabel>
+                   <DropdownMenuLabel className="text-xs">📦 تصدير الإنجليزية غير المترجمة ({untranslatedCount}){skippedTechnicalCount > 0 && ` 🔧 مستبعد: ${skippedTechnicalCount}`}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => editor.handleExportEnglishOnly()}><FileText className="w-4 h-4" /> TXT ملف واحد</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => editor.handleExportEnglishOnlyJson()}><FileText className="w-4 h-4" /> JSON ملف واحد</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}><FileText className="w-4 h-4" /> تصدير مخصص (تقسيم + ZIP) ⚙️</DropdownMenuItem>
@@ -1174,7 +1178,7 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF (memoQ/Trados)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX (ذاكرة ترجمة)</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs">📦 تصدير الإنجليزية غير المترجمة ({untranslatedCount})</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs">📦 تصدير الإنجليزية غير المترجمة ({untranslatedCount}){skippedTechnicalCount > 0 && ` 🔧 مستبعد: ${skippedTechnicalCount}`}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => editor.handleExportEnglishOnly()}>📄 TXT ملف واحد</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => editor.handleExportEnglishOnlyJson()}>📋 JSON ملف واحد</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}>⚙️ تصدير مخصص (تقسيم + ZIP)</DropdownMenuItem>

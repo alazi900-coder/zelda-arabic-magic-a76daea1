@@ -34,7 +34,7 @@ const ABBREV_PATTERN = new RegExp(
 // Patterns to match technical tags in order of priority
 const TAG_PATTERNS: RegExp[] = [
   /[\uE000-\uE0FF]+/g,                     // PUA icons (consecutive = atomic block)
-  /\[\s*\w+\s*:[^\]]*?\s*\](?:\s*\([^)]{1,100}\))?/g, // [Tag:Value] with optional descriptive parentheses
+  /\[\s*\w+\s*:[^\]]*?\s*\]/g,                     // [Tag:Value] only (no trailing parentheses)
   /\d+\s*\[[A-Z]{2,10}\]/g,             // N[TAG] patterns (e.g. 1[ML], 1 [ML])
   /\[[A-Z]{2,10}\]\s*\d+/g,             // [TAG]N patterns (e.g. [ML]1, [ML] 1)
   /\[\s*\w+\s*=\s*\w[^\]]*\]/g,      // [TAG=Value] patterns (e.g. [Color=Red])
@@ -42,7 +42,7 @@ const TAG_PATTERNS: RegExp[] = [
   /\{[\w]+\}/g,                           // {variable} placeholders
   /[\uFFF9-\uFFFC]/g,                      // Unicode special markers
   /<[\w\/][^>]*>/g,                        // HTML-like tags
-  /\([A-Z][^)]{1,100}\)/g,                 // Standalone descriptive parentheses
+  // Removed: standalone descriptive parentheses - these are translatable content
   ABBREV_PATTERN,                            // Game abbreviations (EXP, CP, SP, etc.)
 ];
 

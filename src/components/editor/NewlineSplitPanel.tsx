@@ -1,7 +1,8 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, X, XCircle } from "lucide-react";
+import { CheckCircle2, RefreshCw, X, XCircle } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { visualLength } from "@/lib/balance-lines";
 
 export interface NewlineSplitResult {
@@ -20,10 +21,14 @@ interface NewlineSplitPanelProps {
   onReject: (key: string) => void;
   onAcceptAll: () => void;
   onClose: () => void;
+  charLimit: number;
+  onCharLimitChange: (limit: number) => void;
+  onRescan: () => void;
 }
 
 const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({
   results, onAccept, onReject, onAcceptAll, onClose,
+  charLimit, onCharLimitChange, onRescan,
 }) => {
   const pending = results.filter(r => r.status === 'pending');
   const accepted = results.filter(r => r.status === 'accepted').length;
@@ -52,6 +57,23 @@ const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({
           </div>
         </div>
 
+        {/* Char limit slider */}
+        <div className="flex items-center gap-3 mb-4 p-2 rounded-md bg-muted/30 border border-border/30">
+          <span className="text-xs font-display text-muted-foreground shrink-0">الحد الأقصى:</span>
+          <Slider
+            value={[charLimit]}
+            onValueChange={([v]) => onCharLimitChange(v)}
+            min={20}
+            max={80}
+            step={1}
+            className="flex-1"
+          />
+          <span className="text-sm font-mono font-bold text-primary w-8 text-center">{charLimit}</span>
+          <Button variant="outline" size="sm" onClick={onRescan} className="h-7 px-2 text-xs font-display">
+            <RefreshCw className="w-3 h-3" /> إعادة فحص
+          </Button>
+        </div>
+
         <div className="space-y-2 max-h-[500px] overflow-y-auto">
           {results.map((item) => {
             if (item.status !== 'pending') return null;
@@ -65,7 +87,7 @@ const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({
                     {item.key.split(':').slice(1, 3).join(':')}
                   </p>
                   <span className="text-[10px]">
-                    👁 <span className={visualLength(item.before) > 40 ? 'text-destructive font-bold' : 'text-secondary'}>{visualLength(item.before)}</span>
+                    👁 <span className={visualLength(item.before) > charLimit ? 'text-destructive font-bold' : 'text-secondary'}>{visualLength(item.before)}</span>
                     <span className="text-muted-foreground"> حرف بصري • {item.before.length} حرف خام → {item.originalLines} أسطر</span>
                   </span>
                 </div>

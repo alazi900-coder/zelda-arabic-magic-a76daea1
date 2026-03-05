@@ -770,6 +770,9 @@ const Editor = () => {
               onReject={editor.handleRejectNewlineSplit}
               onAcceptAll={editor.handleApplyAllNewlineSplits}
               onClose={() => editor.setNewlineSplitResults(null)}
+              charLimit={editor.newlineSplitCharLimit}
+              onCharLimitChange={editor.setNewlineSplitCharLimit}
+              onRescan={editor.handleScanNewlineSplit}
             />
           )}
 

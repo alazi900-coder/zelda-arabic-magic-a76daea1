@@ -1505,7 +1505,7 @@ export function useEditorState() {
   }, [state, sentenceSplitResults]);
 
   // === Newline Split (auto-split long translations at character limit) ===
-  const LINE_CHAR_LIMIT = 42; // approximate characters per line in game dialog box
+  const [newlineSplitCharLimit, setNewlineSplitCharLimit] = useState(42);
 
   const splitAtWordBoundary = useCallback((text: string, charLimit: number): string => {
     // Don't split text that already has \n
@@ -1545,7 +1545,7 @@ export function useEditorState() {
       // Skip if already has line breaks
       if (translation.includes('\n')) continue;
       // Skip short translations
-      if (visualLength(translation) <= LINE_CHAR_LIMIT) continue;
+      if (visualLength(translation) <= newlineSplitCharLimit) continue;
       const after = balanceLines(translation);
       if (after === translation) continue;
       const afterLines = after.split('\n').length;
@@ -1564,7 +1564,7 @@ export function useEditorState() {
       setLastSaved("✅ لم يتم اكتشاف نصوص طويلة تحتاج تقسيم");
       setTimeout(() => setLastSaved(""), 4000);
     }
-  }, [state, isFilterActive, filteredEntries]);
+  }, [state, isFilterActive, filteredEntries, newlineSplitCharLimit]);
 
   const handleApplyNewlineSplit = useCallback((key: string) => {
     if (!state || !newlineSplitResults) return;
@@ -1599,8 +1599,8 @@ export function useEditorState() {
   const handleSplitSingleEntry = useCallback((key: string) => {
     if (!state) return;
     const translation = state.translations[key];
-    if (!translation?.trim() || translation.includes('\n') || translation.length <= LINE_CHAR_LIMIT) return;
-    const after = splitAtWordBoundary(translation, LINE_CHAR_LIMIT);
+    if (!translation?.trim() || translation.includes('\n') || translation.length <= newlineSplitCharLimit) return;
+    const after = splitAtWordBoundary(translation, newlineSplitCharLimit);
     if (after === translation) return;
     setPreviousTranslations(old => ({ ...old, [key]: translation }));
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: after } } : null);
@@ -1959,7 +1959,7 @@ export function useEditorState() {
     handleScanDuplicateAlef, handleApplyDuplicateAlefClean, handleRejectDuplicateAlefClean, handleApplyAllDuplicateAlefCleans,
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
-    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest,
+    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit,
     handleScanSentenceOrder, handleApplySentenceOrder, handleRejectSentenceOrder, handleApplyAllSentenceOrders,
     handleTogglePin,
     handleClearTranslations, handleUndoClear, clearUndoBackup, isFilterActive,

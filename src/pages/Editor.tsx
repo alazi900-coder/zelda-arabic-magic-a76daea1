@@ -792,7 +792,21 @@ const Editor = () => {
             />
           )}
 
-          {/* Sentence Order Results */}
+          {/* NPC Split Results */}
+          {editor.npcSplitResults && editor.npcSplitResults.length > 0 && (
+            <NewlineSplitPanel
+              results={editor.npcSplitResults}
+              onAccept={editor.handleApplyNpcSplit}
+              onReject={editor.handleRejectNpcSplit}
+              onAcceptAll={editor.handleApplyAllNpcSplits}
+              onClose={() => editor.setNpcSplitResults(null)}
+              charLimit={editor.npcSplitCharLimit}
+              onCharLimitChange={editor.setNpcSplitCharLimit}
+              onRescan={editor.handleScanNpcSplit}
+              title="💬 تقسيم محادثات NPC"
+            />
+          )}
+
           {editor.sentenceOrderResults && editor.sentenceOrderResults.length > 0 && (
             <SentenceOrderPanel
               results={editor.sentenceOrderResults}

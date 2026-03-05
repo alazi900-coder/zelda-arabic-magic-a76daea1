@@ -1129,7 +1129,18 @@ const Editor = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Tools */}
+              {/* NPC Split — standalone button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="font-body text-xs border-cyan-500/30 text-cyan-400 hover:text-cyan-300 gap-1.5"
+                onClick={editor.handleScanNpcSplit}
+                disabled={editor.translatedCount === 0}
+              >
+                💬 تقسيم NPC
+              </Button>
+
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="font-body text-xs"><MoreVertical className="w-3 h-3" /> أدوات</Button>

@@ -115,20 +115,19 @@ describe("XC3 Tag Protection", () => {
     expect(tags).toHaveLength(0);
   });
 
-  it("should protect descriptive parentheses following ML tags", () => {
+  it("should NOT protect descriptive parentheses following ML tags - they are translatable", () => {
     const text = "[ML:undisp ](Crowd noise of children)";
     const { cleanText, tags } = protectTags(text);
     expect(tags).toHaveLength(1);
-    expect(tags[0].original).toBe("[ML:undisp ](Crowd noise of children)");
-    expect(cleanText).toBe("TAG_0");
+    expect(tags[0].original).toBe("[ML:undisp ]");
+    expect(cleanText).toBe("TAG_0(Crowd noise of children)");
   });
 
-  it("should protect standalone descriptive parentheses starting with uppercase", () => {
+  it("should NOT protect standalone descriptive parentheses - they are translatable", () => {
     const text = "Hello (Sound effect) world";
     const { cleanText, tags } = protectTags(text);
-    expect(tags).toHaveLength(1);
-    expect(tags[0].original).toBe("(Sound effect)");
-    expect(cleanText).toBe("Hello TAG_0 world");
+    expect(tags).toHaveLength(0);
+    expect(cleanText).toBe("Hello (Sound effect) world");
   });
 
   it("should protect [ML:undisp ] with trailing space", () => {

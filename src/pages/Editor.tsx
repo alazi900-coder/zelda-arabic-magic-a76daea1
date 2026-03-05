@@ -1307,6 +1307,16 @@ const Editor = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* NPC Split — standalone button */}
+              <Button
+                variant="outline"
+                className="font-body border-cyan-500/30 text-cyan-400 hover:text-cyan-300 gap-1.5"
+                onClick={editor.handleScanNpcSplit}
+                disabled={editor.translatedCount === 0}
+              >
+                💬 تقسيم NPC
+              </Button>
+
               {/* ── Cloud Save/Load ── */}
               <Button variant="outline" onClick={editor.handleCloudSave} disabled={!editor.user || editor.cloudSyncing} className="font-body border-secondary/30 text-secondary hover:text-secondary">
                 {editor.cloudSyncing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />} حفظ ☁️

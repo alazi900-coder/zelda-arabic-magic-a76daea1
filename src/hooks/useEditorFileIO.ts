@@ -666,7 +666,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const importedKeys = Object.keys(cleanedImported).slice(0, 5);
       const entryKeys = [...entryKeySet].slice(0, 5);
       
-      // Log full diagnostic to console
       console.log('🔍 تشخيص عدم المطابقة:', {
         importedKeySamples: importedKeys,
         editorKeySamples: entryKeys,
@@ -674,33 +673,24 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         totalEntries: entryKeySet.size,
       });
 
-      // Try to find partial matches to explain the difference
-      const firstImported = importedKeys[0] || '';
-      const firstEntry = entryKeys[0] || '';
-      
-      // Check if keys differ only by prefix or suffix
-      const importedParts = firstImported.split(':');
-      const entryParts = firstEntry.split(':');
-      let partDiff = '';
-      if (importedParts.length !== entryParts.length) {
-        partDiff = `\n\nعدد أجزاء المفتاح مختلف: الملف=${importedParts.length} vs المحرر=${entryParts.length}`;
-      } else {
-        const diffs: string[] = [];
-        for (let i = 0; i < importedParts.length; i++) {
-          if (importedParts[i] !== entryParts[i]) {
-            diffs.push(`الجزء ${i}: "${importedParts[i]}" ≠ "${entryParts[i]}"`);
-          }
-        }
-        if (diffs.length > 0) partDiff = `\n\nاختلافات: ${diffs.join('، ')}`;
-      }
-
-      alert(
+      const forceImport = confirm(
         `⚠️ لم يتطابق أي مفتاح من الملف مع المدخلات المحملة!\n\n` +
-        `🔑 أمثلة مفاتيح في الملف:\n${importedKeys.map(k => `  • ${k}`).join('\n')}\n\n` +
-        `📂 أمثلة مفاتيح في المحرر:\n${entryKeys.map(k => `  • ${k}`).join('\n')}` +
-        partDiff +
-        `\n\n💡 افتح Console (F12) لمزيد من التفاصيل`
+        `الملف يحتوي على ${Object.keys(cleanedImported).length} ترجمة.\n\n` +
+        `هل تريد "استيراد قسري"؟\n` +
+        `سيتم حفظ جميع الترجمات وستظهر عند رفع ملفات BDAT المناسبة.\n\n` +
+        `اضغط "موافق" للاستيراد القسري، أو "إلغاء" للتراجع.`
       );
+
+      if (!forceImport) return;
+
+      // Force import: save all translations directly
+      if (state) {
+        const merged = { ...state.translations, ...cleanedImported };
+        const importedKeySet = new Set(Object.keys(cleanedImported));
+        setState(prev => prev ? { ...prev, translations: merged, importedKeys: importedKeySet } : prev);
+        setLastSaved(`✅ استيراد قسري: تم حفظ ${Object.keys(cleanedImported).length} ترجمة — ستظهر عند رفع الملفات المناسبة`);
+        setTimeout(() => setLastSaved(""), 5000);
+      }
       return;
     }
 

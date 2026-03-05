@@ -1959,7 +1959,7 @@ export function useEditorState() {
     handleScanDuplicateAlef, handleApplyDuplicateAlefClean, handleRejectDuplicateAlefClean, handleApplyAllDuplicateAlefCleans,
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
-    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest,
+    handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit,
     handleScanSentenceOrder, handleApplySentenceOrder, handleRejectSentenceOrder, handleApplyAllSentenceOrders,
     handleTogglePin,
     handleClearTranslations, handleUndoClear, clearUndoBackup, isFilterActive,

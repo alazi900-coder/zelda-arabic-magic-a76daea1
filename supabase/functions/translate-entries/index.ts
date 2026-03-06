@@ -793,7 +793,7 @@ async function translateWithGoogle(
         const norm = text.toLowerCase();
         const hit = glossaryMap.get(norm);
         if (hit) {
-          result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags);
+          result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
           stats.directMatches++;
           continue;
         }

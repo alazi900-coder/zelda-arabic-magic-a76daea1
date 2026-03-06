@@ -1629,6 +1629,15 @@ export function useEditorState() {
     try { localStorage.setItem('npcMode', String(v)); } catch {}
   }, []);
 
+  const [npcMaxLines, _setNpcMaxLines] = useState(() => {
+    try { const v = localStorage.getItem('npcMaxLines'); return v ? Number(v) : 2; } catch { return 2; }
+  });
+  const setNpcMaxLines = useCallback((v: number) => {
+    const clamped = Math.max(1, Math.min(3, v));
+    _setNpcMaxLines(clamped);
+    try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
+  }, []);
+
   const [npcSplitCharLimit, setNpcSplitCharLimit] = useState(() => {
     const saved = localStorage.getItem('npcSplitCharLimit');
     return saved ? Number(saved) : 37;
@@ -1659,7 +1668,7 @@ export function useEditorState() {
           after = flat;
         } else {
           // English has N lines → force Arabic to N lines
-          after = balanceLines(flat, npcSplitCharLimit, englishLineCount);
+          after = balanceLines(flat, npcSplitCharLimit, Math.min(englishLineCount, npcMaxLines));
         }
         if (after === translation) continue;
         results.push({
@@ -1680,7 +1689,7 @@ export function useEditorState() {
         }
         continue;
       }
-      const after = balanceLines(translation, npcSplitCharLimit);
+      const after = balanceLines(translation, npcSplitCharLimit, npcMaxLines);
       if (after === translation) continue;
       results.push({
         key, originalLines: after.split('\n').length, translationLines: translation.split('\n').length,
@@ -1694,7 +1703,7 @@ export function useEditorState() {
         : `✅ لا توجد نصوص NPC تحتاج إعادة تقسيم عند ${npcSplitCharLimit} حرف`);
       setTimeout(() => setLastSaved(""), 4000);
     }
-  }, [state, isFilterActive, filteredEntries, npcSplitCharLimit, npcMode]);
+  }, [state, isFilterActive, filteredEntries, npcSplitCharLimit, npcMode, npcMaxLines]);
 
   const handleApplyNpcSplit = useCallback((key: string) => {
     if (!state || !npcSplitResults) return;
@@ -2091,7 +2100,7 @@ export function useEditorState() {
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
     handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit,
-    handleScanNpcSplit, handleApplyNpcSplit, handleRejectNpcSplit, handleApplyAllNpcSplits, npcSplitCharLimit, setNpcSplitCharLimit, npcMode, setNpcMode,
+    handleScanNpcSplit, handleApplyNpcSplit, handleRejectNpcSplit, handleApplyAllNpcSplits, npcSplitCharLimit, setNpcSplitCharLimit, npcMode, setNpcMode, npcMaxLines, setNpcMaxLines,
     handleScanSentenceOrder, handleApplySentenceOrder, handleRejectSentenceOrder, handleApplyAllSentenceOrders,
     handleTogglePin,
     handleClearTranslations, handleUndoClear, clearUndoBackup, isFilterActive,

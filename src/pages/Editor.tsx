@@ -1158,7 +1158,7 @@ const Editor = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* NPC Mode toggle + Split button */}
+              {/* NPC Mode toggle + Max lines selector + Split button */}
               <Button
                 variant={editor.npcMode ? "default" : "outline"}
                 size="sm"
@@ -1171,6 +1171,20 @@ const Editor = () => {
               >
                 🎭 وضع NPC {editor.npcMode ? "✅" : ""}
               </Button>
+              <div className="flex items-center gap-1 border border-cyan-500/20 rounded-md px-2 py-1">
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">أسطر:</span>
+                {[1, 2, 3].map(n => (
+                  <Button
+                    key={n}
+                    size="sm"
+                    variant={editor.npcMaxLines === n ? "default" : "ghost"}
+                    className={`h-6 w-6 p-0 text-xs font-bold ${editor.npcMaxLines === n ? "bg-cyan-600 text-white" : "text-cyan-400"}`}
+                    onClick={() => editor.setNpcMaxLines(n)}
+                  >
+                    {n}
+                  </Button>
+                ))}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -1334,7 +1348,7 @@ const Editor = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* NPC Mode toggle + Split button */}
+              {/* NPC Mode toggle + Max lines selector + Split button */}
               <Button
                 variant={editor.npcMode ? "default" : "outline"}
                 className={`font-body gap-1.5 text-base px-6 py-3 transition-all ${
@@ -1346,6 +1360,20 @@ const Editor = () => {
               >
                 🎭 وضع NPC {editor.npcMode ? "✅" : ""}
               </Button>
+              <div className="flex items-center gap-1 border border-cyan-500/20 rounded-md px-3 py-1.5">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">حد الأسطر:</span>
+                {[1, 2, 3].map(n => (
+                  <Button
+                    key={n}
+                    size="sm"
+                    variant={editor.npcMaxLines === n ? "default" : "ghost"}
+                    className={`h-7 w-7 p-0 text-sm font-bold ${editor.npcMaxLines === n ? "bg-cyan-600 text-white" : "text-cyan-400"}`}
+                    onClick={() => editor.setNpcMaxLines(n)}
+                  >
+                    {n}
+                  </Button>
+                ))}
+              </div>
               <Button
                 variant="outline"
                 className="font-body border-cyan-500/30 text-cyan-400 hover:text-cyan-300 gap-1.5"

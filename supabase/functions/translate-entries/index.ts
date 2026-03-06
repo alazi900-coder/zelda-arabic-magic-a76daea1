@@ -131,6 +131,7 @@ function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<stri
 }
 
 let _rebalanceNewlines = false;
+let _npcMaxLines: number | undefined = undefined;
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -141,8 +142,8 @@ function restoreAndEnforce(original: string, translated: string, tags: Map<strin
   const restored = restoreTags(translated, tags);
   const enforced = enforceTagIntegrity(original, restored);
 
-  // NPC dialogue: limit to 2 lines max
-  const maxLines = entryKey && isNpcDialogue(entryKey) ? 2 : undefined;
+  // NPC dialogue: limit lines (configurable, default 2)
+  const maxLines = entryKey && isNpcDialogue(entryKey) ? (_npcMaxLines ?? 2) : undefined;
 
   // Check if original had real newlines (NEWLINE_N tags exist)
   const hasOriginalNewlines = [...tags.keys()].some(k => k.startsWith('NEWLINE_'));
@@ -1288,7 +1289,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary, context, userApiKey, provider, myMemoryEmail, rebalanceNewlines } = await req.json() as {
+    const { entries, glossary, context, userApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
@@ -1296,10 +1297,12 @@ Deno.serve(async (req) => {
       provider?: string;
       myMemoryEmail?: string;
       rebalanceNewlines?: boolean;
+      npcMaxLines?: number;
     };
 
     // Set the global rebalance flag for this request
     _rebalanceNewlines = !!rebalanceNewlines;
+    _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

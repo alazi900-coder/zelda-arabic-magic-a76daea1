@@ -192,7 +192,7 @@ const TARGET_MIN = 38;
 const TARGET_MAX = 42;
 const HARD_MAX = 48;
 
-function balanceLines(text: string): string {
+function balanceLines(text: string, maxLines?: number): string {
   // Strip AI-inserted newlines and re-balance
   const stripped = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
@@ -222,13 +222,19 @@ function balanceLines(text: string): string {
   };
 
   const totalLen = words.reduce((s, w) => s + wordDisplayLen(w), 0) + (words.length - 1);
-  const numLines = Math.max(2, Math.ceil(totalLen / TARGET_MAX));
+  let numLines = Math.max(2, Math.ceil(totalLen / TARGET_MAX));
+
+  // Enforce maxLines cap if provided
+  if (maxLines && maxLines > 0) {
+    numLines = Math.min(numLines, maxLines);
+  }
 
   // Try line counts from numLines to numLines+1, pick the best
   let bestResult: string[] | null = null;
   let bestCost = Infinity;
 
-  for (let nLines = numLines; nLines <= Math.min(numLines + 1, words.length); nLines++) {
+  const upperBound = maxLines ? Math.min(numLines, maxLines) : Math.min(numLines + 1, words.length);
+  for (let nLines = numLines; nLines <= upperBound; nLines++) {
     const result = dpSplitShielded(words, nLines, wordDisplayLen);
     if (result) {
       const cost = scoreSplit(result.map(line => {

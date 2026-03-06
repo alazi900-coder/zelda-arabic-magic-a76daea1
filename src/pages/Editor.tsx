@@ -508,6 +508,18 @@ const Editor = () => {
                   </div>
                 )}
               </div>
+
+              {/* Rebalance Newlines Switch */}
+              <div className="flex items-center justify-between border-t border-border/50 pt-3 mt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-display">⚖️ إعادة موازنة الأسطر تلقائياً</span>
+                  <span className="text-xs text-muted-foreground font-body">(يعيد توزيع \n بدلاً من المحافظة على مواضعها الإنجليزية)</span>
+                </div>
+                <Switch
+                  checked={editor.rebalanceNewlines}
+                  onCheckedChange={editor.setRebalanceNewlines}
+                />
+              </div>
             </CardContent>
           </Card>
 

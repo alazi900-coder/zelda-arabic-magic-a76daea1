@@ -32,6 +32,8 @@ interface UseEditorTranslationProps {
   addAiRequest: (count?: number) => void;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
+  npcMode: boolean;
+  npcSplitCharLimit: number;
 }
 
 export function useEditorTranslation({

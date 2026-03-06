@@ -167,7 +167,7 @@ function dpSplitShielded(
 }
 
 /** Rebalance text lines to fix orphan words. Client-side mirror of edge function logic. */
-export function balanceLines(text: string, targetMax?: number): string {
+export function balanceLines(text: string, targetMax?: number, maxLines?: number): string {
   const limit = targetMax ?? TARGET_MAX;
   const hardMax = limit + 6;
   const stripped = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
@@ -193,12 +193,18 @@ export function balanceLines(text: string, targetMax?: number): string {
   };
 
   const totalLen = words.reduce((s, w) => s + wordDisplayLen(w), 0) + (words.length - 1);
-  const numLines = Math.max(2, Math.ceil(totalLen / limit));
+  let numLines = Math.max(2, Math.ceil(totalLen / limit));
+
+  // Enforce maxLines cap if provided
+  if (maxLines && maxLines > 0) {
+    numLines = Math.min(numLines, maxLines);
+  }
 
   let bestResult: string[] | null = null;
   let bestCost = Infinity;
 
-  for (let nLines = numLines; nLines <= Math.min(numLines + 1, words.length); nLines++) {
+  const upperBound = maxLines ? Math.min(numLines, maxLines) : Math.min(numLines + 1, words.length);
+  for (let nLines = numLines; nLines <= upperBound; nLines++) {
     const result = dpSplitShielded(words, nLines, wordDisplayLen, hardMax);
     if (result) {
       const cost = scoreSplit(

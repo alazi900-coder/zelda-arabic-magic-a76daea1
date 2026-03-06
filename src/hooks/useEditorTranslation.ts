@@ -626,6 +626,7 @@ export function useEditorTranslation({
             userApiKey: userGeminiKey || undefined,
             provider: translationProvider,
             myMemoryEmail: myMemoryEmail || undefined,
+            npcMaxLines,
           }),
         });
         if (!response.ok) throw new Error(`خطأ ${response.status}`);

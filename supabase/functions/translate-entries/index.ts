@@ -132,18 +132,31 @@ function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<stri
 
 let _rebalanceNewlines = false;
 
-function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>): string {
+/** Check if an entry key belongs to an NPC dialogue file */
+function isNpcDialogue(key: string): boolean {
+  return /\bmsg_nq\b/i.test(key);
+}
+
+function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>, entryKey?: string): string {
   const restored = restoreTags(translated, tags);
   const enforced = enforceTagIntegrity(original, restored);
+
+  // NPC dialogue: limit to 2 lines max
+  const maxLines = entryKey && isNpcDialogue(entryKey) ? 2 : undefined;
 
   // Check if original had real newlines (NEWLINE_N tags exist)
   const hasOriginalNewlines = [...tags.keys()].some(k => k.startsWith('NEWLINE_'));
   if (hasOriginalNewlines && !_rebalanceNewlines) {
     // Preserve structural newlines but still remove orphan lines
-    return fixOrphansPreservingNewlines(enforced);
+    const preserved = fixOrphansPreservingNewlines(enforced);
+    // If NPC and too many lines, rebalance with maxLines
+    if (maxLines && preserved.split('\n').length > maxLines) {
+      return balanceLines(enforced, maxLines);
+    }
+    return preserved;
   }
 
-  return balanceLines(enforced);
+  return balanceLines(enforced, maxLines);
 }
 
 /** Tag shielding: replace technical tags with short placeholders for balanced splitting */
@@ -179,7 +192,7 @@ const TARGET_MIN = 38;
 const TARGET_MAX = 42;
 const HARD_MAX = 48;
 
-function balanceLines(text: string): string {
+function balanceLines(text: string, maxLines?: number): string {
   // Strip AI-inserted newlines and re-balance
   const stripped = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
@@ -209,13 +222,19 @@ function balanceLines(text: string): string {
   };
 
   const totalLen = words.reduce((s, w) => s + wordDisplayLen(w), 0) + (words.length - 1);
-  const numLines = Math.max(2, Math.ceil(totalLen / TARGET_MAX));
+  let numLines = Math.max(2, Math.ceil(totalLen / TARGET_MAX));
+
+  // Enforce maxLines cap if provided
+  if (maxLines && maxLines > 0) {
+    numLines = Math.min(numLines, maxLines);
+  }
 
   // Try line counts from numLines to numLines+1, pick the best
   let bestResult: string[] | null = null;
   let bestCost = Infinity;
 
-  for (let nLines = numLines; nLines <= Math.min(numLines + 1, words.length); nLines++) {
+  const upperBound = maxLines ? Math.min(numLines, maxLines) : Math.min(numLines + 1, words.length);
+  for (let nLines = numLines; nLines <= upperBound; nLines++) {
     const result = dpSplitShielded(words, nLines, wordDisplayLen);
     if (result) {
       const cost = scoreSplit(result.map(line => {
@@ -683,7 +702,7 @@ async function translateWithMyMemory(
 
     // Tag-only/symbolic entries must pass through unchanged
     if (isTagOnlyOrSymbolic(textToTranslate)) {
-      result[entry.key] = restoreAndEnforce(entry.original, textToTranslate, pe.tags);
+      result[entry.key] = restoreAndEnforce(entry.original, textToTranslate, pe.tags, entry.key);
       continue;
     }
 
@@ -692,7 +711,7 @@ async function translateWithMyMemory(
       const norm = textToTranslate.toLowerCase();
       const hit = glossaryMap.get(norm);
       if (hit) {
-        result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags);
+        result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
         stats.directMatches++;
         continue;
       }
@@ -732,7 +751,7 @@ async function translateWithMyMemory(
         if (glossaryMap) {
           translation = applyGlossaryPost(translation, glossaryMap);
         }
-        result[entry.key] = restoreAndEnforce(entry.original, translation, pe.tags);
+        result[entry.key] = restoreAndEnforce(entry.original, translation, pe.tags, entry.key);
         charsUsed += textToTranslate.length;
       }
     } catch (err) {
@@ -766,7 +785,7 @@ async function translateWithGoogle(
 
       // Tag-only/symbolic entries must pass through unchanged
       if (isTagOnlyOrSymbolic(text)) {
-        result[entry.key] = restoreAndEnforce(entry.original, text, pe.tags);
+        result[entry.key] = restoreAndEnforce(entry.original, text, pe.tags, entry.key);
         continue;
       }
 
@@ -774,7 +793,7 @@ async function translateWithGoogle(
         const norm = text.toLowerCase();
         const hit = glossaryMap.get(norm);
         if (hit) {
-          result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags);
+          result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
           stats.directMatches++;
           continue;
         }
@@ -817,7 +836,7 @@ async function translateWithGoogle(
           if (glossaryMap) {
             translation = applyGlossaryPost(translation, glossaryMap);
           }
-          result[entry.key] = restoreAndEnforce(entry.original, translation, pe.tags);
+          result[entry.key] = restoreAndEnforce(entry.original, translation, pe.tags, entry.key);
           charsUsed += text.length;
         }
       } catch (err) {
@@ -911,14 +930,14 @@ async function translateWithAI(
 
     // Tag-only/symbolic entries must pass through unchanged
     if (isTagOnlyOrSymbolic(pe.cleaned)) {
-      directResult[entry.key] = restoreAndEnforce(entry.original, pe.cleaned, pe.tags);
+      directResult[entry.key] = restoreAndEnforce(entry.original, pe.cleaned, pe.tags, entry.key);
       continue;
     }
 
     // Priority 1: Glossary exact match
     const glossaryHit = glossaryMap.get(norm);
     if (glossaryHit) {
-      directResult[entry.key] = restoreAndEnforce(entry.original, glossaryHit, pe.tags);
+      directResult[entry.key] = restoreAndEnforce(entry.original, glossaryHit, pe.tags, entry.key);
       stats.directMatches++;
       continue;
     }
@@ -926,7 +945,7 @@ async function translateWithAI(
     // Priority 2: Translation memory exact match (previously translated identical text)
     const tmHit = tmMap.get(norm);
     if (tmHit) {
-      directResult[entry.key] = restoreAndEnforce(entry.original, tmHit, pe.tags);
+      directResult[entry.key] = restoreAndEnforce(entry.original, tmHit, pe.tags, entry.key);
       stats.directMatches++;
       continue;
     }
@@ -1150,7 +1169,7 @@ ${textsBlock}
       if (glossaryMap.size > 0) {
         translated = applyGlossaryPost(translated, glossaryMap);
       }
-      result[item.entry.key] = restoreAndEnforce(item.entry.original, translated, item.pe.tags);
+      result[item.entry.key] = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
     }
     return result;
   };

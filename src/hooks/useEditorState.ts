@@ -25,7 +25,7 @@ export function useEditorState() {
   const [search, setSearch] = useState("");
   const [filterFile, setFilterFile] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<"all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "damaged-tags" | "fuzzy" | "byte-overflow">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "damaged-tags" | "fuzzy" | "byte-overflow" | "has-newlines">("all");
   const [filterTechnical, setFilterTechnical] = useState<"all" | "only" | "exclude">("all");
   const [filterTable, setFilterTable] = useState<string>("all");
   const [filterColumn, setFilterColumn] = useState<string>("all");
@@ -589,6 +589,12 @@ export function useEditorState() {
     return count;
   }, [state?.translations]);
 
+  // === Count entries where English original has \n ===
+  const newlinesCount = useMemo(() => {
+    if (!state) return 0;
+    return state.entries.filter(e => e.original.includes('\n')).length;
+  }, [state?.entries]);
+
 
   // === Count entries with technical tags ===
   const tagsCount = useMemo(() => {
@@ -702,7 +708,8 @@ export function useEditorState() {
         (filterStatus === "has-tags" && hasTechnicalTags(e.original)) ||
         (filterStatus === "damaged-tags" && qualityStats.damagedTagKeys.has(key)) ||
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
-        (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && new TextEncoder().encode(translation).length > e.maxBytes);
+        (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && new TextEncoder().encode(translation).length > e.maxBytes) ||
+        (filterStatus === "has-newlines" && e.original.includes('\n'));
       const matchTechnical = 
         filterTechnical === "all" ||
         (filterTechnical === "only" && isTechnical) ||
@@ -2013,7 +2020,7 @@ export function useEditorState() {
     checkingConsistency, consistencyResults,
     scanningSentences, sentenceSplitResults, newlineCleanResults, diacriticsCleanResults, duplicateAlefResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults, npcSplitResults, sentenceOrderResults,
     isSearchPinned, pinnedKeys,
-    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount,
+    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, newlinesCount,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
     ...glossary,
     msbtFiles, filteredEntries, paginatedEntries, totalPages,

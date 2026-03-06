@@ -895,6 +895,7 @@ const Editor = () => {
                     <option value="stuck-chars">🔤 ملتصق ({editor.needsImproveCount.stuck})</option>
                     <option value="mixed-lang">🌐 مختلط ({editor.needsImproveCount.mixed})</option>
                     <option value="has-tags">🔧 يحتوي رموز تقنية ({editor.tagsCount})</option>
+                    {editor.newlinesCount > 0 && <option value="has-newlines">↵ يحتوي أسطر ({editor.newlinesCount})</option>}
                     {editor.fuzzyCount > 0 && <option value="fuzzy">🔍 مطابقة جزئية ({editor.fuzzyCount})</option>}
                     {editor.byteOverflowCount > 0 && <option value="byte-overflow">⛔ تجاوز البايتات ({editor.byteOverflowCount})</option>}
                   </select>

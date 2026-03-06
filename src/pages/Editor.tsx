@@ -1158,7 +1158,19 @@ const Editor = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* NPC Split — standalone button */}
+              {/* NPC Mode toggle + Split button */}
+              <Button
+                variant={editor.npcMode ? "default" : "outline"}
+                size="sm"
+                className={`font-body text-xs gap-1.5 transition-all ${
+                  editor.npcMode
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/30"
+                    : "border-cyan-500/30 text-cyan-400 hover:text-cyan-300"
+                }`}
+                onClick={() => editor.setNpcMode(!editor.npcMode)}
+              >
+                🎭 وضع NPC {editor.npcMode ? "✅" : ""}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

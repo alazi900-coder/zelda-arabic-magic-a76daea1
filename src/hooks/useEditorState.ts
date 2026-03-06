@@ -69,6 +69,14 @@ export function useEditorState() {
     _setRebalanceNewlines(v);
     try { localStorage.setItem('rebalanceNewlines', String(v)); } catch {}
   }, []);
+  const [npcMaxLines, _setNpcMaxLines] = useState(() => {
+    try { const v = localStorage.getItem('npcMaxLines'); return v ? Number(v) : 2; } catch { return 2; }
+  });
+  const setNpcMaxLines = useCallback((v: number) => {
+    const clamped = Math.max(1, Math.min(3, v));
+    _setNpcMaxLines(clamped);
+    try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
+  }, []);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [userGeminiKey, _setUserGeminiKey] = useState(() => {
@@ -777,7 +785,7 @@ export function useEditorState() {
 
   const translation = useEditorTranslation({
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines,
+    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines,
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations, discardPendingTranslations } = translation;
 
@@ -1627,15 +1635,6 @@ export function useEditorState() {
   const setNpcMode = useCallback((v: boolean) => {
     _setNpcMode(v);
     try { localStorage.setItem('npcMode', String(v)); } catch {}
-  }, []);
-
-  const [npcMaxLines, _setNpcMaxLines] = useState(() => {
-    try { const v = localStorage.getItem('npcMaxLines'); return v ? Number(v) : 2; } catch { return 2; }
-  });
-  const setNpcMaxLines = useCallback((v: number) => {
-    const clamped = Math.max(1, Math.min(3, v));
-    _setNpcMaxLines(clamped);
-    try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
   }, []);
 
   const [npcSplitCharLimit, setNpcSplitCharLimit] = useState(() => {

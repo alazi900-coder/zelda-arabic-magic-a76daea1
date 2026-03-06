@@ -702,7 +702,7 @@ async function translateWithMyMemory(
 
     // Tag-only/symbolic entries must pass through unchanged
     if (isTagOnlyOrSymbolic(textToTranslate)) {
-      result[entry.key] = restoreAndEnforce(entry.original, textToTranslate, pe.tags);
+      result[entry.key] = restoreAndEnforce(entry.original, textToTranslate, pe.tags, entry.key);
       continue;
     }
 

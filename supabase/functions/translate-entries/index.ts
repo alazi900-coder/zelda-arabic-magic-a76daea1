@@ -141,8 +141,8 @@ function restoreAndEnforce(original: string, translated: string, tags: Map<strin
   const restored = restoreTags(translated, tags);
   const enforced = enforceTagIntegrity(original, restored);
 
-  // NPC dialogue: limit to 2 lines max
-  const maxLines = entryKey && isNpcDialogue(entryKey) ? 2 : undefined;
+  // NPC dialogue: limit lines (configurable, default 2)
+  const maxLines = entryKey && isNpcDialogue(entryKey) ? (_npcMaxLines ?? 2) : undefined;
 
   // Check if original had real newlines (NEWLINE_N tags exist)
   const hasOriginalNewlines = [...tags.keys()].some(k => k.startsWith('NEWLINE_'));

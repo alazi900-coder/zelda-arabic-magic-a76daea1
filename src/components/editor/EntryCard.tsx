@@ -12,28 +12,49 @@ import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/ara
 /** Renders text with technical tags highlighted visually */
 function HighlightedOriginal({ text }: { text: string }) {
   const tagPattern = /(\[\s*\w+\s*:[^\]]*?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:\s*[^}]*\}|\{[\w]+\}|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC])/g;
-  const parts = text.split(tagPattern);
 
-  if (parts.length <= 1) {
-    return <span>{displayOriginal(text)}</span>;
+  // Split by newlines first, then highlight tags within each line
+  const lines = text.split('\n');
+
+  const renderLine = (line: string, lineIdx: number) => {
+    const parts = line.split(tagPattern);
+    if (parts.length <= 1) {
+      return <span key={lineIdx}>{displayOriginal(line)}</span>;
+    }
+    return (
+      <span key={lineIdx}>
+        {parts.map((part, i) =>
+          tagPattern.test(part) ? (
+            <span
+              key={i}
+              className="inline-flex items-center px-1 py-0.5 mx-0.5 rounded text-[11px] font-mono bg-accent/15 text-accent border border-accent/25 leading-tight"
+              dir="ltr"
+              title="وسم تقني — لا تحذفه"
+            >
+              {displayOriginal(part)}
+            </span>
+          ) : (
+            <span key={i}>{displayOriginal(part)}</span>
+          )
+        )}
+      </span>
+    );
+  };
+
+  if (lines.length <= 1) {
+    return <span>{renderLine(text, 0)}</span>;
   }
 
   return (
-    <span>
-      {parts.map((part, i) =>
-        tagPattern.test(part) ? (
-          <span
-            key={i}
-            className="inline-flex items-center px-1 py-0.5 mx-0.5 rounded text-[11px] font-mono bg-accent/15 text-accent border border-accent/25 leading-tight"
-            dir="ltr"
-            title="وسم تقني — لا تحذفه"
-          >
-            {displayOriginal(part)}
-          </span>
-        ) : (
-          <span key={i}>{displayOriginal(part)}</span>
-        )
-      )}
+    <span className="whitespace-pre-wrap">
+      {lines.map((line, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && (
+            <span className="inline-flex items-center mx-0.5 text-[10px] text-primary/50 select-none" title="فاصل سطر \n">↵{'\n'}</span>
+          )}
+          {renderLine(line, i)}
+        </React.Fragment>
+      ))}
     </span>
   );
 }

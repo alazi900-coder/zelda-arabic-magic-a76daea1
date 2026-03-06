@@ -1628,6 +1628,21 @@ export function useEditorState() {
   // === NPC Dialogue Split (configurable chars for NPC dialogue files) ===
   const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
+  // Count NPC entries that would be affected by the split tool
+  const npcAffectedCount = useMemo(() => {
+    if (!state) return 0;
+    const entriesToScan = isFilterActive ? filteredEntries : state.entries;
+    let count = 0;
+    for (const entry of entriesToScan) {
+      const key = `${entry.msbtFile}:${entry.index}`;
+      if (!NPC_FILE_RE.test(key)) continue;
+      const translation = state.translations[key];
+      if (!translation?.trim()) continue;
+      count++;
+    }
+    return count;
+  }, [state, isFilterActive, filteredEntries]);
+
   // === NPC Mode: sync Arabic line count to English \n count ===
   const [npcMode, _setNpcMode] = useState(() => {
     try { return localStorage.getItem('npcMode') === 'true'; } catch { return false; }

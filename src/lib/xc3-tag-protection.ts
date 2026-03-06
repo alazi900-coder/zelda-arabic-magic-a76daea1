@@ -33,6 +33,7 @@ const ABBREV_PATTERN = new RegExp(
 
 // Patterns to match technical tags in order of priority
 const TAG_PATTERNS: RegExp[] = [
+  /\[\s*\w+:\w[^\]]*\][^[]*?\[\/\s*\w+:\w[^\]]*\]/g, // Paired tags: [System:Ruby rt=x ]content[/System:Ruby]
   /[\uE000-\uE0FF]+/g,                     // PUA icons (consecutive = atomic block)
   /\[\s*\w+\s*:[^\]]*?\s*\]/g,                     // [Tag:Value] only (no trailing parentheses)
   /\d+\s*\[[A-Z]{2,10}\]/g,             // N[TAG] patterns (e.g. 1[ML], 1 [ML])

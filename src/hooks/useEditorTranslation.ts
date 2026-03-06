@@ -45,13 +45,31 @@ export function useEditorTranslation({
   const autoSyncLines = (key: string, translated: string, originalEntry?: ExtractedEntry): string => {
     if (!originalEntry) return translated;
     const englishLineCount = originalEntry.original.split('\n').length;
-    const flat = translated.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-    if (englishLineCount <= 1) return flat;
-    // For NPC files, respect npcMaxLines cap
-    const isNpc = NPC_FILE_RE.test(key);
-    const maxLines = isNpc ? Math.min(englishLineCount, npcMaxLines) : englishLineCount;
-    const charLimit = isNpc ? npcSplitCharLimit : npcSplitCharLimit;
-    return balanceLines(flat, charLimit, maxLines);
+
+    // Protect tags before any text manipulation
+    const { cleanText, tags } = protectTags(translated);
+
+    // Flatten (remove newlines, collapse spaces)
+    const flat = cleanText.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+    let balanced: string;
+    if (englishLineCount <= 1) {
+      balanced = flat;
+    } else {
+      const isNpc = NPC_FILE_RE.test(key);
+      const maxLines = isNpc ? Math.min(englishLineCount, npcMaxLines) : englishLineCount;
+      balanced = balanceLines(flat, npcSplitCharLimit, maxLines);
+    }
+
+    // Restore tags
+    const result = restoreTags(balanced, tags);
+
+    // Validate: warn if any placeholder leaked
+    if (/TAG_\d+/.test(result)) {
+      console.warn(`[autoSyncLines] Unreplaced tag placeholder in key: ${key}`);
+    }
+
+    return result;
   };
   const [translating, setTranslating] = useState(false);
   const [translatingSingle, setTranslatingSingle] = useState<string | null>(null);

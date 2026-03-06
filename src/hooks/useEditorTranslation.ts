@@ -7,6 +7,9 @@ import {
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
+import { balanceLines } from "@/lib/balance-lines";
+
+const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
 interface UseEditorTranslationProps {
   state: EditorState | null;

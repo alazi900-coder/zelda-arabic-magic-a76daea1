@@ -171,12 +171,11 @@ describe("autoSyncLines edge cases", () => {
   });
 
   it("preserves multiple Ruby pairs in the same text", () => {
-    const input = "[System:Ruby rt=we ]كيفيسي[/System:Ruby] ضد [System:Ruby rt=ag ]أغنوس[/System:Ruby] في المعركة الكبرى";
-    const result = syncLines(input, 2);
+    const input = "[System:Ruby rt=we ]كيفيسي[/System:Ruby] ضد [System:Ruby rt=ag ]أغنوس[/System:Ruby] في المعركة الكبرى التي ستحدد مصير العالم بأكمله";
+    const result = syncLines(input, 2, 30);
     expect(result).toContain("[System:Ruby rt=we ]");
     expect(result).toContain("[System:Ruby rt=ag ]");
     expect(result).toContain("[/System:Ruby]");
-    // Count closing tags
     const closingCount = (result.match(/\[\/System:Ruby\]/g) || []).length;
     expect(closingCount).toBe(2);
     expect(result.split("\n")).toHaveLength(2);

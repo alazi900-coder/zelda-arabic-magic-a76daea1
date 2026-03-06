@@ -836,7 +836,7 @@ async function translateWithGoogle(
           if (glossaryMap) {
             translation = applyGlossaryPost(translation, glossaryMap);
           }
-          result[entry.key] = restoreAndEnforce(entry.original, translation, pe.tags);
+          result[entry.key] = restoreAndEnforce(entry.original, translation, pe.tags, entry.key);
           charsUsed += text.length;
         }
       } catch (err) {

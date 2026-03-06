@@ -132,18 +132,31 @@ function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<stri
 
 let _rebalanceNewlines = false;
 
-function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>): string {
+/** Check if an entry key belongs to an NPC dialogue file */
+function isNpcDialogue(key: string): boolean {
+  return /\bmsg_nq\b/i.test(key);
+}
+
+function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>, entryKey?: string): string {
   const restored = restoreTags(translated, tags);
   const enforced = enforceTagIntegrity(original, restored);
+
+  // NPC dialogue: limit to 2 lines max
+  const maxLines = entryKey && isNpcDialogue(entryKey) ? 2 : undefined;
 
   // Check if original had real newlines (NEWLINE_N tags exist)
   const hasOriginalNewlines = [...tags.keys()].some(k => k.startsWith('NEWLINE_'));
   if (hasOriginalNewlines && !_rebalanceNewlines) {
     // Preserve structural newlines but still remove orphan lines
-    return fixOrphansPreservingNewlines(enforced);
+    const preserved = fixOrphansPreservingNewlines(enforced);
+    // If NPC and too many lines, rebalance with maxLines
+    if (maxLines && preserved.split('\n').length > maxLines) {
+      return balanceLines(enforced, maxLines);
+    }
+    return preserved;
   }
 
-  return balanceLines(enforced);
+  return balanceLines(enforced, maxLines);
 }
 
 /** Tag shielding: replace technical tags with short placeholders for balanced splitting */

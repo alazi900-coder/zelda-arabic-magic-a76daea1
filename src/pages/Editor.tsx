@@ -835,6 +835,7 @@ const Editor = () => {
             />
           )}
 
+          {editor.sentenceOrderResults && editor.sentenceOrderResults.length > 0 && (
             <SentenceOrderPanel
               results={editor.sentenceOrderResults}
               onAccept={editor.handleApplySentenceOrder}

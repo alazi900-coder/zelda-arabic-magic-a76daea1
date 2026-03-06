@@ -185,7 +185,22 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <span className="text-muted-foreground/60">صف {rowIdx}</span>
                 </div>
               );
-            }
+          )}
+          {/* NPC overflow warning */}
+          {translation?.trim() && /msg_(ask|cq|fev|nq|sq|tlk|tq)/i.test(key) && (() => {
+            const lines = translation.split('\n');
+            const lineCount = lines.length;
+            const maxLineLen = Math.max(...lines.map(l => visualLength(l)));
+            const warnings: string[] = [];
+            if (lineCount > 2) warnings.push(`${lineCount} أسطر (الحد: 2)`);
+            if (maxLineLen > 42) warnings.push(`سطر بطول ${maxLineLen} (الحد: 42)`);
+            if (warnings.length === 0) return null;
+            return (
+              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 mb-2">
+                <AlertTriangle className="w-3 h-3" /> ⚠️ NPC: {warnings.join(' • ')}
+              </span>
+            );
+          })()
             return <p className="text-xs text-muted-foreground mb-1 truncate">{entry.msbtFile} • {entry.label}</p>;
           })()}
           <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'isolate' }}><HighlightedOriginal text={entry.original} /></p>

@@ -68,7 +68,7 @@ export interface FileCategory {
 }
 
 export const AUTOSAVE_DELAY = 1500;
-export const AI_BATCH_SIZE = 10;
+export const AI_BATCH_SIZE = 5;
 export const PAGE_SIZE = 50;
 export const INPUT_DEBOUNCE = 300;
 

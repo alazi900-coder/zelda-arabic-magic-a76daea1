@@ -937,7 +937,7 @@ async function translateWithAI(
     // Priority 1: Glossary exact match
     const glossaryHit = glossaryMap.get(norm);
     if (glossaryHit) {
-      directResult[entry.key] = restoreAndEnforce(entry.original, glossaryHit, pe.tags);
+      directResult[entry.key] = restoreAndEnforce(entry.original, glossaryHit, pe.tags, entry.key);
       stats.directMatches++;
       continue;
     }

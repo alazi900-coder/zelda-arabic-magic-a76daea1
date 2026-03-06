@@ -77,6 +77,20 @@ export function useEditorState() {
     _setNpcMaxLines(clamped);
     try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
   }, []);
+  const [npcMode, _setNpcMode] = useState(() => {
+    try { return localStorage.getItem('npcMode') === 'true'; } catch { return false; }
+  });
+  const setNpcMode = useCallback((v: boolean) => {
+    _setNpcMode(v);
+    try { localStorage.setItem('npcMode', String(v)); } catch {}
+  }, []);
+  const [npcSplitCharLimit, setNpcSplitCharLimit] = useState(() => {
+    const saved = localStorage.getItem('npcSplitCharLimit');
+    return saved ? Number(saved) : 37;
+  });
+  useEffect(() => {
+    localStorage.setItem('npcSplitCharLimit', String(npcSplitCharLimit));
+  }, [npcSplitCharLimit]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [userGeminiKey, _setUserGeminiKey] = useState(() => {

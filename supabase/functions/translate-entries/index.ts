@@ -1066,6 +1066,41 @@ ${textsBlock}
         return obj;
       } catch {}
     }
+
+    // Fallback: regex extraction of individual K{n} keys
+    const regexResult: Record<string, string> = {};
+    const keyRegex = /"K(\d+)"\s*:\s*"/g;
+    let keyMatch;
+    while ((keyMatch = keyRegex.exec(cleaned)) !== null) {
+      const keyNum = keyMatch[1];
+      const valueStart = keyMatch.index + keyMatch[0].length;
+      // Find the end of the value string, handling escaped quotes
+      let i = valueStart;
+      let value = '';
+      while (i < cleaned.length) {
+        if (cleaned[i] === '\\' && i + 1 < cleaned.length) {
+          value += cleaned[i] + cleaned[i + 1];
+          i += 2;
+        } else if (cleaned[i] === '"') {
+          break;
+        } else {
+          value += cleaned[i];
+          i++;
+        }
+      }
+      if (value.trim()) {
+        // Unescape the value
+        try {
+          regexResult[`K${keyNum}`] = JSON.parse(`"${value}"`);
+        } catch {
+          regexResult[`K${keyNum}`] = value.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        }
+      }
+    }
+    if (Object.keys(regexResult).length > 0) {
+      console.warn(`Extracted ${Object.keys(regexResult).length} keys via regex fallback`);
+      return regexResult;
+    }
     
     throw new Error('فشل في تحليل استجابة الذكاء الاصطناعي — لم يتم العثور على JSON صالح');
   }
@@ -1119,13 +1154,13 @@ ${textsBlock}
   };
 
   if (effectiveKey) {
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${effectiveKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${effectiveKey}`;
     const geminiResponse = await fetch(geminiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation.' }] },
+        systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' }] },
         generationConfig: { temperature: 0.3 },
       }),
     });
@@ -1153,41 +1188,76 @@ ${textsBlock}
     }
   }
 
-  // Fallback to Lovable AI
+  // Fallback to Lovable AI — with retry on JSON parse failure
   {
     const apiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!apiKey) throw new Error('Missing LOVABLE_API_KEY');
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.3,
-      }),
-    });
+    const callLovableAI = async (aiPrompt: string, count: number): Promise<Record<string, string>> => {
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' },
+            { role: 'user', content: aiPrompt },
+          ],
+          temperature: 0.3,
+        }),
+      });
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('AI gateway error:', err);
-      if (response.status === 402) throw new Error('انتهت نقاط الذكاء الاصطناعي — استخدم مفتاح Gemini الشخصي');
-      if (response.status === 429) throw new Error('تم تجاوز حد الطلبات، حاول لاحقاً');
-      throw new Error(`AI error: ${response.status}`);
-    }
+      if (!response.ok) {
+        const err = await response.text();
+        console.error('AI gateway error:', err);
+        if (response.status === 402) throw new Error('انتهت نقاط الذكاء الاصطناعي — استخدم مفتاح Gemini الشخصي');
+        if (response.status === 429) throw new Error('تم تجاوز حد الطلبات، حاول لاحقاً');
+        throw new Error(`AI error: ${response.status}`);
+      }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    if (detectTruncation(content)) {
-      console.warn('Lovable AI response truncated, results may be incomplete');
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      if (detectTruncation(content)) {
+        console.warn('Lovable AI response truncated, results may be incomplete');
+      }
+      return extractJsonObject(content);
+    };
+
+    // Try full batch first, on JSON failure split into halves
+    try {
+      const translationsObj = await callLovableAI(prompt, needsAI.length);
+      const aiResult = parseAndUnlock(translationsObj);
+      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+    } catch (e) {
+      if (needsAI.length <= 1) throw e;
+      console.warn(`Full batch failed (${(e as Error).message}), splitting into halves...`);
+
+      const mid = Math.ceil(needsAI.length / 2);
+      const buildHalfPrompt = (items: typeof needsAI, offset: number) => {
+        const halfTexts = items.map((item, i) => `"K${i}": "${escapeForJsonString(item.termLocks.lockedText)}"`).join(',\n');
+        return prompt.replace(textsBlock, halfTexts).replace(`EXACTLY ${needsAI.length} entries`, `EXACTLY ${items.length} entries`);
+      };
+
+      const firstHalf = needsAI.slice(0, mid);
+      const secondHalf = needsAI.slice(mid);
+
+      const [obj1, obj2] = await Promise.all([
+        callLovableAI(buildHalfPrompt(firstHalf, 0), firstHalf.length),
+        callLovableAI(buildHalfPrompt(secondHalf, mid), secondHalf.length),
+      ]);
+
+      // Remap second half keys back to original indices
+      const combined: Record<string, string> = { ...obj1 };
+      for (const [key, val] of Object.entries(obj2)) {
+        const idx = parseInt(key.replace('K', ''));
+        combined[`K${idx + mid}`] = val;
+      }
+
+      const aiResult = parseAndUnlock(combined);
+      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (split mode)`);
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
     }
-    const translationsObj = extractJsonObject(content);
-    const aiResult = parseAndUnlock(translationsObj);
-    console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
-    return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
   }
 }
 

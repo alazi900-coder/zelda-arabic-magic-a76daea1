@@ -7,6 +7,9 @@ import {
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
+import { balanceLines } from "@/lib/balance-lines";
+
+const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
 interface UseEditorTranslationProps {
   state: EditorState | null;
@@ -29,12 +32,28 @@ interface UseEditorTranslationProps {
   addAiRequest: (count?: number) => void;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
+  npcMode: boolean;
+  npcSplitCharLimit: number;
 }
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit,
 }: UseEditorTranslationProps) {
+
+  /** Auto-split NPC translation to respect line limits */
+  const autoSplitNpc = (key: string, translated: string, originalEntry?: ExtractedEntry): string => {
+    if (!NPC_FILE_RE.test(key)) return translated;
+    if (npcMode && originalEntry) {
+      const englishLineCount = originalEntry.original.split('\n').length;
+      const flat = translated.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      if (englishLineCount <= 1) return flat;
+      return balanceLines(flat, npcSplitCharLimit, Math.min(englishLineCount, npcMaxLines));
+    }
+    // Classic: just enforce maxLines
+    const flat = translated.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    return balanceLines(flat, npcSplitCharLimit, npcMaxLines);
+  };
   const [translating, setTranslating] = useState(false);
   const [translatingSingle, setTranslatingSingle] = useState<string | null>(null);
   const [tmStats, setTmStats] = useState<{ reused: number; sent: number } | null>(null);
@@ -91,6 +110,8 @@ export function useEditorTranslation({
         // Fix broken brackets around [Tag:Value] tags
         result = autoFixTagBrackets(entry.original, result);
       }
+      // Auto-split NPC translations to respect line limits
+      result = autoSplitNpc(key, result, entry);
       fixed[key] = result;
     }
     return fixed;
@@ -147,6 +168,8 @@ export function useEditorTranslation({
           translated = restoreTagsLocally(entry.original, translated);
           translated = autoFixTagBrackets(entry.original, translated);
         }
+        // Auto-split NPC translations
+        translated = autoSplitNpc(key, translated, entry);
         updateTranslation(key, translated);
       }
     } catch (err) {

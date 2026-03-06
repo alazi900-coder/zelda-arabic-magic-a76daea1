@@ -233,6 +233,20 @@ const EntryCard: React.FC<EntryCardProps> = ({
               {isDamagedTag && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">⚠️ رموز تالفة</span>
               )}
+              {/msg_(ask|cq|fev|nq|sq|tlk|tq)/i.test(key) && (() => {
+                const lines = translation.split('\n');
+                const lineCount = lines.length;
+                const maxLineLen = Math.max(...lines.map(l => visualLength(l)));
+                const warnings: string[] = [];
+                if (lineCount > 2) warnings.push(`${lineCount} أسطر`);
+                if (maxLineLen > 42) warnings.push(`طول ${maxLineLen}`);
+                if (warnings.length === 0) return null;
+                return (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> NPC: {warnings.join(' • ')}
+                  </span>
+                );
+              })()}
               {fuzzyScore != null && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border ${fuzzyScore >= 80 ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : fuzzyScore >= 70 ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-orange-500/10 text-orange-600 border-orange-500/20'}`}>
                   🔍 مطابقة جزئية {fuzzyScore}%

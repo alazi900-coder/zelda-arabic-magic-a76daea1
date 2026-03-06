@@ -77,6 +77,20 @@ export function useEditorState() {
     _setNpcMaxLines(clamped);
     try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
   }, []);
+  const [npcMode, _setNpcMode] = useState(() => {
+    try { return localStorage.getItem('npcMode') === 'true'; } catch { return false; }
+  });
+  const setNpcMode = useCallback((v: boolean) => {
+    _setNpcMode(v);
+    try { localStorage.setItem('npcMode', String(v)); } catch {}
+  }, []);
+  const [npcSplitCharLimit, setNpcSplitCharLimit] = useState(() => {
+    const saved = localStorage.getItem('npcSplitCharLimit');
+    return saved ? Number(saved) : 37;
+  });
+  useEffect(() => {
+    localStorage.setItem('npcSplitCharLimit', String(npcSplitCharLimit));
+  }, [npcSplitCharLimit]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [userGeminiKey, _setUserGeminiKey] = useState(() => {
@@ -785,7 +799,7 @@ export function useEditorState() {
 
   const translation = useEditorTranslation({
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines,
+    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit,
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations, discardPendingTranslations } = translation;
 
@@ -1642,24 +1656,6 @@ export function useEditorState() {
     }
     return count;
   }, [state, isFilterActive, filteredEntries]);
-
-  // === NPC Mode: sync Arabic line count to English \n count ===
-  const [npcMode, _setNpcMode] = useState(() => {
-    try { return localStorage.getItem('npcMode') === 'true'; } catch { return false; }
-  });
-  const setNpcMode = useCallback((v: boolean) => {
-    _setNpcMode(v);
-    try { localStorage.setItem('npcMode', String(v)); } catch {}
-  }, []);
-
-  const [npcSplitCharLimit, setNpcSplitCharLimit] = useState(() => {
-    const saved = localStorage.getItem('npcSplitCharLimit');
-    return saved ? Number(saved) : 37;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('npcSplitCharLimit', String(npcSplitCharLimit));
-  }, [npcSplitCharLimit]);
 
   const handleScanNpcSplit = useCallback(() => {
     if (!state) return;

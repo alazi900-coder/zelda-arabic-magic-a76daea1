@@ -166,6 +166,8 @@ export function useEditorTranslation({
           translated = restoreTagsLocally(entry.original, translated);
           translated = autoFixTagBrackets(entry.original, translated);
         }
+        // Auto-split NPC translations
+        translated = autoSplitNpc(key, translated, entry);
         updateTranslation(key, translated);
       }
     } catch (err) {

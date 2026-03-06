@@ -1702,7 +1702,7 @@ export function useEditorState() {
         : `✅ لا توجد نصوص NPC تحتاج إعادة تقسيم عند ${npcSplitCharLimit} حرف`);
       setTimeout(() => setLastSaved(""), 4000);
     }
-  }, [state, isFilterActive, filteredEntries, npcSplitCharLimit, npcMode]);
+  }, [state, isFilterActive, filteredEntries, npcSplitCharLimit, npcMode, npcMaxLines]);
 
   const handleApplyNpcSplit = useCallback((key: string) => {
     if (!state || !npcSplitResults) return;

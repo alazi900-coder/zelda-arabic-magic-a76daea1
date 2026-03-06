@@ -945,7 +945,7 @@ async function translateWithAI(
     // Priority 2: Translation memory exact match (previously translated identical text)
     const tmHit = tmMap.get(norm);
     if (tmHit) {
-      directResult[entry.key] = restoreAndEnforce(entry.original, tmHit, pe.tags);
+      directResult[entry.key] = restoreAndEnforce(entry.original, tmHit, pe.tags, entry.key);
       stats.directMatches++;
       continue;
     }

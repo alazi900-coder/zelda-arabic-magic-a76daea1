@@ -69,6 +69,14 @@ export function useEditorState() {
     _setRebalanceNewlines(v);
     try { localStorage.setItem('rebalanceNewlines', String(v)); } catch {}
   }, []);
+  const [npcMaxLines, _setNpcMaxLines] = useState(() => {
+    try { const v = localStorage.getItem('npcMaxLines'); return v ? Number(v) : 2; } catch { return 2; }
+  });
+  const setNpcMaxLines = useCallback((v: number) => {
+    const clamped = Math.max(1, Math.min(3, v));
+    _setNpcMaxLines(clamped);
+    try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
+  }, []);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [userGeminiKey, _setUserGeminiKey] = useState(() => {

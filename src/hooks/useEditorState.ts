@@ -1761,7 +1761,7 @@ export function useEditorState() {
           after = flat;
         } else {
           // English has N lines → force Arabic to N lines
-          after = splitEvenlyByLines(flat, Math.min(englishLineCount, npcMaxLines));
+          after = splitEvenlyByLines(flat, englishLineCount);
         }
         if (after === translation) continue;
         results.push({

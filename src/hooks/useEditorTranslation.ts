@@ -154,17 +154,11 @@ export function useEditorTranslation({
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const idx = state.entries.indexOf(entry);
-      const contextEntries = [-2, -1, 1, 2]
-        .map(offset => state.entries[idx + offset])
-        .filter(n => n && state.translations[`${n.msbtFile}:${n.index}`]?.trim())
-        .map(n => ({ key: `${n.msbtFile}:${n.index}`, original: n.original, translation: state.translations[`${n.msbtFile}:${n.index}`] }));
-
       // Send original text directly — server handles tag protection (avoid double-protection)
       const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, context: contextEntries.length > 0 ? contextEntries : undefined, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines }),
+        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();

@@ -382,28 +382,13 @@ export function useEditorTranslation({
         const batch = entriesToRetranslate.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
         setTranslateProgress(`🔄 إعادة ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const contextEntries: { key: string; original: string; translation?: string }[] = [];
-        const contextKeys = new Set<string>();
-        for (const e of batch) {
-          const idx = state.entries.indexOf(e);
-          for (const offset of [-2, -1, 1, 2]) {
-            const neighbor = state.entries[idx + offset];
-            if (neighbor) {
-              const nKey = `${neighbor.msbtFile}:${neighbor.index}`;
-              if (!contextKeys.has(nKey) && state.translations[nKey]?.trim()) {
-                contextKeys.add(nKey);
-                contextEntries.push({ key: nKey, original: neighbor.original, translation: state.translations[nKey] });
-              }
-            }
-          }
-        }
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, context: contextEntries.length > 0 ? contextEntries.slice(0, 10) : undefined, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines }),
         });
         if (!response.ok) throw new Error(`خطأ ${response.status}`);
         const data = await response.json();

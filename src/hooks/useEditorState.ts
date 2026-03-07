@@ -1862,23 +1862,19 @@ export function useEditorState() {
             processedKeys.add(key);
           }
         } else {
-          if (visualLength(flat) <= npcSplitCharLimit) {
-            if (translation !== flat && translation.includes('\n')) {
-              results.push({
-                key, originalLines: 1, translationLines: arabicLineCount,
-                before: translation, after: flat, original: entry.original, status: 'pending',
-              });
-              processedKeys.add(key);
-            }
+          // Even with npcMode off, sync to English line count
+          let after: string;
+          if (englishLineCount <= 1) {
+            after = flat;
           } else {
-            const after = splitEvenlyByLines(translation, npcMaxLines);
-            if (after !== translation) {
-              results.push({
-                key, originalLines: after.split('\n').length, translationLines: arabicLineCount,
-                before: translation, after, original: entry.original, status: 'pending',
-              });
-              processedKeys.add(key);
-            }
+            after = splitEvenlyByLines(flat, englishLineCount);
+          }
+          if (after !== translation) {
+            results.push({
+              key, originalLines: englishLineCount, translationLines: arabicLineCount,
+              before: translation, after, original: entry.original, status: 'pending',
+            });
+            processedKeys.add(key);
           }
         }
         continue;

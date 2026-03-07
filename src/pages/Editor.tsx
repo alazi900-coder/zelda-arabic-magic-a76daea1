@@ -1225,7 +1225,7 @@ const Editor = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="font-body text-xs"><MoreVertical className="w-3 h-3" /> أدوات</Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[200px]">
+                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[200px] max-h-[70vh] overflow-y-auto">
                   <DropdownMenuItem onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic}><Sparkles className="w-4 h-4" /> تطبيق المعالجة العربية ✨</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic}><RotateCcw className="w-4 h-4" /> التراجع عن المعالجة العربية ↩️</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixAllReversed}><RotateCcw className="w-4 h-4" /> تصحيح الكل (معكوس)</DropdownMenuItem>

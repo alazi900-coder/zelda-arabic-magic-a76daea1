@@ -588,25 +588,6 @@ export function useEditorTranslation({
         const key = `${entry.msbtFile}:${entry.index}`;
         setTranslateProgress(`🔄 ترجمة ${i + 1}/${needsAI.length}...`);
 
-        // Build context from neighboring entries (like handleTranslateSingle)
-        const idx = state.entries.indexOf(entry);
-        const contextEntries: { key: string; original: string; translation?: string }[] = [];
-        for (const offset of [-2, -1, 1, 2]) {
-          const neighbor = state.entries[idx + offset];
-          if (neighbor) {
-            const nKey = `${neighbor.msbtFile}:${neighbor.index}`;
-            // Use already-translated entries from this session or existing translations
-            const trans = allTranslations[nKey] || state.translations[nKey];
-            if (trans?.trim()) {
-              contextEntries.push({ key: nKey, original: neighbor.original, translation: trans });
-            }
-          }
-        }
-
-        // Protect tags before sending
-        const protected_ = protectTags(entry.original);
-        const textToSend = protected_.tags.length > 0 ? protected_.cleanText : entry.original;
-
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
@@ -614,9 +595,8 @@ export function useEditorTranslation({
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
           signal: abortControllerRef.current.signal,
           body: JSON.stringify({
-            entries: [{ key, original: textToSend }],
+            entries: [{ key, original: entry.original }],
             glossary: activeGlossary,
-            context: contextEntries.length > 0 ? contextEntries : undefined,
             userApiKey: userGeminiKey || undefined,
             provider: translationProvider,
             myMemoryEmail: myMemoryEmail || undefined,

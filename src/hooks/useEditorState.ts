@@ -1669,9 +1669,11 @@ export function useEditorState() {
       if (!translation?.trim()) continue;
       // Skip if already has line breaks
       if (translation.includes('\n')) continue;
-      // Skip short translations
-      if (visualLength(translation) <= newlineSplitCharLimit) continue;
-      const after = balanceLines(translation, newlineSplitCharLimit);
+      // Skip short translations — use English line count if available
+      const englishLineCount = entry.original.split('\n').length;
+      if (englishLineCount <= 1 && visualLength(translation) <= newlineSplitCharLimit) continue;
+      const targetLines = englishLineCount > 1 ? englishLineCount : Math.max(2, Math.ceil(visualLength(translation) / newlineSplitCharLimit));
+      const after = splitEvenlyByLines(translation, targetLines);
       if (after === translation) continue;
       const afterLines = after.split('\n').length;
       results.push({

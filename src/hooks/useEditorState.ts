@@ -55,6 +55,7 @@ export function useEditorState() {
   const [newlineCleanResults, setNewlineCleanResults] = useState<import("@/components/editor/NewlineCleanPanel").NewlineCleanResult[] | null>(null);
   const [diacriticsCleanResults, setDiacriticsCleanResults] = useState<import("@/components/editor/DiacriticsCleanPanel").DiacriticsCleanResult[] | null>(null);
   const [duplicateAlefResults, setDuplicateAlefResults] = useState<import("@/components/editor/DuplicateAlefCleanPanel").DuplicateAlefResult[] | null>(null);
+  const [missingAlefResults, setMissingAlefResults] = useState<import("@/components/editor/DuplicateAlefCleanPanel").DuplicateAlefResult[] | null>(null);
   const [mirrorCharsResults, setMirrorCharsResults] = useState<import("@/components/editor/MirrorCharsCleanPanel").MirrorCharsResult[] | null>(null);
   const [tagBracketFixResults, setTagBracketFixResults] = useState<import("@/components/editor/TagBracketFixPanel").TagBracketFixResult[] | null>(null);
   const [newlineSplitResults, setNewlineSplitResults] = useState<import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] | null>(null);
@@ -2066,6 +2067,78 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, duplicateAlefResults]);
 
+  // === Missing Alef Fix (الألف المحذوفة بعد ال التعريف) ===
+  const fixMissingAlef = (text: string): string => {
+    const KNOWN_MISSING_ALEF_PATTERNS = new Set([
+      'نت', 'نط', 'نف', 'نق', 'نش', 'نح', 'نس', 'نك', 'ند', 'نذ', 'نب', 'نج', 'نص', 'نض', 'نظ', 'نع', 'نغ', 'نم', 'نو', 'نه',
+      'ست', 'سم', 'سن', 'سر', 'سل',
+      'خت', 'خف', 'خر', 'خل',
+      'فت', 'فر',
+      'قت', 'قر', 'قص', 'قل',
+      'جت', 'جر', 'جم',
+      'عت', 'عم', 'عر', 'عص', 'عل', 'عد',
+      'تف', 'تص', 'تح', 'تج', 'تق', 'تخ', 'تر', 'تك', 'تب', 'تس', 'تم', 'تش', 'تن', 'تل', 'تع', 'تض', 'تط', 'تظ', 'تغ', 'ته',
+      'حت', 'حر', 'حم', 'حل',
+      'كت', 'كر', 'كم', 'كف',
+      'لت', 'لر', 'لم',
+      'مت', 'مر', 'مل',
+      'بت', 'بر',
+      'شت', 'شم', 'شر',
+      'صط', 'صر', 'صل',
+      'ضط', 'ضر',
+      'طل', 'طر', 'طف', 'طم',
+      'ظل',
+      'غت', 'غر',
+      'رت', 'رم', 'رف', 'رس',
+    ]);
+    const regex = /ال([\u0628-\u064A])([\u0628-\u064A])/g;
+    return text.replace(regex, (match, c1: string, c2: string) => {
+      const pair = c1 + c2;
+      if (KNOWN_MISSING_ALEF_PATTERNS.has(pair)) return 'الا' + c1 + c2;
+      return match;
+    });
+  };
+
+  const handleScanMissingAlef = useCallback(() => {
+    if (!state) return;
+    const results: import("@/components/editor/DuplicateAlefCleanPanel").DuplicateAlefResult[] = [];
+    for (const [key, value] of Object.entries(state.translations)) {
+      if (!value?.trim()) continue;
+      const after = fixMissingAlef(value);
+      if (after === value) continue;
+      const count = 1;
+      results.push({ key, before: value, after, count, status: 'pending' });
+    }
+    setMissingAlefResults(results);
+    if (results.length === 0) {
+      setLastSaved("✅ لا توجد ألفات محذوفة في الترجمات");
+      setTimeout(() => setLastSaved(""), 4000);
+    }
+  }, [state]);
+
+  const handleApplyMissingAlefClean = useCallback((key: string) => {
+    if (!state || !missingAlefResults) return;
+    const item = missingAlefResults.find(r => r.key === key);
+    if (!item) return;
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setMissingAlefResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'accepted' as const } : r) : null);
+  }, [state, missingAlefResults]);
+
+  const handleRejectMissingAlefClean = useCallback((key: string) => {
+    setMissingAlefResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'rejected' as const } : r) : null);
+  }, []);
+
+  const handleApplyAllMissingAlefCleans = useCallback(() => {
+    if (!state || !missingAlefResults) return;
+    const pending = missingAlefResults.filter(r => r.status === 'pending');
+    const newTranslations = { ...state.translations };
+    for (const item of pending) newTranslations[item.key] = item.after;
+    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setMissingAlefResults(prev => prev ? prev.map(r => r.status === 'pending' ? { ...r, status: 'accepted' as const } : r) : null);
+    setLastSaved(`✅ تم إصلاح ${pending.length} ألف محذوفة`);
+    setTimeout(() => setLastSaved(""), 4000);
+  }, [state, missingAlefResults]);
+
   // === Mirror Chars Clean (brackets & arrows) ===
   const handleScanMirrorChars = useCallback(() => {
     if (!state) return;
@@ -2274,7 +2347,7 @@ export function useEditorState() {
     applyingArabic, improvingTranslations, improveResults,
     fixingMixed, filtersOpen, buildStats, buildPreview, showBuildConfirm, bdatFileStats,
     checkingConsistency, consistencyResults,
-    scanningSentences, sentenceSplitResults, newlineCleanResults, diacriticsCleanResults, duplicateAlefResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults, npcSplitResults, lineSyncResults, unifiedSplitResults, sentenceOrderResults,
+    scanningSentences, sentenceSplitResults, newlineCleanResults, diacriticsCleanResults, duplicateAlefResults, missingAlefResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults, npcSplitResults, lineSyncResults, unifiedSplitResults, sentenceOrderResults,
     isSearchPinned, pinnedKeys,
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
@@ -2288,7 +2361,7 @@ export function useEditorState() {
     setCurrentPage, setShowRetranslateConfirm,
     setArabicNumerals, setMirrorPunctuation, setUserGeminiKey, setTranslationProvider, setMyMemoryEmail, setRebalanceNewlines,
     setReviewResults, setShortSuggestions, setImproveResults, setBuildStats, setShowBuildConfirm,
-    setConsistencyResults, setSentenceSplitResults, setNewlineCleanResults, setDiacriticsCleanResults, setDuplicateAlefResults, setMirrorCharsResults, setTagBracketFixResults, setNewlineSplitResults, setNpcSplitResults, setLineSyncResults, setUnifiedSplitResults, setSentenceOrderResults,
+    setConsistencyResults, setSentenceSplitResults, setNewlineCleanResults, setDiacriticsCleanResults, setDuplicateAlefResults, setMissingAlefResults, setMirrorCharsResults, setTagBracketFixResults, setNewlineSplitResults, setNpcSplitResults, setLineSyncResults, setUnifiedSplitResults, setSentenceOrderResults,
 
     // Handlers
     toggleProtection, toggleTechnicalBypass,
@@ -2310,6 +2383,7 @@ export function useEditorState() {
     handleScanNewlines, handleApplyNewlineClean, handleRejectNewlineClean, handleApplyAllNewlineCleans,
     handleScanDiacritics, handleApplyDiacriticsClean, handleRejectDiacriticsClean, handleApplyAllDiacriticsCleans,
     handleScanDuplicateAlef, handleApplyDuplicateAlefClean, handleRejectDuplicateAlefClean, handleApplyAllDuplicateAlefCleans,
+    handleScanMissingAlef, handleApplyMissingAlefClean, handleRejectMissingAlefClean, handleApplyAllMissingAlefCleans,
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
     handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit,

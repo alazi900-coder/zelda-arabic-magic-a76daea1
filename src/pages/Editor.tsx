@@ -1199,21 +1199,6 @@ const Editor = () => {
               >
                 🎭 وضع NPC {editor.npcMode ? "✅" : ""}
               </Button>
-              <div className="flex items-center gap-1 border border-cyan-500/20 rounded-md px-2 py-1">
-                <Rows3 className="w-3 h-3 text-cyan-400" />
-                <span className="text-[10px] text-muted-foreground whitespace-nowrap">أسطر:</span>
-                {[1, 2, 3].map(n => (
-                  <Button
-                    key={n}
-                    size="sm"
-                    variant={editor.npcMaxLines === n ? "default" : "ghost"}
-                    className={`h-6 w-6 p-0 text-xs font-bold ${editor.npcMaxLines === n ? "bg-cyan-600 text-white" : "text-cyan-400"}`}
-                    onClick={() => editor.setNpcMaxLines(n)}
-                  >
-                    {n}
-                  </Button>
-                ))}
-              </div>
               {/* Unified Split Button */}
               <Button
                 variant="default"
@@ -1386,21 +1371,6 @@ const Editor = () => {
               >
                 🎭 وضع NPC {editor.npcMode ? "✅" : ""}
               </Button>
-              <div className="flex items-center gap-1 border border-cyan-500/20 rounded-md px-3 py-1.5">
-                <Rows3 className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-xs text-muted-foreground whitespace-nowrap">حد الأسطر:</span>
-                {[1, 2, 3].map(n => (
-                  <Button
-                    key={n}
-                    size="sm"
-                    variant={editor.npcMaxLines === n ? "default" : "ghost"}
-                    className={`h-7 w-7 p-0 text-sm font-bold ${editor.npcMaxLines === n ? "bg-cyan-600 text-white" : "text-cyan-400"}`}
-                    onClick={() => editor.setNpcMaxLines(n)}
-                  >
-                    {n}
-                  </Button>
-                ))}
-              </div>
               {/* Unified Split Button */}
               <Button
                 variant="default"

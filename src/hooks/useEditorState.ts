@@ -1782,7 +1782,7 @@ export function useEditorState() {
         }
         continue;
       }
-      const after = balanceLines(translation, npcSplitCharLimit, npcMaxLines);
+      const after = splitEvenlyByLines(translation, npcMaxLines);
       if (after === translation) continue;
       results.push({
         key, originalLines: after.split('\n').length, translationLines: translation.split('\n').length,

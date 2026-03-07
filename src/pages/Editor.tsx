@@ -791,7 +791,22 @@ const Editor = () => {
             />
           )}
 
-          {/* Newline Split Results */}
+          {/* Unified Split Results */}
+          {editor.unifiedSplitResults && editor.unifiedSplitResults.length > 0 && (
+            <NewlineSplitPanel
+              results={editor.unifiedSplitResults}
+              onAccept={editor.handleApplyUnifiedSplit}
+              onReject={editor.handleRejectUnifiedSplit}
+              onAcceptAll={editor.handleApplyAllUnifiedSplits}
+              onClose={() => editor.setUnifiedSplitResults(null)}
+              charLimit={editor.newlineSplitCharLimit}
+              onCharLimitChange={editor.setNewlineSplitCharLimit}
+              onRescan={editor.handleScanAllSplits}
+              title="✂️ تقسيم ومزامنة الأسطر (كل الملفات)"
+            />
+          )}
+
+          {/* Legacy panels kept for individual tool usage */}
           {editor.newlineSplitResults && editor.newlineSplitResults.length > 0 && (
             <NewlineSplitPanel
               results={editor.newlineSplitResults}
@@ -805,7 +820,6 @@ const Editor = () => {
             />
           )}
 
-          {/* NPC Split Results */}
           {editor.npcSplitResults && editor.npcSplitResults.length > 0 && (
             <NewlineSplitPanel
               results={editor.npcSplitResults}
@@ -820,7 +834,6 @@ const Editor = () => {
             />
           )}
 
-          {/* Line Sync Results */}
           {editor.lineSyncResults && editor.lineSyncResults.length > 0 && (
             <NewlineSplitPanel
               results={editor.lineSyncResults}

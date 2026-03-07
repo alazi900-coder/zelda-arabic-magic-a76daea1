@@ -1824,6 +1824,129 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, npcSplitResults]);
 
+  // === Unified Split: combines newline split + NPC split + line sync in one scan ===
+  const handleScanAllSplits = useCallback(() => {
+    if (!state) return;
+    const results: import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] = [];
+    const entriesToScan = isFilterActive ? filteredEntries : state.entries;
+    const processedKeys = new Set<string>();
+
+    for (const entry of entriesToScan) {
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key];
+      if (!translation?.trim()) continue;
+
+      const isNpcFile = NPC_FILE_RE.test(key);
+      const isBubbleFile = BUBBLE_FILE_RE.test(key);
+      const englishLineCount = entry.original.split('\n').length;
+      const arabicLineCount = translation.split('\n').length;
+      const flat = translation.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+      // 1) NPC files: apply NPC split logic
+      if (isNpcFile) {
+        if (npcMode) {
+          let after: string;
+          if (englishLineCount <= 1) {
+            after = flat;
+          } else {
+            after = balanceLines(flat, npcSplitCharLimit, Math.min(englishLineCount, npcMaxLines));
+          }
+          if (after !== translation) {
+            results.push({
+              key, originalLines: englishLineCount, translationLines: arabicLineCount,
+              before: translation, after, original: entry.original, status: 'pending',
+            });
+            processedKeys.add(key);
+          }
+        } else {
+          if (visualLength(flat) <= npcSplitCharLimit) {
+            if (translation !== flat && translation.includes('\n')) {
+              results.push({
+                key, originalLines: 1, translationLines: arabicLineCount,
+                before: translation, after: flat, original: entry.original, status: 'pending',
+              });
+              processedKeys.add(key);
+            }
+          } else {
+            const after = balanceLines(translation, npcSplitCharLimit, npcMaxLines);
+            if (after !== translation) {
+              results.push({
+                key, originalLines: after.split('\n').length, translationLines: arabicLineCount,
+                before: translation, after, original: entry.original, status: 'pending',
+              });
+              processedKeys.add(key);
+            }
+          }
+        }
+        continue;
+      }
+
+      // 2) Line sync: if English/Arabic line counts differ
+      if (englishLineCount !== arabicLineCount && !processedKeys.has(key)) {
+        let after: string;
+        if (englishLineCount <= 1) {
+          after = flat;
+        } else {
+          after = balanceLines(flat, newlineSplitCharLimit, englishLineCount);
+        }
+        if (after !== translation) {
+          results.push({
+            key, originalLines: englishLineCount, translationLines: arabicLineCount,
+            before: translation, after, original: entry.original, status: 'pending',
+          });
+          processedKeys.add(key);
+        }
+      }
+
+      // 3) Newline split: long single-line texts (skip bubble files)
+      if (!processedKeys.has(key) && !isBubbleFile && !translation.includes('\n') && visualLength(translation) > newlineSplitCharLimit) {
+        const after = balanceLines(translation, newlineSplitCharLimit);
+        if (after !== translation) {
+          results.push({
+            key, originalLines: after.split('\n').length, translationLines: 1,
+            before: translation, after, original: entry.original, status: 'pending',
+          });
+          processedKeys.add(key);
+        }
+      }
+    }
+
+    setUnifiedSplitResults(results);
+    if (results.length === 0) {
+      setLastSaved("✅ لا توجد نصوص تحتاج تقسيم أو مزامنة");
+      setTimeout(() => setLastSaved(""), 4000);
+    }
+  }, [state, isFilterActive, filteredEntries, newlineSplitCharLimit, npcSplitCharLimit, npcMode, npcMaxLines]);
+
+  const handleApplyUnifiedSplit = useCallback((key: string) => {
+    if (!state || !unifiedSplitResults) return;
+    const item = unifiedSplitResults.find(r => r.key === key);
+    if (!item) return;
+    setPreviousTranslations(old => ({ ...old, [key]: state.translations[key] || '' }));
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setUnifiedSplitResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'accepted' as const } : r) : null);
+  }, [state, unifiedSplitResults]);
+
+  const handleRejectUnifiedSplit = useCallback((key: string) => {
+    setUnifiedSplitResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'rejected' as const } : r) : null);
+  }, []);
+
+  const handleApplyAllUnifiedSplits = useCallback(() => {
+    if (!state || !unifiedSplitResults) return;
+    const pending = unifiedSplitResults.filter(r => r.status === 'pending');
+    const newTranslations = { ...state.translations };
+    const prevTrans: Record<string, string> = {};
+    for (const item of pending) {
+      prevTrans[item.key] = newTranslations[item.key] || '';
+      newTranslations[item.key] = item.after;
+    }
+    setPreviousTranslations(old => ({ ...old, ...prevTrans }));
+    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setUnifiedSplitResults(prev => prev ? prev.map(r => r.status === 'pending' ? { ...r, status: 'accepted' as const } : r) : null);
+    setLastSaved(`✅ تم تقسيم ومزامنة ${pending.length} نص`);
+    setTimeout(() => setLastSaved(""), 4000);
+  }, [state, unifiedSplitResults]);
+
 
   /** Split a single entry's translation at word boundaries (per-entry inline button) */
   const handleSplitSingleEntry = useCallback((key: string) => {

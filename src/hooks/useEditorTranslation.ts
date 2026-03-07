@@ -610,6 +610,7 @@ export function useEditorTranslation({
         if (data.translations && data.translations[key]) {
           let translated = data.translations[key];
           // Server handles tag protection — just do local repair
+          if (hasTechnicalTags(entry.original)) {
             translated = restoreTagsLocally(entry.original, translated);
             translated = autoFixTagBrackets(entry.original, translated);
           }

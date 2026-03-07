@@ -239,6 +239,10 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
           const after = fixUnicode(cleaned);
           if (after !== cleaned) { appliedTypes.push("unicode_fix"); cleaned = after; }
         }
+        if (isEnabled("alef_fix")) {
+          const after = fixMissingAlef(cleaned);
+          if (after !== cleaned) { appliedTypes.push("alef_fix"); cleaned = after; }
+        }
         if (appliedTypes.length > 0) {
           results.push({
             key,

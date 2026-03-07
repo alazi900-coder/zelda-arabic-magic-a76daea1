@@ -771,13 +771,15 @@ export function useEditorTranslation({
             if (glossaryHit) { allTranslations[key] = glossaryHit; }
           }
         } else {
-          // AI mode: translate one-by-one
-          for (let i = 0; i < candidates.length; i++) {
+          // AI mode: translate in batches of 10
+          const ALL_PAGES_BATCH = 10;
+          const totalBatches = Math.ceil(candidates.length / ALL_PAGES_BATCH);
+          for (let b = 0; b < totalBatches; b++) {
             if (abortControllerRef.current.signal.aborted) break;
-            const entry = candidates[i];
-            const key = `${entry.msbtFile}:${entry.index}`;
-            setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — ترجمة ${i + 1}/${candidates.length}...`);
+            const batch = candidates.slice(b * ALL_PAGES_BATCH, (b + 1) * ALL_PAGES_BATCH);
+            setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — دفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
+            const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
             const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
@@ -785,7 +787,7 @@ export function useEditorTranslation({
               headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
               signal: abortControllerRef.current.signal,
               body: JSON.stringify({
-                entries: [{ key, original: entry.original }],
+                entries,
                 glossary: activeGlossary,
                 userApiKey: userGeminiKey || undefined,
                 provider: translationProvider,
@@ -797,14 +799,18 @@ export function useEditorTranslation({
             const data = await response.json();
             addAiRequest(1);
             if (data.charsUsed) addMyMemoryChars(data.charsUsed);
-            if (data.translations && data.translations[key]) {
-              let translated = data.translations[key];
-              // Server handles tag protection — just do local repair
-              if (hasTechnicalTags(entry.original)) {
-                translated = restoreTagsLocally(entry.original, translated);
-                translated = autoFixTagBrackets(entry.original, translated);
+            if (data.translations) {
+              for (const entry of batch) {
+                const key = `${entry.msbtFile}:${entry.index}`;
+                if (data.translations[key]) {
+                  let translated = data.translations[key];
+                  if (hasTechnicalTags(entry.original)) {
+                    translated = restoreTagsLocally(entry.original, translated);
+                    translated = autoFixTagBrackets(entry.original, translated);
+                  }
+                  allTranslations[key] = translated;
+                }
               }
-              allTranslations[key] = translated;
             }
           }
         }

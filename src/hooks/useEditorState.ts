@@ -1852,7 +1852,7 @@ export function useEditorState() {
           if (englishLineCount <= 1) {
             after = flat;
           } else {
-            after = balanceLines(flat, npcSplitCharLimit, Math.min(englishLineCount, npcMaxLines));
+            after = splitEvenlyByLines(flat, Math.min(englishLineCount, npcMaxLines));
           }
           if (after !== translation) {
             results.push({

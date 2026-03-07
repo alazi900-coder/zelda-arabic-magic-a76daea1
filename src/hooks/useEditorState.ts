@@ -1903,7 +1903,8 @@ export function useEditorState() {
 
       // 3) Newline split: long single-line texts (skip bubble files)
       if (!processedKeys.has(key) && !isBubbleFile && !translation.includes('\n') && visualLength(translation) > newlineSplitCharLimit) {
-        const after = balanceLines(translation, newlineSplitCharLimit);
+        const targetLines = Math.max(2, Math.ceil(visualLength(translation) / newlineSplitCharLimit));
+        const after = splitEvenlyByLines(translation, targetLines);
         if (after !== translation) {
           results.push({
             key, originalLines: after.split('\n').length, translationLines: 1,

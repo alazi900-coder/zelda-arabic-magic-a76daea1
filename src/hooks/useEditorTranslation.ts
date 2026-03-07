@@ -160,25 +160,19 @@ export function useEditorTranslation({
         .filter(n => n && state.translations[`${n.msbtFile}:${n.index}`]?.trim())
         .map(n => ({ key: `${n.msbtFile}:${n.index}`, original: n.original, translation: state.translations[`${n.msbtFile}:${n.index}`] }));
 
-      // Protect tags before sending to AI
-      const protected_ = protectTags(entry.original);
-      const textToSend = protected_.tags.length > 0 ? protected_.cleanText : entry.original;
-
+      // Send original text directly — server handles tag protection (avoid double-protection)
       const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries: [{ key, original: textToSend }], glossary: activeGlossary, context: contextEntries.length > 0 ? contextEntries : undefined, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines }),
+        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, context: contextEntries.length > 0 ? contextEntries : undefined, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();
       addAiRequest(1);
       if (data.charsUsed) addMyMemoryChars(data.charsUsed);
       if (data.translations && data.translations[key]) {
-        // Restore protected tags first, then auto-fix any remaining
         let translated = data.translations[key];
-        if (protected_.tags.length > 0) {
-          translated = restoreTags(translated, protected_.tags);
-        }
+        // Post-process: local tag repair + auto-sync lines
         if (hasTechnicalTags(entry.original)) {
           translated = restoreTagsLocally(entry.original, translated);
           translated = autoFixTagBrackets(entry.original, translated);

@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { fixTagBracketsStrict, hasTechnicalBracketTag } from "@/lib/tag-bracket-fix";
 import { detectReversedSentences } from "@/components/editor/SentenceOrderPanel";
-import { balanceLines, visualLength } from "@/lib/balance-lines";
+import { balanceLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 
 import { useEditorGlossary } from "@/hooks/useEditorGlossary";
 import { useEditorFileIO } from "@/hooks/useEditorFileIO";

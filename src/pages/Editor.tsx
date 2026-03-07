@@ -1253,9 +1253,6 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleScanNewlines} disabled={editor.translatedCount === 0}>
                     🧹 تنظيف رموز غير مرغوبة
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanNewlineSplit} disabled={editor.translatedCount === 0}>
-                    📐 تقسيم النصوص المضغوطة
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFlattenAllNewlines} disabled={editor.translatedCount === 0 || editor.multiLineCount === 0}>
                     📏 دمج الأسطر المتعددة (سطر واحد) {editor.multiLineCount > 0 && <span className="text-muted-foreground text-[10px]">({editor.multiLineCount})</span>}
                   </DropdownMenuItem>

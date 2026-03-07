@@ -769,6 +769,17 @@ const Editor = () => {
             />
           )}
 
+          {/* Missing Alef Fix Results */}
+          {editor.missingAlefResults && editor.missingAlefResults.length > 0 && (
+            <DuplicateAlefCleanPanel
+              results={editor.missingAlefResults}
+              onAccept={editor.handleApplyMissingAlefClean}
+              onReject={editor.handleRejectMissingAlefClean}
+              onAcceptAll={editor.handleApplyAllMissingAlefCleans}
+              onClose={() => editor.setMissingAlefResults(null)}
+            />
+          )}
+
           {/* Mirror Chars Clean Results */}
           {editor.mirrorCharsResults && editor.mirrorCharsResults.length > 0 && (
             <MirrorCharsCleanPanel

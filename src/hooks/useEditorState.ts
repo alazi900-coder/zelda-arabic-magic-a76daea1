@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { fixTagBracketsStrict, hasTechnicalBracketTag } from "@/lib/tag-bracket-fix";
 import { detectReversedSentences } from "@/components/editor/SentenceOrderPanel";
-import { balanceLines, visualLength } from "@/lib/balance-lines";
+import { balanceLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 
 import { useEditorGlossary } from "@/hooks/useEditorGlossary";
 import { useEditorFileIO } from "@/hooks/useEditorFileIO";
@@ -1406,7 +1406,8 @@ export function useEditorState() {
       if (englishLineCount <= 1) {
         after = flat;
       } else {
-        after = balanceLines(flat, npcSplitCharLimit, englishLineCount);
+        // تقسيم متساوٍ بالكلمات حسب عدد أسطر النص الإنجليزي فقط (بدون حد أحرف)
+        after = splitEvenlyByLines(flat, englishLineCount);
       }
       if (after === translation) continue;
       results.push({

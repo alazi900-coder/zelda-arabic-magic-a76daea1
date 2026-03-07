@@ -228,6 +228,40 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
   return bestResult.map((line) => unshieldTagsAfterBalance(line, map)).join('\n');
 }
 
+/** Split text evenly into N lines by word count (no character limit, only line count matters) */
+export function splitEvenlyByLines(text: string, numLines: number): string {
+  const flat = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  if (numLines <= 1 || !flat) return flat;
+
+  const { shielded, map } = shieldTagsForBalance(flat);
+  const words = shielded.split(/\s+/).filter(w => w.length > 0);
+  if (words.length < numLines) return flat;
+
+  const wordDisplayLen = (w: string): number => {
+    let len = w.length;
+    for (const [placeholder, info] of map) {
+      if (w.includes(placeholder)) {
+        len += info.displayLen - placeholder.length;
+      }
+    }
+    return len;
+  };
+
+  // Use DP to split evenly without hard character limit
+  const result = dpSplitShielded(words, numLines, wordDisplayLen, 99999);
+  if (!result) {
+    // Fallback: distribute words evenly
+    const perLine = Math.ceil(words.length / numLines);
+    const lines: string[] = [];
+    for (let i = 0; i < numLines; i++) {
+      lines.push(words.slice(i * perLine, Math.min((i + 1) * perLine, words.length)).join(' '));
+    }
+    return lines.filter(Boolean).map(l => unshieldTagsAfterBalance(l, map)).join('\n');
+  }
+
+  return result.map(line => unshieldTagsAfterBalance(line, map)).join('\n');
+}
+
 /** Check if text has orphan lines (single lexical word on a line) */
 export function hasOrphanLines(text: string): boolean {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);

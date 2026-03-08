@@ -696,3 +696,673 @@ Lucky Seven=الحظ السابع
 Replica Monado=موناديو مقلد
 Shulk's Monado=موناديو شولك
 Rex's Aegis=إيجيس ريكس
+
+# ═══════════════════════════════════════════════════
+# قناصل موبيوس (Moebius Consuls)
+# ═══════════════════════════════════════════════════
+Consul A=القنصل أ
+Consul B=القنصل ب
+Consul C=القنصل ج
+Consul D=القنصل د
+Consul F=القنصل ف
+Consul G=القنصل غ
+Consul H=القنصل هـ
+Consul I=القنصل ي
+Consul J=القنصل ج
+Consul K=القنصل ك
+Consul L=القنصل ل
+Consul M=القنصل م
+Consul N=القنصل ن
+Consul O=القنصل و
+Consul P=القنصل ب
+Consul Q=القنصل ق
+Consul R=القنصل ر
+Consul S=القنصل س
+Consul T=القنصل ت
+Consul U=القنصل ع
+Consul V=القنصل ڤ
+Consul W=القنصل و
+Consul X=القنصل إكس
+Consul Y=القنصل واي
+Consul Z=القنصل ز
+Moebius N=موبيوس ن
+Moebius M=موبيوس م
+Moebius D=موبيوس د
+Moebius X=موبيوس إكس
+Moebius Y=موبيوس واي
+Moebius Z=موبيوس ز
+
+# ═══════════════════════════════════════════════════
+# فنون الشخصيات (Character Arts)
+# ═══════════════════════════════════════════════════
+# فنون نوح (Noah Arts - Swordfighter)
+Sword Strike=ضربة السيف
+Edge Thrust=طعنة الحد
+Air Slash=قطع هوائي
+Shadow Eye=عين الظل
+Shining Refrain=لازمة ساطعة
+Overclock Buster=مبيد فرط السرعة
+Final Lucky Seven=السبعة المحظوظة الأخيرة
+Unlimited Sword=السيف اللامحدود
+# فنون ميو (Mio Arts - Zephyr)
+Butterfly Blade=نصل الفراشة
+Air Fang=ناب الهواء
+Gemini Strike=ضربة الجوزاء
+Wide Slash=قطع واسع
+Speed Demon=شيطان السرعة
+Myopic Screen=حاجز قصر النظر
+Glitter Stream=تيار اللمعان
+# فنون لانز (Lanz Arts - Heavy Guard)
+Bull Rush=اندفاع الثور
+Crashdown=السقوط الساحق
+Mad Taunt=استفزاز مجنون
+Variable Turret=برج متغير
+Shield Bash=صدمة الدرع
+Solid Stance=وضعية صلبة
+Giga Impact=تأثير عملاق
+# فنون سينا (Sena Arts - Ogre)
+Giant Swing=تأرجح عملاق
+Cannonball=كرة المدفع
+Jackhammer=المطرقة الهوائية
+Power Smash=تحطيم قوي
+Big Impact=تأثير كبير
+Pressure Drop=سقوط الضغط
+Demolition=هدم
+# فنون يوني (Eunie Arts - Medic Gunner)
+Healing Ring=حلقة الشفاء
+Group Heal=شفاء جماعي
+Power Ring=حلقة القوة
+Mega Heal=شفاء ضخم
+Ether Cannon=مدفع الأثير
+Myopic Screen=حاجز قصر النظر
+Healing Halo=هالة الشفاء
+# فنون تايون (Taion Arts - Tactician)
+Mondo=موندو
+Analyze=تحليل
+Phantom Force=قوة شبحية
+Overfall=الانهمار
+Tidal Wave=موجة مدية
+Storm Reign=حكم العاصفة
+Stormy Skies=سماء عاصفة
+
+# ═══════════════════════════════════════════════════
+# مهارات الفصائل (Class Skills)
+# ═══════════════════════════════════════════════════
+# مهارات عامة للفصائل
+First Move Advantage=أفضلية الضربة الأولى
+Critical Strike=ضربة حرجة
+Evasion Expertise=خبرة المراوغة
+Tank Mastery=إتقان الحماية
+Healer's Gift=هبة المعالج
+Attacker's Spirit=روح المهاجم
+Quick Step=خطوة سريعة
+Iron Wall=جدار حديدي
+Vigilance=اليقظة
+Sharp Eye=عين حادة
+Power Boost=دفعة القوة
+Speed Boost=دفعة السرعة
+Concentration=التركيز
+Last Stand=الموقف الأخير
+Fighting Spirit=روح القتال
+Battle Cry=صيحة المعركة
+All Out Attack=هجوم شامل
+Critical Boost=تعزيز الحرجة
+Enhanced Arts=فنون معززة
+Enhanced Healing=شفاء معزز
+Natural Instinct=غريزة طبيعية
+Second Wind=النفس الثاني
+Recovery Up=تعزيز التعافي
+Combo Boost=تعزيز الكومبو
+Chain Boost=تعزيز السلسلة
+Interlink Boost=تعزيز الارتباط
+Shield Wall=جدار الدروع
+Counterstrike=ضربة مضادة
+Follow-Up Attack=هجوم ملاحق
+Support Boost=تعزيز الدعم
+Art Acceleration=تسريع الفنون
+Talent Boost=تعزيز الموهبة
+
+# ═══════════════════════════════════════════════════
+# مصطلحات الهجوم المتسلسل (Chain Attack Terms)
+# ═══════════════════════════════════════════════════
+Chain Order=أمر السلسلة
+Heroic Chain=سلسلة بطولية
+Chain Combo=كومبو السلسلة
+Chain Arts=فنون السلسلة
+Chain Link=رابط السلسلة
+TP=نقاط التكتيك
+Tactical Points=النقاط التكتيكية
+Completion Bonus=مكافأة الإكمال
+Overkill=قتل مفرط
+Overkill Bonus=مكافأة القتل المفرط
+Brave Order=أمر الشجاعة
+Smash Order=أمر التحطيم
+Amazing Order=أمر مذهل
+Excellent=ممتاز
+Bravo=أحسنت
+Amazing=مذهل
+Good=جيد
+Completion Rate=معدل الإكمال
+Chain Multiplier=مضاعف السلسلة
+Damage Multiplier=مضاعف الضرر
+Bonus Multiplier=مضاعف المكافأة
+Union Combo=كومبو الاتحاد
+Full Burst=انفجار كامل
+
+# ═══════════════════════════════════════════════════
+# فنون أوروبوروس (Ouroboros Arts)
+# ═══════════════════════════════════════════════════
+# Noah + Mio Ouroboros
+Infinity Blade=نصل اللانهاية
+Eternity Slash=قطع الأبدية
+Dominion Fang=ناب السيادة
+Ouroboros Fury=غضب الأوروبوروس
+# Lanz + Sena Ouroboros
+Omega Smash=تحطيم أوميغا
+Infinity Press=ضغط اللانهاية
+Dominion Hammer=مطرقة السيادة
+# Eunie + Taion Ouroboros
+Seraphic Pulse=نبض السيراف
+Infinity Heal=شفاء اللانهاية
+Dominion Burst=انفجار السيادة
+# مصطلحات الارتباط
+Interlink Level 1=مستوى الارتباط 1
+Interlink Level 2=مستوى الارتباط 2
+Interlink Level 3=مستوى الارتباط 3
+Heat Gauge=مقياس الحرارة
+Overheat=فرط الحرارة
+Cooldown Period=فترة التبريد
+
+# ═══════════════════════════════════════════════════
+# وحوش فريدة إضافية (More Unique Monsters)
+# ═══════════════════════════════════════════════════
+Territorial Rotbart=روتبارت الإقليمي
+Immovable Gonzalez=غونزاليس الراسخ
+Perilwing Ryuho=ريوهو الجناح الخطير
+Fortified Judicator=القاضي المحصّن
+Superboss=زعيم خارق
+Lucky Monster=وحش الحظ
+Aura Monster=وحش الهالة
+Fog Monster=وحش الضباب
+Fog Beast=وحش الضباب
+Unique Enemy=عدو فريد
+Named Enemy=عدو مسمى
+Level Scaling=تكيّف المستوى
+Enraged=هائج
+Spike Damage=ضرر الأشواك
+Spike=شوكة
+Talent Art (Enemy)=فن الموهبة (عدو)
+Boss Art=فن الزعيم
+Rage Mode=وضع الهياج
+Summon=استدعاء
+Reinforcement=تعزيزات
+
+# ═══════════════════════════════════════════════════
+# مصطلحات الدروس والنصائح (Tutorial Terms)
+# ═══════════════════════════════════════════════════
+Tutorial=درس تعليمي
+Tips=نصائح
+Hint=تلميح
+How to Play=كيفية اللعب
+Battle Tips=نصائح المعركة
+Exploration Tips=نصائح الاستكشاف
+System Tips=نصائح النظام
+Basic Controls=أزرار التحكم الأساسية
+Advanced Controls=أزرار التحكم المتقدمة
+Camera Controls=أزرار الكاميرا
+Movement Controls=أزرار الحركة
+Battle Controls=أزرار المعركة
+Menu Controls=أزرار القوائم
+Button Guide=دليل الأزرار
+On-Screen Prompt=تعليمات الشاشة
+Information=معلومات
+Guide=دليل
+Objective=الهدف
+Mission Objective=هدف المهمة
+Waypoint=نقطة الطريق
+Navigation=الملاحة
+Quest Marker=علامة المهمة
+Active Quest=المهمة النشطة
+Quest Log=سجل المهام
+Quest Complete=المهمة مكتملة
+Quest Failed=فشلت المهمة
+Quest Reward=مكافأة المهمة
+Quest Update=تحديث المهمة
+New Quest=مهمة جديدة
+Accept Quest=قبول المهمة
+Abandon Quest=التخلي عن المهمة
+
+# ═══════════════════════════════════════════════════
+# وضع التحدي (Challenge Mode)
+# ═══════════════════════════════════════════════════
+Challenge Battle=معركة التحدي
+Challenge Mode=وضع التحدي
+Challenge Portal=بوابة التحدي
+Archsage=الحكيم الأعظم
+Nopon Archsage=حكيم النوبون الأعظم
+Archsage's Gauntlet=تحدي الحكيم الأعظم
+Archsage's Whimsy=مزاج الحكيم الأعظم
+Wave Battle=معركة الموجات
+Survival Battle=معركة البقاء
+Time Attack=هجوم الوقت
+Score Attack=هجوم النقاط
+High Score=أعلى نقاط
+Best Time=أفضل وقت
+Rank S=الرتبة S
+Rank A=الرتبة A
+Rank B=الرتبة B
+Rank C=الرتبة C
+Clear Bonus=مكافأة الإكمال
+Challenge Reward=مكافأة التحدي
+Bonus Time=وقت المكافأة
+Launch Charge=شحنة الإطلاق
+Challenge Level=مستوى التحدي
+Enemy Level=مستوى العدو
+Party Level=مستوى الفريق
+Level Cap=الحد الأقصى للمستوى
+Level 99=المستوى 99
+Level 200=المستوى 200
+
+# ═══════════════════════════════════════════════════
+# لعبة جديدة+ (New Game Plus)
+# ═══════════════════════════════════════════════════
+New Game Plus=لعبة جديدة+
+New Game+=لعبة جديدة+
+Carry Over=نقل البيانات
+Inherited Data=بيانات موروثة
+Bonus EXP=نقاط خبرة إضافية
+Bonus Items=عناصر إضافية
+Level Reset=إعادة ضبط المستوى
+Difficulty Change=تغيير الصعوبة
+Hard Difficulty=الصعوبة العالية
+Normal Difficulty=الصعوبة العادية
+Easy Difficulty=الصعوبة السهلة
+Cleared Data=بيانات مكتملة
+Save Data=بيانات الحفظ
+Clear Time=وقت الإكمال
+Play Time=وقت اللعب
+Completion Rate=معدل الإكمال
+Collectopaedia Completion=إكمال الموسوعة
+Affinity Chart Completion=إكمال مخطط الألفة
+Side Quest Completion=إكمال المهام الجانبية
+
+# ═══════════════════════════════════════════════════
+# مصطلحات صناعة الإكسسوارات (Accessory Crafting)
+# ═══════════════════════════════════════════════════
+Accessory Crafting=صناعة الإكسسوارات
+Craft Accessory=صناعة إكسسوار
+Crafted Accessory=إكسسوار مُصنّع
+Base Effect=التأثير الأساسي
+Random Bonus=مكافأة عشوائية
+Bonus Stat=صفة إضافية
+Catalyst=المحفّز
+Material Bonus=مكافأة المادة
+Quality=الجودة
+High Quality=جودة عالية
+Low Quality=جودة منخفضة
+Rarity=الندرة
+Common=شائع
+Rare=نادر
+Legendary=أسطوري
+Unique=فريد
+Stat Roll=رمية الصفات
+Reroll=إعادة الرمي
+Equip Slot=خانة التجهيز
+
+# ═══════════════════════════════════════════════════
+# مصطلحات الاستكشاف المتقدمة (Advanced Exploration)
+# ═══════════════════════════════════════════════════
+Secret Area=منطقة سرية
+Hidden Area=منطقة مخفية
+Elevated Area=منطقة مرتفعة
+Underwater Area=منطقة تحت الماء
+Cave=كهف
+Dungeon=زنزانة
+Ruin=أطلال
+Tower=برج
+Bridge=جسر
+Gate=بوابة
+Barrier=حاجز
+Ladder=سلم
+Rope=حبل
+Zip Line=خط انزلاقي
+Wall Jump=قفزة الجدار
+Slide=انزلاق
+Dive=غوص
+Surface=سطح
+Climb=تسلق
+Descend=نزول
+Landmark Discovered=تم اكتشاف معلم
+Location Discovered=تم اكتشاف موقع
+Secret Area Discovered=تم اكتشاف منطقة سرية
+Region Map=خريطة المنطقة
+World Map=خريطة العالم
+Zoom In=تكبير
+Zoom Out=تصغير
+Place Marker=وضع علامة
+Remove Marker=إزالة العلامة
+Fast Travel=سفر سريع
+Skip Travel=سفر سريع
+Destination=الوجهة
+Current Location=الموقع الحالي
+Explored=مُستكشف
+Unexplored=غير مُستكشف
+Fog of War=ضباب الحرب
+Map Completion=إكمال الخريطة
+
+# ═══════════════════════════════════════════════════
+# مصطلحات الألفة والعلاقات (Affinity & Relationships)
+# ═══════════════════════════════════════════════════
+Affinity=الألفة
+Affinity Chart=مخطط الألفة
+Affinity Level=مستوى الألفة
+Heart-to-Heart=من القلب للقلب
+Relationship=العلاقة
+Bond=الرابطة
+Friendship=الصداقة
+Trust=الثقة
+Respect=الاحترام
+Rivalry=المنافسة
+Colony Affinity=ألفة المستعمرة
+Colony Rank=رتبة المستعمرة
+Colony Rank Up=ارتقاء رتبة المستعمرة
+Colony Development=تطوير المستعمرة
+Colony Request=طلب المستعمرة
+Colony Mood=مزاج المستعمرة
+Happy=سعيد
+Neutral=محايد
+Worried=قلق
+Grateful=ممتن
+Discussion=نقاش
+Party Discussion=نقاش الفريق
+Camp Discussion=نقاش المخيم
+Rest Conversation=محادثة الاستراحة
+Quiet Moment=لحظة هادئة
+
+# ═══════════════════════════════════════════════════
+# مصطلحات الإنترلينك المتقدمة (Advanced Interlink)
+# ═══════════════════════════════════════════════════
+Interlink=الارتباط
+Interlink Level=مستوى الارتباط
+Soul Tree=شجرة الروح
+Soul Points=نقاط الروح
+Soul Tree Upgrade=ترقية شجرة الروح
+Ouroboros Form=شكل الأوروبوروس
+Noah Form=شكل نوح
+Mio Form=شكل ميو
+Lanz Form=شكل لانز
+Sena Form=شكل سينا
+Eunie Form=شكل يوني
+Taion Form=شكل تايون
+Ouroboros Arts=فنون الأوروبوروس
+Ouroboros Skills=مهارات الأوروبوروس
+Ouroboros Talent Art=فن موهبة الأوروبوروس
+Power Increase=زيادة القوة
+Defense Increase=زيادة الدفاع
+Speed Increase=زيادة السرعة
+Healing Increase=زيادة الشفاء
+
+# ═══════════════════════════════════════════════════
+# مصطلحات النظام والواجهة المتقدمة (Advanced System/UI)
+# ═══════════════════════════════════════════════════
+Sort=ترتيب
+Sort by Name=ترتيب بالاسم
+Sort by Level=ترتيب بالمستوى
+Sort by Type=ترتيب بالنوع
+Sort by Date=ترتيب بالتاريخ
+Sort by Rarity=ترتيب بالندرة
+Filter=تصفية
+Search=بحث
+All=الكل
+None=لا شيء
+Select All=تحديد الكل
+Deselect All=إلغاء تحديد الكل
+Page=صفحة
+Total=المجموع
+Owned=مملوك
+Not Owned=غير مملوك
+Equipped=مُجهّز
+Not Equipped=غير مُجهّز
+New=جديد
+Updated=مُحدّث
+Locked=مقفل
+Unlocked=مفتوح
+Completed=مكتمل
+In Progress=قيد التقدم
+Not Started=لم يبدأ
+Available=متاح
+Unavailable=غير متاح
+Required=مطلوب
+Optional=اختياري
+Recommended=موصى به
+Warning=تحذير
+Error=خطأ
+Success=نجاح
+Failed=فشل
+Confirmed=مؤكد
+Cancelled=ملغي
+
+# ═══════════════════════════════════════════════════
+# تعبيرات المعركة والحوار (Battle & Dialogue Expressions)
+# ═══════════════════════════════════════════════════
+Let's go!=هيا بنا!
+I'll cover you!=سأغطيك!
+Watch out!=انتبه!
+Behind you!=خلفك!
+Nice one!=أحسنت!
+Over here!=هنا!
+Now's our chance!=الآن فرصتنا!
+Don't give up!=لا تستسلم!
+We can do this!=يمكننا فعلها!
+Leave it to me!=اتركها لي!
+I've got this!=أنا أتولاها!
+Take this!=خذ هذه!
+Not done yet!=لم ننتهِ بعد!
+Keep going!=استمر!
+Fall back!=تراجع!
+Heal me!=اشفني!
+I need healing!=أحتاج علاجاً!
+Cover me!=غطّني!
+Switch target!=غيّر الهدف!
+Chain Attack, now!=هجوم متسلسل، الآن!
+Interlink!=ارتباط!
+Ouroboros!=أوروبوروس!
+Excellent work!=عمل ممتاز!
+We did it!=لقد فعلناها!
+That was close!=كانت قريبة!
+Victory is ours!=النصر لنا!
+Level up!=ارتفع المستوى!
+Good work, everyone!=أحسنتم جميعاً!
+
+# ═══════════════════════════════════════════════════
+# مصطلحات مسرح الأحداث (Event Theater)
+# ═══════════════════════════════════════════════════
+Event Theater=مسرح الأحداث
+Cutscene=مشهد سينمائي
+Cutscene Viewer=عارض المشاهد
+Chapter Select=اختيار الفصل
+Chapter 1=الفصل 1
+Chapter 2=الفصل 2
+Chapter 3=الفصل 3
+Chapter 4=الفصل 4
+Chapter 5=الفصل 5
+Chapter 6=الفصل 6
+Chapter 7=الفصل 7
+Epilogue=الخاتمة
+Prologue=المقدمة
+Main Story=القصة الرئيسية
+Side Story=القصة الجانبية
+Hero Story=قصة البطل
+DLC Story=قصة المحتوى الإضافي
+Expansion Pass=بطاقة التوسعة
+Volume 1=الجزء 1
+Volume 2=الجزء 2
+Volume 3=الجزء 3
+Volume 4=الجزء 4
+Future Redeemed=المستقبل المُسترد
+Sound Test=اختبار الصوت
+BGM=موسيقى الخلفية
+Battle BGM=موسيقى المعركة
+Field BGM=موسيقى الحقل
+Cutscene BGM=موسيقى المشهد
+
+# ═══════════════════════════════════════════════════
+# مستعمرات إضافية ومعسكرات (More Colonies & Camps)
+# ═══════════════════════════════════════════════════
+Colony Gamma=مستعمرة غاما
+Colony Iota=مستعمرة يوتا
+Colony 0=المستعمرة 0
+Colony 4=المستعمرة 4
+Colony 5=المستعمرة 5
+Colony 9=المستعمرة 9
+Colony 11=المستعمرة 11
+Colony 15=المستعمرة 15
+Colony 30=المستعمرة 30
+Colony Lambda=مستعمرة لامبدا
+Colony Tau=مستعمرة تاو
+Colony Mu=مستعمرة مو
+Colony Sigma=مستعمرة سيجما
+Colony Omega=مستعمرة أوميغا
+Great Sword Base=قاعدة السيف العظيم
+City Outskirts=ضواحي المدينة
+Camp=مخيم
+Rest Spot=نقطة استراحة
+Ferronis Hulk=هيكل فيرونيس
+Ferronis Hulk Camp=مخيم هيكل فيرونيس
+Lake Neus Camp=مخيم بحيرة نيوس
+Hillside Camp=مخيم التل
+Cliffside Camp=مخيم الجرف
+Seaside Camp=مخيم الشاطئ
+Desert Camp=مخيم الصحراء
+Forest Camp=مخيم الغابة
+Mountain Camp=مخيم الجبل
+Underground Camp=مخيم تحت الأرض
+
+# ═══════════════════════════════════════════════════
+# شخصيات ثانوية إضافية (More NPCs)
+# ═══════════════════════════════════════════════════
+Dorrick=دوريك
+Amagi=أماجي
+Saibara=سايبارا
+Tarou=تارو
+Niina=نينا
+Touma=توما
+Shuuri=شوري
+Jhodor=جودور
+Joulietta=جولييتا
+Shiki=شيكي
+Raizou=رايزو
+Mikage=ميكاجي
+Sekiei=سيكيي
+Fugen=فوجين
+Shidou=شيدو
+Oleg=أوليغ
+Kotori=كوتوري
+Url=أورل
+Jake=جيك
+Tiian=تيان
+Koto=كوتو
+Ichika=إيتشيكا
+Jansen=يانسن
+Lucione=لوسيوني
+Fox=فوكس
+Camilla=كاميلا
+Harala=هارالا
+Trish=تريش
+Olivia=أوليفيا
+Marlon=مارلون
+Ist=إيست
+Yuzet=يوزيت
+Nagiri=ناغيري
+Leonardo=ليوناردو
+Eastman=إيستمان
+Jango=جانغو
+Mumba=مومبا
+Eilis=إيليس
+
+# ═══════════════════════════════════════════════════
+# مصطلحات بطاقات الموسوعة (Collectopaedia Cards)
+# ═══════════════════════════════════════════════════
+Collectopaedia=موسوعة المقتنيات
+Collectopaedia Card=بطاقة الموسوعة
+Card Slot=خانة البطاقة
+Card Effect=تأثير البطاقة
+Card Level=مستوى البطاقة
+Card Upgrade=ترقية البطاقة
+Register Item=تسجيل عنصر
+Complete Card=إكمال البطاقة
+Card Reward=مكافأة البطاقة
+Card Category=فئة البطاقة
+Collection=مجموعة
+Collection Bonus=مكافأة المجموعة
+Auto-Collect=جمع تلقائي
+Exchange=تبادل
+Nopon Exchange=تبادل النوبون
+Nopon Coin Exchange=تبادل عملات النوبون
+Exchange Rate=سعر التبادل
+
+# ═══════════════════════════════════════════════════
+# مصطلحات تأثيرات الطعام (Food Effects)
+# ═══════════════════════════════════════════════════
+EXP Boost=تعزيز الخبرة
+Gold Boost=تعزيز الذهب
+Drop Rate Boost=تعزيز معدل الغنائم
+Rare Drop Boost=تعزيز الغنائم النادرة
+Attack Boost=تعزيز الهجوم
+Defense Boost=تعزيز الدفاع
+HP Boost=تعزيز الصحة
+Healing Boost=تعزيز الشفاء
+Agility Boost=تعزيز الرشاقة
+Critical Boost=تعزيز الحرجة
+Class EXP Boost=تعزيز خبرة الفصيلة
+AP Boost=تعزيز نقاط الفنون
+Effect Duration=مدة التأثير
+Short Duration=مدة قصيرة
+Medium Duration=مدة متوسطة
+Long Duration=مدة طويلة
+Permanent Effect=تأثير دائم
+
+# ═══════════════════════════════════════════════════
+# أصوات وموسيقى (Sound & Music)
+# ═══════════════════════════════════════════════════
+Sound Test=اختبار الصوت
+BGM=موسيقى الخلفية
+Battle Theme=نغمة المعركة
+Field Theme=نغمة الحقل
+Boss Theme=نغمة الزعيم
+Event Theme=نغمة الحدث
+Title Theme=نغمة العنوان
+Colony Theme=نغمة المستعمرة
+Night Theme=نغمة الليل
+Day Theme=نغمة النهار
+Rain Theme=نغمة المطر
+Unique Monster Theme=نغمة الوحش الفريد
+Chain Attack Theme=نغمة الهجوم المتسلسل
+Ouroboros Theme=نغمة الأوروبوروس
+Credits Theme=نغمة الشارة
+Off-Seer Song=أغنية المُنشد
+Flute=الناي
+Melody=اللحن
+Harmony=التناغم
+
+# ═══════════════════════════════════════════════════
+# مصطلحات الإنجازات والتحديات (Achievements)
+# ═══════════════════════════════════════════════════
+Achievement=إنجاز
+Achievement Unlocked=تم فتح إنجاز
+Trophy=كأس
+Bronze Trophy=كأس برونزي
+Silver Trophy=كأس فضي
+Gold Trophy=كأس ذهبي
+Platinum Trophy=كأس بلاتيني
+100% Completion=إكمال 100%
+All Quests Complete=جميع المهام مكتملة
+All Heroes Recruited=تم تجنيد جميع الأبطال
+All Classes Mastered=تم إتقان جميع الفصائل
+All Unique Monsters Defeated=تم هزيمة جميع الوحوش الفريدة
+All Locations Discovered=تم اكتشاف جميع المواقع
+All Collectibles Found=تم العثور على جميع المقتنيات
+All Gems Crafted=تم صناعة جميع الجواهر
+Max Level Reached=تم بلوغ الحد الأقصى للمستوى
+Story Complete=اكتملت القصة
+True Ending=النهاية الحقيقية

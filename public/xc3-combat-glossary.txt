@@ -170,3 +170,245 @@ Class Aptitude=كفاءة الفئة
 Master Arts=فنون التمكن
 Master Skills=مهارات التمكن
 Soul Hack=اختراق الأرواح
+# ═══════════════════════════════════════════════════
+# فنون الفصائل المحددة (Class-Specific Arts)
+# ═══════════════════════════════════════════════════
+# Swordfighter فنون المبارز
+Sword Strike=ضربة السيف
+Edge Thrust=طعنة الحد
+Air Slash=قطع هوائي
+Shadow Eye=عين الظل
+Shining Refrain=لازمة ساطعة
+Overclock Buster=مبيد فرط السرعة
+# Zephyr فنون زفير
+Butterfly Blade=نصل الفراشة
+Air Fang=ناب الهواء
+Gemini Strike=ضربة الجوزاء
+Wide Slash=قطع واسع
+Speed Demon=شيطان السرعة
+Myopic Screen=حاجز قصر النظر
+Glitter Stream=تيار اللمعان
+# Heavy Guard فنون الحارس الثقيل
+Bull Rush=اندفاع الثور
+Crashdown=السقوط الساحق
+Mad Taunt=استفزاز مجنون
+Variable Turret=برج متغير
+Shield Bash=صدمة الدرع
+Solid Stance=وضعية صلبة
+Giga Impact=تأثير عملاق
+# Ogre فنون الغول
+Giant Swing=تأرجح عملاق
+Cannonball=كرة المدفع
+Jackhammer=المطرقة الهوائية
+Power Smash=تحطيم قوي
+Big Impact=تأثير كبير
+Pressure Drop=سقوط الضغط
+Demolition=هدم
+# Medic Gunner فنون المسعف المدفعي
+Healing Ring=حلقة الشفاء
+Group Heal=شفاء جماعي
+Power Ring=حلقة القوة
+Mega Heal=شفاء ضخم
+Healing Halo=هالة الشفاء
+# Tactician فنون التكتيكي
+Mondo=موندو
+Phantom Force=قوة شبحية
+Overfall=الانهمار
+Tidal Wave=موجة مدية
+Storm Reign=حكم العاصفة
+Stormy Skies=سماء عاصفة
+# Flash Fencer فنون المبارز الخاطف
+Cross Impact=تأثير متقاطع
+Sharpened Edge=حد مسنون
+Upper Slash=قطع علوي
+Acceleration=تسارع
+Rapid Combo=كومبو سريع
+# Stalker فنون المتعقب
+Shadow Stitch=خياطة الظل
+Blood Moon=قمر الدم
+Assassin's Pledge=عهد القاتل
+Phantom Strike=ضربة شبحية
+Shadow Assault=هجوم الظل
+# War Medic فنون طبيب الحرب
+Medical Burst=انفجار طبي
+Venom Jab=وخزة السم
+Antibody System=نظام الأجسام المضادة
+Ether Guard=حارس الأثير
+Multi Blast=انفجار متعدد
+# Full Metal Jaguar فنون الجاغوار المعدني
+Delta Turret=برج دلتا
+Max Voltage=الفولتية القصوى
+Trigger Happy=سعيد الزناد
+Gunblast=انفجار البندقية
+Ether Bullet=رصاصة الأثير
+# Guardian Commander فنون قائد الحراسة
+Noble Taunt=استفزاز نبيل
+Grand Protection=حماية كبرى
+Commander's Order=أمر القائد
+Shield Charge=شحنة الدرع
+Rally Cry=صيحة الحشد
+# Thaumaturge فنون المعجزاتي
+Elemental Discharge=تفريغ عنصري
+Healing Circle=دائرة الشفاء
+Spirit Bomb=قنبلة الروح
+Ether Blast=انفجار الأثير
+Purifying Light=نور مُطهّر
+# Yumsmith فنون حداد يوم
+Overclock=فرط السرعة
+Release Posture=وضعية التحرير
+Smithy Combo=كومبو الحداد
+Forge Fire=نار التشكيل
+Power Smelt=صهر القوة
+# Strategos فنون الاستراتيجوس
+Master Order=أمر السيد
+Trick Edge=حد الخدعة
+Field Barrier=حاجز ميداني
+Strategy Order=أمر الاستراتيجية
+Grand Tactics=تكتيكات كبرى
+# Lone Exile فنون المنفي الوحيد
+Razing Slash=قطع مُحرق
+Cross Cut=قطع متقاطع
+Wild Charge=شحنة متوحشة
+Rogue Assault=هجوم مارق
+Exile's Fury=غضب المنفي
+# Incursor فنون المقتحم
+Combo Edge=حد الكومبو
+Swift Strike=ضربة سريعة
+Infiltrate=تسلل
+Viper Fang=ناب الأفعى
+Shadow Blade=نصل الظل
+# Lost Vanguard فنون الطليعة المفقودة
+Lost Charge=شحنة مفقودة
+Vanguard Shield=درع الطليعة
+Sacrificial Guard=حراسة تضحوية
+Resilient Stance=وضعية الصمود
+Iron Bastion=معقل حديدي
+# Soulhacker فنون مخترق الأرواح
+Soul Read=قراءة الروح
+Hack Slash=قطع المخترق
+Monster Art=فن الوحش
+Stolen Power=قوة مسروقة
+Assimilate=استيعاب
+# Signifer فنون حامل اللواء
+Flag of Courage=راية الشجاعة
+March of Power=مسيرة القوة
+Battle Standard=معيار المعركة
+Morale Boost=رفع المعنويات
+Flag of Victory=راية النصر
+# Troubadour فنون المنشد
+Song of Life=أغنية الحياة
+Battle Hymn=ترنيمة المعركة
+Lullaby=تهويدة
+War Song=أغنية الحرب
+Requiem=مرثية
+# Seraph فنون السيراف
+Divine Heal=شفاء إلهي
+Holy Light=نور مقدس
+Sacred Arrow=سهم مقدس
+Wings of Light=أجنحة النور
+Angelic Pulse=نبض ملائكي
+# Machine Assassin فنون القاتل الآلي
+Blade Frenzy=جنون النصل
+Mech Strike=ضربة ميكانيكية
+Auto-Counter=هجمة مرتدة آلية
+Cyber Slash=قطع سيبراني
+Overdrive=فرط التشغيل
+# Royal Summoner فنون الاستدعاء الملكي
+Royal Order=أمر ملكي
+Summon Elemental=استدعاء عنصري
+Elemental Burst=انفجار عنصري
+Summon Knight=استدعاء فارس
+Grand Summon=استدعاء عظيم
+# Lifesage فنون حكيم الحياة
+Life Drop=قطرة الحياة
+Nature's Embrace=عناق الطبيعة
+Verdant Shield=درع أخضر
+Ether Bloom=إزهار الأثير
+Rejuvenate=تجديد الشباب
+# Martial Artist فنون الفنان القتالي
+Fist Combo=كومبو القبضة
+Roundhouse Kick=ركلة دائرية
+Dragon Fist=قبضة التنين
+Flying Kick=ركلة طائرة
+Iron Fist=القبضة الحديدية
+# Lapidarist فنون صانع الجواهر
+Gem Barrage=وابل الجواهر
+Crystal Shield=درع البلور
+Prism Beam=شعاع المنشور
+Diamond Edge=حد الألماس
+Jewel Storm=عاصفة الجواهر
+# Nines فنون التاسع
+Lucky Strike=ضربة الحظ
+Nine Lives=تسعة أرواح
+Fortune Slash=قطع الحظ
+Jackpot=الجائزة الكبرى
+Wild Card=الورقة الرابحة
+# ═══════════════════════════════════════════════════
+# مهارات الفصائل الموروثة (Inheritable Skills)
+# ═══════════════════════════════════════════════════
+Covert Attack=هجوم خفي
+Swelling Blessing=البركة المتصاعدة
+Disperse Bloodlust=تشتيت عطش الدم
+Ultimate Counter=صد مطلق
+Steelcleaver=شاطر الفولاذ
+Brimming Spirit=الروح الفائضة
+Steady Striker=الضارب الثابت
+Steel Protection=حماية الفولاذ
+Ironclad=المدرّع
+Tail Wind=ريح الذيل
+Swelling Scourge=البلاء المتصاعد
+Empowered Combo=الكومبو المعزز
+Refined Incantation=التعويذة المصقولة
+Lifebearer=حامل الحياة
+Healing Aura=هالة الشفاء
+Analyze Weakness=تحليل الضعف
+Accurate Grace=نعمة الدقة
+Doublestrike=الضربة المزدوجة
+Non-Stick Nacelle=الحجرة غير اللاصقة
+Lifesteal Amplifier=مضخّم سرقة الحياة
+Peeling Gate=بوابة التقشير
+# ═══════════════════════════════════════════════════
+# مصطلحات الهجوم المتسلسل المتقدمة (Advanced Chain Attack)
+# ═══════════════════════════════════════════════════
+Chain Order=أمر السلسلة
+Heroic Chain=السلسلة البطولية
+TP Gain=اكتساب النقاط التكتيكية
+TP Cost=تكلفة النقاط التكتيكية
+100% TP=100% نقاط تكتيكية
+Completion Bonus=مكافأة الإكمال
+Overkill Bonus=مكافأة القتل المفرط
+Brave Order=أمر الشجاعة
+Union Combo=كومبو الاتحاد
+Full Burst=انفجار كامل
+Chain Multiplier=مضاعف السلسلة
+Damage Ratio=نسبة الضرر
+Initial Damage Ratio=نسبة الضرر الأولية
+Emblem=شعار
+Emblem Effect=تأثير الشعار
+Hero Emblem=شعار البطل
+# ═══════════════════════════════════════════════════
+# فنون أوروبوروس (Ouroboros Arts)
+# ═══════════════════════════════════════════════════
+# Noah + Mio
+Infinity Blade=نصل اللانهاية
+Eternity Slash=قطع الأبدية
+Dominion Fang=ناب السيادة
+Ouroboros Fury=غضب الأوروبوروس
+Infinity Strike=ضربة اللانهاية
+# Lanz + Sena
+Omega Smash=تحطيم أوميغا
+Infinity Press=ضغط اللانهاية
+Dominion Hammer=مطرقة السيادة
+Power Crush=سحق القوة
+# Eunie + Taion
+Seraphic Pulse=نبض السيراف
+Infinity Heal=شفاء اللانهاية
+Dominion Burst=انفجار السيادة
+Ether Storm=عاصفة الأثير
+# مصطلحات الارتباط العامة
+Heat Level=مستوى الحرارة
+Cooldown=التبريد
+Linked Arts=فنون مرتبطة
+Soul Tree=شجرة الروح
+Soul Points=نقاط الروح
+Ouroboros Upgrade=ترقية الأوروبوروس

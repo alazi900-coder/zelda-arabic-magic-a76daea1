@@ -363,21 +363,22 @@ export function useEditorGlossary({
     return { duplicates, emptyValues, reversedEntries, singleCharKeys, totalIssues: duplicates + emptyValues + reversedEntries + singleCharKeys };
   }, [state?.glossary]);
 
-  // === Auto-fix glossary issues ===
+  // === Auto-fix glossary issues (preserves section structure) ===
   const handleFixGlossaryIssues = useCallback(() => {
     if (!state?.glossary?.trim()) return;
     
-    const seen = new Map<string, string>();
-    const comments: string[] = [];
+    const lines = state.glossary.split('\n');
+    const seen = new Map<string, number>(); // normKey -> index in result
+    const result: string[] = [];
     let fixed = 0;
     
-    for (const line of state.glossary.split('\n')) {
-      const trimmed = line.trim();
+    for (const line of lines) {
+      const trimmed = line.trimEnd();
       if (!trimmed) continue;
-      if (trimmed.startsWith('#') || trimmed.startsWith('//')) { comments.push(trimmed); continue; }
+      if (trimmed.startsWith('#') || trimmed.startsWith('//')) { result.push(trimmed); continue; }
       
       const eqIdx = trimmed.indexOf('=');
-      if (eqIdx < 1) continue;
+      if (eqIdx < 1) { fixed++; continue; }
       
       let eng = trimmed.slice(0, eqIdx).trim();
       let arb = trimmed.slice(eqIdx + 1).trimEnd();
@@ -393,12 +394,19 @@ export function useEditorGlossary({
       if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng) || /^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) { fixed++; continue; }
       
       const normKey = eng.toLowerCase();
-      if (seen.has(normKey)) { fixed++; continue; } // dedup
-      seen.set(normKey, `${eng}=${arb}`);
+      if (seen.has(normKey)) {
+        // Replace previous occurrence in-place (last wins)
+        result[seen.get(normKey)!] = `${eng}=${arb}`;
+        fixed++;
+      } else {
+        seen.set(normKey, result.length);
+        result.push(`${eng}=${arb}`);
+      }
     }
     
-    const result = [...comments, ...Array.from(seen.values())].join('\n');
-    setState(prev => prev ? { ...prev, glossary: result } : null);
+    // Remove any empty slots from in-place replacements
+    const finalResult = result.filter(l => l !== '');
+    setState(prev => prev ? { ...prev, glossary: finalResult.join('\n') } : null);
     setLastSaved(`🔧 تم إصلاح ${fixed} مشكلة في القاموس (${seen.size} مصطلح نظيف)`);
     setTimeout(() => setLastSaved(""), 4000);
   }, [state?.glossary, setState, setLastSaved]);

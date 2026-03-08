@@ -919,7 +919,7 @@ export function useEditorTranslation({
         continue;
       }
 
-      // Try partial matching: replace glossary terms found within the text using word-boundary regex
+      // Try partial matching: replace ALL glossary terms found within the text
       let result = e.original;
       let matched = false;
       const usedRanges: Array<[number, number]> = []; // prevent overlapping replacements
@@ -928,26 +928,31 @@ export function useEditorTranslation({
         // Quick pre-filter: skip if term not present at all (case-insensitive)
         if (!result.toLowerCase().includes(glossaryKey)) continue;
 
-        // Reset regex state
+        // Find ALL occurrences (not just first)
         regex.lastIndex = 0;
-        const match = regex.exec(result);
-        if (!match) continue;
+        let match: RegExpExecArray | null;
+        const matches: Array<{ start: number; end: number }> = [];
+        while ((match = regex.exec(result)) !== null) {
+          matches.push({ start: match.index, end: match.index + match[0].length });
+        }
 
-        const matchStart = match.index;
-        const matchEnd = matchStart + match[0].length;
+        // Process matches in reverse order to preserve indices
+        for (let mi = matches.length - 1; mi >= 0; mi--) {
+          const { start: matchStart, end: matchEnd } = matches[mi];
 
-        // Check if this range overlaps with any already-replaced range
-        const overlaps = usedRanges.some(([s, e]) =>
-          (matchStart >= s && matchStart < e) || (matchEnd > s && matchEnd <= e)
-        );
-        if (overlaps) continue;
+          // Check if this range overlaps with any already-replaced range
+          const overlaps = usedRanges.some(([s, e]) =>
+            (matchStart >= s && matchStart < e) || (matchEnd > s && matchEnd <= e)
+          );
+          if (overlaps) continue;
 
-        // Replace the matched portion with the Arabic translation
-        result = result.slice(0, matchStart) + glossaryValue + result.slice(matchEnd);
-        // Track the new range (after replacement, length may differ)
-        const newEnd = matchStart + glossaryValue.length;
-        usedRanges.push([matchStart, newEnd]);
-        matched = true;
+          // Replace the matched portion with the Arabic translation
+          result = result.slice(0, matchStart) + glossaryValue + result.slice(matchEnd);
+          // Track the new range (after replacement, length may differ)
+          const newEnd = matchStart + glossaryValue.length;
+          usedRanges.push([matchStart, newEnd]);
+          matched = true;
+        }
       }
 
       if (matched) {

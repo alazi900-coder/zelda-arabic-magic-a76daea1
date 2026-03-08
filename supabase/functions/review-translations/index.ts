@@ -105,7 +105,7 @@ ${tooLongEntries.map((e, i) => {
            'Content-Type': 'application/json',
          },
          body: JSON.stringify({
-           model: 'google/gemini-2.5-flash',
+            model: resolvedModel,
            messages: [
              { role: 'system', content: 'أنت متخصص في اختصار النصوص. اخرج ONLY JSON arrays.' },
              { role: 'user', content: prompt },

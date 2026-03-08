@@ -1887,6 +1887,16 @@ const Editor = () => {
           />
         )}
 
+        {/* Glossary Translation Preview Dialog */}
+        {editor.showGlossaryPreview && editor.glossaryPreviewEntries.length > 0 && (
+          <GlossaryTranslationPreview
+            open={editor.showGlossaryPreview}
+            entries={editor.glossaryPreviewEntries}
+            onApply={(selectedKeys) => editor.applyGlossaryPreview(selectedKeys)}
+            onDiscard={editor.discardGlossaryPreview}
+          />
+        )}
+
         {editor.pendingMerge && (
           <GlossaryMergePreviewDialog
             open={!!editor.pendingMerge}

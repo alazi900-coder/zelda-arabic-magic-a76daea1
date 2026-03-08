@@ -2546,7 +2546,6 @@ export function useEditorState() {
   // === Arabic Text Fixes (تاء/هاء، ياء/ألف مقصورة، كلمات مكررة، مخلفات AI) ===
   const handleScanArabicTextFixes = useCallback(() => {
     if (!state) return;
-    const { scanAllTextFixes } = require('@/lib/arabic-text-fixes');
     const results = scanAllTextFixes(state.translations);
     setArabicTextFixResults(results);
     if (results.length === 0) {

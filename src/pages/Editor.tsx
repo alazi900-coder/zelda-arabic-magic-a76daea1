@@ -1313,22 +1313,47 @@ const Editor = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="font-body text-xs"><MoreVertical className="w-3 h-3" /> أدوات</Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[200px] max-h-[70vh] overflow-y-auto">
+                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[220px] max-h-[70vh] overflow-y-auto">
+                  {/* ─── معالجة عربية ─── */}
+                  <DropdownMenuLabel className="text-xs text-primary/80">🔤 معالجة عربية</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic}><Sparkles className="w-4 h-4" /> تطبيق المعالجة العربية ✨</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic}><RotateCcw className="w-4 h-4" /> التراجع عن المعالجة العربية ↩️</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixAllReversed}><RotateCcw className="w-4 h-4" /> تصحيح الكل (معكوس)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixAllStuckCharacters} disabled={editor.needsImproveCount.stuck === 0}><AlertTriangle className="w-4 h-4" /> إصلاح الأحرف الملتصقة 🔤</DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+
+                  {/* ─── تنظيف النصوص ─── */}
+                  <DropdownMenuLabel className="text-xs text-primary/80">🧹 تنظيف النصوص</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleScanDiacritics}><Type className="w-4 h-4" /> إزالة التشكيلات ✏️</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanDuplicateAlef} disabled={editor.translatedCount === 0}>🔤 إزالة الألف المكرر</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanMissingAlef} disabled={editor.translatedCount === 0}>🅰️ إصلاح الألف المحذوفة</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanMirrorChars} disabled={editor.translatedCount === 0}>🔄 عكس الأقواس والأسهم</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanTagBrackets} disabled={editor.translatedCount === 0}>🔧 إصلاح أقواس الرموز التقنية</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanMissingAlef} disabled={editor.translatedCount === 0}>🅰️ إصلاح الألف المحذوفة</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanSentenceOrder} disabled={editor.translatedCount === 0}>↕️ فحص ترتيب الجمل</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanArabicTextFixes} disabled={editor.translatedCount === 0}>✨ تحسين النصوص (تاء/هاء، ياء/ألف، مكررات، مخلفات AI)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanArabicTextFixes} disabled={editor.translatedCount === 0}>✨ تحسين النصوص (تاء/هاء، ياء/ألف)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixMixedLanguage} disabled={editor.fixingMixed || editor.needsImproveCount.mixed === 0}>
                     {editor.fixingMixed ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />} إصلاح النصوص المختلطة 🌐
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanNewlines} disabled={editor.translatedCount === 0}>
+                    🧹 تنظيف رموز غير مرغوبة
+                  </DropdownMenuItem>
+
                   <DropdownMenuSeparator />
+
+                  {/* ─── تنسيق وتقسيم ─── */}
+                  <DropdownMenuLabel className="text-xs text-primary/80">✂️ تنسيق وتقسيم</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleScanSentenceOrder} disabled={editor.translatedCount === 0}>↕️ فحص ترتيب الجمل</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanMergedSentences} disabled={editor.scanningSentences || editor.translatedCount === 0}>
+                    {editor.scanningSentences ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} فصل الجمل المندمجة ✂️
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleFlattenAllNewlines} disabled={editor.translatedCount === 0 || editor.multiLineCount === 0}>
+                    📏 دمج الأسطر المتعددة {editor.multiLineCount > 0 && <span className="text-muted-foreground text-[10px]">({editor.multiLineCount})</span>}
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+
+                  {/* ─── مراجعة وجودة ─── */}
+                  <DropdownMenuLabel className="text-xs text-primary/80">🔍 مراجعة وجودة</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleReviewTranslations} disabled={editor.reviewing || editor.translatedCount === 0}><ShieldCheck className="w-4 h-4" /> مراجعة ذكية 🔍</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleSmartReview} disabled={editor.smartReviewing || editor.translatedCount === 0}>
                     {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />} مراجعة عميقة بالذكاء 🔬
@@ -1338,20 +1363,16 @@ const Editor = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImproveTranslations} disabled={editor.improvingTranslations || editor.translatedCount === 0}><Sparkles className="w-4 h-4" /> تحسين الترجمات ✨</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleCheckConsistency} disabled={editor.checkingConsistency || editor.translatedCount === 0}>
-                    {editor.checkingConsistency ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق المصطلحات 🔍
-                   </DropdownMenuItem>
+                    {editor.checkingConsistency ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق المصطلحات
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleGlossaryCompliance} disabled={editor.checkingGlossaryCompliance || editor.translatedCount === 0 || !editor.activeGlossary}>
                     {editor.checkingGlossaryCompliance ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />} فحص التزام القاموس 📖
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanMergedSentences} disabled={editor.scanningSentences || editor.translatedCount === 0}>
-                    {editor.scanningSentences ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} فصل الجمل المندمجة ✂️
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanNewlines} disabled={editor.translatedCount === 0}>
-                    🧹 تنظيف رموز غير مرغوبة
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleFlattenAllNewlines} disabled={editor.translatedCount === 0 || editor.multiLineCount === 0}>
-                    📏 دمج الأسطر المتعددة (سطر واحد) {editor.multiLineCount > 0 && <span className="text-muted-foreground text-[10px]">({editor.multiLineCount})</span>}
-                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+
+                  {/* ─── أدوات متنوعة ─── */}
+                  <DropdownMenuLabel className="text-xs text-primary/80">🛠️ متنوعة</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => { setFontTestWord(""); setShowFontTest(true); }} disabled={editor.translatedCount === 0 && (editor.state?.entries.length || 0) === 0}>
                     🔤 تجربة الخط (ملء الكل)
                   </DropdownMenuItem>

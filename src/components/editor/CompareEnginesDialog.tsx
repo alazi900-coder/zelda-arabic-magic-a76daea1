@@ -7,12 +7,6 @@ import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 
-interface CompareResult {
-  gemini?: string;
-  mymemory?: string;
-  google?: string;
-}
-
 interface CompareEnginesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,11 +18,23 @@ interface CompareEnginesDialogProps {
   aiModel?: string;
 }
 
-const ENGINE_LABELS: Record<string, { label: string; emoji: string }> = {
-  gemini: { label: "Gemini AI", emoji: "🤖" },
-  mymemory: { label: "MyMemory", emoji: "🆓" },
-  google: { label: "Google Translate", emoji: "🌐" },
-};
+interface EngineConfig {
+  id: string;
+  label: string;
+  emoji: string;
+  provider: string;
+  model?: string;
+  description: string;
+}
+
+const ALL_ENGINES: EngineConfig[] = [
+  { id: 'gemini-flash', label: 'Gemini 2.5 Flash', emoji: '⚡', provider: 'gemini', model: 'gemini-2.5-flash', description: 'سريع ومتوازن' },
+  { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
+  { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
+  { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
+  { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
+  { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
+];
 
 const TECH_TAG_RENDER_REGEX = /([\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\[\s*\w+\s*:[^\]]*?\s*\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\})/g;
 
@@ -57,30 +63,22 @@ function checkTagIntegrity(originalText: string, translatedText: string): { ok: 
   return { ok: missing.length === 0 && extra.length === 0, missing, extra };
 }
 
-/** Auto-fix broken tags: remove extras, append missing ones at the end */
 function autoFixTags(originalText: string, translatedText: string): string {
   const origTags = extractTags(originalText);
   const transTags = extractTags(translatedText);
-
   const origCount = new Map<string, number>();
   origTags.forEach(t => origCount.set(t, (origCount.get(t) || 0) + 1));
-
-  // Keep valid tags already in translation (up to original count)
   const usedCount = new Map<string, number>();
   for (const tt of transTags) {
     const oc = origCount.get(tt) || 0;
     const uc = usedCount.get(tt) || 0;
     if (uc < oc) usedCount.set(tt, uc + 1);
   }
-
-  // Find missing tags
   const missingTags: string[] = [];
   origCount.forEach((count, tag) => {
     const have = usedCount.get(tag) || 0;
     for (let i = 0; i < count - have; i++) missingTags.push(tag);
   });
-
-  // Find & remove extra tags (last occurrences first)
   let rebuilt = translatedText;
   const extraCount = new Map<string, number>();
   const extrasToRemove = new Map<string, number>();
@@ -92,7 +90,6 @@ function autoFixTags(originalText: string, translatedText: string): string {
       extrasToRemove.set(tt, (extrasToRemove.get(tt) || 0) + 1);
     }
   }
-
   if (extrasToRemove.size > 0) {
     const allMatches: { tag: string; start: number; end: number }[] = [];
     const rx = new RegExp(TECH_TAG_RENDER_REGEX.source, 'g');
@@ -109,12 +106,9 @@ function autoFixTags(originalText: string, translatedText: string): string {
       }
     }
   }
-
-  // Append missing tags
   if (missingTags.length > 0) {
     rebuilt = rebuilt.trimEnd() + ' ' + missingTags.join(' ');
   }
-
   return rebuilt.replace(/\s{2,}/g, ' ').trim();
 }
 
@@ -139,10 +133,11 @@ function renderTranslationWithProtectedTags(text: string) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, myMemoryEmail, aiModel,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, myMemoryEmail,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<CompareResult>({});
+  const [results, setResults] = useState<Record<string, string | null>>({});
+  const [loadingEngines, setLoadingEngines] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
 
   const handleCompare = async () => {
@@ -150,12 +145,13 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
     setLoading(true);
     setError("");
     setResults({});
+    setLoadingEngines(new Set(ALL_ENGINES.map(e => e.id)));
 
     const key = `${entry.msbtFile}:${entry.index}`;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-    const fetchProvider = async (provider: string) => {
+    const fetchEngine = async (engine: EngineConfig) => {
       try {
         const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
           method: 'POST',
@@ -163,155 +159,153 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
           body: JSON.stringify({
             entries: [{ key, original: entry.original }],
             glossary,
-            provider,
-            userApiKey: provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-            myMemoryEmail: provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
-            aiModel: provider === 'gemini' ? (aiModel || undefined) : undefined,
+            provider: engine.provider,
+            userApiKey: engine.provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+            myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
+            aiModel: engine.model || undefined,
           }),
         });
-        if (!response.ok) return null;
+        if (!response.ok) return { id: engine.id, result: null };
         const data = await response.json();
-        const raw = data.translations?.[key] || null;
-        if (!raw) return null;
-        return raw;
+        return { id: engine.id, result: data.translations?.[key] || null };
       } catch {
-        return null;
+        return { id: engine.id, result: null };
       }
     };
 
     try {
-      const [gemini, mymemory, google] = await Promise.all([
-        fetchProvider('gemini'),
-        fetchProvider('mymemory'),
-        fetchProvider('google'),
-      ]);
-      setResults({ gemini, mymemory, google });
-    } catch (err) {
+      // Fire all in parallel, update results as each completes
+      const promises = ALL_ENGINES.map(engine =>
+        fetchEngine(engine).then(({ id, result }) => {
+          setResults(prev => ({ ...prev, [id]: result }));
+          setLoadingEngines(prev => { const next = new Set(prev); next.delete(id); return next; });
+        })
+      );
+      await Promise.all(promises);
+    } catch {
       setError("حدث خطأ أثناء المقارنة");
     } finally {
       setLoading(false);
     }
   };
 
-  // Auto-compare when dialog opens with a new entry
   React.useEffect(() => {
-    if (open && entry) {
-      handleCompare();
-    }
-    if (!open) {
-      setResults({});
-      setError("");
-    }
+    if (open && entry) handleCompare();
+    if (!open) { setResults({}); setError(""); }
   }, [open, entry?.msbtFile, entry?.index]);
 
   const key = entry ? `${entry.msbtFile}:${entry.index}` : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="font-display">🔍 مقارنة المحركات</DialogTitle>
+          <DialogTitle className="font-display">🔍 مقارنة جميع المحركات</DialogTitle>
           <DialogDescription className="text-xs">
-            مقارنة ترجمة نفس النص بين المحركات الثلاثة — اختر الأفضل
+            مقارنة ترجمة نفس النص عبر <span className="font-bold text-primary">{ALL_ENGINES.length}</span> محركات مختلفة — اختر الأفضل
           </DialogDescription>
         </DialogHeader>
 
         {entry && (
-          <div className="space-y-4">
+          <div className="flex-1 min-h-0 flex flex-col gap-3">
             {/* Original text */}
             <div className="p-3 rounded-lg border border-border bg-muted/30">
               <p className="text-xs text-muted-foreground mb-1">النص الأصلي:</p>
               <p className="text-sm font-body">{entry.original}</p>
             </div>
 
-            {loading && (
-              <div className="flex items-center justify-center gap-2 py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">جاري ترجمة النص بالمحركات الثلاثة...</span>
-              </div>
-            )}
-
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
 
-            {!loading && Object.keys(results).length > 0 && (
-              <div className="space-y-3">
-                {(["gemini", "mymemory", "google"] as const).map((engine) => {
-                  const result = results[engine];
-                  const info = ENGINE_LABELS[engine];
-                  const integrity = result && entry ? checkTagIntegrity(entry.original, result) : null;
-                  const hasProblem = integrity && !integrity.ok;
-                  return (
-                    <div
-                      key={engine}
-                      className={`p-3 rounded-lg border transition-colors group ${hasProblem ? 'border-destructive/50 bg-destructive/5' : 'border-border hover:border-primary/40'}`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
+            {/* Results grid - scrollable */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1" style={{ maxHeight: '55vh' }}>
+              {ALL_ENGINES.map((engine) => {
+                const result = results[engine.id];
+                const isEngineLoading = loadingEngines.has(engine.id);
+                const integrity = result && entry ? checkTagIntegrity(entry.original, result) : null;
+                const hasProblem = integrity && !integrity.ok;
+
+                return (
+                  <div
+                    key={engine.id}
+                    className={`p-3 rounded-lg border transition-colors group ${
+                      hasProblem ? 'border-destructive/50 bg-destructive/5'
+                      : result ? 'border-border hover:border-primary/40'
+                      : 'border-border/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
                         <span className="text-xs font-display font-bold">
-                          {info.emoji} {info.label}
+                          {engine.emoji} {engine.label}
                         </span>
-                        <div className="flex items-center gap-1">
-                          {hasProblem && (
-                            <span className="text-xs text-destructive flex items-center gap-1">
-                              <AlertTriangle className="w-3 h-3" /> وسوم مكسورة
-                            </span>
-                          )}
-                          {result && !hasProblem && (
-                            <span className="text-xs text-primary flex items-center gap-1">
-                              <Check className="w-3 h-3" /> وسوم سليمة
-                            </span>
-                          )}
-                          {result && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() => {
-                                onSelect(key, result);
-                                onOpenChange(false);
-                              }}
-                            >
-                              <Check className="w-3 h-3 ml-1" /> اختيار
-                            </Button>
-                          )}
-                        </div>
+                        <span className="text-[10px] text-muted-foreground">{engine.description}</span>
                       </div>
-                      {result ? (
-                        <>
-                          <p className="text-sm font-body whitespace-pre-wrap break-words">
-                            {renderTranslationWithProtectedTags(result)}
-                          </p>
-                          {hasProblem && (
-                            <Alert variant="destructive" className="mt-2 py-2 px-3">
-                              <AlertDescription className="text-xs">
-                                {integrity!.missing.length > 0 && (
-                                  <span dir="ltr" className="block">⚠ مفقودة: <code className="font-mono bg-destructive/10 px-1 rounded">{integrity!.missing.join(' ، ')}</code></span>
-                                )}
-                                {integrity!.extra.length > 0 && (
-                                  <span dir="ltr" className="block">⚠ زائدة: <code className="font-mono bg-destructive/10 px-1 rounded">{integrity!.extra.join(' ، ')}</code></span>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="mt-2 h-7 text-xs border-destructive/30 hover:bg-destructive/10"
-                                  onClick={() => {
-                                    const fixed = autoFixTags(entry!.original, result);
-                                    setResults(prev => ({ ...prev, [engine]: fixed }));
-                                  }}
-                                >
-                                  <Wrench className="w-3 h-3 ml-1" /> إصلاح الوسوم تلقائياً
-                                </Button>
-                              </AlertDescription>
-                            </Alert>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">فشل في الترجمة أو لا توجد نتيجة</p>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {isEngineLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                        {hasProblem && (
+                          <span className="text-xs text-destructive flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> وسوم مكسورة
+                          </span>
+                        )}
+                        {result && !hasProblem && !isEngineLoading && (
+                          <span className="text-xs text-primary flex items-center gap-1">
+                            <Check className="w-3 h-3" /> سليم
+                          </span>
+                        )}
+                        {result && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => { onSelect(key, result); onOpenChange(false); }}
+                          >
+                            <Check className="w-3 h-3 ml-1" /> اختيار
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+
+                    {isEngineLoading && !result ? (
+                      <div className="flex items-center gap-2 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">جاري الترجمة...</span>
+                      </div>
+                    ) : result ? (
+                      <>
+                        <p className="text-sm font-body whitespace-pre-wrap break-words" dir="rtl">
+                          {renderTranslationWithProtectedTags(result)}
+                        </p>
+                        {hasProblem && (
+                          <Alert variant="destructive" className="mt-2 py-2 px-3">
+                            <AlertDescription className="text-xs">
+                              {integrity!.missing.length > 0 && (
+                                <span dir="ltr" className="block">⚠ مفقودة: <code className="font-mono bg-destructive/10 px-1 rounded">{integrity!.missing.join(' ، ')}</code></span>
+                              )}
+                              {integrity!.extra.length > 0 && (
+                                <span dir="ltr" className="block">⚠ زائدة: <code className="font-mono bg-destructive/10 px-1 rounded">{integrity!.extra.join(' ، ')}</code></span>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="mt-2 h-7 text-xs border-destructive/30 hover:bg-destructive/10"
+                                onClick={() => {
+                                  const fixed = autoFixTags(entry!.original, result);
+                                  setResults(prev => ({ ...prev, [engine.id]: fixed }));
+                                }}
+                              >
+                                <Wrench className="w-3 h-3 ml-1" /> إصلاح الوسوم تلقائياً
+                              </Button>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </>
+                    ) : !isEngineLoading ? (
+                      <p className="text-xs text-muted-foreground italic">فشل في الترجمة أو لا توجد نتيجة</p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
 
             {!loading && (
               <Button variant="outline" size="sm" onClick={handleCompare} className="w-full font-display">
@@ -326,4 +320,3 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
 };
 
 export default CompareEnginesDialog;
-

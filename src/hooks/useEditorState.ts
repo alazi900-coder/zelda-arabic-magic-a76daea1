@@ -815,11 +815,11 @@ export function useEditorState() {
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations } = translation;
 
+  const handleSmartReviewRef = useRef<(() => void) | null>(null);
   // Wrap applyPendingTranslations to auto-trigger smart review
   const applyPendingTranslations = useCallback((selectedKeys?: Set<string>) => {
     _applyPendingRaw(selectedKeys);
     if (autoSmartReview) {
-      // Delay slightly to let state update propagate
       setTimeout(() => {
         handleSmartReviewRef.current?.();
       }, 500);

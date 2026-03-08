@@ -22666,6 +22666,102 @@ Lost Vanguard=طليعي مفقود
 Lifesage=حكيم الحياة
 Machine Assassin=قاتل آلي
 
+# ═══════════════════════════════════════════════════
+# الإحصائيات الأساسية (Stats & Attributes)
+# ═══════════════════════════════════════════════════
+HP=نقاط الصحة
+Attack=هجوم
+Healing Power=قوة الشفاء
+Dexterity=براعة
+Agility=رشاقة
+Critical Rate=معدل الضربة الحرجة
+Block Rate=معدل الصد
+Physical Defense=دفاع جسدي
+Ether Defense=دفاع إيثري
+Weight=وزن
+EXP=نقاط الخبرة
+CP=نقاط الفئة
+SP=نقاط الروح
+TP=نقاط تكتيكية
+
+# ═══════════════════════════════════════════════════
+# التعزيزات والبوفات (Buffs)
+# ═══════════════════════════════════════════════════
+Attack Up=زيادة الهجوم
+Defense Up=زيادة الدفاع
+Evasion Up=زيادة المراوغة
+Accuracy Up=زيادة الدقة
+Critical Up=زيادة الضربة الحرجة
+Regeneration=تجديد الصحة
+Delayed Healing=شفاء مؤجل
+Counter Heal=شفاء مضاد
+Fast Recharge=تبريد سريع
+Power Charge=شحن القوة
+Armor Veil=حجاب الدروع
+Invincible=لا يقهر
+Awakening=صحوة
+Damage Armor=درع الضرر
+Decoy=شَرَك
+Aura=هالة
+Barrier=حاجز
+Charge=شحن
+Block Plus=زيادة الصد
+Crit Plus=زيادة الحرج
+
+# ═══════════════════════════════════════════════════
+# الإضعافات والضرر المستمر (Debuffs & Status Ailments)
+# ═══════════════════════════════════════════════════
+Attack Down=تقليل الهجوم
+Defense Down=تقليل الدفاع
+Physical Defense Down=تقليل الدفاع الجسدي
+Ether Defense Down=تقليل الدفاع الإيثري
+Resistance Down=تقليل المقاومة
+Evasion Down=تقليل المراوغة
+Bleed=نزيف
+Blaze=احتراق
+Freeze=تجميد
+Poison=تسمم
+Toxic=تسمم شديد
+Bind=تقييد
+Arts Seal=ختم الفنون
+Skill Seal=ختم المهارات
+Sleep=نوم
+Shackle=تكبيل
+Shackle Healing=تكبيل الشفاء
+Shackle Blocking=تكبيل الصد
+Moebius Bind=تقييد موبيوس
+Eclipse Soul=كسوف الروح
+Taunt=استفزاز
+
+# ═══════════════════════════════════════════════════
+# واجهة القتال والمعلومات (Combat UI & Info)
+# ═══════════════════════════════════════════════════
+Buff Info=معلومات التعزيز
+Debuff Info=معلومات الإضعاف
+Stat Modifiers=مُعدِّلات الإحصائيات
+Effect Duration=مدة التأثير
+Details=تفاصيل
+Party Gauge=مقياس الفريق
+Chain Attack Gauge=مقياس الهجوم المتسلسل
+Interlink Level=مستوى الربط البيني
+Cancel Bonus=مكافأة الإلغاء
+Position=موقع
+Front=أمام
+Side=جانب
+Back=خلف
+Area of Effect=منطقة التأثير
+AoE=منطقة التأثير
+Aggro Line=خط الانتباه
+Targeting=استهداف
+Auto-Attack=هجوم تلقائي
+Arts Palette=لوحة الفنون
+Master Arts=فنون متقنة
+Class Arts=فنون الفئة
+Fusion Arts=فنون مدمجة
+Directional Arts=فنون موجهة
+Field Arts=فنون الحقل
+Stance=وقفة
+
 # ============================================================
 # --- نهاية القاموس الشامل ---
 # End of Comprehensive Glossary

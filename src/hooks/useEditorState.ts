@@ -2539,7 +2539,7 @@ export function useEditorState() {
 
   return {
     // State
-    state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace, userGeminiKey, translationProvider, myMemoryEmail, myMemoryCharsUsed, aiRequestsToday, aiRequestsMonth, rebalanceNewlines,
+    state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace, userGeminiKey, translationProvider, myMemoryEmail, myMemoryCharsUsed, aiRequestsToday, aiRequestsMonth, rebalanceNewlines, aiModel,
     pendingRecovery, handleRecoverSession, handleStartFresh,
     hasStoredOriginals, originalsDetectedAsPreviousBuild,
     building, buildProgress, dismissBuildProgress, translating, translateProgress,

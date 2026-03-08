@@ -22159,6 +22159,303 @@ View gem effects=عرض تأثيرات الحجر
 Compare gems=مقارنة الأحجار
 Best materials selected automatically=تم اختيار أفضل المواد تلقائياً
 
+
+# ═══════════════════════════════════════════════════
+# نظام المعارك والتحديات (Challenge Battle System)
+# ═══════════════════════════════════════════════════
+Easy=سهل
+Normal=عادي
+Hard=صعب
+Time Attack=هجوم الوقت
+Archsage's Gauntlet=قفاز الحكيم
+Completion Reward=مكافأة الإكمال
+Rank A or Better=تصنيف A أو أفضل
+Rank B or Better=تصنيف B أو أفضل
+Level Restriction=تقييد المستوى
+No. of Waves=عدد الموجات
+No. of Stages=عدد المراحل
+Unlock Conditions=شروط الفتح
+Noponstone=حجر نوبون
+NEW RECORD=رقم قياسي جديد
+FINAL WAVE=الموجة الأخيرة
+FINAL STAGE=المرحلة الأخيرة
+BOSS STAGE=مرحلة الزعيم
+Bonus Time=وقت إضافي
+Score Multiplier Increased=زيادة مضاعف النتيجة
+No Death Bonus=مكافأة عدم الموت
+Completion Bonus=مكافأة الإكمال
+
+# ═══════════════════════════════════════════════════
+# أوامر التكتيك والقتال (Tactics & Combat Orders)
+# ═══════════════════════════════════════════════════
+Tactics=تكتيكات
+Focus Attacks=تركيز الهجمات
+Follow Leader=اتبع القائد
+Smash Combo=كومبو السحق
+Burst Combo=كومبو الانفجار
+Any Combo=أي كومبو
+Fusion First=الدمج أولاً
+Sheathe=غمد السلاح
+Switch=تبديل
+
+# ═══════════════════════════════════════════════════
+# حالات القتال والشاشة (Battle States & HUD)
+# ═══════════════════════════════════════════════════
+OVER HEAT=حرارة زائدة
+COOL DOWN=تبريد
+CAUTION=تحذير
+CONQUERED=مقهور
+SOUL HACK=اختراق الروح
+End Chain Attack=إنهاء الهجوم المتسلسل
+AMAZING=مذهل
+Tactical Point=نقطة تكتيكية
+Order Record=سجل الأوامر
+First Point=النقطة الأولى
+Limit Point=نقطة الحد
+Best Returner=أفضل عائد
+Hero Chain=سلسلة البطل
+Level Up=رفع المستوى
+Rank Up=رفع التصنيف
+STAGE CLEAR=اكتملت المرحلة
+CHALLENGE COMPLETE!=اكتمل التحدي!
+FAILURE=فشل
+HAPPENING=حدث
+High Score=أعلى نتيجة
+Clear Time=وقت الإكمال
+MAX RANK=أقصى تصنيف
+Invincible=لا يقهر
+
+# ═══════════════════════════════════════════════════
+# قوائم الشخصيات والتخصيص (Character Customization)
+# ═══════════════════════════════════════════════════
+Learn Skill=تعلم المهارة
+Enhance Skill=تحسين المهارة
+Heat Gauge=مقياس الحرارة
+Soul Link=الرابط الروحي
+HERO SELECT=اختيار البطل
+CURRENT HERO=البطل الحالي
+FASHION SELECT=اختيار الأزياء
+ATTACHMENT SELECT=اختيار الملحقات
+Fashion=أزياء
+Attachments=ملحقات
+Base Fashion=الأزياء الأساسية
+No Attachments=بدون ملحقات
+
+# ═══════════════════════════════════════════════════
+# الأعداء — وحوش فريدة ومسماة (Named & Unique Monsters)
+# ═══════════════════════════════════════════════════
+Ghostfist Róisín=غوستفيست رويزين
+Cruelfist Rojou=كرويلفيست روجو
+Trickfist Tuano=تريكفيست توانو
+Vapid Roger=فابيد روجر
+Artificial Optho=أوبثو الاصطناعي
+Phony Temnos=تيمينوس المزيف
+Dishonest Karom=كاروم المخادع
+Creeping Hameel=هاميل الزاحف
+Clinging Azreel=أزريل المتشبث
+Pressing Rafeel=رافيل الضاغط
+Reaping Anteel=أنتيل الحاصد
+Thaumawolf Bajeek=ثوماوولف باجيك
+Desired Oruria=أوروريا المنشودة
+Defiled Ishtar=عشتار المدنسة
+Gyanna Aspar=جيانا أسبار
+Hunter Volff=فولف الصياد
+Princess Arachno=الأميرة أراكنو
+Savant Arachno=أراكنو العالم
+Drifter Scorpox=سكوربوكس المتجول
+Strange Keves Soldier=جندي كيفيسي غريب
+Incomplete Siege-Lev=ليفنيس حصار غير مكتمل
+Dutiful Zeon=زيون المطيع
+Inscrutable Shidou=شيدو الغامض
+Craftmaiden Niina=الحرفية نينا
+
+# ═══════════════════════════════════════════════════
+# الأعداء — جنود الفصائل (Faction Soldiers)
+# ═══════════════════════════════════════════════════
+Agnus Fighter=مقاتل أغنياني
+Agnus Duoblade=مزدوج النصل الأغنياني
+Agnus Skirmisher=مناوش أغنياني
+Agnus Blaster=مفجر أغنياني
+Agnus Scout=كشاف أغنياني
+Agnus Vanguard=طليعي أغنياني
+Agnus Medic=مسعف أغنياني
+Keves Trooper=جندي كيفيسي
+Keves Warrior=محارب كيفيسي
+Keves Blaster=مفجر كيفيسي
+Keves Sniper=قناص كيفيسي
+Keves Blocker=مانع كيفيسي
+Keves Rescuer=منقذ كيفيسي
+Elite=نخبة
+
+# ═══════════════════════════════════════════════════
+# الأعداء — وحوش إضافية (Additional Monsters)
+# ═══════════════════════════════════════════════════
+Spearhead Zuoren=رأس الحربة زورين
+Fellplume Easel=ريشة السقوط إيزل
+Tenacious Clad=كلاد العنيد
+Arcaphor Gogol=غوغول أركافور
+Defiant Triden=ترايدن المتحدي
+Delit Gyaark=ديليت جيارك
+False Volff=فولف الزائف
+Daedal Crustip=كروستيب دايدال
+Territorial Antol=أنتول الإقليمي
+Forin Ansel=أنسيل فورين
+Forin Skeeter=سكيتر فورين
+Rogue Ropl=روبل المارق
+Memorial Rhogul=روغول التذكاري
+Memorial Ekidno=إيكيدنو التذكاري
+Giant Gogol=غوغول عملاق
+Evolved Sentry=حارس متطور
+Naberius Bunnit=بانيت نابيريوس
+Troll Grebel=جريبل القزم
+Elsayer Ansel=أنسيل إلساير
+Keves Deathsapper=مخرب الموت الكيفيسي
+Luina Volff=لوينا فولف
+Hungry Anlood=أنلود الجائع
+Hungry Skwaror=سكوارور الجائع
+Hungry Quadwing=كوادوينج الجائع
+The Tirking=الملك تيركين
+Himekin=هيميكين
+Tirkin Groom=عريس التيركين
+Wood Bunnit=بانيت الخشب
+Alaat Skwaror=سكوارور ألات
+Hantis Ansel=أنسيل هانتيس
+Jail Duoblade=مزدوج النصل بالسجن
+Jail Scout=كشاف السجن
+Jail Vanguard=طليعي السجن
+Jail Medic=مسعف السجن
+Jail Skirmisher=مناوش السجن
+Jail Blaster=مفجر السجن
+Assassin Moramora=مورامورا القاتل
+Armuvore Aligo=أليجو آكل الآرمو
+Hard Hox=هوكس الصلب
+Debria Volff=فولف ديبريا
+Towaris Taos=تاوس تواريس
+
+# ═══════════════════════════════════════════════════
+# شبكة التقارب — روابط الشخصيات (Affinity Chart / Kizuna)
+# ═══════════════════════════════════════════════════
+Overdo it=مبالغ فيه
+Friends=أصدقاء
+Distant from=بعيد عن
+Understand suffering=يتفهم المعاناة
+Wants to believe in=يريد الإيمان بـ
+I won't lose to you=لن أخسر أمامك
+Tirkinhead=رأس التيركين
+Companions of old=رفاق قدامى
+Super enthusiastic=متحمس جداً
+In high spirits=بمعنويات عالية
+Tough cookies, both=كلاهما صلب
+Breathing easy=يتنفس بارتياح
+Have each other's backs=يساندان بعضهما البعض
+Plenty motivated=متحفز جداً
+Feels inferior to=يشعر بالنقص تجاه
+Raising Armus is fun=تربية الآرمو ممتعة
+Observing=يُراقب
+Soft and bouncy!=ناعم ونطاط!
+Long-time allies=حلفاء لفترة طويلة
+Unique friendship=صداقة فريدة
+Wants to be there for=يريد أن يكون حاضراً من أجله
+Worked hard=عمل بجد
+Till next time!=حتى المرة القادمة!
+Let's do our best=لنبذل قصارى جهدنا
+Worthy leader=قائد جدير
+Inherited dying wish=ورث وصية الموت
+You're the best!=أنت الأفضل!
+Pals=أصحاب
+Want to chat more=يريد التحدث أكثر
+Close friends=أصدقاء مقربون
+Understands her pain=يتفهم ألمها
+Gourmands=ذواقة
+Sweetie=عزيزي/عزيزتي
+Can talk about anything=يمكنهما التحدث عن أي شيء
+Inspired each other=ألهما بعضهما البعض
+Friends like no other=أصدقاء لا مثيل لهم
+Good pals=أصحاب جيدون
+Get along=ينسجمان
+Got your back=سأحميك
+Open and honest=صريح وصادق
+A culinary genius!=عبقري طبخ!
+Friends forever=أصدقاء للأبد
+Worried about=قلق بشأن
+Has to rescue=يجب أن يُنقذ
+Cooperating=يتعاونان
+Lieutenant=ملازم
+At odds with=على خلاف مع
+Candidate leader=قائد مرشح
+Partners=شركاء
+Aspires to=يطمح إلى
+Fellow Queens=رفاق الملكات
+Entrusts future to=يأتمنه على المستقبل
+Looks after=يعتني بـ
+Concerned about=مهتم بـ
+Looks exhausted=يبدو مرهقاً
+Respected teacher=معلم محترم
+Newlyweds=عروسان جديدان
+Brother-in-law=صهر (أخو الزوج/الزوجة)
+Acquainted=معارف
+Newbie and superior=مبتدئ ورئيس
+Don't get greedy=لا تكن جشعاً
+Understand their hardships=يتفهمون مصاعبهم
+A handful when drunk=مشاغب عند السكر
+Kind older brother=أخ أكبر لطيف
+Fashionistas=محبون للموضة
+Grandpa and grandkid=جد وحفيده
+Has high hopes for=يأمل خيراً لـ
+Hide-and-seek buddies=رفاق الغميضة
+Father and son=أب وابنه
+Hit a nerve=أثار أعصابه
+Adopted child=طفل متبنى
+Wants to see smiling=يريد رؤيته يبتسم
+Proposing marriage=يقترح الزواج
+Wants approval from=يريد الموافقة من
+Disappointed in=خاب أمله في
+Cut from the same cloth=من نفس الطينة
+Fought for the first time=تَشَاجَرَا للمرة الأولى
+Good grief=يا إلهي
+Wary of=حذر من
+Discussing independence=يناقشان الاستقلال
+Supports=يدعم
+Lady of lofty wisdom=سيدة ذات حكمة رفيعة
+Great artist=فنان عظيم
+Acting commander=قائد بالنيابة
+Fast friends=أصدقاء سريعون
+Has a request=لديه طلب
+A right firecracker=شخصية نارية
+Very wary of=حذر جداً من
+Supplies intel=يوفر معلومات استخباراتية
+Hardliners=متشددون
+Apprentice=متدرب
+Has a taste for adventure=لديه ذوق للمغامرة
+A good doctor=طبيب جيد
+Fellow legendary Nopon=زميل نوبون أسطوري
+Mother and son=أم وابنها
+Nearly got married, once=كاد أن يتزوج، ذات مرة
+Ouroboros candidates=مرشحو أوربوروس
+Subordinate tactician=تكتيكي مرؤوس
+Good with machines=جيد مع الآلات
+Sole blood relatives=أقارب الدم الوحيدون
+Not convinced=غير مقتنع
+Laments=ينوح
+Daughter=ابنة
+Same-term buddies=رفاق من نفس الدورة
+Actually twins=توأمان في الواقع
+Bitchqueen=الملكة اللئيمة
+Dependable lieutenant=ملازم يعتمد عليه
+Disagrees with=لا يتفق مع
+Defiance?=تحدٍ؟
+Married=متزوجان
+Benefactor=متبرع/ولي نعمة
+Cool captain=قائد رائع
+Has an eye on=يراقبه
+Great work=عمل رائع
+Precious friend=صديق ثمين
+Like a little brother=مثل الأخ الأصغر
+Gets on well with=ينسجم جيداً مع
+Fun grandpa and grandkid=جد مرح وحفيده
+Beloved father=أب محبوب
+Generous=كريم
+
 # ============================================================
 # --- نهاية القاموس الشامل ---
 # End of Comprehensive Glossary

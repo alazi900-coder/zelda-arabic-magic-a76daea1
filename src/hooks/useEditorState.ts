@@ -980,6 +980,7 @@ export function useEditorState() {
     if (!state) return;
     setReviewing(true);
     setReviewResults(null);
+    toast({ title: "🔍 بدأت المراجعة التلقائية", description: "جاري فحص الترجمات في الخلفية..." });
     try {
       const reviewEntries = filteredEntries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
@@ -1004,6 +1005,7 @@ export function useEditorState() {
     if (!state || !reviewResults) return;
     setSuggestingShort(true);
     setShortSuggestions(null);
+    toast({ title: "✂️ اقتراح اختصارات", description: "جاري البحث عن ترجمات أقصر..." });
     try {
       const reviewEntries = state.entries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
@@ -1152,6 +1154,7 @@ export function useEditorState() {
     if (!state) return;
     setSmartReviewing(true);
     setSmartReviewFindings(null);
+    toast({ title: "🔬 بدأت المراجعة الذكية", description: "تحليل عميق للترجمات في الخلفية..." });
     try {
       const reviewEntries = filteredEntries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
@@ -1208,6 +1211,7 @@ export function useEditorState() {
   const handleImproveTranslations = async () => {
     if (!state) return;
     setImprovingTranslations(true); setImproveResults(null);
+    toast({ title: "✨ بدأ التحسين", description: "جاري تحسين الترجمات في الخلفية..." });
     try {
       const translatedEntries = filteredEntries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })

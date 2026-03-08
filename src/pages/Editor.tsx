@@ -870,6 +870,17 @@ const Editor = () => {
             />
           )}
 
+          {/* Smart Review Panel */}
+          {editor.smartReviewFindings && editor.smartReviewFindings.length > 0 && (
+            <SmartReviewPanel
+              findings={editor.smartReviewFindings}
+              onApply={editor.handleApplySmartFix}
+              onApplyAll={editor.handleApplyAllSmartFixes}
+              onDismiss={editor.handleDismissSmartFinding}
+              onClose={() => editor.setSmartReviewFindings(null)}
+            />
+          )}
+
           {/* Tag Repair Panel */}
           {showTagRepair && editor.state && (
             <TagRepairPanel

@@ -1005,6 +1005,7 @@ export function useEditorState() {
     if (!state || !reviewResults) return;
     setSuggestingShort(true);
     setShortSuggestions(null);
+    toast({ title: "✂️ اقتراح اختصارات", description: "جاري البحث عن ترجمات أقصر..." });
     try {
       const reviewEntries = state.entries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })

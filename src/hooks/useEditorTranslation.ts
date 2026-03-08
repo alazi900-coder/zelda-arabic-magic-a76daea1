@@ -34,6 +34,7 @@ interface UseEditorTranslationProps {
   npcMaxLines: number;
   npcMode: boolean;
   npcSplitCharLimit: number;
+  aiModel: string;
 }
 
 export function useEditorTranslation({

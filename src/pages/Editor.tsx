@@ -1263,7 +1263,9 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleImproveTranslations} disabled={editor.improvingTranslations || editor.translatedCount === 0}><Sparkles className="w-4 h-4" /> تحسين الترجمات ✨</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleCheckConsistency} disabled={editor.checkingConsistency || editor.translatedCount === 0}>
                     {editor.checkingConsistency ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق المصطلحات 🔍
-                  </DropdownMenuItem>
+                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleGlossaryCompliance} disabled={editor.checkingGlossaryCompliance || editor.translatedCount === 0 || !editor.activeGlossary}>
+                    {editor.checkingGlossaryCompliance ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />} فحص التزام القاموس 📖
                   <DropdownMenuItem onClick={editor.handleScanMergedSentences} disabled={editor.scanningSentences || editor.translatedCount === 0}>
                     {editor.scanningSentences ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} فصل الجمل المندمجة ✂️
                   </DropdownMenuItem>

@@ -1349,7 +1349,6 @@ export function useEditorState() {
     } catch (err) { setCloudStatus(`❌ ${err instanceof Error ? err.message : 'خطأ في التحميل'}`); }
     finally { setCloudSyncing(false); setTimeout(() => setCloudStatus(""), 4000); }
   };
-  handleSmartReviewRef.current = handleSmartReview;
 
   const loadDemoBdatData = useCallback(() => {
     const tableData: { table: string; cols: string[]; rows: number; texts: Record<string, string[]> }[] = [

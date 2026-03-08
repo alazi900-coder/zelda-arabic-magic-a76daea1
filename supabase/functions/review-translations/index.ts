@@ -41,11 +41,21 @@ Deno.serve(async (req) => {
    }
 
    try {
-     const { entries, glossary, action } = await req.json() as {
-       entries: ReviewEntry[];
-       glossary?: string;
-       action?: 'review' | 'suggest-short' | 'improve';
-     };
+      const { entries, glossary, action, aiModel } = await req.json() as {
+        entries: ReviewEntry[];
+        glossary?: string;
+        action?: 'review' | 'suggest-short' | 'improve' | 'smart-review';
+        aiModel?: string;
+      };
+
+      // Map aiModel to gateway model name
+      const gatewayModelMap: Record<string, string> = {
+        'gemini-2.5-flash': 'google/gemini-2.5-flash',
+        'gemini-2.5-pro': 'google/gemini-2.5-pro',
+        'gemini-3.1-pro-preview': 'google/gemini-3.1-pro-preview',
+        'gpt-5': 'openai/gpt-5',
+      };
+      const resolvedModel = (aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash';
 
      if (!entries || entries.length === 0) {
        return new Response(JSON.stringify({ issues: [] }), {

@@ -1333,7 +1333,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {
-      const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey);
+      const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
       return new Response(JSON.stringify({ translations, glossaryStats }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

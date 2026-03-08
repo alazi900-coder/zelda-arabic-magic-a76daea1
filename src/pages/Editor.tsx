@@ -803,6 +803,17 @@ const Editor = () => {
               onAcceptAll={editor.handleApplyAllDuplicateAlefCleans}
               onClose={() => editor.setDuplicateAlefResults(null)}
             />
+           )}
+
+          {/* Arabic Text Fix Results */}
+          {editor.arabicTextFixResults && editor.arabicTextFixResults.length > 0 && (
+            <ArabicTextFixPanel
+              results={editor.arabicTextFixResults}
+              onAccept={editor.handleApplyArabicTextFix}
+              onReject={editor.handleRejectArabicTextFix}
+              onAcceptAll={editor.handleApplyAllArabicTextFixes}
+              onClose={() => editor.setArabicTextFixResults(null)}
+            />
           )}
 
           {/* Missing Alef Fix Results */}

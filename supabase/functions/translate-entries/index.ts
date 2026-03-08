@@ -915,6 +915,7 @@ async function translateWithAI(
   glossary: string | undefined,
   context: { key: string; original: string; translation?: string }[] | undefined,
   userApiKey: string | undefined,
+  aiModel: string | undefined,
 ): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
   const glossaryMap = glossary ? parseGlossaryToMap(glossary) : new Map<string, string>();
   const tmMap = buildTranslationMemory(context);

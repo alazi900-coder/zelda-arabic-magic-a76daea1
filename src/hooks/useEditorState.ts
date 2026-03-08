@@ -2654,6 +2654,7 @@ export function useEditorState() {
     handleScanLineSync, handleApplyLineSync, handleRejectLineSync, handleApplyAllLineSyncs,
     handleScanAllSplits, handleApplyUnifiedSplit, handleRejectUnifiedSplit, handleApplyAllUnifiedSplits,
     handleScanSentenceOrder, handleApplySentenceOrder, handleRejectSentenceOrder, handleApplyAllSentenceOrders,
+    handleScanArabicTextFixes, handleApplyArabicTextFix, handleRejectArabicTextFix, handleApplyAllArabicTextFixes,
     handleTogglePin,
     handleClearTranslations, handleUndoClear, clearUndoBackup, isFilterActive,
     integrityResult, showIntegrityDialog, setShowIntegrityDialog, checkingIntegrity,

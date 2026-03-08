@@ -387,5 +387,6 @@ export function useEditorGlossary({
     handleImportGlossary, handleLoadXC3Glossary, handleLoadUIMenusGlossary, handleLoadFullGlossary, handleLoadCombatGlossary,
     handleSaveGlossaryToCloud, handleLoadGlossaryFromCloud,
     handleGenerateGlossaryFromTranslations,
+    getGlossaryHealth, handleFixGlossaryIssues,
   };
 }

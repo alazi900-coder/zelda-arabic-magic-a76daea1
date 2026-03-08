@@ -22617,6 +22617,55 @@ An All-New Original Story=قصة أصلية جديدة كلياً
 Future Redeemed=المستقبل المسترد
 Adventure Support Pack=حزمة دعم المغامرة
 
+# ═══════════════════════════════════════════════════
+# مهارات التنقل والبيئة (Field Skills & Traversal)
+# ═══════════════════════════════════════════════════
+Rope Sliding=انزلاق بالحبل
+Wall Climbing=تسلق الجدران
+Hazard Neutralization=تحييد المخاطر
+Show Quest Route=إظهار مسار المهمة
+Soul Tree=شجرة الروح
+Ouroboros Switching=تبديل أوربوروس
+Soul Link slot=فتحة الرابط الروحي
+Training Drills=تدريبات
+
+# ═══════════════════════════════════════════════════
+# رسائل وتنبيهات النظام (System Popups)
+# ═══════════════════════════════════════════════════
+System Popup=نافذة النظام
+Autotalk=محادثة تلقائية
+Not enough materials=المواد غير كافية
+Not enough coins=العملات غير كافية
+Inventory Full=المخزون ممتلئ
+Item Acquired=تم الحصول على عنصر
+Quest Updated=تم تحديث المهمة
+Quest Accepted=تم قبول المهمة
+Cannot save here=لا يمكن الحفظ هنا
+Enemy Spotted=تم رصد عدو
+Target Defeated=تمت هزيمة الهدف
+
+# ═══════════════════════════════════════════════════
+# فئات الأسلحة والفصول (Classes & Weapons)
+# ═══════════════════════════════════════════════════
+Swordfighter=مقاتل سيف
+Zephyr=نسيم
+Medic Gunner=مطلق نار مسعف
+Tactician=تكتيكي
+Heavy Guard=حارس ثقيل
+Ogre=غول
+Flash Fencer=مبارز وامض
+Yumsmith=صانع يام
+Strategos=استراتيجي
+Signifer=صاحب الراية
+Soulhacker=مخترق الأرواح
+Martial Artist=فنان قتالي
+Stalker=متعقب
+Lone Exile=منفي وحيد
+Incursor=مغير
+Lost Vanguard=طليعي مفقود
+Lifesage=حكيم الحياة
+Machine Assassin=قاتل آلي
+
 # ============================================================
 # --- نهاية القاموس الشامل ---
 # End of Comprehensive Glossary

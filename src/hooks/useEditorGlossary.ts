@@ -36,7 +36,7 @@ export function useEditorGlossary({
 
   const activeGlossary = glossaryEnabled ? (state?.glossary || '') : '';
 
-  // === Parse glossary into lookup map ===
+  // === Parse glossary into lookup map (with dedup, last-wins) ===
   const parseGlossaryMap = useCallback((glossaryText: string): Map<string, string> => {
     const map = new Map<string, string>();
     if (!glossaryText?.trim()) return map;
@@ -46,8 +46,12 @@ export function useEditorGlossary({
       const eqIdx = trimmed.indexOf('=');
       if (eqIdx < 1) continue;
       const eng = trimmed.slice(0, eqIdx).trim().toLowerCase();
-      const arb = trimmed.slice(eqIdx + 1).trim();
-      if (eng && arb) map.set(eng, arb);
+      const arb = trimmed.slice(eqIdx + 1).trimEnd();
+      // Skip invalid entries: empty values, single chars, pure symbols
+      if (!eng || !arb) continue;
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng)) continue;
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) continue;
+      map.set(eng, arb);
     }
     return map;
   }, []);
@@ -108,15 +112,51 @@ export function useEditorGlossary({
     setPendingMerge(null);
   }, [setState, setLastSaved]);
 
-  // === Clean glossary text ===
+  // === Clean glossary text (comprehensive) ===
   const cleanGlossaryText = (rawText: string): string => {
-    return rawText.split('\n').map(line => {
+    const seen = new Map<string, string>(); // key -> full line (dedup)
+    const commentLines: string[] = [];
+    
+    for (const line of rawText.split('\n')) {
       const trimmed = line.trimEnd();
-      if (/^[#%+=\-.\\/;:]+\s*=\s*[#%+=\-.\\/;:]+\s*$/.test(trimmed)) return null;
-      if (/^#\[ML:/.test(trimmed)) return null;
-      if (/^\+\[ML:/.test(trimmed)) return null;
-      return trimmed;
-    }).filter(l => l !== null).join('\n');
+      if (!trimmed) continue;
+      
+      // Keep comment/section headers
+      if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
+        // Filter out technical noise
+        if (/^#\[ML:/.test(trimmed) || /^\+\[ML:/.test(trimmed)) continue;
+        commentLines.push(trimmed);
+        continue;
+      }
+      
+      // Filter out garbage lines
+      if (/^[#%+=\-.\\/;:*&^$@!]+\s*=\s*[#%+=\-.\\/;:*&^$@!]+\s*$/.test(trimmed)) continue;
+      
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      
+      const eng = trimmed.slice(0, eqIdx).trim();
+      const arb = trimmed.slice(eqIdx + 1).trimEnd();
+      
+      // Skip empty or pure-symbol entries
+      if (!eng || !arb) continue;
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng)) continue;
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) continue;
+      // Skip single character keys that aren't meaningful
+      if (eng.length === 1 && !/^[A-Za-z\u0600-\u06FF]$/.test(eng)) continue;
+      
+      const normKey = eng.toLowerCase();
+      // Last occurrence wins (dedup)
+      seen.set(normKey, `${eng}=${arb}`);
+    }
+    
+    // Rebuild: comments at top, then sorted entries
+    const result: string[] = [];
+    if (commentLines.length > 0) {
+      result.push(...commentLines);
+    }
+    result.push(...Array.from(seen.values()));
+    return result.join('\n');
   };
 
   // === Import from file (with merge preview) ===
@@ -233,6 +273,8 @@ export function useEditorGlossary({
 
       if (original.includes('\n') || original.includes('[ML:') || original.includes('{')) continue;
       if (original.length > 60) continue;
+      // Skip entries that are mostly numbers/symbols
+      if (/^[\d\s\-+*/=<>.,;:!?%$#@&^()[\]{}|\\~`'"]+$/.test(original)) continue;
 
       const normKey = original.toLowerCase();
       if (existingMap.has(normKey)) continue;
@@ -268,6 +310,75 @@ export function useEditorGlossary({
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, parseGlossaryMap, setState, setLastSaved]);
 
+  // === Glossary health check — detect issues ===
+  const getGlossaryHealth = useCallback((): { duplicates: number; emptyValues: number; reversedEntries: number; singleCharKeys: number; totalIssues: number } => {
+    if (!state?.glossary?.trim()) return { duplicates: 0, emptyValues: 0, reversedEntries: 0, singleCharKeys: 0, totalIssues: 0 };
+    
+    const keyCount = new Map<string, number>();
+    let emptyValues = 0, reversedEntries = 0, singleCharKeys = 0;
+    
+    for (const line of state.glossary.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      
+      const eng = trimmed.slice(0, eqIdx).trim();
+      const arb = trimmed.slice(eqIdx + 1).trim();
+      const normKey = eng.toLowerCase();
+      
+      keyCount.set(normKey, (keyCount.get(normKey) || 0) + 1);
+      
+      if (!arb) emptyValues++;
+      // Check if English/Arabic might be reversed (Arabic on left side)
+      if (/[\u0600-\u06FF]/.test(eng) && /^[a-zA-Z\s]+$/.test(arb)) reversedEntries++;
+      if (eng.length === 1 && !/^[A-Za-z]$/.test(eng)) singleCharKeys++;
+    }
+    
+    const duplicates = Array.from(keyCount.values()).filter(c => c > 1).reduce((sum, c) => sum + (c - 1), 0);
+    return { duplicates, emptyValues, reversedEntries, singleCharKeys, totalIssues: duplicates + emptyValues + reversedEntries + singleCharKeys };
+  }, [state?.glossary]);
+
+  // === Auto-fix glossary issues ===
+  const handleFixGlossaryIssues = useCallback(() => {
+    if (!state?.glossary?.trim()) return;
+    
+    const seen = new Map<string, string>();
+    const comments: string[] = [];
+    let fixed = 0;
+    
+    for (const line of state.glossary.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (trimmed.startsWith('#') || trimmed.startsWith('//')) { comments.push(trimmed); continue; }
+      
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      
+      let eng = trimmed.slice(0, eqIdx).trim();
+      let arb = trimmed.slice(eqIdx + 1).trimEnd();
+      
+      // Skip empty
+      if (!eng || !arb) { fixed++; continue; }
+      // Fix reversed entries (Arabic=English → English=Arabic)
+      if (/[\u0600-\u06FF]/.test(eng) && /^[a-zA-Z\s]+$/.test(arb)) {
+        [eng, arb] = [arb, eng];
+        fixed++;
+      }
+      // Skip pure symbols
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng) || /^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) { fixed++; continue; }
+      
+      const normKey = eng.toLowerCase();
+      if (seen.has(normKey)) { fixed++; continue; } // dedup
+      seen.set(normKey, `${eng}=${arb}`);
+    }
+    
+    const result = [...comments, ...Array.from(seen.values())].join('\n');
+    setState(prev => prev ? { ...prev, glossary: result } : null);
+    setLastSaved(`🔧 تم إصلاح ${fixed} مشكلة في القاموس (${seen.size} مصطلح نظيف)`);
+    setTimeout(() => setLastSaved(""), 4000);
+  }, [state?.glossary, setState, setLastSaved]);
+
   return {
     glossaryEnabled, setGlossaryEnabled,
     glossaryTermCount, activeGlossary,
@@ -276,5 +387,6 @@ export function useEditorGlossary({
     handleImportGlossary, handleLoadXC3Glossary, handleLoadUIMenusGlossary, handleLoadFullGlossary, handleLoadCombatGlossary,
     handleSaveGlossaryToCloud, handleLoadGlossaryFromCloud,
     handleGenerateGlossaryFromTranslations,
+    getGlossaryHealth, handleFixGlossaryIssues,
   };
 }

@@ -864,6 +864,16 @@ export function useEditorTranslation({
     }
   };
 
+  /** Build a word-boundary-aware regex for a glossary term */
+  const buildGlossaryTermRegex = (term: string): RegExp => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Use word boundary that works for English terms — handles possessives, punctuation, brackets
+    // \b doesn't work well at start/end with special chars, so use lookaround-like approach
+    const before = `(?<![a-zA-Z0-9])`;
+    const after = `(?![a-zA-Z0-9])`;
+    return new RegExp(`${before}${escaped}${after}`, 'gi');
+  };
+
   /** Translate using glossary only — no AI, no TM. Supports both exact and partial matching. */
   const handleTranslateFromGlossaryOnly = () => {
     if (!state) return;
@@ -880,6 +890,13 @@ export function useEditorTranslation({
     // Sort glossary entries by key length (longest first) for greedy partial matching
     const sortedGlossaryEntries = Array.from(glossaryMap.entries())
       .sort((a, b) => b[0].length - a[0].length);
+
+    // Pre-build regexes for partial matching (cached for performance)
+    const glossaryRegexes = sortedGlossaryEntries.map(([key, value]) => ({
+      key,
+      value,
+      regex: buildGlossaryTermRegex(key),
+    }));
 
     const targetEntries = filterCategory.length > 0
       ? state.entries.filter(e => filterCategory.includes(categorizeEntry(e)))
@@ -902,17 +919,35 @@ export function useEditorTranslation({
         continue;
       }
 
-      // Try partial matching: replace glossary terms found within the text
+      // Try partial matching: replace glossary terms found within the text using word-boundary regex
       let result = e.original;
       let matched = false;
-      for (const [glossaryKey, glossaryValue] of sortedGlossaryEntries) {
-        // Case-insensitive search in the original text
-        const idx = result.toLowerCase().indexOf(glossaryKey);
-        if (idx !== -1) {
-          // Replace the matched portion with the Arabic translation
-          result = result.slice(0, idx) + glossaryValue + result.slice(idx + glossaryKey.length);
-          matched = true;
-        }
+      const usedRanges: Array<[number, number]> = []; // prevent overlapping replacements
+
+      for (const { key: glossaryKey, value: glossaryValue, regex } of glossaryRegexes) {
+        // Quick pre-filter: skip if term not present at all (case-insensitive)
+        if (!result.toLowerCase().includes(glossaryKey)) continue;
+
+        // Reset regex state
+        regex.lastIndex = 0;
+        const match = regex.exec(result);
+        if (!match) continue;
+
+        const matchStart = match.index;
+        const matchEnd = matchStart + match[0].length;
+
+        // Check if this range overlaps with any already-replaced range
+        const overlaps = usedRanges.some(([s, e]) =>
+          (matchStart >= s && matchStart < e) || (matchEnd > s && matchEnd <= e)
+        );
+        if (overlaps) continue;
+
+        // Replace the matched portion with the Arabic translation
+        result = result.slice(0, matchStart) + glossaryValue + result.slice(matchEnd);
+        // Track the new range (after replacement, length may differ)
+        const newEnd = matchStart + glossaryValue.length;
+        usedRanges.push([matchStart, newEnd]);
+        matched = true;
       }
 
       if (matched) {

@@ -1127,31 +1127,46 @@ const Editor = () => {
             </div>
           )}
 
-          {editor.glossaryTermCount > 0 && (
-            <div className="flex items-center gap-2 mb-4 px-3 py-1.5 rounded-lg bg-primary/5 border border-primary/15">
-              <BookOpen className="w-3.5 h-3.5 text-primary/70" />
-              <span className="text-xs text-primary/80 font-body">
-                📖 القاموس: <strong>{editor.glossaryTermCount}</strong> مصطلح
-              </span>
-              <Button
-                variant={editor.glossaryEnabled ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => editor.setGlossaryEnabled(!editor.glossaryEnabled)}
-                className="mr-auto h-6 px-2 text-xs font-body"
-              >
-                {editor.glossaryEnabled ? (
-                  <><Eye className="w-3 h-3" /> مفعّل</>
-                ) : (
-                  <><EyeOff className="w-3 h-3" /> معطّل</>
+          {editor.glossaryTermCount > 0 && (() => {
+            const health = editor.getGlossaryHealth();
+            return (
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/5 border border-primary/15">
+                  <BookOpen className="w-3.5 h-3.5 text-primary/70" />
+                  <span className="text-xs text-primary/80 font-body">
+                    📖 القاموس: <strong>{editor.glossaryTermCount}</strong> مصطلح
+                  </span>
+                  <Button
+                    variant={editor.glossaryEnabled ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => editor.setGlossaryEnabled(!editor.glossaryEnabled)}
+                    className="mr-auto h-6 px-2 text-xs font-body"
+                  >
+                    {editor.glossaryEnabled ? (
+                      <><Eye className="w-3 h-3" /> مفعّل</>
+                    ) : (
+                      <><EyeOff className="w-3 h-3" /> معطّل</>
+                    )}
+                  </Button>
+                </div>
+                {health.totalIssues > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <span className="text-xs text-amber-600 font-body flex-1">
+                      ⚠️ {health.totalIssues} مشكلة:
+                      {health.duplicates > 0 && ` ${health.duplicates} مكرر`}
+                      {health.emptyValues > 0 && ` ${health.emptyValues} فارغ`}
+                      {health.reversedEntries > 0 && ` ${health.reversedEntries} معكوس`}
+                      {health.singleCharKeys > 0 && ` ${health.singleCharKeys} رمز`}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={editor.handleFixGlossaryIssues} className="h-6 px-2 text-xs font-body">
+                      🔧 إصلاح
+                    </Button>
+                  </div>
                 )}
-              </Button>
-            </div>
-          )}
-
-          {/* Glossary Stats Report */}
-          {editor.glossaryTermCount > 0 && (
-            <GlossaryStatsPanel glossaryText={editor.activeGlossary} />
-          )}
+                <GlossaryStatsPanel glossaryText={editor.activeGlossary} />
+              </div>
+            );
+          })()}
 
           {/* Cloud & Actions */}
           {isMobile ? (

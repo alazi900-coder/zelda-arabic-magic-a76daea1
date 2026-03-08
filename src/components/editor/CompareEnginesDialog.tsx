@@ -21,6 +21,7 @@ interface CompareEnginesDialogProps {
   glossary: string;
   userGeminiKey: string;
   myMemoryEmail: string;
+  aiModel?: string;
 }
 
 const ENGINE_LABELS: Record<string, { label: string; emoji: string }> = {

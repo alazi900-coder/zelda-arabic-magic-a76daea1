@@ -619,6 +619,327 @@ Joulietta's Attitude=موقف جولييتا
 Shiki's Rumors=شائعات شيكي
 Shiki's Identity=هوية شيكي
 # ═══════════════════════════════════════════════════
+# قناصل موبيوس (Moebius Consuls)
+# ═══════════════════════════════════════════════════
+Consul=القنصل
+Consul A=القنصل أ
+Consul B=القنصل ب
+Consul C=القنصل ج
+Consul D=القنصل د
+Consul F=القنصل ف
+Consul G=القنصل غ
+Consul H=القنصل هـ
+Consul I=القنصل ي
+Consul J=القنصل ج
+Consul K=القنصل ك
+Consul L=القنصل ل
+Consul M=القنصل م
+Consul N=القنصل ن
+Consul O=القنصل و
+Consul P=القنصل ب
+Consul Q=القنصل ق
+Consul R=القنصل ر
+Consul S=القنصل س
+Consul T=القنصل ت
+Consul U=القنصل ع
+Consul V=القنصل ڤ
+Consul W=القنصل و
+Consul X=القنصل إكس
+Consul Y=القنصل واي
+Consul Z=القنصل ز
+Moebius N=موبيوس ن
+Moebius M=موبيوس م
+Moebius D=موبيوس د
+Moebius X=موبيوس إكس
+Moebius Y=موبيوس واي
+Moebius Z=موبيوس ز
+# ═══════════════════════════════════════════════════
+# فنون الشخصيات الرئيسية (Main Character Arts)
+# ═══════════════════════════════════════════════════
+# Noah - Swordfighter
+Sword Strike=ضربة السيف
+Edge Thrust=طعنة الحد
+Air Slash=قطع هوائي
+Shadow Eye=عين الظل
+Shining Refrain=لازمة ساطعة
+Overclock Buster=مبيد فرط السرعة
+Final Lucky Seven=السبعة المحظوظة الأخيرة
+Unlimited Sword=السيف اللامحدود
+# Mio - Zephyr
+Butterfly Blade=نصل الفراشة
+Air Fang=ناب الهواء
+Gemini Strike=ضربة الجوزاء
+Wide Slash=قطع واسع
+Speed Demon=شيطان السرعة
+Myopic Screen=حاجز قصر النظر
+Glitter Stream=تيار اللمعان
+# Lanz - Heavy Guard
+Bull Rush=اندفاع الثور
+Crashdown=السقوط الساحق
+Mad Taunt=استفزاز مجنون
+Variable Turret=برج متغير
+Shield Bash=صدمة الدرع
+Solid Stance=وضعية صلبة
+Giga Impact=تأثير عملاق
+# Sena - Ogre
+Giant Swing=تأرجح عملاق
+Cannonball=كرة المدفع
+Jackhammer=المطرقة الهوائية
+Power Smash=تحطيم قوي
+Big Impact=تأثير كبير
+Pressure Drop=سقوط الضغط
+Demolition=هدم
+# Eunie - Medic Gunner
+Healing Ring=حلقة الشفاء
+Group Heal=شفاء جماعي
+Mega Heal=شفاء ضخم
+Healing Halo=هالة الشفاء
+# Taion - Tactician
+Mondo=موندو
+Phantom Force=قوة شبحية
+Overfall=الانهمار
+Tidal Wave=موجة مدية
+Storm Reign=حكم العاصفة
+Stormy Skies=سماء عاصفة
+# ═══════════════════════════════════════════════════
+# فنون فصائل الأبطال (Hero Class Arts)
+# ═══════════════════════════════════════════════════
+# Flash Fencer
+Cross Impact=تأثير متقاطع
+Sharpened Edge=حد مسنون
+Upper Slash=قطع علوي
+Acceleration=تسارع
+Rapid Combo=كومبو سريع
+# Stalker
+Shadow Stitch=خياطة الظل
+Blood Moon=قمر الدم
+Assassin's Pledge=عهد القاتل
+Phantom Strike=ضربة شبحية
+Shadow Assault=هجوم الظل
+# War Medic
+Medical Burst=انفجار طبي
+Venom Jab=وخزة السم
+Antibody System=نظام الأجسام المضادة
+Ether Guard=حارس الأثير
+Multi Blast=انفجار متعدد
+# Full Metal Jaguar
+Delta Turret=برج دلتا
+Max Voltage=الفولتية القصوى
+Trigger Happy=سعيد الزناد
+Gunblast=انفجار البندقية
+Ether Bullet=رصاصة الأثير
+# Guardian Commander
+Noble Taunt=استفزاز نبيل
+Grand Protection=حماية كبرى
+Commander's Order=أمر القائد
+Shield Charge=شحنة الدرع
+Rally Cry=صيحة الحشد
+# Thaumaturge
+Elemental Discharge=تفريغ عنصري
+Healing Circle=دائرة الشفاء
+Spirit Bomb=قنبلة الروح
+Ether Blast=انفجار الأثير
+Purifying Light=نور مُطهّر
+# Yumsmith
+Overclock=فرط السرعة
+Release Posture=وضعية التحرير
+Smithy Combo=كومبو الحداد
+Forge Fire=نار التشكيل
+Power Smelt=صهر القوة
+# Strategos
+Master Order=أمر السيد
+Trick Edge=حد الخدعة
+Field Barrier=حاجز ميداني
+Strategy Order=أمر الاستراتيجية
+Grand Tactics=تكتيكات كبرى
+# Lone Exile
+Razing Slash=قطع مُحرق
+Cross Cut=قطع متقاطع
+Wild Charge=شحنة متوحشة
+Rogue Assault=هجوم مارق
+Exile's Fury=غضب المنفي
+# Incursor
+Combo Edge=حد الكومبو
+Swift Strike=ضربة سريعة
+Infiltrate=تسلل
+Viper Fang=ناب الأفعى
+Shadow Blade=نصل الظل
+# Lost Vanguard
+Lost Charge=شحنة مفقودة
+Vanguard Shield=درع الطليعة
+Sacrificial Guard=حراسة تضحوية
+Resilient Stance=وضعية الصمود
+Iron Bastion=معقل حديدي
+# Soulhacker
+Soul Read=قراءة الروح
+Hack Slash=قطع المخترق
+Monster Art=فن الوحش
+Stolen Power=قوة مسروقة
+Assimilate=استيعاب
+# Signifer
+Flag of Courage=راية الشجاعة
+March of Power=مسيرة القوة
+Battle Standard=معيار المعركة
+Morale Boost=رفع المعنويات
+Flag of Victory=راية النصر
+# Troubadour
+Song of Life=أغنية الحياة
+Battle Hymn=ترنيمة المعركة
+Lullaby=تهويدة
+War Song=أغنية الحرب
+Requiem=مرثية
+# Seraph
+Divine Heal=شفاء إلهي
+Holy Light=نور مقدس
+Sacred Arrow=سهم مقدس
+Wings of Light=أجنحة النور
+Angelic Pulse=نبض ملائكي
+# Machine Assassin
+Blade Frenzy=جنون النصل
+Mech Strike=ضربة ميكانيكية
+Auto-Counter=هجمة مرتدة آلية
+Cyber Slash=قطع سيبراني
+Overdrive=فرط التشغيل
+# Royal Summoner
+Royal Order=أمر ملكي
+Summon Elemental=استدعاء عنصري
+Elemental Burst=انفجار عنصري
+Summon Knight=استدعاء فارس
+Grand Summon=استدعاء عظيم
+# Lifesage
+Life Drop=قطرة الحياة
+Nature's Embrace=عناق الطبيعة
+Verdant Shield=درع أخضر
+Ether Bloom=إزهار الأثير
+Rejuvenate=تجديد الشباب
+# Martial Artist
+Fist Combo=كومبو القبضة
+Roundhouse Kick=ركلة دائرية
+Dragon Fist=قبضة التنين
+Flying Kick=ركلة طائرة
+Iron Fist=القبضة الحديدية
+# Lapidarist
+Gem Barrage=وابل الجواهر
+Crystal Shield=درع البلور
+Prism Beam=شعاع المنشور
+Diamond Edge=حد الألماس
+Jewel Storm=عاصفة الجواهر
+# Nines
+Lucky Strike=ضربة الحظ
+Nine Lives=تسعة أرواح
+Fortune Slash=قطع الحظ
+Jackpot=الجائزة الكبرى
+Wild Card=الورقة الرابحة
+# ═══════════════════════════════════════════════════
+# فنون أوروبوروس (Ouroboros Arts)
+# ═══════════════════════════════════════════════════
+# Noah + Mio
+Infinity Blade=نصل اللانهاية
+Eternity Slash=قطع الأبدية
+Dominion Fang=ناب السيادة
+Ouroboros Fury=غضب الأوروبوروس
+Infinity Strike=ضربة اللانهاية
+# Lanz + Sena
+Omega Smash=تحطيم أوميغا
+Infinity Press=ضغط اللانهاية
+Dominion Hammer=مطرقة السيادة
+Power Crush=سحق القوة
+# Eunie + Taion
+Seraphic Pulse=نبض السيراف
+Infinity Heal=شفاء اللانهاية
+Dominion Burst=انفجار السيادة
+Ether Storm=عاصفة الأثير
+# ═══════════════════════════════════════════════════
+# مصطلحات الهجوم المتسلسل (Chain Attack Terms)
+# ═══════════════════════════════════════════════════
+Chain Order=أمر السلسلة
+Heroic Chain=السلسلة البطولية
+TP Gain=اكتساب النقاط التكتيكية
+TP Cost=تكلفة النقاط التكتيكية
+Completion Bonus=مكافأة الإكمال
+Overkill=قتل مفرط
+Overkill Bonus=مكافأة القتل المفرط
+Brave Order=أمر الشجاعة
+Union Combo=كومبو الاتحاد
+Full Burst=انفجار كامل
+Chain Multiplier=مضاعف السلسلة
+Damage Ratio=نسبة الضرر
+Emblem=شعار
+Emblem Effect=تأثير الشعار
+Hero Emblem=شعار البطل
+# ═══════════════════════════════════════════════════
+# مصطلحات الألفة والمستعمرات (Affinity & Colony)
+# ═══════════════════════════════════════════════════
+Affinity Chart=مخطط الألفة
+Affinity Level=مستوى الألفة
+Colony Rank=رتبة المستعمرة
+Colony Rank Up=ارتقاء رتبة المستعمرة
+Colony Development=تطوير المستعمرة
+Colony Request=طلب المستعمرة
+Heart-to-Heart=من القلب للقلب
+# ═══════════════════════════════════════════════════
+# شجرة الروح والإنترلينك (Soul Tree & Interlink)
+# ═══════════════════════════════════════════════════
+Soul Tree=شجرة الروح
+Soul Points=نقاط الروح
+Soul Tree Upgrade=ترقية شجرة الروح
+Heat Gauge=مقياس الحرارة
+Overheat=فرط الحرارة
+Cooldown Period=فترة التبريد
+Interlink Level 1=مستوى الارتباط 1
+Interlink Level 2=مستوى الارتباط 2
+Interlink Level 3=مستوى الارتباط 3
+# ═══════════════════════════════════════════════════
+# بطاقات الموسوعة (Collectopaedia Cards)
+# ═══════════════════════════════════════════════════
+Collectopaedia Card=بطاقة الموسوعة
+Card Slot=خانة البطاقة
+Card Effect=تأثير البطاقة
+Register Item=تسجيل عنصر
+Complete Card=إكمال البطاقة
+Card Reward=مكافأة البطاقة
+Collection Bonus=مكافأة المجموعة
+Nopon Exchange=تبادل النوبون
+Nopon Coin Exchange=تبادل عملات النوبون
+# ═══════════════════════════════════════════════════
+# وضع التحدي (Challenge Mode)
+# ═══════════════════════════════════════════════════
+Challenge Battle=معركة التحدي
+Challenge Mode=وضع التحدي
+Challenge Portal=بوابة التحدي
+Archsage=الحكيم الأعظم
+Nopon Archsage=حكيم النوبون الأعظم
+Archsage's Gauntlet=تحدي الحكيم الأعظم
+Archsage's Whimsy=مزاج الحكيم الأعظم
+Wave Battle=معركة الموجات
+Survival Battle=معركة البقاء
+Time Attack=هجوم الوقت
+Score Attack=هجوم النقاط
+Rank S=الرتبة S
+Rank A=الرتبة A
+Bonus Time=وقت المكافأة
+Launch Charge=شحنة الإطلاق
+# ═══════════════════════════════════════════════════
+# لعبة جديدة+ (New Game Plus)
+# ═══════════════════════════════════════════════════
+New Game Plus=لعبة جديدة+
+Carry Over=نقل البيانات
+Inherited Data=بيانات موروثة
+Level Reset=إعادة ضبط المستوى
+Hard Difficulty=الصعوبة العالية
+Cleared Data=بيانات مكتملة
+Clear Time=وقت الإكمال
+Completion Rate=معدل الإكمال
+# ═══════════════════════════════════════════════════
+# صناعة الإكسسوارات (Accessory Crafting)
+# ═══════════════════════════════════════════════════
+Accessory Crafting=صناعة الإكسسوارات
+Crafted Accessory=إكسسوار مُصنّع
+Base Effect=التأثير الأساسي
+Random Bonus=مكافأة عشوائية
+Catalyst=المحفّز
+Material Bonus=مكافأة المادة
+# ═══════════════════════════════════════════════════
 # مصطلحات تقنية (Technical Terms)
 # ═══════════════════════════════════════════════════
 BDAT=بي دي أي تي

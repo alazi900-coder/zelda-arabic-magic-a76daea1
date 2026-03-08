@@ -112,15 +112,51 @@ export function useEditorGlossary({
     setPendingMerge(null);
   }, [setState, setLastSaved]);
 
-  // === Clean glossary text ===
+  // === Clean glossary text (comprehensive) ===
   const cleanGlossaryText = (rawText: string): string => {
-    return rawText.split('\n').map(line => {
+    const seen = new Map<string, string>(); // key -> full line (dedup)
+    const commentLines: string[] = [];
+    
+    for (const line of rawText.split('\n')) {
       const trimmed = line.trimEnd();
-      if (/^[#%+=\-.\\/;:]+\s*=\s*[#%+=\-.\\/;:]+\s*$/.test(trimmed)) return null;
-      if (/^#\[ML:/.test(trimmed)) return null;
-      if (/^\+\[ML:/.test(trimmed)) return null;
-      return trimmed;
-    }).filter(l => l !== null).join('\n');
+      if (!trimmed) continue;
+      
+      // Keep comment/section headers
+      if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
+        // Filter out technical noise
+        if (/^#\[ML:/.test(trimmed) || /^\+\[ML:/.test(trimmed)) continue;
+        commentLines.push(trimmed);
+        continue;
+      }
+      
+      // Filter out garbage lines
+      if (/^[#%+=\-.\\/;:*&^$@!]+\s*=\s*[#%+=\-.\\/;:*&^$@!]+\s*$/.test(trimmed)) continue;
+      
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      
+      const eng = trimmed.slice(0, eqIdx).trim();
+      const arb = trimmed.slice(eqIdx + 1).trimEnd();
+      
+      // Skip empty or pure-symbol entries
+      if (!eng || !arb) continue;
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng)) continue;
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) continue;
+      // Skip single character keys that aren't meaningful
+      if (eng.length === 1 && !/^[A-Za-z\u0600-\u06FF]$/.test(eng)) continue;
+      
+      const normKey = eng.toLowerCase();
+      // Last occurrence wins (dedup)
+      seen.set(normKey, `${eng}=${arb}`);
+    }
+    
+    // Rebuild: comments at top, then sorted entries
+    const result: string[] = [];
+    if (commentLines.length > 0) {
+      result.push(...commentLines);
+    }
+    result.push(...Array.from(seen.values()));
+    return result.join('\n');
   };
 
   // === Import from file (with merge preview) ===

@@ -2565,6 +2565,7 @@ export function useEditorState() {
     setReviewResults, setShortSuggestions, setImproveResults, setBuildStats, setShowBuildConfirm,
     setConsistencyResults, setSentenceSplitResults, setNewlineCleanResults, setDiacriticsCleanResults, setDuplicateAlefResults, setMissingAlefResults, setMirrorCharsResults, setTagBracketFixResults, setNewlineSplitResults, setNpcSplitResults, setLineSyncResults, setUnifiedSplitResults, setSentenceOrderResults,
     setSmartReviewFindings,
+    setGlossaryComplianceResults,
     autoSmartReview, setAutoSmartReview,
 
     // Handlers

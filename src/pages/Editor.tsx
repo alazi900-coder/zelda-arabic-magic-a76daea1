@@ -1172,10 +1172,13 @@ const Editor = () => {
                 <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[220px] max-h-[60vh] overflow-y-auto">
                   <DropdownMenuLabel className="text-xs">📤 تصدير</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleExportAllEnglishJson}><FileDown className="w-4 h-4" /> تصدير الكل JSON للترجمة الخارجية 🌍</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs">🌍 تصدير جميع الإنجليزية الأصلية ({editor.state?.entries?.length || 0})</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleExportAllEnglishJson}><FileDown className="w-4 h-4" /> JSON (للترجمة الخارجية)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleExportAllEnglishTxt}><FileText className="w-4 h-4" /> TXT (نص عادي)</DropdownMenuItem>
                   <DropdownMenuSeparator />
                    <DropdownMenuLabel className="text-xs">📦 تصدير الإنجليزية غير المترجمة ({untranslatedCount}){skippedTechnicalCount > 0 && ` 🔧 مستبعد: ${skippedTechnicalCount}`}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => editor.handleExportEnglishOnly()}><FileText className="w-4 h-4" /> TXT ملف واحد</DropdownMenuItem>

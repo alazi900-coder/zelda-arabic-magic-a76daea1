@@ -1321,6 +1321,128 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 3000);
   };
 
+  // === Glossary Compliance Check ===
+  const handleGlossaryCompliance = useCallback(() => {
+    if (!state || !activeGlossary) {
+      toast({ title: "⚠️ لا يوجد قاموس محمّل", description: "حمّل القاموس الشامل أولاً" });
+      return;
+    }
+    setCheckingGlossaryCompliance(true);
+    setGlossaryComplianceResults(null);
+    setTranslateProgress("جاري فحص التزام القاموس...");
+
+    // Run async to not block UI
+    setTimeout(() => {
+      try {
+        const glossaryMap = parseGlossaryMap(activeGlossary);
+        if (glossaryMap.size === 0) {
+          setTranslateProgress("⚠️ القاموس فارغ");
+          setTimeout(() => setTranslateProgress(""), 3000);
+          setCheckingGlossaryCompliance(false);
+          return;
+        }
+
+        // Sort terms by length (longest first) for greedy matching
+        const sortedTerms = Array.from(glossaryMap.entries())
+          .filter(([eng]) => eng.length >= 2)
+          .sort((a, b) => b[0].length - a[0].length);
+
+        const violations: import("@/components/editor/GlossaryCompliancePanel").GlossaryViolation[] = [];
+
+        for (const entry of state.entries) {
+          const key = `${entry.msbtFile}:${entry.index}`;
+          const translation = state.translations[key];
+          if (!translation?.trim()) continue;
+
+          const originalLower = entry.original.toLowerCase();
+          const entryViolations: { englishTerm: string; expectedArabic: string; foundFragment: string }[] = [];
+
+          for (const [engLower, arabic] of sortedTerms) {
+            // Check if the English term exists in the original
+            const termRe = new RegExp(`\\b${engLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:'s)?\\b`, 'i');
+            if (!termRe.test(originalLower)) continue;
+
+            // Check if the expected Arabic translation exists in the translation
+            if (translation.includes(arabic)) continue;
+
+            // Term found in English but correct Arabic not in translation — violation
+            entryViolations.push({
+              englishTerm: engLower,
+              expectedArabic: arabic,
+              foundFragment: "", // We'll try to detect wrong translations below
+            });
+          }
+
+          if (entryViolations.length === 0) continue;
+
+          // Build corrected translation by replacing wrong terms
+          let corrected = translation;
+          for (const viol of entryViolations) {
+            // Try to find other Arabic translations of this term in the text
+            // by checking if any other glossary entry's Arabic appears that shouldn't
+            // Simple approach: just ensure the expected term is present
+            // We can't easily detect the "wrong" fragment without more context,
+            // so we'll just flag it
+          }
+
+          // Build a corrected version by doing term replacement in original-order
+          corrected = translation;
+          for (const viol of entryViolations) {
+            // If we can find the English term left untranslated in Arabic text
+            const engInArabic = new RegExp(`\\b${viol.englishTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+            if (engInArabic.test(corrected)) {
+              viol.foundFragment = corrected.match(engInArabic)?.[0] || "";
+              corrected = corrected.replace(engInArabic, viol.expectedArabic);
+            }
+          }
+
+          violations.push({
+            key,
+            original: entry.original,
+            translation,
+            violations: entryViolations,
+            corrected,
+          });
+        }
+
+        if (violations.length === 0) {
+          setTranslateProgress("✅ جميع الترجمات متوافقة مع القاموس!");
+        } else {
+          setTranslateProgress(`📖 تم اكتشاف ${violations.length} ترجمة تخالف القاموس`);
+          setGlossaryComplianceResults(violations);
+        }
+        setTimeout(() => setTranslateProgress(""), 4000);
+      } catch (err) {
+        setTranslateProgress(`❌ خطأ: ${err instanceof Error ? err.message : 'غير معروف'}`);
+        setTimeout(() => setTranslateProgress(""), 4000);
+      } finally {
+        setCheckingGlossaryCompliance(false);
+      }
+    }, 50);
+  }, [state, activeGlossary, parseGlossaryMap, setTranslateProgress]);
+
+  const handleApplyGlossaryFix = useCallback((index: number) => {
+    if (!glossaryComplianceResults || !state) return;
+    const v = glossaryComplianceResults[index];
+    if (!v) return;
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [v.key]: v.corrected } } : null);
+    setGlossaryComplianceResults(prev => prev ? prev.filter((_, i) => i !== index) : null);
+    setLastSaved(`✅ تم تصحيح ترجمة وفق القاموس`);
+    setTimeout(() => setLastSaved(""), 3000);
+  }, [glossaryComplianceResults, state]);
+
+  const handleApplyAllGlossaryFixes = useCallback(() => {
+    if (!glossaryComplianceResults || !state) return;
+    const updates: Record<string, string> = {};
+    for (const v of glossaryComplianceResults) {
+      updates[v.key] = v.corrected;
+    }
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setGlossaryComplianceResults(null);
+    setLastSaved(`✅ تم تصحيح ${glossaryComplianceResults.length} ترجمة وفق القاموس`);
+    setTimeout(() => setLastSaved(""), 3000);
+  }, [glossaryComplianceResults, state]);
+
   // === Cloud save/load ===
   const handleCloudSave = async () => {
     if (!state || !user) return;

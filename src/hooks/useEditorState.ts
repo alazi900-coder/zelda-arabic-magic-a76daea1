@@ -114,6 +114,13 @@ export function useEditorState() {
     _setUserGeminiKey(key);
     try { if (key) localStorage.setItem('userGeminiKey', key); else localStorage.removeItem('userGeminiKey'); } catch {}
   }, []);
+  const [aiModel, _setAiModel] = useState<string>(() => {
+    try { return localStorage.getItem('aiModel') || 'gemini-2.5-flash'; } catch { return 'gemini-2.5-flash'; }
+  });
+  const setAiModel = useCallback((m: string) => {
+    _setAiModel(m);
+    try { localStorage.setItem('aiModel', m); } catch {}
+  }, []);
   const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google'>(() => {
     try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google') || 'gemini'; } catch { return 'gemini'; }
   });

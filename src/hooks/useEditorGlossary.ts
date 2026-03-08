@@ -112,20 +112,36 @@ export function useEditorGlossary({
     setPendingMerge(null);
   }, [setState, setLastSaved]);
 
-  // === Clean glossary text (comprehensive) ===
+  // === Clean glossary text (comprehensive — preserves section structure) ===
   const cleanGlossaryText = (rawText: string): string => {
-    const seen = new Map<string, string>(); // key -> full line (dedup)
-    const commentLines: string[] = [];
+    const seen = new Map<string, string>(); // normKey -> true (for dedup tracking)
+    const outputLines: string[] = [];
+    const lines = rawText.split('\n');
     
-    for (const line of rawText.split('\n')) {
-      const trimmed = line.trimEnd();
+    // First pass: find last occurrence of each key (last-wins dedup)
+    const lastOccurrence = new Map<string, number>(); // normKey -> line index
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx < 1) continue;
+      const eng = trimmed.slice(0, eqIdx).trim();
+      const arb = trimmed.slice(eqIdx + 1).trimEnd();
+      if (!eng || !arb) continue;
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng) || /^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) continue;
+      if (eng.length === 1 && !/^[A-Za-z\u0600-\u06FF]$/.test(eng)) continue;
+      lastOccurrence.set(eng.toLowerCase(), i);
+    }
+    
+    // Second pass: rebuild with section headers inline, keeping only last occurrence of each key
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trimEnd();
       if (!trimmed) continue;
       
-      // Keep comment/section headers
+      // Keep comment/section headers (filter technical noise)
       if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
-        // Filter out technical noise
         if (/^#\[ML:/.test(trimmed) || /^\+\[ML:/.test(trimmed)) continue;
-        commentLines.push(trimmed);
+        outputLines.push(trimmed);
         continue;
       }
       
@@ -137,26 +153,19 @@ export function useEditorGlossary({
       
       const eng = trimmed.slice(0, eqIdx).trim();
       const arb = trimmed.slice(eqIdx + 1).trimEnd();
-      
-      // Skip empty or pure-symbol entries
       if (!eng || !arb) continue;
-      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng)) continue;
-      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) continue;
-      // Skip single character keys that aren't meaningful
+      if (/^[#%+=\-.\\/;:*&^$@!]+$/.test(eng) || /^[#%+=\-.\\/;:*&^$@!]+$/.test(arb)) continue;
       if (eng.length === 1 && !/^[A-Za-z\u0600-\u06FF]$/.test(eng)) continue;
       
       const normKey = eng.toLowerCase();
-      // Last occurrence wins (dedup)
-      seen.set(normKey, `${eng}=${arb}`);
+      // Only emit if this is the last occurrence (dedup) and not already emitted
+      if (lastOccurrence.get(normKey) === i && !seen.has(normKey)) {
+        seen.set(normKey, 'true');
+        outputLines.push(`${eng}=${arb}`);
+      }
     }
     
-    // Rebuild: comments at top, then sorted entries
-    const result: string[] = [];
-    if (commentLines.length > 0) {
-      result.push(...commentLines);
-    }
-    result.push(...Array.from(seen.values()));
-    return result.join('\n');
+    return outputLines.join('\n');
   };
 
   // === Import from file (with merge preview) ===

@@ -2542,7 +2542,51 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, sentenceOrderResults]);
 
-  return {
+  // === Arabic Text Fixes (تاء/هاء، ياء/ألف مقصورة، كلمات مكررة، مخلفات AI) ===
+  const handleScanArabicTextFixes = useCallback(() => {
+    if (!state) return;
+    const { scanAllTextFixes } = require('@/lib/arabic-text-fixes');
+    const results = scanAllTextFixes(state.translations);
+    setArabicTextFixResults(results);
+    if (results.length === 0) {
+      setLastSaved("✅ لا توجد مشاكل في النصوص العربية");
+      setTimeout(() => setLastSaved(""), 4000);
+    } else {
+      toast({ title: `✨ تم العثور على ${results.length} مشكلة`, description: "راجع النتائج وقرر ما تريد تطبيقه" });
+    }
+  }, [state]);
+
+  const handleApplyArabicTextFix = useCallback((key: string, fixType: string) => {
+    if (!state || !arabicTextFixResults) return;
+    const item = arabicTextFixResults.find(r => r.key === key && r.fixType === fixType);
+    if (!item) return;
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setArabicTextFixResults(prev => prev ? prev.map(r => (r.key === key && r.fixType === fixType) ? { ...r, status: 'accepted' as const } : r) : null);
+  }, [state, arabicTextFixResults]);
+
+  const handleRejectArabicTextFix = useCallback((key: string, fixType: string) => {
+    setArabicTextFixResults(prev => prev ? prev.map(r => (r.key === key && r.fixType === fixType) ? { ...r, status: 'rejected' as const } : r) : null);
+  }, []);
+
+  const handleApplyAllArabicTextFixes = useCallback(() => {
+    if (!state || !arabicTextFixResults) return;
+    const pending = arabicTextFixResults.filter(r => r.status === 'pending');
+    const newTranslations = { ...state.translations };
+    // Apply in order: each fix is based on original text, so apply sequentially per key
+    const appliedKeys = new Set<string>();
+    for (const item of pending) {
+      if (!appliedKeys.has(item.key)) {
+        newTranslations[item.key] = item.after;
+        appliedKeys.add(item.key);
+      }
+    }
+    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setArabicTextFixResults(prev => prev ? prev.map(r => r.status === 'pending' ? { ...r, status: 'accepted' as const } : r) : null);
+    setLastSaved(`✅ تم تطبيق ${pending.length} إصلاح نصي`);
+    setTimeout(() => setLastSaved(""), 4000);
+  }, [state, arabicTextFixResults]);
+
+
     // State
     state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace, userGeminiKey, translationProvider, myMemoryEmail, myMemoryCharsUsed, aiRequestsToday, aiRequestsMonth, rebalanceNewlines, aiModel,
     pendingRecovery, handleRecoverSession, handleStartFresh,

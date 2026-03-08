@@ -2572,13 +2572,9 @@ export function useEditorState() {
     if (!state || !arabicTextFixResults) return;
     const pending = arabicTextFixResults.filter(r => r.status === 'pending');
     const newTranslations = { ...state.translations };
-    // Apply in order: each fix is based on original text, so apply sequentially per key
-    const appliedKeys = new Set<string>();
+    // For same key with multiple chained fixes, apply the LAST one (most complete)
     for (const item of pending) {
-      if (!appliedKeys.has(item.key)) {
-        newTranslations[item.key] = item.after;
-        appliedKeys.add(item.key);
-      }
+      newTranslations[item.key] = item.after;
     }
     setState(prev => prev ? { ...prev, translations: newTranslations } : null);
     setArabicTextFixResults(prev => prev ? prev.map(r => r.status === 'pending' ? { ...r, status: 'accepted' as const } : r) : null);

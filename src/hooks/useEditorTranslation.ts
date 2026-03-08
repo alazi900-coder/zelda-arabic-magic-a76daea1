@@ -85,6 +85,13 @@ export function useEditorTranslation({
   const [pageTranslationOriginals, setPageTranslationOriginals] = useState<Record<string, string>>({});
   const [showPageCompare, setShowPageCompare] = useState(false);
 
+  // Glossary preview state
+  const [glossaryPreviewEntries, setGlossaryPreviewEntries] = useState<Array<{
+    key: string; original: string; newTranslation: string; oldTranslation: string; matchType: 'exact' | 'partial';
+  }>>([]);
+  const [pendingGlossaryTranslations, setPendingGlossaryTranslations] = useState<Record<string, string>>({});
+  const [showGlossaryPreview, setShowGlossaryPreview] = useState(false);
+
   const applyPendingTranslations = (selectedKeys?: Set<string>) => {
     if (!state || !pendingPageTranslations) return;
     const toApply: Record<string, string> = {};

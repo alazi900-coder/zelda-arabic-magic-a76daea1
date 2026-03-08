@@ -73,6 +73,7 @@ import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 import MismatchDetectorPanel from "@/components/editor/MismatchDetectorPanel";
 import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
 import SmartReviewPanel from "@/components/editor/SmartReviewPanel";
+import GlossaryCompliancePanel from "@/components/editor/GlossaryCompliancePanel";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -881,6 +882,16 @@ const Editor = () => {
             />
           )}
 
+          {/* Glossary Compliance Panel */}
+          {editor.glossaryComplianceResults && editor.glossaryComplianceResults.length > 0 && (
+            <GlossaryCompliancePanel
+              violations={editor.glossaryComplianceResults}
+              onApplyFix={editor.handleApplyGlossaryFix}
+              onApplyAll={editor.handleApplyAllGlossaryFixes}
+              onClose={() => editor.setGlossaryComplianceResults(null)}
+            />
+          )}
+
           {/* Tag Repair Panel */}
           {showTagRepair && editor.state && (
             <TagRepairPanel
@@ -1262,6 +1273,9 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleImproveTranslations} disabled={editor.improvingTranslations || editor.translatedCount === 0}><Sparkles className="w-4 h-4" /> تحسين الترجمات ✨</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleCheckConsistency} disabled={editor.checkingConsistency || editor.translatedCount === 0}>
                     {editor.checkingConsistency ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق المصطلحات 🔍
+                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleGlossaryCompliance} disabled={editor.checkingGlossaryCompliance || editor.translatedCount === 0 || !editor.activeGlossary}>
+                    {editor.checkingGlossaryCompliance ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />} فحص التزام القاموس 📖
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanMergedSentences} disabled={editor.scanningSentences || editor.translatedCount === 0}>
                     {editor.scanningSentences ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} فصل الجمل المندمجة ✂️
@@ -1451,6 +1465,9 @@ const Editor = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleCheckConsistency} disabled={editor.checkingConsistency || editor.translatedCount === 0}>
                     {editor.checkingConsistency ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق المصطلحات 🔍
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleGlossaryCompliance} disabled={editor.checkingGlossaryCompliance || editor.translatedCount === 0 || !editor.activeGlossary}>
+                    {editor.checkingGlossaryCompliance ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />} فحص التزام القاموس 📖
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanMergedSentences} disabled={editor.scanningSentences || editor.translatedCount === 0}>
                     {editor.scanningSentences ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} فصل الجمل المندمجة ✂️

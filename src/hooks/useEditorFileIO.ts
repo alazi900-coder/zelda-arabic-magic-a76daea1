@@ -1030,6 +1030,28 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     setTimeout(() => setLastSaved(""), 4000);
   };
 
+  /** Export ALL English originals as TXT (including already translated) */
+  const handleExportAllEnglishTxt = () => {
+    if (!state) return;
+    const entriesToExport = isFilterActive ? filteredEntries : state.entries;
+    const sortedEntries = [...entriesToExport].sort((a, b) => {
+      const fileCompare = a.msbtFile.localeCompare(b.msbtFile);
+      if (fileCompare !== 0) return fileCompare;
+      return a.index - b.index;
+    });
+    const flatEntries = sortedEntries.map(e => ({
+      file: e.msbtFile,
+      index: e.index,
+      original: e.original,
+      label: e.label || '',
+    }));
+    const content = buildEnglishTxt(flatEntries, '', 1, 1);
+    const suffix = isFilterActive ? `_${filterLabel}` : '';
+    downloadTxt(content, `english-all${suffix}_${new Date().toISOString().slice(0, 10)}.txt`);
+    setLastSaved(`✅ تم تصدير ${flatEntries.length} نص إنجليزي أصلي (الكل)`);
+    setTimeout(() => setLastSaved(""), 4000);
+  };
+
   /** Import external translations JSON {key: translation} back */
   const handleImportExternalJson = () => {
     const input = document.createElement('input');
@@ -1975,6 +1997,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     handleExportCSV,
     handleImportCSV,
     handleExportAllEnglishJson,
+    handleExportAllEnglishTxt,
     handleImportExternalJson,
     handleExportXLIFF,
     handleExportTMX,

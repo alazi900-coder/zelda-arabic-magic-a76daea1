@@ -1885,57 +1885,47 @@ const Editor = () => {
             />
           )}
 
-          {/* Pagination Header */}
+          {/* Entries Count */}
           {editor.filteredEntries.length > 0 && (
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">
-                عرض {editor.currentPage * PAGE_SIZE + 1}-{Math.min((editor.currentPage + 1) * PAGE_SIZE, editor.filteredEntries.length)} من {editor.filteredEntries.length} نص
+                {editor.filteredEntries.length} نص
               </p>
               <PaginationControls currentPage={editor.currentPage} totalPages={editor.totalPages} totalItems={editor.filteredEntries.length} pageSize={PAGE_SIZE} setCurrentPage={editor.setCurrentPage} />
             </div>
           )}
 
-          {/* Entries List */}
-          <div className="space-y-2">
-            {editor.filteredEntries.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">لا توجد نصوص مطابقة</p>
-            ) : (
-              editor.paginatedEntries.map((entry) => {
-                const key = `${entry.msbtFile}:${entry.index}`;
-                return (
-                  <EntryCard
-                    key={key}
-                    entry={entry}
-                    translation={editor.state?.translations[key] || ''}
-                    glossary={editor.activeGlossary}
-                    isProtected={editor.state?.protectedEntries?.has(key) || false}
-                    hasProblem={editor.qualityStats.problemKeys.has(key)}
-                    isDamagedTag={editor.qualityStats.damagedTagKeys.has(key)}
-                    fuzzyScore={editor.state?.fuzzyScores?.[key]}
-                    isMobile={isMobile}
-                    translatingSingle={editor.translatingSingle}
-                    improvingTranslations={editor.improvingTranslations}
-                    previousTranslations={editor.previousTranslations}
-                    isTranslationTooShort={editor.isTranslationTooShort}
-                    isTranslationTooLong={editor.isTranslationTooLong}
-                    hasStuckChars={editor.hasStuckChars}
-                    isMixedLanguage={editor.isMixedLanguage}
-                    updateTranslation={editor.updateTranslation}
-                    handleTranslateSingle={editor.handleTranslateSingle}
-                    handleImproveSingleTranslation={editor.handleImproveSingleTranslation}
-                    handleUndoTranslation={editor.handleUndoTranslation}
-                    handleFixReversed={editor.handleFixReversed}
-                    handleLocalFixDamagedTag={editor.handleLocalFixDamagedTag}
-                    onAcceptFuzzy={editor.handleAcceptFuzzy}
-                    onRejectFuzzy={editor.handleRejectFuzzy}
-                    onCompare={(entry) => setCompareEntry(entry)}
-                    onSplitNewline={editor.handleSplitSingleEntry}
-                    tmSuggestions={findSimilar(key, entry.original)}
-                  />
-                );
-              })
-            )}
-          </div>
+          {/* Virtualized Entries List */}
+          {editor.filteredEntries.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">لا توجد نصوص مطابقة</p>
+          ) : editor.state ? (
+            <VirtualizedEntryList
+              entries={editor.paginatedEntries}
+              state={editor.state}
+              qualityStats={editor.qualityStats}
+              activeGlossary={editor.activeGlossary}
+              isMobile={isMobile}
+              translatingSingle={editor.translatingSingle}
+              improvingTranslations={editor.improvingTranslations}
+              previousTranslations={editor.previousTranslations}
+              isTranslationTooShort={editor.isTranslationTooShort}
+              isTranslationTooLong={editor.isTranslationTooLong}
+              hasStuckChars={editor.hasStuckChars}
+              isMixedLanguage={editor.isMixedLanguage}
+              updateTranslation={editor.updateTranslation}
+              handleTranslateSingle={editor.handleTranslateSingle}
+              handleImproveSingleTranslation={editor.handleImproveSingleTranslation}
+              handleUndoTranslation={editor.handleUndoTranslation}
+              handleFixReversed={editor.handleFixReversed}
+              handleLocalFixDamagedTag={editor.handleLocalFixDamagedTag}
+              onAcceptFuzzy={editor.handleAcceptFuzzy}
+              onRejectFuzzy={editor.handleRejectFuzzy}
+              onCompare={(entry) => setCompareEntry(entry)}
+              onSplitNewline={editor.handleSplitSingleEntry}
+              findSimilar={findSimilar}
+              height={Math.max(400, window.innerHeight - 300)}
+            />
+          ) : null}
 
           {/* Pagination Footer */}
           <PaginationControls currentPage={editor.currentPage} totalPages={editor.totalPages} totalItems={editor.filteredEntries.length} pageSize={PAGE_SIZE} setCurrentPage={editor.setCurrentPage} />

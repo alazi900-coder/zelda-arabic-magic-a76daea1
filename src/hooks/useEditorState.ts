@@ -1406,7 +1406,7 @@ export function useEditorState() {
       setTranslateProgress(`🔍 جاري تقييم الجودة (0/${reviewEntries.length})...`);
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const allWeak: typeof weakTranslations extends (infer T)[] | null ? T[] : never[] = [];
+      const allWeak: { key: string; original: string; current: string; score: number; reason: string; suggestion: string }[] = [];
       let processed = 0;
       for (const batch of batches) {
         if (abortCtrl.signal.aborted) break;

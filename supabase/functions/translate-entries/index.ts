@@ -1003,12 +1003,27 @@ async function translateWithAI(
 
   let categoryHint = '';
   const sampleKey = entries[0]?.key || '';
-  if (/ActorMsg\/PouchContent/i.test(sampleKey)) categoryHint = 'هذه نصوص أسماء أسلحة وأدوات ومواد - استخدم صيغة مختصرة ومباشرة.';
-  else if (/LayoutMsg/i.test(sampleKey)) categoryHint = 'هذه نصوص واجهة مستخدم وقوائم - استخدم صيغة مختصرة وواضحة.';
-  else if (/EventFlowMsg/i.test(sampleKey)) categoryHint = 'هذه حوارات قصة ومهام - استخدم أسلوباً سردياً طبيعياً وممتعاً.';
-  else if (/ChallengeMsg/i.test(sampleKey)) categoryHint = 'هذه نصوص مهام وتحديات - استخدم أسلوباً تحفيزياً واضحاً.';
-  else if (/LocationMsg/i.test(sampleKey)) categoryHint = 'هذه أسماء مواقع وخرائط - حافظ على الأسماء العلم أو ترجمها بالطريقة الشائعة.';
-  else if (/ActorMsg/i.test(sampleKey)) categoryHint = 'هذه أسماء شخصيات وأعداء - حافظ على الأسماء العلم الشهيرة كما هي.';
+  const sampleText = entries[0]?.original || '';
+  // Enhanced content-type detection based on table patterns AND text content
+  if (/CharacterName|SYS_.*Name|ActorName/i.test(sampleKey)) {
+    categoryHint = 'هذه أسماء شخصيات أو كيانات — حافظ على الأسماء العلم كما في القاموس أو اكتبها بالعربية بالطريقة الشائعة. اجعل الترجمة مختصرة جداً.';
+  } else if (/ItemName|PouchContent|CollectibleName|GemName|AccessoryName|CookName/i.test(sampleKey)) {
+    categoryHint = 'هذه أسماء أدوات ومواد وعناصر قابلة للجمع — استخدم صيغة اسمية مختصرة ومباشرة وواضحة.';
+  } else if (/MNU_|Menu|LayoutMsg|BTN_|Option|Setting/i.test(sampleKey)) {
+    categoryHint = 'هذه نصوص واجهة مستخدم وقوائم وأزرار — اجعلها مختصرة جداً وواضحة ومباشرة. كلمة أو كلمتان كحد أقصى عند الإمكان.';
+  } else if (/EventFlow|msg_(ask|cq|fev|nq|sq|tlk|tq)|FLD_Npc|talk/i.test(sampleKey)) {
+    categoryHint = 'هذه حوارات شخصيات ومحادثات NPC — استخدم أسلوباً طبيعياً وحيوياً يعكس شخصية المتحدث. حافظ على الحميمية والعاطفة في الحوارات.';
+  } else if (/QST_|Quest|Mission|Challenge/i.test(sampleKey)) {
+    categoryHint = 'هذه أسماء مهام وتحديات وأوصافها — استخدم أسلوباً تحفيزياً واضحاً مع الحفاظ على أسماء العلم.';
+  } else if (/Location|Map|FLD_.*Name|Area|Region|Landmark/i.test(sampleKey)) {
+    categoryHint = 'هذه أسماء مواقع ومعالم على الخريطة — حافظ على الأسماء العلم أو ترجمها وصفياً إذا كانت وصفية (مثل Crystal Valley = وادي الكريستال).';
+  } else if (/Skill|Art|Ability|Class|Talent/i.test(sampleKey)) {
+    categoryHint = 'هذه أسماء فنون قتالية ومهارات وتخصصات — استخدم مصطلحات قوية ومؤثرة تتناسب مع طبيعة القتال والأكشن.';
+  } else if (/desc|caption|help|tutorial|tip|guide/i.test(sampleKey)) {
+    categoryHint = 'هذه نصوص أوصاف وتعليمات وشروحات — اجعلها واضحة ومفصلة وسهلة الفهم للاعب.';
+  } else if (sampleText.length <= 15 && /^[A-Z]/.test(sampleText)) {
+    categoryHint = 'هذا نص قصير (على الأرجح اسم أو عنصر واجهة) — اجعل الترجمة مختصرة جداً.';
+  }
 
   const categorySection = categoryHint ? `\n\n${categoryHint}` : '';
 

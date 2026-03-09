@@ -80,6 +80,8 @@ import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationP
 import TranslationEnhancePanel from "@/components/editor/TranslationEnhancePanel";
 import AdvancedTranslationPanel from "@/components/editor/AdvancedTranslationPanel";
 import ToolHelpDialog, { ToolType } from "@/components/editor/ToolHelpDialog";
+import TranslationProgressDashboard from "@/components/editor/TranslationProgressDashboard";
+import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
 import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
 
 const Editor = () => {
@@ -771,6 +773,21 @@ const Editor = () => {
             onApplyAll={(fixes) => {
               for (const f of fixes) editor.updateTranslation(f.key, f.value);
             }}
+          />
+
+          {/* Translation Progress Dashboard */}
+          <TranslationProgressDashboard
+            state={editor.state}
+            qualityStats={editor.qualityStats}
+            glossarySessionStats={editor.glossarySessionStats}
+            aiRequestsToday={editor.aiRequestsToday}
+            aiRequestsMonth={editor.aiRequestsMonth}
+          />
+
+          {/* Cross-file Consistency Check */}
+          <ConsistencyCheckPanel
+            state={editor.state}
+            updateTranslation={editor.updateTranslation}
           />
 
           {/* Translation Tools */}

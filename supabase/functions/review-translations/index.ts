@@ -41,11 +41,12 @@ Deno.serve(async (req) => {
    }
 
    try {
-      const { entries, glossary, action, aiModel } = await req.json() as {
+      const { entries, glossary, action, aiModel, contextEntries } = await req.json() as {
         entries: ReviewEntry[];
         glossary?: string;
-        action?: 'review' | 'suggest-short' | 'improve' | 'smart-review';
+        action?: 'review' | 'suggest-short' | 'improve' | 'smart-review' | 'grammar-check' | 'context-review';
         aiModel?: string;
+        contextEntries?: { key: string; original: string; translation: string }[];
       };
 
       // Map aiModel to gateway model name

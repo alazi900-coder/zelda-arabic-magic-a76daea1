@@ -801,6 +801,14 @@ const Editor = () => {
             onApplyTranslation={(key, val) => editor.updateTranslation(key, val)}
           />
 
+          {/* AI Translation Enhancement */}
+          <TranslationAIEnhancePanel
+            entries={editor.state?.entries || []}
+            translations={editor.state?.translations || {}}
+            onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
+            glossary={editor.activeGlossary}
+          />
+
           {/* Review Results */}
           <ReviewPanel
             reviewResults={editor.reviewResults}

@@ -96,6 +96,7 @@ const Editor = () => {
   const [showFontTest, setShowFontTest] = React.useState(false);
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
+  const [showToolHelp, setShowToolHelp] = React.useState<ToolType>(null);
   const gameType = "xenoblade";
   const processPath = "/process";
 

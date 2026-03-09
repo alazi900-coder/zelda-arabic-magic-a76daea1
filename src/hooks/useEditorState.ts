@@ -1221,6 +1221,113 @@ export function useEditorState() {
     // Dismissal is handled in the panel via local state
   };
 
+  // === Context-aware Translation Enhancement ===
+  const handleEnhanceTranslations = async () => {
+    if (!state) return;
+    setEnhancingTranslations(true);
+    setEnhanceResults(null);
+    toast({ title: "🎯 بدأ التحسين السياقي", description: "تحليل الترجمات مع مراعاة السياق والشخصيات..." });
+    
+    try {
+      const translatedEntries = filteredEntries
+        .filter(e => {
+          const key = `${e.msbtFile}:${e.index}`;
+          return state.translations[key]?.trim();
+        })
+        .slice(0, 20) // Limit for performance
+        .map(e => ({
+          key: `${e.msbtFile}:${e.index}`,
+          original: e.original,
+          translation: state.translations[`${e.msbtFile}:${e.index}`],
+          fileName: e.msbtFile,
+          tableName: e.bdatTable,
+        }));
+
+      if (translatedEntries.length === 0) {
+        setTranslateProgress("⚠️ لا توجد ترجمات للتحسين في النطاق المحدد");
+        setTimeout(() => setTranslateProgress(""), 3000);
+        setEnhancingTranslations(false);
+        return;
+      }
+
+      setTranslateProgress(`🎯 جاري تحليل ${translatedEntries.length} ترجمة سياقياً...`);
+      
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/enhance-translations`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entries: translatedEntries,
+          action: 'analyze',
+          glossary: activeGlossary?.split('\n').slice(0, 200).join('\n'), // Send limited glossary
+          aiModel,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `خطأ ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.results && data.results.length > 0) {
+        const withIssues = data.results.filter((r: any) => r.issues?.length > 0 || r.suggestions?.length > 0);
+        setEnhanceResults(data.results);
+        setTranslateProgress(`✅ تم تحليل ${data.results.length} ترجمة — ${withIssues.length} تحتاج تحسين`);
+      } else {
+        setTranslateProgress("✅ جميع الترجمات جيدة — لا توجد اقتراحات");
+      }
+      setTimeout(() => setTranslateProgress(""), 5000);
+
+    } catch (err) {
+      console.error('Enhance error:', err);
+      toast({
+        title: "خطأ في التحسين السياقي",
+        description: err instanceof Error ? err.message : 'خطأ غير متوقع',
+        variant: "destructive",
+      });
+      setTranslateProgress("");
+    } finally {
+      setEnhancingTranslations(false);
+    }
+  };
+
+  const handleApplyEnhanceSuggestion = (key: string, newTranslation: string) => {
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: newTranslation } } : null);
+    setEnhanceResults(prev => prev ? prev.filter(r => r.key !== key) : null);
+    toast({ title: "✅ تم تطبيق الاقتراح" });
+  };
+
+  const handleApplyAllEnhanceSuggestions = () => {
+    if (!enhanceResults || !state) return;
+    const updates: Record<string, string> = {};
+    for (const r of enhanceResults) {
+      if (r.preferredSuggestion) {
+        updates[r.key] = r.preferredSuggestion;
+      } else if (r.suggestions?.[0]?.text) {
+        updates[r.key] = r.suggestions[0].text;
+      }
+    }
+    if (Object.keys(updates).length === 0) {
+      toast({ title: "⚠️ لا توجد اقتراحات للتطبيق" });
+      return;
+    }
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setEnhanceResults([]);
+    toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} تحسين` });
+  };
+
+  const handleCloseEnhanceResults = () => {
+    setEnhanceResults(null);
+  };
+
   // === Improve translations ===
   const handleImproveTranslations = async () => {
     if (!state) return;

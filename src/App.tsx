@@ -37,15 +37,15 @@ const App = () => (
         
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ErrorBoundary fallbackTitle="حدث خطأ في التطبيق">
-            <Routes>
-              <Route path="/" element={<Xenoblade />} />
-              <Route path="/process" element={<ErrorBoundary fallbackTitle="خطأ في المعالجة"><XenobladeProcess /></ErrorBoundary>} />
-              <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />
-              
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/install" element={<Install />} />
-              <Route path="/mod-packager" element={<ModPackager />} />
-              <Route path="*" element={<NotFound />} />
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<Xenoblade />} />
+                <Route path="/process" element={<ErrorBoundary fallbackTitle="خطأ في المعالجة"><XenobladeProcess /></ErrorBoundary>} />
+                <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/install" element={<Install />} />
+                <Route path="/mod-packager" element={<ModPackager />} />
+                <Route path="*" element={<NotFound />} />
             </Routes>
           </ErrorBoundary>
         </BrowserRouter>

@@ -1317,6 +1317,166 @@ export function useEditorState() {
     } finally { setSmartReviewing(false); }
   };
 
+  // === Auto-Correct (bulk spelling/grammar auto-fix) ===
+  const [autoCorrectResults, setAutoCorrectResults] = useState<{ key: string; original: string; current: string; corrected: string }[] | null>(null);
+  const [autoCorrectApplied, setAutoCorrectApplied] = useState(false);
+
+  const handleAutoCorrect = async () => {
+    if (!state) return;
+    setSmartReviewing(true);
+    setAutoCorrectResults(null);
+    setAutoCorrectApplied(false);
+    toast({ title: "✏️ بدأ التصحيح الإملائي الشامل", description: "جاري فحص وتصحيح جميع الترجمات..." });
+    try {
+      const reviewEntries = filteredEntries
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
+      if (reviewEntries.length === 0) { toast({ title: "لا توجد ترجمات للتصحيح" }); return; }
+      
+      setTranslateProgress(`✏️ جاري التصحيح الإملائي (${reviewEntries.length} نص)...`);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: reviewEntries, action: 'auto-correct', aiModel }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `خطأ ${response.status}`);
+      }
+      const data = await response.json();
+      const corrections = data.corrections || [];
+      if (corrections.length === 0) {
+        setTranslateProgress("✅ جميع الترجمات سليمة إملائياً!");
+        setTimeout(() => setTranslateProgress(""), 4000);
+      } else {
+        // Auto-apply all corrections
+        const newTranslations = { ...state.translations };
+        for (const c of corrections) {
+          newTranslations[c.key] = c.corrected;
+        }
+        setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+        setAutoCorrectResults(corrections);
+        setAutoCorrectApplied(true);
+        setTranslateProgress(`✏️ تم تصحيح ${corrections.length} ترجمة تلقائياً`);
+        toast({ title: `✅ تم تصحيح ${corrections.length} خطأ إملائي/نحوي`, description: "يمكنك التراجع عن أي تصحيح من سجل التعديلات" });
+        setTimeout(() => setTranslateProgress(""), 4000);
+      }
+    } catch (err) {
+      toast({ title: "خطأ في التصحيح التلقائي", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
+      setTranslateProgress("");
+    } finally { setSmartReviewing(false); }
+  };
+
+  // === Detect Weak Translations ===
+  const [weakTranslations, setWeakTranslations] = useState<{ key: string; original: string; current: string; score: number; reason: string; suggestion: string }[] | null>(null);
+  const [detectingWeak, setDetectingWeak] = useState(false);
+
+  const handleDetectWeak = async () => {
+    if (!state) return;
+    setDetectingWeak(true);
+    setWeakTranslations(null);
+    toast({ title: "🔍 بدأ كشف الترجمات الركيكة", description: "تقييم جودة الترجمات..." });
+    try {
+      const reviewEntries = filteredEntries
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
+      if (reviewEntries.length === 0) { toast({ title: "لا توجد ترجمات للفحص" }); return; }
+
+      setTranslateProgress(`🔍 جاري تقييم جودة ${reviewEntries.length} ترجمة...`);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'detect-weak', aiModel }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `خطأ ${response.status}`);
+      }
+      const data = await response.json();
+      setWeakTranslations(data.weakEntries || []);
+      const count = data.weakEntries?.length || 0;
+      setTranslateProgress(count > 0 ? `🔍 تم العثور على ${count} ترجمة ركيكة` : `✅ جميع الترجمات بجودة عالية!`);
+      setTimeout(() => setTranslateProgress(""), 4000);
+    } catch (err) {
+      toast({ title: "خطأ في كشف الترجمات", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
+      setTranslateProgress("");
+    } finally { setDetectingWeak(false); }
+  };
+
+  const handleApplyWeakFix = (key: string, suggestion: string) => {
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: suggestion } } : null);
+    setWeakTranslations(prev => prev ? prev.filter(w => w.key !== key) : null);
+  };
+
+  const handleApplyAllWeakFixes = () => {
+    if (!weakTranslations || !state) return;
+    const updates: Record<string, string> = {};
+    for (const w of weakTranslations) {
+      if (w.suggestion) updates[w.key] = w.suggestion;
+    }
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setWeakTranslations([]);
+    toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} تحسين` });
+  };
+
+  // === Context-aware Re-translation ===
+  const handleContextRetranslate = async () => {
+    if (!state) return;
+    setSmartReviewing(true);
+    toast({ title: "🎯 بدأت إعادة الترجمة بالسياق", description: "إعادة ترجمة النصوص مع مراعاة السياق المحيط..." });
+    try {
+      const reviewEntries = filteredEntries
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
+      if (reviewEntries.length === 0) { toast({ title: "لا توجد ترجمات لإعادة الترجمة" }); return; }
+
+      // Build context from all translated entries in the current filter
+      const contextEntries = filteredEntries
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .slice(0, 30)
+        .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`] }));
+
+      setTranslateProgress(`🎯 جاري إعادة الترجمة بالسياق (${reviewEntries.length} نص)...`);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-retranslate', aiModel, contextEntries }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `خطأ ${response.status}`);
+      }
+      const data = await response.json();
+      const retranslations = data.retranslations || [];
+      if (retranslations.length === 0) {
+        setTranslateProgress("✅ لم يتم العثور على تحسينات سياقية");
+        setTimeout(() => setTranslateProgress(""), 4000);
+      } else {
+        // Show as smart review findings for review before applying
+        const findings = retranslations.map((r: any) => ({
+          key: r.key,
+          original: r.original,
+          current: r.current,
+          type: 'improvement' as const,
+          issue: r.changes || 'تحسين سياقي',
+          fix: r.retranslated,
+        }));
+        setSmartReviewFindings(findings);
+        setTranslateProgress(`🎯 تم العثور على ${retranslations.length} تحسين سياقي`);
+        setTimeout(() => setTranslateProgress(""), 4000);
+      }
+    } catch (err) {
+      toast({ title: "خطأ في إعادة الترجمة", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
+      setTranslateProgress("");
+    } finally { setSmartReviewing(false); }
+  };
+
   // === Context-aware Translation Enhancement ===
   const handleEnhanceTranslations = async () => {
     if (!state) return;
@@ -3126,6 +3286,9 @@ export function useEditorState() {
     handleImproveSingleTranslation,
     handleCheckConsistency, handleApplyConsistencyFix, handleApplyAllConsistencyFixes,
     handleSmartReview, handleGrammarCheck, handleContextReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
+    handleAutoCorrect, autoCorrectResults, autoCorrectApplied,
+    handleDetectWeak, weakTranslations, detectingWeak, handleApplyWeakFix, handleApplyAllWeakFixes, setWeakTranslations,
+    handleContextRetranslate,
     handleEnhanceTranslations, handleApplyEnhanceSuggestion, handleApplyAllEnhanceSuggestions, handleCloseEnhanceResults,
     // Advanced Analysis handlers
     handleAdvancedAnalysis, handleApplyAdvancedSuggestion, handleApplyAllAdvanced, handleCloseAdvancedPanel, saveToEnhancedMemory, handleStopAdvancedAnalysis,

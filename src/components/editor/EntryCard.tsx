@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2 } from "lucide-react";
+import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
@@ -127,6 +127,8 @@ const EntryCard: React.FC<EntryCardProps> = ({
   const [showTagPreview, setShowTagPreview] = useState(false);
   const [balancePreview, setBalancePreview] = useState<string | null>(null);
   const [showGamePreview, setShowGamePreview] = useState(false);
+  const [alternatives, setAlternatives] = useState<{ style: string; text: string; reason: string }[] | null>(null);
+  const [fetchingAlternatives, setFetchingAlternatives] = useState(false);
 
   const tagPreview = useMemo(() => {
     if (!isDamagedTag || !translation?.trim()) return null;
@@ -162,6 +164,32 @@ const EntryCard: React.FC<EntryCardProps> = ({
       toast({ title: "خطأ", description: "فشل في الترجمة العكسية", variant: "destructive" });
     } finally {
       setBackTranslating(false);
+    }
+  };
+
+  const handleQuickAlternatives = async () => {
+    if (!translation?.trim() || fetchingAlternatives) return;
+    setFetchingAlternatives(true);
+    setAlternatives(null);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }],
+          glossary,
+          action: 'quick-alternatives',
+        }),
+      });
+      if (!response.ok) throw new Error(`خطأ ${response.status}`);
+      const data = await response.json();
+      setAlternatives(data.alternatives || []);
+    } catch (e) {
+      toast({ title: "خطأ", description: "فشل في جلب البدائل", variant: "destructive" });
+    } finally {
+      setFetchingAlternatives(false);
     }
   };
 
@@ -311,6 +339,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
               <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleImproveSingleTranslation(entry)} disabled={improvingTranslations || !translation?.trim()} title="تحسين هذه الترجمة">
                 {improvingTranslations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-secondary" />}
               </Button>
+              {translation?.trim() && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={handleQuickAlternatives} disabled={fetchingAlternatives} title="📝 3 بدائل فورية">
+                  {fetchingAlternatives ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListOrdered className="w-4 h-4 text-primary" />}
+                </Button>
+              )}
               {translation?.trim() && /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/.test(translation) && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
                   const cleaned = translation.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '');
@@ -454,6 +487,43 @@ const EntryCard: React.FC<EntryCardProps> = ({
                 </Button>
               </div>
               <p dir="ltr" className="text-foreground break-words">{backTranslation}</p>
+            </div>
+          )}
+          {/* Quick Alternatives */}
+          {alternatives && alternatives.length > 0 && (
+            <div className="mt-2 p-2 rounded border border-primary/20 bg-primary/5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-primary font-semibold">
+                  <ListOrdered className="w-3.5 h-3.5" /> بدائل مقترحة
+                </span>
+                <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" onClick={() => setAlternatives(null)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              {alternatives.map((alt, i) => {
+                const styleEmoji = alt.style === 'natural' ? '💬' : alt.style === 'concise' ? '✂️' : '📚';
+                const styleLabel = alt.style === 'natural' ? 'طبيعي' : alt.style === 'concise' ? 'مختصر' : 'أدبي';
+                return (
+                  <div key={i} className="flex items-start gap-2 text-[11px] group">
+                    <span className="shrink-0 px-1 py-0.5 rounded bg-primary/15 text-primary border border-primary/20 text-[10px]">
+                      {styleEmoji} {styleLabel}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-foreground font-body" dir="rtl">{alt.text}</p>
+                      {alt.reason && <p className="text-[10px] text-muted-foreground mt-0.5">{alt.reason}</p>}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:bg-primary/10 shrink-0"
+                      onClick={() => { updateTranslation(key, alt.text); setAlternatives(null); }}
+                      title="استخدام هذا البديل"
+                    >
+                      استخدام
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
           {/* Translation Memory Suggestions */}

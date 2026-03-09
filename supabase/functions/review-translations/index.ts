@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       const { entries, glossary, action, aiModel, contextEntries } = await req.json() as {
         entries: ReviewEntry[];
         glossary?: string;
-        action?: 'review' | 'suggest-short' | 'improve' | 'smart-review' | 'grammar-check' | 'context-review';
+        action?: 'review' | 'suggest-short' | 'improve' | 'smart-review' | 'grammar-check' | 'context-review' | 'quick-alternatives' | 'auto-correct' | 'detect-weak' | 'context-retranslate';
         aiModel?: string;
         contextEntries?: { key: string; original: string; translation: string }[];
       };
@@ -432,6 +432,357 @@ AR: "${e.translation}"`).join('\n\n')}
         }
 
         return new Response(JSON.stringify({ findings: allFindings }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // --- Handle "quick-alternatives" action (3 alternatives for a single entry) ---
+      if (action === 'quick-alternatives') {
+        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
+        const entry = entries[0];
+        if (!entry?.translation?.trim()) {
+          return new Response(JSON.stringify({ alternatives: [] }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const contextBlock = contextEntries && contextEntries.length > 0
+          ? `\nسياق (نصوص مجاورة):\n${contextEntries.slice(0, 10).map(ce => `  "${ce.original}" → "${ce.translation}"`).join('\n')}\n`
+          : '';
+
+        const prompt = `أنت مترجم ألعاب فيديو محترف. أعطني 3 بدائل مختلفة للترجمة التالية بأساليب متنوعة:
+
+النص الأصلي: "${entry.original}"
+الترجمة الحالية: "${entry.translation}"
+${entry.maxBytes > 0 ? `الحد الأقصى: ${entry.maxBytes} بايت (كل حرف = 2 بايت)` : ''}
+
+${glossary ? `القاموس:\n${glossary.slice(0, 1500)}\n` : ''}
+${contextBlock}
+
+قدم 3 بدائل بأساليب مختلفة:
+1. 💬 طبيعي وسلس
+2. ✂️ مختصر ومباشر  
+3. 📚 أدبي وغني
+
+أخرج JSON array فقط بـ 3 عناصر. كل عنصر: {"style": "natural"|"concise"|"literary", "text": "الترجمة البديلة", "reason": "سبب قصير"}`;
+
+        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: resolvedModel,
+            messages: [
+              { role: 'system', content: 'أنت مترجم ألعاب. أخرج ONLY valid JSON arrays.' },
+              { role: 'user', content: prompt },
+            ],
+            temperature: 0.5,
+          }),
+        });
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            return new Response(JSON.stringify({ error: "تم تجاوز حد الطلبات" }), {
+              status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          const err = await response.text();
+          console.error('AI gateway error:', err);
+          throw new Error(`AI error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error('Failed to parse AI response');
+
+        const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
+        const alternatives = JSON.parse(sanitized);
+
+        return new Response(JSON.stringify({ alternatives }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // --- Handle "auto-correct" action (bulk spelling/grammar auto-fix) ---
+      if (action === 'auto-correct') {
+        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
+        const translatedEntries = entries.filter(e => e.translation?.trim());
+        if (translatedEntries.length === 0) {
+          return new Response(JSON.stringify({ corrections: [] }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const CHUNK_SIZE = 20;
+        const allCorrections: any[] = [];
+
+        for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
+          const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
+
+          const prompt = `أنت مصحح إملائي ونحوي آلي. صحّح كل ترجمة عربية بدون تغيير المعنى أو الأسلوب.
+
+قواعد:
+- صحّح الأخطاء الإملائية والنحوية فقط
+- لا تُغيّر الأسلوب أو الصياغة
+- حافظ على جميع الوسوم [Tags] و الرموز الخاصة كما هي
+- إذا كان النص سليماً أعد نفس النص بالضبط
+- صحّح: همزات خاطئة، تاء/هاء، ياء/ألف مقصورة، تذكير/تأنيث، "ل" → "لا"
+
+${chunk.map((e, i) => `[${i}] "${e.translation}"`).join('\n')}
+
+أخرج JSON array فقط بنفس الترتيب يحتوي النصوص المصححة. مثال: ["نص مصحح 1", "نص مصحح 2"]`;
+
+          const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: resolvedModel,
+              messages: [
+                { role: 'system', content: 'أنت مصحح إملائي. أخرج ONLY JSON arrays. لا تغيّر المعنى.' },
+                { role: 'user', content: prompt },
+              ],
+              temperature: 0.1,
+            }),
+          });
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              return new Response(JSON.stringify({ error: "تم تجاوز حد الطلبات" }), {
+                status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+            const err = await response.text();
+            console.error('AI gateway error:', err);
+            continue;
+          }
+
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          const jsonMatch = content.match(/\[[\s\S]*\]/);
+          if (!jsonMatch) continue;
+
+          try {
+            const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
+            const corrected: string[] = JSON.parse(sanitized);
+            for (let i = 0; i < Math.min(chunk.length, corrected.length); i++) {
+              const entry = chunk[i];
+              const correctedText = corrected[i]?.trim();
+              if (correctedText && correctedText !== entry.translation) {
+                allCorrections.push({
+                  key: entry.key,
+                  original: entry.original,
+                  current: entry.translation,
+                  corrected: correctedText,
+                });
+              }
+            }
+          } catch (e) {
+            console.error('JSON parse error in auto-correct chunk:', e);
+          }
+        }
+
+        return new Response(JSON.stringify({ corrections: allCorrections }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // --- Handle "detect-weak" action (detect weak/poor translations) ---
+      if (action === 'detect-weak') {
+        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
+        const translatedEntries = entries.filter(e => e.translation?.trim());
+        if (translatedEntries.length === 0) {
+          return new Response(JSON.stringify({ weakEntries: [] }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const CHUNK_SIZE = 15;
+        const allWeak: any[] = [];
+
+        for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
+          const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
+
+          const prompt = `أنت مراجع جودة ترجمات ألعاب. قيّم كل ترجمة وأعطها درجة من 1-10:
+- 1-3: ركيكة/سيئة (ترجمة حرفية، أخطاء فادحة، غير مفهومة)
+- 4-5: مقبولة لكن تحتاج تحسين
+- 6-7: جيدة مع ملاحظات بسيطة
+- 8-10: ممتازة (لا تضعها في النتائج)
+
+${glossary ? `القاموس:\n${glossary.slice(0, 1500)}\n` : ''}
+
+${chunk.map((e, i) => `[${i}] EN: "${e.original}"
+AR: "${e.translation}"`).join('\n\n')}
+
+أخرج JSON array فقط للترجمات بدرجة 7 أو أقل. كل عنصر:
+{"i": رقم, "score": درجة_1_10, "reason": "سبب الدرجة المنخفضة", "suggestion": "ترجمة مقترحة أفضل"}
+أخرج [] إذا كانت كل الترجمات ممتازة.`;
+
+          const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: resolvedModel,
+              messages: [
+                { role: 'system', content: 'أنت مقيّم جودة ترجمات. أخرج ONLY valid JSON arrays.' },
+                { role: 'user', content: prompt },
+              ],
+              temperature: 0.2,
+            }),
+          });
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              return new Response(JSON.stringify({ error: "تم تجاوز حد الطلبات" }), {
+                status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+            const err = await response.text();
+            console.error('AI gateway error:', err);
+            continue;
+          }
+
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          const jsonMatch = content.match(/\[[\s\S]*\]/);
+          if (!jsonMatch) continue;
+
+          try {
+            const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
+            const findings: any[] = JSON.parse(sanitized);
+            for (const f of findings) {
+              if (typeof f.i === 'number' && f.i >= 0 && f.i < chunk.length) {
+                allWeak.push({
+                  key: chunk[f.i].key,
+                  original: chunk[f.i].original,
+                  current: chunk[f.i].translation,
+                  score: f.score || 5,
+                  reason: f.reason || '',
+                  suggestion: f.suggestion || '',
+                });
+              }
+            }
+          } catch (e) {
+            console.error('JSON parse error in detect-weak chunk:', e);
+          }
+        }
+
+        // Sort by score ascending (worst first)
+        allWeak.sort((a, b) => a.score - b.score);
+
+        return new Response(JSON.stringify({ weakEntries: allWeak }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // --- Handle "context-retranslate" action ---
+      if (action === 'context-retranslate') {
+        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
+        const translatedEntries = entries.filter(e => e.translation?.trim());
+        if (translatedEntries.length === 0) {
+          return new Response(JSON.stringify({ retranslations: [] }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const contextBlock = contextEntries && contextEntries.length > 0
+          ? `\nسياق من نفس المشهد/الملف:\n${contextEntries.slice(0, 20).map(ce => `  EN: "${ce.original}" → AR: "${ce.translation}"`).join('\n')}\n`
+          : '';
+
+        const CHUNK_SIZE = 10;
+        const allRetranslations: any[] = [];
+
+        for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
+          const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
+
+          const prompt = `أنت مترجم ألعاب فيديو محترف. أعد ترجمة النصوص التالية مع مراعاة السياق المحيط.
+
+${glossary ? `القاموس المعتمد (التزم به):\n${glossary.slice(0, 2000)}\n` : ''}
+${contextBlock}
+
+قواعد:
+- استخدم السياق المحيط لفهم المشهد والشخصية المتحدثة
+- قدّم ترجمة طبيعية وسلسة تناسب سياق اللعبة
+- حافظ على جميع الوسوم [Tags] والرموز الخاصة
+- الترجمة الحالية قد تكون حرفية أو ركيكة — حسّنها
+
+${chunk.map((e, i) => `[${i}] EN: "${e.original}"
+الترجمة الحالية: "${e.translation}"
+${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`).join('\n\n')}
+
+أخرج JSON array فقط بنفس الترتيب. كل عنصر: {"text": "الترجمة الجديدة", "changes": "ملخص التغييرات"}`;
+
+          const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: resolvedModel,
+              messages: [
+                { role: 'system', content: 'أنت مترجم ألعاب متخصص. أخرج ONLY valid JSON arrays.' },
+                { role: 'user', content: prompt },
+              ],
+              temperature: 0.3,
+            }),
+          });
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              return new Response(JSON.stringify({ error: "تم تجاوز حد الطلبات" }), {
+                status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+            const err = await response.text();
+            console.error('AI gateway error:', err);
+            continue;
+          }
+
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          const jsonMatch = content.match(/\[[\s\S]*\]/);
+          if (!jsonMatch) continue;
+
+          try {
+            const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
+            const results: any[] = JSON.parse(sanitized);
+            for (let i = 0; i < Math.min(chunk.length, results.length); i++) {
+              const entry = chunk[i];
+              const result = results[i];
+              const newText = result?.text?.trim();
+              if (newText && newText !== entry.translation) {
+                allRetranslations.push({
+                  key: entry.key,
+                  original: entry.original,
+                  current: entry.translation,
+                  retranslated: newText,
+                  changes: result.changes || '',
+                });
+              }
+            }
+          } catch (e) {
+            console.error('JSON parse error in context-retranslate chunk:', e);
+          }
+        }
+
+        return new Response(JSON.stringify({ retranslations: allRetranslations }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

@@ -22,7 +22,7 @@ import {
   Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle,
   Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight,
   BarChart3, Menu, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2,
-  Lock, Unlock, Rows3,
+  Lock, Unlock, Rows3, Languages,
 } from "lucide-react";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -933,6 +933,24 @@ const Editor = () => {
             />
           )}
 
+          {/* Weak Translations Panel */}
+          {editor.weakTranslations && editor.weakTranslations.length > 0 && (
+            <SmartReviewPanel
+              findings={editor.weakTranslations.map(w => ({
+                key: w.key,
+                original: w.original,
+                current: w.current,
+                type: 'naturalness' as const,
+                issue: `درجة ${w.score}/10 — ${w.reason}`,
+                fix: w.suggestion,
+              }))}
+              onApply={(key, fix) => editor.handleApplyWeakFix(key, fix)}
+              onApplyAll={editor.handleApplyAllWeakFixes}
+              onDismiss={() => {}}
+              onClose={() => editor.setWeakTranslations(null)}
+            />
+          )}
+
           {/* Translation Enhancement Panel */}
           {editor.enhanceResults && editor.enhanceResults.length > 0 && (
             <TranslationEnhancePanel
@@ -1418,6 +1436,15 @@ const Editor = () => {
                     {editor.autoSmartReview ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Eye className="w-4 h-4 opacity-40" />} مراجعة تلقائية بعد الترجمة
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImproveTranslations} disabled={editor.improvingTranslations || editor.translatedCount === 0}><Sparkles className="w-4 h-4" /> تحسين الترجمات ✨</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleAutoCorrect} disabled={editor.smartReviewing || editor.translatedCount === 0}>
+                    {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Type className="w-4 h-4" />} تصحيح إملائي تلقائي ✏️
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleDetectWeak} disabled={editor.detectingWeak || editor.translatedCount === 0}>
+                    {editor.detectingWeak ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} كشف الترجمات الركيكة 🔍
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleContextRetranslate} disabled={editor.smartReviewing || editor.translatedCount === 0}>
+                    {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />} إعادة ترجمة بالسياق 🎯
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleCheckConsistency} disabled={editor.checkingConsistency || editor.translatedCount === 0}>
                     {editor.checkingConsistency ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق المصطلحات
                   </DropdownMenuItem>
@@ -1656,6 +1683,15 @@ const Editor = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImproveTranslations} disabled={editor.improvingTranslations || editor.translatedCount === 0}>
                     {editor.improvingTranslations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} تحسين الترجمات ✨
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleAutoCorrect} disabled={editor.smartReviewing || editor.translatedCount === 0}>
+                    {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Type className="w-4 h-4" />} تصحيح إملائي تلقائي ✏️
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleDetectWeak} disabled={editor.detectingWeak || editor.translatedCount === 0}>
+                    {editor.detectingWeak ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} كشف الترجمات الركيكة 🔍
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleContextRetranslate} disabled={editor.smartReviewing || editor.translatedCount === 0}>
+                    {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />} إعادة ترجمة بالسياق 🎯
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleCheckConsistency} disabled={editor.checkingConsistency || editor.translatedCount === 0}>
                     {editor.checkingConsistency ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق المصطلحات

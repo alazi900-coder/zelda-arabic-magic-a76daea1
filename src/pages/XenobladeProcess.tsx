@@ -434,7 +434,7 @@ const XenobladeProcess = () => {
               const idx = parseInt(parts[2], 10);
               const fileEntries = entriesByFile[filename];
               if (fileEntries && idx < fileEntries.length) {
-                const entry = fileEntries[idx] as any;
+                const entry = fileEntries[idx];
                 const newKey = `${entry.msbtFile}:${entry.index}`;
                 if (!finalTranslations[newKey]) {
                   finalTranslations[newKey] = v as string;

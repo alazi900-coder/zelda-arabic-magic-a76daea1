@@ -21,7 +21,7 @@ import {
   ExtractedEntry, EditorState, AUTOSAVE_DELAY, AI_BATCH_SIZE, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags,
   ReviewIssue, ReviewSummary, ReviewResults, ShortSuggestion, ImproveResult,
-  restoreTagsLocally,
+  restoreTagsLocally, FilterStatus, FilterTechnical,
 } from "@/components/editor/types";
 export function useEditorState() {
   // === Extracted hooks ===

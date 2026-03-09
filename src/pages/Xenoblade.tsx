@@ -23,8 +23,8 @@ const Xenoblade = forwardRef<HTMLDivElement>((_, ref) => {
             src={heroBg}
             alt="Xenoblade Chronicles 3 Aionios"
             className="w-full h-full object-cover"
-            fetchPriority="high"
             decoding="sync"
+            loading="eager"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/50 to-background" />
         </div>

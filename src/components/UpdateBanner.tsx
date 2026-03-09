@@ -10,7 +10,7 @@ export default function UpdateBanner() {
     if (!("serviceWorker" in navigator)) return;
 
     const checkForUpdate = () => {
-      navigator.serviceWorker.getRegistration().then((reg) => reg?.update());
+      navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
     };
 
     navigator.serviceWorker.getRegistration().then((reg) => {
@@ -25,7 +25,7 @@ export default function UpdateBanner() {
           }
         });
       });
-    });
+    }).catch(() => {});
 
     // Auto-reload when new SW takes control
     let refreshing = false;

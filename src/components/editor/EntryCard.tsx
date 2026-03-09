@@ -245,54 +245,65 @@ const EntryCard: React.FC<EntryCardProps> = ({
               ↵ {entry.original.split('\n').length} أسطر في الأصل
             </span>
           )}
-          {translation?.trim() && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {isTranslationTooShort(entry, translation) && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">📏 قصيرة جداً</span>
-              )}
-              {isTranslationTooLong(entry, translation) && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">📐 تتجاوز الحد</span>
-              )}
-              {hasStuckChars(translation) && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20">🔤 أحرف ملتصقة</span>
-              )}
-              {isMixedLanguage(translation) && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">🌐 عربي + إنجليزي</span>
-              )}
-              {isDamagedTag && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">⚠️ رموز تالفة</span>
-              )}
-              {/msg_(ask|cq|fev|nq|sq|tlk|tq)/i.test(key) && (() => {
-                const lines = translation.split('\n');
-                const lineCount = lines.length;
-                const maxLineLen = Math.max(...lines.map(l => visualLength(l)));
-                const warnings: string[] = [];
-                if (lineCount > 2) warnings.push(`${lineCount} أسطر`);
-                if (maxLineLen > 42) warnings.push(`طول ${maxLineLen}`);
-                if (warnings.length === 0) return null;
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" /> NPC: {warnings.join(' • ')}
-                  </span>
-                );
-              })()}
-              {fuzzyScore != null && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${fuzzyScore >= 80 ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : fuzzyScore >= 70 ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-orange-500/10 text-orange-600 border-orange-500/20'}`}>
-                  🔍 مطابقة جزئية {fuzzyScore}%
+          {translation?.trim() && (() => {
+            const confidence = computeConfidence(entry, translation);
+            const isLiteral = detectLiteralTranslation(entry.original, translation);
+            return (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {/* Confidence badge */}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border border-border/30 ${confidence.color} bg-background`}>
+                  <Shield className="w-3 h-3 inline mr-0.5" />{confidence.score}% {confidence.label}
                 </span>
-              )}
-              {fuzzyScore != null && onAcceptFuzzy && onRejectFuzzy && (
-                <>
-                  <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-emerald-600 hover:bg-emerald-500/10" onClick={() => onAcceptFuzzy(key)}>
-                    <Check className="w-3 h-3" /> قبول
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-destructive hover:bg-destructive/10" onClick={() => onRejectFuzzy(key)}>
-                    <X className="w-3 h-3" /> رفض
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
+                {isLiteral && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">📝 ترجمة حرفية محتملة</span>
+                )}
+                {isTranslationTooShort(entry, translation) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">📏 قصيرة جداً</span>
+                )}
+                {isTranslationTooLong(entry, translation) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">📐 تتجاوز الحد</span>
+                )}
+                {hasStuckChars(translation) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20">🔤 أحرف ملتصقة</span>
+                )}
+                {isMixedLanguage(translation) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">🌐 عربي + إنجليزي</span>
+                )}
+                {isDamagedTag && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">⚠️ رموز تالفة</span>
+                )}
+                {/msg_(ask|cq|fev|nq|sq|tlk|tq)/i.test(key) && (() => {
+                  const lines = translation.split('\n');
+                  const lineCount = lines.length;
+                  const maxLineLen = Math.max(...lines.map(l => visualLength(l)));
+                  const warnings: string[] = [];
+                  if (lineCount > 2) warnings.push(`${lineCount} أسطر`);
+                  if (maxLineLen > 42) warnings.push(`طول ${maxLineLen}`);
+                  if (warnings.length === 0) return null;
+                  return (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" /> NPC: {warnings.join(' • ')}
+                    </span>
+                  );
+                })()}
+                {fuzzyScore != null && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${fuzzyScore >= 80 ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : fuzzyScore >= 70 ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-orange-500/10 text-orange-600 border-orange-500/20'}`}>
+                    🔍 مطابقة جزئية {fuzzyScore}%
+                  </span>
+                )}
+                {fuzzyScore != null && onAcceptFuzzy && onRejectFuzzy && (
+                  <>
+                    <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-emerald-600 hover:bg-emerald-500/10" onClick={() => onAcceptFuzzy(key)}>
+                      <Check className="w-3 h-3" /> قبول
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-destructive hover:bg-destructive/10" onClick={() => onRejectFuzzy(key)}>
+                      <X className="w-3 h-3" /> رفض
+                    </Button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
           {hasArabicChars(entry.original) && (!translation || translation === entry.original) && (
             <Button variant="ghost" size="sm" onClick={() => handleFixReversed(entry)} className="text-xs text-accent mb-2 h-7 px-2">
               <RotateCcw className="w-3 h-3" /> تصحيح المعكوس

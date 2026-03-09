@@ -34,7 +34,7 @@ import {
 
 import { useEditorState } from "@/hooks/useEditorState";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
-import { PAGE_SIZE, isTechnicalText } from "@/components/editor/types";
+import { PAGE_SIZE, isTechnicalText, type FilterStatus, type FilterTechnical } from "@/components/editor/types";
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import CategoryProgress from "@/components/editor/CategoryProgress";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";

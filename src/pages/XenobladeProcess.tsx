@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Upload, FileText, ArrowRight, Loader2, CheckCircle2, Clock, Pencil, Database, Binary, Sparkles, Download, ChevronDown, ChevronRight, Shield, Tag, Settings2, FolderOpen } from "lucide-react";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
-import { categorizeBdatTable, categorizeByTableName, categorizeByColumnName, categorizeByFilename } from "@/components/editor/types";
+import { categorizeBdatTable, categorizeByTableName, categorizeByColumnName, categorizeByFilename, type ExtractedEntry } from "@/components/editor/types";
 import type { BdatSchemaReport } from "@/lib/bdat-schema-inspector";
 import { loadBdatSettings, saveBdatSettings, formatMarginPct } from "@/lib/bdat-settings";
 

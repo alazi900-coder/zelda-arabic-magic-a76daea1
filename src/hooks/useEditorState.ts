@@ -1240,7 +1240,6 @@ export function useEditorState() {
           original: e.original,
           translation: state.translations[`${e.msbtFile}:${e.index}`],
           fileName: e.msbtFile,
-          tableName: e.bdatTable,
         }));
 
       if (translatedEntries.length === 0) {

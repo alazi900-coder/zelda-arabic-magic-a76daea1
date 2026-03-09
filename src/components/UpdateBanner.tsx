@@ -25,7 +25,7 @@ export default function UpdateBanner() {
           }
         });
       });
-    });
+    }).catch(() => {});
 
     // Auto-reload when new SW takes control
     let refreshing = false;

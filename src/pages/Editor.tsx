@@ -930,6 +930,17 @@ const Editor = () => {
             />
           )}
 
+          {/* Translation Enhancement Panel */}
+          {editor.enhanceResults && editor.enhanceResults.length > 0 && (
+            <TranslationEnhancePanel
+              results={editor.enhanceResults}
+              onApplySuggestion={editor.handleApplyEnhanceSuggestion}
+              onApplyAll={editor.handleApplyAllEnhanceSuggestions}
+              onClose={editor.handleCloseEnhanceResults}
+              analyzing={editor.enhancingTranslations}
+            />
+          )}
+
           {/* Glossary Compliance Panel */}
           {editor.glossaryComplianceResults && editor.glossaryComplianceResults.length > 0 && (
             <GlossaryCompliancePanel

@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useEffect } from "react";
-import { VariableSizeList } from "react-window";
-type List = VariableSizeList;
+import { VariableSizeList as VList } from "react-window";
 import type { ExtractedEntry } from "./types";
 import EntryCard from "./EntryCard";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";

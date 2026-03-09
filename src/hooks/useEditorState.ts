@@ -1237,6 +1237,86 @@ export function useEditorState() {
     // Dismissal is handled in the panel via local state
   };
 
+  // === Grammar Check (dedicated AI grammar analysis) ===
+  const handleGrammarCheck = async () => {
+    if (!state) return;
+    setSmartReviewing(true);
+    setSmartReviewFindings(null);
+    toast({ title: "📝 بدأ فحص القواعد النحوية", description: "تحليل الأخطاء النحوية والإملائية..." });
+    try {
+      const reviewEntries = filteredEntries
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
+      if (reviewEntries.length === 0) {
+        toast({ title: "لا توجد ترجمات للفحص" });
+        return;
+      }
+      setTranslateProgress(`📝 جاري فحص القواعد النحوية (${reviewEntries.length} نص)...`);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'grammar-check', aiModel }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `خطأ ${response.status}`);
+      }
+      const data = await response.json();
+      setSmartReviewFindings(data.findings || []);
+      const count = data.findings?.length || 0;
+      setTranslateProgress(count > 0 ? `📝 تم العثور على ${count} خطأ نحوي/إملائي` : `✅ النصوص سليمة نحوياً!`);
+      setTimeout(() => setTranslateProgress(""), 4000);
+    } catch (err) {
+      toast({ title: "خطأ في فحص القواعد", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
+      setTranslateProgress("");
+    } finally { setSmartReviewing(false); }
+  };
+
+  // === Context Review (context-aware translation review) ===
+  const handleContextReview = async () => {
+    if (!state) return;
+    setSmartReviewing(true);
+    setSmartReviewFindings(null);
+    toast({ title: "🎯 بدأت المراجعة السياقية", description: "تحليل الترجمات في سياقها..." });
+    try {
+      const reviewEntries = filteredEntries
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
+      if (reviewEntries.length === 0) {
+        toast({ title: "لا توجد ترجمات للمراجعة" });
+        return;
+      }
+      // Build context from surrounding translated entries
+      const contextEntries = filteredEntries
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .slice(0, 30)
+        .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`] }));
+
+      setTranslateProgress(`🎯 جاري المراجعة السياقية (${reviewEntries.length} نص)...`);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-review', aiModel, contextEntries }),
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `خطأ ${response.status}`);
+      }
+      const data = await response.json();
+      setSmartReviewFindings(data.findings || []);
+      const count = data.findings?.length || 0;
+      setTranslateProgress(count > 0 ? `🎯 تم العثور على ${count} مشكلة سياقية` : `✅ الترجمات متسقة سياقياً!`);
+      setTimeout(() => setTranslateProgress(""), 4000);
+    } catch (err) {
+      toast({ title: "خطأ في المراجعة السياقية", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
+      setTranslateProgress("");
+    } finally { setSmartReviewing(false); }
+  };
+
   // === Context-aware Translation Enhancement ===
   const handleEnhanceTranslations = async () => {
     if (!state) return;
@@ -3045,7 +3125,7 @@ export function useEditorState() {
     handleImproveTranslations, handleApplyImprovement, handleApplyAllImprovements,
     handleImproveSingleTranslation,
     handleCheckConsistency, handleApplyConsistencyFix, handleApplyAllConsistencyFixes,
-    handleSmartReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
+    handleSmartReview, handleGrammarCheck, handleContextReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
     handleEnhanceTranslations, handleApplyEnhanceSuggestion, handleApplyAllEnhanceSuggestions, handleCloseEnhanceResults,
     // Advanced Analysis handlers
     handleAdvancedAnalysis, handleApplyAdvancedSuggestion, handleApplyAllAdvanced, handleCloseAdvancedPanel, saveToEnhancedMemory, handleStopAdvancedAnalysis,

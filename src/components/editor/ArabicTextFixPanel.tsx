@@ -18,6 +18,7 @@ const FIX_TYPE_CONFIG: Record<string, { emoji: string; color: string }> = {
   'yaa-alef': { emoji: '✏️', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   'repeated': { emoji: '🔁', color: 'bg-red-500/15 text-red-400 border-red-500/30' },
   'ai-artifact': { emoji: '🧹', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
+  'lonely-lam': { emoji: '🚫', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
 };
 
 const ArabicTextFixPanel: React.FC<ArabicTextFixPanelProps> = ({

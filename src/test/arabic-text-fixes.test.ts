@@ -4,6 +4,7 @@ import {
   fixYaaAlefMaqsura,
   fixRepeatedWords,
   cleanAIArtifacts,
+  fixLonelyLam,
   scanAllTextFixes,
 } from '@/lib/arabic-text-fixes';
 
@@ -157,6 +158,43 @@ describe('Arabic Text Fixes', () => {
     });
   });
 
+  // === 5. Lonely Lam (ل → لا) ===
+  describe('fixLonelyLam', () => {
+    it('should fix standalone ل to لا', () => {
+      const r = fixLonelyLam('هذا ل يمكن');
+      expect(r.fixed).toBe('هذا لا يمكن');
+      expect(r.changes).toBe(1);
+    });
+
+    it('should fix ل at start of text', () => {
+      const r = fixLonelyLam('ل تذهب هناك');
+      expect(r.fixed).toBe('لا تذهب هناك');
+      expect(r.changes).toBe(1);
+    });
+
+    it('should fix multiple standalone ل', () => {
+      const r = fixLonelyLam('ل تذهب ل ترجع');
+      expect(r.fixed).toBe('لا تذهب لا ترجع');
+      expect(r.changes).toBe(2);
+    });
+
+    it('should not change ل attached to words', () => {
+      const r = fixLonelyLam('للذهاب إلى المدينة');
+      expect(r.changes).toBe(0);
+    });
+
+    it('should not change correct لا', () => {
+      const r = fixLonelyLam('لا تذهب هناك');
+      expect(r.changes).toBe(0);
+    });
+
+    it('should protect tags', () => {
+      const r = fixLonelyLam('ل [ML:icon] تذهب');
+      expect(r.fixed).toContain('[ML:icon]');
+      expect(r.fixed).toContain('لا');
+    });
+  });
+
   // === 5. Combined scan ===
   describe('scanAllTextFixes', () => {
     it('should find multiple fix types across entries', () => {
@@ -166,13 +204,15 @@ describe('Arabic Text Fixes', () => {
         'k3': 'الذهاب الذهاب',
         'k4': 'بالتأكيد! مرحبا',
         'k5': 'نص سليم تماماً',
+        'k6': 'هذا ل يمكن',
       });
       
-      expect(results.length).toBeGreaterThanOrEqual(4);
+      expect(results.length).toBeGreaterThanOrEqual(5);
       expect(results.find(r => r.fixType === 'taa-haa')).toBeTruthy();
       expect(results.find(r => r.fixType === 'yaa-alef')).toBeTruthy();
       expect(results.find(r => r.fixType === 'repeated')).toBeTruthy();
       expect(results.find(r => r.fixType === 'ai-artifact')).toBeTruthy();
+      expect(results.find(r => r.fixType === 'lonely-lam')).toBeTruthy();
       // k5 should produce no results
       expect(results.filter(r => r.key === 'k5')).toHaveLength(0);
     });

@@ -26,6 +26,20 @@ const TYPE_CONFIG: Record<string, { label: string; emoji: string; color: string;
   grammar: { label: 'خطأ نحوي', emoji: '🔤', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: TextCursorInput },
   inconsistency: { label: 'عدم اتساق', emoji: '🔀', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: BookOpen },
   naturalness: { label: 'ركاكة', emoji: '✨', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: Sparkles },
+  // Grammar check types
+  gender: { label: 'تذكير/تأنيث', emoji: '♀️', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30', icon: TextCursorInput },
+  conjugation: { label: 'تصريف أفعال', emoji: '🔄', color: 'bg-violet-500/20 text-violet-400 border-violet-500/30', icon: TextCursorInput },
+  case: { label: 'خطأ إعرابي', emoji: '📐', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30', icon: TextCursorInput },
+  spelling: { label: 'خطأ إملائي', emoji: '✏️', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: TextCursorInput },
+  hamza: { label: 'همزات', emoji: '🅰️', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: TextCursorInput },
+  negation: { label: 'أداة نفي', emoji: '🚫', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30', icon: TextCursorInput },
+  preposition: { label: 'حرف جر', emoji: '🔗', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: TextCursorInput },
+  // Context review types
+  'context-mismatch': { label: 'سياق غير مناسب', emoji: '🎯', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: BookOpen },
+  'tone-mismatch': { label: 'نبرة غير مناسبة', emoji: '🎭', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: Sparkles },
+  ambiguity: { label: 'غموض', emoji: '❓', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: AlertTriangle },
+  continuity: { label: 'عدم اتساق سياقي', emoji: '🔗', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: BookOpen },
+  improvement: { label: 'تحسين سياقي', emoji: '💡', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: Sparkles },
 };
 
 const SmartReviewPanel: React.FC<SmartReviewPanelProps> = ({

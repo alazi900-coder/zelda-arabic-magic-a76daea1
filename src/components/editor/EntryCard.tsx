@@ -127,6 +127,8 @@ const EntryCard: React.FC<EntryCardProps> = ({
   const [showTagPreview, setShowTagPreview] = useState(false);
   const [balancePreview, setBalancePreview] = useState<string | null>(null);
   const [showGamePreview, setShowGamePreview] = useState(false);
+  const [alternatives, setAlternatives] = useState<{ style: string; text: string; reason: string }[] | null>(null);
+  const [fetchingAlternatives, setFetchingAlternatives] = useState(false);
 
   const tagPreview = useMemo(() => {
     if (!isDamagedTag || !translation?.trim()) return null;

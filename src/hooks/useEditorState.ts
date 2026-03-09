@@ -1190,10 +1190,6 @@ export function useEditorState() {
   };
 
   // === Auto-Correct (bulk spelling/grammar auto-fix) ===
-  const [autoCorrectResults, setAutoCorrectResults] = useState<{ key: string; original: string; current: string; corrected: string }[] | null>(null);
-  const [autoCorrectApplied, setAutoCorrectApplied] = useState(false);
-  const [autoCorrectProgress, setAutoCorrectProgress] = useState<{ current: number; total: number } | null>(null);
-  const autoCorrectAbortRef = useRef<AbortController | null>(null);
   const handleStopAutoCorrect = () => { autoCorrectAbortRef.current?.abort(); };
 
   const handleAutoCorrect = async () => {

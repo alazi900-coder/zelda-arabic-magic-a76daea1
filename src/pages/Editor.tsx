@@ -78,6 +78,7 @@ import SmartReviewPanel from "@/components/editor/SmartReviewPanel";
 import GlossaryCompliancePanel from "@/components/editor/GlossaryCompliancePanel";
 import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationPreview";
 import TranslationEnhancePanel from "@/components/editor/TranslationEnhancePanel";
+import AdvancedTranslationPanel from "@/components/editor/AdvancedTranslationPanel";
 
 const Editor = () => {
   const editor = useEditorState();

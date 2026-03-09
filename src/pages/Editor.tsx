@@ -1290,6 +1290,10 @@ const Editor = () => {
                   />
                 )}
                 <GlossaryStatsPanel glossaryText={editor.activeGlossary} />
+                <GlossaryCategoryFilter 
+                  glossaryText={editor.activeGlossary} 
+                  onCopyFiltered={(text) => navigator.clipboard.writeText(text)}
+                />
               </div>
             );
           })()}

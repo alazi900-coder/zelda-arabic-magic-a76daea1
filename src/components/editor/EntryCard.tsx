@@ -489,6 +489,43 @@ const EntryCard: React.FC<EntryCardProps> = ({
               <p dir="ltr" className="text-foreground break-words">{backTranslation}</p>
             </div>
           )}
+          {/* Quick Alternatives */}
+          {alternatives && alternatives.length > 0 && (
+            <div className="mt-2 p-2 rounded border border-primary/20 bg-primary/5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs text-primary font-semibold">
+                  <ListOrdered className="w-3.5 h-3.5" /> بدائل مقترحة
+                </span>
+                <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" onClick={() => setAlternatives(null)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              {alternatives.map((alt, i) => {
+                const styleEmoji = alt.style === 'natural' ? '💬' : alt.style === 'concise' ? '✂️' : '📚';
+                const styleLabel = alt.style === 'natural' ? 'طبيعي' : alt.style === 'concise' ? 'مختصر' : 'أدبي';
+                return (
+                  <div key={i} className="flex items-start gap-2 text-[11px] group">
+                    <span className="shrink-0 px-1 py-0.5 rounded bg-primary/15 text-primary border border-primary/20 text-[10px]">
+                      {styleEmoji} {styleLabel}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-foreground font-body" dir="rtl">{alt.text}</p>
+                      {alt.reason && <p className="text-[10px] text-muted-foreground mt-0.5">{alt.reason}</p>}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:bg-primary/10 shrink-0"
+                      onClick={() => { updateTranslation(key, alt.text); setAlternatives(null); }}
+                      title="استخدام هذا البديل"
+                    >
+                      استخدام
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {/* Translation Memory Suggestions */}
           {tmSuggestions && tmSuggestions.length > 0 && (
             <div className="mt-2 p-2 rounded border border-secondary/20 bg-secondary/5 space-y-1.5">

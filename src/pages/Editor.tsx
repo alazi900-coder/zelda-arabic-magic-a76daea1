@@ -933,6 +933,24 @@ const Editor = () => {
             />
           )}
 
+          {/* Weak Translations Panel */}
+          {editor.weakTranslations && editor.weakTranslations.length > 0 && (
+            <SmartReviewPanel
+              findings={editor.weakTranslations.map(w => ({
+                key: w.key,
+                original: w.original,
+                current: w.current,
+                type: 'naturalness' as const,
+                issue: `درجة ${w.score}/10 — ${w.reason}`,
+                fix: w.suggestion,
+              }))}
+              onApply={(key, fix) => editor.handleApplyWeakFix(key, fix)}
+              onApplyAll={editor.handleApplyAllWeakFixes}
+              onDismiss={() => {}}
+              onClose={() => editor.setWeakTranslations(null)}
+            />
+          )}
+
           {/* Translation Enhancement Panel */}
           {editor.enhanceResults && editor.enhanceResults.length > 0 && (
             <TranslationEnhancePanel

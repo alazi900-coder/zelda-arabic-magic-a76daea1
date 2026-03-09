@@ -3313,8 +3313,8 @@ export function useEditorState() {
     handleImproveSingleTranslation,
     handleCheckConsistency, handleApplyConsistencyFix, handleApplyAllConsistencyFixes,
     handleSmartReview, handleGrammarCheck, handleContextReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
-    handleAutoCorrect, autoCorrectResults, autoCorrectApplied,
-    handleDetectWeak, weakTranslations, detectingWeak, handleApplyWeakFix, handleApplyAllWeakFixes, setWeakTranslations,
+    handleAutoCorrect, autoCorrectResults, autoCorrectApplied, autoCorrectProgress, handleStopAutoCorrect,
+    handleDetectWeak, weakTranslations, detectingWeak, detectWeakProgress, handleStopDetectWeak, handleApplyWeakFix, handleApplyAllWeakFixes, setWeakTranslations,
     handleContextRetranslate,
     handleEnhanceTranslations, handleApplyEnhanceSuggestion, handleApplyAllEnhanceSuggestions, handleCloseEnhanceResults,
     // Advanced Analysis handlers

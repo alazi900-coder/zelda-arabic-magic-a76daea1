@@ -80,6 +80,7 @@ export function useEditorState() {
     const [alternativeResults, setAlternativeResults] = useState<import("@/components/editor/AdvancedTranslationPanel").AlternativeResult[] | null>(null);
     const [fullAnalysisResults, setFullAnalysisResults] = useState<import("@/components/editor/AdvancedTranslationPanel").FullAnalysisResult[] | null>(null);
     const [advancedAnalyzing, setAdvancedAnalyzing] = useState(false);
+    const advancedAnalysisCancelRef = useRef(false);
     
     // Translation Memory for improvements
     const [enhancedMemory, setEnhancedMemory] = useState<Record<string, { original: string; translation: string }>>(() => {

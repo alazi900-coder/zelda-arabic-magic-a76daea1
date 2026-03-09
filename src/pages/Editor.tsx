@@ -609,7 +609,35 @@ const Editor = () => {
             </Card>
           )}
           {editor.translateProgress && (
-            <Card className="mb-4 border-secondary/30 bg-secondary/5"><CardContent className="p-4 text-center font-display">{editor.translateProgress}</CardContent></Card>
+            <Card className="mb-4 border-secondary/30 bg-secondary/5">
+              <CardContent className="p-4 space-y-2">
+                <div className="text-center font-display">{editor.translateProgress}</div>
+                {/* Auto-correct progress bar */}
+                {editor.autoCorrectProgress && (
+                  <div className="space-y-1.5">
+                    <Progress value={(editor.autoCorrectProgress.current / editor.autoCorrectProgress.total) * 100} className="h-2" />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{editor.autoCorrectProgress.current} / {editor.autoCorrectProgress.total}</span>
+                      <Button variant="destructive" size="sm" className="h-6 text-xs gap-1" onClick={editor.handleStopAutoCorrect}>
+                        <StopCircle className="w-3 h-3" /> إيقاف
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {/* Detect weak progress bar */}
+                {editor.detectWeakProgress && (
+                  <div className="space-y-1.5">
+                    <Progress value={(editor.detectWeakProgress.current / editor.detectWeakProgress.total) * 100} className="h-2" />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{editor.detectWeakProgress.current} / {editor.detectWeakProgress.total}</span>
+                      <Button variant="destructive" size="sm" className="h-6 text-xs gap-1" onClick={editor.handleStopDetectWeak}>
+                        <StopCircle className="w-3 h-3" /> إيقاف
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
           {editor.buildProgress && (
             <Card className="mb-4 border-secondary/30 bg-secondary/5 cursor-pointer" onClick={() => editor.buildStats && editor.setBuildStats(editor.buildStats)}>

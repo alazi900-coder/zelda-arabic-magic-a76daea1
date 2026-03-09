@@ -2068,8 +2068,8 @@ const Editor = () => {
           onClose={() => {
             const toolToRun = showToolHelp;
             setShowToolHelp(null);
-            if (toolToRun) {
-              editor.handleAdvancedAnalysis(toolToRun);
+            if (toolToRun && ['literal-detect', 'style-unify', 'consistency-check', 'alternatives', 'full-analysis'].includes(toolToRun)) {
+              editor.handleAdvancedAnalysis(toolToRun as import("@/components/editor/AdvancedTranslationPanel").AnalysisAction);
             }
           }}
         />

@@ -4,6 +4,7 @@ import {
   fixYaaAlefMaqsura,
   fixRepeatedWords,
   cleanAIArtifacts,
+  fixLonelyLam,
   scanAllTextFixes,
 } from '@/lib/arabic-text-fixes';
 

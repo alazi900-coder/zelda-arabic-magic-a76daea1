@@ -24,6 +24,45 @@ import {
   restoreTagsLocally,
 } from "@/components/editor/types";
 export function useEditorState() {
+  // === Extracted hooks ===
+  const settings = useEditorSettings();
+  const {
+    arabicNumerals, mirrorPunctuation, userGeminiKey, aiModel, translationProvider,
+    myMemoryEmail, myMemoryCharsUsed, addMyMemoryChars, aiRequestsToday, aiRequestsMonth,
+    addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, setNpcSplitCharLimit,
+    newlineSplitCharLimit, setNewlineSplitCharLimit, autoSmartReview, setAutoSmartReview,
+    enhancedMemory, saveToEnhancedMemory,
+  } = settings;
+
+  const scanResults = useEditorScanResults();
+  const {
+    reviewing, setReviewing, reviewResults, setReviewResults,
+    suggestingShort, setSuggestingShort, shortSuggestions, setShortSuggestions,
+    improvingTranslations, setImprovingTranslations, improveResults, setImproveResults,
+    fixingMixed, setFixingMixed,
+    checkingConsistency, setCheckingConsistency, consistencyResults, setConsistencyResults,
+    scanningSentences, setScanningSentences, sentenceSplitResults, setSentenceSplitResults,
+    newlineCleanResults, setNewlineCleanResults, diacriticsCleanResults, setDiacriticsCleanResults,
+    duplicateAlefResults, setDuplicateAlefResults, missingAlefResults, setMissingAlefResults,
+    mirrorCharsResults, setMirrorCharsResults, tagBracketFixResults, setTagBracketFixResults,
+    arabicTextFixResults, setArabicTextFixResults, newlineSplitResults, setNewlineSplitResults,
+    npcSplitResults, setNpcSplitResults, lineSyncResults, setLineSyncResults,
+    unifiedSplitResults, setUnifiedSplitResults, sentenceOrderResults, setSentenceOrderResults,
+    smartReviewFindings, setSmartReviewFindings, smartReviewing, setSmartReviewing,
+    glossaryComplianceResults, setGlossaryComplianceResults, checkingGlossaryCompliance, setCheckingGlossaryCompliance,
+    enhanceResults, setEnhanceResults, enhancingTranslations, setEnhancingTranslations,
+    advancedAnalysisTab, setAdvancedAnalysisTab,
+    literalResults, setLiteralResults, styleResults, setStyleResults,
+    consistencyCheckResult, setConsistencyCheckResult,
+    alternativeResults, setAlternativeResults, fullAnalysisResults, setFullAnalysisResults,
+    advancedAnalyzing, setAdvancedAnalyzing, advancedAnalysisCancelRef,
+    autoCorrectResults, setAutoCorrectResults, autoCorrectApplied, setAutoCorrectApplied,
+    autoCorrectProgress, setAutoCorrectProgress, autoCorrectAbortRef,
+    weakTranslations, setWeakTranslations, detectingWeak, setDetectingWeak,
+    detectWeakProgress, setDetectWeakProgress, detectWeakAbortRef,
+  } = scanResults;
+
+  // === Core state ===
   const [state, setState] = useState<EditorState | null>(null);
   const [search, setSearch] = useState("");
   const [filterFile, setFilterFile] = useState<string>("all");
@@ -36,97 +75,14 @@ export function useEditorState() {
   const [lastSaved, setLastSaved] = useState<string>("");
   const [cloudSyncing, setCloudSyncing] = useState(false);
   const [cloudStatus, setCloudStatus] = useState("");
-  const [reviewing, setReviewing] = useState(false);
-  const [reviewResults, setReviewResults] = useState<ReviewResults | null>(null);
-  const [suggestingShort, setSuggestingShort] = useState(false);
-  const [shortSuggestions, setShortSuggestions] = useState<ShortSuggestion[] | null>(null);
   const [quickReviewMode, setQuickReviewMode] = useState(false);
   const [quickReviewIndex, setQuickReviewIndex] = useState(0);
   const [showQualityStats, setShowQualityStats] = useState(false);
   const [previousTranslations, setPreviousTranslations] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(0);
   const [showRetranslateConfirm, setShowRetranslateConfirm] = useState(false);
-  const [arabicNumerals, setArabicNumerals] = useState(false);
-  const [mirrorPunctuation, setMirrorPunctuation] = useState(false);
-  const [improvingTranslations, setImprovingTranslations] = useState(false);
-  const [improveResults, setImproveResults] = useState<ImproveResult[] | null>(null);
-  const [fixingMixed, setFixingMixed] = useState(false);
-  const [checkingConsistency, setCheckingConsistency] = useState(false);
-  const [consistencyResults, setConsistencyResults] = useState<{ groups: any[]; aiSuggestions: { best: string; reason: string }[] } | null>(null);
-  const [scanningSentences, setScanningSentences] = useState(false);
-  const [sentenceSplitResults, setSentenceSplitResults] = useState<import("@/lib/arabic-sentence-splitter").SentenceSplitResult[] | null>(null);
-  const [newlineCleanResults, setNewlineCleanResults] = useState<import("@/components/editor/NewlineCleanPanel").NewlineCleanResult[] | null>(null);
-  const [diacriticsCleanResults, setDiacriticsCleanResults] = useState<import("@/components/editor/DiacriticsCleanPanel").DiacriticsCleanResult[] | null>(null);
-  const [duplicateAlefResults, setDuplicateAlefResults] = useState<import("@/components/editor/DuplicateAlefCleanPanel").DuplicateAlefResult[] | null>(null);
-  const [missingAlefResults, setMissingAlefResults] = useState<import("@/components/editor/DuplicateAlefCleanPanel").DuplicateAlefResult[] | null>(null);
-  const [mirrorCharsResults, setMirrorCharsResults] = useState<import("@/components/editor/MirrorCharsCleanPanel").MirrorCharsResult[] | null>(null);
-  const [tagBracketFixResults, setTagBracketFixResults] = useState<import("@/components/editor/TagBracketFixPanel").TagBracketFixResult[] | null>(null);
-  const [arabicTextFixResults, setArabicTextFixResults] = useState<import("@/lib/arabic-text-fixes").TextFixResult[] | null>(null);
-  const [newlineSplitResults, setNewlineSplitResults] = useState<import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] | null>(null);
-  const [npcSplitResults, setNpcSplitResults] = useState<import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] | null>(null);
-  const [lineSyncResults, setLineSyncResults] = useState<import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] | null>(null);
-  const [unifiedSplitResults, setUnifiedSplitResults] = useState<import("@/components/editor/NewlineSplitPanel").NewlineSplitResult[] | null>(null);
-  const [sentenceOrderResults, setSentenceOrderResults] = useState<import("@/components/editor/SentenceOrderPanel").SentenceOrderResult[] | null>(null);
-    const [smartReviewFindings, setSmartReviewFindings] = useState<import("@/components/editor/SmartReviewPanel").SmartReviewFinding[] | null>(null);
-    const [smartReviewing, setSmartReviewing] = useState(false);
-    const [glossaryComplianceResults, setGlossaryComplianceResults] = useState<import("@/components/editor/GlossaryCompliancePanel").GlossaryViolation[] | null>(null);
-    const [checkingGlossaryCompliance, setCheckingGlossaryCompliance] = useState(false);
-    const [enhanceResults, setEnhanceResults] = useState<import("@/components/editor/TranslationEnhancePanel").EnhanceResult[] | null>(null);
-    const [enhancingTranslations, setEnhancingTranslations] = useState(false);
-    
-    // Advanced Analysis State
-    const [advancedAnalysisTab, setAdvancedAnalysisTab] = useState<import("@/components/editor/AdvancedTranslationPanel").AnalysisAction>('full-analysis');
-    const [literalResults, setLiteralResults] = useState<import("@/components/editor/AdvancedTranslationPanel").LiteralResult[] | null>(null);
-    const [styleResults, setStyleResults] = useState<import("@/components/editor/AdvancedTranslationPanel").StyleResult[] | null>(null);
-    const [consistencyCheckResult, setConsistencyCheckResult] = useState<import("@/components/editor/AdvancedTranslationPanel").ConsistencyResult | null>(null);
-    const [alternativeResults, setAlternativeResults] = useState<import("@/components/editor/AdvancedTranslationPanel").AlternativeResult[] | null>(null);
-    const [fullAnalysisResults, setFullAnalysisResults] = useState<import("@/components/editor/AdvancedTranslationPanel").FullAnalysisResult[] | null>(null);
-    const [advancedAnalyzing, setAdvancedAnalyzing] = useState(false);
-    const advancedAnalysisCancelRef = useRef(false);
-    
-    // Translation Memory for improvements
-    const [enhancedMemory, setEnhancedMemory] = useState<Record<string, { original: string; translation: string }>>(() => {
-      try { const v = localStorage.getItem('enhancedMemory'); return v ? JSON.parse(v) : {}; } catch { return {}; }
-    });
-    
-   const [autoSmartReview, _setAutoSmartReview] = useState(() => {
-      try { return localStorage.getItem('autoSmartReview') === 'true'; } catch { return false; }
-    });
-   const setAutoSmartReview = useCallback((v: boolean) => {
-     _setAutoSmartReview(v);
-     try { localStorage.setItem('autoSmartReview', String(v)); } catch {}
-   }, []);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string> | null>(null);
   const [isSearchPinned, setIsSearchPinned] = useState(false);
-  const [rebalanceNewlines, _setRebalanceNewlines] = useState(() => {
-    try { return localStorage.getItem('rebalanceNewlines') === 'true'; } catch { return false; }
-  });
-  const setRebalanceNewlines = useCallback((v: boolean) => {
-    _setRebalanceNewlines(v);
-    try { localStorage.setItem('rebalanceNewlines', String(v)); } catch {}
-  }, []);
-  const [npcMaxLines, _setNpcMaxLines] = useState(() => {
-    try { const v = localStorage.getItem('npcMaxLines'); return v ? Number(v) : 2; } catch { return 2; }
-  });
-  const setNpcMaxLines = useCallback((v: number) => {
-    const clamped = Math.max(1, Math.min(3, v));
-    _setNpcMaxLines(clamped);
-    try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
-  }, []);
-  const [npcMode, _setNpcMode] = useState(() => {
-    try { return localStorage.getItem('npcMode') === 'true'; } catch { return false; }
-  });
-  const setNpcMode = useCallback((v: boolean) => {
-    _setNpcMode(v);
-    try { localStorage.setItem('npcMode', String(v)); } catch {}
-  }, []);
-  const [npcSplitCharLimit, setNpcSplitCharLimit] = useState(() => {
-    const saved = localStorage.getItem('npcSplitCharLimit');
-    return saved ? Number(saved) : 37;
-  });
-  useEffect(() => {
-    localStorage.setItem('npcSplitCharLimit', String(npcSplitCharLimit));
-  }, [npcSplitCharLimit]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [userGeminiKey, _setUserGeminiKey] = useState(() => {

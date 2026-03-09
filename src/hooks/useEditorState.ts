@@ -1739,13 +1739,8 @@ export function useEditorState() {
     setFullAnalysisResults(null);
   };
 
-  const saveToEnhancedMemory = (key: string, original: string, translation: string) => {
-    setEnhancedMemory(prev => {
-      const next = { ...prev, [original.toLowerCase().trim()]: { original, translation } };
-      try { localStorage.setItem('enhancedMemory', JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
+
+
 
 
   const handleImproveTranslations = async () => {

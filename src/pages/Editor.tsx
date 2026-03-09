@@ -80,6 +80,8 @@ import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationP
 import TranslationEnhancePanel from "@/components/editor/TranslationEnhancePanel";
 import AdvancedTranslationPanel from "@/components/editor/AdvancedTranslationPanel";
 import ToolHelpDialog, { ToolType } from "@/components/editor/ToolHelpDialog";
+import TranslationProgressDashboard from "@/components/editor/TranslationProgressDashboard";
+import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
 import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
 
 const Editor = () => {

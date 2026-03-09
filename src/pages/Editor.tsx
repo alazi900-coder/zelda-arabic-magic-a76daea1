@@ -34,7 +34,7 @@ import {
 
 import { useEditorState } from "@/hooks/useEditorState";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
-import { PAGE_SIZE, isTechnicalText } from "@/components/editor/types";
+import { PAGE_SIZE, isTechnicalText, type FilterStatus, type FilterTechnical } from "@/components/editor/types";
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import CategoryProgress from "@/components/editor/CategoryProgress";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
@@ -1106,7 +1106,7 @@ const Editor = () => {
                 </Button>
               ) : (
                 <>
-                  <select value={editor.filterStatus} onChange={e => editor.setFilterStatus(e.target.value as any)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm">
+                  <select value={editor.filterStatus} onChange={e => editor.setFilterStatus(e.target.value as FilterStatus)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm">
                     <option value="all">الكل</option>
                     <option value="translated">✅ مترجم</option>
                     <option value="untranslated">⬜ غير مترجم</option>
@@ -1125,7 +1125,7 @@ const Editor = () => {
                     <option value="all">كل الملفات</option>
                     {editor.msbtFiles.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
-                  <select value={editor.filterTechnical} onChange={e => editor.setFilterTechnical(e.target.value as any)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm">
+                  <select value={editor.filterTechnical} onChange={e => editor.setFilterTechnical(e.target.value as FilterTechnical)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm">
                     <option value="all">الكل</option>
                     <option value="exclude">بدون تقني</option>
                     <option value="only">تقني فقط</option>
@@ -1156,7 +1156,7 @@ const Editor = () => {
             </div>
             {isMobile && editor.filtersOpen && (
               <div className="mt-3 flex flex-col gap-2">
-                <select value={editor.filterStatus} onChange={e => editor.setFilterStatus(e.target.value as any)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
+                <select value={editor.filterStatus} onChange={e => editor.setFilterStatus(e.target.value as FilterStatus)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
                   <option value="all">الكل</option>
                   <option value="translated">✅ مترجم</option>
                   <option value="untranslated">⬜ غير مترجم</option>

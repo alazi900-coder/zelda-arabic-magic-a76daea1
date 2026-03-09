@@ -21,7 +21,7 @@ import {
   ExtractedEntry, EditorState, AUTOSAVE_DELAY, AI_BATCH_SIZE, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags,
   ReviewIssue, ReviewSummary, ReviewResults, ShortSuggestion, ImproveResult,
-  restoreTagsLocally,
+  restoreTagsLocally, FilterStatus, FilterTechnical,
 } from "@/components/editor/types";
 export function useEditorState() {
   // === Extracted hooks ===
@@ -67,8 +67,8 @@ export function useEditorState() {
   const [search, setSearch] = useState("");
   const [filterFile, setFilterFile] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<"all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "damaged-tags" | "fuzzy" | "byte-overflow" | "has-newlines">("all");
-  const [filterTechnical, setFilterTechnical] = useState<"all" | "only" | "exclude">("all");
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const [filterTechnical, setFilterTechnical] = useState<FilterTechnical>("all");
   const [filterTable, setFilterTable] = useState<string>("all");
   const [filterColumn, setFilterColumn] = useState<string>("all");
   const [translateProgress, setTranslateProgress] = useState("");

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Upload, FileText, ArrowRight, Loader2, CheckCircle2, Clock, Pencil, Database, Binary, Sparkles, Download, ChevronDown, ChevronRight, Shield, Tag, Settings2, FolderOpen } from "lucide-react";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
-import { categorizeBdatTable, categorizeByTableName, categorizeByColumnName, categorizeByFilename } from "@/components/editor/types";
+import { categorizeBdatTable, categorizeByTableName, categorizeByColumnName, categorizeByFilename, type ExtractedEntry } from "@/components/editor/types";
 import type { BdatSchemaReport } from "@/lib/bdat-schema-inspector";
 import { loadBdatSettings, saveBdatSettings, formatMarginPct } from "@/lib/bdat-settings";
 
@@ -266,7 +266,7 @@ const XenobladeProcess = () => {
       }
 
       // Only call server if we have MSBT or JSON BDAT files
-      let serverEntries: any[] = [];
+      let serverEntries: ExtractedEntry[] = [];
       let msbtCount = 0, bdatJsonCount = 0;
 
       if (msbtFiles.length > 0 || bdatFiles.length > 0) {
@@ -338,7 +338,7 @@ const XenobladeProcess = () => {
 
       // Early check: is this a re-uploaded built file? (presentation forms in originals)
       const { hasArabicPresentationForms, removeArabicPresentationForms, reverseBidi } = await import("@/lib/arabic-processing");
-      const isReUploadedBuild = allEntries.some((e: any) => hasArabicPresentationForms(e.original));
+      const isReUploadedBuild = allEntries.some(e => hasArabicPresentationForms(e.original));
 
       // Auto-detect Arabic entries — but SKIP if this is a re-uploaded built file
       // because the "originals" contain processed Arabic (reshaped+reversed) which
@@ -392,7 +392,7 @@ const XenobladeProcess = () => {
         }
         // Check if ANY entry has Arabic-range chars
         const arabicCheckRegex = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-        const entriesWithArabic = allEntries.filter((e: any) => arabicCheckRegex.test(e.original));
+        const entriesWithArabic = allEntries.filter(e => arabicCheckRegex.test(e.original));
         addLog(`🔎 عدد النصوص التي تحتوي أحرف عربية (أي نطاق): ${entriesWithArabic.length}`);
         if (entriesWithArabic.length > 0 && entriesWithArabic.length <= 5) {
           for (const e of entriesWithArabic) {
@@ -411,13 +411,13 @@ const XenobladeProcess = () => {
       if (mergeMode === "merge") {
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
         const existingTranslations = existing?.translations || {};
-        const validKeys = new Set(allEntries.map((e: any) => `${e.msbtFile}:${e.index}`));
+        const validKeys = new Set(allEntries.map(e => `${e.msbtFile}:${e.index}`));
 
         // Build legacy-to-new key mapping for old sequential keys
         const entriesByFile: Record<string, typeof allEntries> = {};
         for (const entry of allEntries) {
-          const parts = (entry as any).msbtFile.split(':');
-          const filename = parts.length >= 2 ? parts[1] : (entry as any).msbtFile;
+          const parts = entry.msbtFile.split(':');
+          const filename = parts.length >= 2 ? parts[1] : entry.msbtFile;
           if (!entriesByFile[filename]) entriesByFile[filename] = [];
           entriesByFile[filename].push(entry);
         }
@@ -434,7 +434,7 @@ const XenobladeProcess = () => {
               const idx = parseInt(parts[2], 10);
               const fileEntries = entriesByFile[filename];
               if (fileEntries && idx < fileEntries.length) {
-                const entry = fileEntries[idx] as any;
+                const entry = fileEntries[idx];
                 const newKey = `${entry.msbtFile}:${entry.index}`;
                 if (!finalTranslations[newKey]) {
                   finalTranslations[newKey] = v as string;
@@ -468,7 +468,7 @@ const XenobladeProcess = () => {
         const noColMap = new Map<string, string[]>();
         const baseMap = new Map<string, string[]>();
         const validKeys = new Set<string>();
-        for (const e of allEntries as any[]) {
+        for (const e of allEntries) {
           const ek = `${e.msbtFile}:${e.index}`;
           validKeys.add(ek);
           if (ek.startsWith('bdat-bin:')) {
@@ -540,7 +540,7 @@ const XenobladeProcess = () => {
         let restoredByDecoding = 0;
 
         for (let i = 0; i < allEntries.length; i++) {
-          const entry = allEntries[i] as any;
+          const entry = allEntries[i];
           if (!hasArabicPresentationForms(entry.original)) continue;
 
           const key = `${entry.msbtFile}:${entry.index}`;
@@ -569,8 +569,8 @@ const XenobladeProcess = () => {
         // Clean file — save original English texts for future restoration
         const originalTextsMap: Record<string, string> = {};
         for (const entry of allEntries) {
-          const key = `${(entry as any).msbtFile}:${(entry as any).index}`;
-          originalTextsMap[key] = (entry as any).original;
+          const key = `${entry.msbtFile}:${entry.index}`;
+          originalTextsMap[key] = entry.original;
         }
         
         await idbClearExcept(["buildTranslations"]);

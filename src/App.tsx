@@ -7,13 +7,22 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import UpdateBanner from "@/components/UpdateBanner";
 
-import Xenoblade from "./pages/Xenoblade";
-import XenobladeProcess from "./pages/XenobladeProcess";
-import Editor from "./pages/Editor";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import Install from "./pages/Install";
-import ModPackager from "./pages/ModPackager";
+import { lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
+
+const Xenoblade = lazy(() => import("./pages/Xenoblade"));
+const XenobladeProcess = lazy(() => import("./pages/XenobladeProcess"));
+const Editor = lazy(() => import("./pages/Editor"));
+const Auth = lazy(() => import("./pages/Auth"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Install = lazy(() => import("./pages/Install"));
+const ModPackager = lazy(() => import("./pages/ModPackager"));
+
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+  </div>
+);
 
 
 const queryClient = new QueryClient();

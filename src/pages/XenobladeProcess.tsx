@@ -411,7 +411,7 @@ const XenobladeProcess = () => {
       if (mergeMode === "merge") {
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
         const existingTranslations = existing?.translations || {};
-        const validKeys = new Set(allEntries.map((e: any) => `${e.msbtFile}:${e.index}`));
+        const validKeys = new Set(allEntries.map(e => `${e.msbtFile}:${e.index}`));
 
         // Build legacy-to-new key mapping for old sequential keys
         const entriesByFile: Record<string, typeof allEntries> = {};

@@ -10,7 +10,7 @@ export default function UpdateBanner() {
     if (!("serviceWorker" in navigator)) return;
 
     const checkForUpdate = () => {
-      navigator.serviceWorker.getRegistration().then((reg) => reg?.update());
+      navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
     };
 
     navigator.serviceWorker.getRegistration().then((reg) => {

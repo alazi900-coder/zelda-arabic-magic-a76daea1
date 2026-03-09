@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 interface EnhanceEntry {
@@ -83,9 +83,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, action, glossary, aiModel } = await req.json() as {
+    const { entries, action, mode, glossary, aiModel } = await req.json() as {
       entries: EnhanceEntry[];
-      action: 'analyze' | 'enhance' | 'alternatives';
+      action?: 'analyze' | 'enhance' | 'alternatives';
+      mode?: 'enhance' | 'grammar';
       glossary?: string;
       aiModel?: string;
     };
@@ -102,12 +103,143 @@ Deno.serve(async (req) => {
     const resolvedModel = (aiModel && gatewayModelMap[aiModel]) || 'google/gemini-3-flash-preview';
 
     if (!entries || entries.length === 0) {
-      return new Response(JSON.stringify({ results: [] }), {
+      return new Response(JSON.stringify({ results: [], suggestions: [], issues: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Pre-analyze context for all entries
+    // Handle grammar check mode (new)
+    if (mode === 'grammar') {
+      const grammarPrompt = `أنت مدقق نحوي عربي. افحص النصوص التالية بحثاً عن أخطاء:
+1. أخطاء إملائية (همزات، تاء مربوطة/مفتوحة)
+2. أخطاء نحوية (رفع/نصب/جر)
+3. علامات ترقيم خاطئة
+
+النصوص:
+${entries.map((e, i) => `[${i}] ${e.translation}`).join('\n')}
+
+أجب بصيغة JSON:
+{
+  "issues": [
+    {"index": 0, "issue": "وصف الخطأ", "suggestion": "النص المصحح"}
+  ]
+}`;
+
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: resolvedModel,
+          messages: [
+            { role: 'system', content: 'أنت مدقق نحوي. أجب بـ JSON صالح فقط.' },
+            { role: 'user', content: grammarPrompt }
+          ],
+          temperature: 0.2,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('Grammar check error:', response.status, errText);
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: 'تم تجاوز حد الطلبات' }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        throw new Error(`AI error: ${response.status}`);
+      }
+
+      const aiResult = await response.json();
+      const content = aiResult.choices?.[0]?.message?.content || '';
+      let parsed: { issues: any[] } = { issues: [] };
+      try {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        parsed = JSON.parse((jsonMatch[1] || content).trim());
+      } catch { /* ignore */ }
+
+      const mappedIssues = (parsed.issues || []).map((i: any) => ({
+        key: entries[i.index]?.key || '',
+        original: entries[i.index]?.original || '',
+        translation: entries[i.index]?.translation || '',
+        issue: i.issue,
+        suggestion: i.suggestion,
+      })).filter((i: any) => i.key && i.suggestion);
+
+      return new Response(JSON.stringify({ issues: mappedIssues }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Handle style enhancement mode (new)
+    if (mode === 'enhance') {
+      const enhancePrompt = `أنت مترجم ألعاب فيديو محترف. راجع الترجمات واقترح تحسينات:
+
+${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+
+${glossary ? `القاموس:\n${glossary.slice(0, 2000)}` : ''}
+
+أجب بـ JSON:
+{
+  "suggestions": [
+    {"index": 0, "suggested": "النص المحسن", "reason": "السبب", "type": "style|accuracy|consistency"}
+  ]
+}
+
+أرجع فقط الترجمات التي تحتاج تحسين.`;
+
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: resolvedModel,
+          messages: [
+            { role: 'system', content: 'أنت مترجم محترف. أجب بـ JSON صالح فقط.' },
+            { role: 'user', content: enhancePrompt }
+          ],
+          temperature: 0.3,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('Enhance error:', response.status, errText);
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: 'تم تجاوز حد الطلبات' }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        throw new Error(`AI error: ${response.status}`);
+      }
+
+      const aiResult = await response.json();
+      const content = aiResult.choices?.[0]?.message?.content || '';
+      let parsed: { suggestions: any[] } = { suggestions: [] };
+      try {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        parsed = JSON.parse((jsonMatch[1] || content).trim());
+      } catch { /* ignore */ }
+
+      const mappedSuggestions = (parsed.suggestions || []).map((s: any) => ({
+        key: entries[s.index]?.key || '',
+        original: entries[s.index]?.original || '',
+        current: entries[s.index]?.translation || '',
+        suggested: s.suggested,
+        reason: s.reason,
+        type: s.type || 'style',
+      })).filter((s: any) => s.key && s.suggested);
+
+      return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Original full analysis mode (action-based)
     const entriesWithContext = entries.map(e => ({
       ...e,
       detectedContext: {
@@ -116,7 +248,6 @@ Deno.serve(async (req) => {
       }
     }));
 
-    // Build analysis prompt
     const analysisPrompt = `أنت خبير في تحسين ترجمات ألعاب الفيديو من الإنجليزية للعربية، متخصص في لعبة Xenoblade Chronicles 3.
 
 مهمتك: تحليل الترجمات التالية وتقديم اقتراحات تحسين مع مراعاة:
@@ -185,16 +316,13 @@ ${entriesWithContext.map((e, i) => `[${i}]
     const aiResult = await response.json();
     const content = aiResult.choices?.[0]?.message?.content || '';
     
-    // Parse JSON from AI response
     let parsed: { results: any[] } = { results: [] };
     try {
-      // Extract JSON from potential markdown code block
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
       const jsonStr = jsonMatch[1] || content;
       parsed = JSON.parse(jsonStr.trim());
     } catch (parseErr) {
       console.error('JSON parse error:', parseErr, 'Content:', content.slice(0, 500));
-      // Try to extract partial results
       const resultsMatch = content.match(/"results"\s*:\s*\[([\s\S]*?)\]/);
       if (resultsMatch) {
         try {
@@ -203,7 +331,6 @@ ${entriesWithContext.map((e, i) => `[${i}]
       }
     }
 
-    // Merge AI analysis with pre-detected context
     const finalResults: EnhanceResult[] = entriesWithContext.map((entry, i) => {
       const aiAnalysis = parsed.results?.find((r: any) => r.index === i) || {};
       

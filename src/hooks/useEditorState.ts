@@ -1596,6 +1596,10 @@ export function useEditorState() {
     toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} تحسين` });
   };
 
+  const handleStopAdvancedAnalysis = () => {
+    advancedAnalysisCancelRef.current = true;
+  };
+
   const handleCloseAdvancedPanel = () => {
     setLiteralResults(null);
     setStyleResults(null);

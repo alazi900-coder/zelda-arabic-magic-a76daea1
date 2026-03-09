@@ -478,6 +478,73 @@ export function useEditorGlossary({
     setTimeout(() => setLastSaved(""), 5000);
   }, [state?.glossary, setLastSaved]);
 
+  // === Smart Merge: Compare combat glossary against full glossary (or current) ===
+  const handleSmartMergeGlossaries = useCallback(async () => {
+    setLastSaved('📊 جاري تحميل القواميس للمقارنة...');
+    
+    try {
+      // Fetch both glossaries
+      const [combatRes, fullRes] = await Promise.all([
+        fetch('/xc3-combat-glossary.txt'),
+        fetch('/xc3-full-glossary.txt'),
+      ]);
+      
+      if (!combatRes.ok || !fullRes.ok) {
+        throw new Error('فشل تحميل أحد القواميس');
+      }
+      
+      const [combatText, fullText] = await Promise.all([
+        combatRes.text(),
+        fullRes.text(),
+      ]);
+      
+      // Parse both into maps
+      const combatMap = parseGlossaryMap(combatText);
+      const fullMap = parseGlossaryMap(fullText);
+      
+      // Find differences: what's in combat but not in full, or different
+      const diffs: GlossaryMergeDiff[] = [];
+      
+      for (const [key, combatVal] of combatMap) {
+        const fullVal = fullMap.get(key);
+        if (!fullVal) {
+          // New term: exists in combat but not in full
+          diffs.push({ key, newValue: combatVal, type: 'new' });
+        } else if (fullVal !== combatVal) {
+          // Different translation
+          diffs.push({ key, newValue: combatVal, oldValue: fullVal, type: 'changed' });
+        } else {
+          // Same
+          diffs.push({ key, newValue: combatVal, type: 'same' });
+        }
+      }
+      
+      const changesCount = diffs.filter(d => d.type !== 'same').length;
+      
+      if (changesCount === 0) {
+        setLastSaved('✅ القواميس متطابقة — لا توجد إضافات أو تحديثات');
+        setTimeout(() => setLastSaved(""), 4000);
+        return;
+      }
+      
+      // Show the merge preview dialog with the diffs
+      setPendingMerge({
+        name: 'مقارنة القتال → الشامل',
+        diffs,
+        rawText: combatText,
+        replace: false, // merge mode, not replace
+      });
+      
+      setLastSaved(`📊 تم العثور على ${changesCount} اختلاف — راجع التفاصيل`);
+      setTimeout(() => setLastSaved(""), 4000);
+      
+    } catch (error) {
+      console.error('Smart merge error:', error);
+      setLastSaved('❌ خطأ في تحميل القواميس');
+      setTimeout(() => setLastSaved(""), 4000);
+    }
+  }, [parseGlossaryMap, setLastSaved, setPendingMerge]);
+
   return {
     glossaryEnabled, setGlossaryEnabled,
     glossaryTermCount, activeGlossary,
@@ -488,5 +555,6 @@ export function useEditorGlossary({
     handleGenerateGlossaryFromTranslations,
     getGlossaryHealth, handleFixGlossaryIssues,
     handleExportSkillsGlossary,
+    handleSmartMergeGlossaries,
   };
 }

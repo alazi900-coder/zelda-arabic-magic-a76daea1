@@ -71,9 +71,24 @@ export function useEditorState() {
     const [checkingGlossaryCompliance, setCheckingGlossaryCompliance] = useState(false);
     const [enhanceResults, setEnhanceResults] = useState<import("@/components/editor/TranslationEnhancePanel").EnhanceResult[] | null>(null);
     const [enhancingTranslations, setEnhancingTranslations] = useState(false);
+    
+    // Advanced Analysis State
+    const [advancedAnalysisTab, setAdvancedAnalysisTab] = useState<import("@/components/editor/AdvancedTranslationPanel").AnalysisAction>('full-analysis');
+    const [literalResults, setLiteralResults] = useState<import("@/components/editor/AdvancedTranslationPanel").LiteralResult[] | null>(null);
+    const [styleResults, setStyleResults] = useState<import("@/components/editor/AdvancedTranslationPanel").StyleResult[] | null>(null);
+    const [consistencyCheckResult, setConsistencyCheckResult] = useState<import("@/components/editor/AdvancedTranslationPanel").ConsistencyResult | null>(null);
+    const [alternativeResults, setAlternativeResults] = useState<import("@/components/editor/AdvancedTranslationPanel").AlternativeResult[] | null>(null);
+    const [fullAnalysisResults, setFullAnalysisResults] = useState<import("@/components/editor/AdvancedTranslationPanel").FullAnalysisResult[] | null>(null);
+    const [advancedAnalyzing, setAdvancedAnalyzing] = useState(false);
+    
+    // Translation Memory for improvements
+    const [enhancedMemory, setEnhancedMemory] = useState<Record<string, { original: string; translation: string }>>(() => {
+      try { const v = localStorage.getItem('enhancedMemory'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+    });
+    
    const [autoSmartReview, _setAutoSmartReview] = useState(() => {
-     try { return localStorage.getItem('autoSmartReview') === 'true'; } catch { return false; }
-   });
+      try { return localStorage.getItem('autoSmartReview') === 'true'; } catch { return false; }
+    });
    const setAutoSmartReview = useCallback((v: boolean) => {
      _setAutoSmartReview(v);
      try { localStorage.setItem('autoSmartReview', String(v)); } catch {}

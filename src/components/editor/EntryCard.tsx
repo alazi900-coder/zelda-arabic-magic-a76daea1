@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered } from "lucide-react";
+import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
 import { balanceLines, hasOrphanLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
+import { computeConfidence, detectLiteralTranslation } from "./TranslationProgressDashboard";
 
 /** Renders text with technical tags highlighted visually */
 function HighlightedOriginal({ text }: { text: string }) {

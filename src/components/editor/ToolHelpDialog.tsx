@@ -20,6 +20,9 @@ export type ToolType =
   | 'consistency-check'
   | 'alternatives'
   | 'full-analysis'
+  | 'auto-correct'
+  | 'detect-weak'
+  | 'context-retranslate'
   | null;
 
 interface ToolHelpDialogProps {

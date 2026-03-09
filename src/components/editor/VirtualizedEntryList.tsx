@@ -66,7 +66,7 @@ const VirtualizedEntryList = React.memo(({
   findSimilar,
   height = 600,
 }: VirtualizedEntryListProps) => {
-  const listRef = useRef<List>(null);
+  const listRef = useRef<VList>(null);
   const rowHeights = useRef<Record<number, number>>({});
 
   const getItemSize = useCallback((index: number) => {

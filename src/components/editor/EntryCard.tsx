@@ -339,6 +339,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
               <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleImproveSingleTranslation(entry)} disabled={improvingTranslations || !translation?.trim()} title="تحسين هذه الترجمة">
                 {improvingTranslations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-secondary" />}
               </Button>
+              {translation?.trim() && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={handleQuickAlternatives} disabled={fetchingAlternatives} title="📝 3 بدائل فورية">
+                  {fetchingAlternatives ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListOrdered className="w-4 h-4 text-primary" />}
+                </Button>
+              )}
               {translation?.trim() && /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/.test(translation) && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
                   const cleaned = translation.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '');

@@ -569,8 +569,8 @@ const XenobladeProcess = () => {
         // Clean file — save original English texts for future restoration
         const originalTextsMap: Record<string, string> = {};
         for (const entry of allEntries) {
-          const key = `${(entry as any).msbtFile}:${(entry as any).index}`;
-          originalTextsMap[key] = (entry as any).original;
+          const key = `${entry.msbtFile}:${entry.index}`;
+          originalTextsMap[key] = entry.original;
         }
         
         await idbClearExcept(["buildTranslations"]);

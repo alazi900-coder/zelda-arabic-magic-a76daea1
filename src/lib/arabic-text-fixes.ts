@@ -207,6 +207,30 @@ export function cleanAIArtifacts(text: string): { fixed: string; changes: number
 }
 
 // ============================================================
+// 5. Lonely Lam fix (ل → لا)
+// ============================================================
+
+/**
+ * Detects standalone 'ل' that should be 'لا' (negation).
+ * In Arabic, 'ل' alone (separated by spaces) is almost never correct —
+ * it's usually a broken 'لا' (no/not) from AI translation.
+ * The preposition 'ل' is always attached to the next word (لِلذهاب).
+ */
+export function fixLonelyLam(text: string): { fixed: string; changes: number } {
+  const { shielded, tags } = shieldTags(text);
+  let changes = 0;
+
+  // Match standalone 'ل' surrounded by whitespace or at start/end
+  // But NOT 'ل' followed immediately by Arabic chars (that's a prefix)
+  const fixed = shielded.replace(/(^|\s)ل(\s|$)/g, (match, before, after) => {
+    changes++;
+    return before + 'لا' + after;
+  });
+
+  return { fixed: unshieldTags(fixed, tags), changes };
+}
+
+// ============================================================
 // Combined scan
 // ============================================================
 
@@ -214,7 +238,7 @@ export interface TextFixResult {
   key: string;
   before: string;
   after: string;
-  fixType: 'taa-haa' | 'yaa-alef' | 'repeated' | 'ai-artifact';
+  fixType: 'taa-haa' | 'yaa-alef' | 'repeated' | 'ai-artifact' | 'lonely-lam';
   fixLabel: string;
   details: string;
   status: 'pending' | 'accepted' | 'rejected';

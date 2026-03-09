@@ -411,6 +411,73 @@ export function useEditorGlossary({
     setTimeout(() => setLastSaved(""), 4000);
   }, [state?.glossary, setState, setLastSaved]);
 
+  // === Export Skills & Arts sections from glossary as a standalone file ===
+  const handleExportSkillsGlossary = useCallback(() => {
+    const glossaryText = state?.glossary?.trim();
+    if (!glossaryText) {
+      setLastSaved('⚠️ لا يوجد قاموس محمّل');
+      setTimeout(() => setLastSaved(""), 3000);
+      return;
+    }
+
+    const skillsSectionPatterns = [
+      /skill/i, /art\b/i, /arts/i, /فنون/i, /مهارات/i, /talent/i, /master art/i,
+      /fusion/i, /combo/i, /battle/i, /combat/i, /قتال/i, /موهبة/i, /إتقان/i,
+    ];
+
+    const lines = glossaryText.split('\n');
+    const outputLines: string[] = ['# ═══════════════════════════════════════════════════', '# قاموس المهارات والفنون المُستخرج (Skills & Arts Mini-Glossary)', '# ═══════════════════════════════════════════════════', ''];
+    let inSkillsSection = false;
+    let extractedCount = 0;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (inSkillsSection) outputLines.push('');
+        continue;
+      }
+
+      // Check if this is a section header
+      if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
+        const headerText = trimmed.replace(/^[#/]+\s*/, '').replace(/[═─\-=]+/g, '').trim();
+        if (headerText.length > 2) {
+          inSkillsSection = skillsSectionPatterns.some(p => p.test(headerText));
+          if (inSkillsSection) {
+            outputLines.push(trimmed);
+          }
+        }
+        continue;
+      }
+
+      // If we're in a skills section, include the term
+      if (inSkillsSection) {
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          outputLines.push(trimmed);
+          extractedCount++;
+        }
+      }
+    }
+
+    if (extractedCount === 0) {
+      setLastSaved('⚠️ لم يتم العثور على أقسام مهارات/فنون في القاموس');
+      setTimeout(() => setLastSaved(""), 4000);
+      return;
+    }
+
+    // Download as file
+    const blob = new Blob([outputLines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'xc3-skills-arts-glossary.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setLastSaved(`📤 تم تصدير ${extractedCount} مصطلح (مهارات + فنون) إلى ملف مستقل`);
+    setTimeout(() => setLastSaved(""), 5000);
+  }, [state?.glossary, setLastSaved]);
+
   return {
     glossaryEnabled, setGlossaryEnabled,
     glossaryTermCount, activeGlossary,
@@ -420,5 +487,6 @@ export function useEditorGlossary({
     handleSaveGlossaryToCloud, handleLoadGlossaryFromCloud,
     handleGenerateGlossaryFromTranslations,
     getGlossaryHealth, handleFixGlossaryIssues,
+    handleExportSkillsGlossary,
   };
 }

@@ -1645,6 +1645,12 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleSmartReview} disabled={editor.smartReviewing || editor.translatedCount === 0}>
                     {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />} مراجعة عميقة بالذكاء 🔬
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleGrammarCheck} disabled={editor.smartReviewing || editor.translatedCount === 0}>
+                    {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Type className="w-4 h-4" />} فحص القواعد النحوية 📝
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleContextReview} disabled={editor.smartReviewing || editor.translatedCount === 0}>
+                    {editor.smartReviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />} مراجعة سياقية 🎯
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => editor.setAutoSmartReview(!editor.autoSmartReview)}>
                     {editor.autoSmartReview ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Eye className="w-4 h-4 opacity-40" />} مراجعة تلقائية بعد الترجمة
                   </DropdownMenuItem>

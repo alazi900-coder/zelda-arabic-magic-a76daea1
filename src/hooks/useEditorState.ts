@@ -3125,7 +3125,7 @@ export function useEditorState() {
     handleImproveTranslations, handleApplyImprovement, handleApplyAllImprovements,
     handleImproveSingleTranslation,
     handleCheckConsistency, handleApplyConsistencyFix, handleApplyAllConsistencyFixes,
-    handleSmartReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
+    handleSmartReview, handleGrammarCheck, handleContextReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
     handleEnhanceTranslations, handleApplyEnhanceSuggestion, handleApplyAllEnhanceSuggestions, handleCloseEnhanceResults,
     // Advanced Analysis handlers
     handleAdvancedAnalysis, handleApplyAdvancedSuggestion, handleApplyAllAdvanced, handleCloseAdvancedPanel, saveToEnhancedMemory, handleStopAdvancedAnalysis,

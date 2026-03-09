@@ -1320,91 +1320,118 @@ export function useEditorState() {
   // === Auto-Correct (bulk spelling/grammar auto-fix) ===
   const [autoCorrectResults, setAutoCorrectResults] = useState<{ key: string; original: string; current: string; corrected: string }[] | null>(null);
   const [autoCorrectApplied, setAutoCorrectApplied] = useState(false);
+  const [autoCorrectProgress, setAutoCorrectProgress] = useState<{ current: number; total: number } | null>(null);
+  const autoCorrectAbortRef = useRef<AbortController | null>(null);
+  const handleStopAutoCorrect = () => { autoCorrectAbortRef.current?.abort(); };
 
   const handleAutoCorrect = async () => {
     if (!state) return;
     setSmartReviewing(true);
     setAutoCorrectResults(null);
     setAutoCorrectApplied(false);
-    toast({ title: "✏️ بدأ التصحيح الإملائي الشامل", description: "جاري فحص وتصحيح جميع الترجمات..." });
+    setAutoCorrectProgress(null);
+    const abortCtrl = new AbortController();
+    autoCorrectAbortRef.current = abortCtrl;
     try {
       const reviewEntries = filteredEntries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (reviewEntries.length === 0) { toast({ title: "لا توجد ترجمات للتصحيح" }); return; }
-      
-      setTranslateProgress(`✏️ جاري التصحيح الإملائي (${reviewEntries.length} نص)...`);
+      const BATCH = 30;
+      const batches: typeof reviewEntries[] = [];
+      for (let i = 0; i < reviewEntries.length; i += BATCH) batches.push(reviewEntries.slice(i, i + BATCH));
+      setAutoCorrectProgress({ current: 0, total: reviewEntries.length });
+      setTranslateProgress(`✏️ جاري التصحيح الإملائي (0/${reviewEntries.length})...`);
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries: reviewEntries, action: 'auto-correct', aiModel }),
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `خطأ ${response.status}`);
+      const allCorrections: { key: string; original: string; current: string; corrected: string }[] = [];
+      let processed = 0;
+      for (const batch of batches) {
+        if (abortCtrl.signal.aborted) break;
+        const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries: batch, action: 'auto-correct', aiModel }),
+          signal: abortCtrl.signal,
+        });
+        if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
+        const data = await response.json();
+        if (data.corrections) allCorrections.push(...data.corrections);
+        processed += batch.length;
+        setAutoCorrectProgress({ current: Math.min(processed, reviewEntries.length), total: reviewEntries.length });
+        setTranslateProgress(`✏️ جاري التصحيح الإملائي (${Math.min(processed, reviewEntries.length)}/${reviewEntries.length})...`);
       }
-      const data = await response.json();
-      const corrections = data.corrections || [];
-      if (corrections.length === 0) {
+      if (abortCtrl.signal.aborted) toast({ title: "⏹️ تم إيقاف التصحيح", description: `تم تصحيح ${allCorrections.length} نص` });
+      if (allCorrections.length === 0) {
         setTranslateProgress("✅ جميع الترجمات سليمة إملائياً!");
-        setTimeout(() => setTranslateProgress(""), 4000);
       } else {
-        // Auto-apply all corrections
         const newTranslations = { ...state.translations };
-        for (const c of corrections) {
-          newTranslations[c.key] = c.corrected;
-        }
+        for (const c of allCorrections) newTranslations[c.key] = c.corrected;
         setState(prev => prev ? { ...prev, translations: newTranslations } : null);
-        setAutoCorrectResults(corrections);
+        setAutoCorrectResults(allCorrections);
         setAutoCorrectApplied(true);
-        setTranslateProgress(`✏️ تم تصحيح ${corrections.length} ترجمة تلقائياً`);
-        toast({ title: `✅ تم تصحيح ${corrections.length} خطأ إملائي/نحوي`, description: "يمكنك التراجع عن أي تصحيح من سجل التعديلات" });
-        setTimeout(() => setTranslateProgress(""), 4000);
+        setTranslateProgress(`✏️ تم تصحيح ${allCorrections.length} ترجمة تلقائياً`);
+        toast({ title: `✅ تم تصحيح ${allCorrections.length} خطأ إملائي/نحوي` });
       }
+      setTimeout(() => setTranslateProgress(""), 4000);
     } catch (err) {
-      toast({ title: "خطأ في التصحيح التلقائي", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
+      if ((err as Error).name !== 'AbortError') toast({ title: "خطأ في التصحيح التلقائي", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
       setTranslateProgress("");
-    } finally { setSmartReviewing(false); }
+    } finally { setSmartReviewing(false); setAutoCorrectProgress(null); autoCorrectAbortRef.current = null; }
   };
 
   // === Detect Weak Translations ===
   const [weakTranslations, setWeakTranslations] = useState<{ key: string; original: string; current: string; score: number; reason: string; suggestion: string }[] | null>(null);
   const [detectingWeak, setDetectingWeak] = useState(false);
+  const [detectWeakProgress, setDetectWeakProgress] = useState<{ current: number; total: number } | null>(null);
+  const detectWeakAbortRef = useRef<AbortController | null>(null);
+  const handleStopDetectWeak = () => { detectWeakAbortRef.current?.abort(); };
 
   const handleDetectWeak = async () => {
     if (!state) return;
     setDetectingWeak(true);
     setWeakTranslations(null);
-    toast({ title: "🔍 بدأ كشف الترجمات الركيكة", description: "تقييم جودة الترجمات..." });
+    setDetectWeakProgress(null);
+    const abortCtrl = new AbortController();
+    detectWeakAbortRef.current = abortCtrl;
     try {
       const reviewEntries = filteredEntries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (reviewEntries.length === 0) { toast({ title: "لا توجد ترجمات للفحص" }); return; }
-
-      setTranslateProgress(`🔍 جاري تقييم جودة ${reviewEntries.length} ترجمة...`);
+      const BATCH = 30;
+      const batches: typeof reviewEntries[] = [];
+      for (let i = 0; i < reviewEntries.length; i += BATCH) batches.push(reviewEntries.slice(i, i + BATCH));
+      setDetectWeakProgress({ current: 0, total: reviewEntries.length });
+      setTranslateProgress(`🔍 جاري تقييم الجودة (0/${reviewEntries.length})...`);
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'detect-weak', aiModel }),
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `خطأ ${response.status}`);
+      const allWeak: { key: string; original: string; current: string; score: number; reason: string; suggestion: string }[] = [];
+      let processed = 0;
+      for (const batch of batches) {
+        if (abortCtrl.signal.aborted) break;
+        const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries: batch, glossary: activeGlossary, action: 'detect-weak', aiModel }),
+          signal: abortCtrl.signal,
+        });
+        if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
+        const data = await response.json();
+        if (data.weakEntries) allWeak.push(...data.weakEntries);
+        processed += batch.length;
+        setDetectWeakProgress({ current: Math.min(processed, reviewEntries.length), total: reviewEntries.length });
+        setTranslateProgress(`🔍 جاري تقييم الجودة (${Math.min(processed, reviewEntries.length)}/${reviewEntries.length})...`);
       }
-      const data = await response.json();
-      setWeakTranslations(data.weakEntries || []);
-      const count = data.weakEntries?.length || 0;
+      if (abortCtrl.signal.aborted) toast({ title: "⏹️ تم إيقاف الكشف", description: `تم فحص ${processed} من ${reviewEntries.length}` });
+      setWeakTranslations(allWeak);
+      const count = allWeak.length;
       setTranslateProgress(count > 0 ? `🔍 تم العثور على ${count} ترجمة ركيكة` : `✅ جميع الترجمات بجودة عالية!`);
       setTimeout(() => setTranslateProgress(""), 4000);
     } catch (err) {
-      toast({ title: "خطأ في كشف الترجمات", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
+      if ((err as Error).name !== 'AbortError') toast({ title: "خطأ في كشف الترجمات", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
       setTranslateProgress("");
-    } finally { setDetectingWeak(false); }
+    } finally { setDetectingWeak(false); setDetectWeakProgress(null); detectWeakAbortRef.current = null; }
   };
 
   const handleApplyWeakFix = (key: string, suggestion: string) => {
@@ -3286,8 +3313,8 @@ export function useEditorState() {
     handleImproveSingleTranslation,
     handleCheckConsistency, handleApplyConsistencyFix, handleApplyAllConsistencyFixes,
     handleSmartReview, handleGrammarCheck, handleContextReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
-    handleAutoCorrect, autoCorrectResults, autoCorrectApplied,
-    handleDetectWeak, weakTranslations, detectingWeak, handleApplyWeakFix, handleApplyAllWeakFixes, setWeakTranslations,
+    handleAutoCorrect, autoCorrectResults, autoCorrectApplied, autoCorrectProgress, handleStopAutoCorrect,
+    handleDetectWeak, weakTranslations, detectingWeak, detectWeakProgress, handleStopDetectWeak, handleApplyWeakFix, handleApplyAllWeakFixes, setWeakTranslations,
     handleContextRetranslate,
     handleEnhanceTranslations, handleApplyEnhanceSuggestion, handleApplyAllEnhanceSuggestions, handleCloseEnhanceResults,
     // Advanced Analysis handlers

@@ -79,6 +79,7 @@ import GlossaryCompliancePanel from "@/components/editor/GlossaryCompliancePanel
 import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationPreview";
 import TranslationEnhancePanel from "@/components/editor/TranslationEnhancePanel";
 import AdvancedTranslationPanel from "@/components/editor/AdvancedTranslationPanel";
+import ToolHelpDialog, { ToolType } from "@/components/editor/ToolHelpDialog";
 
 const Editor = () => {
   const editor = useEditorState();

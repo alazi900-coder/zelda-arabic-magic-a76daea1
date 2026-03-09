@@ -230,7 +230,7 @@ const Editor = () => {
       <div className="min-h-screen flex flex-col">
         <div className="relative flex flex-col items-center justify-center py-20 px-4 text-center overflow-hidden">
           <div className="absolute inset-0">
-            <img src={heroBg} alt="" className="w-full h-full object-cover" />
+            <img src={heroBg} alt="" className="w-full h-full object-cover" fetchPriority="high" />
             <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/60 to-background" />
           </div>
           <div className="relative z-10">

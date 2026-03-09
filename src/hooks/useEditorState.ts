@@ -1342,11 +1342,21 @@ export function useEditorState() {
     setEnhanceResults(null);
   };
 
-  // === Advanced Translation Analysis ===
+  // === Advanced Translation Analysis (with batch processing) ===
+  const ADVANCED_BATCH_SIZE = 15; // Smaller batches for better AI accuracy
+  const MAX_ENTRIES_FOR_ANALYSIS = 200; // Max entries to analyze
+  
   const handleAdvancedAnalysis = async (action: import("@/components/editor/AdvancedTranslationPanel").AnalysisAction) => {
     if (!state) return;
     setAdvancedAnalyzing(true);
     setAdvancedAnalysisTab(action);
+    
+    // Clear previous results
+    setLiteralResults(null);
+    setStyleResults(null);
+    setConsistencyCheckResult(null);
+    setAlternativeResults(null);
+    setFullAnalysisResults(null);
     
     const actionLabels: Record<string, string> = {
       'literal-detect': '🔍 كشف الترجمات الحرفية',
@@ -1356,15 +1366,16 @@ export function useEditorState() {
       'full-analysis': '🧠 تحليل شامل متكامل',
     };
     
-    toast({ title: actionLabels[action], description: "جاري التحليل..." });
+    toast({ title: actionLabels[action], description: "جاري تجهيز النصوص للتحليل..." });
     
     try {
-      const translatedEntries = filteredEntries
+      // Get all translated entries (up to max limit)
+      const allTranslatedEntries = filteredEntries
         .filter(e => {
           const key = `${e.msbtFile}:${e.index}`;
           return state.translations[key]?.trim();
         })
-        .slice(0, 25)
+        .slice(0, MAX_ENTRIES_FOR_ANALYSIS)
         .map(e => ({
           key: `${e.msbtFile}:${e.index}`,
           original: e.original,
@@ -1372,84 +1383,151 @@ export function useEditorState() {
           fileName: e.msbtFile,
         }));
 
-      if (translatedEntries.length === 0) {
+      if (allTranslatedEntries.length === 0) {
         setTranslateProgress("⚠️ لا توجد ترجمات للتحليل في النطاق المحدد");
         setTimeout(() => setTranslateProgress(""), 3000);
         setAdvancedAnalyzing(false);
         return;
       }
 
-      setTranslateProgress(`${actionLabels[action]} — ${translatedEntries.length} نص...`);
+      const totalEntries = allTranslatedEntries.length;
+      const totalBatches = Math.ceil(totalEntries / ADVANCED_BATCH_SIZE);
+      
+      setTranslateProgress(`${actionLabels[action]} — ${totalEntries} نص (${totalBatches} دفعات)`);
       
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const glossarySlice = activeGlossary?.split('\n').slice(0, 150).join('\n');
       
-      const response = await fetch(`${supabaseUrl}/functions/v1/translation-analysis`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'apikey': supabaseKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          entries: translatedEntries,
-          action,
-          glossary: activeGlossary?.split('\n').slice(0, 150).join('\n'),
-          aiModel,
-        }),
-      });
+      // Accumulators for batch results
+      let allLiteralResults: any[] = [];
+      let allStyleResults: any[] = [];
+      let allAlternativeResults: any[] = [];
+      let allFullResults: any[] = [];
+      let allInconsistencies: any[] = [];
+      let totalScore = 0;
+      let summaries: string[] = [];
+      
+      // Process in batches
+      for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+        const start = batchIdx * ADVANCED_BATCH_SIZE;
+        const end = Math.min(start + ADVANCED_BATCH_SIZE, totalEntries);
+        const batchEntries = allTranslatedEntries.slice(start, end);
+        
+        const progress = Math.round(((batchIdx + 1) / totalBatches) * 100);
+        setTranslateProgress(`${actionLabels[action]} — دفعة ${batchIdx + 1}/${totalBatches} (${progress}%) — ${end}/${totalEntries} نص`);
+        
+        try {
+          const response = await fetch(`${supabaseUrl}/functions/v1/translation-analysis`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'apikey': supabaseKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              entries: batchEntries,
+              action,
+              glossary: glossarySlice,
+              aiModel,
+            }),
+          });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `خطأ ${response.status}`);
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            if (response.status === 429) {
+              toast({ title: "⚠️ حد الطلبات", description: "انتظر قليلاً ثم أعد المحاولة", variant: "destructive" });
+              break; // Stop processing on rate limit
+            }
+            console.error(`Batch ${batchIdx + 1} error:`, errorData);
+            continue; // Skip failed batch but continue
+          }
+
+          const data = await response.json();
+          
+          // Accumulate results based on action type
+          if (action === 'literal-detect' && data.results) {
+            const mapped = data.results.map((r: any, i: number) => ({
+              key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`,
+              original: batchEntries[r.index ?? i]?.original || '',
+              translation: batchEntries[r.index ?? i]?.translation || '',
+              ...r,
+            }));
+            allLiteralResults.push(...mapped);
+          } else if (action === 'style-unify' && data.results) {
+            const mapped = data.results.map((r: any, i: number) => ({
+              key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`,
+              original: batchEntries[r.index ?? i]?.original || '',
+              translation: batchEntries[r.index ?? i]?.translation || '',
+              ...r,
+            }));
+            allStyleResults.push(...mapped);
+          } else if (action === 'consistency-check') {
+            if (data.inconsistencies) allInconsistencies.push(...data.inconsistencies);
+            if (data.score) totalScore += data.score;
+            if (data.summary) summaries.push(data.summary);
+          } else if (action === 'alternatives' && data.results) {
+            const mapped = data.results.map((r: any, i: number) => ({
+              key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`,
+              original: batchEntries[r.index ?? i]?.original || '',
+              translation: batchEntries[r.index ?? i]?.translation || '',
+              ...r,
+            }));
+            allAlternativeResults.push(...mapped);
+          } else if (action === 'full-analysis' && data.results) {
+            const mapped = data.results.map((r: any, i: number) => ({
+              key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`,
+              original: batchEntries[r.index ?? i]?.original || '',
+              translation: batchEntries[r.index ?? i]?.translation || '',
+              ...r,
+            }));
+            allFullResults.push(...mapped);
+          }
+          
+          // Small delay between batches to avoid rate limiting
+          if (batchIdx < totalBatches - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+        } catch (batchErr) {
+          console.error(`Batch ${batchIdx + 1} failed:`, batchErr);
+          continue; // Continue with next batch
+        }
       }
-
-      const data = await response.json();
       
-      if (action === 'literal-detect' && data.results) {
-        setLiteralResults(data.results.map((r: any, i: number) => ({
-          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
-          original: translatedEntries[r.index ?? i]?.original || '',
-          translation: translatedEntries[r.index ?? i]?.translation || '',
-          ...r,
-        })));
-        setTranslateProgress(`✅ ${data.results.filter((r: any) => r.isLiteral).length} ترجمة حرفية مكتشفة`);
-      } else if (action === 'style-unify' && data.results) {
-        setStyleResults(data.results.map((r: any, i: number) => ({
-          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
-          original: translatedEntries[r.index ?? i]?.original || '',
-          translation: translatedEntries[r.index ?? i]?.translation || '',
-          ...r,
-        })));
-        setTranslateProgress(`✅ تم تحليل الأسلوب — ${data.results.filter((r: any) => r.styleIssues?.length).length} يحتاج توحيد`);
-      } else if (action === 'consistency-check' && data.inconsistencies) {
+      // Set final accumulated results
+      if (action === 'literal-detect') {
+        setLiteralResults(allLiteralResults);
+        const literalCount = allLiteralResults.filter(r => r.isLiteral).length;
+        setTranslateProgress(`✅ تم تحليل ${allLiteralResults.length} نص — ${literalCount} ترجمة حرفية`);
+      } else if (action === 'style-unify') {
+        setStyleResults(allStyleResults);
+        const needsFix = allStyleResults.filter(r => r.styleIssues?.length > 0 || r.unifiedVersion).length;
+        setTranslateProgress(`✅ تم تحليل ${allStyleResults.length} نص — ${needsFix} يحتاج توحيد`);
+      } else if (action === 'consistency-check') {
+        // Deduplicate inconsistencies by term
+        const uniqueInconsistencies = allInconsistencies.reduce((acc: any[], item) => {
+          const existing = acc.find(i => i.term === item.term);
+          if (!existing) acc.push(item);
+          return acc;
+        }, []);
         setConsistencyCheckResult({
-          inconsistencies: data.inconsistencies || [],
-          score: data.score || 0,
-          summary: data.summary || '',
+          inconsistencies: uniqueInconsistencies,
+          score: totalBatches > 0 ? Math.round(totalScore / totalBatches) : 0,
+          summary: summaries.join(' | '),
         });
-        setTranslateProgress(`✅ درجة الاتساق: ${data.score}/100 — ${data.inconsistencies?.length || 0} تناقض`);
-      } else if (action === 'alternatives' && data.results) {
-        setAlternativeResults(data.results.map((r: any, i: number) => ({
-          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
-          original: translatedEntries[r.index ?? i]?.original || '',
-          translation: translatedEntries[r.index ?? i]?.translation || '',
-          ...r,
-        })));
-        setTranslateProgress(`✅ ${data.results.length} نص مع بدائل متعددة`);
-      } else if (action === 'full-analysis' && data.results) {
-        setFullAnalysisResults(data.results.map((r: any, i: number) => ({
-          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
-          original: translatedEntries[r.index ?? i]?.original || '',
-          translation: translatedEntries[r.index ?? i]?.translation || '',
-          ...r,
-        })));
-        const literalCount = data.results.filter((r: any) => r.isLiteral).length;
-        const issueCount = data.results.filter((r: any) => r.issues?.length).length;
-        setTranslateProgress(`✅ تحليل شامل: ${literalCount} حرفية، ${issueCount} مشاكل`);
+        setTranslateProgress(`✅ درجة الاتساق: ${Math.round(totalScore / totalBatches)}/100 — ${uniqueInconsistencies.length} تناقض`);
+      } else if (action === 'alternatives') {
+        setAlternativeResults(allAlternativeResults);
+        setTranslateProgress(`✅ ${allAlternativeResults.length} نص مع بدائل متعددة`);
+      } else if (action === 'full-analysis') {
+        setFullAnalysisResults(allFullResults);
+        const literalCount = allFullResults.filter(r => r.isLiteral).length;
+        const issueCount = allFullResults.filter(r => r.issues?.length > 0).length;
+        setTranslateProgress(`✅ تحليل ${allFullResults.length} نص: ${literalCount} حرفية، ${issueCount} مشاكل`);
       }
       
-      setTimeout(() => setTranslateProgress(""), 5000);
+      setTimeout(() => setTranslateProgress(""), 6000);
 
     } catch (err) {
       console.error('Advanced analysis error:', err);

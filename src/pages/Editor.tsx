@@ -1279,6 +1279,7 @@ const Editor = () => {
                   <DropdownMenuLabel className="text-xs">🔄 إنشاء تلقائي</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleGenerateGlossaryFromTranslations}>✨ إنشاء قاموس من الترجمات</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixGlossaryIssues}>🔧 إصلاح مشاكل القاموس</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleScanGlossaryDuplicates}>🔍 فحص التكرارات المتعارضة</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">📤 تصدير أقسام</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleExportSkillsGlossary}>⚔️ تصدير المهارات والفنون فقط</DropdownMenuItem>

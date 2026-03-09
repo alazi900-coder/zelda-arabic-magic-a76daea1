@@ -1249,10 +1249,6 @@ export function useEditorState() {
   };
 
   // === Detect Weak Translations ===
-  const [weakTranslations, setWeakTranslations] = useState<{ key: string; original: string; current: string; score: number; reason: string; suggestion: string }[] | null>(null);
-  const [detectingWeak, setDetectingWeak] = useState(false);
-  const [detectWeakProgress, setDetectWeakProgress] = useState<{ current: number; total: number } | null>(null);
-  const detectWeakAbortRef = useRef<AbortController | null>(null);
   const handleStopDetectWeak = () => { detectWeakAbortRef.current?.abort(); };
 
   const handleDetectWeak = async () => {

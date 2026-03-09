@@ -78,6 +78,7 @@ import SmartReviewPanel from "@/components/editor/SmartReviewPanel";
 import GlossaryCompliancePanel from "@/components/editor/GlossaryCompliancePanel";
 import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationPreview";
 import TranslationEnhancePanel from "@/components/editor/TranslationEnhancePanel";
+import AdvancedTranslationPanel from "@/components/editor/AdvancedTranslationPanel";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -951,7 +952,25 @@ const Editor = () => {
             />
           )}
 
-          {/* Tag Repair Panel */}
+          {/* Advanced Translation Analysis Panel */}
+          {(editor.literalResults || editor.styleResults || editor.consistencyCheckResult || editor.alternativeResults || editor.fullAnalysisResults) && (
+            <AdvancedTranslationPanel
+              activeTab={editor.advancedAnalysisTab}
+              literalResults={editor.literalResults}
+              styleResults={editor.styleResults}
+              consistencyResult={editor.consistencyCheckResult}
+              alternativeResults={editor.alternativeResults}
+              fullResults={editor.fullAnalysisResults}
+              analyzing={editor.advancedAnalyzing}
+              onApply={editor.handleApplyAdvancedSuggestion}
+              onApplyAll={editor.handleApplyAllAdvanced}
+              onClose={editor.handleCloseAdvancedPanel}
+              onTabChange={(tab) => editor.setAdvancedAnalysisTab(tab)}
+              onSaveToMemory={editor.saveToEnhancedMemory}
+            />
+          )}
+
+
           {showTagRepair && editor.state && (
             <TagRepairPanel
               entries={editor.state.entries}
@@ -1399,8 +1418,25 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleEnhanceTranslations} disabled={editor.enhancingTranslations || editor.translatedCount === 0}>
                     {editor.enhancingTranslations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} تحسين سياقي شامل 🎯
                   </DropdownMenuItem>
-
+                  
                   <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-primary/80">🧠 تحليل متقدم</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => editor.handleAdvancedAnalysis('literal-detect')} disabled={editor.advancedAnalyzing || editor.translatedCount === 0}>
+                    {editor.advancedAnalyzing && editor.advancedAnalysisTab === 'literal-detect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} كشف الترجمات الحرفية 📝
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => editor.handleAdvancedAnalysis('style-unify')} disabled={editor.advancedAnalyzing || editor.translatedCount === 0}>
+                    {editor.advancedAnalyzing && editor.advancedAnalysisTab === 'style-unify' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Type className="w-4 h-4" />} توحيد الأسلوب 🎨
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => editor.handleAdvancedAnalysis('consistency-check')} disabled={editor.advancedAnalyzing || editor.translatedCount === 0}>
+                    {editor.advancedAnalyzing && editor.advancedAnalysisTab === 'consistency-check' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} فحص اتساق شامل 🛡️
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => editor.handleAdvancedAnalysis('alternatives')} disabled={editor.advancedAnalyzing || editor.translatedCount === 0}>
+                    {editor.advancedAnalyzing && editor.advancedAnalysisTab === 'alternatives' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rows3 className="w-4 h-4" />} بدائل متعددة الأسلوب 📝
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => editor.handleAdvancedAnalysis('full-analysis')} disabled={editor.advancedAnalyzing || editor.translatedCount === 0}>
+                    {editor.advancedAnalyzing && editor.advancedAnalysisTab === 'full-analysis' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} تحليل شامل متكامل 🧠
+                  </DropdownMenuItem>
+
 
                   {/* ─── أدوات متنوعة ─── */}
                   <DropdownMenuLabel className="text-xs text-primary/80">🛠️ متنوعة</DropdownMenuLabel>

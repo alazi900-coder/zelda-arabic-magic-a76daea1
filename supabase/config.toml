@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.translation-tools]
 verify_jwt = false
+
+[functions.translation-analysis]
+verify_jwt = false
+
+[functions.enhance-translations]
+verify_jwt = false

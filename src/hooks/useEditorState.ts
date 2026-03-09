@@ -71,9 +71,24 @@ export function useEditorState() {
     const [checkingGlossaryCompliance, setCheckingGlossaryCompliance] = useState(false);
     const [enhanceResults, setEnhanceResults] = useState<import("@/components/editor/TranslationEnhancePanel").EnhanceResult[] | null>(null);
     const [enhancingTranslations, setEnhancingTranslations] = useState(false);
+    
+    // Advanced Analysis State
+    const [advancedAnalysisTab, setAdvancedAnalysisTab] = useState<import("@/components/editor/AdvancedTranslationPanel").AnalysisAction>('full-analysis');
+    const [literalResults, setLiteralResults] = useState<import("@/components/editor/AdvancedTranslationPanel").LiteralResult[] | null>(null);
+    const [styleResults, setStyleResults] = useState<import("@/components/editor/AdvancedTranslationPanel").StyleResult[] | null>(null);
+    const [consistencyCheckResult, setConsistencyCheckResult] = useState<import("@/components/editor/AdvancedTranslationPanel").ConsistencyResult | null>(null);
+    const [alternativeResults, setAlternativeResults] = useState<import("@/components/editor/AdvancedTranslationPanel").AlternativeResult[] | null>(null);
+    const [fullAnalysisResults, setFullAnalysisResults] = useState<import("@/components/editor/AdvancedTranslationPanel").FullAnalysisResult[] | null>(null);
+    const [advancedAnalyzing, setAdvancedAnalyzing] = useState(false);
+    
+    // Translation Memory for improvements
+    const [enhancedMemory, setEnhancedMemory] = useState<Record<string, { original: string; translation: string }>>(() => {
+      try { const v = localStorage.getItem('enhancedMemory'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+    });
+    
    const [autoSmartReview, _setAutoSmartReview] = useState(() => {
-     try { return localStorage.getItem('autoSmartReview') === 'true'; } catch { return false; }
-   });
+      try { return localStorage.getItem('autoSmartReview') === 'true'; } catch { return false; }
+    });
    const setAutoSmartReview = useCallback((v: boolean) => {
      _setAutoSmartReview(v);
      try { localStorage.setItem('autoSmartReview', String(v)); } catch {}
@@ -1327,7 +1342,190 @@ export function useEditorState() {
     setEnhanceResults(null);
   };
 
-  // === Improve translations ===
+  // === Advanced Translation Analysis ===
+  const handleAdvancedAnalysis = async (action: import("@/components/editor/AdvancedTranslationPanel").AnalysisAction) => {
+    if (!state) return;
+    setAdvancedAnalyzing(true);
+    setAdvancedAnalysisTab(action);
+    
+    const actionLabels: Record<string, string> = {
+      'literal-detect': '🔍 كشف الترجمات الحرفية',
+      'style-unify': '🎨 توحيد الأسلوب',
+      'consistency-check': '🛡️ فحص الاتساق الشامل',
+      'alternatives': '📝 اقتراحات بديلة متعددة',
+      'full-analysis': '🧠 تحليل شامل متكامل',
+    };
+    
+    toast({ title: actionLabels[action], description: "جاري التحليل..." });
+    
+    try {
+      const translatedEntries = filteredEntries
+        .filter(e => {
+          const key = `${e.msbtFile}:${e.index}`;
+          return state.translations[key]?.trim();
+        })
+        .slice(0, 25)
+        .map(e => ({
+          key: `${e.msbtFile}:${e.index}`,
+          original: e.original,
+          translation: state.translations[`${e.msbtFile}:${e.index}`],
+          fileName: e.msbtFile,
+        }));
+
+      if (translatedEntries.length === 0) {
+        setTranslateProgress("⚠️ لا توجد ترجمات للتحليل في النطاق المحدد");
+        setTimeout(() => setTranslateProgress(""), 3000);
+        setAdvancedAnalyzing(false);
+        return;
+      }
+
+      setTranslateProgress(`${actionLabels[action]} — ${translatedEntries.length} نص...`);
+      
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/translation-analysis`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entries: translatedEntries,
+          action,
+          glossary: activeGlossary?.split('\n').slice(0, 150).join('\n'),
+          aiModel,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `خطأ ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (action === 'literal-detect' && data.results) {
+        setLiteralResults(data.results.map((r: any, i: number) => ({
+          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
+          original: translatedEntries[r.index ?? i]?.original || '',
+          translation: translatedEntries[r.index ?? i]?.translation || '',
+          ...r,
+        })));
+        setTranslateProgress(`✅ ${data.results.filter((r: any) => r.isLiteral).length} ترجمة حرفية مكتشفة`);
+      } else if (action === 'style-unify' && data.results) {
+        setStyleResults(data.results.map((r: any, i: number) => ({
+          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
+          original: translatedEntries[r.index ?? i]?.original || '',
+          translation: translatedEntries[r.index ?? i]?.translation || '',
+          ...r,
+        })));
+        setTranslateProgress(`✅ تم تحليل الأسلوب — ${data.results.filter((r: any) => r.styleIssues?.length).length} يحتاج توحيد`);
+      } else if (action === 'consistency-check' && data.inconsistencies) {
+        setConsistencyCheckResult({
+          inconsistencies: data.inconsistencies || [],
+          score: data.score || 0,
+          summary: data.summary || '',
+        });
+        setTranslateProgress(`✅ درجة الاتساق: ${data.score}/100 — ${data.inconsistencies?.length || 0} تناقض`);
+      } else if (action === 'alternatives' && data.results) {
+        setAlternativeResults(data.results.map((r: any, i: number) => ({
+          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
+          original: translatedEntries[r.index ?? i]?.original || '',
+          translation: translatedEntries[r.index ?? i]?.translation || '',
+          ...r,
+        })));
+        setTranslateProgress(`✅ ${data.results.length} نص مع بدائل متعددة`);
+      } else if (action === 'full-analysis' && data.results) {
+        setFullAnalysisResults(data.results.map((r: any, i: number) => ({
+          key: translatedEntries[r.index ?? i]?.key || `unknown:${i}`,
+          original: translatedEntries[r.index ?? i]?.original || '',
+          translation: translatedEntries[r.index ?? i]?.translation || '',
+          ...r,
+        })));
+        const literalCount = data.results.filter((r: any) => r.isLiteral).length;
+        const issueCount = data.results.filter((r: any) => r.issues?.length).length;
+        setTranslateProgress(`✅ تحليل شامل: ${literalCount} حرفية، ${issueCount} مشاكل`);
+      }
+      
+      setTimeout(() => setTranslateProgress(""), 5000);
+
+    } catch (err) {
+      console.error('Advanced analysis error:', err);
+      toast({
+        title: "خطأ في التحليل",
+        description: err instanceof Error ? err.message : 'خطأ غير متوقع',
+        variant: "destructive",
+      });
+      setTranslateProgress("");
+    } finally {
+      setAdvancedAnalyzing(false);
+    }
+  };
+
+  const handleApplyAdvancedSuggestion = (key: string, newTranslation: string) => {
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: newTranslation } } : null);
+    setLiteralResults(prev => prev ? prev.filter(r => r.key !== key) : null);
+    setStyleResults(prev => prev ? prev.filter(r => r.key !== key) : null);
+    setAlternativeResults(prev => prev ? prev.filter(r => r.key !== key) : null);
+    setFullAnalysisResults(prev => prev ? prev.filter(r => r.key !== key) : null);
+    toast({ title: "✅ تم تطبيق التحسين" });
+  };
+
+  const handleApplyAllAdvanced = (action: import("@/components/editor/AdvancedTranslationPanel").AnalysisAction) => {
+    if (!state) return;
+    const updates: Record<string, string> = {};
+    
+    if (action === 'literal-detect' && literalResults) {
+      for (const r of literalResults) {
+        if (r.isLiteral && r.naturalVersion) updates[r.key] = r.naturalVersion;
+      }
+      setLiteralResults([]);
+    } else if (action === 'style-unify' && styleResults) {
+      for (const r of styleResults) {
+        if (r.unifiedVersion) updates[r.key] = r.unifiedVersion;
+      }
+      setStyleResults([]);
+    } else if (action === 'alternatives' && alternativeResults) {
+      for (const r of alternativeResults) {
+        const best = r.alternatives.find(a => a.style === r.recommended) || r.alternatives[0];
+        if (best) updates[r.key] = best.text;
+      }
+      setAlternativeResults([]);
+    } else if (action === 'full-analysis' && fullAnalysisResults) {
+      for (const r of fullAnalysisResults) {
+        if (r.recommended) updates[r.key] = r.recommended;
+        else if (r.alternatives?.[0]?.text) updates[r.key] = r.alternatives[0].text;
+      }
+      setFullAnalysisResults([]);
+    }
+    
+    if (Object.keys(updates).length === 0) {
+      toast({ title: "⚠️ لا توجد اقتراحات للتطبيق" });
+      return;
+    }
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} تحسين` });
+  };
+
+  const handleCloseAdvancedPanel = () => {
+    setLiteralResults(null);
+    setStyleResults(null);
+    setConsistencyCheckResult(null);
+    setAlternativeResults(null);
+    setFullAnalysisResults(null);
+  };
+
+  const saveToEnhancedMemory = (key: string, original: string, translation: string) => {
+    setEnhancedMemory(prev => {
+      const next = { ...prev, [original.toLowerCase().trim()]: { original, translation } };
+      try { localStorage.setItem('enhancedMemory', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+
   const handleImproveTranslations = async () => {
     if (!state) return;
     setImprovingTranslations(true); setImproveResults(null);
@@ -2720,6 +2918,8 @@ export function useEditorState() {
     scanningSentences, sentenceSplitResults, newlineCleanResults, diacriticsCleanResults, duplicateAlefResults, missingAlefResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults, npcSplitResults, lineSyncResults, unifiedSplitResults, sentenceOrderResults, arabicTextFixResults,
     smartReviewing, smartReviewFindings,
     enhanceResults, enhancingTranslations,
+    // Advanced Analysis
+    advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing, enhancedMemory,
     glossaryComplianceResults, checkingGlossaryCompliance,
     isSearchPinned, pinnedKeys,
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
@@ -2737,6 +2937,7 @@ export function useEditorState() {
     setConsistencyResults, setSentenceSplitResults, setNewlineCleanResults, setDiacriticsCleanResults, setDuplicateAlefResults, setMissingAlefResults, setMirrorCharsResults, setTagBracketFixResults, setNewlineSplitResults, setNpcSplitResults, setLineSyncResults, setUnifiedSplitResults, setSentenceOrderResults, setArabicTextFixResults,
     setSmartReviewFindings,
     setGlossaryComplianceResults,
+    setAdvancedAnalysisTab,
     autoSmartReview, setAutoSmartReview,
 
     // Handlers
@@ -2755,6 +2956,8 @@ export function useEditorState() {
     handleCheckConsistency, handleApplyConsistencyFix, handleApplyAllConsistencyFixes,
     handleSmartReview, handleApplySmartFix, handleApplyAllSmartFixes, handleDismissSmartFinding,
     handleEnhanceTranslations, handleApplyEnhanceSuggestion, handleApplyAllEnhanceSuggestions, handleCloseEnhanceResults,
+    // Advanced Analysis handlers
+    handleAdvancedAnalysis, handleApplyAdvancedSuggestion, handleApplyAllAdvanced, handleCloseAdvancedPanel, saveToEnhancedMemory,
     handleGlossaryCompliance, handleApplyGlossaryFix, handleApplyAllGlossaryFixes,
     handleAcceptFuzzy, handleRejectFuzzy, handleAcceptAllFuzzy, handleRejectAllFuzzy,
     handleCloudSave, handleCloudLoad,

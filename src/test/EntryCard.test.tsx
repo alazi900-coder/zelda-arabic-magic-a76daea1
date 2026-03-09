@@ -11,8 +11,8 @@ vi.mock("@/integrations/supabase/client", () => ({
 const mockEntry: ExtractedEntry = {
   msbtFile: "test.bdat",
   index: 0,
+  label: "test_label",
   original: "Hello World",
-  context: "",
   maxBytes: 100,
 };
 

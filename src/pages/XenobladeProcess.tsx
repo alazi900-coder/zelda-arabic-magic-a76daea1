@@ -266,7 +266,7 @@ const XenobladeProcess = () => {
       }
 
       // Only call server if we have MSBT or JSON BDAT files
-      let serverEntries: any[] = [];
+      let serverEntries: ExtractedEntry[] = [];
       let msbtCount = 0, bdatJsonCount = 0;
 
       if (msbtFiles.length > 0 || bdatFiles.length > 0) {

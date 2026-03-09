@@ -1156,7 +1156,7 @@ const Editor = () => {
             </div>
             {isMobile && editor.filtersOpen && (
               <div className="mt-3 flex flex-col gap-2">
-                <select value={editor.filterStatus} onChange={e => editor.setFilterStatus(e.target.value as any)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
+                <select value={editor.filterStatus} onChange={e => editor.setFilterStatus(e.target.value as FilterStatus)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
                   <option value="all">الكل</option>
                   <option value="translated">✅ مترجم</option>
                   <option value="untranslated">⬜ غير مترجم</option>

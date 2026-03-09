@@ -1412,12 +1412,19 @@ export function useEditorState() {
       
       // Process in batches
       for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+        // Check for cancellation
+        if (advancedAnalysisCancelRef.current) {
+          setTranslateProgress(`⏹️ تم إيقاف التحليل بعد ${batchIdx} دفعات`);
+          setTimeout(() => setTranslateProgress(""), 4000);
+          break;
+        }
+        
         const start = batchIdx * ADVANCED_BATCH_SIZE;
         const end = Math.min(start + ADVANCED_BATCH_SIZE, totalEntries);
         const batchEntries = allTranslatedEntries.slice(start, end);
         
         const progress = Math.round(((batchIdx + 1) / totalBatches) * 100);
-        setTranslateProgress(`${actionLabels[action]} — دفعة ${batchIdx + 1}/${totalBatches} (${progress}%) — ${end}/${totalEntries} نص`);
+        setTranslateProgress(`${actionLabels[action]} — دفعة ${batchIdx + 1}/${totalBatches} (${progress}%) — ${end}/${totalEntries} نص ⏸️`);
         
         try {
           const response = await fetch(`${supabaseUrl}/functions/v1/translation-analysis`, {

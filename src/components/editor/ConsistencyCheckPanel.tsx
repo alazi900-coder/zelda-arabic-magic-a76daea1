@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X, Copy } from "lucide-react";
 import type { EditorState } from "./types";
 import { detectInconsistencies } from "./TranslationProgressDashboard";
 
@@ -78,7 +78,22 @@ export default function ConsistencyCheckPanel({ state, updateTranslation, onNavi
               >
                 {isExpanded ? <ChevronDown className="w-4 h-4 shrink-0 mt-1" /> : <ChevronRight className="w-4 h-4 shrink-0 mt-1" />}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono text-foreground truncate" dir="ltr">{group.english}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono text-foreground truncate" dir="ltr">{group.english}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(group.english);
+                        import("@/hooks/use-toast").then(({ toast }) => toast({ title: "تم النسخ ✓", description: group.english }));
+                      }}
+                      title="نسخ النص الإنجليزي"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-destructive flex items-center gap-1">
                       <AlertTriangle className="w-3.5 h-3.5" /> {uniqueTranslations.length} ترجمات مختلفة

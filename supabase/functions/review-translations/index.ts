@@ -289,7 +289,6 @@ AR: "${e.translation}"`).join('\n\n')}
                 { role: 'system', content: 'أنت مدقق نحوي وإملائي دقيق. أخرج ONLY valid JSON arrays.' },
                 { role: 'user', content: prompt },
               ],
-              temperature: 0.1,
             }),
           });
 

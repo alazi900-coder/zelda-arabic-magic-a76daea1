@@ -25,7 +25,6 @@ interface UseEditorQualityProps {
   state: EditorState | null;
 }
 
-// Per-entry cached result
 interface EntryCacheResult {
   translation: string;
   cat: string;
@@ -41,7 +40,22 @@ interface EntryCacheResult {
   niMixed: boolean;
 }
 
+// Module-level constants to avoid re-creation per entry
 const encoder = new TextEncoder();
+const MIXED_LANG_WHITELIST = new Set([
+  'HP','MP','AP','TP','EXP','ATK','DEF','NPC','HUD','FPS','XP','DLC','UI','OK','NG',
+  'NOAH','MIO','LANZ','SENA','TAION','EUNIE','RIKU','MANANA',
+  'AIONIOS','KEVES','AGNUS','COLONY',
+  'ARTS','TALENT','CHAIN','ATTACK','OUROBOROS','INTERLINK','BLADE','BLADES',
+  'ZL','ZR','PLUS','MINUS',
+]);
+const RE_TAG = /\[[^\]]*\]/g;
+const RE_PLACEHOLDER = /\uFFFC/g;
+const RE_CONTROL_CHARS = /[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
+const RE_ARABIC = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+const RE_ENGLISH_WORDS = /[a-zA-Z]{2,}/g;
+const RE_BDAT_LABEL = /^.+?\[\d+\]\./;
+const CHUNK_SIZE = 5000;
 
 function computeEntryResult(entry: ExtractedEntry, translation: string, cat: string): EntryCacheResult {
   const trimmed = translation.trim();
@@ -56,42 +70,49 @@ function computeEntryResult(entry: ExtractedEntry, translation: string, cat: str
       if (bytes > entry.maxBytes) qTooLong = true;
       else if (bytes / entry.maxBytes > 0.8) qNearLimit = true;
     }
-    const origTags = entry.original.match(/\[[^\]]*\]/g) || [];
+
+    RE_TAG.lastIndex = 0;
+    const origTags: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = RE_TAG.exec(entry.original)) !== null) origTags.push(m[0]);
     for (const tag of origTags) {
       if (!trimmed.includes(tag)) { qMissingTags = true; break; }
     }
-    const origPh = (entry.original.match(/\uFFFC/g) || []).length;
-    const transPh = (trimmed.match(/\uFFFC/g) || []).length;
+
+    RE_PLACEHOLDER.lastIndex = 0;
+    const origPh = (entry.original.match(RE_PLACEHOLDER) || []).length;
+    RE_PLACEHOLDER.lastIndex = 0;
+    const transPh = (trimmed.match(RE_PLACEHOLDER) || []).length;
     if (origPh !== transPh) qPlaceholderMismatch = true;
 
     if (hasTechnicalTags(entry.original)) {
-      const origCC = (entry.original.match(/[\uFFF9-\uFFFC\uE000-\uF8FF]/g) || []).length;
-      const transCC = (trimmed.match(/[\uFFF9-\uFFFC\uE000-\uF8FF]/g) || []).length;
+      RE_CONTROL_CHARS.lastIndex = 0;
+      const origCC = (entry.original.match(RE_CONTROL_CHARS) || []).length;
+      RE_CONTROL_CHARS.lastIndex = 0;
+      const transCC = (trimmed.match(RE_CONTROL_CHARS) || []).length;
       if (transCC < origCC) damagedTags = true;
     }
 
-    // Too short
-    if (entry.original?.trim() && trimmed.length < entry.original.trim().length * 0.3 && entry.original.trim().length > 5) {
+    const origTrimmed = entry.original?.trim();
+    if (origTrimmed && origTrimmed.length > 5 && trimmed.length < origTrimmed.length * 0.3) {
       niTooShort = true;
     }
-    // Too long (same as qTooLong)
     niTooLong = qTooLong;
-    // Stuck chars
     if (hasArabicPresentationForms(trimmed)) niStuck = true;
-    // Mixed language
-    const stripped = trimmed.replace(/\[[^\]]*\]/g, '').replace(/\uFFFC/g, '').trim();
-    if (stripped) {
-      const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(stripped);
-      const englishWords = stripped.match(/[a-zA-Z]{2,}/g) || [];
-      const whitelist = new Set([
-        'HP','MP','AP','TP','EXP','ATK','DEF','NPC','HUD','FPS','XP','DLC','UI','OK','NG',
-        'NOAH','MIO','LANZ','SENA','TAION','EUNIE','RIKU','MANANA',
-        'AIONIOS','KEVES','AGNUS','COLONY',
-        'ARTS','TALENT','CHAIN','ATTACK','OUROBOROS','INTERLINK','BLADE','BLADES',
-        'ZL','ZR','PLUS','MINUS',
-      ]);
-      const realEnglish = englishWords.filter(w => !whitelist.has(w.toUpperCase()));
-      if (hasArabic && realEnglish.length > 0) niMixed = true;
+
+    // Mixed language check - only if has Arabic chars (fast pre-check)
+    if (RE_ARABIC.test(trimmed)) {
+      RE_TAG.lastIndex = 0;
+      RE_PLACEHOLDER.lastIndex = 0;
+      const stripped = trimmed.replace(RE_TAG, '').replace(RE_PLACEHOLDER, '').trim();
+      if (stripped) {
+        RE_ENGLISH_WORDS.lastIndex = 0;
+        const englishWords = stripped.match(RE_ENGLISH_WORDS);
+        if (englishWords && englishWords.length > 0) {
+          const hasReal = englishWords.some(w => !MIXED_LANG_WHITELIST.has(w.toUpperCase()));
+          if (hasReal) niMixed = true;
+        }
+      }
     }
   }
 
@@ -105,8 +126,8 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
   const [translatedCount, setTranslatedCount] = useState(0);
   const combinedStatsTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const cacheRef = useRef<Map<string, EntryCacheResult>>(new Map());
+  const abortRef = useRef(false);
 
-  // === Quality helper functions ===
   const isTranslationTooShort = useCallback((entry: ExtractedEntry, translation: string): boolean => {
     if (!translation?.trim() || !entry.original?.trim()) return false;
     return translation.trim().length < entry.original.trim().length * 0.3 && entry.original.trim().length > 5;
@@ -124,18 +145,12 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
 
   const isMixedLanguage = useCallback((translation: string): boolean => {
     if (!translation?.trim()) return false;
-    const stripped = translation.replace(/\[[^\]]*\]/g, '').replace(/\uFFFC/g, '').trim();
+    const stripped = translation.replace(RE_TAG, '').replace(RE_PLACEHOLDER, '').trim();
     if (!stripped) return false;
-    const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(stripped);
-    const englishWords = stripped.match(/[a-zA-Z]{2,}/g) || [];
-    const whitelist = new Set([
-      'HP','MP','AP','TP','EXP','ATK','DEF','NPC','HUD','FPS','XP','DLC','UI','OK','NG',
-      'NOAH','MIO','LANZ','SENA','TAION','EUNIE','RIKU','MANANA',
-      'AIONIOS','KEVES','AGNUS','COLONY',
-      'ARTS','TALENT','CHAIN','ATTACK','OUROBOROS','INTERLINK','BLADE','BLADES',
-      'ZL','ZR','PLUS','MINUS',
-    ]);
-    const realEnglish = englishWords.filter(w => !whitelist.has(w.toUpperCase()));
+    const hasArabic = RE_ARABIC.test(stripped);
+    RE_ENGLISH_WORDS.lastIndex = 0;
+    const englishWords = stripped.match(RE_ENGLISH_WORDS) || [];
+    const realEnglish = englishWords.filter(w => !MIXED_LANG_WHITELIST.has(w.toUpperCase()));
     return hasArabic && realEnglish.length > 0;
   }, []);
 
@@ -146,13 +161,20 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
            isMixedLanguage(translation);
   }, [isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage]);
 
-  // === Incremental stats computation ===
+  // === Chunked async stats computation — non-blocking ===
   useEffect(() => {
     if (!state) return;
     if (combinedStatsTimerRef.current) clearTimeout(combinedStatsTimerRef.current);
+    abortRef.current = true; // cancel any in-flight chunked processing
+
     combinedStatsTimerRef.current = setTimeout(() => {
+      abortRef.current = false;
       const cache = cacheRef.current;
+      const entries = state.entries;
+      const translations = state.translations;
       const newCache = new Map<string, EntryCacheResult>();
+
+      // Accumulators
       const progress: Record<string, { total: number; translated: number }> = {};
       let qTooLong = 0, qNearLimit = 0, qMissingTags = 0, qPlaceholderMismatch = 0;
       const problemKeys = new Set<string>();
@@ -162,47 +184,65 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
       let damagedTagsCount = 0;
       const damagedTagKeys = new Set<string>();
 
-      for (const entry of state.entries) {
-        const key = `${entry.msbtFile}:${entry.index}`;
-        const translation = state.translations[key] || '';
-        const isBdat = /^.+?\[\d+\]\./.test(entry.label);
-        const sourceFile = entry.msbtFile.startsWith('bdat-bin:') ? entry.msbtFile.split(':')[1] : entry.msbtFile.startsWith('bdat:') ? entry.msbtFile.slice(5) : undefined;
-        const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : categorizeFile(entry.msbtFile);
+      let idx = 0;
 
-        // Use cache if translation unchanged
-        const cached = cache.get(key);
-        let result: EntryCacheResult;
-        if (cached && cached.translation === translation && cached.cat === cat) {
-          result = cached;
+      const processChunk = () => {
+        if (abortRef.current) return; // new computation superseded this one
+
+        const end = Math.min(idx + CHUNK_SIZE, entries.length);
+        for (; idx < end; idx++) {
+          const entry = entries[idx];
+          const key = `${entry.msbtFile}:${entry.index}`;
+          const translation = translations[key] || '';
+          const isBdat = RE_BDAT_LABEL.test(entry.label);
+          const sourceFile = entry.msbtFile.startsWith('bdat-bin:') ? entry.msbtFile.split(':')[1] : entry.msbtFile.startsWith('bdat:') ? entry.msbtFile.slice(5) : undefined;
+          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : categorizeFile(entry.msbtFile);
+
+          const cached = cache.get(key);
+          let result: EntryCacheResult;
+          if (cached && cached.translation === translation && cached.cat === cat) {
+            result = cached;
+          } else {
+            result = computeEntryResult(entry, translation, cat);
+          }
+          newCache.set(key, result);
+
+          if (!progress[cat]) progress[cat] = { total: 0, translated: 0 };
+          progress[cat].total++;
+          if (result.isTranslated) {
+            progress[cat].translated++;
+            translated++;
+            if (result.qTooLong) { qTooLong++; problemKeys.add(key); }
+            if (result.qNearLimit) { qNearLimit++; problemKeys.add(key); }
+            if (result.qMissingTags) { qMissingTags++; problemKeys.add(key); }
+            if (result.qPlaceholderMismatch) { qPlaceholderMismatch++; problemKeys.add(key); }
+            if (result.damagedTags) { damagedTagsCount++; damagedTagKeys.add(key); problemKeys.add(key); }
+            if (result.niTooShort) { niTooShort++; needsImproveKeys.add(key); }
+            if (result.niTooLong) { niTooLong++; needsImproveKeys.add(key); }
+            if (result.niStuck) { niStuck++; needsImproveKeys.add(key); }
+            if (result.niMixed) { niMixed++; needsImproveKeys.add(key); }
+          }
+        }
+
+        if (idx < entries.length) {
+          // Yield to main thread, then continue
+          setTimeout(processChunk, 0);
         } else {
-          result = computeEntryResult(entry, translation, cat);
+          // Done — commit results
+          cacheRef.current = newCache;
+          setCategoryProgress(progress);
+          setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, damagedTagKeys });
+          setNeedsImproveCount({ total: needsImproveKeys.size, tooShort: niTooShort, tooLong: niTooLong, stuck: niStuck, mixed: niMixed });
+          setTranslatedCount(translated);
         }
-        newCache.set(key, result);
+      };
 
-        if (!progress[cat]) progress[cat] = { total: 0, translated: 0 };
-        progress[cat].total++;
-        if (result.isTranslated) {
-          progress[cat].translated++;
-          translated++;
-          if (result.qTooLong) { qTooLong++; problemKeys.add(key); }
-          if (result.qNearLimit) { qNearLimit++; problemKeys.add(key); }
-          if (result.qMissingTags) { qMissingTags++; problemKeys.add(key); }
-          if (result.qPlaceholderMismatch) { qPlaceholderMismatch++; problemKeys.add(key); }
-          if (result.damagedTags) { damagedTagsCount++; damagedTagKeys.add(key); problemKeys.add(key); }
-          if (result.niTooShort) { niTooShort++; needsImproveKeys.add(key); }
-          if (result.niTooLong) { niTooLong++; needsImproveKeys.add(key); }
-          if (result.niStuck) { niStuck++; needsImproveKeys.add(key); }
-          if (result.niMixed) { niMixed++; needsImproveKeys.add(key); }
-        }
-      }
-
-      cacheRef.current = newCache;
-      setCategoryProgress(progress);
-      setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, damagedTagKeys });
-      setNeedsImproveCount({ total: needsImproveKeys.size, tooShort: niTooShort, tooLong: niTooLong, stuck: niStuck, mixed: niMixed });
-      setTranslatedCount(translated);
-    }, 800);
-    return () => { if (combinedStatsTimerRef.current) clearTimeout(combinedStatsTimerRef.current); };
+      processChunk();
+    }, 500);
+    return () => {
+      abortRef.current = true;
+      if (combinedStatsTimerRef.current) clearTimeout(combinedStatsTimerRef.current);
+    };
   }, [state?.entries, state?.translations]);
 
   return {

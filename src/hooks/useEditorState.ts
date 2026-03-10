@@ -1541,12 +1541,34 @@ export function useEditorState() {
       let totalScore = 0;
       let summaries: string[] = [];
       
+      // Helper to commit partial results so user can see progress
+      const commitPartialResults = (action: string) => {
+        if (action === 'literal-detect' && allLiteralResults.length > 0) {
+          setLiteralResults([...allLiteralResults]);
+        } else if (action === 'style-unify' && allStyleResults.length > 0) {
+          setStyleResults([...allStyleResults]);
+        } else if (action === 'alternatives' && allAlternativeResults.length > 0) {
+          setAlternativeResults([...allAlternativeResults]);
+        } else if (action === 'full-analysis' && allFullResults.length > 0) {
+          setFullAnalysisResults([...allFullResults]);
+        } else if (action === 'consistency-check' && allInconsistencies.length > 0) {
+          const unique = allInconsistencies.reduce((acc: any[], item) => {
+            if (!acc.find(i => i.term === item.term)) acc.push(item);
+            return acc;
+          }, []);
+          setConsistencyCheckResult({ inconsistencies: unique, score: totalBatches > 0 ? Math.round(totalScore / (batchIdx || 1)) : 0, summary: summaries.join(' | ') });
+        }
+      };
+      
+      let batchIdx = 0;
       // Process in batches
-      for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
-        // Check for cancellation
+      for (batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+        // Check for cancellation — commit what we have so far
         if (advancedAnalysisCancelRef.current) {
-          setTranslateProgress(`⏹️ تم إيقاف التحليل بعد ${batchIdx} دفعات`);
-          setTimeout(() => setTranslateProgress(""), 4000);
+          commitPartialResults(action);
+          const processed = batchIdx * ADVANCED_BATCH_SIZE;
+          setTranslateProgress(`⏹️ تم إيقاف التحليل — تم معالجة ${processed} من ${totalEntries} نص. النتائج الجزئية معروضة.`);
+          setTimeout(() => setTranslateProgress(""), 6000);
           break;
         }
         

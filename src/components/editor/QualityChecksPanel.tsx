@@ -290,7 +290,10 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
   const [autoFixRunning, setAutoFixRunning] = useState(false);
   const [autoFixProgress, setAutoFixProgress] = useState('');
 
+  // Only compute quality checks when panel is open (avoid blocking UI)
   const results = useMemo(() => {
+    if (!open) return { issues: [] as QualityIssue[], typeCounts: {} as Record<string, number> };
+
     const issues: QualityIssue[] = [];
     const typeCounts: Record<string, number> = {};
 
@@ -301,38 +304,22 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
 
       const entryIssues: { type: string; message: string; fix?: string }[] = [];
 
-      if (isEnabled("number_check")) {
-        const r = checkNumbers(entry.original, translation);
-        if (r) entryIssues.push(r);
-      }
-      if (isEnabled("variable_check")) {
-        const r = checkVariables(entry.original, translation);
-        if (r) entryIssues.push(r);
-      }
-      if (isEnabled("extra_spaces_check")) {
-        const r = checkExtraSpaces(translation);
-        if (r) entryIssues.push(r);
-      }
-      if (isEnabled("remaining_english")) {
-        const r = checkRemainingEnglish(translation);
-        if (r) entryIssues.push(r);
-      }
-      if (isEnabled("length_check")) {
-        const r = checkLength(entry, translation);
-        if (r) entryIssues.push(r);
-      }
-      if (isEnabled("punctuation_check")) {
-        const r = checkPunctuation(entry.original, translation);
-        if (r) entryIssues.push(r);
-      }
-      if (isEnabled("repetition_check")) {
-        const r = checkRepetition(translation);
-        if (r) entryIssues.push(r);
-      }
-      if (isEnabled("grammar_check")) {
-        const r = checkGrammar(translation);
-        if (r.length > 0) entryIssues.push(...r);
-      }
+      const r1 = checkNumbers(entry.original, translation);
+      if (r1) entryIssues.push(r1);
+      const r2 = checkVariables(entry.original, translation);
+      if (r2) entryIssues.push(r2);
+      const r3 = checkExtraSpaces(translation);
+      if (r3) entryIssues.push(r3);
+      const r4 = checkRemainingEnglish(translation);
+      if (r4) entryIssues.push(r4);
+      const r5 = checkLength(entry, translation);
+      if (r5) entryIssues.push(r5);
+      const r6 = checkPunctuation(entry.original, translation);
+      if (r6) entryIssues.push(r6);
+      const r7 = checkRepetition(translation);
+      if (r7) entryIssues.push(r7);
+      const r8 = checkGrammar(translation);
+      if (r8.length > 0) entryIssues.push(...r8);
 
       if (entryIssues.length > 0) {
         issues.push({ key, entryLabel: entry.label, original: entry.original, translation, issues: entryIssues });
@@ -343,7 +330,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     }
 
     return { issues, typeCounts };
-  }, [state.entries, state.translations, isEnabled]);
+  }, [open, state.entries, state.translations]);
 
   // === Feature 1: Batch fix by type ===
   const handleFixAll = useCallback((type: string) => {

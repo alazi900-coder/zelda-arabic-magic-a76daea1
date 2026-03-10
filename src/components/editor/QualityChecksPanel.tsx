@@ -331,7 +331,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
       }
       if (isEnabled("grammar_check")) {
         const r = checkGrammar(translation);
-        if (r) entryIssues.push(r);
+        if (r.length > 0) entryIssues.push(...r);
       }
 
       if (entryIssues.length > 0) {

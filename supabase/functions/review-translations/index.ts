@@ -111,12 +111,11 @@ ${tooLongEntries.map((e, i) => {
              { role: 'system', content: 'أنت متخصص في اختصار النصوص. اخرج ONLY JSON arrays.' },
              { role: 'user', content: prompt },
            ],
-           temperature: 0.3,
-         }),
-       });
+          }),
+        });
 
        if (!response.ok) {
-         const err = await response.text();
+          const err = await response.text();
          console.error('AI gateway error:', err);
          throw new Error(`AI error: ${response.status}`);
        }

@@ -94,6 +94,7 @@ const Editor = () => {
   const [showDiffView, setShowDiffView] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [showDiagnostic, setShowDiagnostic] = React.useState(false);
+  const [showBuildSection, setShowBuildSection] = React.useState(true);
   const [showExportEnglishDialog, setShowExportEnglishDialog] = React.useState(false);
   const [compareEntry, setCompareEntry] = React.useState<import("@/components/editor/types").ExtractedEntry | null>(null);
   const [showClearConfirm, setShowClearConfirm] = React.useState<'all' | 'filtered' | null>(null);

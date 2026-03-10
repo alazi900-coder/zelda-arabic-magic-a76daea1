@@ -733,7 +733,6 @@ ${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`).join('\n\n')}
                 { role: 'system', content: 'أنت مترجم ألعاب متخصص. أخرج ONLY valid JSON arrays.' },
                 { role: 'user', content: prompt },
               ],
-              temperature: 0.3,
             }),
           });
 

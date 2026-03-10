@@ -476,7 +476,6 @@ ${contextBlock}
               { role: 'system', content: 'أنت مترجم ألعاب. أخرج ONLY valid JSON arrays.' },
               { role: 'user', content: prompt },
             ],
-            temperature: 0.5,
           }),
         });
 

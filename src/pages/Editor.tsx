@@ -1792,69 +1792,82 @@ const Editor = () => {
             </div>
           )}
 
-          {/* Build Options */}
-          <Card className="mb-4 border-border">
-            <CardContent className="p-4">
-              <h3 className="font-display font-bold mb-3 text-sm">⚙️ خيارات البناء</h3>
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 cursor-pointer text-sm font-body">
-                  <input type="checkbox" checked={editor.arabicNumerals} onChange={(e) => editor.setArabicNumerals(e.target.checked)} className="rounded border-border" />
-                  تحويل الأرقام إلى هندية (٠١٢٣٤٥٦٧٨٩)
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-sm font-body">
-                  <input type="checkbox" checked={editor.mirrorPunctuation} onChange={(e) => editor.setMirrorPunctuation(e.target.checked)} className="rounded border-border" />
-                  عكس علامات الترقيم (؟ ، ؛)
-                </label>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Arabic Unprocessed Warning Banner */}
-          {unprocessedArabicCount > 0 && (
-            <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
-              <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-display font-bold text-secondary">
-                  ⚠️ {unprocessedArabicCount} نص عربي لم يُعالَج بعد
-                </p>
-                <p className="text-xs text-muted-foreground font-body mt-0.5">
-                  هذه النصوص تحتوي عربية غير مُشكَّلة (بدون Reshaping). سيتم معالجتها تلقائياً عند البناء، أو اضغط الزر أدناه للمعاينة أولاً.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={editor.handleApplyArabicProcessing}
-                disabled={editor.applyingArabic}
-                className="shrink-0 text-xs font-body border-secondary/40 text-secondary hover:border-secondary/60"
-              >
-                {editor.applyingArabic ? <Loader2 className="w-3 h-3 animate-spin ml-1" /> : <Sparkles className="w-3 h-3 ml-1" />}
-                معالجة الآن
-              </Button>
+          {/* Build Options - Collapsible */}
+          <Collapsible open={showBuildSection} onOpenChange={setShowBuildSection}>
+            <div className="flex items-center justify-between mb-3">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2 font-display font-bold text-sm">
+                  {showBuildSection ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  ⚙️ المعالجة والبناء
+                  {!showBuildSection && <span className="text-xs text-muted-foreground font-body">(اضغط لإظهار)</span>}
+                </Button>
+              </CollapsibleTrigger>
             </div>
-          )}
+            <CollapsibleContent>
+              <Card className="mb-4 border-border">
+                <CardContent className="p-4">
+                  <h3 className="font-display font-bold mb-3 text-sm">⚙️ خيارات البناء</h3>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm font-body">
+                      <input type="checkbox" checked={editor.arabicNumerals} onChange={(e) => editor.setArabicNumerals(e.target.checked)} className="rounded border-border" />
+                      تحويل الأرقام إلى هندية (٠١٢٣٤٥٦٧٨٩)
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm font-body">
+                      <input type="checkbox" checked={editor.mirrorPunctuation} onChange={(e) => editor.setMirrorPunctuation(e.target.checked)} className="rounded border-border" />
+                      عكس علامات الترقيم (؟ ، ؛)
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Arabic Processing + Build Buttons */}
-           <div className="flex gap-3 mb-6">
-            <Button size="lg" variant="secondary" onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic} className="flex-1 font-display font-bold">
-              {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
-            </Button>
-            <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic} className="font-body gap-1 shrink-0" title="التراجع عن المعالجة العربية">
-              <RotateCcw className="w-4 h-4" />
-              <span className="hidden sm:inline">تراجع</span>
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setShowDiagnostic(true)} disabled={editor.building} className="font-body gap-1 shrink-0" title="تشخيص ما قبل البناء">
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden sm:inline">تشخيص</span>
-            </Button>
-            <Button size="sm" variant="outline" onClick={editor.handleCheckIntegrity} disabled={editor.building} className="font-body gap-1 shrink-0" title="التحقق من سلامة الترجمة">
-              <ShieldCheck className="w-4 h-4" />
-              <span className="hidden sm:inline">سلامة</span>
-            </Button>
-            <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 font-display font-bold">
-              {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
-            </Button>
-          </div>
+              {/* Arabic Unprocessed Warning Banner */}
+              {unprocessedArabicCount > 0 && (
+                <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
+                  <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-display font-bold text-secondary">
+                      ⚠️ {unprocessedArabicCount} نص عربي لم يُعالَج بعد
+                    </p>
+                    <p className="text-xs text-muted-foreground font-body mt-0.5">
+                      هذه النصوص تحتوي عربية غير مُشكَّلة (بدون Reshaping). سيتم معالجتها تلقائياً عند البناء، أو اضغط الزر أدناه للمعاينة أولاً.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={editor.handleApplyArabicProcessing}
+                    disabled={editor.applyingArabic}
+                    className="shrink-0 text-xs font-body border-secondary/40 text-secondary hover:border-secondary/60"
+                  >
+                    {editor.applyingArabic ? <Loader2 className="w-3 h-3 animate-spin ml-1" /> : <Sparkles className="w-3 h-3 ml-1" />}
+                    معالجة الآن
+                  </Button>
+                </div>
+              )}
+
+              {/* Arabic Processing + Build Buttons */}
+              <div className="flex gap-3 mb-6">
+                <Button size="lg" variant="secondary" onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic} className="flex-1 font-display font-bold">
+                  {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
+                </Button>
+                <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic} className="font-body gap-1 shrink-0" title="التراجع عن المعالجة العربية">
+                  <RotateCcw className="w-4 h-4" />
+                  <span className="hidden sm:inline">تراجع</span>
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowDiagnostic(true)} disabled={editor.building} className="font-body gap-1 shrink-0" title="تشخيص ما قبل البناء">
+                  <BarChart3 className="w-4 h-4" />
+                  <span className="hidden sm:inline">تشخيص</span>
+                </Button>
+                <Button size="sm" variant="outline" onClick={editor.handleCheckIntegrity} disabled={editor.building} className="font-body gap-1 shrink-0" title="التحقق من سلامة الترجمة">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline">سلامة</span>
+                </Button>
+                <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 font-display font-bold">
+                  {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
+                </Button>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Quality Stats Panel */}
           {editor.showQualityStats && (

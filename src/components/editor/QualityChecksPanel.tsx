@@ -171,13 +171,13 @@ function checkRepetition(translation: string): { type: string; message: string }
   return null;
 }
 
-function checkGrammar(translation: string): { type: string; message: string; fix?: string } | null {
+function checkGrammar(translation: string): { type: string; message: string; fix?: string }[] {
   const stripped = translation
     .replace(/\[[^\]]*\]/g, '')
     .replace(/\{[^}]*\}/g, '')
     .replace(/[\uFFF9-\uFFFC\uE000-\uF8FF]/g, '')
     .trim();
-  if (!stripped || stripped.length < 3) return null;
+  if (!stripped || stripped.length < 3) return [];
 
   // Each rule: [regex, message, searchRegex, replacement] - last two for auto-fix
   const rules: [RegExp, string, RegExp?, string?][] = [
@@ -232,16 +232,31 @@ function checkGrammar(translation: string): { type: string; message: string; fix
     [/(?:^|[.،؟!]\s*)ان\s/, '"ان" بدون همزة (إن/أن)'],
   ];
 
+  const found: { type: string; message: string; fix?: string }[] = [];
+  const messages = new Set<string>();
+  let combinedFix = translation;
+  let hasAnyFix = false;
+
   for (const [regex, message, fixRegex, replacement] of rules) {
-    if (regex.test(stripped)) {
-      let fix: string | undefined;
+    // Reset regex lastIndex for safety
+    regex.lastIndex = 0;
+    if (regex.test(stripped) && !messages.has(message)) {
+      messages.add(message);
       if (fixRegex && replacement !== undefined) {
-        fix = translation.replace(fixRegex, replacement);
+        fixRegex.lastIndex = 0;
+        combinedFix = combinedFix.replace(fixRegex, replacement);
+        hasAnyFix = true;
       }
-      return { type: "grammar_check", message: `📝 ${message}`, fix };
+      found.push({ type: "grammar_check", message: `📝 ${message}` });
     }
   }
-  return null;
+
+  // Attach the combined fix to all found issues
+  if (found.length > 0 && hasAnyFix) {
+    found[0].fix = combinedFix;
+  }
+
+  return found;
 }
 
 const CHECK_LABELS: Record<string, string> = {
@@ -316,7 +331,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
       }
       if (isEnabled("grammar_check")) {
         const r = checkGrammar(translation);
-        if (r) entryIssues.push(r);
+        if (r.length > 0) entryIssues.push(...r);
       }
 
       if (entryIssues.length > 0) {

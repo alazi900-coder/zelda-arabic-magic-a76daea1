@@ -41,39 +41,45 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onDiscard(); }}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] flex flex-col p-3 sm:p-6" dir="rtl">
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="font-display text-lg">📄 مقارنة ترجمة الصفحة</DialogTitle>
-          <DialogDescription className="font-body">
-            تم ترجمة <span className="font-bold text-primary">{keys.length}</span> نص — راجع النتائج قبل التطبيق
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        className="!grid-rows-[auto_1fr] max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden p-0"
+        dir="rtl"
+        style={{ display: 'flex', flexDirection: 'column' }}
+      >
+        {/* Fixed header */}
+        <div className="shrink-0 p-4 pb-2 border-b space-y-2">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg">📄 مقارنة ترجمة الصفحة</DialogTitle>
+            <DialogDescription className="font-body">
+              تم ترجمة <span className="font-bold text-primary">{keys.length}</span> نص — راجع النتائج قبل التطبيق
+            </DialogDescription>
+          </DialogHeader>
 
-        {/* Action buttons at top for mobile accessibility */}
-        <div className="shrink-0 flex flex-wrap gap-2 items-center justify-between border-b pb-2">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={selected.size === keys.length}
-              onCheckedChange={toggleAll}
-            />
-            <span className="text-xs font-display text-muted-foreground">تحديد الكل</span>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={onDiscard} className="font-display gap-1 text-xs">
-              <X className="w-3.5 h-3.5" /> تجاهل
-            </Button>
-            <Button size="sm" onClick={() => onApply(selected)} className="font-display gap-1 text-xs" disabled={selected.size === 0}>
-              <CheckCircle2 className="w-3.5 h-3.5" /> تطبيق ({selected.size})
-            </Button>
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={selected.size === keys.length}
+                onCheckedChange={toggleAll}
+              />
+              <span className="text-xs font-display text-muted-foreground">تحديد الكل</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={onDiscard} className="font-display gap-1 text-xs">
+                <X className="w-3.5 h-3.5" /> تجاهل
+              </Button>
+              <Button size="sm" onClick={() => onApply(selected)} className="font-display gap-1 text-xs" disabled={selected.size === 0}>
+                <CheckCircle2 className="w-3.5 h-3.5" /> تطبيق ({selected.size}/{keys.length})
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Scrollable list - card layout for mobile */}
+        {/* Scrollable list */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto -mx-3 px-3 sm:-mx-6 sm:px-6"
-          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+          className="flex-1 overflow-y-auto p-4"
+          style={{ minHeight: 0, WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
         >
-          <div className="space-y-2 py-2">
+          <div className="space-y-2">
             {keys.map((key) => {
               const original = originals[key] || '';
               const old = oldTranslations[key] || '';
@@ -83,7 +89,7 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
               return (
                 <div
                   key={key}
-                  className={`border rounded-md p-2.5 space-y-1.5 ${
+                  className={`border rounded-md p-2.5 space-y-1.5 cursor-pointer select-none transition-opacity ${
                     !selected.has(key) ? 'opacity-40' : ''
                   } ${changed ? 'border-primary/30' : 'bg-muted/30'}`}
                   onClick={() => toggleKey(key)}
@@ -111,15 +117,15 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
           </div>
         </div>
 
-        {/* Bottom buttons too for easy reach */}
-        <DialogFooter className="shrink-0 flex-row-reverse gap-2 pt-2 border-t">
-          <Button variant="outline" onClick={onDiscard} className="font-display gap-1">
-            <X className="w-4 h-4" /> إلغاء
-          </Button>
+        {/* Fixed footer */}
+        <div className="shrink-0 p-4 pt-2 border-t flex flex-row-reverse gap-2">
           <Button onClick={() => onApply(selected)} className="font-display gap-1" disabled={selected.size === 0}>
             <CheckCircle2 className="w-4 h-4" /> تطبيق ({selected.size}/{keys.length}) ✅
           </Button>
-        </DialogFooter>
+          <Button variant="outline" onClick={onDiscard} className="font-display gap-1">
+            <X className="w-4 h-4" /> إلغاء
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

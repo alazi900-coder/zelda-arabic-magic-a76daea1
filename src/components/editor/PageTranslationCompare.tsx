@@ -41,29 +41,39 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onDiscard(); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col" dir="rtl">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] flex flex-col p-3 sm:p-6" dir="rtl">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="font-display text-lg">📄 مقارنة ترجمة الصفحة</DialogTitle>
           <DialogDescription className="font-body">
             تم ترجمة <span className="font-bold text-primary">{keys.length}</span> نص — راجع النتائج قبل التطبيق
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 border rounded-md overflow-y-auto" style={{ maxHeight: '60vh', WebkitOverflowScrolling: 'touch' }}>
-          <div className="p-2">
-            {/* Header row */}
-            <div className="grid grid-cols-[40px_1fr_1fr_1fr] gap-2 px-2 py-2 text-xs font-display font-bold text-muted-foreground border-b sticky top-0 bg-background z-10">
-              <div className="flex items-center">
-                <Checkbox
-                  checked={selected.size === keys.length}
-                  onCheckedChange={toggleAll}
-                />
-              </div>
-              <div>النص الأصلي</div>
-              <div>الترجمة السابقة</div>
-              <div>الترجمة الجديدة</div>
-            </div>
+        {/* Action buttons at top for mobile accessibility */}
+        <div className="shrink-0 flex flex-wrap gap-2 items-center justify-between border-b pb-2">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={selected.size === keys.length}
+              onCheckedChange={toggleAll}
+            />
+            <span className="text-xs font-display text-muted-foreground">تحديد الكل</span>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={onDiscard} className="font-display gap-1 text-xs">
+              <X className="w-3.5 h-3.5" /> تجاهل
+            </Button>
+            <Button size="sm" onClick={() => onApply(selected)} className="font-display gap-1 text-xs" disabled={selected.size === 0}>
+              <CheckCircle2 className="w-3.5 h-3.5" /> تطبيق ({selected.size})
+            </Button>
+          </div>
+        </div>
 
+        {/* Scrollable list - card layout for mobile */}
+        <div
+          className="flex-1 min-h-0 overflow-y-auto -mx-3 px-3 sm:-mx-6 sm:px-6"
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        >
+          <div className="space-y-2 py-2">
             {keys.map((key) => {
               const original = originals[key] || '';
               const old = oldTranslations[key] || '';
@@ -73,23 +83,26 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
               return (
                 <div
                   key={key}
-                  className={`grid grid-cols-[40px_1fr_1fr_1fr] gap-2 px-2 py-2 text-sm border-b last:border-0 ${
+                  className={`border rounded-md p-2.5 space-y-1.5 ${
                     !selected.has(key) ? 'opacity-40' : ''
-                  } ${changed ? '' : 'bg-muted/30'}`}
+                  } ${changed ? 'border-primary/30' : 'bg-muted/30'}`}
+                  onClick={() => toggleKey(key)}
                 >
-                  <div className="flex items-start pt-1">
+                  <div className="flex items-center gap-2">
                     <Checkbox
                       checked={selected.has(key)}
                       onCheckedChange={() => toggleKey(key)}
                     />
+                    <span className="font-body text-muted-foreground text-[11px] leading-relaxed flex-1 truncate" dir="ltr">
+                      {original}
+                    </span>
                   </div>
-                  <div className="font-body text-muted-foreground break-all text-xs leading-relaxed" dir="ltr">
-                    {original}
-                  </div>
-                  <div className="font-body break-all text-xs leading-relaxed" dir="rtl">
-                    {old || <span className="text-muted-foreground italic">— فارغ —</span>}
-                  </div>
-                  <div className={`font-body break-all text-xs leading-relaxed ${changed ? 'text-primary font-semibold' : ''}`} dir="rtl">
+                  {old && (
+                    <div className="text-xs font-body text-muted-foreground pr-6 line-through" dir="rtl">
+                      {old}
+                    </div>
+                  )}
+                  <div className={`text-xs font-body pr-6 ${changed ? 'text-primary font-semibold' : ''}`} dir="rtl">
                     {newT}
                   </div>
                 </div>
@@ -98,9 +111,10 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
           </div>
         </div>
 
-        <DialogFooter className="flex-row-reverse gap-2 pt-2">
+        {/* Bottom buttons too for easy reach */}
+        <DialogFooter className="shrink-0 flex-row-reverse gap-2 pt-2 border-t">
           <Button variant="outline" onClick={onDiscard} className="font-display gap-1">
-            <X className="w-4 h-4" /> إلغاء — تجاهل الكل
+            <X className="w-4 h-4" /> إلغاء
           </Button>
           <Button onClick={() => onApply(selected)} className="font-display gap-1" disabled={selected.size === 0}>
             <CheckCircle2 className="w-4 h-4" /> تطبيق ({selected.size}/{keys.length}) ✅

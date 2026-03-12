@@ -1093,6 +1093,7 @@ export function useEditorState() {
   const handleApplySmartFix = (key: string, fix: string) => {
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: fix } } : null);
     setSmartReviewFindings(prev => prev ? prev.filter(f => f.key !== key) : null);
+    addReviewedKeys([key]);
   };
 
   const handleApplyAllSmartFixes = () => {
@@ -1103,11 +1104,12 @@ export function useEditorState() {
     }
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
     setSmartReviewFindings([]);
+    addReviewedKeys(Object.keys(updates));
     toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} إصلاح` });
   };
 
-  const handleDismissSmartFinding = (_key: string) => {
-    // Dismissal is handled in the panel via local state
+  const handleDismissSmartFinding = (key: string) => {
+    addReviewedKeys([key]);
   };
 
   // === Grammar Check (dedicated AI grammar analysis) ===

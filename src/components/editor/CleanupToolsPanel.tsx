@@ -190,7 +190,7 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
   }, []);
 
   // Check if any cleanup feature is enabled
-  const anyEnabled = ["hamza_unify", "quote_fix", "number_unify", "invisible_chars", "question_mark_fix", "unicode_fix", "alef_fix"].some(id => isEnabled(id));
+  const anyEnabled = ["hamza_unify", "quote_fix", "number_unify", "invisible_chars", "question_mark_fix", "unicode_fix"].some(id => isEnabled(id));
   if (!anyEnabled || dismissed) return null;
 
   const enabledTools = Object.keys(TOOL_LABELS).filter(id => isEnabled(id));

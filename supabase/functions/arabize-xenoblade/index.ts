@@ -200,9 +200,16 @@ function mirrorPunctuation(text: string): string {
   return result;
 }
 
+/** Strip all Arabic diacritics/tashkeel */
+function stripDiacritics(text: string): string {
+  return text.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '');
+}
+
 function processArabicText(text: string, options?: { arabicNumerals?: boolean; mirrorPunct?: boolean }): string {
   if (!hasArabicChars(text)) return text;
-  let result = reshapeArabic(text);
+  // Strip diacritics first — game font cannot render combining marks
+  let result = stripDiacritics(text);
+  result = reshapeArabic(result);
   result = reverseBidi(result);
   if (options?.arabicNumerals) result = convertToArabicNumerals(result);
   if (options?.mirrorPunct) result = mirrorPunctuation(result);

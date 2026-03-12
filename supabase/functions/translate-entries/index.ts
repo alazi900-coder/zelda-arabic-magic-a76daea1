@@ -1039,7 +1039,8 @@ CRITICAL RULES:
 7. Preserve proper nouns (Noah, Mio, Eunie, Taion, Lanz, Sena, Aionios) as-is or use their established Arabic equivalents from the glossary.
 8. Return ONLY a JSON object where each key matches the input key (K0, K1, etc.) and the value is the Arabic translation. Example: {"K0": "ترجمة", "K1": "ترجمة"}
 9. You MUST return EXACTLY ${needsAI.length} entries. Do NOT skip, merge, or add extra entries. Each key MUST have its own separate translation.
-10. Do NOT insert newline characters (\\n) in your translations. Return each translation as a single continuous string. Line breaking is handled separately.${categorySection}${glossarySection}${contextSection}
+10. Do NOT insert newline characters (\\n) in your translations. Return each translation as a single continuous string. Line breaking is handled separately.
+11. NEVER add Arabic diacritics/tashkeel (tanween: ً ٌ ٍ, fatha: َ, damma: ُ, kasra: ِ, shadda: ّ, sukun: ْ). Write plain Arabic text WITHOUT any vowel marks. The game font cannot render them.${categorySection}${glossarySection}${contextSection}
 
 Input texts (as JSON object — translate each value and return with the SAME keys):
 {

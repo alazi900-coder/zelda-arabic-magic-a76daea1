@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import type { ReviewResults, ShortSuggestion, ImproveResult } from "@/components/editor/types";
 
 /** All scan/analysis result states — isolated to reduce useState clutter in useEditorState */
@@ -64,6 +64,15 @@ export function useEditorScanResults() {
   const [detectWeakProgress, setDetectWeakProgress] = useState<{ current: number; total: number } | null>(null);
   const detectWeakAbortRef = useRef<AbortController | null>(null);
 
+  // === Reviewed keys tracking (prevent re-scanning fixed entries) ===
+  const reviewedKeysRef = useRef<Set<string>>(new Set());
+  const addReviewedKeys = useCallback((keys: string[]) => {
+    for (const k of keys) reviewedKeysRef.current.add(k);
+  }, []);
+  const clearReviewedKeys = useCallback(() => {
+    reviewedKeysRef.current = new Set();
+  }, []);
+
   return {
     reviewing, setReviewing,
     reviewResults, setReviewResults,
@@ -108,5 +117,6 @@ export function useEditorScanResults() {
     detectingWeak, setDetectingWeak,
     detectWeakProgress, setDetectWeakProgress,
     detectWeakAbortRef,
+    reviewedKeysRef, addReviewedKeys, clearReviewedKeys,
   };
 }

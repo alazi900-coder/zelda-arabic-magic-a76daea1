@@ -60,6 +60,7 @@ export function useEditorState() {
     autoCorrectProgress, setAutoCorrectProgress, autoCorrectAbortRef,
     weakTranslations, setWeakTranslations, detectingWeak, setDetectingWeak,
     detectWeakProgress, setDetectWeakProgress, detectWeakAbortRef,
+    reviewedKeysRef, addReviewedKeys, clearReviewedKeys,
   } = scanResults;
 
   // === Core state ===
@@ -657,7 +658,7 @@ export function useEditorState() {
     });
   }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys]);
 
-  useEffect(() => { setCurrentPage(0); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn]);
+  useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn]);
 
   const totalPages = Math.ceil(filteredEntries.length / PAGE_SIZE);
   const paginatedEntries = useMemo(() => {
@@ -1059,7 +1060,7 @@ export function useEditorState() {
     toast({ title: "🔬 بدأت المراجعة الذكية", description: "تحليل عميق للترجمات في الخلفية..." });
     try {
       const reviewEntries = filteredEntries
-        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim() && !reviewedKeysRef.current.has(key); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (reviewEntries.length === 0) {
         toast({ title: "لا توجد ترجمات للمراجعة" });
@@ -1092,6 +1093,7 @@ export function useEditorState() {
   const handleApplySmartFix = (key: string, fix: string) => {
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: fix } } : null);
     setSmartReviewFindings(prev => prev ? prev.filter(f => f.key !== key) : null);
+    addReviewedKeys([key]);
   };
 
   const handleApplyAllSmartFixes = () => {
@@ -1102,11 +1104,12 @@ export function useEditorState() {
     }
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
     setSmartReviewFindings([]);
+    addReviewedKeys(Object.keys(updates));
     toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} إصلاح` });
   };
 
-  const handleDismissSmartFinding = (_key: string) => {
-    // Dismissal is handled in the panel via local state
+  const handleDismissSmartFinding = (key: string) => {
+    addReviewedKeys([key]);
   };
 
   // === Grammar Check (dedicated AI grammar analysis) ===
@@ -1117,7 +1120,7 @@ export function useEditorState() {
     toast({ title: "📝 بدأ فحص القواعد النحوية", description: "تحليل الأخطاء النحوية والإملائية..." });
     try {
       const reviewEntries = filteredEntries
-        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim() && !reviewedKeysRef.current.has(key); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (reviewEntries.length === 0) {
         toast({ title: "لا توجد ترجمات للفحص" });
@@ -1154,7 +1157,7 @@ export function useEditorState() {
     toast({ title: "🎯 بدأت المراجعة السياقية", description: "تحليل الترجمات في سياقها..." });
     try {
       const reviewEntries = filteredEntries
-        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim() && !reviewedKeysRef.current.has(key); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (reviewEntries.length === 0) {
         toast({ title: "لا توجد ترجمات للمراجعة" });

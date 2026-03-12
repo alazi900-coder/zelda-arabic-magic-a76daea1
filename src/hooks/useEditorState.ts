@@ -3134,7 +3134,6 @@ export function useEditorState() {
     handleScanNewlines, handleApplyNewlineClean, handleRejectNewlineClean, handleApplyAllNewlineCleans,
     handleScanDiacritics, handleApplyDiacriticsClean, handleRejectDiacriticsClean, handleApplyAllDiacriticsCleans,
     handleScanDuplicateAlef, handleApplyDuplicateAlefClean, handleRejectDuplicateAlefClean, handleApplyAllDuplicateAlefCleans,
-    handleScanMissingAlef, handleApplyMissingAlefClean, handleRejectMissingAlefClean, handleApplyAllMissingAlefCleans,
     handleScanMirrorChars, handleApplyMirrorCharsClean, handleRejectMirrorCharsClean, handleApplyAllMirrorCharsCleans,
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
     handleScanNewlineSplit, handleApplyNewlineSplit, handleRejectNewlineSplit, handleApplyAllNewlineSplits, handleSplitSingleEntry, handleFlattenAllNewlines, handleFontTest, newlineSplitCharLimit, setNewlineSplitCharLimit,

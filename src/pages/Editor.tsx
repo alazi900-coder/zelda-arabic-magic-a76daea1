@@ -895,17 +895,6 @@ const Editor = () => {
             />
           )}
 
-          {/* Missing Alef Fix Results */}
-          {editor.missingAlefResults && editor.missingAlefResults.length > 0 && (
-            <DuplicateAlefCleanPanel
-              results={editor.missingAlefResults}
-              onAccept={editor.handleApplyMissingAlefClean}
-              onReject={editor.handleRejectMissingAlefClean}
-              onAcceptAll={editor.handleApplyAllMissingAlefCleans}
-              onClose={() => editor.setMissingAlefResults(null)}
-            />
-          )}
-
           {/* Mirror Chars Clean Results */}
           {editor.mirrorCharsResults && editor.mirrorCharsResults.length > 0 && (
             <MirrorCharsCleanPanel
@@ -1472,7 +1461,6 @@ const Editor = () => {
                   <DropdownMenuLabel className="text-xs text-primary/80">🧹 تنظيف النصوص</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleScanDiacritics}><Type className="w-4 h-4" /> إزالة التشكيلات ✏️</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanDuplicateAlef} disabled={editor.translatedCount === 0}>🔤 إزالة الألف المكرر</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanMissingAlef} disabled={editor.translatedCount === 0}>🅰️ إصلاح الألف المحذوفة</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanMirrorChars} disabled={editor.translatedCount === 0}>🔄 عكس الأقواس والأسهم</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanTagBrackets} disabled={editor.translatedCount === 0}>🔧 إصلاح أقواس الرموز التقنية</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanArabicTextFixes} disabled={editor.translatedCount === 0}>✨ تحسين النصوص (تاء/هاء، ياء/ألف)</DropdownMenuItem>
@@ -1716,7 +1704,6 @@ const Editor = () => {
                   <DropdownMenuItem onClick={editor.handleFixAllStuckCharacters} disabled={editor.needsImproveCount.stuck === 0}><AlertTriangle className="w-4 h-4" /> إصلاح الأحرف الملتصقة 🔤</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanDiacritics}><Type className="w-4 h-4" /> إزالة التشكيلات ✏️</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanDuplicateAlef} disabled={editor.translatedCount === 0}>🔤 إزالة الألف المكرر</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleScanMissingAlef} disabled={editor.translatedCount === 0}>🅰️ إصلاح الألف المحذوفة</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanMirrorChars} disabled={editor.translatedCount === 0}>🔄 عكس الأقواس والأسهم</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanTagBrackets} disabled={editor.translatedCount === 0}>🔧 إصلاح أقواس الرموز التقنية</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleScanArabicTextFixes} disabled={editor.translatedCount === 0}>✨ تحسين النصوص (تاء/هاء، ياء/ألف، مكررات)</DropdownMenuItem>

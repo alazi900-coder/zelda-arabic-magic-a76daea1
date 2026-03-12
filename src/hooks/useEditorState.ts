@@ -669,6 +669,16 @@ export function useEditorState() {
 
   // === Translation handlers ===
   const lastTagFixToastRef = useRef(0);
+  const lastClosingTagToastRef = useRef(0);
+
+  /** Detect closing colon-tags in original that are missing from translation */
+  const findMissingClosingTags = (original: string, translation: string): string[] => {
+    const closingTagRegex = /\[\s*\/\s*\w+\s*:[^\]]*\]/g;
+    const origClosingTags = [...original.matchAll(closingTagRegex)].map(m => m[0]);
+    if (origClosingTags.length === 0) return [];
+    return origClosingTags.filter(tag => !translation.includes(tag));
+  };
+
   const updateTranslation = (key: string, value: string) => {
     if (!state) return;
     const prev = state.translations[key] || '';
@@ -680,12 +690,24 @@ export function useEditorState() {
     let finalValue = value;
     const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
     if (entry && hasTechnicalTags(entry.original) && value.trim()) {
+      // Check for missing closing tags BEFORE auto-fix (to show user what was wrong)
+      const missingClosing = findMissingClosingTags(entry.original, value);
+
       const fixed = restoreTagsLocally(entry.original, value);
       if (fixed !== value) {
         finalValue = fixed;
         // Throttle toast to max once per 5 seconds
         const now = Date.now();
-        if (now - lastTagFixToastRef.current > 5000) {
+
+        // Show specific closing-tag warning with fix button
+        if (missingClosing.length > 0 && now - lastClosingTagToastRef.current > 5000) {
+          lastClosingTagToastRef.current = now;
+          toast({
+            title: "⚠️ وسوم إغلاق مفقودة",
+            description: `تم اكتشاف ${missingClosing.length} وسم إغلاق مفقود (${missingClosing.join('، ')}) وتم إصلاحه تلقائياً`,
+            duration: 5000,
+          });
+        } else if (now - lastTagFixToastRef.current > 5000) {
           lastTagFixToastRef.current = now;
           toast({
             title: "🔧 إصلاح تلقائي للرموز التقنية",

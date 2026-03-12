@@ -85,7 +85,7 @@ export function useEditorScanResults() {
     npcSplitResults, setNpcSplitResults,
     lineSyncResults, setLineSyncResults,
     unifiedSplitResults, setUnifiedSplitResults,
-    sentenceOrderResults, setSentenceOrderResults,
+    
     smartReviewFindings, setSmartReviewFindings,
     smartReviewing, setSmartReviewing,
     glossaryComplianceResults, setGlossaryComplianceResults,

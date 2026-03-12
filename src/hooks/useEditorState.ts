@@ -41,7 +41,7 @@ export function useEditorState() {
     improvingTranslations, setImprovingTranslations, improveResults, setImproveResults,
     fixingMixed, setFixingMixed,
     checkingConsistency, setCheckingConsistency, consistencyResults, setConsistencyResults,
-    scanningSentences, setScanningSentences, sentenceSplitResults, setSentenceSplitResults,
+    scanningSentences, setScanningSentences,
     newlineCleanResults, setNewlineCleanResults, diacriticsCleanResults, setDiacriticsCleanResults,
     duplicateAlefResults, setDuplicateAlefResults,
     mirrorCharsResults, setMirrorCharsResults, tagBracketFixResults, setTagBracketFixResults,

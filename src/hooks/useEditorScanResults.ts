@@ -77,7 +77,7 @@ export function useEditorScanResults() {
     scanningSentences, setScanningSentences,
     newlineCleanResults, setNewlineCleanResults,
     diacriticsCleanResults, setDiacriticsCleanResults,
-    duplicateAlefResults, setDuplicateAlefResults,
+    
     mirrorCharsResults, setMirrorCharsResults,
     tagBracketFixResults, setTagBracketFixResults,
     arabicTextFixResults, setArabicTextFixResults,

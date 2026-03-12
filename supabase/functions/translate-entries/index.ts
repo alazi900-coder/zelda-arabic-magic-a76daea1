@@ -39,7 +39,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
 
   const patterns: RegExp[] = [
     /[\uE000-\uE0FF]+/g,                     // PUA icons (consecutive = atomic block)
-    /\[\s*\w+\s*:[^\]]*?\s*\]/g,                     // [Tag:Value] only (no trailing parentheses)
+    /\[\s*\/?\s*\w+\s*:[^\]]*?\s*\]/g,        // [Tag:Value] and [/Tag:Value]
     /\d+\s*\[[A-Z]{2,10}\]/g,              // N[TAG] patterns (e.g. 1[ML], 1 [ML])
     /\[[A-Z]{2,10}\]\s*\d+/g,              // [TAG]N patterns (e.g. [ML]1, [ML] 1)
     /\[\s*\w+\s*=\s*\w[^\]]*\]/g,       // [TAG=Value] patterns (e.g. [Color=Red])

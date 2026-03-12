@@ -483,8 +483,8 @@ export { restoreTagsLocally, previewTagRestore } from "@/lib/xc3-tag-restoration
 
 // Sanitize original text: replace binary tag markers with color-coded, tooltipped badges
 export function displayOriginal(text: string): React.ReactNode {
-  // Split on PUA, control chars, AND [Tag:...] patterns
-  const regex = /([\uFFF9\uFFFA\uFFFB\uFFFC\uE000-\uE0FF\u0000-\u0008\u000E-\u001F]+|\[\w+:[^\]]*\])/g;
+  // Split on PUA, control chars, AND [Tag:...] / [/Tag:...] patterns
+  const regex = /([\uFFF9\uFFFA\uFFFB\uFFFC\uE000-\uE0FF\u0000-\u0008\u000E-\u001F]+|\[\s*\/?\s*\w+\s*:[^\]]*\])/g;
   const parts = text.split(regex);
   if (parts.length === 1 && !regex.test(text)) return text;
   const elements: React.ReactNode[] = [];
@@ -494,8 +494,8 @@ export function displayOriginal(text: string): React.ReactNode {
     if (!part) continue;
     const firstCode = part.charCodeAt(0);
 
-    // [Tag:Value] format tags (e.g. [ML:undisp ], [ML:Feeling ])
-    if (/^\[\w+:[^\]]*\]$/.test(part)) {
+    // [Tag:Value] / [/Tag:Value] format tags (e.g. [ML:undisp ], [/System:Ruby])
+    if (/^\[\s*\/?\s*\w+\s*:[^\]]*\]$/.test(part)) {
       mlCounter++;
       const tagContent = part.slice(1, -1); // Remove brackets
       const tagType = tagContent.split(':')[0]; // e.g. "ML"

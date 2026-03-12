@@ -18,6 +18,7 @@ export interface BuildPreview {
   // Warning stats
   overflowCount?: number;
   unprocessedArabicCount?: number;
+  missingClosingTagCount?: number;
   hasBdatFiles?: boolean;
   isDemo?: boolean;
   affectedFileCount?: number;
@@ -34,8 +35,8 @@ interface BuildConfirmDialogProps {
 const BuildConfirmDialog = ({ open, onOpenChange, preview, onConfirm, building }: BuildConfirmDialogProps) => {
   if (!preview) return null;
 
-  const hasWarnings = (preview.overflowCount || 0) > 0 || (preview.unprocessedArabicCount || 0) > 0 || preview.isDemo;
-  const hasCritical = (preview.overflowCount || 0) > 0 || preview.isDemo;
+  const hasWarnings = (preview.overflowCount || 0) > 0 || (preview.unprocessedArabicCount || 0) > 0 || (preview.missingClosingTagCount || 0) > 0 || preview.isDemo;
+  const hasCritical = (preview.overflowCount || 0) > 0 || (preview.missingClosingTagCount || 0) > 0 || preview.isDemo;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -116,6 +117,16 @@ const BuildConfirmDialog = ({ open, onOpenChange, preview, onConfirm, building }
                   <div>
                     <span className="font-bold text-secondary">⚠️ {preview.unprocessedArabicCount} نص لم يُعالَج</span>
                     <span className="text-muted-foreground"> — سيتم معالجتها تلقائياً</span>
+                  </div>
+                </div>
+              )}
+
+              {(preview.missingClosingTagCount || 0) > 0 && (
+                <div className="flex items-start gap-2 text-xs font-body p-2 rounded border border-destructive/30 bg-destructive/5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-destructive">⛔ {preview.missingClosingTagCount} ترجمة تفتقد وسوم إغلاق</span>
+                    <span className="text-muted-foreground"> — مثل [/System:Ruby] — قد تسبب خللاً في اللعبة</span>
                   </div>
                 </div>
               )}

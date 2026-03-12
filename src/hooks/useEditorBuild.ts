@@ -119,8 +119,10 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
     // Compute warnings
     let overflowCount = 0;
     let unprocessedArabicCount = 0;
+    let missingClosingTagCount = 0;
     const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
     const formsRegex = /[\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    const closingTagRegex = /\[\s*\/\s*\w+\s*:[^\]]*\]/g;
 
     for (const entry of currentState.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
@@ -136,6 +138,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // Check unprocessed Arabic
       if (arabicRegex.test(trans) && !formsRegex.test(trans)) {
         unprocessedArabicCount++;
+      }
+
+      // Check missing closing tags
+      if (hasTechnicalTags(entry.original)) {
+        const origClosing = [...entry.original.matchAll(closingTagRegex)].map(m => m[0]);
+        for (const tag of origClosing) {
+          if (!trans.includes(tag)) {
+            missingClosingTagCount++;
+            break; // count per-entry, not per-tag
+          }
+        }
       }
     }
 
@@ -169,6 +182,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       sampleKeys,
       overflowCount,
       unprocessedArabicCount,
+      missingClosingTagCount,
       hasBdatFiles,
       isDemo,
       affectedFileCount,

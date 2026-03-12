@@ -933,15 +933,6 @@ const Editor = () => {
             />
           )}
 
-          {editor.sentenceOrderResults && editor.sentenceOrderResults.length > 0 && (
-            <SentenceOrderPanel
-              results={editor.sentenceOrderResults}
-              onAccept={editor.handleApplySentenceOrder}
-              onReject={editor.handleRejectSentenceOrder}
-              onAcceptAll={editor.handleApplyAllSentenceOrders}
-              onClose={() => editor.setSentenceOrderResults(null)}
-            />
-          )}
 
           {/* Smart Review Panel */}
           {editor.smartReviewFindings && editor.smartReviewFindings.length > 0 && (

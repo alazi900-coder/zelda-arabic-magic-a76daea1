@@ -98,12 +98,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
         if (error) throw error;
 
+        // Mark all batch keys as processed regardless of results
+        for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+
         if (mode === "enhance" && data.suggestions) {
           allSuggestions = [...allSuggestions, ...data.suggestions];
-          setSuggestions([...allSuggestions]);
+          setSuggestions(prev => [...prev, ...data.suggestions]);
         } else if (mode === "grammar" && data.issues) {
           allIssues = [...allIssues, ...data.issues];
-          setGrammarIssues([...allIssues]);
+          setGrammarIssues(prev => [...prev, ...data.issues]);
         }
       } catch (err) {
         console.error('Batch error:', err);

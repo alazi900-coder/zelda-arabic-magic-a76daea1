@@ -60,6 +60,7 @@ export function useEditorState() {
     autoCorrectProgress, setAutoCorrectProgress, autoCorrectAbortRef,
     weakTranslations, setWeakTranslations, detectingWeak, setDetectingWeak,
     detectWeakProgress, setDetectWeakProgress, detectWeakAbortRef,
+    reviewedKeysRef, addReviewedKeys, clearReviewedKeys,
   } = scanResults;
 
   // === Core state ===

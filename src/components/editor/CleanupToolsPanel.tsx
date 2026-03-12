@@ -108,7 +108,6 @@ const TOOL_LABELS: Record<string, { name: string; emoji: string }> = {
   invisible_chars: { name: "أحرف غير مرئية", emoji: "👻" },
   question_mark_fix: { name: "علامة الاستفهام", emoji: "؟" },
   unicode_fix: { name: "إصلاح Unicode", emoji: "🔧" },
-  alef_fix: { name: "إصلاح الألف المحذوفة", emoji: "🅰️" },
 };
 
 export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: CleanupToolsPanelProps) {

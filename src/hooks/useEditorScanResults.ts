@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import type { ReviewResults, ShortSuggestion, ImproveResult } from "@/components/editor/types";
 
 /** All scan/analysis result states — isolated to reduce useState clutter in useEditorState */

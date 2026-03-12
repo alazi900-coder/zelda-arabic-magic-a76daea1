@@ -283,10 +283,17 @@ export function removeArabicPresentationForms(text: string): string {
   }).join('');
 }
 
+/** Strip all Arabic diacritics/tashkeel */
+function stripDiacritics(text: string): string {
+  return text.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '');
+}
+
 export function processArabicText(text: string, options?: { arabicNumerals?: boolean; mirrorPunct?: boolean }): string {
   if (!hasArabicChars(text)) return text;
+  // Strip diacritics first — game font cannot render combining marks (shows dotted circle)
+  let result = stripDiacritics(text);
   // Reshape Arabic letters (connect them) then reverse BiDi for LTR game engine
-  let result = reshapeArabic(text);
+  result = reshapeArabic(result);
   result = reverseBidi(result);
   if (options?.arabicNumerals) result = convertToArabicNumerals(result);
   if (options?.mirrorPunct) result = mirrorPunctuation(result);

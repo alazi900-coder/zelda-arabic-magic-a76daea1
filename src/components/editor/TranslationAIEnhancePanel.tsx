@@ -52,21 +52,24 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const resetProcessedKeys = useCallback(() => {
     processedKeysRef.current = new Set();
   }, []);
+
+  const analyzeTranslations = async (mode: "enhance" | "grammar") => {
+    // Filter only translated entries that haven't been processed yet
     const translatedEntries = entries.filter(e => {
       const key = `${e.msbtFile}:${e.index}`;
-      return translations[key]?.trim();
+      return translations[key]?.trim() && !processedKeysRef.current.has(key);
     });
 
     if (translatedEntries.length === 0) {
-      toast({ title: "لا توجد ترجمات للتحليل", variant: "destructive" });
+      toast({ title: "لا توجد نصوص جديدة للفحص — جميع النصوص تم فحصها", description: "اضغط 🔄 لإعادة الفحص من البداية" });
       return;
     }
 
     setIsAnalyzing(true);
     setActiveTab(mode);
     abortRef.current = false;
-    setSuggestions([]);
-    setGrammarIssues([]);
+    // Don't clear previous results — accumulate
+    // setSuggestions([]); setGrammarIssues([]);
 
     const totalBatches = Math.ceil(translatedEntries.length / BATCH_SIZE);
     setProgress({ current: 0, total: translatedEntries.length });

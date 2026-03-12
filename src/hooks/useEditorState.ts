@@ -1060,7 +1060,7 @@ export function useEditorState() {
     toast({ title: "🔬 بدأت المراجعة الذكية", description: "تحليل عميق للترجمات في الخلفية..." });
     try {
       const reviewEntries = filteredEntries
-        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
+        .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim() && !reviewedKeysRef.current.has(key); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (reviewEntries.length === 0) {
         toast({ title: "لا توجد ترجمات للمراجعة" });

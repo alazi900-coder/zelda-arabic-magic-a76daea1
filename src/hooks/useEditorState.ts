@@ -2749,51 +2749,6 @@ export function useEditorState() {
     }
   }, [pinnedKeys, filteredEntries]);
 
-  // === Duplicate Alef Clean ===
-  const handleScanDuplicateAlef = useCallback(() => {
-    if (!state) return;
-    const results: import("@/components/editor/DuplicateAlefCleanPanel").DuplicateAlefResult[] = [];
-    for (const [key, value] of Object.entries(state.translations)) {
-      if (!value?.trim()) continue;
-      // Pattern: "اال" (alef-alef-lam) → "الا" (alef-lam-alef) — swap, don't delete
-      const fixedAlefLam = value.replace(/ا(ال)/g, '$1ا');
-      // Then fix any remaining raw duplicate alefs (not before lam)
-      const after = fixedAlefLam.replace(/ا{2,}/g, 'ا');
-      if (after === value) continue;
-      const count = (value.match(/ا{2,}/g) || []).length + (value.match(/ا(?=ال)/g) || []).length;
-      results.push({ key, before: value, after, count, status: 'pending' });
-    }
-    setDuplicateAlefResults(results);
-    if (results.length === 0) {
-      setLastSaved("✅ لا توجد ألفات مكررة في الترجمات");
-      setTimeout(() => setLastSaved(""), 4000);
-    }
-  }, [state]);
-
-  const handleApplyDuplicateAlefClean = useCallback((key: string) => {
-    if (!state || !duplicateAlefResults) return;
-    const item = duplicateAlefResults.find(r => r.key === key);
-    if (!item) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
-    setDuplicateAlefResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'accepted' as const } : r) : null);
-  }, [state, duplicateAlefResults]);
-
-  const handleRejectDuplicateAlefClean = useCallback((key: string) => {
-    setDuplicateAlefResults(prev => prev ? prev.map(r => r.key === key ? { ...r, status: 'rejected' as const } : r) : null);
-  }, []);
-
-  const handleApplyAllDuplicateAlefCleans = useCallback(() => {
-    if (!state || !duplicateAlefResults) return;
-    const pending = duplicateAlefResults.filter(r => r.status === 'pending');
-    const newTranslations = { ...state.translations };
-    for (const item of pending) {
-      newTranslations[item.key] = item.after;
-    }
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
-    setDuplicateAlefResults(prev => prev ? prev.map(r => r.status === 'pending' ? { ...r, status: 'accepted' as const } : r) : null);
-    setLastSaved(`✅ تم إصلاح ${pending.length} ألف مكرر`);
-    setTimeout(() => setLastSaved(""), 4000);
-  }, [state, duplicateAlefResults]);
 
   // === Mirror Chars Clean (brackets & arrows) ===
   const handleScanMirrorChars = useCallback(() => {

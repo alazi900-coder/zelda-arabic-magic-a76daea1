@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Languages, CheckCircle2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, CheckCircle2, Square } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import type { ExtractedEntry } from "./types";
@@ -33,6 +33,8 @@ interface GrammarIssue {
   suggestion: string;
 }
 
+const BATCH_SIZE = 20;
+
 const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   entries,
   translations,
@@ -43,15 +45,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [suggestions, setSuggestions] = useState<EnhanceSuggestion[]>([]);
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>([]);
   const [activeTab, setActiveTab] = useState<"enhance" | "grammar">("enhance");
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const abortRef = useRef(false);
 
   const analyzeTranslations = async (mode: "enhance" | "grammar") => {
-    // Get translated entries
-    const translatedEntries = entries
-      .filter(e => {
-        const key = `${e.msbtFile}:${e.index}`;
-        return translations[key]?.trim();
-      })
-      .slice(0, 20); // Limit for performance
+    const translatedEntries = entries.filter(e => {
+      const key = `${e.msbtFile}:${e.index}`;
+      return translations[key]?.trim();
+    });
 
     if (translatedEntries.length === 0) {
       toast({ title: "لا توجد ترجمات للتحليل", variant: "destructive" });
@@ -60,54 +61,92 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
     setIsAnalyzing(true);
     setActiveTab(mode);
+    abortRef.current = false;
+    setSuggestions([]);
+    setGrammarIssues([]);
 
-    try {
-      const textsToAnalyze = translatedEntries.map(e => ({
+    const totalBatches = Math.ceil(translatedEntries.length / BATCH_SIZE);
+    setProgress({ current: 0, total: translatedEntries.length });
+
+    let allSuggestions: EnhanceSuggestion[] = [];
+    let allIssues: GrammarIssue[] = [];
+
+    for (let i = 0; i < translatedEntries.length; i += BATCH_SIZE) {
+      if (abortRef.current) break;
+
+      const batch = translatedEntries.slice(i, i + BATCH_SIZE);
+      const textsToAnalyze = batch.map(e => ({
         key: `${e.msbtFile}:${e.index}`,
         original: e.original,
         translation: translations[`${e.msbtFile}:${e.index}`],
       }));
 
-      const { data, error } = await supabase.functions.invoke('enhance-translations', {
-        body: {
-          entries: textsToAnalyze,
-          mode,
-          glossary: glossary?.slice(0, 5000), // Limit glossary size
-        },
-      });
+      try {
+        const { data, error } = await supabase.functions.invoke('enhance-translations', {
+          body: {
+            entries: textsToAnalyze,
+            mode,
+            glossary: glossary?.slice(0, 5000),
+          },
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (mode === "enhance") {
-        setSuggestions(data.suggestions || []);
-        if (data.suggestions?.length === 0) {
-          toast({ title: "✅ الترجمات جيدة", description: "لم يتم العثور على اقتراحات تحسين" });
+        if (mode === "enhance" && data.suggestions) {
+          allSuggestions = [...allSuggestions, ...data.suggestions];
+          setSuggestions([...allSuggestions]);
+        } else if (mode === "grammar" && data.issues) {
+          allIssues = [...allIssues, ...data.issues];
+          setGrammarIssues([...allIssues]);
         }
-      } else {
-        setGrammarIssues(data.issues || []);
-        if (data.issues?.length === 0) {
-          toast({ title: "✅ لا توجد أخطاء نحوية", description: "الترجمات سليمة لغوياً" });
+      } catch (err) {
+        console.error('Batch error:', err);
+        if (String(err).includes('429')) {
+          toast({ title: "تم تجاوز حد الطلبات، جاري الانتظار...", variant: "destructive" });
+          await new Promise(r => setTimeout(r, 5000));
+          i -= BATCH_SIZE; // retry
+          continue;
         }
       }
-    } catch (err) {
-      console.error('Analysis error:', err);
-      toast({ title: "خطأ في التحليل", description: String(err), variant: "destructive" });
-    } finally {
-      setIsAnalyzing(false);
+
+      setProgress({ current: Math.min(i + BATCH_SIZE, translatedEntries.length), total: translatedEntries.length });
     }
+
+    setIsAnalyzing(false);
+    setProgress(null);
+
+    const count = mode === "enhance" ? allSuggestions.length : allIssues.length;
+    if (count === 0 && !abortRef.current) {
+      toast({ title: mode === "enhance" ? "✅ الترجمات جيدة" : "✅ لا توجد أخطاء نحوية" });
+    } else {
+      toast({ title: `تم العثور على ${count} ${mode === "enhance" ? "اقتراح" : "خطأ"}` });
+    }
+  };
+
+  const stopAnalysis = () => {
+    abortRef.current = true;
   };
 
   const applySuggestion = (item: EnhanceSuggestion | GrammarIssue) => {
     const newText = 'suggested' in item ? item.suggested : item.suggestion;
     onApplySuggestion(item.key, newText);
-    
     if ('suggested' in item) {
       setSuggestions(prev => prev.filter(s => s.key !== item.key));
     } else {
       setGrammarIssues(prev => prev.filter(g => g.key !== item.key));
     }
-    
-    toast({ title: "✅ تم تطبيق الاقتراح" });
+  };
+
+  const applyAll = () => {
+    if (activeTab === "enhance") {
+      for (const s of suggestions) onApplySuggestion(s.key, s.suggested);
+      toast({ title: `✅ تم تطبيق ${suggestions.length} اقتراح` });
+      setSuggestions([]);
+    } else {
+      for (const g of grammarIssues) onApplySuggestion(g.key, g.suggestion);
+      toast({ title: `✅ تم إصلاح ${grammarIssues.length} خطأ` });
+      setGrammarIssues([]);
+    }
   };
 
   const dismissSuggestion = (key: string) => {
@@ -121,6 +160,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     accuracy: { label: "دقة", color: "bg-blue-500/10 text-blue-500" },
     consistency: { label: "اتساق", color: "bg-amber-500/10 text-amber-500" },
   };
+
+  const currentResults = activeTab === "enhance" ? suggestions : grammarIssues;
 
   return (
     <Card className="border-primary/20">
@@ -145,7 +186,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             ) : (
               <Wand2 className="w-4 h-4" />
             )}
-            تحسين الصياغة
+            تحسين الصياغة (الكل)
           </Button>
           <Button
             variant={activeTab === "grammar" ? "default" : "outline"}
@@ -159,16 +200,46 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             ) : (
               <BookOpen className="w-4 h-4" />
             )}
-            فحص القواعد النحوية
+            فحص القواعد (الكل)
           </Button>
+          {isAnalyzing && (
+            <Button variant="destructive" size="sm" onClick={stopAnalysis} className="gap-1.5">
+              <Square className="w-3 h-3" />
+              إيقاف
+            </Button>
+          )}
         </div>
+
+        {/* Progress bar */}
+        {progress && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>جاري الفحص...</span>
+              <span>{progress.current} / {progress.total}</span>
+            </div>
+            <Progress value={(progress.current / progress.total) * 100} className="h-2" />
+          </div>
+        )}
+
+        {/* Apply All button */}
+        {currentResults.length > 0 && !isAnalyzing && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {currentResults.length} {activeTab === "enhance" ? "اقتراح" : "خطأ"}
+            </span>
+            <Button size="sm" variant="default" onClick={applyAll} className="gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
+              إصلاح الكل
+            </Button>
+          </div>
+        )}
 
         {/* Results */}
         {activeTab === "enhance" && suggestions.length > 0 && (
           <ScrollArea className="h-[300px]">
             <div className="space-y-3">
               {suggestions.map((s, i) => (
-                <div key={i} className="p-3 rounded-lg border bg-card space-y-2">
+                <div key={`${s.key}-${i}`} className="p-3 rounded-lg border bg-card space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
@@ -210,7 +281,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           <ScrollArea className="h-[300px]">
             <div className="space-y-3">
               {grammarIssues.map((g, i) => (
-                <div key={i} className="p-3 rounded-lg border border-red-500/20 bg-red-500/5 space-y-2">
+                <div key={`${g.key}-${i}`} className="p-3 rounded-lg border border-red-500/20 bg-red-500/5 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -248,7 +319,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         {!isAnalyzing && suggestions.length === 0 && grammarIssues.length === 0 && (
           <div className="text-center py-6 text-muted-foreground text-sm">
             <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>اضغط على أحد الأزرار لتحليل الترجمات</p>
+            <p>اضغط على أحد الأزرار لفحص جميع الترجمات في الملف</p>
           </div>
         )}
       </CardContent>

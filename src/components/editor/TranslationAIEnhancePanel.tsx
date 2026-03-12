@@ -1,10 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, CheckCircle2, Square } from "lucide-react";
+import { Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, CheckCircle2, Square, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import type { ExtractedEntry } from "./types";
@@ -47,23 +47,29 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [activeTab, setActiveTab] = useState<"enhance" | "grammar">("enhance");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const abortRef = useRef(false);
+  const processedKeysRef = useRef<Set<string>>(new Set());
+
+  const resetProcessedKeys = useCallback(() => {
+    processedKeysRef.current = new Set();
+  }, []);
 
   const analyzeTranslations = async (mode: "enhance" | "grammar") => {
+    // Filter only translated entries that haven't been processed yet
     const translatedEntries = entries.filter(e => {
       const key = `${e.msbtFile}:${e.index}`;
-      return translations[key]?.trim();
+      return translations[key]?.trim() && !processedKeysRef.current.has(key);
     });
 
     if (translatedEntries.length === 0) {
-      toast({ title: "لا توجد ترجمات للتحليل", variant: "destructive" });
+      toast({ title: "لا توجد نصوص جديدة للفحص — جميع النصوص تم فحصها", description: "اضغط 🔄 لإعادة الفحص من البداية" });
       return;
     }
 
     setIsAnalyzing(true);
     setActiveTab(mode);
     abortRef.current = false;
-    setSuggestions([]);
-    setGrammarIssues([]);
+    // Don't clear previous results — accumulate
+    // setSuggestions([]); setGrammarIssues([]);
 
     const totalBatches = Math.ceil(translatedEntries.length / BATCH_SIZE);
     setProgress({ current: 0, total: translatedEntries.length });
@@ -92,12 +98,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
         if (error) throw error;
 
+        // Mark all batch keys as processed regardless of results
+        for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+
         if (mode === "enhance" && data.suggestions) {
           allSuggestions = [...allSuggestions, ...data.suggestions];
-          setSuggestions([...allSuggestions]);
+          setSuggestions(prev => [...prev, ...data.suggestions]);
         } else if (mode === "grammar" && data.issues) {
           allIssues = [...allIssues, ...data.issues];
-          setGrammarIssues([...allIssues]);
+          setGrammarIssues(prev => [...prev, ...data.issues]);
         }
       } catch (err) {
         console.error('Batch error:', err);
@@ -206,6 +215,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <Button variant="destructive" size="sm" onClick={stopAnalysis} className="gap-1.5">
               <Square className="w-3 h-3" />
               إيقاف
+            </Button>
+          )}
+          {!isAnalyzing && processedKeysRef.current.size > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); }} className="gap-1.5">
+              <RotateCcw className="w-3.5 h-3.5" />
+              إعادة فحص الكل
             </Button>
           )}
         </div>

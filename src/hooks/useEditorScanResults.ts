@@ -117,5 +117,6 @@ export function useEditorScanResults() {
     detectingWeak, setDetectingWeak,
     detectWeakProgress, setDetectWeakProgress,
     detectWeakAbortRef,
+    reviewedKeysRef, addReviewedKeys, clearReviewedKeys,
   };
 }

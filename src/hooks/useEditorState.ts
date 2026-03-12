@@ -658,7 +658,7 @@ export function useEditorState() {
     });
   }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys]);
 
-  useEffect(() => { setCurrentPage(0); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn]);
+  useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn]);
 
   const totalPages = Math.ceil(filteredEntries.length / PAGE_SIZE);
   const paginatedEntries = useMemo(() => {

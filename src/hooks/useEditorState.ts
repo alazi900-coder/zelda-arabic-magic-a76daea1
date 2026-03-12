@@ -2961,7 +2961,7 @@ export function useEditorState() {
     applyingArabic, improvingTranslations, improveResults,
     fixingMixed, filtersOpen, buildStats, buildPreview, showBuildConfirm, bdatFileStats,
     checkingConsistency, consistencyResults,
-    scanningSentences, sentenceSplitResults, newlineCleanResults, diacriticsCleanResults, duplicateAlefResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults, npcSplitResults, lineSyncResults, unifiedSplitResults, sentenceOrderResults, arabicTextFixResults,
+    scanningSentences, newlineCleanResults, diacriticsCleanResults, mirrorCharsResults, tagBracketFixResults, newlineSplitResults, npcSplitResults, lineSyncResults, unifiedSplitResults, arabicTextFixResults,
     smartReviewing, smartReviewFindings,
     enhanceResults, enhancingTranslations,
     // Advanced Analysis

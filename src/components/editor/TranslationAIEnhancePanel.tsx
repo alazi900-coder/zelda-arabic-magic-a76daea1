@@ -1,10 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, CheckCircle2, Square } from "lucide-react";
+import { Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, CheckCircle2, Square, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import type { ExtractedEntry } from "./types";

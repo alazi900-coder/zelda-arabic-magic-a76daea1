@@ -33,7 +33,8 @@ interface GrammarIssue {
   suggestion: string;
 }
 
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 50;
+const PARALLEL_REQUESTS = 3;
 
 const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   entries,

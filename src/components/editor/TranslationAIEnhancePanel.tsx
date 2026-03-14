@@ -33,7 +33,8 @@ interface GrammarIssue {
   suggestion: string;
 }
 
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 50;
+const PARALLEL_REQUESTS = 3;
 
 const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   entries,
@@ -71,36 +72,65 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // Don't clear previous results — accumulate
     // setSuggestions([]); setGrammarIssues([]);
 
-    const totalBatches = Math.ceil(translatedEntries.length / BATCH_SIZE);
     setProgress({ current: 0, total: translatedEntries.length });
 
     let allSuggestions: EnhanceSuggestion[] = [];
     let allIssues: GrammarIssue[] = [];
+    let processed = 0;
 
+    // Build all batches
+    const batches: { textsToAnalyze: { key: string; original: string; translation: string }[] }[] = [];
     for (let i = 0; i < translatedEntries.length; i += BATCH_SIZE) {
+      const batch = translatedEntries.slice(i, i + BATCH_SIZE);
+      batches.push({
+        textsToAnalyze: batch.map(e => ({
+          key: `${e.msbtFile}:${e.index}`,
+          original: e.original,
+          translation: translations[`${e.msbtFile}:${e.index}`],
+        })),
+      });
+    }
+
+    // Process batches in parallel chunks
+    for (let i = 0; i < batches.length; i += PARALLEL_REQUESTS) {
       if (abortRef.current) break;
 
-      const batch = translatedEntries.slice(i, i + BATCH_SIZE);
-      const textsToAnalyze = batch.map(e => ({
-        key: `${e.msbtFile}:${e.index}`,
-        original: e.original,
-        translation: translations[`${e.msbtFile}:${e.index}`],
-      }));
+      const chunk = batches.slice(i, i + PARALLEL_REQUESTS);
+      const promises = chunk.map(async ({ textsToAnalyze }) => {
+        try {
+          const { data, error } = await supabase.functions.invoke('enhance-translations', {
+            body: {
+              entries: textsToAnalyze,
+              mode,
+              glossary: glossary?.slice(0, 5000),
+            },
+          });
+          if (error) throw error;
+          for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+          return { data, count: textsToAnalyze.length };
+        } catch (err) {
+          console.error('Batch error:', err);
+          if (String(err).includes('429')) {
+            toast({ title: "تم تجاوز حد الطلبات، جاري الانتظار...", variant: "destructive" });
+            await new Promise(r => setTimeout(r, 5000));
+            // Retry once
+            try {
+              const { data } = await supabase.functions.invoke('enhance-translations', {
+                body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000) },
+              });
+              for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+              return { data, count: textsToAnalyze.length };
+            } catch { return { data: null, count: textsToAnalyze.length }; }
+          }
+          return { data: null, count: textsToAnalyze.length };
+        }
+      });
 
-      try {
-        const { data, error } = await supabase.functions.invoke('enhance-translations', {
-          body: {
-            entries: textsToAnalyze,
-            mode,
-            glossary: glossary?.slice(0, 5000),
-          },
-        });
+      const results = await Promise.all(promises);
 
-        if (error) throw error;
-
-        // Mark all batch keys as processed regardless of results
-        for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
-
+      for (const { data, count } of results) {
+        processed += count;
+        if (!data) continue;
         if (mode === "enhance" && data.suggestions) {
           allSuggestions = [...allSuggestions, ...data.suggestions];
           setSuggestions(prev => [...prev, ...data.suggestions]);
@@ -108,17 +138,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           allIssues = [...allIssues, ...data.issues];
           setGrammarIssues(prev => [...prev, ...data.issues]);
         }
-      } catch (err) {
-        console.error('Batch error:', err);
-        if (String(err).includes('429')) {
-          toast({ title: "تم تجاوز حد الطلبات، جاري الانتظار...", variant: "destructive" });
-          await new Promise(r => setTimeout(r, 5000));
-          i -= BATCH_SIZE; // retry
-          continue;
-        }
       }
 
-      setProgress({ current: Math.min(i + BATCH_SIZE, translatedEntries.length), total: translatedEntries.length });
+      setProgress({ current: Math.min(processed, translatedEntries.length), total: translatedEntries.length });
     }
 
     setIsAnalyzing(false);

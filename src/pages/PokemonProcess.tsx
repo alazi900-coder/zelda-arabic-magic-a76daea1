@@ -3,16 +3,9 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, FileJson, Eye } from "lucide-react";
-import { parseDatFile, parseTblFile, applyLabels, exportAsJson, type GfmsgFile, type AhtbEntry } from "@/lib/gfmsg-parser";
-
-interface LoadedFile {
-  name: string;
-  type: "dat" | "tbl" | "json";
-  datFile?: GfmsgFile;
-  tblEntries?: AhtbEntry[];
-  jsonData?: Record<string, string>;
-}
+import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, FileJson, Eye, Shield, Zap } from "lucide-react";
+import { loadPokemonTextFile, parseTblFile, readFileBufferRobust, buildDat, type PokemonTextFile, type AhtbLabel } from "@/lib/pokemon-text-parser";
+import { autoDecompressZstd } from "@/lib/zstd-utils";
 
 interface ParsedEntry {
   key: string;
@@ -21,25 +14,32 @@ interface ParsedEntry {
   sourceFile: string;
 }
 
+interface FileInfo {
+  name: string;
+  type: "dat" | "tbl" | "json";
+  headerType?: string;
+  wasCompressed?: boolean;
+  lineCount?: number;
+}
+
 export default function PokemonProcess() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const glossaryInputRef = useRef<HTMLInputElement>(null);
 
   const [entries, setEntries] = useState<ParsedEntry[]>([]);
-  const [glossary, setGlossary] = useState<string>("");
+  const [glossary, setGlossary] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadedFiles, setLoadedFiles] = useState<LoadedFile[]>([]);
-  const [rawGfmsg, setRawGfmsg] = useState<Map<string, { dat: GfmsgFile; tbl?: AhtbEntry[] }>>(new Map());
+  const [loadedFiles, setLoadedFiles] = useState<FileInfo[]>([]);
+  const [parsedFiles, setParsedFiles] = useState<Map<string, PokemonTextFile>>(new Map());
 
-  // Handle file upload (.dat, .tbl, .json)
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
     setLoading(true);
 
-    const newLoaded: LoadedFile[] = [...loadedFiles];
-    const newRaw = new Map(rawGfmsg);
+    const newLoaded: FileInfo[] = [...loadedFiles];
+    const newParsed = new Map(parsedFiles);
     const newEntries: ParsedEntry[] = [...entries];
 
     // Group .dat and .tbl by name
@@ -67,25 +67,30 @@ export default function PokemonProcess() {
     for (const [baseName, group] of fileMap) {
       try {
         if (group.dat) {
-          const datBuffer = await group.dat.arrayBuffer();
-          const datFile = parseDatFile(datBuffer, baseName);
+          const rawBuffer = await readFileBufferRobust(group.dat);
+          const { data: datBuffer, wasCompressed } = await autoDecompressZstd(rawBuffer);
 
-          let tblEntries: AhtbEntry[] | undefined;
+          let tblLabels: AhtbLabel[] | null = null;
           if (group.tbl) {
-            const tblBuffer = await group.tbl.arrayBuffer();
-            tblEntries = parseTblFile(tblBuffer);
-            applyLabels(datFile, tblEntries);
+            const tblRaw = await readFileBufferRobust(group.tbl);
+            const { data: tblBuffer } = await autoDecompressZstd(tblRaw);
+            tblLabels = parseTblFile(tblBuffer);
+            newLoaded.push({ name: group.tbl.name, type: "tbl" });
           }
 
-          newRaw.set(baseName, { dat: datFile, tbl: tblEntries });
-          newLoaded.push({ name: group.dat.name, type: "dat", datFile });
-          if (group.tbl) {
-            newLoaded.push({ name: group.tbl.name, type: "tbl", tblEntries });
-          }
+          const parsed = loadPokemonTextFile(datBuffer, tblLabels, baseName);
+          newParsed.set(baseName, parsed);
 
-          // Extract entries from language 0
-          const lang0 = datFile.entries[0] || [];
-          for (const entry of lang0) {
+          newLoaded.push({
+            name: group.dat.name,
+            type: "dat",
+            headerType: parsed.headerType,
+            wasCompressed,
+            lineCount: parsed.lineCount,
+          });
+
+          // Extract text entries
+          for (const entry of parsed.entries) {
             if (entry.text.trim()) {
               newEntries.push({
                 key: `${baseName}.${entry.label}`,
@@ -98,7 +103,7 @@ export default function PokemonProcess() {
 
           toast({
             title: `✅ ${baseName}`,
-            description: `${lang0.filter(e => e.text.trim()).length} نص — ${datFile.languageCount} لغة`,
+            description: `${parsed.entries.filter(e => e.text.trim()).length} نص — ${parsed.headerType}${wasCompressed ? ' (zstd)' : ''}${parsed.encrypted ? ' (XOR)' : ''}`,
           });
         }
       } catch (err) {
@@ -140,13 +145,12 @@ export default function PokemonProcess() {
     }
 
     setLoadedFiles(newLoaded);
-    setRawGfmsg(newRaw);
+    setParsedFiles(newParsed);
     setEntries(newEntries);
     setLoading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [entries, loadedFiles, rawGfmsg, toast]);
+  }, [entries, loadedFiles, parsedFiles, toast]);
 
-  // Handle glossary
   const handleGlossaryUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -155,7 +159,6 @@ export default function PokemonProcess() {
     toast({ title: "تم تحميل القاموس", description: file.name });
   }, [toast]);
 
-  // Export as JSON
   const handleExportJson = useCallback(() => {
     const output: Record<string, Record<string, string>> = {};
     for (const entry of entries) {
@@ -174,7 +177,26 @@ export default function PokemonProcess() {
     URL.revokeObjectURL(url);
   }, [entries]);
 
-  // Open in editor
+  const handleExportDat = useCallback(() => {
+    for (const [name, parsed] of parsedFiles) {
+      const newTexts = parsed.entries.map(e => {
+        const key = `${name}.${e.label}`;
+        const found = entries.find(en => en.key === key);
+        return found?.translation?.trim() ? found.translation : e.text;
+      });
+
+      const rebuilt = buildDat(parsed, newTexts);
+      const blob = new Blob([rebuilt], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${name}.dat`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    toast({ title: "تم تصدير ملفات .dat", description: `${parsedFiles.size} ملف` });
+  }, [entries, parsedFiles, toast]);
+
   const handleOpenEditor = useCallback(() => {
     const editorData = {
       entries: entries.map((e, i) => ({
@@ -196,7 +218,6 @@ export default function PokemonProcess() {
   const datFilesCount = loadedFiles.filter(f => f.type === "dat").length;
   const tblFilesCount = loadedFiles.filter(f => f.type === "tbl").length;
 
-  // Group entries by source file for stats
   const fileStats = new Map<string, number>();
   for (const e of entries) {
     fileStats.set(e.sourceFile, (fileStats.get(e.sourceFile) || 0) + 1);
@@ -204,7 +225,6 @@ export default function PokemonProcess() {
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
-      {/* Header */}
       <header className="border-b border-border px-4 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -229,7 +249,6 @@ export default function PokemonProcess() {
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Upload Cards */}
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Game Files */}
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-display">
@@ -239,27 +258,16 @@ export default function PokemonProcess() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
-                ارفع أزواج ملفات <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.dat</code> و <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.tbl</code> من مجلد <code className="text-xs bg-muted px-1.5 py-0.5 rounded">message/dat/English/</code>
+                ارفع أزواج ملفات <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.dat</code> و <code className="text-xs bg-muted px-1.5 py-0.5 rounded">.tbl</code> من مجلد <code className="text-xs bg-muted px-1.5 py-0.5 rounded">message/dat/</code>
               </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".dat,.tbl,.json"
-                multiple
-                className="hidden"
-                onChange={handleFileUpload}
-              />
+              <input ref={fileInputRef} type="file" accept=".dat,.tbl,.json" multiple className="hidden" onChange={handleFileUpload} />
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 variant="outline"
                 className="w-full border-dashed border-2 py-8 hover:border-[hsl(0,80%,55%)]/50"
                 disabled={loading}
               >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin ml-2" />
-                ) : (
-                  <Upload className="w-5 h-5 ml-2" />
-                )}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin ml-2" /> : <Upload className="w-5 h-5 ml-2" />}
                 {loading ? "جارٍ التحليل..." : "اختر ملفات dat / tbl"}
               </Button>
 
@@ -268,8 +276,12 @@ export default function PokemonProcess() {
                   {loadedFiles.map((f, i) => (
                     <div key={i} className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 flex items-center gap-2">
                       {f.type === "dat" ? "📦" : f.type === "tbl" ? "🏷️" : "📄"} {f.name}
-                      {f.type === "dat" && f.datFile && (
-                        <span className="text-[hsl(0,80%,55%)] mr-auto">{f.datFile.stringCount} نص</span>
+                      {f.type === "dat" && (
+                        <span className="text-[hsl(0,80%,55%)] mr-auto flex items-center gap-1">
+                          {f.lineCount} نص
+                          {f.headerType && <span className="text-muted-foreground">({f.headerType})</span>}
+                          {f.wasCompressed && <Zap className="w-3 h-3 text-yellow-500" />}
+                        </span>
                       )}
                     </div>
                   ))}
@@ -278,7 +290,6 @@ export default function PokemonProcess() {
             </CardContent>
           </Card>
 
-          {/* Glossary */}
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-display">
@@ -288,15 +299,9 @@ export default function PokemonProcess() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
-                ارفع قاموس المصطلحات (English=Arabic) لأسماء البوكيمون والهجمات والقدرات.
+                ارفع قاموس المصطلحات (English=Arabic) لأسماء البوكيمون والهجمات.
               </p>
-              <input
-                ref={glossaryInputRef}
-                type="file"
-                accept=".txt,.csv,.tsv"
-                className="hidden"
-                onChange={handleGlossaryUpload}
-              />
+              <input ref={glossaryInputRef} type="file" accept=".txt,.csv,.tsv" className="hidden" onChange={handleGlossaryUpload} />
               <Button
                 onClick={() => glossaryInputRef.current?.click()}
                 variant="outline"
@@ -329,7 +334,7 @@ export default function PokemonProcess() {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-display font-bold">{tblFilesCount}</div>
-                  <div className="text-xs text-muted-foreground">ملف .tbl (تسميات)</div>
+                  <div className="text-xs text-muted-foreground">ملف .tbl</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-display font-bold">{fileStats.size}</div>
@@ -338,12 +343,13 @@ export default function PokemonProcess() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button
-                  onClick={handleOpenEditor}
-                  className="bg-[hsl(0,80%,50%)] hover:bg-[hsl(0,80%,45%)] text-white font-display font-bold px-6"
-                >
+                <Button onClick={handleOpenEditor} className="bg-[hsl(0,80%,50%)] hover:bg-[hsl(0,80%,45%)] text-white font-display font-bold px-6">
                   افتح في المحرر
                   <ArrowRight className="w-4 h-4 mr-2" />
+                </Button>
+                <Button onClick={handleExportDat} variant="outline" disabled={parsedFiles.size === 0}>
+                  <Shield className="w-4 h-4 ml-2" />
+                  تصدير .dat معدّل
                 </Button>
                 <Button onClick={handleExportJson} variant="outline" disabled={translatedCount === 0}>
                   <Download className="w-4 h-4 ml-2" />

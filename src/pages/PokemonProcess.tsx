@@ -280,7 +280,7 @@ export default function PokemonProcess() {
                         <span className="text-[hsl(0,80%,55%)] mr-auto flex items-center gap-1">
                           {f.lineCount} نص
                           {f.headerType && <span className="text-muted-foreground">({f.headerType})</span>}
-                          {f.wasCompressed && <Zap className="w-3 h-3 text-yellow-500" title="zstd" />}
+                          {f.wasCompressed && <Zap className="w-3 h-3 text-yellow-500" />}
                         </span>
                       )}
                     </div>

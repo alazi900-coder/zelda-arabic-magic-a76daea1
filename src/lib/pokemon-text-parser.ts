@@ -558,8 +558,8 @@ export function parseTblFile(data: ArrayBuffer): AhtbLabel[] {
     const nameLen = view.getUint16(offset, true);
     offset += 2;
 
-    const nameBytes = bytes.slice(offset, offset + nameLen - 1);
-    const name = Array.from(nameBytes).map(b => String.fromCharCode(b)).join('');
+    const nameBytes = Array.from(bytes.slice(offset, offset + nameLen - 1));
+    const name = nameBytes.map(b => String.fromCharCode(b)).join('');
     offset += nameLen;
 
     entries.push({ hash, name });
@@ -690,7 +690,7 @@ function buildV2Section(
   // Copy original header
   const origBytes = new Uint8Array(parsed._rawBuffer);
   const copyLen = Math.min(headerSize, origBytes.length);
-  out.set(origBytes.slice(parsed._headerOffset, parsed._headerOffset + copyLen), 0);
+  out.set(new Uint8Array(origBytes.buffer, origBytes.byteOffset + parsed._headerOffset, copyLen), 0);
 
   // Update line count if needed
   if (hdr.type === 'v2-u16') {

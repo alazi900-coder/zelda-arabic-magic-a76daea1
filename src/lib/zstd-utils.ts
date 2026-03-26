@@ -43,13 +43,9 @@ export async function autoDecompressZstd(
 
   try {
     const decompressed = decompress(bytes);
-    return {
-      data: decompressed.buffer.slice(
-        decompressed.byteOffset,
-        decompressed.byteOffset + decompressed.byteLength
-      ),
-      wasCompressed: true,
-    };
+    const result = new ArrayBuffer(decompressed.byteLength);
+    new Uint8Array(result).set(decompressed);
+    return { data: result, wasCompressed: true };
   } catch (err) {
     console.warn('[zstd] Decompression failed, using raw buffer:', err);
     return { data: buffer, wasCompressed: false };

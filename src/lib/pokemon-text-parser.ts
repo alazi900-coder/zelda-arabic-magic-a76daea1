@@ -154,12 +154,34 @@ function isGibberish(text: string): boolean {
     if (
       (c > 0 && c < 0x20 && c !== 0x0A && c !== 0x0D) || // control chars
       (c >= 0xD800 && c <= 0xDFFF) ||                     // surrogates
-      (c >= 0xE000 && c <= 0xF8FF)                        // private use
+      (c >= 0xE000 && c <= 0xF8FF) ||                     // private use
+      (c >= 0x3000 && c <= 0x9FFF) ||                     // CJK (unexpected for EN/AR text)
+      (c >= 0xAC00 && c <= 0xD7AF)                        // Korean Hangul
     ) {
       bad++;
     }
   }
-  return bad / text.length > 0.3;
+  return bad / text.length > 0.2;
+}
+
+/** Score how "readable" entries are (higher = more readable Latin/Arabic text) */
+function readabilityScore(entries: PokemonTextEntry[]): number {
+  let good = 0, total = 0;
+  for (const e of entries) {
+    for (let i = 0; i < e.text.length; i++) {
+      const c = e.text.charCodeAt(i);
+      total++;
+      if (
+        (c >= 0x20 && c <= 0x7E) ||  // Basic Latin (English)
+        (c >= 0x0600 && c <= 0x06FF) || // Arabic
+        (c >= 0xFE70 && c <= 0xFEFF) || // Arabic Presentation Forms
+        c === 0x0A || c === 0x0D       // newlines
+      ) {
+        good++;
+      }
+    }
+  }
+  return total === 0 ? 0 : good / total;
 }
 
 // ─── Header Detection ────────────────────────────────────────────────────────
@@ -533,14 +555,21 @@ export function loadPokemonTextFile(
   const sampleTexts = entries.slice(0, Math.min(20, entries.length)).filter(e => e.text.length > 0);
   const gibberishCount = sampleTexts.filter(e => isGibberish(e.text)).length;
 
+  // Check readability — try without encryption and compare
   let encrypted = true;
-  if (sampleTexts.length > 0 && gibberishCount / sampleTexts.length > 0.5) {
-    // Retry without encryption
-    if (header.type === 'v1-flat') {
-      entries = readLines(view, bytes, headerOffset, header, false);
-    } else {
-      entries = readSectionBased(view, bytes, headerOffset, header, false);
-    }
+  const scoreEncrypted = readabilityScore(entries);
+
+  let entriesNoEncrypt: PokemonTextEntry[];
+  if (header.type === 'v1-flat') {
+    entriesNoEncrypt = readLines(view, bytes, headerOffset, header, false);
+  } else {
+    entriesNoEncrypt = readSectionBased(view, bytes, headerOffset, header, false);
+  }
+  const scoreNoEncrypt = readabilityScore(entriesNoEncrypt);
+
+  // Pick whichever produces more readable text
+  if (scoreNoEncrypt > scoreEncrypted) {
+    entries = entriesNoEncrypt;
     encrypted = false;
   }
 

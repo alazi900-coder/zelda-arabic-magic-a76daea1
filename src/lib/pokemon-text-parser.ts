@@ -320,7 +320,10 @@ function readLines(
     let userParam = 0;
 
     if (dataLength > 0 && dataOffset + dataLength <= bytes.length) {
-      let lineBytes = new Uint8Array(bytes.slice(dataOffset, dataOffset + dataLength));
+      const sliced = bytes.slice(dataOffset, dataOffset + dataLength);
+      let lineBytes = new Uint8Array(sliced.buffer instanceof ArrayBuffer ? sliced.buffer : new ArrayBuffer(sliced.length)) as Uint8Array<ArrayBuffer>;
+      if (!(sliced.buffer instanceof ArrayBuffer)) lineBytes.set(sliced);
+      else lineBytes = new Uint8Array(sliced) as Uint8Array<ArrayBuffer>;
 
       if (useEncryption) {
         lineBytes = cryptLineData(lineBytes, lineKey);

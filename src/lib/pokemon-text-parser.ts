@@ -555,14 +555,21 @@ export function loadPokemonTextFile(
   const sampleTexts = entries.slice(0, Math.min(20, entries.length)).filter(e => e.text.length > 0);
   const gibberishCount = sampleTexts.filter(e => isGibberish(e.text)).length;
 
+  // Check readability — try without encryption and compare
   let encrypted = true;
-  if (sampleTexts.length > 0 && gibberishCount / sampleTexts.length > 0.5) {
-    // Retry without encryption
-    if (header.type === 'v1-flat') {
-      entries = readLines(view, bytes, headerOffset, header, false);
-    } else {
-      entries = readSectionBased(view, bytes, headerOffset, header, false);
-    }
+  const scoreEncrypted = readabilityScore(entries);
+
+  let entriesNoEncrypt: PokemonTextEntry[];
+  if (header.type === 'v1-flat') {
+    entriesNoEncrypt = readLines(view, bytes, headerOffset, header, false);
+  } else {
+    entriesNoEncrypt = readSectionBased(view, bytes, headerOffset, header, false);
+  }
+  const scoreNoEncrypt = readabilityScore(entriesNoEncrypt);
+
+  // Pick whichever produces more readable text
+  if (scoreNoEncrypt > scoreEncrypted) {
+    entries = entriesNoEncrypt;
     encrypted = false;
   }
 

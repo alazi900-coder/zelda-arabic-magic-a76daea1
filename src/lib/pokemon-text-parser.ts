@@ -248,10 +248,12 @@ function tryV1Flat(view: DataView, base: number, bufLen: number): HeaderInfo | n
 }
 
 function detectHeader(view: DataView, bufLen: number): { header: HeaderInfo; offset: number } | null {
-  // Try at offset 0 first
+  // Try at offset 0 first, but only accept validated layouts
   for (const tryFn of [tryV2U16, tryV2U32, tryV1Flat]) {
     const h = tryFn(view, 0, bufLen);
-    if (h) return { header: h, offset: 0 };
+    if (h && validateTableLayout(view, bufLen, 0, h)) {
+      return { header: h, offset: 0 };
+    }
   }
 
   // Scan for valid header elsewhere (e.g. after container header)
@@ -276,23 +278,52 @@ function validateTableLayout(
   base: number,
   header: HeaderInfo
 ): boolean {
-  const tableStart = base + header.sectionDataOffset;
   const sampleCount = Math.min(header.lineCount, 64);
+
+  if (header.type === 'v1-flat') {
+    const tableStart = base + header.sectionDataOffset;
+    for (let i = 0; i < sampleCount; i++) {
+      const entryPos = tableStart + i * 8;
+      if (entryPos + 8 > bufLen) return false;
+
+      const offset = view.getUint32(entryPos, true);
+      const length = view.getUint32(entryPos + 4, true);
+      if (offset > bufLen || length > bufLen) return false;
+      if (length > 0 && offset + length > bufLen) return false;
+    }
+    return true;
+  }
+
+  const sectionOffsetsPos = base + (header.type === 'v2-u16' ? 16 : 20);
+  if (sectionOffsetsPos + 4 > bufLen) return false;
+
+  const firstSectionOffset = view.getUint32(sectionOffsetsPos, true);
+  const sectionBase = firstSectionOffset > 0 ? base + firstSectionOffset : base + header.sectionDataOffset;
+  if (sectionBase + 4 > bufLen) return false;
+
+  const blockSize = view.getUint32(sectionBase, true);
+  if (blockSize < 4 || sectionBase + blockSize > bufLen) return false;
+
+  const tableStart = sectionBase + 4;
+  let nonEmptySeen = 0;
 
   for (let i = 0; i < sampleCount; i++) {
     const entryPos = tableStart + i * 8;
     if (entryPos + 8 > bufLen) return false;
 
-    const offset = view.getUint32(entryPos, true);
-    const length = view.getUint32(entryPos + 4, true);
+    const strOffset = view.getUint32(entryPos, true);
+    const strLen = view.getUint16(entryPos + 4, true);
 
-    // Offset should be within file
-    if (offset > bufLen) return false;
-    // Length in bytes shouldn't exceed remaining
-    if (length > bufLen) return false;
-    // Empty lines are OK (length=0)
+    if (strOffset >= blockSize) return false;
+    if (strLen > 0) {
+      nonEmptySeen++;
+      const absOffset = sectionBase + strOffset;
+      const byteLen = strLen * 2;
+      if (absOffset + byteLen > sectionBase + blockSize) return false;
+    }
   }
-  return true;
+
+  return sampleCount === 0 || nonEmptySeen > 0;
 }
 
 // ─── Read Lines ──────────────────────────────────────────────────────────────

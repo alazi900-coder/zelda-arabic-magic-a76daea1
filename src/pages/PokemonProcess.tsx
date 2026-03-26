@@ -40,17 +40,15 @@ export default function PokemonProcess() {
     if (!files?.length) return;
     setLoading(true);
 
-    const newLoaded: FileInfo[] = [...loadedFiles];
-    const newParsed = new Map(parsedFiles);
-    const newEntries: ParsedEntry[] = [...entries];
-
-    // Group .dat and .tbl by name
+    // Group .dat and .tbl by name first so re-uploads replace older results
     const fileMap = new Map<string, { dat?: File; tbl?: File }>();
     const jsonFiles: File[] = [];
+    const incomingBaseNames = new Set<string>();
 
     for (const file of Array.from(files)) {
       const ext = file.name.split('.').pop()?.toLowerCase();
       const baseName = file.name.replace(/\.(dat|tbl|json)$/i, '');
+      incomingBaseNames.add(baseName);
 
       if (ext === 'dat') {
         const group = fileMap.get(baseName) || {};
@@ -64,6 +62,10 @@ export default function PokemonProcess() {
         jsonFiles.push(file);
       }
     }
+
+    const newLoaded: FileInfo[] = loadedFiles.filter(file => !incomingBaseNames.has(file.name.replace(/\.(dat|tbl|json)$/i, '')));
+    const newParsed = new Map(Array.from(parsedFiles.entries()).filter(([name]) => !incomingBaseNames.has(name)));
+    const newEntries: ParsedEntry[] = entries.filter(entry => !incomingBaseNames.has(entry.sourceFile));
 
     // Process .dat/.tbl pairs
     for (const [baseName, group] of fileMap) {

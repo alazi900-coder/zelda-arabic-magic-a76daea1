@@ -199,21 +199,29 @@ export default function PokemonProcess() {
     toast({ title: "تم تصدير ملفات .dat", description: `${parsedFiles.size} ملف` });
   }, [entries, parsedFiles, toast]);
 
-  const handleOpenEditor = useCallback(() => {
-    const editorData = {
-      entries: entries.map((e, i) => ({
-        msbtFile: e.sourceFile,
-        index: i,
-        label: e.key,
-        original: e.original,
-        maxBytes: 9999,
-      })),
-      translations: Object.fromEntries(entries.filter(e => e.translation).map(e => [e.key, e.translation])),
-      glossary,
-      game: "pokemon",
-    };
-    sessionStorage.setItem("pokemon-editor-data", JSON.stringify(editorData));
-    navigate("/editor?source=pokemon");
+  const handleOpenEditor = useCallback(async () => {
+    const editorEntries = entries.map((e, i) => ({
+      msbtFile: e.sourceFile,
+      index: i,
+      label: e.key,
+      original: e.original,
+      maxBytes: 9999,
+    }));
+    const translations = Object.fromEntries(
+      entries.filter(e => e.translation?.trim()).map(e => [`${e.sourceFile}:${entries.indexOf(e)}`, e.translation])
+    );
+
+    await idbSet("editorState", {
+      entries: editorEntries,
+      translations,
+      freshExtraction: true,
+    });
+
+    if (glossary) {
+      await idbSet("editorGlossary", glossary);
+    }
+
+    navigate("/editor");
   }, [entries, glossary, navigate]);
 
   const translatedCount = entries.filter(e => e.translation.trim()).length;

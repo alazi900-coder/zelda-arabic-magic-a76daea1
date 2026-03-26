@@ -348,6 +348,43 @@ function validateTableLayout(
   return sampleCount === 0 || nonEmptySeen > 0;
 }
 
+// ─── Raw UTF-16LE fallback ───────────────────────────────────────────────────
+
+function tryRawUtf16(bytes: Uint8Array): PokemonTextEntry[] {
+  if (bytes.length < 4 || bytes.length % 2 !== 0) return [];
+  
+  const codeCount = bytes.length / 2;
+  const codes = new Uint16Array(codeCount);
+  for (let i = 0; i < codeCount; i++) {
+    codes[i] = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
+  }
+  
+  const entries: PokemonTextEntry[] = [];
+  let start = 0;
+  for (let i = 0; i <= codeCount; i++) {
+    if (i === codeCount || codes[i] === 0) {
+      if (i > start) {
+        const slice = codes.slice(start, i);
+        const text = decodeLine(slice);
+        if (text.trim()) {
+          entries.push({
+            index: entries.length,
+            label: String(entries.length),
+            text,
+            originalText: text,
+            userParam: 0,
+            rawCodes: slice,
+          });
+        }
+      }
+      start = i + 1;
+    }
+  }
+  
+  if (entries.length > 0 && readabilityScore(entries) > 0.5) return entries;
+  return [];
+}
+
 // ─── Read Lines ──────────────────────────────────────────────────────────────
 
 function readLines(

@@ -153,6 +153,29 @@ export default function PokemonProcess() {
     setEntries(newEntries);
     setLoading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
+
+    // فتح المحرر مباشرة بعد رفع الملفات
+    if (newEntries.length > 0) {
+      const editorEntries = newEntries.map((e, i) => ({
+        msbtFile: e.sourceFile,
+        index: i,
+        label: e.key,
+        original: e.original,
+        maxBytes: 9999,
+      }));
+      const translations = Object.fromEntries(
+        newEntries.filter(e => e.translation?.trim()).map(e => [`${e.sourceFile}:${newEntries.indexOf(e)}`, e.translation])
+      );
+
+      await idbSet("editorState", {
+        entries: editorEntries,
+        translations,
+        glossary: glossary || "",
+        freshExtraction: true,
+      });
+
+      navigate("/editor");
+    }
   }, [entries, loadedFiles, parsedFiles, toast]);
 
   const handleGlossaryUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {

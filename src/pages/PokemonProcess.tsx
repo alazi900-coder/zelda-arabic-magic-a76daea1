@@ -212,8 +212,8 @@ export default function PokemonProcess() {
       game: "pokemon",
     };
     sessionStorage.setItem("pokemon-editor-data", JSON.stringify(editorData));
-    window.location.href = "/editor?source=pokemon";
-  }, [entries, glossary]);
+    navigate("/editor?source=pokemon");
+  }, [entries, glossary, navigate]);
 
   const translatedCount = entries.filter(e => e.translation.trim()).length;
   const datFilesCount = loadedFiles.filter(f => f.type === "dat").length;

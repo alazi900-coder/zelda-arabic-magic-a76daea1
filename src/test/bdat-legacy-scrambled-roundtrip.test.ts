@@ -15,7 +15,7 @@ function scrambleSection(buf: Uint8Array, startIdx: number, endIdx: number, key:
   }
 }
 
-function buildScrambledLegacyBdat(strings: string[]): Uint8Array {
+function buildScrambledLegacyBdat(strings: string[], trailingPad = 32): Uint8Array {
   const encoder = new TextEncoder();
   const tableName = "TestTable_ms";
   const colName = "caption";
@@ -49,7 +49,7 @@ function buildScrambledLegacyBdat(strings: string[]): Uint8Array {
     strPos += b.length;
   }
   const stringTableLength = strPos;
-  const tableSize = stringTableOffset + stringTableLength;
+  const tableSize = stringTableOffset + stringTableLength + trailingPad;
 
   const tableData = new Uint8Array(tableSize);
   const view = new DataView(tableData.buffer);
@@ -92,6 +92,10 @@ function buildScrambledLegacyBdat(strings: string[]): Uint8Array {
     wp += b.length;
   }
 
+  for (let i = stringTableOffset + stringTableLength; i < tableSize; i++) {
+    tableData[i] = 0xaa;
+  }
+
   scrambleSection(tableData, nameTableOffset, hashTableOffset, scrambleKey);
   scrambleSection(tableData, stringTableOffset, stringTableOffset + stringTableLength, scrambleKey);
 
@@ -117,6 +121,7 @@ describe("Legacy BDAT scrambled roundtrip", () => {
 
     const result = patchBdatFile(parsed, translations);
     expect(result.patchedCount).toBe(1);
+    expect(result.result.byteLength).toBeGreaterThanOrEqual(fileData.byteLength);
 
     const reparsed = parseBdatFile(result.result);
     expect(reparsed.tables.length).toBe(1);

@@ -172,6 +172,7 @@ export function patchBdatFile(
 
     // Track whether this table has MessageId (u16) columns
     const hasU16Columns = stringColumns.some(c => c.valueType === BdatValueType.MessageId);
+    const isLegacyTable = !!table._raw.isLegacy;
 
     const origView = new DataView(origTableData.buffer, origTableData.byteOffset, origTableData.byteLength);
 
@@ -185,7 +186,7 @@ export function patchBdatFile(
       colName: string;
       cellOffset: number;
       isMessageId: boolean;
-      origStrOffset: number;  // original offset in string table
+      origStrOffset: number;  // offset in string table (RELATIVE, even for legacy — we normalize)
       origStr: string;        // original string text
       translationKey: string; // "tableName:row:colName"
       translation: string | undefined; // translated text (undefined = keep original)
@@ -209,10 +210,19 @@ export function patchBdatFile(
         // Bounds check for reading
         if (cellOffset + ptrSize > origTableData.length) continue;
 
-        const strOff = col.valueType === BdatValueType.MessageId
-          ? origView.getUint16(cellOffset, true)
-          : origView.getUint32(cellOffset, true);
-        if (strOff === 0) continue;
+        let strOff: number; // always normalize to RELATIVE to string table
+        if (col.valueType === BdatValueType.MessageId) {
+          strOff = origView.getUint16(cellOffset, true);
+        } else if (isLegacyTable) {
+          // Legacy: pointers are ABSOLUTE from table start → convert to relative
+          const absPtr = origView.getUint32(cellOffset, true);
+          if (absPtr === 0) continue;
+          strOff = absPtr - raw.stringTableOffset;
+          if (strOff < 0 || absPtr >= origTableData.length) continue;
+        } else {
+          strOff = origView.getUint32(cellOffset, true);
+        }
+        if (strOff === 0 && !isLegacyTable) continue;
 
         const absStrOffset = raw.stringTableOffset + strOff;
         if (absStrOffset >= origTableData.length) continue;

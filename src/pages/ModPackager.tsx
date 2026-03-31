@@ -5,8 +5,9 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { ArrowRight, ArrowUp, ArrowDown, ArrowLeft, Package, Upload, FileType, FolderArchive, CheckCircle2, Info, Download, Loader2, MoveVertical, Search, Eye, Grid3X3, ImageDown, ImageUp, Replace, Trash2, Pencil, AlignCenter, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, ChevronDown, Crosshair, Type } from "lucide-react";
+import { ArrowRight, ArrowUp, ArrowDown, ArrowLeft, Package, Upload, FileType, FolderArchive, CheckCircle2, Info, Download, Loader2, MoveVertical, Search, Eye, Grid3X3, ImageDown, ImageUp, Replace, Trash2, Pencil, AlignCenter, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, ChevronDown, Crosshair, Type, Image as ImageIcon } from "lucide-react";
 import { analyzeWifnt, decodeWifntTexture, renderAtlasToCanvas, rebuildWifnt, type WifntInfo } from "@/lib/wifnt-parser";
+import { analyzeWilay, decodeWilayTextureAsync, exportWilayTextureAsPNG, replaceWilayTexture, type WilayInfo, type WilayTextureInfo } from "@/lib/wilay-parser";
 import GlyphDrawingEditor from "@/components/editor/GlyphDrawingEditor";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 

@@ -8,6 +8,7 @@ import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
 import { balanceLines, hasOrphanLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
+import { fixMixedBidi } from "@/lib/arabic-processing";
 import { computeConfidence, detectLiteralTranslation } from "./TranslationProgressDashboard";
 
 /** Renders text with technical tags highlighted visually */
@@ -267,7 +268,10 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20">🔤 أحرف ملتصقة</span>
                 )}
                 {isMixedLanguage(translation) && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">🌐 عربي + إنجليزي</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 cursor-pointer hover:bg-primary/20" onClick={() => {
+                    const fixed = fixMixedBidi(translation);
+                    if (fixed !== translation) updateTranslation(key, fixed);
+                  }} title="اضغط لإصلاح اتجاه النص">🌐 إصلاح الاتجاه ↩</span>
                 )}
                 {isDamagedTag && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">⚠️ رموز تالفة</span>

@@ -8,6 +8,7 @@ import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
 import { splitEvenlyByLines } from "@/lib/balance-lines";
+import { fixMixedBidi } from "@/lib/arabic-processing";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
@@ -135,6 +136,8 @@ export function useEditorTranslation({
       }
       // Auto-sync line count to match English source
       result = autoSyncLines(key, result, entry);
+      // Fix BiDi alignment for mixed Arabic/English
+      result = fixMixedBidi(result);
       fixed[key] = result;
     }
     return fixed;
@@ -181,6 +184,8 @@ export function useEditorTranslation({
         }
         // Auto-sync line count to match English source
         translated = autoSyncLines(key, translated, entry);
+        // Fix BiDi alignment for mixed Arabic/English
+        translated = fixMixedBidi(translated);
         updateTranslation(key, translated);
       }
     } catch (err) {

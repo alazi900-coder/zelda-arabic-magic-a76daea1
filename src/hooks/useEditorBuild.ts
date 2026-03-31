@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import type { IntegrityCheckResult } from "@/components/editor/IntegrityCheckDialog";
 import { idbGet } from "@/lib/idb-storage";
 import { processArabicText, hasArabicChars as hasArabicCharsProcessing, hasArabicPresentationForms, removeArabicPresentationForms, reverseBidi } from "@/lib/arabic-processing";
+import { stripBidiMarkers } from "@/lib/arabic-processing";
 import { EditorState, hasTechnicalTags, restoreTagsLocally } from "@/components/editor/types";
 import { BuildPreview } from "@/components/editor/BuildConfirmDialog";
 import type { MutableRefObject } from "react";
@@ -254,6 +255,10 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         let strippedNewlineCount = 0;
         for (const [key, value] of Object.entries(nonEmptyTranslations)) {
           if (!value?.trim()) continue;
+          // Strip BiDi isolate markers before game build
+          if (value.includes('\u2068') || value.includes('\u2069')) {
+            nonEmptyTranslations[key] = stripBidiMarkers(value);
+          }
           // Strip \n from bubble dialogue files
           if (value.includes('\n') && BUBBLE_FILE_PATTERNS.test(key)) {
             nonEmptyTranslations[key] = value.replace(/\n/g, ' ');

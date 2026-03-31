@@ -530,12 +530,24 @@ export function patchBdatFile(
 
     // ---- Step 7: Update stringTableLength in table header ----
     if (isLegacyTable) {
-      // Legacy header: stringTableOffset at 0x18, stringTableLength at 0x1C
       safeSetUint32(newTableView, 0x1C, finalStringTableLength, true);
     } else if (raw.isU32Layout) {
       safeSetUint32(newTableView, 0x2C, finalStringTableLength, true);
     } else {
       safeSetUint32(newTableView, 0x24, finalStringTableLength, true);
+    }
+
+    // ---- Step 7.5: Re-scramble legacy tables if originally scrambled ----
+    if (isLegacyTable && raw.isScrambled && raw.scrambleKey) {
+      const nameTableOff = newTableView.getUint16(0x06, true);
+      const hashTableOff = newTableView.getUint16(0x0A, true);
+      const newStrTableOff = newTableView.getUint32(0x18, true);
+      const newStrTableLen = newTableView.getUint32(0x1C, true);
+      // Section 1: name table → hash table
+      scrambleSection(newTableData, nameTableOff, hashTableOff, raw.scrambleKey);
+      // Section 2: string table
+      scrambleSection(newTableData, newStrTableOff, newStrTableOff + newStrTableLen, raw.scrambleKey);
+      console.log(`[BDAT-WRITER] Re-scrambled table "${table.name}" with key 0x${raw.scrambleKey.toString(16)}`);
     }
 
     patchedCount += tablePatchedCount;

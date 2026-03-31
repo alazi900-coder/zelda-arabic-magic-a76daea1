@@ -394,14 +394,21 @@ export function parseBdatFile(data: Uint8Array, unhashFn?: (hash: number) => str
   }
 
   const tables: BdatTable[] = [];
+  // For legacy files: compute table extents (each table's full size including padding)
+  const sortedOffsets = [...tableOffsets].sort((a, b) => a - b);
 
   console.log(`[BDAT-PARSER] File: version=0x${version.toString(16)}, tableCount=${tableOffsets.length}, fileSize=${fileSize}`);
   for (let t = 0; t < tableOffsets.length; t++) {
     const tableOffset = tableOffsets[t];
     
+    // Calculate max extent for this table (up to next table or EOF)
+    const sortIdx = sortedOffsets.indexOf(tableOffset);
+    const nextTableOffset = sortIdx + 1 < sortedOffsets.length ? sortedOffsets[sortIdx + 1] : data.byteLength;
+    const maxExtent = nextTableOffset - tableOffset;
+    
     // Check if this table uses legacy format (XC1/XC2/XCDE)
     if (isLegacyTable(data, tableOffset)) {
-      const legacyTable = parseLegacyTable(data, tableOffset, t);
+      const legacyTable = parseLegacyTable(data, tableOffset, t, maxExtent);
       if (legacyTable) {
         tables.push(legacyTable);
       } else {
@@ -463,7 +470,31 @@ export function parseBdatFile(data: Uint8Array, unhashFn?: (hash: number) => str
     });
   }
 
-  return { tables, version, fileSize, _raw: data };
+  // Build legacy offset entries for the writer to preserve file structure
+  let legacyOffsetEntries: BdatFile['_legacyOffsetEntries'];
+  if (magic !== 'BDAT' && typeof allOffsets !== 'undefined') {
+    legacyOffsetEntries = [];
+    // Sort all offsets to compute extents
+    const validOffsetsSet = new Set(tableOffsets);
+    for (let i = 0; i < allOffsets.length; i++) {
+      const off = allOffsets[i];
+      const isTable = validOffsetsSet.has(off);
+      if (isTable) {
+        // Find this table's data in the parsed tables
+        const tbl = tables.find(t => t._raw.tableOffset === off);
+        legacyOffsetEntries.push({
+          offset: off,
+          data: tbl ? tbl._raw.tableData : data.slice(off, off),
+          isTable: true,
+        });
+      } else {
+        // Sentinel or non-table entry
+        legacyOffsetEntries.push({ offset: off, data: new Uint8Array(0), isTable: false });
+      }
+    }
+  }
+
+  return { tables, version, fileSize, _raw: data, _legacyOffsetEntries: legacyOffsetEntries };
 }
 
 /**

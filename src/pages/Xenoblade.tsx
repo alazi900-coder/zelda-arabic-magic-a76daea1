@@ -54,11 +54,6 @@ const Xenoblade = forwardRef<HTMLDivElement>((_, ref) => {
                 بناء حزمة المود 📦
               </Button>
             </Link>
-            <Link to="/mod-packager#wilay-viewer">
-              <Button size="lg" variant="ghost" className="font-display font-bold text-lg px-10 py-6 hover:bg-primary/10">
-                🖼️ عارض صور WILAY
-              </Button>
-            </Link>
             <Link to="/mod-packager#dat-extractor">
               <Button size="lg" variant="ghost" className="font-display font-bold text-lg px-10 py-6 hover:bg-primary/10">
                 <FolderOpen className="w-5 h-5 ml-2" />

@@ -564,6 +564,67 @@ export function patchBdatFile(
   }
 
   // ---- Step 8: Rebuild the full file ----
+  if (isLegacyFile && bdatFile._legacyOffsetEntries) {
+    // Use legacy offset entries to preserve exact file structure
+    const entries = bdatFile._legacyOffsetEntries;
+    
+    // Map parsed table offsets → new table buffers
+    const tableBufferMap = new Map<number, Uint8Array>();
+    for (let t = 0; t < bdatFile.tables.length; t++) {
+      tableBufferMap.set(bdatFile.tables[t]._raw.tableOffset, newTableBuffers[t]);
+    }
+    
+    // Calculate new offsets and total size
+    let currentOffset = fileHeaderSize;
+    const newEntryOffsets: { offset: number; data: Uint8Array }[] = [];
+    
+    for (const entry of entries) {
+      if (entry.isTable) {
+        const buf = tableBufferMap.get(entry.offset) || entry.data;
+        newEntryOffsets.push({ offset: currentOffset, data: buf });
+        currentOffset += buf.length;
+      } else {
+        // Sentinel — will be updated to file size later
+        newEntryOffsets.push({ offset: 0, data: new Uint8Array(0) });
+      }
+    }
+    const newFileSize = currentOffset;
+    
+    const result = new Uint8Array(newFileSize);
+    const resultView = new DataView(result.buffer);
+    
+    // Write header
+    const entryCount = originalView.getUint32(0, true);
+    resultView.setUint32(0, entryCount, true);
+    
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].isTable) {
+        resultView.setUint32(4 + i * 4, newEntryOffsets[i].offset, true);
+      } else {
+        resultView.setUint32(4 + i * 4, newFileSize, true);
+      }
+    }
+    
+    // Write table data
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].isTable && newEntryOffsets[i].data.length > 0) {
+        result.set(newEntryOffsets[i].data, newEntryOffsets[i].offset);
+      }
+    }
+    
+    console.log(`[BDAT-WRITER] Patch complete: ${patchedCount} patched, ${skippedCount} skipped, ${overflowErrors.length} errors`);
+    console.log(`[BDAT-WRITER] Legacy file: ${originalData.byteLength} → ${newFileSize} bytes`);
+    for (const stat of tableStats) {
+      if (stat.stringsPatched > 0 || stat.stringsSkipped > 0) {
+        const growth = stat.newStringTableSize - stat.originalStringTableSize;
+        console.log(`[BDAT-WRITER]   ${stat.tableName}: ${stat.stringsPatched} patched, ${stat.stringsSkipped} skipped, string table ${growth >= 0 ? '+' : ''}${growth} bytes${stat.hasU16Columns ? ' (has u16 MessageId)' : ''}`);
+      }
+    }
+    
+    return { result, overflowErrors, patchedCount, skippedCount, tableStats };
+  }
+
+  // Non-legacy path (XC3) or legacy without offset entries
   const newTableOffsets: number[] = [];
   let currentFileOffset = fileHeaderSize;
   for (const buf of newTableBuffers) {
@@ -576,33 +637,23 @@ export function patchBdatFile(
   const resultView = new DataView(result.buffer);
 
   if (isLegacyFile) {
-    // Legacy header: preserve original offset array structure exactly
-    // Original: count(u32) + count × u32 offsets
-    // Some files have sentinel entries (fileSize), some don't — we preserve the exact count
-    // and rebuild offsets to match new table positions
     const entryCount = originalView.getUint32(0, true);
     resultView.setUint32(0, entryCount, true);
-    
-    // Read original offsets to understand the structure (which are tables, which are sentinels)
     let tableIdx = 0;
     for (let i = 0; i < entryCount; i++) {
       const origOff = originalView.getUint32(4 + i * 4, true);
-      // Check if this was a valid table offset in the original file
       if (origOff < originalData.byteLength && origOff + 4 <= originalData.byteLength &&
           originalData[origOff] === 0x42 && originalData[origOff+1] === 0x44 &&
           originalData[origOff+2] === 0x41 && originalData[origOff+3] === 0x54) {
-        // This was a real table — write the new offset
         if (tableIdx < newTableOffsets.length) {
           resultView.setUint32(4 + i * 4, newTableOffsets[tableIdx], true);
           tableIdx++;
         }
       } else {
-        // This was a sentinel or padding — write new file size
         resultView.setUint32(4 + i * 4, newFileSize, true);
       }
     }
   } else {
-    // Modern XC3 header
     result.set(originalData.subarray(0, 16));
     resultView.setUint32(12, newFileSize, true);
     for (let t = 0; t < newTableOffsets.length; t++) {

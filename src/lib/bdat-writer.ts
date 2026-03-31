@@ -172,6 +172,7 @@ export function patchBdatFile(
 
     // Track whether this table has MessageId (u16) columns
     const hasU16Columns = stringColumns.some(c => c.valueType === BdatValueType.MessageId);
+    const isLegacyTable = !!table._raw.isLegacy;
 
     const origView = new DataView(origTableData.buffer, origTableData.byteOffset, origTableData.byteLength);
 
@@ -185,7 +186,7 @@ export function patchBdatFile(
       colName: string;
       cellOffset: number;
       isMessageId: boolean;
-      origStrOffset: number;  // original offset in string table
+      origStrOffset: number;  // offset in string table (RELATIVE, even for legacy — we normalize)
       origStr: string;        // original string text
       translationKey: string; // "tableName:row:colName"
       translation: string | undefined; // translated text (undefined = keep original)
@@ -209,10 +210,19 @@ export function patchBdatFile(
         // Bounds check for reading
         if (cellOffset + ptrSize > origTableData.length) continue;
 
-        const strOff = col.valueType === BdatValueType.MessageId
-          ? origView.getUint16(cellOffset, true)
-          : origView.getUint32(cellOffset, true);
-        if (strOff === 0) continue;
+        let strOff: number; // always normalize to RELATIVE to string table
+        if (col.valueType === BdatValueType.MessageId) {
+          strOff = origView.getUint16(cellOffset, true);
+        } else if (isLegacyTable) {
+          // Legacy: pointers are ABSOLUTE from table start → convert to relative
+          const absPtr = origView.getUint32(cellOffset, true);
+          if (absPtr === 0) continue;
+          strOff = absPtr - raw.stringTableOffset;
+          if (strOff < 0 || absPtr >= origTableData.length) continue;
+        } else {
+          strOff = origView.getUint32(cellOffset, true);
+        }
+        if (strOff === 0 && !isLegacyTable) continue;
 
         const absStrOffset = raw.stringTableOffset + strOff;
         if (absStrOffset >= origTableData.length) continue;
@@ -456,29 +466,44 @@ export function patchBdatFile(
 
     for (let i = 0; i < newStringEntries.length; i++) {
       const entry = newStringEntries[i];
-      const newOff = entryOffsets[i];
+      const newRelOff = entryOffsets[i]; // relative to string table start
 
       for (const cell of entry.cells) {
         if (cell.isMessageId) {
-          if (!safeSetUint16(newTableView, cell.cellOffset, newOff, true)) {
+          if (!safeSetUint16(newTableView, cell.cellOffset, newRelOff, true)) {
             overflowErrors.push({
               key: cell.translationKey,
               originalBytes: encoder.encode(cell.origStr).length + 1,
               translationBytes: entry.bytes.length + 1,
               reason: 'write_error',
-              newOffset: newOff,
+              newOffset: newRelOff,
             });
             skippedCount++;
             continue;
           }
-        } else {
-          if (!safeSetUint32(newTableView, cell.cellOffset, newOff, true)) {
+        } else if (isLegacyTable) {
+          // Legacy: write ABSOLUTE pointer (from table start)
+          const absOff = raw.stringTableOffset + newRelOff;
+          if (!safeSetUint32(newTableView, cell.cellOffset, absOff, true)) {
             overflowErrors.push({
               key: cell.translationKey,
               originalBytes: encoder.encode(cell.origStr).length + 1,
               translationBytes: entry.bytes.length + 1,
               reason: 'bounds_exceeded',
-              newOffset: newOff,
+              newOffset: absOff,
+            });
+            skippedCount++;
+            continue;
+          }
+        } else {
+          // Modern: write relative offset
+          if (!safeSetUint32(newTableView, cell.cellOffset, newRelOff, true)) {
+            overflowErrors.push({
+              key: cell.translationKey,
+              originalBytes: encoder.encode(cell.origStr).length + 1,
+              translationBytes: entry.bytes.length + 1,
+              reason: 'bounds_exceeded',
+              newOffset: newRelOff,
             });
             skippedCount++;
             continue;
@@ -488,7 +513,10 @@ export function patchBdatFile(
     }
 
     // ---- Step 7: Update stringTableLength in table header ----
-    if (raw.isU32Layout) {
+    if (isLegacyTable) {
+      // Legacy header: stringTableOffset at 0x18, stringTableLength at 0x1C
+      safeSetUint32(newTableView, 0x1C, finalStringTableLength, true);
+    } else if (raw.isU32Layout) {
       safeSetUint32(newTableView, 0x2C, finalStringTableLength, true);
     } else {
       safeSetUint32(newTableView, 0x24, finalStringTableLength, true);
@@ -520,14 +548,30 @@ export function patchBdatFile(
   const resultView = new DataView(result.buffer);
 
   if (isLegacyFile) {
-    // Legacy header: count(u32) + offset array (first entry = file size sentinel)
+    // Legacy header: preserve original offset array structure exactly
+    // Original: count(u32) + count × u32 offsets
+    // Some files have sentinel entries (fileSize), some don't — we preserve the exact count
+    // and rebuild offsets to match new table positions
     const entryCount = originalView.getUint32(0, true);
     resultView.setUint32(0, entryCount, true);
-    // First offset entry is the file size sentinel
-    resultView.setUint32(4, newFileSize, true);
-    // Remaining entries are the actual table offsets
-    for (let t = 0; t < newTableOffsets.length; t++) {
-      resultView.setUint32(4 + (t + 1) * 4, newTableOffsets[t], true);
+    
+    // Read original offsets to understand the structure (which are tables, which are sentinels)
+    let tableIdx = 0;
+    for (let i = 0; i < entryCount; i++) {
+      const origOff = originalView.getUint32(4 + i * 4, true);
+      // Check if this was a valid table offset in the original file
+      if (origOff < originalData.byteLength && origOff + 4 <= originalData.byteLength &&
+          originalData[origOff] === 0x42 && originalData[origOff+1] === 0x44 &&
+          originalData[origOff+2] === 0x41 && originalData[origOff+3] === 0x54) {
+        // This was a real table — write the new offset
+        if (tableIdx < newTableOffsets.length) {
+          resultView.setUint32(4 + i * 4, newTableOffsets[tableIdx], true);
+          tableIdx++;
+        }
+      } else {
+        // This was a sentinel or padding — write new file size
+        resultView.setUint32(4 + i * 4, newFileSize, true);
+      }
     }
   } else {
     // Modern XC3 header

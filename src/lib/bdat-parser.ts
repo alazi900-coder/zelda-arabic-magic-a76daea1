@@ -78,6 +78,7 @@ export interface BdatTable {
     hashedNames: boolean;
     baseId: number;
     isU32Layout: boolean;  // true = 48-byte header (u32 offsets), false = 40-byte header (u16 offsets)
+    isLegacy?: boolean;    // true = XC1/XC2/XCDE legacy format (absolute string pointers)
   };
 }
 

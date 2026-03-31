@@ -76,7 +76,6 @@ const encoder = new TextEncoder();
 
 /**
  * Read a null-terminated UTF-8 string from a buffer at the given offset.
- * Returns the string and the number of bytes consumed (including null terminator).
  */
 function readNullTermStr(data: Uint8Array, offset: number): { str: string; byteLen: number } {
   if (offset >= data.length) return { str: '', byteLen: 1 };
@@ -85,13 +84,31 @@ function readNullTermStr(data: Uint8Array, offset: number): { str: string; byteL
   const bytes = data.slice(offset, end);
   return {
     str: new TextDecoder('utf-8').decode(bytes),
-    byteLen: end - offset + 1, // +1 for null terminator
+    byteLen: end - offset + 1,
   };
 }
 
 /**
+ * Scramble (encrypt) a section using the XOR key — inverse of unscramble.
+ * In unscramble: save encrypted bytes → XOR → update keys with encrypted bytes.
+ * In scramble: XOR first → save encrypted bytes → update keys with encrypted bytes.
+ */
+function scrambleSection(buf: Uint8Array, startIdx: number, endIdx: number, key: number): void {
+  let k1 = ((key >> 8) & 0xFF) ^ 0xFF;
+  let k2 = (key & 0xFF) ^ 0xFF;
+  let pos = startIdx;
+  while (pos + 1 < endIdx) {
+    buf[pos] ^= k1;
+    buf[pos + 1] ^= k2;
+    // After XOR, the values are now encrypted — use them for key update
+    k1 = (k1 + buf[pos]) & 0xFF;
+    k2 = (k2 + buf[pos + 1]) & 0xFF;
+    pos += 2;
+  }
+}
+
+/**
  * Safely write a Uint16 value, checking for overflow.
- * Returns true if successful, false if value exceeds u16 range.
  */
 function safeSetUint16(view: DataView, offset: number, value: number, littleEndian: boolean): boolean {
   if (value > 0xFFFF || value < 0) return false;
@@ -102,7 +119,6 @@ function safeSetUint16(view: DataView, offset: number, value: number, littleEndi
 
 /**
  * Safely write a Uint32 value, checking bounds.
- * Returns true if successful, false if out of bounds.
  */
 function safeSetUint32(view: DataView, offset: number, value: number, littleEndian: boolean): boolean {
   if (offset + 4 > view.byteLength) return false;

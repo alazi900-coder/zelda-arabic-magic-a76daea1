@@ -279,6 +279,97 @@ export default function ModPackager() {
     void handleScanDatForFonts(files);
   }, [handleScanDatForFonts]);
 
+  // ── WILAY handlers ──────────────────────────────────────────────────
+  const handleWilayUpload = useCallback(async (file: File) => {
+    setWilayLoading(true);
+    setWilayPreviews(new Map());
+    try {
+      const buf = await file.arrayBuffer();
+      const info = analyzeWilay(buf);
+      setWilayFile({ name: file.name, data: buf });
+      setWilayInfo(info);
+      // Decode previews
+      const previews = new Map<number, HTMLCanvasElement>();
+      for (const tex of info.textures) {
+        try {
+          const result = await decodeWilayTextureAsync(buf, tex);
+          if (result) {
+            previews.set(tex.index, result.canvas);
+            // Update dimensions if unknown (JPEG)
+            if (tex.width === 0) { tex.width = result.width; tex.height = result.height; }
+          }
+        } catch (e) { console.warn(`Failed to decode texture ${tex.index}:`, e); }
+      }
+      setWilayPreviews(previews);
+    } catch (e) { console.error('WILAY parse error:', e); }
+    setWilayLoading(false);
+  }, []);
+
+  const handleWilayExportTexture = useCallback(async (tex: WilayTextureInfo) => {
+    if (!wilayFile) return;
+    const blob = await exportWilayTextureAsPNG(wilayFile.data, tex);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${wilayFile.name}_texture_${tex.index}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [wilayFile]);
+
+  const handleWilayExportAll = useCallback(async () => {
+    if (!wilayFile || !wilayInfo) return;
+    for (const tex of wilayInfo.textures) {
+      await handleWilayExportTexture(tex);
+    }
+  }, [wilayFile, wilayInfo, handleWilayExportTexture]);
+
+  const handleWilayReplaceTexture = useCallback(async (file: File, texIndex: number) => {
+    if (!wilayFile || !wilayInfo) return;
+    const tex = wilayInfo.textures[texIndex];
+    if (!tex || tex.type !== 'mibl') return;
+
+    // Load replacement image
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = url; });
+    URL.revokeObjectURL(url);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = tex.width; canvas.height = tex.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, tex.width, tex.height);
+    const imgData = ctx.getImageData(0, 0, tex.width, tex.height);
+
+    const newData = replaceWilayTexture(wilayFile.data, tex, new Uint8Array(imgData.data.buffer), tex.width, tex.height);
+    if (!newData) return;
+
+    // Update state with new file
+    setWilayFile({ name: wilayFile.name, data: newData });
+    const newInfo = analyzeWilay(newData);
+    setWilayInfo(newInfo);
+
+    // Re-decode previews
+    const previews = new Map<number, HTMLCanvasElement>();
+    for (const t of newInfo.textures) {
+      try {
+        const result = await decodeWilayTextureAsync(newData, t);
+        if (result) previews.set(t.index, result.canvas);
+      } catch {}
+    }
+    setWilayPreviews(previews);
+  }, [wilayFile, wilayInfo]);
+
+  const handleWilayDownload = useCallback(() => {
+    if (!wilayFile) return;
+    const blob = new Blob([wilayFile.data]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = wilayFile.name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [wilayFile]);
+
   // DAT Explorer: analyze files in a folder
   const getMagicString = useCallback((bytes: Uint8Array): string => {
     if (bytes.length < 4) return "??";

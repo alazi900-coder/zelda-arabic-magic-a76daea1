@@ -53,10 +53,6 @@ export function unscrambleSection(buf: Uint8Array, startIdx: number, endIdx: num
     k2 = (k2 + b) & 0xFF;
     pos += 2;
   }
-  // Handle odd byte
-  if (pos < endIdx) {
-    buf[pos] ^= k1;
-  }
 }
 
 interface LegacyTableHeader {

@@ -548,14 +548,30 @@ export function patchBdatFile(
   const resultView = new DataView(result.buffer);
 
   if (isLegacyFile) {
-    // Legacy header: count(u32) + offset array (first entry = file size sentinel)
+    // Legacy header: preserve original offset array structure exactly
+    // Original: count(u32) + count × u32 offsets
+    // Some files have sentinel entries (fileSize), some don't — we preserve the exact count
+    // and rebuild offsets to match new table positions
     const entryCount = originalView.getUint32(0, true);
     resultView.setUint32(0, entryCount, true);
-    // First offset entry is the file size sentinel
-    resultView.setUint32(4, newFileSize, true);
-    // Remaining entries are the actual table offsets
-    for (let t = 0; t < newTableOffsets.length; t++) {
-      resultView.setUint32(4 + (t + 1) * 4, newTableOffsets[t], true);
+    
+    // Read original offsets to understand the structure (which are tables, which are sentinels)
+    let tableIdx = 0;
+    for (let i = 0; i < entryCount; i++) {
+      const origOff = originalView.getUint32(4 + i * 4, true);
+      // Check if this was a valid table offset in the original file
+      if (origOff < originalData.byteLength && origOff + 4 <= originalData.byteLength &&
+          originalData[origOff] === 0x42 && originalData[origOff+1] === 0x44 &&
+          originalData[origOff+2] === 0x41 && originalData[origOff+3] === 0x54) {
+        // This was a real table — write the new offset
+        if (tableIdx < newTableOffsets.length) {
+          resultView.setUint32(4 + i * 4, newTableOffsets[tableIdx], true);
+          tableIdx++;
+        }
+      } else {
+        // This was a sentinel or padding — write new file size
+        resultView.setUint32(4 + i * 4, newFileSize, true);
+      }
     }
   } else {
     // Modern XC3 header

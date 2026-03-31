@@ -167,7 +167,8 @@ export function patchBdatFile(
 
   for (const table of bdatFile.tables) {
     const raw = table._raw;
-    const origTableData = raw.tableData; // original bytes for this table
+    const origTableData = raw.tableData; // parsed/unscrambled bytes for logical editing
+    const originalTableBytes = raw.originalTableData ?? raw.tableData; // original on-disk bytes for untouched regions
 
     const stringColumns = table.columns.filter(
       c => c.valueType === BdatValueType.String || c.valueType === BdatValueType.DebugString || c.valueType === BdatValueType.MessageId,

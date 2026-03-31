@@ -289,6 +289,16 @@ function stripDiacritics(text: string): string {
 }
 
 export function processArabicText(text: string, options?: { arabicNumerals?: boolean; mirrorPunct?: boolean }): string {
+  if (!hasArabicChars(text)) return text;
+  // Strip diacritics first — game font cannot render combining marks (shows dotted circle)
+  let result = stripDiacritics(text);
+  // Reshape Arabic letters (connect them) then reverse BiDi for LTR game engine
+  result = reshapeArabic(result);
+  result = reverseBidi(result);
+  if (options?.arabicNumerals) result = convertToArabicNumerals(result);
+  if (options?.mirrorPunct) result = mirrorPunctuation(result);
+  return result;
+}
 
 // === BiDi Alignment Fix for Mixed Arabic/English Text ===
 
@@ -296,7 +306,7 @@ const LRI = '\u2068'; // Left-to-Right Isolate
 const PDI = '\u2069'; // Pop Directional Isolate
 const TAG_BIDI_RE = /\[[^\]]*\]|\{[^}]*\}|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC]/g;
 const ENG_SEQ_RE = /[a-zA-Z][a-zA-Z0-9]*(?:[\s/\\-][a-zA-Z][a-zA-Z0-9]*)*/g;
-const ARABIC_CHECK_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+const ARABIC_CHECK_BIDI_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
 
 /**
  * Fix BiDi alignment issues in mixed Arabic/English text.
@@ -305,17 +315,15 @@ const ARABIC_CHECK_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
  * Safe to call multiple times (idempotent).
  */
 export function fixMixedBidi(text: string): string {
-  if (!text || !ARABIC_CHECK_RE.test(text)) return text;
+  if (!text || !ARABIC_CHECK_BIDI_RE.test(text)) return text;
   return text.split('\n').map(line => {
     if (!line.trim() || line.includes(LRI)) return line;
-    // Collect tag ranges to skip
     const tagRanges: [number, number][] = [];
     const tagRe = new RegExp(TAG_BIDI_RE.source, TAG_BIDI_RE.flags);
     let m: RegExpExecArray | null;
     while ((m = tagRe.exec(line)) !== null) {
       tagRanges.push([m.index, m.index + m[0].length]);
     }
-    // Find English sequences
     const engRe = new RegExp(ENG_SEQ_RE.source, ENG_SEQ_RE.flags);
     const replacements: { start: number; end: number; text: string }[] = [];
     while ((m = engRe.exec(line)) !== null) {
@@ -338,14 +346,4 @@ export function fixMixedBidi(text: string): string {
 /** Strip all BiDi isolate/embedding markers (used before game build) */
 export function stripBidiMarkers(text: string): string {
   return text.replace(/[\u2066-\u2069\u202A-\u202E]/g, '');
-}
-  if (!hasArabicChars(text)) return text;
-  // Strip diacritics first — game font cannot render combining marks (shows dotted circle)
-  let result = stripDiacritics(text);
-  // Reshape Arabic letters (connect them) then reverse BiDi for LTR game engine
-  result = reshapeArabic(result);
-  result = reverseBidi(result);
-  if (options?.arabicNumerals) result = convertToArabicNumerals(result);
-  if (options?.mirrorPunct) result = mirrorPunctuation(result);
-  return result;
 }

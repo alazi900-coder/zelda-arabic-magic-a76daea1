@@ -376,15 +376,18 @@ export function parseBdatFile(data: Uint8Array, unhashFn?: (hash: number) => str
     }
     version = 0;
     fileSize = data.byteLength;
-    tableOffsets = [];
+    
+    // Read ALL offset entries (including sentinels)
+    const allOffsets: number[] = [];
     for (let t = 0; t < tableCount; t++) {
-      const off = view.getUint32(4 + t * 4, true);
-      // Skip sentinel entries (offset = fileSize or beyond data)
-      if (off < data.byteLength) {
-        // Verify this offset actually has BDAT magic
-        if (off + 4 <= data.byteLength && data[off] === 0x42 && data[off+1] === 0x44 && data[off+2] === 0x41 && data[off+3] === 0x54) {
-          tableOffsets.push(off);
-        }
+      allOffsets.push(view.getUint32(4 + t * 4, true));
+    }
+    
+    tableOffsets = [];
+    for (const off of allOffsets) {
+      if (off < data.byteLength && off + 4 <= data.byteLength &&
+          data[off] === 0x42 && data[off+1] === 0x44 && data[off+2] === 0x41 && data[off+3] === 0x54) {
+        tableOffsets.push(off);
       }
     }
     console.log(`[BDAT-PARSER] Legacy format detected: ${tableCount} entries, ${tableOffsets.length} valid tables`);

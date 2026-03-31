@@ -480,7 +480,7 @@ export function decodeWilayTexture(
   canvas.height = result.height;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
-  const imgData = new ImageData(new Uint8ClampedArray(result.rgba.buffer), result.width, result.height);
+  const imgData = new ImageData(new Uint8ClampedArray(result.rgba), result.width, result.height);
   ctx.putImageData(imgData, 0, 0);
   return { canvas, width: result.width, height: result.height };
 }

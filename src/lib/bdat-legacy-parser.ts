@@ -411,6 +411,8 @@ export function parseLegacyTable(
     baseId: hdr.baseId,
     isU32Layout: false,
     isLegacy: true,
+    isScrambled: (hdr.flags & 0x02) !== 0 && hdr.scrambleKey !== 0,
+    scrambleKey: hdr.scrambleKey,
   };
 
   if (tableIndex < 5) {

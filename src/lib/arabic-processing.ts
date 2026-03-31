@@ -289,6 +289,56 @@ function stripDiacritics(text: string): string {
 }
 
 export function processArabicText(text: string, options?: { arabicNumerals?: boolean; mirrorPunct?: boolean }): string {
+
+// === BiDi Alignment Fix for Mixed Arabic/English Text ===
+
+const LRI = '\u2068'; // Left-to-Right Isolate
+const PDI = '\u2069'; // Pop Directional Isolate
+const TAG_BIDI_RE = /\[[^\]]*\]|\{[^}]*\}|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC]/g;
+const ENG_SEQ_RE = /[a-zA-Z][a-zA-Z0-9]*(?:[\s/\\-][a-zA-Z][a-zA-Z0-9]*)*/g;
+const ARABIC_CHECK_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
+
+/**
+ * Fix BiDi alignment issues in mixed Arabic/English text.
+ * Wraps English segments with LRI (U+2068) and PDI (U+2069)
+ * Unicode isolate markers so they don't disrupt RTL paragraph flow.
+ * Safe to call multiple times (idempotent).
+ */
+export function fixMixedBidi(text: string): string {
+  if (!text || !ARABIC_CHECK_RE.test(text)) return text;
+  return text.split('\n').map(line => {
+    if (!line.trim() || line.includes(LRI)) return line;
+    // Collect tag ranges to skip
+    const tagRanges: [number, number][] = [];
+    const tagRe = new RegExp(TAG_BIDI_RE.source, TAG_BIDI_RE.flags);
+    let m: RegExpExecArray | null;
+    while ((m = tagRe.exec(line)) !== null) {
+      tagRanges.push([m.index, m.index + m[0].length]);
+    }
+    // Find English sequences
+    const engRe = new RegExp(ENG_SEQ_RE.source, ENG_SEQ_RE.flags);
+    const replacements: { start: number; end: number; text: string }[] = [];
+    while ((m = engRe.exec(line)) !== null) {
+      const s = m.index, e = s + m[0].length;
+      if (tagRanges.some(([ts, te]) => s >= ts && e <= te)) continue;
+      replacements.push({ start: s, end: e, text: `${LRI}${m[0]}${PDI}` });
+    }
+    if (replacements.length === 0) return line;
+    let result = '';
+    let lastEnd = 0;
+    for (const r of replacements) {
+      result += line.slice(lastEnd, r.start) + r.text;
+      lastEnd = r.end;
+    }
+    result += line.slice(lastEnd);
+    return result;
+  }).join('\n');
+}
+
+/** Strip all BiDi isolate/embedding markers (used before game build) */
+export function stripBidiMarkers(text: string): string {
+  return text.replace(/[\u2066-\u2069\u202A-\u202E]/g, '');
+}
   if (!hasArabicChars(text)) return text;
   // Strip diacritics first — game font cannot render combining marks (shows dotted circle)
   let result = stripDiacritics(text);

@@ -516,17 +516,26 @@ export function patchBdatFile(
   }
   const newFileSize = currentFileOffset;
 
-  // Build the new file
   const result = new Uint8Array(newFileSize);
   const resultView = new DataView(result.buffer);
 
-  // Write file header (magic + version + tableCount + fileSize)
-  result.set(originalData.subarray(0, 16));
-  resultView.setUint32(12, newFileSize, true); // update file size
-
-  // Write table offsets
-  for (let t = 0; t < newTableOffsets.length; t++) {
-    resultView.setUint32(16 + t * 4, newTableOffsets[t], true);
+  if (isLegacyFile) {
+    // Legacy header: count(u32) + offset array (first entry = file size sentinel)
+    const entryCount = originalView.getUint32(0, true);
+    resultView.setUint32(0, entryCount, true);
+    // First offset entry is the file size sentinel
+    resultView.setUint32(4, newFileSize, true);
+    // Remaining entries are the actual table offsets
+    for (let t = 0; t < newTableOffsets.length; t++) {
+      resultView.setUint32(4 + (t + 1) * 4, newTableOffsets[t], true);
+    }
+  } else {
+    // Modern XC3 header
+    result.set(originalData.subarray(0, 16));
+    resultView.setUint32(12, newFileSize, true);
+    for (let t = 0; t < newTableOffsets.length; t++) {
+      resultView.setUint32(16 + t * 4, newTableOffsets[t], true);
+    }
   }
 
   // Write table data

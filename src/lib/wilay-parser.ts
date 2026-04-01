@@ -263,12 +263,15 @@ function decodeMiblToRGBA(miblData: Uint8Array): { rgba: Uint8Array; width: numb
   const bc = isBC(fmt);
   const bytesPerPx = bpp(fmt);
 
-  // Compute swizzled size for mip 0 only
+  // Use block height from footer (blockHeightLog2 field)
+  const blockH = 1 << Math.min(footer.blockHeightLog2, 4); // clamp to max 16
+
+  // Compute unit dimensions for mip 0
   let wU: number, hU: number;
   if (bc) { wU = divRoundUp(w, 4); hU = divRoundUp(h, 4); }
   else { wU = w; hU = h; }
 
-  const linear = deswizzle(miblData, wU, hU, bytesPerPx);
+  const linear = deswizzle(miblData, wU, hU, bytesPerPx, blockH);
 
   let rgba: Uint8Array;
   switch (fmt) {
@@ -278,11 +281,11 @@ function decodeMiblToRGBA(miblData: Uint8Array): { rgba: Uint8Array; width: numb
     case 77: rgba = decodeBC7(linear, w, h); break;
     case 37: // RGBA8 – already decoded
       rgba = new Uint8Array(w * h * 4);
-      rgba.set(bc ? linear : deswizzle(miblData, w, h, 4));
+      rgba.set(bc ? linear : deswizzle(miblData, w, h, 4, blockH));
       break;
     case 109: // BGRA8 → RGBA8
       rgba = new Uint8Array(w * h * 4);
-      const src = deswizzle(miblData, w, h, 4);
+      const src = deswizzle(miblData, w, h, 4, blockH);
       for (let i = 0; i < w * h; i++) {
         rgba[i * 4] = src[i * 4 + 2]; rgba[i * 4 + 1] = src[i * 4 + 1];
         rgba[i * 4 + 2] = src[i * 4]; rgba[i * 4 + 3] = src[i * 4 + 3];

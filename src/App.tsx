@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 
 const Xenoblade = lazy(() => import("./pages/Xenoblade"));
 const XenobladeProcess = lazy(() => import("./pages/XenobladeProcess"));
+const WilayViewer = lazy(() => import("./pages/WilayViewer"));
 const Pokemon = lazy(() => import("./pages/Pokemon"));
 const PokemonProcess = lazy(() => import("./pages/PokemonProcess"));
 const Editor = lazy(() => import("./pages/Editor"));

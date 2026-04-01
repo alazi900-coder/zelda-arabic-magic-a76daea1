@@ -495,7 +495,31 @@ function scanForMiblTextures(bytes: Uint8Array, textures: WilayTextureInfo[]): v
         formatName: fmtName(footer.imageFormat),
         type: 'mibl',
       });
+}
+
+/** Fallback: scan for embedded JPEG images (FFD8FF magic) */
+function scanForJPEGTextures(bytes: Uint8Array, textures: WilayTextureInfo[]): void {
+  for (let i = 0; i < bytes.length - 3; i++) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8 && bytes[i + 2] === 0xFF) {
+      // Find JPEG end marker (FFD9)
+      let end = -1;
+      for (let j = i + 3; j < bytes.length - 1; j++) {
+        if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) { end = j + 2; break; }
+      }
+      if (end === -1 || end - i < 100) continue; // too small
+      textures.push({
+        index: textures.length,
+        dataOffset: i,
+        dataSize: end - i,
+        footer: null,
+        width: 0, height: 0,
+        formatName: 'JPEG',
+        type: 'jpeg',
+      });
+      i = end; // skip past this JPEG
     }
+  }
+}
   }
 }
 

@@ -99,7 +99,7 @@ const Xenoblade = forwardRef<HTMLDivElement>((_, ref) => {
             <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
               عرض واستخراج وتعديل صور واجهة اللعبة بصيغة WILAY — استبدل الصور بسهولة وأعد بناء الملف
             </p>
-            <Link to="/mod-packager#wilay-viewer">
+            <Link to="/wilay">
               <Button size="lg" className="font-display font-bold text-xl px-12 py-7 bg-primary hover:bg-primary/90 shadow-xl shadow-primary/30">
                 🖼️ افتح أداة WILAY
               </Button>

@@ -24,7 +24,7 @@ async function decompressDeflate(bytes: Uint8Array): Promise<Uint8Array | null> 
     const ds = new DecompressionStream("deflate");
     const writer = ds.writable.getWriter();
     const reader = ds.readable.getReader();
-    await writer.write(bytes);
+    await writer.write(toArrayBuffer(bytes));
     await writer.close();
 
     const chunks: Uint8Array[] = [];

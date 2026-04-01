@@ -117,6 +117,7 @@ export default function WilayViewer() {
   const handleFilesUpload = useCallback(async (fileArray: File[]) => {
     if (fileArray.length === 0) return;
     setLoading(true);
+    setParseErrors([]);
     const errors: string[] = [];
     const newFiles: LoadedFile[] = [];
 

@@ -12,6 +12,7 @@ import {
   analyzeWilay, decodeWilayTextureAsync, exportWilayTextureAsPNG,
   replaceWilayTexture, type WilayInfo, type WilayTextureInfo
 } from "@/lib/wilay-parser";
+import { unwrapWilaySource } from "@/lib/xbc1-utils";
 import JSZip from "jszip";
 
 type ChannelMode = 'rgba' | 'red' | 'green' | 'blue' | 'alpha';
@@ -122,16 +123,23 @@ export default function WilayViewer() {
     for (let i = 0; i < fileArray.length; i++) {
       const file = fileArray[i];
       try {
-        const buf = await file.arrayBuffer();
-        const info = analyzeWilay(buf);
+        const rawBuffer = await file.arrayBuffer();
+        const source = await unwrapWilaySource(rawBuffer);
+        const info = analyzeWilay(source.data);
+        const sourceMagic = source.changed ? `${source.outerMagic} → ${source.innerMagic}` : source.outerMagic;
+        const unwrapLabel = source.steps.length > 0 ? ` بعد فك ${source.steps.join(" + ")}` : "";
+        const displayName = file.webkitRelativePath || source.archiveName || file.name;
+
         if (!info.valid) {
-          errors.push(`${file.name}: صيغة غير مدعومة (${info.magic})`);
+          errors.push(`${displayName}: صيغة غير مدعومة (${sourceMagic})`);
           continue;
         }
+
         if (info.textures.length === 0) {
-          errors.push(`${file.name}: لا يحتوي على صور (${info.magic} v${info.version}، ${(buf.byteLength / 1024).toFixed(0)} KB)`);
+          errors.push(`${displayName}: لا يحتوي على صور${unwrapLabel} (${info.magic} v${info.version}، ${(source.data.byteLength / 1024).toFixed(0)} KB)`);
         }
-        newFiles.push({ name: file.name, data: buf, info });
+
+        newFiles.push({ name: displayName, data: source.data, info });
       } catch (e) {
         errors.push(`${file.name}: خطأ في القراءة — ${e instanceof Error ? e.message : String(e)}`);
       }

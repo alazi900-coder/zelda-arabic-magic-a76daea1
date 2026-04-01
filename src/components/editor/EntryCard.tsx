@@ -268,10 +268,21 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20">🔤 أحرف ملتصقة</span>
                 )}
                 {isMixedLanguage(translation) && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 cursor-pointer hover:bg-primary/20" onClick={() => {
-                    const fixed = fixMixedBidi(translation);
-                    if (fixed !== translation) updateTranslation(key, fixed);
-                  }} title="اضغط لإصلاح اتجاه النص">🌐 إصلاح الاتجاه ↩</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20">🌐 لغة مختلطة</span>
+                )}
+                {translation && /[a-zA-Z]/.test(translation) && hasArabicContent(translation) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[11px] px-2 gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                    onClick={() => {
+                      const fixed = fixMixedBidi(translation);
+                      if (fixed !== translation) updateTranslation(key, fixed);
+                    }}
+                    title="إصلاح اتجاه النص المختلط عربي-إنجليزي"
+                  >
+                    🌐 إصلاح الاتجاه ↩
+                  </Button>
                 )}
                 {isDamagedTag && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">⚠️ رموز تالفة</span>

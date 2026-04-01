@@ -21,30 +21,36 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 async function decompressDeflate(bytes: Uint8Array): Promise<Uint8Array | null> {
   try {
-    const ds = new DecompressionStream("deflate");
-    const writer = ds.writable.getWriter();
-    const reader = ds.readable.getReader();
-    await writer.write(toArrayBuffer(bytes));
-    await writer.close();
+    const result = await Promise.race([
+      (async () => {
+        const ds = new DecompressionStream("deflate");
+        const writer = ds.writable.getWriter();
+        const reader = ds.readable.getReader();
+        writer.write(toArrayBuffer(bytes)).catch(() => {});
+        writer.close().catch(() => {});
 
-    const chunks: Uint8Array[] = [];
-    let totalLen = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      totalLen += value.length;
-    }
+        const chunks: Uint8Array[] = [];
+        let totalLen = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          totalLen += value.length;
+        }
 
-    if (totalLen === 0) return null;
+        if (totalLen === 0) return null;
 
-    const out = new Uint8Array(totalLen);
-    let offset = 0;
-    for (const chunk of chunks) {
-      out.set(chunk, offset);
-      offset += chunk.length;
-    }
-    return out;
+        const out = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const chunk of chunks) {
+          out.set(chunk, offset);
+          offset += chunk.length;
+        }
+        return out;
+      })(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+    ]);
+    return result;
   } catch {
     return null;
   }
@@ -85,6 +91,8 @@ async function parseXbc1Payload(buffer: ArrayBuffer): Promise<{ data: ArrayBuffe
   return null;
 }
 
+const WILAY_MAGICS = ["LAHD", "LAGP", "LAPS"];
+
 export async function unwrapWilaySource(
   buffer: ArrayBuffer,
   depth = 3,
@@ -96,7 +104,8 @@ export async function unwrapWilaySource(
   const currentMagic = getMagicString(bytes);
   const firstMagic = outerMagic ?? currentMagic;
 
-  if (depth <= 0 || bytes.length < 4) {
+  // If the current data is already a recognized WILAY format, stop unwrapping
+  if (depth <= 0 || bytes.length < 4 || WILAY_MAGICS.includes(currentMagic)) {
     return {
       data: buffer,
       outerMagic: firstMagic,

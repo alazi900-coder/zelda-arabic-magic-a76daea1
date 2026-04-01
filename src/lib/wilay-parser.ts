@@ -65,10 +65,10 @@ function getAddrBlockLinear(x: number, y: number, _w: number, bytesPerPx: number
   return gobAddr + inGob;
 }
 
-function deswizzle(src: Uint8Array, wUnits: number, hUnits: number, bytesPerPx: number): Uint8Array {
+function deswizzle(src: Uint8Array, wUnits: number, hUnits: number, bytesPerPx: number, blockHeightOverride?: number): Uint8Array {
   const byteW = wUnits * bytesPerPx;
   const gobsX = divRoundUp(byteW, 64);
-  const blockH = getBlockHeight(hUnits);
+  const blockH = blockHeightOverride ?? getBlockHeight(hUnits);
   const out = new Uint8Array(wUnits * hUnits * bytesPerPx);
   for (let y = 0; y < hUnits; y++) {
     for (let x = 0; x < wUnits; x++) {

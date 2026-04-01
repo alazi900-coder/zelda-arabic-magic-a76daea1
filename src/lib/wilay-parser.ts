@@ -418,9 +418,50 @@ export function analyzeWilay(data: ArrayBuffer): WilayInfo {
     }
   }
 
-  // If pointer-based parsing failed, scan for embedded LBIM footers
+  // If pointer-based parsing found nothing, try alternative header offsets
+  if (textures.length === 0) {
+    // Try scanning known alternative pointer locations
+    const altOffsets = [24, 28, 32, 40, 44, 48, 52, 56, 60, 64];
+    for (const off of altOffsets) {
+      if (off + 4 > data.byteLength) continue;
+      const ptr = view.getUint32(off, true);
+      if (ptr > 0 && ptr + 8 <= data.byteLength && ptr !== texturesPtr) {
+        try {
+          const tBase = ptr;
+          const iOff = view.getUint32(tBase, true);
+          const iCount = view.getUint32(tBase + 4, true);
+          if (iCount > 0 && iCount < 10000 && tBase + iOff + iCount * 12 <= data.byteLength) {
+            for (let i = 0; i < iCount; i++) {
+              const itemOff = tBase + iOff + i * 12;
+              if (itemOff + 12 > data.byteLength) break;
+              const dOff = view.getUint32(itemOff + 4, true);
+              const dSize = view.getUint32(itemOff + 8, true);
+              const absOff = tBase + dOff;
+              if (absOff + dSize > data.byteLength || dSize === 0 || dSize > data.byteLength) continue;
+              const miblBuf = bytes.subarray(absOff, absOff + dSize);
+              const footer = parseMiblFooter(miblBuf);
+              if (footer && footer.width > 0 && footer.height > 0 && footer.width <= 8192 && footer.height <= 8192) {
+                textures.push({
+                  index: textures.length, dataOffset: absOff, dataSize: dSize, footer,
+                  width: footer.width, height: footer.height, formatName: fmtName(footer.imageFormat), type: 'mibl',
+                });
+              }
+            }
+          }
+        } catch {}
+      }
+      if (textures.length > 0) break;
+    }
+  }
+
+  // Still nothing? Scan for LBIM footers
   if (textures.length === 0) {
     scanForMiblTextures(bytes, textures);
+  }
+
+  // Also scan for embedded JPEG data (FFD8 magic)
+  if (textures.length === 0) {
+    scanForJPEGTextures(bytes, textures);
   }
 
   return { magic, version, fileSize: data.byteLength, textures, valid };
@@ -454,6 +495,30 @@ function scanForMiblTextures(bytes: Uint8Array, textures: WilayTextureInfo[]): v
         formatName: fmtName(footer.imageFormat),
         type: 'mibl',
       });
+    }
+  }
+}
+
+/** Fallback: scan for embedded JPEG images (FFD8FF magic) */
+function scanForJPEGTextures(bytes: Uint8Array, textures: WilayTextureInfo[]): void {
+  for (let i = 0; i < bytes.length - 3; i++) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8 && bytes[i + 2] === 0xFF) {
+      // Find JPEG end marker (FFD9)
+      let end = -1;
+      for (let j = i + 3; j < bytes.length - 1; j++) {
+        if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) { end = j + 2; break; }
+      }
+      if (end === -1 || end - i < 100) continue; // too small
+      textures.push({
+        index: textures.length,
+        dataOffset: i,
+        dataSize: end - i,
+        footer: null,
+        width: 0, height: 0,
+        formatName: 'JPEG',
+        type: 'jpeg',
+      });
+      i = end; // skip past this JPEG
     }
   }
 }

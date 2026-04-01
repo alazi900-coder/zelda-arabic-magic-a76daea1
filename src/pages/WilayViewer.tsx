@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Upload, Download, ImageDown, Replace, ArrowLeft, ZoomIn, ZoomOut,
-  Grid3X3, List, Layers, Eye, EyeOff, Search, RotateCcw, Loader2,
-  Image as ImageIcon, X, Check, AlertTriangle, ChevronLeft, ChevronRight
+  Grid3X3, List, Layers, Eye, Search, RotateCcw, Loader2,
+  Image as ImageIcon, X, Check, AlertTriangle, ChevronLeft, ChevronRight,
+  FolderOpen, FileImage, Trash2
 } from "lucide-react";
 import {
   analyzeWilay, decodeWilayTextureAsync, exportWilayTextureAsPNG,
@@ -23,16 +24,29 @@ interface DecodedTexture {
   height: number;
 }
 
+interface LoadedFile {
+  name: string;
+  data: ArrayBuffer;
+  info: WilayInfo;
+}
+
+// Combined texture reference pointing to its parent file
+interface CombinedTexture {
+  fileIndex: number;
+  tex: WilayTextureInfo;
+  globalIndex: number;
+}
+
 export default function WilayViewer() {
-  // File state
-  const [wilayFile, setWilayFile] = useState<{ name: string; data: ArrayBuffer } | null>(null);
-  const [wilayInfo, setWilayInfo] = useState<WilayInfo | null>(null);
-  const [decoded, setDecoded] = useState<Map<number, DecodedTexture>>(new Map());
+  // Multi-file state
+  const [files, setFiles] = useState<LoadedFile[]>([]);
+  const [decoded, setDecoded] = useState<Map<string, DecodedTexture>>(new Map()); // key = "fileIdx:texIdx"
   const [loading, setLoading] = useState(false);
   const [decodeProgress, setDecodeProgress] = useState({ current: 0, total: 0 });
+  const [parseErrors, setParseErrors] = useState<string[]>([]);
 
   // Selection & view
-  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+  const [selectedGlobalIndex, setSelectedGlobalIndex] = useState<number>(-1);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [channelMode, setChannelMode] = useState<ChannelMode>('rgba');
   const [showCheckerboard, setShowCheckerboard] = useState(true);
@@ -46,7 +60,7 @@ export default function WilayViewer() {
   const [formatFilter, setFormatFilter] = useState<string>('all');
 
   // Replace
-  const [replacePreview, setReplacePreview] = useState<{ url: string; file: File; tex: WilayTextureInfo } | null>(null);
+  const [replacePreview, setReplacePreview] = useState<{ url: string; file: File; ct: CombinedTexture } | null>(null);
 
   // Hex view
   const [showHex, setShowHex] = useState(false);
@@ -59,149 +73,217 @@ export default function WilayViewer() {
   // Drag & drop
   const [dragOver, setDragOver] = useState(false);
 
-  const handleFileUpload = useCallback(async (file: File) => {
-    setLoading(true);
-    setDecoded(new Map());
-    setSelectedIndex(-1);
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-    try {
-      const buf = await file.arrayBuffer();
-      const info = analyzeWilay(buf);
-      setWilayFile({ name: file.name, data: buf });
-      setWilayInfo(info);
+  // Build combined textures list from all files
+  const combinedTextures = useMemo<CombinedTexture[]>(() => {
+    const result: CombinedTexture[] = [];
+    let gi = 0;
+    for (let fi = 0; fi < files.length; fi++) {
+      for (const tex of files[fi].info.textures) {
+        result.push({ fileIndex: fi, tex, globalIndex: gi++ });
+      }
+    }
+    return result;
+  }, [files]);
 
-      const previews = new Map<number, DecodedTexture>();
-      setDecodeProgress({ current: 0, total: info.textures.length });
-      for (let i = 0; i < info.textures.length; i++) {
-        const tex = info.textures[i];
+  const texKey = (fi: number, ti: number) => `${fi}:${ti}`;
+
+  const handleFilesUpload = useCallback(async (newFileList: FileList) => {
+    setLoading(true);
+    const errors: string[] = [];
+    const newFiles: LoadedFile[] = [];
+
+    for (let i = 0; i < newFileList.length; i++) {
+      const file = newFileList[i];
+      try {
+        const buf = await file.arrayBuffer();
+        const info = analyzeWilay(buf);
+        if (!info.valid) {
+          errors.push(`${file.name}: صيغة غير مدعومة (${info.magic})`);
+          continue;
+        }
+        if (info.textures.length === 0) {
+          errors.push(`${file.name}: لا يحتوي على صور (${info.magic} v${info.version}، ${(buf.byteLength / 1024).toFixed(0)} KB)`);
+        }
+        newFiles.push({ name: file.name, data: buf, info });
+      } catch (e) {
+        errors.push(`${file.name}: خطأ في القراءة — ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    setParseErrors(errors);
+
+    setFiles(prev => {
+      const merged = [...prev, ...newFiles];
+      return merged;
+    });
+
+    // Decode textures for new files
+    const existingFileCount = files.length;
+    const newDecoded = new Map(decoded);
+    let totalNew = newFiles.reduce((s, f) => s + f.info.textures.length, 0);
+    let doneNew = 0;
+    setDecodeProgress({ current: 0, total: totalNew });
+
+    for (let fi = 0; fi < newFiles.length; fi++) {
+      const lf = newFiles[fi];
+      for (const tex of lf.info.textures) {
         try {
-          const result = await decodeWilayTextureAsync(buf, tex);
+          const result = await decodeWilayTextureAsync(lf.data, tex);
           if (result) {
-            previews.set(tex.index, {
+            newDecoded.set(texKey(existingFileCount + fi, tex.index), {
               canvas: result.canvas,
               dataUrl: result.canvas.toDataURL(),
               width: result.width,
               height: result.height,
             });
           }
-        } catch (e) { console.warn(`Decode fail ${tex.index}:`, e); }
-        setDecodeProgress({ current: i + 1, total: info.textures.length });
+        } catch (e) {
+          console.warn(`Decode fail ${lf.name}#${tex.index}:`, e);
+        }
+        doneNew++;
+        setDecodeProgress({ current: doneNew, total: totalNew });
       }
-      setDecoded(previews);
-      if (info.textures.length > 0) setSelectedIndex(0);
-    } catch (e) { console.error('WILAY parse error:', e); }
+    }
+
+    setDecoded(newDecoded);
+
+    // Auto-select first texture if none selected
+    if (newFiles.length > 0 && newFiles.some(f => f.info.textures.length > 0)) {
+      setSelectedGlobalIndex(prev => prev < 0 ? 0 : prev);
+    }
+
     setLoading(false);
-  }, []);
+  }, [files, decoded]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) void handleFileUpload(file);
-  }, [handleFileUpload]);
+    if (e.dataTransfer.files.length > 0) void handleFilesUpload(e.dataTransfer.files);
+  }, [handleFilesUpload]);
+
+  const handleRemoveFile = useCallback((fileIndex: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== fileIndex));
+    setDecoded(prev => {
+      const next = new Map<string, DecodedTexture>();
+      prev.forEach((v, k) => {
+        const [fi] = k.split(':').map(Number);
+        if (fi < fileIndex) next.set(k, v);
+        else if (fi > fileIndex) next.set(texKey(fi - 1, Number(k.split(':')[1])), v);
+      });
+      return next;
+    });
+    setSelectedGlobalIndex(-1);
+  }, []);
 
   // Export single
-  const handleExportTexture = useCallback(async (tex: WilayTextureInfo) => {
-    if (!wilayFile) return;
-    const blob = await exportWilayTextureAsPNG(wilayFile.data, tex);
+  const handleExportTexture = useCallback(async (ct: CombinedTexture) => {
+    const lf = files[ct.fileIndex];
+    if (!lf) return;
+    const blob = await exportWilayTextureAsPNG(lf.data, ct.tex);
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${wilayFile.name}_tex${tex.index}.png`;
+    a.download = `${lf.name}_tex${ct.tex.index}.png`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [wilayFile]);
+  }, [files]);
 
   // Export all as ZIP
   const handleExportAllZip = useCallback(async () => {
-    if (!wilayFile || !wilayInfo) return;
+    if (files.length === 0) return;
     const zip = new JSZip();
-    for (const tex of wilayInfo.textures) {
-      const blob = await exportWilayTextureAsPNG(wilayFile.data, tex);
-      if (blob) zip.file(`tex${tex.index}_${tex.width}x${tex.height}_${tex.formatName}.png`, blob);
+    for (const lf of files) {
+      const folder = files.length > 1 ? zip.folder(lf.name.replace(/\.[^.]+$/, ''))! : zip;
+      for (const tex of lf.info.textures) {
+        const blob = await exportWilayTextureAsPNG(lf.data, tex);
+        if (blob) folder.file(`tex${tex.index}_${tex.width}x${tex.height}_${tex.formatName}.png`, blob);
+      }
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${wilayFile.name}_textures.zip`;
+    a.download = files.length === 1 ? `${files[0].name}_textures.zip` : 'wilay_textures.zip';
     a.click();
     URL.revokeObjectURL(url);
-  }, [wilayFile, wilayInfo]);
+  }, [files]);
 
   // Export raw mibl
-  const handleExportRawMibl = useCallback((tex: WilayTextureInfo) => {
-    if (!wilayFile) return;
-    const bytes = new Uint8Array(wilayFile.data);
-    const raw = bytes.slice(tex.dataOffset, tex.dataOffset + tex.dataSize);
+  const handleExportRawMibl = useCallback((ct: CombinedTexture) => {
+    const lf = files[ct.fileIndex];
+    if (!lf) return;
+    const bytes = new Uint8Array(lf.data);
+    const raw = bytes.slice(ct.tex.dataOffset, ct.tex.dataOffset + ct.tex.dataSize);
     const blob = new Blob([raw]);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${wilayFile.name}_tex${tex.index}.mibl`;
+    a.download = `${lf.name}_tex${ct.tex.index}.mibl`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [wilayFile]);
+  }, [files]);
 
   // Replace texture
-  const handleStartReplace = useCallback((tex: WilayTextureInfo) => {
-    if (tex.type !== 'mibl') return;
+  const handleStartReplace = useCallback((ct: CombinedTexture) => {
+    if (ct.tex.type !== 'mibl') return;
     setReplacePreview(null);
     replaceInputRef.current?.click();
   }, []);
 
   const handleReplaceFileSelected = useCallback((file: File) => {
-    if (selectedIndex < 0 || !wilayInfo) return;
-    const tex = wilayInfo.textures[selectedIndex];
-    if (!tex) return;
+    const ct = combinedTextures[selectedGlobalIndex];
+    if (!ct) return;
     const url = URL.createObjectURL(file);
-    setReplacePreview({ url, file, tex });
-  }, [selectedIndex, wilayInfo]);
+    setReplacePreview({ url, file, ct });
+  }, [selectedGlobalIndex, combinedTextures]);
 
   const handleConfirmReplace = useCallback(async () => {
-    if (!replacePreview || !wilayFile || !wilayInfo) return;
-    const { file, tex } = replacePreview;
+    if (!replacePreview) return;
+    const { ct } = replacePreview;
+    const lf = files[ct.fileIndex];
+    if (!lf) return;
+
     const img = new Image();
     await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = replacePreview.url; });
     const canvas = document.createElement('canvas');
-    canvas.width = tex.width;
-    canvas.height = tex.height;
+    canvas.width = ct.tex.width;
+    canvas.height = ct.tex.height;
     const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(img, 0, 0, tex.width, tex.height);
-    const imgData = ctx.getImageData(0, 0, tex.width, tex.height);
-    const newData = replaceWilayTexture(wilayFile.data, tex, new Uint8Array(imgData.data.buffer), tex.width, tex.height);
+    ctx.drawImage(img, 0, 0, ct.tex.width, ct.tex.height);
+    const imgData = ctx.getImageData(0, 0, ct.tex.width, ct.tex.height);
+    const newData = replaceWilayTexture(lf.data, ct.tex, new Uint8Array(imgData.data.buffer), ct.tex.width, ct.tex.height);
     if (!newData) return;
 
     URL.revokeObjectURL(replacePreview.url);
     setReplacePreview(null);
-    setWilayFile({ name: wilayFile.name, data: newData });
-    const newInfo = analyzeWilay(newData);
-    setWilayInfo(newInfo);
 
-    // Re-decode
-    const previews = new Map<number, DecodedTexture>();
+    const newInfo = analyzeWilay(newData);
+    setFiles(prev => prev.map((f, i) => i === ct.fileIndex ? { ...f, data: newData, info: newInfo } : f));
+
+    // Re-decode for this file
+    const newDecoded = new Map(decoded);
     for (const t of newInfo.textures) {
       try {
         const result = await decodeWilayTextureAsync(newData, t);
-        if (result) previews.set(t.index, { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
+        if (result) newDecoded.set(texKey(ct.fileIndex, t.index), { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
       } catch {}
     }
-    setDecoded(previews);
-  }, [replacePreview, wilayFile, wilayInfo]);
+    setDecoded(newDecoded);
+  }, [replacePreview, files, decoded]);
 
   // Download modified file
-  const handleDownloadModified = useCallback(() => {
-    if (!wilayFile) return;
-    const blob = new Blob([wilayFile.data]);
+  const handleDownloadModified = useCallback((fileIndex: number) => {
+    const lf = files[fileIndex];
+    if (!lf) return;
+    const blob = new Blob([lf.data]);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = wilayFile.name;
+    a.download = lf.name;
     a.click();
     URL.revokeObjectURL(url);
-  }, [wilayFile]);
+  }, [files]);
 
   // Channel filter canvas
   const getChannelImage = useCallback((dec: DecodedTexture, mode: ChannelMode): string => {
@@ -245,32 +327,33 @@ export default function WilayViewer() {
 
   // Filtered textures
   const filteredTextures = useMemo(() => {
-    if (!wilayInfo) return [];
-    return wilayInfo.textures.filter(tex => {
-      if (formatFilter !== 'all' && tex.formatName !== formatFilter) return false;
+    return combinedTextures.filter(ct => {
+      if (formatFilter !== 'all' && ct.tex.formatName !== formatFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        return `#${tex.index}`.includes(q) || tex.formatName.toLowerCase().includes(q) || `${tex.width}x${tex.height}`.includes(q);
+        const fileName = files[ct.fileIndex]?.name?.toLowerCase() ?? '';
+        return `#${ct.globalIndex}`.includes(q) || ct.tex.formatName.toLowerCase().includes(q) || `${ct.tex.width}x${ct.tex.height}`.includes(q) || fileName.includes(q);
       }
       return true;
     });
-  }, [wilayInfo, formatFilter, searchQuery]);
+  }, [combinedTextures, formatFilter, searchQuery, files]);
 
   // Available formats
   const availableFormats = useMemo(() => {
-    if (!wilayInfo) return [];
-    return [...new Set(wilayInfo.textures.map(t => t.formatName))];
-  }, [wilayInfo]);
+    return [...new Set(combinedTextures.map(ct => ct.tex.formatName))];
+  }, [combinedTextures]);
 
-  const selectedTex = wilayInfo?.textures[selectedIndex] ?? null;
-  const selectedDec = selectedIndex >= 0 ? decoded.get(selectedIndex) : null;
+  const selectedCT = combinedTextures[selectedGlobalIndex] ?? null;
+  const selectedDec = selectedCT ? decoded.get(texKey(selectedCT.fileIndex, selectedCT.tex.index)) ?? null : null;
 
   // Hex view of footer
   const hexData = useMemo(() => {
-    if (!showHex || !wilayFile || !selectedTex) return '';
-    const bytes = new Uint8Array(wilayFile.data);
-    const start = selectedTex.dataOffset + selectedTex.dataSize - 40;
-    const end = selectedTex.dataOffset + selectedTex.dataSize;
+    if (!showHex || !selectedCT) return '';
+    const lf = files[selectedCT.fileIndex];
+    if (!lf) return '';
+    const bytes = new Uint8Array(lf.data);
+    const start = selectedCT.tex.dataOffset + selectedCT.tex.dataSize - 40;
+    const end = selectedCT.tex.dataOffset + selectedCT.tex.dataSize;
     if (start < 0) return '';
     const slice = bytes.slice(Math.max(0, start), end);
     const lines: string[] = [];
@@ -280,20 +363,20 @@ export default function WilayViewer() {
       lines.push(`${(start + i).toString(16).padStart(8, '0')}  ${hex.padEnd(47)}  ${ascii}`);
     }
     return lines.join('\n');
-  }, [showHex, wilayFile, selectedTex]);
+  }, [showHex, selectedCT, files]);
 
   // Navigate textures
   const goNext = useCallback(() => {
-    if (!wilayInfo || selectedIndex >= wilayInfo.textures.length - 1) return;
-    setSelectedIndex(i => i + 1);
+    if (selectedGlobalIndex >= combinedTextures.length - 1) return;
+    setSelectedGlobalIndex(i => i + 1);
     resetView();
-  }, [wilayInfo, selectedIndex, resetView]);
+  }, [combinedTextures, selectedGlobalIndex, resetView]);
 
   const goPrev = useCallback(() => {
-    if (selectedIndex <= 0) return;
-    setSelectedIndex(i => i - 1);
+    if (selectedGlobalIndex <= 0) return;
+    setSelectedGlobalIndex(i => i - 1);
     resetView();
-  }, [selectedIndex, resetView]);
+  }, [selectedGlobalIndex, resetView]);
 
   // Keyboard
   useEffect(() => {
@@ -309,7 +392,7 @@ export default function WilayViewer() {
   }, [goNext, goPrev, resetView]);
 
   // ── No file loaded: Upload screen ──
-  if (!wilayFile) {
+  if (files.length === 0) {
     return (
       <div className="min-h-screen flex flex-col bg-background" dir="rtl">
         <header className="h-14 border-b border-border flex items-center px-4 gap-3">
@@ -333,23 +416,36 @@ export default function WilayViewer() {
             عرض واستخراج وتعديل صور واجهة ألعاب Xenoblade بصيغة WILAY
             <br />
             <span className="text-xs">يدعم LAHD, LAGP, LAPS — أنسجة Mibl و JPEG</span>
+            <br />
+            <span className="text-xs text-primary font-bold">✨ يمكنك رفع عدة ملفات في وقت واحد</span>
           </p>
           <input
             ref={fileInputRef}
             type="file"
             className="sr-only"
-            accept=".wilay,.WILAY"
-            onChange={(e) => { if (e.target.files?.[0]) void handleFileUpload(e.target.files[0]); e.currentTarget.value = ""; }}
+            multiple
+            onChange={(e) => { if (e.target.files && e.target.files.length > 0) void handleFilesUpload(e.target.files); e.currentTarget.value = ""; }}
           />
           <Button size="lg" className="font-display font-bold text-lg px-12 py-7" onClick={() => fileInputRef.current?.click()}>
             <Upload className="w-5 h-5 ml-2" />
-            رفع ملف WILAY
+            رفع ملفات WILAY
           </Button>
-          <p className="text-xs text-muted-foreground">أو اسحب الملف وأفلته هنا</p>
+          <p className="text-xs text-muted-foreground">أو اسحب الملفات وأفلتها هنا • يقبل أي امتداد</p>
+
+          {parseErrors.length > 0 && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 max-w-md w-full">
+              <p className="text-sm font-bold text-destructive mb-2">⚠️ أخطاء:</p>
+              {parseErrors.map((err, i) => (
+                <p key={i} className="text-xs text-destructive/80">{err}</p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
   }
+
+  const totalTextures = combinedTextures.length;
 
   // ── Main viewer ──
   return (
@@ -359,30 +455,58 @@ export default function WilayViewer() {
         <Link to="/">
           <Button variant="ghost" size="icon" className="h-8 w-8"><ArrowLeft className="w-4 h-4" /></Button>
         </Link>
-        <span className="font-mono text-sm truncate max-w-[200px]">📦 {wilayFile.name}</span>
-        <span className="text-xs text-muted-foreground">{wilayInfo?.magic} • {wilayInfo?.textures.length} صورة</span>
+        <span className="text-xs text-muted-foreground">
+          <FolderOpen className="w-3.5 h-3.5 inline ml-1" />
+          {files.length} ملف • {totalTextures} صورة
+        </span>
         <div className="flex-1" />
         <input
           ref={fileInputRef}
           type="file"
           className="sr-only"
-          accept=".wilay,.WILAY"
-          onChange={(e) => { if (e.target.files?.[0]) void handleFileUpload(e.target.files[0]); e.currentTarget.value = ""; }}
+          multiple
+          onChange={(e) => { if (e.target.files && e.target.files.length > 0) void handleFilesUpload(e.target.files); e.currentTarget.value = ""; }}
         />
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => fileInputRef.current?.click()}>
-          <Upload className="w-3.5 h-3.5 ml-1" /> فتح ملف آخر
+          <Upload className="w-3.5 h-3.5 ml-1" /> إضافة ملفات
         </Button>
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={!wilayInfo?.textures.length}>
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={handleDownloadModified}>
-          <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدّل
-        </Button>
       </header>
+
+      {/* Parse errors banner */}
+      {parseErrors.length > 0 && (
+        <div className="bg-destructive/10 border-b border-destructive/30 px-3 py-1.5 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs text-destructive/80 space-y-0.5">
+            {parseErrors.map((err, i) => <p key={i}>{err}</p>)}
+          </div>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setParseErrors([])}>
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar - thumbnails */}
         <div className="w-56 border-l border-border flex flex-col shrink-0 bg-card">
+          {/* File list (collapsible) */}
+          {files.length > 1 && (
+            <div className="border-b border-border p-1.5 space-y-0.5 max-h-28 overflow-y-auto">
+              {files.map((lf, fi) => (
+                <div key={fi} className="flex items-center gap-1 text-[10px] bg-muted/30 rounded px-1.5 py-0.5">
+                  <FileImage className="w-3 h-3 shrink-0 text-primary" />
+                  <span className="truncate flex-1 font-mono">{lf.name}</span>
+                  <span className="text-muted-foreground">{lf.info.textures.length}</span>
+                  <button onClick={() => handleRemoveFile(fi)} className="hover:text-destructive">
+                    <Trash2 className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Search & filter */}
           <div className="p-2 space-y-1.5 border-b border-border">
             <div className="relative">
@@ -390,7 +514,7 @@ export default function WilayViewer() {
               <input
                 type="text"
                 className="w-full h-8 rounded-md border border-input bg-background pr-8 pl-2 text-xs placeholder:text-muted-foreground"
-                placeholder="بحث..."
+                placeholder="بحث بالاسم أو الرقم..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -400,7 +524,7 @@ export default function WilayViewer() {
                 className={`text-[10px] px-1.5 py-0.5 rounded ${formatFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'}`}
                 onClick={() => setFormatFilter('all')}
               >
-                الكل
+                الكل ({totalTextures})
               </button>
               {availableFormats.map(f => (
                 <button
@@ -432,23 +556,23 @@ export default function WilayViewer() {
             )}
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-2 gap-1 p-1.5">
-                {filteredTextures.map(tex => {
-                  const dec = decoded.get(tex.index);
+                {filteredTextures.map(ct => {
+                  const dec = decoded.get(texKey(ct.fileIndex, ct.tex.index));
                   return (
                     <button
-                      key={tex.index}
-                      className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedIndex === tex.index ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
-                      onClick={() => { setSelectedIndex(tex.index); resetView(); setChannelMode('rgba'); }}
+                      key={ct.globalIndex}
+                      className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedGlobalIndex === ct.globalIndex ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
+                      onClick={() => { setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba'); }}
                     >
                       {dec ? (
-                        <img src={dec.dataUrl} alt={`#${tex.index}`} className="w-full h-full object-contain bg-muted/30" style={{ imageRendering: tex.width < 128 ? 'pixelated' : 'auto' }} />
+                        <img src={dec.dataUrl} alt={`#${ct.globalIndex}`} className="w-full h-full object-contain bg-muted/30" style={{ imageRendering: ct.tex.width < 128 ? 'pixelated' : 'auto' }} />
                       ) : (
                         <div className="w-full h-full bg-muted/30 flex items-center justify-center">
                           <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                         </div>
                       )}
                       <span className="absolute bottom-0 left-0 right-0 bg-background/80 text-[9px] text-center py-0.5 font-mono">
-                        #{tex.index}
+                        #{ct.globalIndex}
                       </span>
                     </button>
                   );
@@ -456,24 +580,32 @@ export default function WilayViewer() {
               </div>
             ) : (
               <div className="space-y-0.5 p-1">
-                {filteredTextures.map(tex => {
-                  const dec = decoded.get(tex.index);
+                {filteredTextures.map(ct => {
+                  const dec = decoded.get(texKey(ct.fileIndex, ct.tex.index));
                   return (
                     <button
-                      key={tex.index}
-                      className={`w-full flex items-center gap-2 p-1.5 rounded text-right transition-colors ${selectedIndex === tex.index ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'}`}
-                      onClick={() => { setSelectedIndex(tex.index); resetView(); setChannelMode('rgba'); }}
+                      key={ct.globalIndex}
+                      className={`w-full flex items-center gap-2 p-1.5 rounded text-right transition-colors ${selectedGlobalIndex === ct.globalIndex ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted/50'}`}
+                      onClick={() => { setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba'); }}
                     >
                       <div className="w-10 h-10 shrink-0 rounded overflow-hidden bg-muted/30">
-                        {dec && <img src={dec.dataUrl} className="w-full h-full object-contain" style={{ imageRendering: tex.width < 128 ? 'pixelated' : 'auto' }} />}
+                        {dec && <img src={dec.dataUrl} className="w-full h-full object-contain" style={{ imageRendering: ct.tex.width < 128 ? 'pixelated' : 'auto' }} />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-mono">#{tex.index}</div>
-                        <div className="text-[10px] text-muted-foreground">{tex.width}×{tex.height} • {tex.formatName}</div>
+                        <div className="text-xs font-mono">#{ct.globalIndex} {files.length > 1 && <span className="text-muted-foreground">({files[ct.fileIndex]?.name})</span>}</div>
+                        <div className="text-[10px] text-muted-foreground">{ct.tex.width}×{ct.tex.height} • {ct.tex.formatName}</div>
                       </div>
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {filteredTextures.length === 0 && !loading && (
+              <div className="p-6 text-center text-muted-foreground">
+                <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">لا توجد صور</p>
+                <p className="text-xs mt-1">تأكد أن الملفات بصيغة WILAY صحيحة (LAHD/LAGP)</p>
               </div>
             )}
           </ScrollArea>
@@ -482,15 +614,15 @@ export default function WilayViewer() {
         {/* Main viewer area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Viewer toolbar */}
-          {selectedTex && (
-            <div className="h-10 border-b border-border flex items-center px-3 gap-1.5 shrink-0">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goPrev} disabled={selectedIndex <= 0}>
+          {selectedCT && (
+            <div className="h-10 border-b border-border flex items-center px-3 gap-1.5 shrink-0 flex-wrap">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goPrev} disabled={selectedGlobalIndex <= 0}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
               <span className="text-xs font-mono min-w-[60px] text-center">
-                #{selectedIndex} / {(wilayInfo?.textures.length ?? 1) - 1}
+                #{selectedGlobalIndex} / {totalTextures - 1}
               </span>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goNext} disabled={selectedIndex >= (wilayInfo?.textures.length ?? 1) - 1}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goNext} disabled={selectedGlobalIndex >= totalTextures - 1}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
 
@@ -551,18 +683,23 @@ export default function WilayViewer() {
 
               <div className="flex-1" />
 
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => void handleExportTexture(selectedTex)}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => void handleExportTexture(selectedCT)}>
                 <ImageDown className="w-3 h-3 ml-1" /> PNG
               </Button>
-              {selectedTex.type === 'mibl' && (
+              {selectedCT.tex.type === 'mibl' && (
                 <>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleExportRawMibl(selectedTex)}>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleExportRawMibl(selectedCT)}>
                     Raw
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartReplace(selectedTex)}>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartReplace(selectedCT)}>
                     <Replace className="w-3 h-3 ml-1" /> استبدال
                   </Button>
                 </>
+              )}
+              {files.length === 1 && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleDownloadModified(0)}>
+                  <Download className="w-3 h-3 ml-1" /> حفظ
+                </Button>
               )}
             </div>
           )}
@@ -576,8 +713,16 @@ export default function WilayViewer() {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
             style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
           >
+            {dragOver && (
+              <div className="absolute inset-0 z-10 bg-primary/10 border-2 border-dashed border-primary flex items-center justify-center">
+                <p className="text-primary font-bold text-lg">أفلت الملفات هنا لإضافتها</p>
+              </div>
+            )}
             {selectedDec ? (
               <div
                 className="absolute inset-0 flex items-center justify-center"
@@ -585,9 +730,9 @@ export default function WilayViewer() {
               >
                 <img
                   src={channelMode === 'rgba' ? selectedDec.dataUrl : getChannelImage(selectedDec, channelMode)}
-                  alt={`Texture #${selectedIndex}`}
+                  alt={`Texture #${selectedGlobalIndex}`}
                   className="max-w-none"
-                  style={{ imageRendering: zoom > 2 || (selectedTex?.width ?? 0) < 256 ? 'pixelated' : 'auto' }}
+                  style={{ imageRendering: zoom > 2 || (selectedCT?.tex.width ?? 0) < 256 ? 'pixelated' : 'auto' }}
                   draggable={false}
                 />
               </div>
@@ -597,6 +742,16 @@ export default function WilayViewer() {
                   <div className="text-center">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
                     <p className="text-sm">جاري فك الصور...</p>
+                    <p className="text-xs mt-1">{decodeProgress.current}/{decodeProgress.total}</p>
+                  </div>
+                ) : totalTextures === 0 ? (
+                  <div className="text-center space-y-2">
+                    <AlertTriangle className="w-10 h-10 mx-auto text-yellow-500" />
+                    <p className="text-sm font-bold">لا توجد صور في الملفات المرفوعة</p>
+                    <p className="text-xs max-w-sm">قد تكون الملفات من نوع LAPS (بدون صور) أو بصيغة غير مدعومة. جرب ملفات أخرى.</p>
+                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="w-4 h-4 ml-1" /> رفع ملفات أخرى
+                    </Button>
                   </div>
                 ) : (
                   <p className="text-sm">اختر صورة من القائمة</p>
@@ -606,19 +761,20 @@ export default function WilayViewer() {
           </div>
 
           {/* Bottom info panel */}
-          {selectedTex && (
+          {selectedCT && (
             <div className="border-t border-border px-3 py-2 shrink-0">
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-                <span><strong>الأبعاد:</strong> {selectedTex.width} × {selectedTex.height}</span>
-                <span><strong>التنسيق:</strong> {selectedTex.formatName}</span>
-                <span><strong>النوع:</strong> {selectedTex.type === 'jpeg' ? 'JPEG' : 'Mibl/LBIM'}</span>
-                <span><strong>الحجم:</strong> {(selectedTex.dataSize / 1024).toFixed(1)} KB</span>
-                <span><strong>Offset:</strong> <code className="font-mono">0x{selectedTex.dataOffset.toString(16)}</code></span>
-                {selectedTex.footer && (
+                {files.length > 1 && <span><strong>الملف:</strong> {files[selectedCT.fileIndex]?.name}</span>}
+                <span><strong>الأبعاد:</strong> {selectedCT.tex.width} × {selectedCT.tex.height}</span>
+                <span><strong>التنسيق:</strong> {selectedCT.tex.formatName}</span>
+                <span><strong>النوع:</strong> {selectedCT.tex.type === 'jpeg' ? 'JPEG' : 'Mibl/LBIM'}</span>
+                <span><strong>الحجم:</strong> {(selectedCT.tex.dataSize / 1024).toFixed(1)} KB</span>
+                <span><strong>Offset:</strong> <code className="font-mono">0x{selectedCT.tex.dataOffset.toString(16)}</code></span>
+                {selectedCT.tex.footer && (
                   <>
-                    <span><strong>Mipmaps:</strong> {selectedTex.footer.mipmapCount}</span>
-                    <span><strong>العمق:</strong> {selectedTex.footer.depth}</span>
-                    <span><strong>الإصدار:</strong> {selectedTex.footer.version}</span>
+                    <span><strong>Mipmaps:</strong> {selectedCT.tex.footer.mipmapCount}</span>
+                    <span><strong>العمق:</strong> {selectedCT.tex.footer.depth}</span>
+                    <span><strong>الإصدار:</strong> {selectedCT.tex.footer.version}</span>
                   </>
                 )}
               </div>
@@ -653,10 +809,10 @@ export default function WilayViewer() {
                 </div>
               </div>
             </div>
-            {selectedTex && (
+            {selectedCT && (
               <p className="text-xs text-muted-foreground">
                 <AlertTriangle className="w-3 h-3 inline ml-1 text-yellow-500" />
-                سيتم تغيير حجم الصورة الجديدة إلى {selectedTex.width}×{selectedTex.height} لتتوافق مع الأصلية
+                سيتم تغيير حجم الصورة الجديدة إلى {selectedCT.tex.width}×{selectedCT.tex.height} لتتوافق مع الأصلية
               </p>
             )}
             <div className="flex gap-2 justify-end">

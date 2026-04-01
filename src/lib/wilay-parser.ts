@@ -495,6 +495,8 @@ function scanForMiblTextures(bytes: Uint8Array, textures: WilayTextureInfo[]): v
         formatName: fmtName(footer.imageFormat),
         type: 'mibl',
       });
+    }
+  }
 }
 
 /** Fallback: scan for embedded JPEG images (FFD8FF magic) */

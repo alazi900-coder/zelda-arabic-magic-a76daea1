@@ -677,8 +677,9 @@ export default function WilayViewer() {
                           <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                         </div>
                       )}
-                      <span className="absolute bottom-0 left-0 right-0 bg-background/80 text-[9px] text-center py-0.5 font-mono">
-                        #{ct.globalIndex}
+                      <span className="absolute bottom-0 left-0 right-0 bg-background/80 text-[9px] text-center py-0.5 font-mono flex items-center justify-center gap-1">
+                        <span>#{ct.globalIndex}</span>
+                        <span className="px-1 rounded bg-primary/20 text-primary text-[8px]">{ct.tex.formatName}</span>
                       </span>
                     </button>
                   );

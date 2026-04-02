@@ -51,3 +51,11 @@ export async function autoDecompressZstd(
     return { data: buffer, wasCompressed: false };
   }
 }
+
+/**
+ * Compress data using zstd.
+ */
+export async function compressZstd(data: Uint8Array, level = 3): Promise<Uint8Array> {
+  await ensureZstd();
+  return compress(data, level);
+}

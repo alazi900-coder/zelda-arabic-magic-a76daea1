@@ -14,6 +14,7 @@
 
 import { decodeDXT1, decodeBC4 } from './wifnt-parser';
 import { decodeBC7 as decodeBC7Full } from './bc7-decoder';
+import { encodeBC7 as encodeBC7Fmt, encodeBC3 as encodeBC3Fmt } from './bc7-encoder';
 
 // ── Mibl helpers (shared with wifnt-parser) ──────────────────────────
 

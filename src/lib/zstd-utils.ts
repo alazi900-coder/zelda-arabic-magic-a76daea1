@@ -3,7 +3,7 @@
  * Uses @bokuweb/zstd-wasm for decompression.
  */
 
-import { init as initZstd, decompress } from '@bokuweb/zstd-wasm';
+import { init as initZstd, decompress, compress } from '@bokuweb/zstd-wasm';
 
 let zstdReady = false;
 

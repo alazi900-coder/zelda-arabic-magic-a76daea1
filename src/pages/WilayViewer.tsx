@@ -424,17 +424,33 @@ export default function WilayViewer() {
 
   const selectedCT = combinedTextures[selectedGlobalIndex] ?? null;
   const selectedDec = selectedCT ? decoded.get(texKey(selectedCT.fileIndex, selectedCT.tex.index)) ?? null : null;
-  const selectedDisplayScale = useMemo(() => {
-    if (!selectedDec || viewerSize.width === 0 || viewerSize.height === 0) return zoom;
+  const selectedDisplayMetrics = useMemo(() => {
+    if (!selectedDec) {
+      return { scale: zoom, width: 0, height: 0 };
+    }
+
+    if (viewerSize.width === 0 || viewerSize.height === 0) {
+      return {
+        scale: zoom,
+        width: Math.max(selectedDec.width * zoom, 1),
+        height: Math.max(selectedDec.height * zoom, 1),
+      };
+    }
 
     const availableWidth = Math.max(viewerSize.width - 32, 1);
     const availableHeight = Math.max(viewerSize.height - 32, 1);
     const fitScale = Math.min(availableWidth / selectedDec.width, availableHeight / selectedDec.height);
+    const boundedFitScale = Number.isFinite(fitScale) && fitScale > 0
+      ? Math.min(fitScale, pixelPerfect ? 12 : 8)
+      : 1;
+    const scale = boundedFitScale * zoom;
 
-    if (!Number.isFinite(fitScale) || fitScale <= 0) return zoom;
-
-    return Math.min(fitScale, 12) * zoom;
-  }, [selectedDec, viewerSize, zoom]);
+    return {
+      scale,
+      width: Math.max(selectedDec.width * scale, 1),
+      height: Math.max(selectedDec.height * scale, 1),
+    };
+  }, [selectedDec, viewerSize, zoom, pixelPerfect]);
 
   // Hex view of footer
   const hexData = useMemo(() => {
@@ -721,7 +737,7 @@ export default function WilayViewer() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.min(20, z * 1.5))}>
                 <ZoomIn className="w-3.5 h-3.5" />
               </Button>
-              <span className="text-xs font-mono w-12 text-center shrink-0">{Math.round(selectedDisplayScale * 100)}%</span>
+              <span className="text-xs font-mono w-12 text-center shrink-0">{Math.round(selectedDisplayMetrics.scale * 100)}%</span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.max(0.1, z / 1.5))}>
                 <ZoomOut className="w-3.5 h-3.5" />
               </Button>
@@ -834,13 +850,17 @@ export default function WilayViewer() {
             {selectedDec ? (
               <div
                 className="absolute inset-0 flex items-center justify-center"
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${selectedDisplayScale})`, transformOrigin: 'center center' }}
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, transformOrigin: 'center center' }}
               >
                 <img
                   src={channelMode === 'rgba' ? selectedDec.dataUrl : getChannelImage(selectedDec, channelMode)}
                   alt={`Texture #${selectedGlobalIndex}`}
-                  className="max-w-none"
-                  style={{ imageRendering: pixelPerfect ? 'pixelated' : 'auto' }}
+                  className="max-w-none shrink-0"
+                  style={{
+                    width: selectedDisplayMetrics.width,
+                    height: selectedDisplayMetrics.height,
+                    imageRendering: pixelPerfect ? 'pixelated' : 'auto',
+                  }}
                   draggable={false}
                 />
               </div>

@@ -811,11 +811,9 @@ export default function WilayViewer() {
                   </Button>
                 </>
               )}
-              {files.length === 1 && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleDownloadModified(0)}>
-                  <Download className="w-3 h-3 ml-1" /> حفظ
-                </Button>
-              )}
+              <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleDownloadModified(selectedCT.fileIndex)}>
+                <Download className="w-3 h-3 ml-1" /> حفظ ملف WILAY
+              </Button>
             </div>
           )}
 

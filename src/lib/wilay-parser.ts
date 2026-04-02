@@ -195,13 +195,30 @@ function decodeMiblToRGBA(miblData: Uint8Array): { rgba: Uint8Array; width: numb
   if (bc) { wU = divRoundUp(w, 4); hU = divRoundUp(h, 4); }
   else { wU = w; hU = h; }
 
-  // The footer field at +0x04 is not a reliable block-height hint for WILAY textures.
-  // Infer the Tegra layout like the working WIFNT decoder to avoid the noisy dotted output.
-  const blockH = getBlockHeight(hU);
-  const expectedSurfaceSize = getSurfaceSize(wU, hU, bytesPerPx, blockH);
+  // Try multiple block heights to find the one that matches the payload.
+  // The footer's blockHeightLog2 field is sometimes unreliable, so we try:
+  // 1. Footer hint  2. Calculated from height  3. Common powers of 2
   const payloadLimit = Math.max(0, miblData.length - MIBL_FOOTER_SIZE);
+  const footerBH = 1 << Math.min(footer.blockHeightLog2, 4); // clamp to max 16
+  const calcBH = getBlockHeight(hU);
+  const candidates = [footerBH, calcBH];
+  // Add nearby powers of 2 as fallbacks
+  for (const bh of [1, 2, 4, 8, 16]) {
+    if (!candidates.includes(bh)) candidates.push(bh);
+  }
+
+  // Pick the block height whose surface size best matches the available payload
+  let bestBH = calcBH;
+  let bestDiff = Infinity;
+  for (const bh of candidates) {
+    const ss = getSurfaceSize(wU, hU, bytesPerPx, bh);
+    const diff = Math.abs(ss - payloadLimit);
+    if (diff < bestDiff) { bestDiff = diff; bestBH = bh; }
+  }
+
+  const expectedSurfaceSize = getSurfaceSize(wU, hU, bytesPerPx, bestBH);
   const surface = miblData.subarray(0, Math.min(expectedSurfaceSize, payloadLimit || miblData.length));
-  const linear = deswizzle(surface, wU, hU, bytesPerPx, blockH);
+  const linear = deswizzle(surface, wU, hU, bytesPerPx, bestBH);
 
   let rgba: Uint8Array;
   switch (fmt) {

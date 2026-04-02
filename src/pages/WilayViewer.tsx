@@ -333,7 +333,7 @@ export default function WilayViewer() {
   const handleDownloadModified = useCallback((fileIndex: number) => {
     const lf = files[fileIndex];
     if (!lf) return;
-    const blob = new Blob([lf.data]);
+    const blob = new Blob([lf.data], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

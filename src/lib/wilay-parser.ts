@@ -551,12 +551,19 @@ export function replaceWilayTexture(
   const bytesPerPx = bpp(fmt);
   const bc = isBC(fmt);
 
-  // Encode RGBA → compressed format
+  // Encode RGBA → same compressed format as original
   let linearBC: Uint8Array;
   switch (fmt) {
-    case 66: linearBC = encodeDXT1Simple(newRGBA, newWidth, newHeight); break;
-    case 73: linearBC = encodeBC4Simple(newRGBA, newWidth, newHeight); break;
-    // For BC3/BC7 we can't easily encode, so fall back to BC1
+    case 66: linearBC = encodeDXT1Simple(newRGBA, newWidth, newHeight); break;   // BC1
+    case 73: linearBC = encodeBC4Simple(newRGBA, newWidth, newHeight); break;    // BC4
+    case 68: linearBC = encodeBC3Fmt(newRGBA, newWidth, newHeight); break;       // BC3
+    case 77: linearBC = encodeBC7Fmt(newRGBA, newWidth, newHeight); break;       // BC7
+    case 37: { // RGBA8 uncompressed – no encoding needed
+      const size = newWidth * newHeight * 4;
+      linearBC = new Uint8Array(size);
+      linearBC.set(newRGBA.subarray(0, size));
+      break;
+    }
     default: linearBC = encodeDXT1Simple(newRGBA, newWidth, newHeight); break;
   }
 

@@ -66,6 +66,7 @@ export default function WilayViewer() {
   // Hex view
   const [showHex, setShowHex] = useState(false);
   const [pixelPerfect, setPixelPerfect] = useState(false);
+  const [modifiedFiles, setModifiedFiles] = useState<Set<number>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -315,6 +316,7 @@ export default function WilayViewer() {
 
     const newInfo = analyzeWilay(newData);
     setFiles(prev => prev.map((f, i) => i === ct.fileIndex ? { ...f, data: newData, info: newInfo } : f));
+    setModifiedFiles(prev => new Set(prev).add(ct.fileIndex));
 
     // Re-decode for this file
     const newDecoded = new Map(decoded);
@@ -339,6 +341,28 @@ export default function WilayViewer() {
     a.click();
     URL.revokeObjectURL(url);
   }, [files]);
+
+  // Download all modified files as ZIP (skip unmodified)
+  const handleDownloadAllModified = useCallback(async () => {
+    if (modifiedFiles.size === 0) return;
+    if (modifiedFiles.size === 1) {
+      const idx = Array.from(modifiedFiles)[0];
+      handleDownloadModified(idx);
+      return;
+    }
+    const zip = new JSZip();
+    for (const idx of modifiedFiles) {
+      const lf = files[idx];
+      if (lf) zip.file(lf.name, lf.data);
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'modified_wilay_files.zip';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [files, modifiedFiles, handleDownloadModified]);
 
   // Channel filter canvas
   const getChannelImage = useCallback((dec: DecodedTexture, mode: ChannelMode): string => {
@@ -579,6 +603,11 @@ export default function WilayViewer() {
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
+        {modifiedFiles.size > 0 && (
+          <Button variant="default" size="sm" className="h-8 text-xs" onClick={() => void handleDownloadAllModified()}>
+            <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})
+          </Button>
+        )}
       </header>
 
       {/* Parse errors banner */}

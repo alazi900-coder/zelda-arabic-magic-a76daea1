@@ -3,7 +3,7 @@
  * Uses @bokuweb/zstd-wasm for decompression.
  */
 
-import { init as initZstd, decompress } from '@bokuweb/zstd-wasm';
+import { init as initZstd, decompress, compress } from '@bokuweb/zstd-wasm';
 
 let zstdReady = false;
 
@@ -50,4 +50,12 @@ export async function autoDecompressZstd(
     console.warn('[zstd] Decompression failed, using raw buffer:', err);
     return { data: buffer, wasCompressed: false };
   }
+}
+
+/**
+ * Compress data using zstd.
+ */
+export async function compressZstd(data: Uint8Array, level = 3): Promise<Uint8Array> {
+  await ensureZstd();
+  return compress(data, level);
 }

@@ -12,7 +12,7 @@ import {
   analyzeWilay, decodeWilayTextureAsync, exportWilayTextureAsPNG,
   replaceWilayTexture, type WilayInfo, type WilayTextureInfo
 } from "@/lib/wilay-parser";
-import { unwrapWilaySource } from "@/lib/xbc1-utils";
+import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
 import JSZip from "jszip";
 
 type ChannelMode = 'rgba' | 'red' | 'green' | 'blue' | 'alpha';
@@ -29,6 +29,8 @@ interface LoadedFile {
   name: string;
   data: ArrayBuffer;
   info: WilayInfo;
+  compressionSteps: string[];
+  xbc1Header: Uint8Array | null;
 }
 
 // Combined texture reference pointing to its parent file
@@ -143,7 +145,7 @@ export default function WilayViewer() {
           errors.push(`${displayName}: لا يحتوي على صور${unwrapLabel} (${info.magic} v${info.version}، ${(source.data.byteLength / 1024).toFixed(0)} KB)`);
         }
 
-        newFiles.push({ name: displayName, data: source.data, info });
+        newFiles.push({ name: displayName, data: source.data, info, compressionSteps: source.steps, xbc1Header: source.xbc1Header });
       } catch (e) {
         errors.push(`${file.name}: خطأ في القراءة — ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -329,11 +331,12 @@ export default function WilayViewer() {
     setDecoded(newDecoded);
   }, [replacePreview, files, decoded]);
 
-  // Download modified file
-  const handleDownloadModified = useCallback((fileIndex: number) => {
+  // Download modified file (re-wrapped with original compression)
+  const handleDownloadModified = useCallback(async (fileIndex: number) => {
     const lf = files[fileIndex];
     if (!lf) return;
-    const blob = new Blob([lf.data], { type: 'application/octet-stream' });
+    const rewrapped = await rewrapWilayData(lf.data, lf.compressionSteps, lf.xbc1Header);
+    const blob = new Blob([rewrapped], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -347,13 +350,16 @@ export default function WilayViewer() {
     if (modifiedFiles.size === 0) return;
     if (modifiedFiles.size === 1) {
       const idx = Array.from(modifiedFiles)[0];
-      handleDownloadModified(idx);
+      await handleDownloadModified(idx);
       return;
     }
     const zip = new JSZip();
     for (const idx of modifiedFiles) {
       const lf = files[idx];
-      if (lf) zip.file(lf.name, lf.data);
+      if (lf) {
+        const rewrapped = await rewrapWilayData(lf.data, lf.compressionSteps, lf.xbc1Header);
+        zip.file(lf.name, rewrapped);
+      }
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(zipBlob);

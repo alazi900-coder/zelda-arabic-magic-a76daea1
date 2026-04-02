@@ -771,6 +771,14 @@ export default function WilayViewer() {
                 <Eye className="w-3.5 h-3.5" />
               </Button>
 
+              <button
+                className={`text-[10px] px-2 py-1 rounded font-mono border ${pixelPerfect ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/50 hover:bg-muted border-border'}`}
+                onClick={() => setPixelPerfect(p => !p)}
+                title={pixelPerfect ? 'وضع نقطي (Pixel-perfect)' : 'وضع سلس (Smooth)'}
+              >
+                {pixelPerfect ? '🔲 نقطي' : '🔵 سلس'}
+              </button>
+
               <div className="flex-1" />
 
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => void handleExportTexture(selectedCT)}>

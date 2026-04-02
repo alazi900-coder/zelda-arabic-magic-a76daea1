@@ -66,6 +66,7 @@ export default function WilayViewer() {
   // Hex view
   const [showHex, setShowHex] = useState(false);
   const [pixelPerfect, setPixelPerfect] = useState(false);
+  const [modifiedFiles, setModifiedFiles] = useState<Set<number>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);

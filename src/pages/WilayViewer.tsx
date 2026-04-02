@@ -134,7 +134,7 @@ export default function WilayViewer() {
         const info = analyzeWilay(source.data);
         const sourceMagic = source.changed ? `${source.outerMagic} → ${source.innerMagic}` : source.outerMagic;
         const unwrapLabel = source.steps.length > 0 ? ` بعد فك ${source.steps.join(" + ")}` : "";
-        const displayName = file.webkitRelativePath || source.archiveName || file.name;
+        const displayName = file.webkitRelativePath || file.name;
 
         if (!info.valid) {
           errors.push(`${displayName}: صيغة غير مدعومة (${sourceMagic})`);

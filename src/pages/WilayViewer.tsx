@@ -73,6 +73,7 @@ export default function WilayViewer() {
 
   // Drag & drop
   const [dragOver, setDragOver] = useState(false);
+  const [viewerSize, setViewerSize] = useState({ width: 0, height: 0 });
 
   // Build combined textures list from all files
   const combinedTextures = useMemo<CombinedTexture[]>(() => {
@@ -378,6 +379,30 @@ export default function WilayViewer() {
 
   const resetView = useCallback(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, []);
 
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    const updateViewerSize = () => {
+      setViewerSize({
+        width: viewer.clientWidth,
+        height: viewer.clientHeight,
+      });
+    };
+
+    updateViewerSize();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateViewerSize);
+      return () => window.removeEventListener('resize', updateViewerSize);
+    }
+
+    const observer = new ResizeObserver(updateViewerSize);
+    observer.observe(viewer);
+
+    return () => observer.disconnect();
+  }, [files.length]);
+
   // Filtered textures
   const filteredTextures = useMemo(() => {
     return combinedTextures.filter(ct => {
@@ -398,6 +423,17 @@ export default function WilayViewer() {
 
   const selectedCT = combinedTextures[selectedGlobalIndex] ?? null;
   const selectedDec = selectedCT ? decoded.get(texKey(selectedCT.fileIndex, selectedCT.tex.index)) ?? null : null;
+  const selectedDisplayScale = useMemo(() => {
+    if (!selectedDec || viewerSize.width === 0 || viewerSize.height === 0) return zoom;
+
+    const availableWidth = Math.max(viewerSize.width - 32, 1);
+    const availableHeight = Math.max(viewerSize.height - 32, 1);
+    const fitScale = Math.min(availableWidth / selectedDec.width, availableHeight / selectedDec.height);
+
+    if (!Number.isFinite(fitScale) || fitScale <= 0) return zoom;
+
+    return Math.min(fitScale, 12) * zoom;
+  }, [selectedDec, viewerSize, zoom]);
 
   // Hex view of footer
   const hexData = useMemo(() => {
@@ -618,7 +654,7 @@ export default function WilayViewer() {
                       onClick={() => { setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba'); }}
                     >
                       {dec ? (
-                        <img src={dec.dataUrl} alt={`#${ct.globalIndex}`} className="w-full h-full object-contain bg-muted/30" style={{ imageRendering: ct.tex.width < 128 ? 'pixelated' : 'auto' }} />
+                        <img src={dec.dataUrl} alt={`#${ct.globalIndex}`} className="w-full h-full object-contain bg-muted/30" style={{ imageRendering: 'auto' }} />
                       ) : (
                         <div className="w-full h-full bg-muted/30 flex items-center justify-center">
                           <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -642,7 +678,7 @@ export default function WilayViewer() {
                       onClick={() => { setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba'); }}
                     >
                       <div className="w-10 h-10 shrink-0 rounded overflow-hidden bg-muted/30">
-                        {dec && <img src={dec.dataUrl} className="w-full h-full object-contain" style={{ imageRendering: ct.tex.width < 128 ? 'pixelated' : 'auto' }} />}
+                        {dec && <img src={dec.dataUrl} className="w-full h-full object-contain" style={{ imageRendering: 'auto' }} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-mono">#{ct.globalIndex} {files.length > 1 && <span className="text-muted-foreground">({files[ct.fileIndex]?.name})</span>}</div>
@@ -684,7 +720,7 @@ export default function WilayViewer() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.min(20, z * 1.5))}>
                 <ZoomIn className="w-3.5 h-3.5" />
               </Button>
-              <span className="text-xs font-mono w-12 text-center">{Math.round(zoom * 100)}%</span>
+              <span className="text-xs font-mono w-12 text-center">{Math.round(selectedDisplayScale * 100)}%</span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.max(0.1, z / 1.5))}>
                 <ZoomOut className="w-3.5 h-3.5" />
               </Button>
@@ -779,13 +815,13 @@ export default function WilayViewer() {
             {selectedDec ? (
               <div
                 className="absolute inset-0 flex items-center justify-center"
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'center center' }}
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${selectedDisplayScale})`, transformOrigin: 'center center' }}
               >
                 <img
                   src={channelMode === 'rgba' ? selectedDec.dataUrl : getChannelImage(selectedDec, channelMode)}
                   alt={`Texture #${selectedGlobalIndex}`}
                   className="max-w-none"
-                  style={{ imageRendering: zoom > 2 || (selectedCT?.tex.width ?? 0) < 256 ? 'pixelated' : 'auto' }}
+                  style={{ imageRendering: 'auto' }}
                   draggable={false}
                 />
               </div>

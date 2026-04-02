@@ -578,9 +578,9 @@ export default function WilayViewer() {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
         {/* Sidebar - thumbnails */}
-        <div className="w-56 border-l border-border flex flex-col shrink-0 bg-card">
+        <div className="order-2 md:order-1 w-full md:w-56 h-48 md:h-auto border-b md:border-b-0 md:border-l border-border flex flex-col shrink-0 bg-card">
           {/* File list (collapsible) */}
           {files.length > 1 && (
             <div className="border-b border-border p-1.5 space-y-0.5 max-h-28 overflow-y-auto">
@@ -702,14 +702,14 @@ export default function WilayViewer() {
         </div>
 
         {/* Main viewer area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="order-1 md:order-2 flex-1 flex flex-col overflow-hidden">
           {/* Viewer toolbar */}
           {selectedCT && (
-            <div className="h-10 border-b border-border flex items-center px-3 gap-1.5 shrink-0 flex-wrap">
+            <div className="min-h-10 border-b border-border flex items-center px-3 py-1 gap-1.5 gap-y-1 shrink-0 flex-wrap">
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goPrev} disabled={selectedGlobalIndex <= 0}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
-              <span className="text-xs font-mono min-w-[60px] text-center">
+              <span className="text-xs font-mono min-w-[60px] text-center shrink-0">
                 #{selectedGlobalIndex} / {totalTextures - 1}
               </span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goNext} disabled={selectedGlobalIndex >= totalTextures - 1}>
@@ -721,7 +721,7 @@ export default function WilayViewer() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.min(20, z * 1.5))}>
                 <ZoomIn className="w-3.5 h-3.5" />
               </Button>
-              <span className="text-xs font-mono w-12 text-center">{Math.round(selectedDisplayScale * 100)}%</span>
+              <span className="text-xs font-mono w-12 text-center shrink-0">{Math.round(selectedDisplayScale * 100)}%</span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.max(0.1, z / 1.5))}>
                 <ZoomOut className="w-3.5 h-3.5" />
               </Button>
@@ -772,7 +772,7 @@ export default function WilayViewer() {
               </Button>
 
               <button
-                className={`text-[10px] px-2 py-1 rounded font-mono border ${pixelPerfect ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/50 hover:bg-muted border-border'}`}
+                className={`shrink-0 whitespace-nowrap text-[10px] px-2 py-1 rounded font-mono border ${pixelPerfect ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/50 hover:bg-muted border-border'}`}
                 onClick={() => setPixelPerfect(p => !p)}
                 title={pixelPerfect ? 'وضع نقطي (Pixel-perfect)' : 'وضع سلس (Smooth)'}
               >
@@ -816,6 +816,16 @@ export default function WilayViewer() {
             onDrop={handleDrop}
             style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
           >
+            {selectedDec && (
+              <Button
+                variant={pixelPerfect ? 'default' : 'secondary'}
+                size="sm"
+                className="absolute top-2 right-2 z-20 h-8 px-2 text-xs md:hidden"
+                onClick={() => setPixelPerfect(p => !p)}
+              >
+                {pixelPerfect ? 'نقطي' : 'سلس'}
+              </Button>
+            )}
             {dragOver && (
               <div className="absolute inset-0 z-10 bg-primary/10 border-2 border-dashed border-primary flex items-center justify-center">
                 <p className="text-primary font-bold text-lg">أفلت الملفات هنا لإضافتها</p>

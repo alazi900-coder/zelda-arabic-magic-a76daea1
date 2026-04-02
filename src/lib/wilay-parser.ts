@@ -82,6 +82,14 @@ function deswizzle(src: Uint8Array, wUnits: number, hUnits: number, bytesPerPx: 
   return out;
 }
 
+function getSurfaceSize(wUnits: number, hUnits: number, bytesPerPx: number, blockHeightOverride?: number): number {
+  const byteW = wUnits * bytesPerPx;
+  const gobsX = divRoundUp(byteW, 64);
+  const blockH = blockHeightOverride ?? getBlockHeight(hUnits);
+  const gobsY = divRoundUp(hUnits, 8 * blockH);
+  return gobsX * gobsY * blockH * 512;
+}
+
 function swizzle(src: Uint8Array, wUnits: number, hUnits: number, bytesPerPx: number, blockHeightOverride?: number): Uint8Array {
   const byteW = wUnits * bytesPerPx;
   const gobsX = divRoundUp(byteW, 64);
@@ -263,15 +271,18 @@ function decodeMiblToRGBA(miblData: Uint8Array): { rgba: Uint8Array; width: numb
   const bc = isBC(fmt);
   const bytesPerPx = bpp(fmt);
 
-  // Use block height from footer (blockHeightLog2 field)
-  const blockH = 1 << Math.min(footer.blockHeightLog2, 4); // clamp to max 16
-
   // Compute unit dimensions for mip 0
   let wU: number, hU: number;
   if (bc) { wU = divRoundUp(w, 4); hU = divRoundUp(h, 4); }
   else { wU = w; hU = h; }
 
-  const linear = deswizzle(miblData, wU, hU, bytesPerPx, blockH);
+  // The footer field at +0x04 is not a reliable block-height hint for WILAY textures.
+  // Infer the Tegra layout like the working WIFNT decoder to avoid the noisy dotted output.
+  const blockH = getBlockHeight(hU);
+  const expectedSurfaceSize = getSurfaceSize(wU, hU, bytesPerPx, blockH);
+  const payloadLimit = Math.max(0, miblData.length - MIBL_FOOTER_SIZE);
+  const surface = miblData.subarray(0, Math.min(expectedSurfaceSize, payloadLimit || miblData.length));
+  const linear = deswizzle(surface, wU, hU, bytesPerPx, blockH);
 
   let rgba: Uint8Array;
   switch (fmt) {
@@ -281,11 +292,11 @@ function decodeMiblToRGBA(miblData: Uint8Array): { rgba: Uint8Array; width: numb
     case 77: rgba = decodeBC7(linear, w, h); break;
     case 37: // RGBA8 – already decoded
       rgba = new Uint8Array(w * h * 4);
-      rgba.set(bc ? linear : deswizzle(miblData, w, h, 4, blockH));
+      rgba.set(linear.subarray(0, rgba.length));
       break;
     case 109: // BGRA8 → RGBA8
       rgba = new Uint8Array(w * h * 4);
-      const src = deswizzle(miblData, w, h, 4, blockH);
+      const src = linear;
       for (let i = 0; i < w * h; i++) {
         rgba[i * 4] = src[i * 4 + 2]; rgba[i * 4 + 1] = src[i * 4 + 1];
         rgba[i * 4 + 2] = src[i * 4]; rgba[i * 4 + 3] = src[i * 4 + 3];

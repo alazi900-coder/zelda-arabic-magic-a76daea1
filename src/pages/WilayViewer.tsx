@@ -737,7 +737,7 @@ export default function WilayViewer() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.min(20, z * 1.5))}>
                 <ZoomIn className="w-3.5 h-3.5" />
               </Button>
-              <span className="text-xs font-mono w-12 text-center shrink-0">{Math.round(selectedDisplayScale * 100)}%</span>
+              <span className="text-xs font-mono w-12 text-center shrink-0">{Math.round(selectedDisplayMetrics.scale * 100)}%</span>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.max(0.1, z / 1.5))}>
                 <ZoomOut className="w-3.5 h-3.5" />
               </Button>

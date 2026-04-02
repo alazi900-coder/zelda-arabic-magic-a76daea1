@@ -350,13 +350,16 @@ export default function WilayViewer() {
     if (modifiedFiles.size === 0) return;
     if (modifiedFiles.size === 1) {
       const idx = Array.from(modifiedFiles)[0];
-      handleDownloadModified(idx);
+      await handleDownloadModified(idx);
       return;
     }
     const zip = new JSZip();
     for (const idx of modifiedFiles) {
       const lf = files[idx];
-      if (lf) zip.file(lf.name, lf.data);
+      if (lf) {
+        const rewrapped = await rewrapWilayData(lf.data, lf.compressionSteps, lf.xbc1Header);
+        zip.file(lf.name, rewrapped);
+      }
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(zipBlob);

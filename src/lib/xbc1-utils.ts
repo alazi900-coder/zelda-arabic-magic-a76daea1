@@ -226,7 +226,7 @@ async function compressDeflate(data: Uint8Array): Promise<Uint8Array> {
   const cs = new CompressionStream("deflate");
   const writer = cs.writable.getWriter();
   const reader = cs.readable.getReader();
-  writer.write(data).catch(() => {});
+  writer.write(toArrayBuffer(data)).catch(() => {});
   writer.close().catch(() => {});
 
   const chunks: Uint8Array[] = [];

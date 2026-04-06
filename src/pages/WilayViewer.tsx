@@ -703,18 +703,35 @@ export default function WilayViewer() {
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
         <Button
-          variant="outline"
+          variant={selectionMode ? "default" : "outline"}
           size="sm"
           className="h-8 text-xs"
-          onClick={() => void handleArabizeAll()}
+          onClick={() => { setSelectionMode(s => !s); setSelectedForArabize(new Set()); }}
           disabled={arabizing || totalTextures === 0}
         >
-          {arabizing ? (
-            <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> تعريب {arabizeProgress.current}/{arabizeProgress.total}</>
-          ) : (
-            <><Languages className="w-3.5 h-3.5 ml-1" /> تعريب الصور</>
-          )}
+          <Languages className="w-3.5 h-3.5 ml-1" />
+          {selectionMode ? `تعريب المحدد (${selectedForArabize.size})` : 'تعريب الصور'}
         </Button>
+        {selectionMode && (
+          <>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={toggleSelectAll}>
+              {selectedForArabize.size === combinedTextures.filter(ct => ct.tex.type === 'mibl').length ? 'إلغاء الكل' : 'تحديد الكل'}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => void handleArabizeSelected()}
+              disabled={arabizing || selectedForArabize.size === 0}
+            >
+              {arabizing ? (
+                <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> {arabizeProgress.current}/{arabizeProgress.total}</>
+              ) : (
+                <>▶ بدء التعريب</>
+              )}
+            </Button>
+          </>
+        )}
         {modifiedFiles.size > 0 && (
           <Button variant="default" size="sm" className="h-8 text-xs" onClick={() => void handleDownloadAllModified()}>
             <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})

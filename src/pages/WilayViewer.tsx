@@ -13,6 +13,7 @@ import {
   replaceWilayTexture, type WilayInfo, type WilayTextureInfo
 } from "@/lib/wilay-parser";
 import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
+import { supabase } from "@/integrations/supabase/client";
 import JSZip from "jszip";
 
 type ChannelMode = 'rgba' | 'red' | 'green' | 'blue' | 'alpha';

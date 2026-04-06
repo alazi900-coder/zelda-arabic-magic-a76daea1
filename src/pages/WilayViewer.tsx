@@ -6,7 +6,7 @@ import {
   Upload, Download, ImageDown, Replace, ArrowLeft, ZoomIn, ZoomOut,
   Grid3X3, List, Layers, Eye, Search, RotateCcw, Loader2,
   Image as ImageIcon, X, Check, AlertTriangle, ChevronLeft, ChevronRight,
-  FolderOpen, FileImage, Trash2
+  FolderOpen, FileImage, Trash2, Languages
 } from "lucide-react";
 import {
   analyzeWilay, decodeWilayTextureAsync, exportWilayTextureAsPNG,

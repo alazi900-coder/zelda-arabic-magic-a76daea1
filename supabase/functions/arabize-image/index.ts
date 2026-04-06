@@ -10,7 +10,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64 } = await req.json();
+    const { imageBase64, context } = await req.json();
     if (!imageBase64 || typeof imageBase64 !== "string") {
       return new Response(JSON.stringify({ error: "imageBase64 is required" }), {
         status: 400,
@@ -26,7 +26,8 @@ serve(async (req) => {
       });
     }
 
-    // Use Gemini image editing model to replace English text with Arabic
+    const contextHint = context ? `\nسياق الصورة: ${context}` : "";
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -34,26 +35,36 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3.1-flash-image-preview",
+        model: "google/gemini-3-pro-image-preview",
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `You are an expert Arabic localizer for video game UI textures. 
-Look at this game UI texture image. Find ALL English text in it and replace each piece of text with its accurate Arabic translation.
+                text: `أنت مترجم محترف لواجهات ألعاب الفيديو من الإنجليزية إلى العربية.
 
-CRITICAL RULES:
-- Keep the EXACT same visual style: same font size, color, position, background
-- Arabic text should be right-to-left
-- Do NOT change any non-text elements (icons, borders, backgrounds, graphics)
-- If there is no English text, return the image unchanged
-- Make the Arabic text look natural and professional as if the game was originally in Arabic
-- Translate game UI terms accurately (e.g., "HP" → "نقاط الصحة", "Attack" → "هجوم", "Items" → "العناصر", "Save" → "حفظ", "Load" → "تحميل", "Settings" → "الإعدادات", "Quest" → "المهمة", etc.)
-- Keep numbers as-is
+المهمة: انظر إلى هذه الصورة من واجهة لعبة فيديو. ابحث عن كل النصوص الإنجليزية واستبدلها بترجمتها العربية الدقيقة.${contextHint}
 
-Return ONLY the modified image with Arabic text.`,
+القواعد الصارمة:
+1. حافظ على نفس الخط والحجم واللون والموضع والخلفية تماماً
+2. النص العربي يكون من اليمين لليسار
+3. لا تغير أي عنصر غير نصي (أيقونات، حدود، خلفيات، رسومات)
+4. إذا لم يوجد نص إنجليزي، أعد الصورة كما هي بدون تغيير
+5. الأرقام تبقى كما هي
+6. الترجمة يجب أن تكون طبيعية وكأن اللعبة صُممت أصلاً بالعربية
+7. لا تضف أي نص جديد غير موجود في الصورة الأصلية
+
+أمثلة ترجمات شائعة في الألعاب:
+- HP → نقاط الصحة | Attack → هجوم | Defense → دفاع
+- Items → العناصر | Equipment → التجهيزات | Skills → المهارات
+- Save → حفظ | Load → تحميل | Settings → الإعدادات
+- Quest → المهمة | Map → الخريطة | Party → الفريق
+- Level → المستوى | Experience → الخبرة | Status → الحالة
+- Start → ابدأ | Continue → متابعة | New Game → لعبة جديدة
+- Inventory → المخزون | Shop → المتجر | Inn → النُزل
+
+أعد الصورة المعدلة فقط.`,
               },
               {
                 type: "image_url",
@@ -85,16 +96,30 @@ Return ONLY the modified image with Arabic text.`,
         });
       }
       
-      return new Response(JSON.stringify({ error: "ai_error", message: "فشل في معالجة الصورة" }), {
+      return new Response(JSON.stringify({ error: "ai_error", message: `فشل: ${response.status}` }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const data = await response.json();
+    // Read full response body as text first to handle large base64 payloads
+    const rawText = await response.text();
+    
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseErr) {
+      console.error("JSON parse failed, raw length:", rawText.length, "first 200:", rawText.substring(0, 200));
+      return new Response(JSON.stringify({ error: "parse_error", message: "فشل تحليل استجابة AI" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const imageResult = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
     if (!imageResult) {
+      console.error("No image in response. Keys:", JSON.stringify(Object.keys(data)), "choices:", JSON.stringify(data.choices?.length));
       return new Response(JSON.stringify({ error: "no_image", message: "لم يتم إنتاج صورة معدلة" }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

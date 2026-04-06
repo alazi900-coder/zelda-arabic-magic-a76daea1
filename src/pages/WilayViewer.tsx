@@ -933,6 +933,15 @@ export default function WilayViewer() {
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartReplace(selectedCT)}>
                     <Replace className="w-3 h-3 ml-1" /> استبدال
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => void handleArabizeTexture(selectedCT)}
+                    disabled={arabizing}
+                  >
+                    <Languages className="w-3 h-3 ml-1" /> تعريب
+                  </Button>
                 </>
               )}
               <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleDownloadModified(selectedCT.fileIndex)}>

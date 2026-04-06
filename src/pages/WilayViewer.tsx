@@ -793,7 +793,8 @@ export default function WilayViewer() {
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden" dir="rtl">
       {/* Top toolbar */}
-      <header className="h-12 border-b border-border flex items-center px-3 gap-2 shrink-0">
+      <header className="border-b border-border px-3 py-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
         <Link to="/">
           <Button variant="ghost" size="icon" className="h-8 w-8"><ArrowLeft className="w-4 h-4" /></Button>
         </Link>
@@ -815,19 +816,6 @@ export default function WilayViewer() {
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
-        <select
-          value={arabizeProvider}
-          onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-          disabled={arabizeLocked || totalTextures === 0}
-          title="محرك تعريب الصور"
-        >
-          {ARABIZE_PROVIDER_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
         <Button
           variant={selectionMode ? "default" : "outline"}
           size="sm"
@@ -863,6 +851,26 @@ export default function WilayViewer() {
             <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})
           </Button>
         )}
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground shrink-0">محرك التعريب:</span>
+          <select
+            value={arabizeProvider}
+            onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
+            className="h-8 min-w-[150px] rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            disabled={arabizeLocked || totalTextures === 0}
+            title="محرك تعريب الصور"
+          >
+            {ARABIZE_PROVIDER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {arabizeCooldownRemaining > 0 && (
+            <span className="text-[11px] text-muted-foreground">إعادة المحاولة بعد {arabizeCooldownRemaining}ث</span>
+          )}
+        </div>
       </header>
 
       {/* Parse errors banner */}
@@ -1042,6 +1050,20 @@ export default function WilayViewer() {
               </Button>
 
               <div className="w-px h-5 bg-border mx-1" />
+
+              <select
+                value={arabizeProvider}
+                onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
+                className="h-7 rounded-md border border-border bg-background px-2 text-[11px] text-foreground"
+                disabled={arabizeLocked}
+                title="محرك تعريب الصورة الحالية"
+              >
+                {ARABIZE_PROVIDER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
 
               {/* Channel selector */}
               {(['rgba', 'red', 'green', 'blue', 'alpha'] as ChannelMode[]).map(ch => (

@@ -129,9 +129,9 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -140,21 +140,8 @@ serve(async (req) => {
     const contextHint = sanitizeContext(context) ? `\nسياق الصورة: ${sanitizeContext(context)}` : "";
     const glossaryHint = buildGlossaryBlock(parseGlossary(glossary));
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-image-preview",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `أنت مترجم محترف لواجهات ألعاب الفيديو من الإنجليزية إلى العربية.
+    // Use Gemini API directly (free tier) instead of Lovable AI gateway
+    const promptText = `أنت مترجم محترف لواجهات ألعاب الفيديو من الإنجليزية إلى العربية.
 
 المهمة: انظر إلى هذه الصورة من واجهة لعبة فيديو. ابحث عن كل النصوص الإنجليزية واستبدلها بترجمتها العربية الدقيقة والطبيعية، مع الالتزام الصارم بالمصطلحات المعتمدة.${contextHint}
 
@@ -184,18 +171,37 @@ ${glossaryHint}
 - Keves → كيفيس | Agnus → أغنوس | Ouroboros → أوروبوروس
 - Ferronis → فيرونيس | Chain Attack → هجوم متسلسل | Arts → الفنون
 
-أعد الصورة المعدلة فقط.`,
+أعد الصورة المعدلة فقط.`;
+
+    // Extract base64 data without the data URI prefix for Gemini API
+    const base64Data = imageBase64.startsWith("data:")
+      ? imageBase64.split(",")[1]
+      : imageBase64;
+    
+    // Detect mime type
+    const mimeMatch = imageBase64.match(/^data:(image\/[^;]+);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: promptText },
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data,
               },
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageBase64.startsWith("data:") ? imageBase64 : `data:image/png;base64,${imageBase64}`,
-                },
-              },
-            ],
-          },
-        ],
-        modalities: ["image", "text"],
+            },
+          ],
+        }],
+        generationConfig: {
+          responseModalities: ["IMAGE", "TEXT"],
+        },
       }),
     });
 
@@ -209,14 +215,8 @@ ${glossaryHint}
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "payment_required", message: "يرجى شحن رصيد AI" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       
-      return new Response(JSON.stringify({ error: "ai_error", message: `فشل: ${response.status}` }), {
+      return new Response(JSON.stringify({ error: "ai_error", message: `فشل Gemini API: ${response.status}` }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -236,17 +236,21 @@ ${glossaryHint}
       });
     }
 
-    const imageResult = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    // Gemini API returns: candidates[0].content.parts[] with inlineData
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith("image/"));
 
-    if (!imageResult) {
-      console.error("No image in response. Keys:", JSON.stringify(Object.keys(data)), "choices:", JSON.stringify(data.choices?.length));
+    if (!imagePart) {
+      console.error("No image in response. Keys:", JSON.stringify(Object.keys(data)), "parts:", JSON.stringify(parts.length));
       return new Response(JSON.stringify({ error: "no_image", message: "لم يتم إنتاج صورة معدلة" }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ imageBase64: imageResult }), {
+    const resultBase64 = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+
+    return new Response(JSON.stringify({ imageBase64: resultBase64 }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

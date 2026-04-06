@@ -6,13 +6,14 @@ import {
   Upload, Download, ImageDown, Replace, ArrowLeft, ZoomIn, ZoomOut,
   Grid3X3, List, Layers, Eye, Search, RotateCcw, Loader2,
   Image as ImageIcon, X, Check, AlertTriangle, ChevronLeft, ChevronRight,
-  FolderOpen, FileImage, Trash2
+  FolderOpen, FileImage, Trash2, Languages
 } from "lucide-react";
 import {
   analyzeWilay, decodeWilayTextureAsync, exportWilayTextureAsPNG,
   replaceWilayTexture, type WilayInfo, type WilayTextureInfo
 } from "@/lib/wilay-parser";
 import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
+import { supabase } from "@/integrations/supabase/client";
 import JSZip from "jszip";
 
 type ChannelMode = 'rgba' | 'red' | 'green' | 'blue' | 'alpha';
@@ -69,6 +70,8 @@ export default function WilayViewer() {
   const [showHex, setShowHex] = useState(false);
   const [pixelPerfect, setPixelPerfect] = useState(false);
   const [modifiedFiles, setModifiedFiles] = useState<Set<number>>(new Set());
+  const [arabizing, setArabizing] = useState(false);
+  const [arabizeProgress, setArabizeProgress] = useState({ current: 0, total: 0 });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -370,7 +373,80 @@ export default function WilayViewer() {
     URL.revokeObjectURL(url);
   }, [files, modifiedFiles, handleDownloadModified]);
 
-  // Channel filter canvas
+  // Arabize a single texture using AI
+  const handleArabizeTexture = useCallback(async (ct: CombinedTexture) => {
+    const lf = files[ct.fileIndex];
+    const dec = decoded.get(texKey(ct.fileIndex, ct.tex.index));
+    if (!lf || !dec) return;
+
+    // Get image as base64
+    const dataUrl = dec.dataUrl;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('arabize-image', {
+        body: { imageBase64: dataUrl },
+      });
+
+      if (error) throw error;
+      if (!data?.imageBase64) throw new Error('لم يتم إرجاع صورة');
+
+      // Convert base64 result back to image and replace texture
+      const img = new Image();
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = rej;
+        img.src = data.imageBase64;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = ct.tex.width;
+      canvas.height = ct.tex.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, ct.tex.width, ct.tex.height);
+      const imgData = ctx.getImageData(0, 0, ct.tex.width, ct.tex.height);
+
+      const newData = replaceWilayTexture(lf.data, ct.tex, new Uint8Array(imgData.data.buffer), ct.tex.width, ct.tex.height);
+      if (!newData) return;
+
+      const newInfo = analyzeWilay(newData);
+      setFiles(prev => prev.map((f, i) => i === ct.fileIndex ? { ...f, data: newData, info: newInfo } : f));
+      setModifiedFiles(prev => new Set(prev).add(ct.fileIndex));
+
+      // Re-decode
+      const newDecoded = new Map(decoded);
+      for (const t of newInfo.textures) {
+        try {
+          const result = await decodeWilayTextureAsync(newData, t);
+          if (result) newDecoded.set(texKey(ct.fileIndex, t.index), { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
+        } catch {}
+      }
+      setDecoded(newDecoded);
+      return true;
+    } catch (e: any) {
+      console.error('Arabize error:', e);
+      return false;
+    }
+  }, [files, decoded]);
+
+  // Arabize all textures
+  const handleArabizeAll = useCallback(async () => {
+    const miblTextures = combinedTextures.filter(ct => ct.tex.type === 'mibl');
+    if (miblTextures.length === 0) return;
+
+    setArabizing(true);
+    setArabizeProgress({ current: 0, total: miblTextures.length });
+
+    for (let i = 0; i < miblTextures.length; i++) {
+      setArabizeProgress({ current: i + 1, total: miblTextures.length });
+      await handleArabizeTexture(miblTextures[i]);
+      // Small delay to avoid rate limiting
+      if (i < miblTextures.length - 1) await new Promise(r => setTimeout(r, 2000));
+    }
+
+    setArabizing(false);
+  }, [combinedTextures, handleArabizeTexture]);
+
+
   const getChannelImage = useCallback((dec: DecodedTexture, mode: ChannelMode): string => {
     if (mode === 'rgba') return dec.dataUrl;
     const canvas = document.createElement('canvas');
@@ -609,6 +685,19 @@ export default function WilayViewer() {
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => void handleArabizeAll()}
+          disabled={arabizing || totalTextures === 0}
+        >
+          {arabizing ? (
+            <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> تعريب {arabizeProgress.current}/{arabizeProgress.total}</>
+          ) : (
+            <><Languages className="w-3.5 h-3.5 ml-1" /> تعريب الصور</>
+          )}
+        </Button>
         {modifiedFiles.size > 0 && (
           <Button variant="default" size="sm" className="h-8 text-xs" onClick={() => void handleDownloadAllModified()}>
             <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})
@@ -843,6 +932,15 @@ export default function WilayViewer() {
                   </Button>
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartReplace(selectedCT)}>
                     <Replace className="w-3 h-3 ml-1" /> استبدال
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => void handleArabizeTexture(selectedCT)}
+                    disabled={arabizing}
+                  >
+                    <Languages className="w-3 h-3 ml-1" /> تعريب
                   </Button>
                 </>
               )}

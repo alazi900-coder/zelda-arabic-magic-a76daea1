@@ -791,6 +791,19 @@ export default function WilayViewer() {
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
+        <select
+          value={arabizeProvider}
+          onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+          disabled={arabizing || totalTextures === 0}
+          title="محرك تعريب الصور"
+        >
+          {ARABIZE_PROVIDER_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <Button
           variant={selectionMode ? "default" : "outline"}
           size="sm"

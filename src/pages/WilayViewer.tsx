@@ -72,6 +72,8 @@ export default function WilayViewer() {
   const [modifiedFiles, setModifiedFiles] = useState<Set<number>>(new Set());
   const [arabizing, setArabizing] = useState(false);
   const [arabizeProgress, setArabizeProgress] = useState({ current: 0, total: 0 });
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedForArabize, setSelectedForArabize] = useState<Set<number>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -428,24 +430,39 @@ export default function WilayViewer() {
     }
   }, [files, decoded]);
 
-  // Arabize all textures
-  const handleArabizeAll = useCallback(async () => {
-    const miblTextures = combinedTextures.filter(ct => ct.tex.type === 'mibl');
-    if (miblTextures.length === 0) return;
+  // Arabize selected or all textures
+  const handleArabizeSelected = useCallback(async () => {
+    const targets = selectionMode && selectedForArabize.size > 0
+      ? combinedTextures.filter(ct => selectedForArabize.has(ct.globalIndex) && ct.tex.type === 'mibl')
+      : combinedTextures.filter(ct => ct.tex.type === 'mibl');
+    if (targets.length === 0) return;
 
     setArabizing(true);
-    setArabizeProgress({ current: 0, total: miblTextures.length });
+    setArabizeProgress({ current: 0, total: targets.length });
 
-    for (let i = 0; i < miblTextures.length; i++) {
-      setArabizeProgress({ current: i + 1, total: miblTextures.length });
-      await handleArabizeTexture(miblTextures[i]);
-      // Small delay to avoid rate limiting
-      if (i < miblTextures.length - 1) await new Promise(r => setTimeout(r, 2000));
+    for (let i = 0; i < targets.length; i++) {
+      setArabizeProgress({ current: i + 1, total: targets.length });
+      await handleArabizeTexture(targets[i]);
+      if (i < targets.length - 1) await new Promise(r => setTimeout(r, 2000));
     }
 
     setArabizing(false);
-  }, [combinedTextures, handleArabizeTexture]);
+    setSelectionMode(false);
+    setSelectedForArabize(new Set());
+  }, [combinedTextures, handleArabizeTexture, selectionMode, selectedForArabize]);
 
+  const toggleSelectTexture = useCallback((gi: number) => {
+    setSelectedForArabize(prev => {
+      const next = new Set(prev);
+      if (next.has(gi)) next.delete(gi); else next.add(gi);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    const miblIndices = combinedTextures.filter(ct => ct.tex.type === 'mibl').map(ct => ct.globalIndex);
+    setSelectedForArabize(prev => prev.size === miblIndices.length ? new Set() : new Set(miblIndices));
+  }, [combinedTextures]);
 
   const getChannelImage = useCallback((dec: DecodedTexture, mode: ChannelMode): string => {
     if (mode === 'rgba') return dec.dataUrl;
@@ -686,18 +703,35 @@ export default function WilayViewer() {
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
         <Button
-          variant="outline"
+          variant={selectionMode ? "default" : "outline"}
           size="sm"
           className="h-8 text-xs"
-          onClick={() => void handleArabizeAll()}
+          onClick={() => { setSelectionMode(s => !s); setSelectedForArabize(new Set()); }}
           disabled={arabizing || totalTextures === 0}
         >
-          {arabizing ? (
-            <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> تعريب {arabizeProgress.current}/{arabizeProgress.total}</>
-          ) : (
-            <><Languages className="w-3.5 h-3.5 ml-1" /> تعريب الصور</>
-          )}
+          <Languages className="w-3.5 h-3.5 ml-1" />
+          {selectionMode ? `تعريب المحدد (${selectedForArabize.size})` : 'تعريب الصور'}
         </Button>
+        {selectionMode && (
+          <>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={toggleSelectAll}>
+              {selectedForArabize.size === combinedTextures.filter(ct => ct.tex.type === 'mibl').length ? 'إلغاء الكل' : 'تحديد الكل'}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => void handleArabizeSelected()}
+              disabled={arabizing || selectedForArabize.size === 0}
+            >
+              {arabizing ? (
+                <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> {arabizeProgress.current}/{arabizeProgress.total}</>
+              ) : (
+                <>▶ بدء التعريب</>
+              )}
+            </Button>
+          </>
+        )}
         {modifiedFiles.size > 0 && (
           <Button variant="default" size="sm" className="h-8 text-xs" onClick={() => void handleDownloadAllModified()}>
             <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})
@@ -791,9 +825,20 @@ export default function WilayViewer() {
                   return (
                     <button
                       key={ct.globalIndex}
-                      className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedGlobalIndex === ct.globalIndex ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
-                      onClick={() => { setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba'); }}
+                      className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedForArabize.has(ct.globalIndex) ? 'border-green-500' : selectedGlobalIndex === ct.globalIndex ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
+                      onClick={() => {
+                        if (selectionMode && ct.tex.type === 'mibl') {
+                          toggleSelectTexture(ct.globalIndex);
+                        } else {
+                          setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba');
+                        }
+                      }}
                     >
+                      {selectionMode && ct.tex.type === 'mibl' && (
+                        <div className={`absolute top-1 right-1 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedForArabize.has(ct.globalIndex) ? 'bg-primary border-primary' : 'bg-background/80 border-muted-foreground/50'}`}>
+                          {selectedForArabize.has(ct.globalIndex) && <Check className="w-3 h-3 text-primary-foreground" />}
+                        </div>
+                      )}
                       {dec ? (
                         <img src={dec.dataUrl} alt={`#${ct.globalIndex}`} className="w-full h-full object-contain bg-muted/30" style={{ imageRendering: 'auto' }} />
                       ) : (

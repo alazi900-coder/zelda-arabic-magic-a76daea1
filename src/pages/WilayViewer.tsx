@@ -72,6 +72,8 @@ export default function WilayViewer() {
   const [modifiedFiles, setModifiedFiles] = useState<Set<number>>(new Set());
   const [arabizing, setArabizing] = useState(false);
   const [arabizeProgress, setArabizeProgress] = useState({ current: 0, total: 0 });
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedForArabize, setSelectedForArabize] = useState<Set<number>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);

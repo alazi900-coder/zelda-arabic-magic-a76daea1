@@ -825,9 +825,20 @@ export default function WilayViewer() {
                   return (
                     <button
                       key={ct.globalIndex}
-                      className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedGlobalIndex === ct.globalIndex ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
-                      onClick={() => { setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba'); }}
+                      className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedForArabize.has(ct.globalIndex) ? 'border-green-500' : selectedGlobalIndex === ct.globalIndex ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
+                      onClick={() => {
+                        if (selectionMode && ct.tex.type === 'mibl') {
+                          toggleSelectTexture(ct.globalIndex);
+                        } else {
+                          setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba');
+                        }
+                      }}
                     >
+                      {selectionMode && ct.tex.type === 'mibl' && (
+                        <div className={`absolute top-1 right-1 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedForArabize.has(ct.globalIndex) ? 'bg-primary border-primary' : 'bg-background/80 border-muted-foreground/50'}`}>
+                          {selectedForArabize.has(ct.globalIndex) && <Check className="w-3 h-3 text-primary-foreground" />}
+                        </div>
+                      )}
                       {dec ? (
                         <img src={dec.dataUrl} alt={`#${ct.globalIndex}`} className="w-full h-full object-contain bg-muted/30" style={{ imageRendering: 'auto' }} />
                       ) : (

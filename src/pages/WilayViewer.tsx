@@ -373,7 +373,80 @@ export default function WilayViewer() {
     URL.revokeObjectURL(url);
   }, [files, modifiedFiles, handleDownloadModified]);
 
-  // Channel filter canvas
+  // Arabize a single texture using AI
+  const handleArabizeTexture = useCallback(async (ct: CombinedTexture) => {
+    const lf = files[ct.fileIndex];
+    const dec = decoded.get(texKey(ct.fileIndex, ct.tex.index));
+    if (!lf || !dec) return;
+
+    // Get image as base64
+    const dataUrl = dec.dataUrl;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('arabize-image', {
+        body: { imageBase64: dataUrl },
+      });
+
+      if (error) throw error;
+      if (!data?.imageBase64) throw new Error('لم يتم إرجاع صورة');
+
+      // Convert base64 result back to image and replace texture
+      const img = new Image();
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = rej;
+        img.src = data.imageBase64;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = ct.tex.width;
+      canvas.height = ct.tex.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, ct.tex.width, ct.tex.height);
+      const imgData = ctx.getImageData(0, 0, ct.tex.width, ct.tex.height);
+
+      const newData = replaceWilayTexture(lf.data, ct.tex, new Uint8Array(imgData.data.buffer), ct.tex.width, ct.tex.height);
+      if (!newData) return;
+
+      const newInfo = analyzeWilay(newData);
+      setFiles(prev => prev.map((f, i) => i === ct.fileIndex ? { ...f, data: newData, info: newInfo } : f));
+      setModifiedFiles(prev => new Set(prev).add(ct.fileIndex));
+
+      // Re-decode
+      const newDecoded = new Map(decoded);
+      for (const t of newInfo.textures) {
+        try {
+          const result = await decodeWilayTextureAsync(newData, t);
+          if (result) newDecoded.set(texKey(ct.fileIndex, t.index), { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
+        } catch {}
+      }
+      setDecoded(newDecoded);
+      return true;
+    } catch (e: any) {
+      console.error('Arabize error:', e);
+      return false;
+    }
+  }, [files, decoded]);
+
+  // Arabize all textures
+  const handleArabizeAll = useCallback(async () => {
+    const miblTextures = combinedTextures.filter(ct => ct.tex.type === 'mibl');
+    if (miblTextures.length === 0) return;
+
+    setArabizing(true);
+    setArabizeProgress({ current: 0, total: miblTextures.length });
+
+    for (let i = 0; i < miblTextures.length; i++) {
+      setArabizeProgress({ current: i + 1, total: miblTextures.length });
+      await handleArabizeTexture(miblTextures[i]);
+      // Small delay to avoid rate limiting
+      if (i < miblTextures.length - 1) await new Promise(r => setTimeout(r, 2000));
+    }
+
+    setArabizing(false);
+  }, [combinedTextures, handleArabizeTexture]);
+
+
   const getChannelImage = useCallback((dec: DecodedTexture, mode: ChannelMode): string => {
     if (mode === 'rgba') return dec.dataUrl;
     const canvas = document.createElement('canvas');

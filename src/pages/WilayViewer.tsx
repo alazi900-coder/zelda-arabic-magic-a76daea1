@@ -685,6 +685,19 @@ export default function WilayViewer() {
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => void handleArabizeAll()}
+          disabled={arabizing || totalTextures === 0}
+        >
+          {arabizing ? (
+            <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> تعريب {arabizeProgress.current}/{arabizeProgress.total}</>
+          ) : (
+            <><Languages className="w-3.5 h-3.5 ml-1" /> تعريب الصور</>
+          )}
+        </Button>
         {modifiedFiles.size > 0 && (
           <Button variant="default" size="sm" className="h-8 text-xs" onClick={() => void handleDownloadAllModified()}>
             <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})

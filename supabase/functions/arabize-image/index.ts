@@ -9,6 +9,9 @@ type GlossaryEntry = {
   target: string;
 };
 
+type ArabizeProvider = "auto" | "google-free" | "google-strong";
+type GoogleImageModel = "gemini-2.5-flash-image" | "gemini-3.1-flash-image-preview" | "gemini-3-pro-image-preview";
+
 const BUILT_IN_GLOSSARY: GlossaryEntry[] = [
   { source: "HP", target: "نقاط الصحة" },
   { source: "AP", target: "نقاط الفنون" },
@@ -115,13 +118,78 @@ ${entries.map(({ source, target }) => `- ${source} → ${target}`).join("\n")}
 `;
 }
 
+const GOOGLE_MODEL_CHAINS: Record<ArabizeProvider, GoogleImageModel[]> = {
+  auto: ["gemini-2.5-flash-image", "gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"],
+  "google-free": ["gemini-2.5-flash-image"],
+  "google-strong": ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview", "gemini-2.5-flash-image"],
+};
+
+function getArabizeProvider(raw: unknown): ArabizeProvider {
+  if (raw === "google-free" || raw === "google-strong") return raw;
+  return "auto";
+}
+
+function getImageResultFromGeminiResponse(data: any): string | null {
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  const imagePart = parts.find((part: any) => part?.inlineData?.mimeType?.startsWith("image/"));
+  if (!imagePart?.inlineData?.data || !imagePart?.inlineData?.mimeType) return null;
+  return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+}
+
+function getGeminiErrorMessage(rawText: string): string | null {
+  try {
+    const parsed = JSON.parse(rawText);
+    return parsed?.error?.message ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function callGeminiImageModel(params: {
+  apiKey: string;
+  model: GoogleImageModel;
+  promptText: string;
+  mimeType: string;
+  base64Data: string;
+}) {
+  const { apiKey, model, promptText, mimeType, base64Data } = params;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: promptText },
+          {
+            inlineData: {
+              mimeType,
+              data: base64Data,
+            },
+          },
+        ],
+      }],
+      generationConfig: {
+        responseModalities: ["IMAGE", "TEXT"],
+      },
+    }),
+  });
+
+  const rawText = await response.text();
+  return { response, rawText };
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { imageBase64, context, glossary } = await req.json();
+    const { imageBase64, context, glossary, provider } = await req.json();
     if (!imageBase64 || typeof imageBase64 !== "string") {
       return new Response(JSON.stringify({ error: "imageBase64 is required" }), {
         status: 400,
@@ -139,6 +207,7 @@ serve(async (req) => {
 
     const contextHint = sanitizeContext(context) ? `\nسياق الصورة: ${sanitizeContext(context)}` : "";
     const glossaryHint = buildGlossaryBlock(parseGlossary(glossary));
+    const selectedProvider = getArabizeProvider(provider);
 
     // Use Gemini API directly (free tier) instead of Lovable AI gateway
     const promptText = `أنت مترجم محترف لواجهات ألعاب الفيديو من الإنجليزية إلى العربية.
@@ -182,75 +251,79 @@ ${glossaryHint}
     const mimeMatch = imageBase64.match(/^data:(image\/[^;]+);/);
     const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: promptText },
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data,
-              },
-            },
-          ],
-        }],
-        generationConfig: {
-          responseModalities: ["IMAGE", "TEXT"],
-        },
-      }),
-    });
+    const modelsToTry = GOOGLE_MODEL_CHAINS[selectedProvider];
+    let lastUnsupportedModelMessage = "";
+    let lastNoImage = false;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("AI gateway error:", response.status, errText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "rate_limited", message: "تم تجاوز حد الطلبات، حاول لاحقاً" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+    for (const model of modelsToTry) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { response, rawText } = await callGeminiImageModel({
+          apiKey: GEMINI_API_KEY,
+          model,
+          promptText,
+          mimeType,
+          base64Data,
         });
+
+        if (!response.ok) {
+          const apiMessage = getGeminiErrorMessage(rawText) ?? `فشل ${model}: ${response.status}`;
+          console.error("Gemini API error:", model, response.status, rawText);
+
+          if (response.status === 429 && attempt === 0) {
+            await sleep(6000);
+            continue;
+          }
+
+          if (response.status === 429) {
+            return new Response(JSON.stringify({ error: "rate_limited", message: "تم تجاوز حد الطلبات، حاول لاحقاً" }), {
+              status: 429,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          if (response.status === 404 || response.status === 400) {
+            lastUnsupportedModelMessage = apiMessage;
+            break;
+          }
+
+          return new Response(JSON.stringify({ error: "ai_error", message: apiMessage }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          console.error("JSON parse failed, raw length:", rawText.length, "first 200:", rawText.substring(0, 200));
+          return new Response(JSON.stringify({ error: "parse_error", message: "فشل تحليل استجابة AI" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const imageResult = getImageResultFromGeminiResponse(data);
+        if (imageResult) {
+          return new Response(JSON.stringify({ imageBase64: imageResult, providerUsed: "google", modelUsed: model }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        lastNoImage = true;
+        break;
       }
-      
-      return new Response(JSON.stringify({ error: "ai_error", message: `فشل Gemini API: ${response.status}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
-    // Read full response body as text first to handle large base64 payloads
-    const rawText = await response.text();
-    
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (parseErr) {
-      console.error("JSON parse failed, raw length:", rawText.length, "first 200:", rawText.substring(0, 200));
-      return new Response(JSON.stringify({ error: "parse_error", message: "فشل تحليل استجابة AI" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Gemini API returns: candidates[0].content.parts[] with inlineData
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith("image/"));
-
-    if (!imagePart) {
-      console.error("No image in response. Keys:", JSON.stringify(Object.keys(data)), "parts:", JSON.stringify(parts.length));
+    if (lastNoImage) {
       return new Response(JSON.stringify({ error: "no_image", message: "لم يتم إنتاج صورة معدلة" }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const resultBase64 = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-
-    return new Response(JSON.stringify({ imageBase64: resultBase64 }), {
+    return new Response(JSON.stringify({ error: "unsupported_model", message: lastUnsupportedModelMessage || "تعذر العثور على موديل Google متاح حالياً، جرّب Google مجاني أو الوضع التلقائي" }), {
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

@@ -43,6 +43,13 @@ interface CombinedTexture {
 }
 
 type ArabizeStatus = 'ok' | 'payment_required' | 'rate_limited' | 'error';
+type ArabizeProvider = 'auto' | 'google-free' | 'google-strong';
+
+const ARABIZE_PROVIDER_OPTIONS: Array<{ value: ArabizeProvider; label: string }> = [
+  { value: 'auto', label: 'تلقائي' },
+  { value: 'google-free', label: 'Google مجاني' },
+  { value: 'google-strong', label: 'Google قوي' },
+];
 
 export default function WilayViewer() {
   // Multi-file state
@@ -77,6 +84,7 @@ export default function WilayViewer() {
   const [arabizeProgress, setArabizeProgress] = useState({ current: 0, total: 0 });
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedForArabize, setSelectedForArabize] = useState<Set<number>>(new Set());
+  const [arabizeProvider, setArabizeProvider] = useState<ArabizeProvider>('auto');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -130,6 +138,28 @@ export default function WilayViewer() {
 
     return { status: 'error', message: 'فشل تعريب الصورة' };
   }, []);
+
+  const resolveArabizeFailure = useCallback(async (error: unknown): Promise<{ status: ArabizeStatus; message: string }> => {
+    const context = (error as { context?: { json?: () => Promise<any>; status?: number } })?.context;
+
+    if (context) {
+      try {
+        const payload = await context.json?.();
+        if (payload?.error === 'payment_required') return { status: 'payment_required', message: payload.message ?? 'يرجى شحن رصيد AI ثم إعادة المحاولة' };
+        if (payload?.error === 'rate_limited') return { status: 'rate_limited', message: payload.message ?? 'تم تجاوز حد الطلبات، انتظر قليلاً ثم أعد المحاولة' };
+        if (payload?.error === 'no_image') return { status: 'error', message: payload.message ?? 'لم يتمكن التعريب من إنتاج صورة مناسبة لهذه الواجهة' };
+        if (payload?.error === 'unsupported_model') return { status: 'error', message: payload.message ?? 'تعذر العثور على موديل Google صالح الآن، جرّب الوضع التلقائي أو Google مجاني' };
+        if (typeof payload?.message === 'string' && payload.message) return { status: 'error', message: payload.message };
+      } catch {
+        // fall back to generic parsing below
+      }
+
+      if (context.status === 429) return { status: 'rate_limited', message: 'تم تجاوز حد الطلبات، انتظر قليلاً ثم أعد المحاولة' };
+      if (context.status === 402) return { status: 'payment_required', message: 'يرجى شحن رصيد AI ثم إعادة المحاولة' };
+    }
+
+    return getArabizeFailure(error);
+  }, [getArabizeFailure]);
 
   // Recursively read all files from directory entries (for drag & drop folders)
   const readEntriesRecursive = useCallback(async (entry: FileSystemEntry): Promise<File[]> => {
@@ -418,22 +448,40 @@ export default function WilayViewer() {
     const dataUrl = dec.dataUrl;
 
     try {
-      const { data, error } = await supabase.functions.invoke('arabize-image', {
-        body: {
-          imageBase64: dataUrl,
-          context: buildArabizeContext(ct),
-        },
-      });
+      let functionData: { imageBase64?: string } | null = null;
 
-      if (error) throw error;
-      if (!data?.imageBase64) throw new Error('no_image');
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, error } = await supabase.functions.invoke('arabize-image', {
+          body: {
+            imageBase64: dataUrl,
+            context: buildArabizeContext(ct),
+            provider: arabizeProvider,
+          },
+        });
+
+        if (!error) {
+          functionData = data;
+          break;
+        }
+
+        const failure = await resolveArabizeFailure(error);
+        if (failure.status === 'rate_limited' && attempt === 0) {
+          toast.warning('تم تجاوز الحد مؤقتاً، ستتم إعادة المحاولة تلقائياً خلال 8 ثوانٍ');
+          await new Promise(r => setTimeout(r, 8000));
+          continue;
+        }
+
+        throw Object.assign(error, { __arabizeFailure: failure });
+      }
+
+      if (!functionData?.imageBase64) throw new Error('no_image');
 
       // Convert base64 result back to image and replace texture
       const img = new Image();
       await new Promise<void>((res, rej) => {
         img.onload = () => res();
         img.onerror = rej;
-        img.src = data.imageBase64;
+        img.src = functionData.imageBase64;
       });
 
       const canvas = document.createElement('canvas');
@@ -462,11 +510,11 @@ export default function WilayViewer() {
       return 'ok';
     } catch (e: any) {
       console.error('Arabize error:', e);
-      const failure = getArabizeFailure(e);
+      const failure = e?.__arabizeFailure ?? await resolveArabizeFailure(e);
       toast.error(failure.message);
       return failure.status;
     }
-  }, [buildArabizeContext, decoded, files, getArabizeFailure]);
+  }, [arabizeProvider, buildArabizeContext, decoded, files, resolveArabizeFailure]);
 
   // Arabize selected or all textures
   const handleArabizeSelected = useCallback(async () => {
@@ -478,17 +526,19 @@ export default function WilayViewer() {
     setArabizing(true);
     setArabizeProgress({ current: 0, total: targets.length });
 
+    const delayMs = arabizeProvider === 'google-strong' ? 5000 : 3000;
+
     for (let i = 0; i < targets.length; i++) {
       setArabizeProgress({ current: i + 1, total: targets.length });
       const result = await handleArabizeTexture(targets[i]);
       if (result === 'payment_required' || result === 'rate_limited') break;
-      if (i < targets.length - 1) await new Promise(r => setTimeout(r, 2000));
+      if (i < targets.length - 1) await new Promise(r => setTimeout(r, delayMs));
     }
 
     setArabizing(false);
     setSelectionMode(false);
     setSelectedForArabize(new Set());
-  }, [combinedTextures, handleArabizeTexture, selectionMode, selectedForArabize]);
+  }, [arabizeProvider, combinedTextures, handleArabizeTexture, selectionMode, selectedForArabize]);
 
   const toggleSelectTexture = useCallback((gi: number) => {
     setSelectedForArabize(prev => {
@@ -741,6 +791,19 @@ export default function WilayViewer() {
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
+        <select
+          value={arabizeProvider}
+          onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+          disabled={arabizing || totalTextures === 0}
+          title="محرك تعريب الصور"
+        >
+          {ARABIZE_PROVIDER_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <Button
           variant={selectionMode ? "default" : "outline"}
           size="sm"

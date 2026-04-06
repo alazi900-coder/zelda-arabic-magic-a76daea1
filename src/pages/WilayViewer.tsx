@@ -819,7 +819,7 @@ export default function WilayViewer() {
           value={arabizeProvider}
           onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
           className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-          disabled={arabizing || totalTextures === 0}
+          disabled={arabizeLocked || totalTextures === 0}
           title="محرك تعريب الصور"
         >
           {ARABIZE_PROVIDER_OPTIONS.map((option) => (
@@ -833,10 +833,10 @@ export default function WilayViewer() {
           size="sm"
           className="h-8 text-xs"
           onClick={() => { setSelectionMode(s => !s); setSelectedForArabize(new Set()); }}
-          disabled={arabizing || totalTextures === 0}
+          disabled={arabizeLocked || totalTextures === 0}
         >
           <Languages className="w-3.5 h-3.5 ml-1" />
-          {selectionMode ? `تعريب المحدد (${selectedForArabize.size})` : 'تعريب الصور'}
+          {arabizeCooldownRemaining > 0 ? `انتظار ${arabizeCooldownRemaining}ث` : selectionMode ? `تعريب المحدد (${selectedForArabize.size})` : 'تعريب الصور'}
         </Button>
         {selectionMode && (
           <>
@@ -848,7 +848,7 @@ export default function WilayViewer() {
               size="sm"
               className="h-8 text-xs"
               onClick={() => void handleArabizeSelected()}
-              disabled={arabizing || selectedForArabize.size === 0}
+              disabled={arabizeLocked || selectedForArabize.size === 0}
             >
               {arabizing ? (
                 <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> {arabizeProgress.current}/{arabizeProgress.total}</>
@@ -1108,10 +1108,10 @@ export default function WilayViewer() {
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs"
-                    onClick={() => void handleArabizeTexture(selectedCT)}
-                    disabled={arabizing}
+                    onClick={() => void handleArabizeSingle(selectedCT)}
+                    disabled={arabizeLocked}
                   >
-                    <Languages className="w-3 h-3 ml-1" /> تعريب
+                    <Languages className="w-3 h-3 ml-1" /> {singleArabizing ? 'جارٍ التعريب' : arabizeCooldownRemaining > 0 ? `انتظار ${arabizeCooldownRemaining}ث` : 'تعريب'}
                   </Button>
                 </>
               )}

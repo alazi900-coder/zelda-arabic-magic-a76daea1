@@ -85,6 +85,8 @@ export default function WilayViewer() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedForArabize, setSelectedForArabize] = useState<Set<number>>(new Set());
   const [arabizeProvider, setArabizeProvider] = useState<ArabizeProvider>('auto');
+  const [singleArabizing, setSingleArabizing] = useState(false);
+  const [arabizeCooldownRemaining, setArabizeCooldownRemaining] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +110,15 @@ export default function WilayViewer() {
   }, [files]);
 
   const texKey = (fi: number, ti: number) => `${fi}:${ti}`;
+  const arabizeLocked = arabizing || singleArabizing || arabizeCooldownRemaining > 0;
+
+  useEffect(() => {
+    if (arabizeCooldownRemaining <= 0) return;
+    const timer = window.setTimeout(() => {
+      setArabizeCooldownRemaining((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [arabizeCooldownRemaining]);
 
   const buildArabizeContext = useCallback((ct: CombinedTexture) => {
     const fileName = files[ct.fileIndex]?.name ?? '';
@@ -466,8 +477,8 @@ export default function WilayViewer() {
 
         const failure = await resolveArabizeFailure(error);
         if (failure.status === 'rate_limited' && attempt === 0) {
-          toast.warning('تم تجاوز الحد مؤقتاً، ستتم إعادة المحاولة تلقائياً خلال 8 ثوانٍ');
-          await new Promise(r => setTimeout(r, 8000));
+          toast.warning('تم تجاوز الحد مؤقتاً، ستتم إعادة المحاولة تلقائياً خلال 12 ثانية');
+          await new Promise(r => setTimeout(r, 12000));
           continue;
         }
 
@@ -511,10 +522,23 @@ export default function WilayViewer() {
     } catch (e: any) {
       console.error('Arabize error:', e);
       const failure = e?.__arabizeFailure ?? await resolveArabizeFailure(e);
+      if (failure.status === 'rate_limited') {
+        setArabizeCooldownRemaining((prev) => Math.max(prev, 20));
+      }
       toast.error(failure.message);
       return failure.status;
     }
   }, [arabizeProvider, buildArabizeContext, decoded, files, resolveArabizeFailure]);
+
+  const handleArabizeSingle = useCallback(async (ct: CombinedTexture) => {
+    if (arabizeLocked) return;
+    setSingleArabizing(true);
+    try {
+      await handleArabizeTexture(ct);
+    } finally {
+      setSingleArabizing(false);
+    }
+  }, [arabizeLocked, handleArabizeTexture]);
 
   // Arabize selected or all textures
   const handleArabizeSelected = useCallback(async () => {
@@ -526,7 +550,7 @@ export default function WilayViewer() {
     setArabizing(true);
     setArabizeProgress({ current: 0, total: targets.length });
 
-    const delayMs = arabizeProvider === 'google-strong' ? 5000 : 3000;
+    const delayMs = arabizeProvider === 'google-strong' ? 7000 : 5000;
 
     for (let i = 0; i < targets.length; i++) {
       setArabizeProgress({ current: i + 1, total: targets.length });

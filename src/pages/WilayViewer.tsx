@@ -1051,6 +1051,20 @@ export default function WilayViewer() {
 
               <div className="w-px h-5 bg-border mx-1" />
 
+              <select
+                value={arabizeProvider}
+                onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
+                className="h-7 rounded-md border border-border bg-background px-2 text-[11px] text-foreground"
+                disabled={arabizeLocked}
+                title="محرك تعريب الصورة الحالية"
+              >
+                {ARABIZE_PROVIDER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
               {/* Channel selector */}
               {(['rgba', 'red', 'green', 'blue', 'alpha'] as ChannelMode[]).map(ch => (
                 <button

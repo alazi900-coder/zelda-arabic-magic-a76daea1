@@ -275,10 +275,8 @@ ${glossaryHint}
           }
 
           if (response.status === 429) {
-            return new Response(JSON.stringify({ error: "rate_limited", message: "تم تجاوز حد الطلبات، حاول لاحقاً" }), {
-              status: 429,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
+            lastUnsupportedModelMessage = apiMessage;
+            break;
           }
 
           if (response.status === 404 || response.status === 400) {

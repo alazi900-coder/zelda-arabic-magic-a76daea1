@@ -430,24 +430,39 @@ export default function WilayViewer() {
     }
   }, [files, decoded]);
 
-  // Arabize all textures
-  const handleArabizeAll = useCallback(async () => {
-    const miblTextures = combinedTextures.filter(ct => ct.tex.type === 'mibl');
-    if (miblTextures.length === 0) return;
+  // Arabize selected or all textures
+  const handleArabizeSelected = useCallback(async () => {
+    const targets = selectionMode && selectedForArabize.size > 0
+      ? combinedTextures.filter(ct => selectedForArabize.has(ct.globalIndex) && ct.tex.type === 'mibl')
+      : combinedTextures.filter(ct => ct.tex.type === 'mibl');
+    if (targets.length === 0) return;
 
     setArabizing(true);
-    setArabizeProgress({ current: 0, total: miblTextures.length });
+    setArabizeProgress({ current: 0, total: targets.length });
 
-    for (let i = 0; i < miblTextures.length; i++) {
-      setArabizeProgress({ current: i + 1, total: miblTextures.length });
-      await handleArabizeTexture(miblTextures[i]);
-      // Small delay to avoid rate limiting
-      if (i < miblTextures.length - 1) await new Promise(r => setTimeout(r, 2000));
+    for (let i = 0; i < targets.length; i++) {
+      setArabizeProgress({ current: i + 1, total: targets.length });
+      await handleArabizeTexture(targets[i]);
+      if (i < targets.length - 1) await new Promise(r => setTimeout(r, 2000));
     }
 
     setArabizing(false);
-  }, [combinedTextures, handleArabizeTexture]);
+    setSelectionMode(false);
+    setSelectedForArabize(new Set());
+  }, [combinedTextures, handleArabizeTexture, selectionMode, selectedForArabize]);
 
+  const toggleSelectTexture = useCallback((gi: number) => {
+    setSelectedForArabize(prev => {
+      const next = new Set(prev);
+      if (next.has(gi)) next.delete(gi); else next.add(gi);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    const miblIndices = combinedTextures.filter(ct => ct.tex.type === 'mibl').map(ct => ct.globalIndex);
+    setSelectedForArabize(prev => prev.size === miblIndices.length ? new Set() : new Set(miblIndices));
+  }, [combinedTextures]);
 
   const getChannelImage = useCallback((dec: DecodedTexture, mode: ChannelMode): string => {
     if (mode === 'rgba') return dec.dataUrl;

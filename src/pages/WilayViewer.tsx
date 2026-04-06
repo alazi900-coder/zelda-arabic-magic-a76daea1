@@ -14,6 +14,7 @@ import {
 } from "@/lib/wilay-parser";
 import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
 import JSZip from "jszip";
 
 type ChannelMode = 'rgba' | 'red' | 'green' | 'blue' | 'alpha';
@@ -40,6 +41,8 @@ interface CombinedTexture {
   tex: WilayTextureInfo;
   globalIndex: number;
 }
+
+type ArabizeStatus = 'ok' | 'payment_required' | 'rate_limited' | 'error';
 
 export default function WilayViewer() {
   // Multi-file state
@@ -97,6 +100,36 @@ export default function WilayViewer() {
   }, [files]);
 
   const texKey = (fi: number, ti: number) => `${fi}:${ti}`;
+
+  const buildArabizeContext = useCallback((ct: CombinedTexture) => {
+    const fileName = files[ct.fileIndex]?.name ?? '';
+
+    return [
+      'الصورة من واجهة لعبة فيديو',
+      fileName ? `اسم الملف: ${fileName}` : '',
+      `رقم الصورة: ${ct.tex.index}`,
+      `الأبعاد: ${ct.tex.width}x${ct.tex.height}`,
+      `التنسيق: ${ct.tex.formatName}`,
+    ].filter(Boolean).join(' | ');
+  }, [files]);
+
+  const getArabizeFailure = useCallback((error: unknown): { status: ArabizeStatus; message: string } => {
+    const raw = String((error as { message?: string })?.message ?? error ?? '');
+
+    if (raw.includes('payment_required') || raw.includes('402')) {
+      return { status: 'payment_required', message: 'يرجى شحن رصيد AI ثم إعادة المحاولة' };
+    }
+
+    if (raw.includes('rate_limited') || raw.includes('429')) {
+      return { status: 'rate_limited', message: 'تم تجاوز حد الطلبات، انتظر قليلاً ثم أعد المحاولة' };
+    }
+
+    if (raw.includes('no_image')) {
+      return { status: 'error', message: 'لم يتمكن التعريب من إنتاج صورة مناسبة لهذه الواجهة' };
+    }
+
+    return { status: 'error', message: 'فشل تعريب الصورة' };
+  }, []);
 
   // Recursively read all files from directory entries (for drag & drop folders)
   const readEntriesRecursive = useCallback(async (entry: FileSystemEntry): Promise<File[]> => {
@@ -376,21 +409,24 @@ export default function WilayViewer() {
   }, [files, modifiedFiles, handleDownloadModified]);
 
   // Arabize a single texture using AI
-  const handleArabizeTexture = useCallback(async (ct: CombinedTexture) => {
+  const handleArabizeTexture = useCallback(async (ct: CombinedTexture): Promise<ArabizeStatus> => {
     const lf = files[ct.fileIndex];
     const dec = decoded.get(texKey(ct.fileIndex, ct.tex.index));
-    if (!lf || !dec) return;
+    if (!lf || !dec) return 'error';
 
     // Get image as base64
     const dataUrl = dec.dataUrl;
 
     try {
       const { data, error } = await supabase.functions.invoke('arabize-image', {
-        body: { imageBase64: dataUrl },
+        body: {
+          imageBase64: dataUrl,
+          context: buildArabizeContext(ct),
+        },
       });
 
       if (error) throw error;
-      if (!data?.imageBase64) throw new Error('لم يتم إرجاع صورة');
+      if (!data?.imageBase64) throw new Error('no_image');
 
       // Convert base64 result back to image and replace texture
       const img = new Image();
@@ -423,12 +459,14 @@ export default function WilayViewer() {
         } catch {}
       }
       setDecoded(newDecoded);
-      return true;
+      return 'ok';
     } catch (e: any) {
       console.error('Arabize error:', e);
-      return false;
+      const failure = getArabizeFailure(e);
+      toast.error(failure.message);
+      return failure.status;
     }
-  }, [files, decoded]);
+  }, [buildArabizeContext, decoded, files, getArabizeFailure]);
 
   // Arabize selected or all textures
   const handleArabizeSelected = useCallback(async () => {
@@ -442,7 +480,8 @@ export default function WilayViewer() {
 
     for (let i = 0; i < targets.length; i++) {
       setArabizeProgress({ current: i + 1, total: targets.length });
-      await handleArabizeTexture(targets[i]);
+      const result = await handleArabizeTexture(targets[i]);
+      if (result === 'payment_required' || result === 'rate_limited') break;
       if (i < targets.length - 1) await new Promise(r => setTimeout(r, 2000));
     }
 

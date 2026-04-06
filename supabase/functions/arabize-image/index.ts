@@ -270,7 +270,7 @@ ${glossaryHint}
           console.error("Gemini API error:", model, response.status, rawText);
 
           if (response.status === 429 && attempt === 0) {
-            await sleep(6000);
+            await sleep(12000);
             continue;
           }
 

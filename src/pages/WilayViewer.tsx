@@ -42,14 +42,8 @@ interface CombinedTexture {
   globalIndex: number;
 }
 
-type ArabizeStatus = 'ok' | 'payment_required' | 'rate_limited' | 'error';
-type ArabizeProvider = 'auto' | 'google-free' | 'google-strong';
 
-const ARABIZE_PROVIDER_OPTIONS: Array<{ value: ArabizeProvider; label: string }> = [
-  { value: 'auto', label: 'تلقائي' },
-  { value: 'google-free', label: 'Google مجاني' },
-  { value: 'google-strong', label: 'Google قوي' },
-];
+
 
 export default function WilayViewer() {
   // Multi-file state

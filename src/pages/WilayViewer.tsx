@@ -1003,7 +1003,7 @@ export default function WilayViewer() {
         ref={replaceInputRef}
         type="file"
         className="sr-only"
-        accept="image/png,image/jpeg,image/webp"
+        accept="*/*"
         onChange={(e) => { if (e.target.files?.[0]) handleReplaceFileSelected(e.target.files[0]); e.currentTarget.value = ""; }}
       />
 

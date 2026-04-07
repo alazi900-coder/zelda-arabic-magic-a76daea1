@@ -6,14 +6,14 @@ import {
   Upload, Download, ImageDown, Replace, ArrowLeft, ZoomIn, ZoomOut,
   Grid3X3, List, Layers, Eye, Search, RotateCcw, Loader2,
   Image as ImageIcon, X, Check, AlertTriangle, ChevronLeft, ChevronRight,
-  FolderOpen, FileImage, Trash2, Languages
+  FolderOpen, FileImage, Trash2
 } from "lucide-react";
 import {
   analyzeWilay, decodeWilayTextureAsync, exportWilayTextureAsPNG,
   replaceWilayTexture, type WilayInfo, type WilayTextureInfo
 } from "@/lib/wilay-parser";
 import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
-import { supabase } from "@/integrations/supabase/client";
+
 import { toast } from "@/components/ui/sonner";
 import JSZip from "jszip";
 
@@ -80,13 +80,6 @@ export default function WilayViewer() {
   const [showHex, setShowHex] = useState(false);
   const [pixelPerfect, setPixelPerfect] = useState(false);
   const [modifiedFiles, setModifiedFiles] = useState<Set<number>>(new Set());
-  const [arabizing, setArabizing] = useState(false);
-  const [arabizeProgress, setArabizeProgress] = useState({ current: 0, total: 0 });
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedForArabize, setSelectedForArabize] = useState<Set<number>>(new Set());
-  const [arabizeProvider, setArabizeProvider] = useState<ArabizeProvider>('auto');
-  const [singleArabizing, setSingleArabizing] = useState(false);
-  const [arabizeCooldownRemaining, setArabizeCooldownRemaining] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -110,67 +103,6 @@ export default function WilayViewer() {
   }, [files]);
 
   const texKey = (fi: number, ti: number) => `${fi}:${ti}`;
-  const arabizeLocked = arabizing || singleArabizing || arabizeCooldownRemaining > 0;
-
-  useEffect(() => {
-    if (arabizeCooldownRemaining <= 0) return;
-    const timer = window.setTimeout(() => {
-      setArabizeCooldownRemaining((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => window.clearTimeout(timer);
-  }, [arabizeCooldownRemaining]);
-
-  const buildArabizeContext = useCallback((ct: CombinedTexture) => {
-    const fileName = files[ct.fileIndex]?.name ?? '';
-
-    return [
-      'الصورة من واجهة لعبة فيديو',
-      fileName ? `اسم الملف: ${fileName}` : '',
-      `رقم الصورة: ${ct.tex.index}`,
-      `الأبعاد: ${ct.tex.width}x${ct.tex.height}`,
-      `التنسيق: ${ct.tex.formatName}`,
-    ].filter(Boolean).join(' | ');
-  }, [files]);
-
-  const getArabizeFailure = useCallback((error: unknown): { status: ArabizeStatus; message: string } => {
-    const raw = String((error as { message?: string })?.message ?? error ?? '');
-
-    if (raw.includes('payment_required') || raw.includes('402')) {
-      return { status: 'payment_required', message: 'يرجى شحن رصيد AI ثم إعادة المحاولة' };
-    }
-
-    if (raw.includes('rate_limited') || raw.includes('429')) {
-      return { status: 'rate_limited', message: 'تم تجاوز حد الطلبات، انتظر قليلاً ثم أعد المحاولة' };
-    }
-
-    if (raw.includes('no_image')) {
-      return { status: 'error', message: 'لم يتمكن التعريب من إنتاج صورة مناسبة لهذه الواجهة' };
-    }
-
-    return { status: 'error', message: 'فشل تعريب الصورة' };
-  }, []);
-
-  const resolveArabizeFailure = useCallback(async (error: unknown): Promise<{ status: ArabizeStatus; message: string }> => {
-    const context = (error as { context?: { json?: () => Promise<any>; status?: number } })?.context;
-
-    if (context) {
-      try {
-        const payload = await context.json?.();
-        if (payload?.error === 'payment_required') return { status: 'payment_required', message: payload.message ?? 'يرجى شحن رصيد AI ثم إعادة المحاولة' };
-        if (payload?.error === 'rate_limited') return { status: 'rate_limited', message: payload.message ?? 'تم تجاوز حد الطلبات، انتظر قليلاً ثم أعد المحاولة' };
-        if (payload?.error === 'no_image') return { status: 'error', message: payload.message ?? 'لم يتمكن التعريب من إنتاج صورة مناسبة لهذه الواجهة' };
-        if (payload?.error === 'unsupported_model') return { status: 'error', message: payload.message ?? 'تعذر العثور على موديل Google صالح الآن، جرّب الوضع التلقائي أو Google مجاني' };
-        if (typeof payload?.message === 'string' && payload.message) return { status: 'error', message: payload.message };
-      } catch {
-        // fall back to generic parsing below
-      }
-
-      if (context.status === 429) return { status: 'rate_limited', message: 'تم تجاوز حد الطلبات، انتظر قليلاً ثم أعد المحاولة' };
-      if (context.status === 402) return { status: 'payment_required', message: 'يرجى شحن رصيد AI ثم إعادة المحاولة' };
-    }
-
-    return getArabizeFailure(error);
-  }, [getArabizeFailure]);
 
   // Recursively read all files from directory entries (for drag & drop folders)
   const readEntriesRecursive = useCallback(async (entry: FileSystemEntry): Promise<File[]> => {
@@ -449,133 +381,6 @@ export default function WilayViewer() {
     URL.revokeObjectURL(url);
   }, [files, modifiedFiles, handleDownloadModified]);
 
-  // Arabize a single texture using AI
-  const handleArabizeTexture = useCallback(async (ct: CombinedTexture): Promise<ArabizeStatus> => {
-    const lf = files[ct.fileIndex];
-    const dec = decoded.get(texKey(ct.fileIndex, ct.tex.index));
-    if (!lf || !dec) return 'error';
-
-    // Get image as base64
-    const dataUrl = dec.dataUrl;
-
-    try {
-      let functionData: { imageBase64?: string } | null = null;
-
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const { data, error } = await supabase.functions.invoke('arabize-image', {
-          body: {
-            imageBase64: dataUrl,
-            context: buildArabizeContext(ct),
-            provider: arabizeProvider,
-          },
-        });
-
-        if (!error) {
-          functionData = data;
-          break;
-        }
-
-        const failure = await resolveArabizeFailure(error);
-        if (failure.status === 'rate_limited' && attempt === 0) {
-          toast.warning('تم تجاوز الحد مؤقتاً، ستتم إعادة المحاولة تلقائياً خلال 12 ثانية');
-          await new Promise(r => setTimeout(r, 12000));
-          continue;
-        }
-
-        throw Object.assign(error, { __arabizeFailure: failure });
-      }
-
-      if (!functionData?.imageBase64) throw new Error('no_image');
-
-      // Convert base64 result back to image and replace texture
-      const img = new Image();
-      await new Promise<void>((res, rej) => {
-        img.onload = () => res();
-        img.onerror = rej;
-        img.src = functionData.imageBase64;
-      });
-
-      const canvas = document.createElement('canvas');
-      canvas.width = ct.tex.width;
-      canvas.height = ct.tex.height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, ct.tex.width, ct.tex.height);
-      const imgData = ctx.getImageData(0, 0, ct.tex.width, ct.tex.height);
-
-      const newData = replaceWilayTexture(lf.data, ct.tex, new Uint8Array(imgData.data.buffer), ct.tex.width, ct.tex.height);
-      if (!newData) return;
-
-      const newInfo = analyzeWilay(newData);
-      setFiles(prev => prev.map((f, i) => i === ct.fileIndex ? { ...f, data: newData, info: newInfo } : f));
-      setModifiedFiles(prev => new Set(prev).add(ct.fileIndex));
-
-      // Re-decode
-      const newDecoded = new Map(decoded);
-      for (const t of newInfo.textures) {
-        try {
-          const result = await decodeWilayTextureAsync(newData, t);
-          if (result) newDecoded.set(texKey(ct.fileIndex, t.index), { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
-        } catch {}
-      }
-      setDecoded(newDecoded);
-      return 'ok';
-    } catch (e: any) {
-      console.error('Arabize error:', e);
-      const failure = e?.__arabizeFailure ?? await resolveArabizeFailure(e);
-      if (failure.status === 'rate_limited') {
-        setArabizeCooldownRemaining((prev) => Math.max(prev, 20));
-      }
-      toast.error(failure.message);
-      return failure.status;
-    }
-  }, [arabizeProvider, buildArabizeContext, decoded, files, resolveArabizeFailure]);
-
-  const handleArabizeSingle = useCallback(async (ct: CombinedTexture) => {
-    if (arabizeLocked) return;
-    setSingleArabizing(true);
-    try {
-      await handleArabizeTexture(ct);
-    } finally {
-      setSingleArabizing(false);
-    }
-  }, [arabizeLocked, handleArabizeTexture]);
-
-  // Arabize selected or all textures
-  const handleArabizeSelected = useCallback(async () => {
-    const targets = selectionMode && selectedForArabize.size > 0
-      ? combinedTextures.filter(ct => selectedForArabize.has(ct.globalIndex) && ct.tex.type === 'mibl')
-      : combinedTextures.filter(ct => ct.tex.type === 'mibl');
-    if (targets.length === 0) return;
-
-    setArabizing(true);
-    setArabizeProgress({ current: 0, total: targets.length });
-
-    const delayMs = arabizeProvider === 'google-strong' ? 7000 : 5000;
-
-    for (let i = 0; i < targets.length; i++) {
-      setArabizeProgress({ current: i + 1, total: targets.length });
-      const result = await handleArabizeTexture(targets[i]);
-      if (result === 'payment_required' || result === 'rate_limited') break;
-      if (i < targets.length - 1) await new Promise(r => setTimeout(r, delayMs));
-    }
-
-    setArabizing(false);
-    setSelectionMode(false);
-    setSelectedForArabize(new Set());
-  }, [arabizeProvider, combinedTextures, handleArabizeTexture, selectionMode, selectedForArabize]);
-
-  const toggleSelectTexture = useCallback((gi: number) => {
-    setSelectedForArabize(prev => {
-      const next = new Set(prev);
-      if (next.has(gi)) next.delete(gi); else next.add(gi);
-      return next;
-    });
-  }, []);
-
-  const toggleSelectAll = useCallback(() => {
-    const miblIndices = combinedTextures.filter(ct => ct.tex.type === 'mibl').map(ct => ct.globalIndex);
-    setSelectedForArabize(prev => prev.size === miblIndices.length ? new Set() : new Set(miblIndices));
-  }, [combinedTextures]);
 
   const getChannelImage = useCallback((dec: DecodedTexture, mode: ChannelMode): string => {
     if (mode === 'rgba') return dec.dataUrl;
@@ -816,60 +621,11 @@ export default function WilayViewer() {
         <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => void handleExportAllZip()} disabled={totalTextures === 0}>
           <Download className="w-3.5 h-3.5 ml-1" /> تصدير ZIP
         </Button>
-        <Button
-          variant={selectionMode ? "default" : "outline"}
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => { setSelectionMode(s => !s); setSelectedForArabize(new Set()); }}
-          disabled={arabizeLocked || totalTextures === 0}
-        >
-          <Languages className="w-3.5 h-3.5 ml-1" />
-          {arabizeCooldownRemaining > 0 ? `انتظار ${arabizeCooldownRemaining}ث` : selectionMode ? `تعريب المحدد (${selectedForArabize.size})` : 'تعريب الصور'}
-        </Button>
-        {selectionMode && (
-          <>
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={toggleSelectAll}>
-              {selectedForArabize.size === combinedTextures.filter(ct => ct.tex.type === 'mibl').length ? 'إلغاء الكل' : 'تحديد الكل'}
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => void handleArabizeSelected()}
-              disabled={arabizeLocked || selectedForArabize.size === 0}
-            >
-              {arabizing ? (
-                <><Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> {arabizeProgress.current}/{arabizeProgress.total}</>
-              ) : (
-                <>▶ بدء التعريب</>
-              )}
-            </Button>
-          </>
-        )}
         {modifiedFiles.size > 0 && (
           <Button variant="default" size="sm" className="h-8 text-xs" onClick={() => void handleDownloadAllModified()}>
             <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})
           </Button>
         )}
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground shrink-0">محرك التعريب:</span>
-          <select
-            value={arabizeProvider}
-            onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
-            className="h-8 min-w-[150px] rounded-md border border-border bg-background px-2 text-xs text-foreground"
-            disabled={arabizeLocked || totalTextures === 0}
-            title="محرك تعريب الصور"
-          >
-            {ARABIZE_PROVIDER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {arabizeCooldownRemaining > 0 && (
-            <span className="text-[11px] text-muted-foreground">إعادة المحاولة بعد {arabizeCooldownRemaining}ث</span>
-          )}
         </div>
       </header>
 
@@ -959,20 +715,11 @@ export default function WilayViewer() {
                   return (
                     <button
                       key={ct.globalIndex}
-                      className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedForArabize.has(ct.globalIndex) ? 'border-green-500' : selectedGlobalIndex === ct.globalIndex ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
+                    className={`aspect-square rounded overflow-hidden border-2 transition-colors relative ${selectedGlobalIndex === ct.globalIndex ? 'border-primary' : 'border-transparent hover:border-primary/40'}`}
                       onClick={() => {
-                        if (selectionMode && ct.tex.type === 'mibl') {
-                          toggleSelectTexture(ct.globalIndex);
-                        } else {
-                          setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba');
-                        }
+                        setSelectedGlobalIndex(ct.globalIndex); resetView(); setChannelMode('rgba');
                       }}
                     >
-                      {selectionMode && ct.tex.type === 'mibl' && (
-                        <div className={`absolute top-1 right-1 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedForArabize.has(ct.globalIndex) ? 'bg-primary border-primary' : 'bg-background/80 border-muted-foreground/50'}`}>
-                          {selectedForArabize.has(ct.globalIndex) && <Check className="w-3 h-3 text-primary-foreground" />}
-                        </div>
-                      )}
                       {dec ? (
                         <img src={dec.dataUrl} alt={`#${ct.globalIndex}`} className="w-full h-full object-contain bg-muted/30" style={{ imageRendering: 'auto' }} />
                       ) : (
@@ -1051,20 +798,6 @@ export default function WilayViewer() {
 
               <div className="w-px h-5 bg-border mx-1" />
 
-              <select
-                value={arabizeProvider}
-                onChange={(e) => setArabizeProvider(e.target.value as ArabizeProvider)}
-                className="h-7 rounded-md border border-border bg-background px-2 text-[11px] text-foreground"
-                disabled={arabizeLocked}
-                title="محرك تعريب الصورة الحالية"
-              >
-                {ARABIZE_PROVIDER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
               {/* Channel selector */}
               {(['rgba', 'red', 'green', 'blue', 'alpha'] as ChannelMode[]).map(ch => (
                 <button
@@ -1125,15 +858,6 @@ export default function WilayViewer() {
                   </Button>
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleStartReplace(selectedCT)}>
                     <Replace className="w-3 h-3 ml-1" /> استبدال
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => void handleArabizeSingle(selectedCT)}
-                    disabled={arabizeLocked}
-                  >
-                    <Languages className="w-3 h-3 ml-1" /> {singleArabizing ? 'جارٍ التعريب' : arabizeCooldownRemaining > 0 ? `انتظار ${arabizeCooldownRemaining}ث` : 'تعريب'}
                   </Button>
                 </>
               )}

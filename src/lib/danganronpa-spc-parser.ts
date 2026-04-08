@@ -166,7 +166,7 @@ export function parseSpc(buffer: ArrayBuffer): SpcEntry[] {
       fileData = decompressed.buffer.slice(
         decompressed.byteOffset,
         decompressed.byteOffset + Math.min(decompressed.byteLength, decompressedSize)
-      );
+      ) as ArrayBuffer;
     } else {
       fileData = compressedData.buffer.slice(
         compressedData.byteOffset,

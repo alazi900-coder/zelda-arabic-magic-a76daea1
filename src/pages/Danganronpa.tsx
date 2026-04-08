@@ -75,9 +75,20 @@ const Danganronpa = forwardRef<HTMLDivElement>((_, ref) => {
       </section>
 
       <GameInfoSection
-        gameName="Danganronpa V3"
-        fileFormats={["SPC (أرشيف اللعبة)", "STX (ملفات النصوص)"]}
-        description="يدعم استخراج وترجمة النصوص من ملفات Danganronpa V3: Killing Harmony. يمكنك رفع ملفات SPC مباشرة أو ملفات STX المستخرجة."
+        accentColor="hsl(330,80%,55%)"
+        secondaryColor="hsl(280,70%,55%)"
+        fileFormat="STX / SPC"
+        fileFormatDesc="ملفات النصوص (STX) وأرشيفات اللعبة (SPC) من Danganronpa V3: Killing Harmony"
+        requiredFiles={[
+          { name: "ملفات .spc", desc: "أرشيفات الفصول مثل script_pak_e01.spc" },
+          { name: "ملفات .stx", desc: "ملفات النصوص المستخرجة مباشرة" },
+        ]}
+        tools={[
+          { name: "CriPakGUI", desc: "لاستخراج ملفات CPK" },
+          { name: "DRV3-Sharp", desc: "لاستخراج ملفات SPC" },
+        ]}
+        method="استخراج النصوص من ملفات STX (UTF-16LE) وترجمتها وإعادة حقنها"
+        notes="يدعم حالياً Danganronpa V3 فقط. دعم DR1 و DR2 قريباً."
       />
 
       <footer className="py-6 text-center text-xs text-muted-foreground border-t border-border">

@@ -22,6 +22,7 @@ const Install = lazy(() => import("./pages/Install"));
 const ModPackager = lazy(() => import("./pages/ModPackager"));
 const Danganronpa = lazy(() => import("./pages/Danganronpa"));
 const DanganronpaProcess = lazy(() => import("./pages/DanganronpaProcess"));
+const DanganronpaClassicProcess = lazy(() => import("./pages/DanganronpaClassicProcess"));
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -53,7 +54,8 @@ const App = () => (
                 <Route path="/pokemon/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة بوكيمون"><PokemonProcess /></ErrorBoundary>} />
                 <Route path="/mod-packager" element={<ModPackager />} />
                 <Route path="/danganronpa" element={<Danganronpa />} />
-                <Route path="/danganronpa/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa"><DanganronpaProcess /></ErrorBoundary>} />
+                <Route path="/danganronpa/v3" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa V3"><DanganronpaProcess /></ErrorBoundary>} />
+                <Route path="/danganronpa/classic" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa"><DanganronpaClassicProcess /></ErrorBoundary>} />
                 <Route path="/wilay" element={<WilayViewer />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

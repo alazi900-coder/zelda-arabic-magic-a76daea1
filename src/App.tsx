@@ -23,7 +23,6 @@ const ModPackager = lazy(() => import("./pages/ModPackager"));
 const Danganronpa = lazy(() => import("./pages/Danganronpa"));
 const DanganronpaProcess = lazy(() => import("./pages/DanganronpaProcess"));
 const DanganronpaClassicProcess = lazy(() => import("./pages/DanganronpaClassicProcess"));
-const DanganronpaProcess = lazy(() => import("./pages/DanganronpaProcess"));
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">

@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, Eye, FolderOpen } from "lucide-react";
 import { parseLin } from "@/lib/danganronpa-lin-parser";
 import { parsePak, type PakEntry } from "@/lib/danganronpa-pak-parser";
+import { parsePo } from "@/lib/danganronpa-po-parser";
 import { idbSet } from "@/lib/idb-storage";
 
 interface ParsedEntry {
@@ -17,8 +18,9 @@ interface ParsedEntry {
 
 interface FileInfo {
   name: string;
-  type: "pak" | "lin" | "json";
+  type: "pak" | "lin" | "po" | "json";
   linCount?: number;
+  poCount?: number;
   stringCount?: number;
 }
 
@@ -47,6 +49,18 @@ export default function DanganronpaClassicProcess() {
       }));
   }, [isDr2]);
 
+  const processPo = useCallback((name: string, buffer: ArrayBuffer): ParsedEntry[] => {
+    const poEntries = parsePo(buffer);
+    return poEntries
+      .filter(entry => entry.original.trim())
+      .map((entry, i) => ({
+        key: `${name}:${i}`,
+        original: entry.original,
+        translation: entry.translation || "",
+        sourceFile: name,
+      }));
+  }, []);
+
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
@@ -64,16 +78,28 @@ export default function DanganronpaClassicProcess() {
           try {
             const pakEntries: PakEntry[] = parsePak(buffer);
             let linCount = 0;
+            let poCount = 0;
             let totalStrings = 0;
 
             for (const pakEntry of pakEntries) {
+              const sourceFile = pakEntry.name || `${file.name}:${pakEntry.index}`;
+
+              const parsedPo = processPo(sourceFile, pakEntry.data);
+              if (parsedPo.length > 0) {
+                poCount++;
+                totalStrings += parsedPo.length;
+                const filtered = newEntries.filter(e => e.sourceFile !== sourceFile);
+                filtered.push(...parsedPo);
+                newEntries.length = 0;
+                newEntries.push(...filtered);
+                continue;
+              }
+
               try {
-                const parsed = processLin(pakEntry.name || `${file.name}:${pakEntry.index}`, pakEntry.data);
+                const parsed = processLin(sourceFile, pakEntry.data);
                 if (parsed.length > 0) {
                   linCount++;
                   totalStrings += parsed.length;
-                  // Remove old entries for this file
-                  const sourceFile = pakEntry.name || `${file.name}:${pakEntry.index}`;
                   const filtered = newEntries.filter(e => e.sourceFile !== sourceFile);
                   filtered.push(...parsed);
                   newEntries.length = 0;
@@ -88,12 +114,13 @@ export default function DanganronpaClassicProcess() {
               name: file.name,
               type: "pak",
               linCount,
+              poCount,
               stringCount: totalStrings,
             });
 
             toast({
               title: `تم تحميل ${file.name}`,
-              description: `${linCount} ملف LIN — ${totalStrings} نص`,
+              description: `${poCount} ملف PO — ${linCount} ملف LIN — ${totalStrings} نص`,
             });
           } catch (err) {
             toast({
@@ -120,6 +147,31 @@ export default function DanganronpaClassicProcess() {
             toast({
               title: `تم تحميل ${file.name}`,
               description: `${lin.strings.length} نص`,
+            });
+          } catch (err) {
+            toast({
+              title: `خطأ في ${file.name}`,
+              description: String(err),
+              variant: "destructive",
+            });
+          }
+        } else if (ext === "po") {
+          try {
+            const parsed = processPo(file.name, buffer);
+            const filtered = newEntries.filter(e => e.sourceFile !== file.name);
+            filtered.push(...parsed);
+            newEntries.length = 0;
+            newEntries.push(...filtered);
+
+            newLoaded.push({
+              name: file.name,
+              type: "po",
+              stringCount: parsed.length,
+            });
+
+            toast({
+              title: `تم تحميل ${file.name}`,
+              description: `${parsed.length} نص من PO`,
             });
           } catch (err) {
             toast({
@@ -165,7 +217,7 @@ export default function DanganronpaClassicProcess() {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [entries, loadedFiles, processLin, isDr2, toast]);
+  }, [entries, loadedFiles, processLin, processPo, isDr2, toast]);
 
   const handleGlossaryUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -228,9 +280,9 @@ export default function DanganronpaClassicProcess() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-3">
-                ارفع ملفات <strong>.pak</strong> (أرشيف) أو <strong>.lin</strong> (سكربت) أو <strong>.json</strong> (ترجمات سابقة)
+                ارفع ملفات <strong>.pak</strong> (قد تحتوي <strong>.po</strong> و <strong>.bytecode</strong>) أو <strong>.lin</strong> أو <strong>.po</strong> أو <strong>.json</strong>
               </p>
-              <input ref={fileInputRef} type="file" className="sr-only" accept=".pak,.lin,.json" multiple onChange={handleFileUpload} />
+              <input ref={fileInputRef} type="file" className="sr-only" accept=".pak,.lin,.po,.json" multiple onChange={handleFileUpload} />
               <Button onClick={() => fileInputRef.current?.click()} disabled={loading} className="w-full" style={{ backgroundColor: accentColor }}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <FolderOpen className="w-4 h-4 ml-2" />}
                 اختر الملفات
@@ -271,6 +323,7 @@ export default function DanganronpaClassicProcess() {
                         {f.type.toUpperCase()}
                       </span>
                       {f.linCount != null && <span className="text-xs text-muted-foreground">{f.linCount} LIN</span>}
+                      {f.poCount != null && <span className="text-xs text-muted-foreground">{f.poCount} PO</span>}
                       {f.stringCount != null && <span className="text-xs text-muted-foreground">{f.stringCount} نص</span>}
                     </div>
                   </div>

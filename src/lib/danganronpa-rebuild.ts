@@ -416,7 +416,5 @@ function rebuildClassicLin(node: ArchiveNode, translations: Map<string, string>)
     newStrings.push(translation || "");
   }
   
-  // Use the existing buildLin
-  const { buildLin } = require("./danganronpa-lin-parser");
   return buildLin(node.originalBuffer, newStrings);
 }

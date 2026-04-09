@@ -65,6 +65,11 @@ const Xenoblade = forwardRef<HTMLDivElement>((_, ref) => {
                 Pokémon Scarlet 🎮
               </Button>
             </Link>
+            <Link to="/danganronpa">
+              <Button size="lg" variant="ghost" className="font-display font-bold text-lg px-10 py-6 hover:bg-[hsl(330,80%,55%)]/10 text-[hsl(330,80%,55%)]">
+                Danganronpa 🎮
+              </Button>
+            </Link>
           </div>
         </div>
       </header>

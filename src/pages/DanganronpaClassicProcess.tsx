@@ -3,11 +3,12 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, Eye, FolderOpen } from "lucide-react";
+import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, Eye, FolderOpen, Package } from "lucide-react";
 import { parseLin } from "@/lib/danganronpa-lin-parser";
 import { parsePak, parseLin0Container, type PakEntry } from "@/lib/danganronpa-pak-parser";
 import { parsePo } from "@/lib/danganronpa-po-parser";
 import { idbSet } from "@/lib/idb-storage";
+import { type ArchiveNode, rebuildArchive } from "@/lib/danganronpa-rebuild";
 
 interface ParsedEntry {
   key: string;
@@ -36,6 +37,7 @@ export default function DanganronpaClassicProcess() {
   const [glossary, setGlossary] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadedFiles, setLoadedFiles] = useState<FileInfo[]>([]);
+  const [archiveTrees, setArchiveTrees] = useState<Map<string, ArchiveNode>>(new Map());
 
   const processLin = useCallback((name: string, buffer: ArrayBuffer): ParsedEntry[] => {
     const lin = parseLin(buffer, isDr2);
@@ -62,50 +64,87 @@ export default function DanganronpaClassicProcess() {
   }, []);
 
   /**
-   * Recursively extract text entries from a buffer that could be:
-   * PAK → contains LIN0 containers or LIN/PO files
-   * LIN0 → contains .po and .bytecode files
-   * PO → text entries directly
-   * LIN → classic script text
+   * Detect the format used to parse the buffer (for archive tree tracking).
    */
-  const extractFromBuffer = useCallback((name: string, buffer: ArrayBuffer, results: { entries: ParsedEntry[]; linCount: number; poCount: number }, depth = 0) => {
+  function detectFormat(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length < 4) return "raw";
+    const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+    if (magic === "PAK0") return "pak0";
+    if (magic === "LIN0") return "lin0";
+    return "raw";
+  }
+
+  /**
+   * Recursively extract text entries and build an ArchiveNode tree.
+   */
+  const extractFromBuffer = useCallback((
+    name: string,
+    buffer: ArrayBuffer,
+    results: { entries: ParsedEntry[]; linCount: number; poCount: number },
+    depth = 0,
+  ): ArchiveNode | null => {
     const pad = "  ".repeat(depth);
     const bytes = new Uint8Array(buffer);
     const magic = bytes.length >= 4 ? String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) : "(short)";
-    console.log(`${pad}[extract] 📂 "${name}" — ${buffer.byteLength} bytes — magic: "${magic}" (0x${bytes[0]?.toString(16)} 0x${bytes[1]?.toString(16)} 0x${bytes[2]?.toString(16)} 0x${bytes[3]?.toString(16)})`);
+    console.log(`${pad}[extract] 📂 "${name}" — ${buffer.byteLength} bytes — magic: "${magic}"`);
 
-    // 1) Try as PO first (cheapest check)
+    // 1) Try as PO
     const poEntries = processPo(name, buffer);
     if (poEntries.length > 0) {
       console.log(`${pad}  ✅ PO: ${poEntries.length} entries`);
       results.poCount++;
       results.entries.push(...poEntries);
-      return;
+      return {
+        name,
+        format: "po",
+        originalBuffer: buffer,
+        entryKeys: poEntries.map(e => e.key),
+      };
     }
-    console.log(`${pad}  ❌ Not PO`);
 
     // 2) Try as LIN0 container
     const lin0Entries = parseLin0Container(buffer);
     if (lin0Entries) {
-      console.log(`${pad}  ✅ LIN0 container: ${lin0Entries.length} files → [${lin0Entries.map(e => e.name).join(", ")}]`);
+      console.log(`${pad}  ✅ LIN0 container: ${lin0Entries.length} files`);
+      const children: ArchiveNode[] = [];
       for (const entry of lin0Entries) {
         const childName = entry.name || `${name}:${entry.index}`;
-        extractFromBuffer(childName, entry.data, results, depth + 1);
+        const childNode = extractFromBuffer(childName, entry.data, results, depth + 1);
+        if (childNode) children.push(childNode);
+        else children.push({ name: childName, format: "raw", originalBuffer: entry.data });
       }
-      return;
+      return { name, format: "lin0", originalBuffer: buffer, children };
     }
-    console.log(`${pad}  ❌ Not LIN0`);
 
-    // 3) Try as PAK container (recursive)
+    // 3) Try as PAK container
     try {
       const pakEntries = parsePak(buffer);
       if (pakEntries.length > 0) {
-        console.log(`${pad}  ✅ PAK: ${pakEntries.length} files → [${pakEntries.map(e => e.name).join(", ")}]`);
+        // Detect specific PAK format
+        let fmt: ArchiveNode["format"] = "pak-offset";
+        if (magic === "PAK0") fmt = "pak0";
+        else {
+          const view = new DataView(buffer);
+          const fc = view.getUint32(0, true);
+          if (fc > 0 && fc < 100000) {
+            const headerOs = 4 + fc * 8;
+            if (headerOs <= buffer.byteLength) {
+              const firstOff = view.getUint32(4, true);
+              if (firstOff >= headerOs) fmt = "pak-offset-size";
+            }
+          }
+        }
+
+        console.log(`${pad}  ✅ PAK (${fmt}): ${pakEntries.length} files`);
+        const children: ArchiveNode[] = [];
         for (const entry of pakEntries) {
           const childName = entry.name || `${name}:${entry.index}`;
-          extractFromBuffer(childName, entry.data, results, depth + 1);
+          const childNode = extractFromBuffer(childName, entry.data, results, depth + 1);
+          if (childNode) children.push(childNode);
+          else children.push({ name: childName, format: "raw", originalBuffer: entry.data });
         }
-        return;
+        return { name, format: fmt, originalBuffer: buffer, children };
       }
     } catch (err) {
       console.log(`${pad}  ❌ Not PAK: ${err}`);
@@ -118,21 +157,24 @@ export default function DanganronpaClassicProcess() {
         console.log(`${pad}  ✅ Classic LIN: ${parsed.length} entries`);
         results.linCount++;
         results.entries.push(...parsed);
-        return;
+        return {
+          name,
+          format: "classic-lin",
+          originalBuffer: buffer,
+          entryKeys: parsed.map(e => e.key),
+        };
       }
-      console.log(`${pad}  ❌ Classic LIN: 0 entries`);
     } catch (err) {
       console.log(`${pad}  ❌ Not classic LIN: ${err}`);
     }
 
-    // 5) Try as raw UTF-16LE text (PAK sub-files in DR1/DR2 classic)
+    // 5) Try as raw UTF-16LE text
     if (bytes.length >= 2) {
       const hasBom = bytes[0] === 0xFF && bytes[1] === 0xFE;
       if (hasBom || bytes.length >= 4) {
         try {
           const startOffset = hasBom ? 2 : 0;
           const textBytes = bytes.slice(startOffset);
-          // Check if it looks like UTF-16LE: should have some printable chars
           let isUtf16 = false;
           if (textBytes.length >= 2) {
             const view16 = new DataView(textBytes.buffer, textBytes.byteOffset, textBytes.byteLength);
@@ -147,26 +189,30 @@ export default function DanganronpaClassicProcess() {
             isUtf16 = printableCount >= 1;
           }
           if (isUtf16) {
-            // Decode UTF-16LE string
             let str = "";
             const view16 = new DataView(textBytes.buffer, textBytes.byteOffset, textBytes.byteLength);
             for (let j = 0; j + 1 < textBytes.length; j += 2) {
               const ch = view16.getUint16(j, true);
               if (ch === 0) break;
-              // Skip control char 0x1FFF (DR formatting marker)
               if (ch === 0x1FFF) continue;
               str += String.fromCharCode(ch);
             }
             str = str.trim();
             if (str.length > 0) {
               console.log(`${pad}  ✅ UTF-16LE text: "${str.substring(0, 50)}..."`);
+              const entryKey = `${name}`;
               results.entries.push({
-                key: `${name}`,
+                key: entryKey,
                 original: str,
                 translation: "",
                 sourceFile: name.split(":")[0] || name,
               });
-              return;
+              return {
+                name,
+                format: "utf16le",
+                originalBuffer: buffer,
+                entryKeys: [entryKey],
+              };
             }
           }
         } catch { /* not UTF-16 */ }
@@ -176,49 +222,54 @@ export default function DanganronpaClassicProcess() {
     // 6) Last resort: scan raw bytes for PO markers
     const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     if (text.includes('msgid "') || text.includes('msgctxt "')) {
-      console.log(`${pad}  🔍 Raw PO markers found, retrying...`);
       const fallbackPo = processPo(name, buffer);
       if (fallbackPo.length > 0) {
         console.log(`${pad}  ✅ Raw PO fallback: ${fallbackPo.length} entries`);
         results.poCount++;
         results.entries.push(...fallbackPo);
-        return;
+        return {
+          name,
+          format: "po",
+          originalBuffer: buffer,
+          entryKeys: fallbackPo.map(e => e.key),
+        };
       }
     }
 
-    // 7) Brute-force: scan for LIN0 or PAK0 signatures inside the buffer
+    // 7) Brute-force scan for LIN0/PAK0 signatures
     if (buffer.byteLength > 16) {
-      console.log(`${pad}  🔍 Brute-force scanning for LIN0/PAK0 signatures...`);
       const signatures = [
         { magic: [0x4C, 0x49, 0x4E, 0x30], label: "LIN0" },
         { magic: [0x50, 0x41, 0x4B, 0x30], label: "PAK0" },
       ];
       let foundAnything = false;
+      const children: ArchiveNode[] = [];
       for (let offset = 0; offset <= bytes.length - 8; offset++) {
         for (const sig of signatures) {
           if (bytes[offset] === sig.magic[0] && bytes[offset+1] === sig.magic[1] &&
               bytes[offset+2] === sig.magic[2] && bytes[offset+3] === sig.magic[3]) {
-            console.log(`${pad}    📍 Found ${sig.label} at offset ${offset}`);
             const subBuffer = buffer.slice(offset);
             try {
               const subResults = { entries: [] as ParsedEntry[], linCount: 0, poCount: 0 };
-              extractFromBuffer(`${name}@${offset}`, subBuffer, subResults, depth + 1);
+              const subNode = extractFromBuffer(`${name}@${offset}`, subBuffer, subResults, depth + 1);
               if (subResults.entries.length > 0) {
                 results.entries.push(...subResults.entries);
                 results.linCount += subResults.linCount;
                 results.poCount += subResults.poCount;
+                if (subNode) children.push(subNode);
                 foundAnything = true;
               }
-            } catch (err) {
-              console.log(`${pad}    ❌ Failed to parse ${sig.label} at ${offset}: ${err}`);
-            }
+            } catch { /* ignore */ }
           }
         }
       }
-      if (foundAnything) return;
+      if (foundAnything) {
+        return { name, format: "raw", originalBuffer: buffer, children };
+      }
     }
 
     console.log(`${pad}  ⚠️ NO TEXT FOUND in "${name}"`);
+    return null;
   }, [processLin, processPo]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,6 +279,7 @@ export default function DanganronpaClassicProcess() {
 
     const newLoaded: FileInfo[] = [...loadedFiles];
     const newEntries: ParsedEntry[] = [...entries];
+    const newTrees = new Map(archiveTrees);
 
     try {
       for (const file of Array.from(files)) {
@@ -236,16 +288,17 @@ export default function DanganronpaClassicProcess() {
 
         if (ext === "pak" || ext === "lin") {
           const results = { entries: [] as ParsedEntry[], linCount: 0, poCount: 0 };
-          extractFromBuffer(file.name, buffer, results);
+          const tree = extractFromBuffer(file.name, buffer, results);
 
-          // Merge results
+          // Store the archive tree for rebuilding
+          if (tree) {
+            newTrees.set(file.name, tree);
+          }
+
           for (const entry of results.entries) {
             const idx = newEntries.findIndex(e => e.key === entry.key);
-            if (idx >= 0) {
-              newEntries[idx] = entry;
-            } else {
-              newEntries.push(entry);
-            }
+            if (idx >= 0) newEntries[idx] = entry;
+            else newEntries.push(entry);
           }
 
           newLoaded.push({
@@ -268,22 +321,18 @@ export default function DanganronpaClassicProcess() {
             newEntries.length = 0;
             newEntries.push(...filtered);
 
-            newLoaded.push({
+            // Store as a simple PO tree
+            newTrees.set(file.name, {
               name: file.name,
-              type: "po",
-              stringCount: parsed.length,
+              format: "po",
+              originalBuffer: buffer,
+              entryKeys: parsed.map(e => e.key),
             });
 
-            toast({
-              title: `تم تحميل ${file.name}`,
-              description: `${parsed.length} نص من PO`,
-            });
+            newLoaded.push({ name: file.name, type: "po", stringCount: parsed.length });
+            toast({ title: `تم تحميل ${file.name}`, description: `${parsed.length} نص من PO` });
           } catch (err) {
-            toast({
-              title: `خطأ في ${file.name}`,
-              description: String(err),
-              variant: "destructive",
-            });
+            toast({ title: `خطأ في ${file.name}`, description: String(err), variant: "destructive" });
           }
         } else if (ext === "json") {
           try {
@@ -316,13 +365,14 @@ export default function DanganronpaClassicProcess() {
 
       setEntries(newEntries);
       setLoadedFiles(newLoaded);
+      setArchiveTrees(newTrees);
     } catch (err) {
       toast({ title: "خطأ في القراءة", description: String(err), variant: "destructive" });
     } finally {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [entries, loadedFiles, processLin, processPo, isDr2, toast]);
+  }, [entries, loadedFiles, archiveTrees, processLin, processPo, isDr2, toast, extractFromBuffer]);
 
   const handleGlossaryUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -364,6 +414,55 @@ export default function DanganronpaClassicProcess() {
     a.click();
     URL.revokeObjectURL(url);
   }, [entries, isDr2]);
+
+  const rebuildFiles = useCallback(() => {
+    if (archiveTrees.size === 0) {
+      toast({ title: "لا توجد ملفات لإعادة البناء", variant: "destructive" });
+      return;
+    }
+
+    // Build translations map from current entries
+    const translationsMap = new Map<string, string>();
+    for (const entry of entries) {
+      if (entry.translation.trim()) {
+        translationsMap.set(entry.key, entry.translation);
+      }
+    }
+
+    if (translationsMap.size === 0) {
+      toast({ title: "لا توجد ترجمات لتطبيقها", variant: "destructive" });
+      return;
+    }
+
+    let exportedCount = 0;
+    for (const [fileName, tree] of archiveTrees) {
+      try {
+        const rebuilt = rebuildArchive(tree, translationsMap);
+        const blob = new Blob([rebuilt], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        exportedCount++;
+      } catch (err) {
+        console.error(`Failed to rebuild ${fileName}:`, err);
+        toast({
+          title: `خطأ في بناء ${fileName}`,
+          description: String(err),
+          variant: "destructive",
+        });
+      }
+    }
+
+    if (exportedCount > 0) {
+      toast({
+        title: `تم بناء ${exportedCount} ملف`,
+        description: `${translationsMap.size} ترجمة مطبّقة`,
+      });
+    }
+  }, [archiveTrees, entries, toast]);
 
   const translatedCount = entries.filter(e => e.translation.trim()).length;
   const gameTitle = isDr2 ? "Danganronpa 2: Goodbye Despair" : "Danganronpa: Trigger Happy Havoc";
@@ -484,6 +583,12 @@ export default function DanganronpaClassicProcess() {
               <Download className="w-4 h-4 ml-2" />
               تصدير JSON
             </Button>
+            {archiveTrees.size > 0 && translatedCount > 0 && (
+              <Button onClick={rebuildFiles} variant="outline" size="lg" className="border-green-500/50 text-green-600 hover:bg-green-500/10">
+                <Package className="w-4 h-4 ml-2" />
+                بناء الملفات المترجمة
+              </Button>
+            )}
           </div>
         )}
       </main>

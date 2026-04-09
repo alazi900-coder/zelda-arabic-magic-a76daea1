@@ -48,6 +48,7 @@ import BuildStatsDialog from "@/components/editor/BuildStatsDialog";
 import BuildConfirmDialog from "@/components/editor/BuildConfirmDialog";
 import ConsistencyResultsPanel from "@/components/editor/ConsistencyResultsPanel";
 import BdatBuildReport from "@/components/editor/BdatBuildReport";
+import FileLoadReport from "@/components/editor/FileLoadReport";
 import IntegrityCheckDialog from "@/components/editor/IntegrityCheckDialog";
 import PreBuildDiagnostic from "@/components/editor/PreBuildDiagnostic";
 import CompareEnginesDialog from "@/components/editor/CompareEnginesDialog";

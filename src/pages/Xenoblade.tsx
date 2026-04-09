@@ -1,7 +1,7 @@
 import { forwardRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Shield, FileText, Download, Sparkles, FolderOpen } from "lucide-react";
+import { Shield, FileText, Download, Sparkles, FolderOpen, ArrowRight } from "lucide-react";
 import GameInfoSection from "@/components/GameInfoSection";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { APP_VERSION } from "@/lib/version";
@@ -60,14 +60,10 @@ const Xenoblade = forwardRef<HTMLDivElement>((_, ref) => {
                 فك ملفات DAT 🔬
               </Button>
             </Link>
-            <Link to="/pokemon">
-              <Button size="lg" variant="ghost" className="font-display font-bold text-lg px-10 py-6 hover:bg-[hsl(0,80%,50%)]/10 text-[hsl(0,80%,55%)]">
-                Pokémon Scarlet 🎮
-              </Button>
-            </Link>
-            <Link to="/danganronpa">
-              <Button size="lg" variant="ghost" className="font-display font-bold text-lg px-10 py-6 hover:bg-[hsl(330,80%,55%)]/10 text-[hsl(330,80%,55%)]">
-                Danganronpa 🎮
+            <Link to="/">
+              <Button size="lg" variant="ghost" className="font-display font-bold text-lg px-10 py-6 hover:bg-primary/10">
+                <ArrowRight className="w-5 h-5 ml-2" />
+                جميع الألعاب
               </Button>
             </Link>
           </div>

@@ -1209,8 +1209,8 @@ ${textsBlock}
     if (!geminiResponse.ok) {
       const errText = await geminiResponse.text();
       console.error('Gemini API error:', errText);
-      if (geminiResponse.status === 429) {
-        console.log('Gemini quota exceeded, falling back to Lovable AI...');
+      if (geminiResponse.status === 429 || geminiResponse.status === 503) {
+        console.log(`Gemini ${geminiResponse.status} error, falling back to Lovable AI...`);
       } else {
         if (geminiResponse.status === 400) throw new Error('مفتاح API غير صالح — تحقق من المفتاح');
         if (geminiResponse.status === 403) throw new Error('مفتاح API محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio');

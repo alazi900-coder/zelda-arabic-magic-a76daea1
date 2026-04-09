@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Clock, AlertTriangle, BookOpen, BarChart3, TrendingUp, Zap } from "lucide-react";
 import type { EditorState, ExtractedEntry } from "./types";
-import { hasTechnicalTags, isTechnicalText, categorizeFile, categorizeBdatTable } from "./types";
+import { hasTechnicalTags, isTechnicalText, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "./types";
 
 interface Props {
   state: EditorState;
@@ -134,9 +134,10 @@ export default function TranslationProgressDashboard({ state, qualityStats, glos
     for (const entry of state.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
       const isBdat = /^.+?\[\d+\]\./.test(entry.label);
+      const isDr = !isBdat && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
       const cat = isBdat
         ? categorizeBdatTable(entry.label, entry.msbtFile.includes(':') ? entry.msbtFile.split(':')[1] : undefined, entry.original)
-        : categorizeFile(entry.msbtFile);
+        : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
       
       if (!categories.has(cat)) categories.set(cat, { total: 0, translated: 0 });
       const c = categories.get(cat)!;

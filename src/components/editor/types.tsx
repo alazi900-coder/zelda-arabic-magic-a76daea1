@@ -108,6 +108,42 @@ export const FILE_CATEGORIES: FileCategory[] = [
   { id: "npc", label: "حوارات الشخصيات", emoji: "💬", icon: "MessageCircle", color: "text-cyan-400" },
 ];
 
+// === Danganronpa Categories ===
+export const DR_CATEGORIES: FileCategory[] = [
+  { id: "dr-system", label: "النظام والإعدادات", emoji: "⚙️", icon: "Settings", color: "text-slate-400" },
+  { id: "dr-prologue", label: "المقدمة (Prologue)", emoji: "🎬", icon: "Clapperboard", color: "text-purple-400" },
+  { id: "dr-ch1", label: "الفصل 1", emoji: "📖", icon: "BookOpen", color: "text-blue-400" },
+  { id: "dr-ch2", label: "الفصل 2", emoji: "📖", icon: "BookOpen", color: "text-cyan-400" },
+  { id: "dr-ch3", label: "الفصل 3", emoji: "📖", icon: "BookOpen", color: "text-teal-400" },
+  { id: "dr-ch4", label: "الفصل 4", emoji: "📖", icon: "BookOpen", color: "text-emerald-400" },
+  { id: "dr-ch5", label: "الفصل 5", emoji: "📖", icon: "BookOpen", color: "text-amber-400" },
+  { id: "dr-ch6", label: "الفصل 6", emoji: "📖", icon: "BookOpen", color: "text-red-400" },
+  { id: "dr-freetime", label: "الوقت الحر", emoji: "💬", icon: "MessageCircle", color: "text-pink-400" },
+  { id: "dr-trial", label: "المحاكمات", emoji: "⚖️", icon: "Shield", color: "text-rose-500" },
+  { id: "dr-menu", label: "القوائم والواجهة", emoji: "🖥️", icon: "Monitor", color: "text-sky-400" },
+  { id: "dr-items", label: "الأدوات والأدلة", emoji: "🔑", icon: "Key", color: "text-yellow-400" },
+  { id: "dr-report", label: "التقارير والملفات", emoji: "📜", icon: "ScrollText", color: "text-orange-400" },
+  { id: "dr-characters", label: "الشخصيات", emoji: "🎭", icon: "Drama", color: "text-violet-400" },
+];
+
+export function categorizeDanganronpaFile(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  if (/system|00_system/i.test(lower)) return "dr-system";
+  if (/menu|title|config|option|setting|save|load|select/i.test(lower)) return "dr-menu";
+  if (/item|evidence|present|bullet|mono_/i.test(lower)) return "dr-items";
+  if (/report|profile|skill/i.test(lower)) return "dr-report";
+  if (/freetime|free_time|freeact|ft_/i.test(lower)) return "dr-freetime";
+  if (/trial|nonstop|debate|hangman|closing|mtb|panic|ptb/i.test(lower)) return "dr-trial";
+  if (/chara_name|character/i.test(lower)) return "dr-characters";
+  const chapterMatch = lower.match(/(?:^|[:/])e(\d{2})[_:]/);
+  if (chapterMatch) {
+    const ch = parseInt(chapterMatch[1], 10);
+    if (ch === 0) return "dr-prologue";
+    if (ch >= 1 && ch <= 6) return `dr-ch${ch}`;
+  }
+  return "other";
+}
+
 // === BDAT (Xenoblade) Game Categories ===
 export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-title-menu", label: "القائمة الرئيسية", emoji: "🏠", icon: "Home", color: "text-emerald-400" },

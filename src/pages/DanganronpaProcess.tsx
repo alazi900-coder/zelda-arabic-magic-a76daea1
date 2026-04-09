@@ -182,11 +182,22 @@ export default function DanganronpaProcess() {
 
   const openInEditor = useCallback(async () => {
     if (!entries.length) return;
-    const translations: Record<string, { original: string; translation: string }> = {};
+    const editorEntries = entries.map((e, i) => ({
+      msbtFile: e.key,
+      index: i,
+      label: e.key,
+      original: e.original,
+    }));
+    const editorTranslations: Record<string, string> = {};
     for (const e of entries) {
-      translations[e.key] = { original: e.original, translation: e.translation };
+      const editorKey = `${e.key}:${entries.indexOf(e)}`;
+      if (e.translation) editorTranslations[editorKey] = e.translation;
     }
-    await idbSet("editor-translations", translations);
+    await idbSet("editorState", {
+      entries: editorEntries,
+      translations: editorTranslations,
+      freshExtraction: true,
+    });
     if (glossary) await idbSet("editor-glossary", glossary);
     await idbSet("editor-source-game", "danganronpa");
     navigate("/editor");

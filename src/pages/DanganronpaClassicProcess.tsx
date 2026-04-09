@@ -398,7 +398,7 @@ export default function DanganronpaClassicProcess() {
               <p className="text-sm text-muted-foreground mb-3">
                 ارفع ملفات <strong>.pak</strong> (قد تحتوي <strong>.po</strong> و <strong>.bytecode</strong>) أو <strong>.lin</strong> أو <strong>.po</strong> أو <strong>.json</strong>
               </p>
-              <input ref={fileInputRef} type="file" className="sr-only" accept=".pak,.lin,.po,.json" multiple onChange={handleFileUpload} />
+              <input ref={fileInputRef} type="file" className="sr-only" accept=".pak,.lin,.po,.json,.bytecode" multiple onChange={handleFileUpload} />
               <Button onClick={() => fileInputRef.current?.click()} disabled={loading} className="w-full" style={{ backgroundColor: accentColor }}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <FolderOpen className="w-4 h-4 ml-2" />}
                 اختر الملفات

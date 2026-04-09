@@ -133,6 +133,7 @@ export default function TranslationProgressDashboard({ state, qualityStats, glos
     const categories = new Map<string, { total: number; translated: number }>();
     for (const entry of state.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
+      const isBdat = /^.+?\[\d+\]\./.test(entry.label);
       const isDr = !isBdat && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
       const cat = isBdat
         ? categorizeBdatTable(entry.label, entry.msbtFile.includes(':') ? entry.msbtFile.split(':')[1] : undefined, entry.original)

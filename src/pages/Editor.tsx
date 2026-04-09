@@ -633,6 +633,9 @@ const Editor = () => {
             <Progress value={editor.state.entries.length > 0 ? (editor.translatedCount / editor.state.entries.length) * 100 : 0} className="h-2.5" />
           </div>
 
+          {/* File Load Report */}
+          <FileLoadReport entries={editor.state.entries} translations={editor.state.translations} />
+
           {/* Status Messages */}
           {editor.lastSaved && (
             <Card className="mb-4 border-secondary/30 bg-secondary/5"><CardContent className="p-4 text-center font-display">{editor.lastSaved}</CardContent></Card>

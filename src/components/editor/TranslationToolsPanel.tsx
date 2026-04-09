@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, X, Sparkles, Copy, RotateCcw, Loader2, Bookmark, Clock, ArrowLeftRight } from "lucide-react";
-import { EditorState, ExtractedEntry, categorizeFile, categorizeBdatTable } from "@/components/editor/types";
+import { EditorState, ExtractedEntry, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 
 import { toast } from "@/hooks/use-toast";
 
@@ -111,7 +111,8 @@ export default function TranslationToolsPanel({ state, currentEntry, currentTran
       const entries = state.entries.filter(e => {
         const isBdat = /^.+?\\\\[\\d+\\]\\\\./.test(e.label);
         const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
-        const c = isBdat ? categorizeBdatTable(e.label, sourceFile) : categorizeFile(e.msbtFile);
+        const isDr = !isBdat && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+        const c = isBdat ? categorizeBdatTable(e.label, sourceFile) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile);
         return c === cat;
       });
       if (entries.length === 0) continue;

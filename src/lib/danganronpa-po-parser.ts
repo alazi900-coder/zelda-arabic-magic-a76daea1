@@ -100,7 +100,7 @@ export function parsePo(buffer: ArrayBuffer): PoEntry[] {
           ? "msgctxt"
           : "msgid";
 
-      if (field === "msgid" && (current.msgctxt || current.msgid || current.msgstr)) {
+      if (field === "msgid" && (current.msgid || current.msgstr)) {
         pushEntry(entries, current);
         current = createEntry();
       }

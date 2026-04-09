@@ -38,10 +38,14 @@ export function parsePak(buffer: ArrayBuffer): PakEntry[] {
 
   // Heuristic: if first u32 is a reasonable file count and subsequent values
   // look like offsets, treat as simple offset-based PAK
-  if (firstU32 > 0 && firstU32 < 10000) {
+  if (firstU32 > 0 && firstU32 < 100000) {
     // Try Type 2 (script PAK with embedded file sizes + names)
     const type2Result = tryParseType2Pak(buffer, firstU32);
     if (type2Result) return type2Result;
+
+    // Try offset+size PAK (Switch format: each entry = offset u32 + size u32)
+    const offsetSizeResult = tryParseOffsetSizePak(buffer, firstU32);
+    if (offsetSizeResult) return offsetSizeResult;
 
     // Try simple offset-based PAK  
     const offsetResult = tryParseOffsetPak(buffer, firstU32);
@@ -90,6 +94,38 @@ function tryParseType2Pak(buffer: ArrayBuffer, fileCount: number): PakEntry[] | 
       pos += fileSize;
 
       entries.push({ name: name || `file_${i}`, data, index: i });
+    }
+
+    return entries.length > 0 ? entries : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Switch format PAK: header = fileCount, then N × (offset u32, size u32)
+ */
+function tryParseOffsetSizePak(buffer: ArrayBuffer, fileCount: number): PakEntry[] | null {
+  const view = new DataView(buffer);
+  const entries: PakEntry[] = [];
+
+  try {
+    const headerSize = 4 + fileCount * 8;
+    if (headerSize > buffer.byteLength) return null;
+
+    const fileEntries: { offset: number; size: number }[] = [];
+    for (let i = 0; i < fileCount; i++) {
+      const offset = view.getUint32(4 + i * 8, true);
+      const size = view.getUint32(4 + i * 8 + 4, true);
+      // Sanity: offset should be >= headerSize and within buffer
+      if (offset < headerSize || size > buffer.byteLength || offset + size > buffer.byteLength) return null;
+      fileEntries.push({ offset, size });
+    }
+
+    for (let i = 0; i < fileEntries.length; i++) {
+      const { offset, size } = fileEntries[i];
+      const data = buffer.slice(offset, offset + size);
+      entries.push({ name: `file_${i.toString().padStart(3, "0")}`, data, index: i });
     }
 
     return entries.length > 0 ? entries : null;

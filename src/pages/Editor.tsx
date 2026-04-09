@@ -104,12 +104,25 @@ const Editor = () => {
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
   const [showToolHelp, setShowToolHelp] = React.useState<ToolType>(null);
+  const [drBuilding, setDrBuilding] = React.useState(false);
+  const [sourceGame, setSourceGame] = React.useState<string | null>(null);
+
+  // Detect source game on mount
+  React.useEffect(() => {
+    import("@/lib/idb-storage").then(({ idbGet }) => {
+      idbGet<string>("editor-source-game").then(g => { if (g) setSourceGame(g); });
+    });
+  }, []);
+
+  const isDanganronpa = sourceGame?.startsWith("danganronpa");
+
   const isPokemon = React.useMemo(() => {
+    if (isDanganronpa) return false;
     if (!editor.state?.entries?.length) return false;
     return !editor.state.entries[0].msbtFile.startsWith("bdat-bin:");
-  }, [editor.state?.entries]);
-  const gameType = isPokemon ? "pokemon" : "xenoblade";
-  const processPath = isPokemon ? "/pokemon/process" : "/process";
+  }, [editor.state?.entries, isDanganronpa]);
+  const gameType = isPokemon ? "pokemon" : isDanganronpa ? "danganronpa" : "xenoblade";
+  const processPath = isDanganronpa ? "/danganronpa/classic" : isPokemon ? "/pokemon/process" : "/process";
 
   // Keyboard shortcuts
   useEditorKeyboard({

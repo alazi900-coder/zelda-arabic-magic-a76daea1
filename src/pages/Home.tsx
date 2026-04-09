@@ -13,10 +13,10 @@ const games = [
     link: "/xenoblade",
     image: xc3Bg,
     formats: ["BDAT", "MSBT"],
-    gradient: "from-[hsl(180,80%,30%)] to-[hsl(200,90%,40%)]",
-    accentBorder: "border-[hsl(180,60%,50%)]",
-    accentText: "text-[hsl(180,80%,60%)]",
-    accentBg: "bg-[hsl(180,60%,50%)]",
+    cardClass: "border-[hsl(180,60%,50%)]/30 hover:border-[hsl(180,60%,50%)]/60",
+    formatClass: "bg-[hsl(180,60%,50%)]/20 text-[hsl(180,80%,60%)] border-[hsl(180,60%,50%)]/30",
+    subtitleClass: "text-[hsl(180,80%,60%)]",
+    arrowClass: "text-[hsl(180,80%,60%)]",
   },
   {
     title: "Pokémon Scarlet & Violet",
@@ -25,10 +25,10 @@ const games = [
     link: "/pokemon",
     image: pokemonBg,
     formats: ["JSON", "FlatBuffers"],
-    gradient: "from-[hsl(0,70%,40%)] to-[hsl(30,80%,50%)]",
-    accentBorder: "border-[hsl(0,70%,55%)]",
-    accentText: "text-[hsl(0,80%,60%)]",
-    accentBg: "bg-[hsl(0,70%,55%)]",
+    cardClass: "border-[hsl(0,70%,55%)]/30 hover:border-[hsl(0,70%,55%)]/60",
+    formatClass: "bg-[hsl(0,70%,55%)]/20 text-[hsl(0,80%,60%)] border-[hsl(0,70%,55%)]/30",
+    subtitleClass: "text-[hsl(0,80%,60%)]",
+    arrowClass: "text-[hsl(0,80%,60%)]",
   },
   {
     title: "Danganronpa",
@@ -37,10 +37,10 @@ const games = [
     link: "/danganronpa",
     image: danganronpaBg,
     formats: ["PAK", "LIN", "SPC", "STX"],
-    gradient: "from-[hsl(330,70%,40%)] to-[hsl(350,80%,50%)]",
-    accentBorder: "border-[hsl(330,70%,55%)]",
-    accentText: "text-[hsl(330,80%,60%)]",
-    accentBg: "bg-[hsl(330,70%,55%)]",
+    cardClass: "border-[hsl(330,70%,55%)]/30 hover:border-[hsl(330,70%,55%)]/60",
+    formatClass: "bg-[hsl(330,70%,55%)]/20 text-[hsl(330,80%,60%)] border-[hsl(330,70%,55%)]/30",
+    subtitleClass: "text-[hsl(330,80%,60%)]",
+    arrowClass: "text-[hsl(330,80%,60%)]",
   },
 ];
 
@@ -66,10 +66,10 @@ const Home = () => {
 
       {/* Game Cards */}
       <section className="flex-1 px-4 pb-8">
-        <div className="max-w-4xl mx-auto grid gap-5 md:grid-cols-1">
+        <div className="max-w-4xl mx-auto grid gap-5">
           {games.map((game) => (
             <Link key={game.title} to={game.link} className="block group">
-              <div className={`relative rounded-2xl overflow-hidden border ${game.accentBorder}/30 hover:${game.accentBorder}/60 transition-all duration-300 shadow-lg hover:shadow-2xl`}>
+              <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 shadow-lg hover:shadow-2xl ${game.cardClass}`}>
                 {/* Background Image */}
                 <div className="absolute inset-0">
                   <img
@@ -88,7 +88,7 @@ const Home = () => {
                     {game.formats.map((f) => (
                       <span
                         key={f}
-                        className={`text-xs font-mono px-2 py-0.5 rounded ${game.accentBg}/20 ${game.accentText} border ${game.accentBorder}/30`}
+                        className={`text-xs font-mono px-2 py-0.5 rounded border ${game.formatClass}`}
                       >
                         {f}
                       </span>
@@ -98,7 +98,7 @@ const Home = () => {
                   <h2 className="text-2xl md:text-3xl font-display font-black text-white mb-1 drop-shadow-lg">
                     {game.title}
                   </h2>
-                  <p className={`text-lg font-display font-bold ${game.accentText} mb-2`}>
+                  <p className={`text-lg font-display font-bold mb-2 ${game.subtitleClass}`}>
                     {game.subtitle}
                   </p>
                   <p className="text-sm text-white/70 max-w-lg leading-relaxed">
@@ -106,7 +106,7 @@ const Home = () => {
                   </p>
 
                   {/* Arrow indicator */}
-                  <div className={`mt-4 inline-flex items-center gap-2 ${game.accentText} text-sm font-bold`}>
+                  <div className={`mt-4 inline-flex items-center gap-2 text-sm font-bold ${game.arrowClass}`}>
                     <span>ابدأ التعريب</span>
                     <span className="transition-transform group-hover:-translate-x-1">←</span>
                   </div>

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, Eye, FolderOpen } from "lucide-react";
 import { parseLin } from "@/lib/danganronpa-lin-parser";
-import { parsePak, type PakEntry } from "@/lib/danganronpa-pak-parser";
+import { parsePak, parseLin0Container, type PakEntry } from "@/lib/danganronpa-pak-parser";
 import { parsePo } from "@/lib/danganronpa-po-parser";
 import { idbSet } from "@/lib/idb-storage";
 
@@ -61,6 +61,65 @@ export default function DanganronpaClassicProcess() {
       }));
   }, []);
 
+  /**
+   * Recursively extract text entries from a buffer that could be:
+   * PAK → contains LIN0 containers or LIN/PO files
+   * LIN0 → contains .po and .bytecode files
+   * PO → text entries directly
+   * LIN → classic script text
+   */
+  const extractFromBuffer = useCallback((name: string, buffer: ArrayBuffer, results: { entries: ParsedEntry[]; linCount: number; poCount: number }) => {
+    // 1) Try as PO first (cheapest check)
+    const poEntries = processPo(name, buffer);
+    if (poEntries.length > 0) {
+      results.poCount++;
+      results.entries.push(...poEntries);
+      return;
+    }
+
+    // 2) Try as LIN0 container
+    const lin0Entries = parseLin0Container(buffer);
+    if (lin0Entries) {
+      for (const entry of lin0Entries) {
+        const childName = entry.name || `${name}:${entry.index}`;
+        extractFromBuffer(childName, entry.data, results);
+      }
+      return;
+    }
+
+    // 3) Try as PAK container (recursive)
+    try {
+      const pakEntries = parsePak(buffer);
+      if (pakEntries.length > 0) {
+        for (const entry of pakEntries) {
+          const childName = entry.name || `${name}:${entry.index}`;
+          extractFromBuffer(childName, entry.data, results);
+        }
+        return;
+      }
+    } catch { /* not a PAK */ }
+
+    // 4) Try as classic LIN script
+    try {
+      const parsed = processLin(name, buffer);
+      if (parsed.length > 0) {
+        results.linCount++;
+        results.entries.push(...parsed);
+        return;
+      }
+    } catch { /* not a LIN */ }
+
+    // 5) Last resort: scan raw bytes for PO markers
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(buffer));
+    if (text.includes('msgid "') || text.includes('msgctxt "')) {
+      const fallbackPo = processPo(name, buffer);
+      if (fallbackPo.length > 0) {
+        results.poCount++;
+        results.entries.push(...fallbackPo);
+      }
+    }
+  }, [processLin, processPo]);
+
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
@@ -74,87 +133,32 @@ export default function DanganronpaClassicProcess() {
         const ext = file.name.split(".").pop()?.toLowerCase();
         const buffer = await file.arrayBuffer();
 
-        if (ext === "pak") {
-          try {
-            const pakEntries: PakEntry[] = parsePak(buffer);
-            let linCount = 0;
-            let poCount = 0;
-            let totalStrings = 0;
+        if (ext === "pak" || ext === "lin") {
+          const results = { entries: [] as ParsedEntry[], linCount: 0, poCount: 0 };
+          extractFromBuffer(file.name, buffer, results);
 
-            for (const pakEntry of pakEntries) {
-              const sourceFile = pakEntry.name || `${file.name}:${pakEntry.index}`;
-
-              const parsedPo = processPo(sourceFile, pakEntry.data);
-              if (parsedPo.length > 0) {
-                poCount++;
-                totalStrings += parsedPo.length;
-                const filtered = newEntries.filter(e => e.sourceFile !== sourceFile);
-                filtered.push(...parsedPo);
-                newEntries.length = 0;
-                newEntries.push(...filtered);
-                continue;
-              }
-
-              try {
-                const parsed = processLin(sourceFile, pakEntry.data);
-                if (parsed.length > 0) {
-                  linCount++;
-                  totalStrings += parsed.length;
-                  const filtered = newEntries.filter(e => e.sourceFile !== sourceFile);
-                  filtered.push(...parsed);
-                  newEntries.length = 0;
-                  newEntries.push(...filtered);
-                }
-              } catch {
-                // Skip non-LIN files in PAK
-              }
+          // Merge results
+          for (const entry of results.entries) {
+            const idx = newEntries.findIndex(e => e.key === entry.key);
+            if (idx >= 0) {
+              newEntries[idx] = entry;
+            } else {
+              newEntries.push(entry);
             }
-
-            newLoaded.push({
-              name: file.name,
-              type: "pak",
-              linCount,
-              poCount,
-              stringCount: totalStrings,
-            });
-
-            toast({
-              title: `تم تحميل ${file.name}`,
-              description: `${poCount} ملف PO — ${linCount} ملف LIN — ${totalStrings} نص`,
-            });
-          } catch (err) {
-            toast({
-              title: `خطأ في ${file.name}`,
-              description: String(err),
-              variant: "destructive",
-            });
           }
-        } else if (ext === "lin") {
-          try {
-            const parsed = processLin(file.name, buffer);
-            const filtered = newEntries.filter(e => e.sourceFile !== file.name);
-            filtered.push(...parsed);
-            newEntries.length = 0;
-            newEntries.push(...filtered);
 
-            const lin = parseLin(buffer, isDr2);
-            newLoaded.push({
-              name: file.name,
-              type: "lin",
-              stringCount: lin.strings.length,
-            });
+          newLoaded.push({
+            name: file.name,
+            type: ext as "pak" | "lin",
+            linCount: results.linCount || undefined,
+            poCount: results.poCount || undefined,
+            stringCount: results.entries.length,
+          });
 
-            toast({
-              title: `تم تحميل ${file.name}`,
-              description: `${lin.strings.length} نص`,
-            });
-          } catch (err) {
-            toast({
-              title: `خطأ في ${file.name}`,
-              description: String(err),
-              variant: "destructive",
-            });
-          }
+          toast({
+            title: `تم تحميل ${file.name}`,
+            description: `${results.poCount} ملف PO — ${results.linCount} ملف LIN — ${results.entries.length} نص`,
+          });
         } else if (ext === "po") {
           try {
             const parsed = processPo(file.name, buffer);

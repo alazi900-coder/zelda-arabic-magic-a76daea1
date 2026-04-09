@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil } from "lucide-react";
-import { EditorState, categorizeFile, categorizeBdatTable } from "@/components/editor/types";
+import { EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 import { balanceLines, hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
 
 interface BalanceResult {
@@ -82,9 +82,10 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
               : entry.msbtFile.startsWith('bdat:')
               ? entry.msbtFile.slice(5)
               : undefined;
+            const isDr = !isBdat && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
             const category = isBdat
               ? categorizeBdatTable(entry.label, sourceFile)
-              : categorizeFile(entry.msbtFile);
+              : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
 
             found.push({
               key,

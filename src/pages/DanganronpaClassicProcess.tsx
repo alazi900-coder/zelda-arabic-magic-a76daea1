@@ -137,6 +137,39 @@ export default function DanganronpaClassicProcess() {
         return;
       }
     }
+
+    // 6) Brute-force: scan for LIN0 or PAK0 signatures inside the buffer
+    if (buffer.byteLength > 16) {
+      console.log(`${pad}  🔍 Brute-force scanning for LIN0/PAK0 signatures...`);
+      const signatures = [
+        { magic: [0x4C, 0x49, 0x4E, 0x30], label: "LIN0" }, // "LIN0"
+        { magic: [0x50, 0x41, 0x4B, 0x30], label: "PAK0" }, // "PAK0"
+      ];
+      let foundAnything = false;
+      for (let offset = 0; offset <= bytes.length - 8; offset++) {
+        for (const sig of signatures) {
+          if (bytes[offset] === sig.magic[0] && bytes[offset+1] === sig.magic[1] &&
+              bytes[offset+2] === sig.magic[2] && bytes[offset+3] === sig.magic[3]) {
+            console.log(`${pad}    📍 Found ${sig.label} at offset ${offset}`);
+            const subBuffer = buffer.slice(offset);
+            try {
+              const subResults = { entries: [] as ParsedEntry[], linCount: 0, poCount: 0 };
+              extractFromBuffer(`${name}@${offset}`, subBuffer, subResults, depth + 1);
+              if (subResults.entries.length > 0) {
+                results.entries.push(...subResults.entries);
+                results.linCount += subResults.linCount;
+                results.poCount += subResults.poCount;
+                foundAnything = true;
+              }
+            } catch (err) {
+              console.log(`${pad}    ❌ Failed to parse ${sig.label} at ${offset}: ${err}`);
+            }
+          }
+        }
+      }
+      if (foundAnything) return;
+    }
+
     console.log(`${pad}  ⚠️ NO TEXT FOUND in "${name}"`);
   }, [processLin, processPo]);
 

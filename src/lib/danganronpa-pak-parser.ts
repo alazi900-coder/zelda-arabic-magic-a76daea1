@@ -121,6 +121,42 @@ function tryLin0OffsetSize(buffer: ArrayBuffer): PakEntry[] | null {
   }
 }
 
+/**
+ * Parse PAK0 format (Switch): "PAK0" magic + u32 fileCount + N × (u32 offset, u32 size)
+ */
+function tryParsePak0WithMagic(buffer: ArrayBuffer): PakEntry[] | null {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 8) return null;
+  const magic = getMagic(bytes, 4);
+  if (magic !== "PAK0") return null;
+
+  const view = new DataView(buffer);
+  const fileCount = view.getUint32(4, true);
+  if (fileCount === 0 || fileCount > 100000) return null;
+
+  const tableStart = 8;
+  const headerSize = tableStart + fileCount * 8;
+  if (headerSize > buffer.byteLength) return null;
+
+  const entries: PakEntry[] = [];
+  try {
+    for (let i = 0; i < fileCount; i++) {
+      const offset = view.getUint32(tableStart + i * 8, true);
+      const size = view.getUint32(tableStart + i * 8 + 4, true);
+      if (offset + size > buffer.byteLength) return null;
+      if (size === 0) continue;
+      entries.push({
+        name: `file_${i.toString().padStart(3, "0")}`,
+        data: buffer.slice(offset, offset + size),
+        index: i,
+      });
+    }
+    return entries.length > 0 ? entries : null;
+  } catch {
+    return null;
+  }
+}
+
 export function parsePak(buffer: ArrayBuffer): PakEntry[] {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
@@ -129,8 +165,15 @@ export function parsePak(buffer: ArrayBuffer): PakEntry[] {
     throw new Error("ملف PAK قصير جداً");
   }
 
-  // Check for LIN0 magic first
   const magic4 = getMagic(bytes, 4);
+
+  // Check for PAK0 magic (Switch format)
+  if (magic4 === "PAK0") {
+    const pak0Result = tryParsePak0WithMagic(buffer);
+    if (pak0Result) return pak0Result;
+  }
+
+  // Check for LIN0 magic
   if (magic4 === "LIN0") {
     const lin0Result = parseLin0Container(buffer);
     if (lin0Result) return lin0Result;

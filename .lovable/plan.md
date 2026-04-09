@@ -1,43 +1,56 @@
 
 
-## المشكلة
+## تحليل المشكلة الجذرية
 
-عند فتح ملف WILAY، الأداة تفك الضغط (xbc1/zstd/deflate) وتخزن البيانات المفكوكة فقط. عند الحفظ، تحفظ البيانات المفكوكة بدون إعادة ضغطها — فيصبح الملف المحفوظ مختلفاً عن الأصلي ولا يعمل في اللعبة.
+المشكلة الأساسية واضحة الآن: ملفات Switch تبدأ بـ magic `PAK0` (أربع بايتات: `0x50 0x41 0x4B 0x30`). عندما يقرأها `parsePak` كـ u32 little-endian، تكون القيمة `811,368,784` وهي أكبر من `100,000`، فيتجاهل الملف بالكامل ويرمي خطأ "لم يتم التعرف على صيغة PAK".
 
-## الحل
+```text
+الهيكلية الفعلية للملف:
+┌──────────────────────────────┐
+│ PAK0 (4 bytes magic)         │
+│ u32 fileCount                │
+│ N × (u32 offset, u32 size)   │  ← جدول الملفات
+│ ────────────────────         │
+│ LIN0 (4 bytes magic)         │  ← ملف داخلي #0
+│   u32 fileCount              │
+│   (nameLen, name, dataLen,   │
+│    data) × N                 │
+│   ├── e01_103.po             │  ← النصوص هنا!
+│   └── e01_103.bytecode       │
+│ ────────────────────         │
+│ LIN0 ...                     │  ← ملف داخلي #1
+│   ...                        │
+└──────────────────────────────┘
+```
 
-### 1. حفظ معلومات الضغط الأصلية عند الفتح
+## خطة الإصلاح
 
-في `LoadedFile` نضيف:
-- `originalRaw: ArrayBuffer` — البيانات الخام قبل فك الضغط
-- `compressionSteps: string[]` — خطوات الضغط (مثل `["xbc1"]` أو `["zstd"]`)
-- `xbc1Header: Uint8Array | null` — أول 48 بايت من حاوية xbc1 الأصلية (تحتوي نوع الضغط واسم الملف)
+### 1. إضافة دعم `PAK0` magic في `danganronpa-pak-parser.ts`
 
-### 2. إضافة دالة إعادة الضغط في `xbc1-utils.ts`
+في دالة `parsePak`، إضافة فحص لـ magic `PAK0` قبل الهيورستكس الحالية:
+- إذا بدأ الملف بـ `PAK0`، نقرأ `fileCount` من الموقع `4` (بدل `0`)
+- نقرأ جدول (offset, size) بدءاً من الموقع `8` (بدل `4`)
+- كل entry يبدأ من `8 + i*8`
 
-دالة `rewrapWilayData(modifiedData, originalRaw, steps)`:
-- إذا كان الملف الأصلي xbc1 مع deflate → يضغط البيانات المعدلة بـ deflate ويعيد بناء حاوية xbc1 بنفس الـ header (اسم الملف، نوع الضغط)
-- إذا كان xbc1 بدون ضغط (type 0) → يلف البيانات بحاوية xbc1 بدون ضغط
-- إذا لم يكن مضغوطاً → يعيد البيانات كما هي
+هذا يعني إضافة دالة `tryParsePak0` جديدة تتعامل مع الـ magic header.
 
-### 3. تعديل `handleDownloadModified` في `WilayViewer.tsx`
+### 2. تحسين `tryParseOffsetSizePak` ليدعم PAK0
 
-قبل الحفظ، يستدعي `rewrapWilayData` لإعادة ضغط البيانات المعدلة بنفس طريقة الملف الأصلي، ثم يحفظ بنفس الاسم الأصلي مع الامتداد الصحيح.
+بدل إنشاء دالة منفصلة، يمكن تعديل `parsePak` لتكتشف PAK0 وتمرر الـ buffer مع offset مصحح:
+- فحص أول 4 بايت = "PAK0"
+- قراءة fileCount من offset 4
+- تمرير headerOffset = 8 لجدول الملفات
+
+### 3. تحسين المتانة في `extractFromBuffer`
+
+إضافة فحص إضافي: إذا فشلت كل المحاولات وكان حجم الملف كبيراً، نحاول البحث عن magic `LIN0` أو `PAK0` داخل البيانات الخام (brute-force scan) كملاذ أخير.
 
 ### التفاصيل التقنية
 
-**ملف `xbc1-utils.ts`** — إضافة:
-```text
-rewrapWilayData(data, originalRaw, steps)
-  ├─ إذا steps يحتوي "xbc1":
-  │   ├─ يقرأ header الأصلي (48 بايت)
-  │   ├─ يحدد نوع الضغط (0=بدون، 1=deflate، 3=zstd)
-  │   ├─ يضغط data بنفس النوع
-  │   └─ يبني حاوية xbc1 جديدة بنفس الاسم والنوع
-  └─ وإلا يعيد data مباشرة
-```
+**ملف `src/lib/danganronpa-pak-parser.ts`:**
+- إضافة كشف `PAK0` magic في بداية `parsePak`
+- إنشاء `tryParsePak0WithMagic` التي تقرأ fileCount من offset 4 وجدول offset+size من offset 8
 
-**ملف `WilayViewer.tsx`** — تعديلات:
-- `LoadedFile` يحفظ `originalRaw` و `compressionSteps`
-- `handleDownloadModified` يستدعي `rewrapWilayData` قبل إنشاء Blob
+**ملف `src/pages/DanganronpaClassicProcess.tsx`:**
+- إضافة خطوة fallback في `extractFromBuffer` تبحث عن `LIN0` signatures داخل البيانات الخام إذا فشلت كل الطرق الأخرى
 

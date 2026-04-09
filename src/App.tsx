@@ -10,6 +10,7 @@ import UpdateBanner from "@/components/UpdateBanner";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
+const Home = lazy(() => import("./pages/Home"));
 const Xenoblade = lazy(() => import("./pages/Xenoblade"));
 const XenobladeProcess = lazy(() => import("./pages/XenobladeProcess"));
 const WilayViewer = lazy(() => import("./pages/WilayViewer"));
@@ -45,7 +46,8 @@ const App = () => (
           <ErrorBoundary fallbackTitle="حدث خطأ في التطبيق">
             <Suspense fallback={<PageLoader />}>
               <Routes>
-                <Route path="/" element={<Xenoblade />} />
+                <Route path="/" element={<Home />} />
+                <Route path="/xenoblade" element={<Xenoblade />} />
                 <Route path="/process" element={<ErrorBoundary fallbackTitle="خطأ في المعالجة"><XenobladeProcess /></ErrorBoundary>} />
                 <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />
                 <Route path="/auth" element={<Auth />} />

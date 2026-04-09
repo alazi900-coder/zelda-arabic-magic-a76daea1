@@ -5,7 +5,8 @@
  * then rebuilds files with translated text in the same format.
  */
 
-import { buildPo } from "./danganronpa-po-parser";
+import { parsePo, buildPo } from "./danganronpa-po-parser";
+import { buildLin } from "./danganronpa-lin-parser";
 
 /**
  * A node in the archive tree. Leaf nodes have `textEntries`.

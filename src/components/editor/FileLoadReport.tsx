@@ -31,7 +31,7 @@ const FileLoadReport: React.FC<FileLoadReportProps> = ({ entries, translations }
   const totalTranslated = Object.values(translations).filter(v => v?.trim()).length;
   const overallPct = totalEntries > 0 ? Math.round((totalTranslated / totalEntries) * 100) : 0;
 
-  if (totalFiles <= 1) return null;
+  if (totalFiles === 0) return null;
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mb-4" dir="rtl">

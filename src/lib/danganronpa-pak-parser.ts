@@ -14,6 +14,15 @@
  *   file data blocks
  *
  * This parser auto-detects the format by heuristics.
+ *
+ * LIN0 container format (Switch/Unity):
+ *   4 bytes magic "LIN0"
+ *   u32 file_count (LE)
+ *   For each file:
+ *     u32 name_length (byte count of null-terminated UTF-8 name)
+ *     u8[] name (null-terminated)
+ *     u32 data_length
+ *     u8[] data
  */
 
 export interface PakEntry {
@@ -26,12 +35,107 @@ export interface PakEntry {
  * Parse a DR1/DR2 PAK archive containing LIN or other files.
  * Uses heuristic detection since PAK has no magic bytes.
  */
+/**
+ * Check if buffer starts with a known magic string
+ */
+function getMagic(bytes: Uint8Array, len: number): string {
+  let s = "";
+  for (let i = 0; i < Math.min(len, bytes.length); i++) {
+    s += String.fromCharCode(bytes[i]);
+  }
+  return s;
+}
+
+/**
+ * Parse a LIN0 container (Switch/Unity).
+ * Format: "LIN0" + u32 fileCount + for each: u32 nameLen, name bytes, u32 dataLen, data bytes
+ */
+export function parseLin0Container(buffer: ArrayBuffer): PakEntry[] | null {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 8) return null;
+  const magic = getMagic(bytes, 4);
+  if (magic !== "LIN0") return null;
+
+  const view = new DataView(buffer);
+  const fileCount = view.getUint32(4, true);
+  if (fileCount === 0 || fileCount > 100000) return null;
+
+  const entries: PakEntry[] = [];
+  let pos = 8;
+
+  try {
+    for (let i = 0; i < fileCount; i++) {
+      if (pos + 4 > bytes.length) return null;
+      const nameLen = view.getUint32(pos, true);
+      pos += 4;
+      if (nameLen > 1024 || pos + nameLen > bytes.length) return null;
+
+      // Read null-terminated UTF-8 name
+      const nameBytes = bytes.slice(pos, pos + nameLen);
+      let name = new TextDecoder("utf-8", { fatal: false }).decode(nameBytes).replace(/\0+$/, "");
+      pos += nameLen;
+
+      if (pos + 4 > bytes.length) return null;
+      const dataLen = view.getUint32(pos, true);
+      pos += 4;
+      if (pos + dataLen > bytes.length) return null;
+
+      const data = buffer.slice(pos, pos + dataLen);
+      pos += dataLen;
+
+      entries.push({ name: name || `file_${i}`, data, index: i });
+    }
+    return entries.length > 0 ? entries : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Try alternative LIN0 layout: "LIN0" + entries as (offset, size) pairs after header
+ */
+function tryLin0OffsetSize(buffer: ArrayBuffer): PakEntry[] | null {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 8) return null;
+  const magic = getMagic(bytes, 4);
+  if (magic !== "LIN0") return null;
+
+  const view = new DataView(buffer);
+  const fileCount = view.getUint32(4, true);
+  if (fileCount === 0 || fileCount > 10000) return null;
+
+  const headerSize = 8 + fileCount * 8;
+  if (headerSize > buffer.byteLength) return null;
+
+  const entries: PakEntry[] = [];
+  try {
+    for (let i = 0; i < fileCount; i++) {
+      const offset = view.getUint32(8 + i * 8, true);
+      const size = view.getUint32(8 + i * 8 + 4, true);
+      if (offset + size > buffer.byteLength) return null;
+      entries.push({ name: `file_${i.toString().padStart(3, "0")}`, data: buffer.slice(offset, offset + size), index: i });
+    }
+    return entries.length > 0 ? entries : null;
+  } catch {
+    return null;
+  }
+}
+
 export function parsePak(buffer: ArrayBuffer): PakEntry[] {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
 
   if (bytes.length < 8) {
     throw new Error("ملف PAK قصير جداً");
+  }
+
+  // Check for LIN0 magic first
+  const magic4 = getMagic(bytes, 4);
+  if (magic4 === "LIN0") {
+    const lin0Result = parseLin0Container(buffer);
+    if (lin0Result) return lin0Result;
+    const lin0Alt = tryLin0OffsetSize(buffer);
+    if (lin0Alt) return lin0Alt;
   }
 
   const firstU32 = view.getUint32(0, true);

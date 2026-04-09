@@ -107,7 +107,7 @@ export default function DanganronpaClassicProcess() {
       console.log(`${pad}  ✅ LIN0 container: ${lin0Entries.length} files`);
       const children: ArchiveNode[] = [];
       for (const entry of lin0Entries) {
-        const childName = entry.name || `${name}:${entry.index}`;
+        const childName = `${name}:${entry.name || entry.index}`;
         const childNode = extractFromBuffer(childName, entry.data, results, depth + 1);
         if (childNode) children.push(childNode);
         else children.push({ name: childName, format: "raw", originalBuffer: entry.data });
@@ -135,7 +135,7 @@ export default function DanganronpaClassicProcess() {
         console.log(`${pad}  ✅ PAK (${fmt}): ${pakEntries.length} files`);
         const children: ArchiveNode[] = [];
         for (const entry of pakEntries) {
-          const childName = entry.name || `${name}:${entry.index}`;
+          const childName = `${name}:${entry.name || entry.index}`;
           const childNode = extractFromBuffer(childName, entry.data, results, depth + 1);
           if (childNode) children.push(childNode);
           else children.push({ name: childName, format: "raw", originalBuffer: entry.data });

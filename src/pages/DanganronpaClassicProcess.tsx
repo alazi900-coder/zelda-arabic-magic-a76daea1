@@ -1,20 +1,23 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, Eye, FolderOpen, Package } from "lucide-react";
 import { parseLin } from "@/lib/danganronpa-lin-parser";
 import { parsePak, parseLin0Container, type PakEntry } from "@/lib/danganronpa-pak-parser";
 import { parsePo } from "@/lib/danganronpa-po-parser";
 import { idbSet } from "@/lib/idb-storage";
-import { type ArchiveNode, rebuildArchive } from "@/lib/danganronpa-rebuild";
+import { type ArchiveNode, rebuildArchive, nodeHasTranslations } from "@/lib/danganronpa-rebuild";
 
 interface ParsedEntry {
   key: string;
   original: string;
   translation: string;
   sourceFile: string;
+  /** Top-level file this entry came from (the file user uploaded) */
+  rootFile: string;
 }
 
 interface FileInfo {
@@ -39,6 +42,19 @@ export default function DanganronpaClassicProcess() {
   const [loadedFiles, setLoadedFiles] = useState<FileInfo[]>([]);
   const [archiveTrees, setArchiveTrees] = useState<Map<string, ArchiveNode>>(new Map());
 
+  // Per-file progress calculation
+  const fileProgress = useMemo(() => {
+    const map = new Map<string, { total: number; translated: number }>();
+    for (const e of entries) {
+      const root = e.rootFile;
+      if (!map.has(root)) map.set(root, { total: 0, translated: 0 });
+      const stats = map.get(root)!;
+      stats.total++;
+      if (e.translation.trim()) stats.translated++;
+    }
+    return map;
+  }, [entries]);
+
   const processLin = useCallback((name: string, buffer: ArrayBuffer): ParsedEntry[] => {
     const lin = parseLin(buffer, isDr2);
     return lin.strings
@@ -48,6 +64,7 @@ export default function DanganronpaClassicProcess() {
         original: str,
         translation: "",
         sourceFile: name,
+        rootFile: "",
       }));
   }, [isDr2]);
 
@@ -60,24 +77,10 @@ export default function DanganronpaClassicProcess() {
         original: entry.original,
         translation: entry.translation || "",
         sourceFile: name,
+        rootFile: "",
       }));
   }, []);
 
-  /**
-   * Detect the format used to parse the buffer (for archive tree tracking).
-   */
-  function detectFormat(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer);
-    if (bytes.length < 4) return "raw";
-    const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
-    if (magic === "PAK0") return "pak0";
-    if (magic === "LIN0") return "lin0";
-    return "raw";
-  }
-
-  /**
-   * Recursively extract text entries and build an ArchiveNode tree.
-   */
   const extractFromBuffer = useCallback((
     name: string,
     buffer: ArrayBuffer,
@@ -95,12 +98,7 @@ export default function DanganronpaClassicProcess() {
       console.log(`${pad}  ✅ PO: ${poEntries.length} entries`);
       results.poCount++;
       results.entries.push(...poEntries);
-      return {
-        name,
-        format: "po",
-        originalBuffer: buffer,
-        entryKeys: poEntries.map(e => e.key),
-      };
+      return { name, format: "po", originalBuffer: buffer, entryKeys: poEntries.map(e => e.key) };
     }
 
     // 2) Try as LIN0 container
@@ -121,7 +119,6 @@ export default function DanganronpaClassicProcess() {
     try {
       const pakEntries = parsePak(buffer);
       if (pakEntries.length > 0) {
-        // Detect specific PAK format
         let fmt: ArchiveNode["format"] = "pak-offset";
         if (magic === "PAK0") fmt = "pak0";
         else {
@@ -135,7 +132,6 @@ export default function DanganronpaClassicProcess() {
             }
           }
         }
-
         console.log(`${pad}  ✅ PAK (${fmt}): ${pakEntries.length} files`);
         const children: ArchiveNode[] = [];
         for (const entry of pakEntries) {
@@ -157,12 +153,7 @@ export default function DanganronpaClassicProcess() {
         console.log(`${pad}  ✅ Classic LIN: ${parsed.length} entries`);
         results.linCount++;
         results.entries.push(...parsed);
-        return {
-          name,
-          format: "classic-lin",
-          originalBuffer: buffer,
-          entryKeys: parsed.map(e => e.key),
-        };
+        return { name, format: "classic-lin", originalBuffer: buffer, entryKeys: parsed.map(e => e.key) };
       }
     } catch (err) {
       console.log(`${pad}  ❌ Not classic LIN: ${err}`);
@@ -202,24 +193,17 @@ export default function DanganronpaClassicProcess() {
               console.log(`${pad}  ✅ UTF-16LE text: "${str.substring(0, 50)}..."`);
               const entryKey = `${name}`;
               results.entries.push({
-                key: entryKey,
-                original: str,
-                translation: "",
-                sourceFile: name.split(":")[0] || name,
+                key: entryKey, original: str, translation: "",
+                sourceFile: name.split(":")[0] || name, rootFile: "",
               });
-              return {
-                name,
-                format: "utf16le",
-                originalBuffer: buffer,
-                entryKeys: [entryKey],
-              };
+              return { name, format: "utf16le", originalBuffer: buffer, entryKeys: [entryKey] };
             }
           }
         } catch { /* not UTF-16 */ }
       }
     }
 
-    // 6) Last resort: scan raw bytes for PO markers
+    // 6) Raw PO markers fallback
     const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     if (text.includes('msgid "') || text.includes('msgctxt "')) {
       const fallbackPo = processPo(name, buffer);
@@ -227,12 +211,7 @@ export default function DanganronpaClassicProcess() {
         console.log(`${pad}  ✅ Raw PO fallback: ${fallbackPo.length} entries`);
         results.poCount++;
         results.entries.push(...fallbackPo);
-        return {
-          name,
-          format: "po",
-          originalBuffer: buffer,
-          entryKeys: fallbackPo.map(e => e.key),
-        };
+        return { name, format: "po", originalBuffer: buffer, entryKeys: fallbackPo.map(e => e.key) };
       }
     }
 
@@ -290,10 +269,12 @@ export default function DanganronpaClassicProcess() {
           const results = { entries: [] as ParsedEntry[], linCount: 0, poCount: 0 };
           const tree = extractFromBuffer(file.name, buffer, results);
 
-          // Store the archive tree for rebuilding
-          if (tree) {
-            newTrees.set(file.name, tree);
+          // Tag all entries with rootFile
+          for (const entry of results.entries) {
+            entry.rootFile = file.name;
           }
+
+          if (tree) newTrees.set(file.name, tree);
 
           for (const entry of results.entries) {
             const idx = newEntries.findIndex(e => e.key === entry.key);
@@ -302,8 +283,7 @@ export default function DanganronpaClassicProcess() {
           }
 
           newLoaded.push({
-            name: file.name,
-            type: ext as "pak" | "lin",
+            name: file.name, type: ext as "pak" | "lin",
             linCount: results.linCount || undefined,
             poCount: results.poCount || undefined,
             stringCount: results.entries.length,
@@ -316,16 +296,14 @@ export default function DanganronpaClassicProcess() {
         } else if (ext === "po") {
           try {
             const parsed = processPo(file.name, buffer);
+            for (const p of parsed) p.rootFile = file.name;
             const filtered = newEntries.filter(e => e.sourceFile !== file.name);
             filtered.push(...parsed);
             newEntries.length = 0;
             newEntries.push(...filtered);
 
-            // Store as a simple PO tree
             newTrees.set(file.name, {
-              name: file.name,
-              format: "po",
-              originalBuffer: buffer,
+              name: file.name, format: "po", originalBuffer: buffer,
               entryKeys: parsed.map(e => e.key),
             });
 
@@ -346,10 +324,10 @@ export default function DanganronpaClassicProcess() {
                     newEntries[idx].translation = item.translation || "";
                   } else {
                     newEntries.push({
-                      key: item.key,
-                      original: item.original,
+                      key: item.key, original: item.original,
                       translation: item.translation || "",
                       sourceFile: item.sourceFile || file.name,
+                      rootFile: item.rootFile || file.name,
                     });
                   }
                 }
@@ -395,15 +373,22 @@ export default function DanganronpaClassicProcess() {
       const editorKey = `${e.key}:${entries.indexOf(e)}`;
       if (e.translation) editorTranslations[editorKey] = e.translation;
     }
+
+    // Save archive trees for rebuilding from the editor
+    const treesObj: Record<string, ArchiveNode> = {};
+    for (const [k, v] of archiveTrees) treesObj[k] = v;
+
     await idbSet("editorState", {
       entries: editorEntries,
       translations: editorTranslations,
       freshExtraction: true,
     });
+    await idbSet("dr-archive-trees", treesObj);
+    await idbSet("dr-entries-meta", entries.map(e => ({ key: e.key, rootFile: e.rootFile })));
     if (glossary) await idbSet("editor-glossary", glossary);
     await idbSet("editor-source-game", isDr2 ? "danganronpa2" : "danganronpa1");
     navigate("/editor");
-  }, [entries, glossary, isDr2, navigate]);
+  }, [entries, glossary, isDr2, navigate, archiveTrees]);
 
   const exportJson = useCallback(() => {
     const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
@@ -421,7 +406,6 @@ export default function DanganronpaClassicProcess() {
       return;
     }
 
-    // Build translations map from current entries
     const translationsMap = new Map<string, string>();
     for (const entry of entries) {
       if (entry.translation.trim()) {
@@ -435,7 +419,15 @@ export default function DanganronpaClassicProcess() {
     }
 
     let exportedCount = 0;
+    let skippedCount = 0;
     for (const [fileName, tree] of archiveTrees) {
+      // Skip files with no translations at all
+      if (!nodeHasTranslations(tree, translationsMap)) {
+        skippedCount++;
+        console.log(`⏭️ تخطي ${fileName} — لا ترجمات`);
+        continue;
+      }
+
       try {
         const rebuilt = rebuildArchive(tree, translationsMap);
         const blob = new Blob([rebuilt], { type: "application/octet-stream" });
@@ -448,18 +440,16 @@ export default function DanganronpaClassicProcess() {
         exportedCount++;
       } catch (err) {
         console.error(`Failed to rebuild ${fileName}:`, err);
-        toast({
-          title: `خطأ في بناء ${fileName}`,
-          description: String(err),
-          variant: "destructive",
-        });
+        toast({ title: `خطأ في بناء ${fileName}`, description: String(err), variant: "destructive" });
       }
     }
 
     if (exportedCount > 0) {
       toast({
         title: `تم بناء ${exportedCount} ملف`,
-        description: `${translationsMap.size} ترجمة مطبّقة`,
+        description: skippedCount > 0
+          ? `${translationsMap.size} ترجمة — تم تخطي ${skippedCount} ملف بدون ترجمات`
+          : `${translationsMap.size} ترجمة مطبّقة`,
       });
     }
   }, [archiveTrees, entries, toast]);
@@ -525,29 +515,45 @@ export default function DanganronpaClassicProcess() {
           </Card>
         </div>
 
+        {/* Loaded Files with Progress */}
         {loadedFiles.length > 0 && (
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">الملفات المحمّلة</CardTitle></CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {loadedFiles.map((f, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
-                    <span className="font-mono text-xs">{f.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: `${accentColor}20`, color: accentColor }}>
-                        {f.type.toUpperCase()}
-                      </span>
-                      {f.linCount != null && <span className="text-xs text-muted-foreground">{f.linCount} LIN</span>}
-                      {f.poCount != null && <span className="text-xs text-muted-foreground">{f.poCount} PO</span>}
-                      {f.stringCount != null && <span className="text-xs text-muted-foreground">{f.stringCount} نص</span>}
+              <div className="space-y-3">
+                {loadedFiles.map((f, i) => {
+                  const stats = fileProgress.get(f.name);
+                  const pct = stats && stats.total > 0 ? Math.round((stats.translated / stats.total) * 100) : 0;
+                  return (
+                    <div key={i} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-mono text-xs truncate max-w-[60%]">{f.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: `${accentColor}20`, color: accentColor }}>
+                            {f.type.toUpperCase()}
+                          </span>
+                          {f.stringCount != null && (
+                            <span className="text-xs text-muted-foreground">
+                              {stats ? `${stats.translated}/${stats.total}` : `${f.stringCount}`} نص
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {stats && stats.total > 0 && (
+                        <div className="flex items-center gap-2">
+                          <Progress value={pct} className="h-2 flex-1" />
+                          <span className="text-xs text-muted-foreground min-w-[3rem] text-left">{pct}%</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         )}
 
+        {/* Preview */}
         {entries.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
@@ -573,6 +579,7 @@ export default function DanganronpaClassicProcess() {
           </Card>
         )}
 
+        {/* Actions */}
         {entries.length > 0 && (
           <div className="flex flex-wrap gap-3 justify-center">
             <Button onClick={openInEditor} size="lg" style={{ backgroundColor: accentColor }} className="text-white">

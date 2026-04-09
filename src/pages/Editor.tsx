@@ -104,12 +104,25 @@ const Editor = () => {
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
   const [showToolHelp, setShowToolHelp] = React.useState<ToolType>(null);
+  const [drBuilding, setDrBuilding] = React.useState(false);
+  const [sourceGame, setSourceGame] = React.useState<string | null>(null);
+
+  // Detect source game on mount
+  React.useEffect(() => {
+    import("@/lib/idb-storage").then(({ idbGet }) => {
+      idbGet<string>("editor-source-game").then(g => { if (g) setSourceGame(g); });
+    });
+  }, []);
+
+  const isDanganronpa = sourceGame?.startsWith("danganronpa");
+
   const isPokemon = React.useMemo(() => {
+    if (isDanganronpa) return false;
     if (!editor.state?.entries?.length) return false;
     return !editor.state.entries[0].msbtFile.startsWith("bdat-bin:");
-  }, [editor.state?.entries]);
-  const gameType = isPokemon ? "pokemon" : "xenoblade";
-  const processPath = isPokemon ? "/pokemon/process" : "/process";
+  }, [editor.state?.entries, isDanganronpa]);
+  const gameType = isPokemon ? "pokemon" : isDanganronpa ? "danganronpa" : "xenoblade";
+  const processPath = isDanganronpa ? "/danganronpa/classic" : isPokemon ? "/pokemon/process" : "/process";
 
   // Keyboard shortcuts
   useEditorKeyboard({
@@ -1795,9 +1808,69 @@ const Editor = () => {
                   <ShieldCheck className="w-4 h-4" />
                   <span className="hidden sm:inline">سلامة</span>
                 </Button>
-                <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 font-display font-bold">
-                  {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
-                </Button>
+                {isDanganronpa ? (
+                  <Button size="lg" onClick={async () => {
+                    setDrBuilding(true);
+                    try {
+                      const { idbGet } = await import("@/lib/idb-storage");
+                      const { rebuildArchive, nodeHasTranslations } = await import("@/lib/danganronpa-rebuild");
+                      const treesObj = await idbGet<Record<string, import("@/lib/danganronpa-rebuild").ArchiveNode>>("dr-archive-trees");
+                      if (!treesObj || Object.keys(treesObj).length === 0) {
+                        import("@/hooks/use-toast").then(({ toast }) => toast({ title: "لا توجد ملفات أرشيف محفوظة", description: "ارجع لصفحة المعالجة وارفع الملفات مرة أخرى", variant: "destructive" }));
+                        return;
+                      }
+                      // Collect translations from editor state
+                      const translations = new Map<string, string>();
+                      const st = editor.state;
+                      if (st?.entries) {
+                        for (let i = 0; i < st.entries.length; i++) {
+                          const entry = st.entries[i];
+                          const key = entry.msbtFile;
+                          const editorKey = `${key}:${i}`;
+                          const tr = st.translations?.[editorKey];
+                          if (tr?.trim()) translations.set(key, tr);
+                        }
+                      }
+                      if (translations.size === 0) {
+                        import("@/hooks/use-toast").then(({ toast }) => toast({ title: "لا توجد ترجمات لتطبيقها", variant: "destructive" }));
+                        return;
+                      }
+                      let built = 0, skipped = 0;
+                      for (const [fileName, tree] of Object.entries(treesObj)) {
+                        if (!nodeHasTranslations(tree, translations)) { skipped++; continue; }
+                        try {
+                          const rebuilt = rebuildArchive(tree, translations);
+                          const blob = new Blob([rebuilt], { type: "application/octet-stream" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url; a.download = fileName; a.click();
+                          URL.revokeObjectURL(url);
+                          built++;
+                        } catch (err) {
+                          console.error(`Failed to rebuild ${fileName}:`, err);
+                          import("@/hooks/use-toast").then(({ toast }) => toast({ title: `خطأ في بناء ${fileName}`, description: String(err), variant: "destructive" }));
+                        }
+                      }
+                      if (built > 0) {
+                        import("@/hooks/use-toast").then(({ toast }) => toast({
+                          title: `تم بناء ${built} ملف`,
+                          description: skipped > 0 ? `تم تخطي ${skipped} ملف بدون ترجمات` : `${translations.size} ترجمة مطبّقة`,
+                        }));
+                      }
+                    } catch (err) {
+                      console.error("DR build error:", err);
+                      import("@/hooks/use-toast").then(({ toast }) => toast({ title: "خطأ في البناء", description: String(err), variant: "destructive" }));
+                    } finally {
+                      setDrBuilding(false);
+                    }
+                  }} disabled={drBuilding} className="flex-1 font-display font-bold">
+                    {drBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Package className="w-4 h-4 mr-2" />} بناء ملفات Danganronpa
+                  </Button>
+                ) : (
+                  <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 font-display font-bold">
+                    {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
+                  </Button>
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>

@@ -48,6 +48,7 @@ import BuildStatsDialog from "@/components/editor/BuildStatsDialog";
 import BuildConfirmDialog from "@/components/editor/BuildConfirmDialog";
 import ConsistencyResultsPanel from "@/components/editor/ConsistencyResultsPanel";
 import BdatBuildReport from "@/components/editor/BdatBuildReport";
+import FileLoadReport from "@/components/editor/FileLoadReport";
 import IntegrityCheckDialog from "@/components/editor/IntegrityCheckDialog";
 import PreBuildDiagnostic from "@/components/editor/PreBuildDiagnostic";
 import CompareEnginesDialog from "@/components/editor/CompareEnginesDialog";
@@ -631,6 +632,9 @@ const Editor = () => {
             </div>
             <Progress value={editor.state.entries.length > 0 ? (editor.translatedCount / editor.state.entries.length) * 100 : 0} className="h-2.5" />
           </div>
+
+          {/* File Load Report */}
+          <FileLoadReport entries={editor.state.entries} translations={editor.state.translations} />
 
           {/* Status Messages */}
           {editor.lastSaved && (

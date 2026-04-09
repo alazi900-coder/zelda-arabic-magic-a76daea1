@@ -125,7 +125,55 @@ export default function DanganronpaClassicProcess() {
       console.log(`${pad}  ❌ Not classic LIN: ${err}`);
     }
 
-    // 5) Last resort: scan raw bytes for PO markers
+    // 5) Try as raw UTF-16LE text (PAK sub-files in DR1/DR2 classic)
+    if (bytes.length >= 2) {
+      const hasBom = bytes[0] === 0xFF && bytes[1] === 0xFE;
+      if (hasBom || bytes.length >= 4) {
+        try {
+          const startOffset = hasBom ? 2 : 0;
+          const textBytes = bytes.slice(startOffset);
+          // Check if it looks like UTF-16LE: should have some printable chars
+          let isUtf16 = false;
+          if (textBytes.length >= 2) {
+            const view16 = new DataView(textBytes.buffer, textBytes.byteOffset, textBytes.byteLength);
+            let printableCount = 0;
+            for (let j = 0; j + 1 < textBytes.length; j += 2) {
+              const ch = view16.getUint16(j, true);
+              if (ch === 0) break;
+              if ((ch >= 0x20 && ch < 0x7F) || (ch >= 0x0600 && ch <= 0x06FF) || ch === 0x0A || ch === 0x0D || ch === 0x1FFF) {
+                printableCount++;
+              }
+            }
+            isUtf16 = printableCount >= 1;
+          }
+          if (isUtf16) {
+            // Decode UTF-16LE string
+            let str = "";
+            const view16 = new DataView(textBytes.buffer, textBytes.byteOffset, textBytes.byteLength);
+            for (let j = 0; j + 1 < textBytes.length; j += 2) {
+              const ch = view16.getUint16(j, true);
+              if (ch === 0) break;
+              // Skip control char 0x1FFF (DR formatting marker)
+              if (ch === 0x1FFF) continue;
+              str += String.fromCharCode(ch);
+            }
+            str = str.trim();
+            if (str.length > 0) {
+              console.log(`${pad}  ✅ UTF-16LE text: "${str.substring(0, 50)}..."`);
+              results.entries.push({
+                key: `${name}`,
+                original: str,
+                translation: "",
+                sourceFile: name.split(":")[0] || name,
+              });
+              return;
+            }
+          }
+        } catch { /* not UTF-16 */ }
+      }
+    }
+
+    // 6) Last resort: scan raw bytes for PO markers
     const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     if (text.includes('msgid "') || text.includes('msgctxt "')) {
       console.log(`${pad}  🔍 Raw PO markers found, retrying...`);
@@ -138,12 +186,12 @@ export default function DanganronpaClassicProcess() {
       }
     }
 
-    // 6) Brute-force: scan for LIN0 or PAK0 signatures inside the buffer
+    // 7) Brute-force: scan for LIN0 or PAK0 signatures inside the buffer
     if (buffer.byteLength > 16) {
       console.log(`${pad}  🔍 Brute-force scanning for LIN0/PAK0 signatures...`);
       const signatures = [
-        { magic: [0x4C, 0x49, 0x4E, 0x30], label: "LIN0" }, // "LIN0"
-        { magic: [0x50, 0x41, 0x4B, 0x30], label: "PAK0" }, // "PAK0"
+        { magic: [0x4C, 0x49, 0x4E, 0x30], label: "LIN0" },
+        { magic: [0x50, 0x41, 0x4B, 0x30], label: "PAK0" },
       ];
       let foundAnything = false;
       for (let offset = 0; offset <= bytes.length - 8; offset++) {

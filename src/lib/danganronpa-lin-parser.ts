@@ -19,36 +19,32 @@ export interface LinFile {
   isDr2: boolean;
 }
 
-export function parseLin(buffer: ArrayBuffer, isDr2 = false): LinFile {
+const TEXT_OPCODE = 0x02;
+
+/**
+ * Try header-based parsing (standard DR1/DR2 PC format)
+ */
+function tryHeaderParse(buffer: ArrayBuffer, isDr2: boolean): LinFile | null {
   const view = new DataView(buffer);
   const bytes = new Uint8Array(buffer);
 
-  if (bytes.length < 8) {
-    throw new Error("ملف LIN قصير جداً");
-  }
+  if (bytes.length < 16) return null;
 
   const type = view.getUint32(0, true);
-  const headerSize = view.getUint32(4, true);
-
-  if (type !== 1 && type !== 2) {
-    throw new Error(`نوع LIN غير معروف: ${type}`);
-  }
-
-  // Type 2 = no text block
-  if (type === 2 || bytes.length < 16) {
-    return { type, strings: [], isDr2 };
-  }
+  if (type !== 1 && type !== 2) return null;
+  if (type === 2) return { type, strings: [], isDr2 };
 
   const textBlockOffset = view.getUint32(8, true);
   const stringCount = view.getUint32(12, true);
 
-  if (stringCount === 0 || textBlockOffset >= bytes.length) {
-    return { type, strings: [], isDr2 };
-  }
+  if (stringCount === 0 || textBlockOffset >= bytes.length) return null;
+  // Sanity: string count shouldn't be absurdly large
+  if (stringCount > 100000) return null;
 
-  // Read string offsets table
   const offsetsStart = textBlockOffset;
   const stringsDataStart = offsetsStart + stringCount * 4;
+  if (stringsDataStart > bytes.length) return null;
+
   const strings: string[] = [];
 
   for (let i = 0; i < stringCount; i++) {
@@ -63,7 +59,6 @@ export function parseLin(buffer: ArrayBuffer, isDr2 = false): LinFile {
       continue;
     }
 
-    // Read null-terminated UTF-16LE string
     let str = "";
     let pos = stringAbsPos;
     while (pos + 1 < bytes.length) {
@@ -75,7 +70,78 @@ export function parseLin(buffer: ArrayBuffer, isDr2 = false): LinFile {
     strings.push(str);
   }
 
-  return { type, strings, isDr2 };
+  // If we got valid strings, return them
+  if (strings.some(s => s.trim().length > 0)) {
+    return { type, strings, isDr2 };
+  }
+  return null;
+}
+
+/**
+ * Fallback: opcode-based scanning for Switch/Unity LIN format.
+ * Scans for TEXT_OPCODE (0x02) followed by null-terminated UTF-8 strings.
+ */
+function tryOpcodeParse(buffer: ArrayBuffer, isDr2: boolean): LinFile | null {
+  const bytes = new Uint8Array(buffer);
+  const strings: string[] = [];
+
+  let pos = 0;
+  while (pos < bytes.length) {
+    if (bytes[pos] === TEXT_OPCODE) {
+      const stringStart = pos + 1;
+      let stringEnd = stringStart;
+
+      while (stringEnd < bytes.length && bytes[stringEnd] !== 0x00) {
+        stringEnd++;
+      }
+
+      if (stringEnd > stringStart && stringEnd < bytes.length) {
+        const textBytes = bytes.slice(stringStart, stringEnd);
+        try {
+          const text = new TextDecoder("utf-8", { fatal: true }).decode(textBytes);
+          // Only accept if it looks like readable text (has printable chars)
+          if (text.trim().length > 0 && /[\x20-\x7E\u0080-\uFFFF]/.test(text)) {
+            strings.push(text);
+          }
+        } catch {
+          // Not valid UTF-8, skip
+        }
+        pos = stringEnd + 1;
+      } else {
+        pos++;
+      }
+    } else {
+      pos++;
+    }
+  }
+
+  if (strings.length > 0) {
+    return { type: 1, strings, isDr2 };
+  }
+  return null;
+}
+
+export function parseLin(buffer: ArrayBuffer, isDr2 = false): LinFile {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 8) {
+    throw new Error("ملف LIN قصير جداً");
+  }
+
+  // Try standard header-based parsing first
+  const headerResult = tryHeaderParse(buffer, isDr2);
+  if (headerResult && headerResult.strings.length > 0) {
+    return headerResult;
+  }
+
+  // Fallback: opcode scanning (Switch/Unity format)
+  const opcodeResult = tryOpcodeParse(buffer, isDr2);
+  if (opcodeResult) {
+    return opcodeResult;
+  }
+
+  // Return empty if nothing found
+  const type = new DataView(buffer).getUint32(0, true);
+  return { type: (type === 1 || type === 2) ? type : 1, strings: [], isDr2 };
 }
 
 export function buildLin(

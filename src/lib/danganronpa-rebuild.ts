@@ -56,8 +56,6 @@ export function rebuildArchive(
 }
 
 function rebuildPo(node: ArchiveNode, translations: Map<string, string>): ArrayBuffer {
-  // Parse original PO entries, apply translations, rebuild
-  const { parsePo } = require("./danganronpa-po-parser");
   const entries = parsePo(node.originalBuffer);
   
   // Map our keys back to PO entries

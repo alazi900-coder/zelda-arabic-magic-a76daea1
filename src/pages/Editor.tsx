@@ -1835,16 +1835,14 @@ const Editor = () => {
                         import("@/hooks/use-toast").then(({ toast }) => toast({ title: "لا توجد ترجمات لتطبيقها", variant: "destructive" }));
                         return;
                       }
+                      const JSZip = (await import("jszip")).default;
+                      const zip = new JSZip();
                       let built = 0, skipped = 0;
                       for (const [fileName, tree] of Object.entries(treesObj)) {
                         if (!nodeHasTranslations(tree, translations)) { skipped++; continue; }
                         try {
                           const rebuilt = rebuildArchive(tree, translations);
-                          const blob = new Blob([rebuilt], { type: "application/octet-stream" });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url; a.download = fileName; a.click();
-                          URL.revokeObjectURL(url);
+                          zip.file(fileName, rebuilt);
                           built++;
                         } catch (err) {
                           console.error(`Failed to rebuild ${fileName}:`, err);
@@ -1852,8 +1850,13 @@ const Editor = () => {
                         }
                       }
                       if (built > 0) {
+                        const blob = await zip.generateAsync({ type: "blob" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url; a.download = "danganronpa-translated.zip"; a.click();
+                        URL.revokeObjectURL(url);
                         import("@/hooks/use-toast").then(({ toast }) => toast({
-                          title: `تم بناء ${built} ملف`,
+                          title: `تم بناء ${built} ملف في ZIP`,
                           description: skipped > 0 ? `تم تخطي ${skipped} ملف بدون ترجمات` : `${translations.size} ترجمة مطبّقة`,
                         }));
                       }

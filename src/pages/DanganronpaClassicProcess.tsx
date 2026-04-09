@@ -68,56 +68,76 @@ export default function DanganronpaClassicProcess() {
    * PO → text entries directly
    * LIN → classic script text
    */
-  const extractFromBuffer = useCallback((name: string, buffer: ArrayBuffer, results: { entries: ParsedEntry[]; linCount: number; poCount: number }) => {
+  const extractFromBuffer = useCallback((name: string, buffer: ArrayBuffer, results: { entries: ParsedEntry[]; linCount: number; poCount: number }, depth = 0) => {
+    const pad = "  ".repeat(depth);
+    const bytes = new Uint8Array(buffer);
+    const magic = bytes.length >= 4 ? String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) : "(short)";
+    console.log(`${pad}[extract] 📂 "${name}" — ${buffer.byteLength} bytes — magic: "${magic}" (0x${bytes[0]?.toString(16)} 0x${bytes[1]?.toString(16)} 0x${bytes[2]?.toString(16)} 0x${bytes[3]?.toString(16)})`);
+
     // 1) Try as PO first (cheapest check)
     const poEntries = processPo(name, buffer);
     if (poEntries.length > 0) {
+      console.log(`${pad}  ✅ PO: ${poEntries.length} entries`);
       results.poCount++;
       results.entries.push(...poEntries);
       return;
     }
+    console.log(`${pad}  ❌ Not PO`);
 
     // 2) Try as LIN0 container
     const lin0Entries = parseLin0Container(buffer);
     if (lin0Entries) {
+      console.log(`${pad}  ✅ LIN0 container: ${lin0Entries.length} files → [${lin0Entries.map(e => e.name).join(", ")}]`);
       for (const entry of lin0Entries) {
         const childName = entry.name || `${name}:${entry.index}`;
-        extractFromBuffer(childName, entry.data, results);
+        extractFromBuffer(childName, entry.data, results, depth + 1);
       }
       return;
     }
+    console.log(`${pad}  ❌ Not LIN0`);
 
     // 3) Try as PAK container (recursive)
     try {
       const pakEntries = parsePak(buffer);
       if (pakEntries.length > 0) {
+        console.log(`${pad}  ✅ PAK: ${pakEntries.length} files → [${pakEntries.map(e => e.name).join(", ")}]`);
         for (const entry of pakEntries) {
           const childName = entry.name || `${name}:${entry.index}`;
-          extractFromBuffer(childName, entry.data, results);
+          extractFromBuffer(childName, entry.data, results, depth + 1);
         }
         return;
       }
-    } catch { /* not a PAK */ }
+    } catch (err) {
+      console.log(`${pad}  ❌ Not PAK: ${err}`);
+    }
 
     // 4) Try as classic LIN script
     try {
       const parsed = processLin(name, buffer);
       if (parsed.length > 0) {
+        console.log(`${pad}  ✅ Classic LIN: ${parsed.length} entries`);
         results.linCount++;
         results.entries.push(...parsed);
         return;
       }
-    } catch { /* not a LIN */ }
+      console.log(`${pad}  ❌ Classic LIN: 0 entries`);
+    } catch (err) {
+      console.log(`${pad}  ❌ Not classic LIN: ${err}`);
+    }
 
     // 5) Last resort: scan raw bytes for PO markers
-    const text = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(buffer));
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     if (text.includes('msgid "') || text.includes('msgctxt "')) {
+      console.log(`${pad}  🔍 Raw PO markers found, retrying...`);
       const fallbackPo = processPo(name, buffer);
       if (fallbackPo.length > 0) {
+        console.log(`${pad}  ✅ Raw PO fallback: ${fallbackPo.length} entries`);
         results.poCount++;
         results.entries.push(...fallbackPo);
+        return;
       }
     }
+    console.log(`${pad}  ⚠️ NO TEXT FOUND in "${name}"`);
   }, [processLin, processPo]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {

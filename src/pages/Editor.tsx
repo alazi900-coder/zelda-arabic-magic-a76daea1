@@ -386,6 +386,13 @@ const Editor = () => {
               </>
             )}
 
+            {editor.isFilterActive && !editor.translating && (
+              <div className="w-full rounded-lg bg-primary/10 border border-primary/20 px-4 py-2 text-sm font-display flex items-center gap-2" dir="rtl">
+                <Filter className="w-4 h-4 text-primary shrink-0" />
+                <span>⚠️ الفلتر نشط: <strong>{editor.filterLabel}</strong> — سيتم ترجمة <strong>{editor.filteredEntries.length}</strong> جملة فقط من أصل {editor.state?.entries.length ?? 0}</span>
+              </div>
+            )}
+
             {editor.translating ? (
               <Button size={isMobile ? "default" : "lg"} variant="destructive" onClick={editor.handleStopTranslate} className="font-display font-bold px-4 md:px-6">
                 <Loader2 className="w-4 h-4 animate-spin" /> إيقاف ⏹️
@@ -736,6 +743,9 @@ const Editor = () => {
             stats={editor.glossarySessionStats}
             translating={editor.translating}
           />
+
+
+
 
 
           <QualityChecksPanel

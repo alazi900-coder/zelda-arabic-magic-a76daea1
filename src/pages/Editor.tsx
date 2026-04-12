@@ -1167,7 +1167,7 @@ const Editor = () => {
           </div>
 
           {/* Needs Improvement Badges */}
-          {(editor.needsImproveCount.total > 0 || editor.byteOverflowCount > 0) && !isMobile && (
+          {(editor.needsImproveCount.total > 0 || editor.byteOverflowCount > 0) && (
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="text-xs font-display text-muted-foreground">⚠️ تحتاج تحسين:</span>
               {editor.needsImproveCount.tooShort > 0 && (

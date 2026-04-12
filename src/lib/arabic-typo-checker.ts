@@ -9,7 +9,7 @@ export interface TypoResult {
   suggestion: string;
   reason: string;
   position: number;
-  category: 'hamza' | 'taa' | 'alef' | 'common' | 'duplicate' | 'spacing' | 'letter';
+  category: 'hamza' | 'taa' | 'alef' | 'common' | 'duplicate' | 'spacing' | 'letter' | 'yaa' | 'waw' | 'haa';
 }
 
 // ========== Common misspelling pairs ==========

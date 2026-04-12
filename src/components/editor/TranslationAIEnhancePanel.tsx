@@ -54,11 +54,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [activeTab, setActiveTab] = useState<string>("enhance");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [processedCount, setProcessedCount] = useState(0);
   const abortRef = useRef(false);
   const processedKeysRef = useRef<Set<string>>(new Set());
 
   const resetProcessedKeys = useCallback(() => {
     processedKeysRef.current = new Set();
+    setProcessedCount(0);
   }, []);
 
   const analyzeTranslations = async (mode: "enhance" | "grammar") => {

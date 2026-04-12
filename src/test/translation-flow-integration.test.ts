@@ -37,16 +37,8 @@ Object.defineProperty(globalThis, 'URL', {
   writable: true,
 });
 
-// Mock Blob
-const capturedBlobs: Blob[] = [];
-const OriginalBlob = globalThis.Blob;
-class MockBlob extends OriginalBlob {
-  constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
-    super(parts, options);
-    capturedBlobs.push(this);
-  }
-}
-globalThis.Blob = MockBlob as any;
+// Capture blob contents
+const capturedBlobTexts: string[] = [];
 
 // Mock anchor click
 const mockClick = vi.fn();
@@ -58,6 +50,18 @@ vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
   }
   return el;
 });
+
+// Intercept Blob constructor to capture content
+const OriginalBlob = globalThis.Blob;
+globalThis.Blob = class extends OriginalBlob {
+  constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+    super(parts, options);
+    // Capture text content from parts
+    if (parts) {
+      capturedBlobTexts.push(parts.map(p => typeof p === 'string' ? p : '').join(''));
+    }
+  }
+} as any;
 
 function createHookParams(state: EditorState | null, filteredEntries?: ExtractedEntry[], filterLabel?: string) {
   return {

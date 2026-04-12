@@ -217,9 +217,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       if (isTechnicalText(entry.original)) { skippedTechnical++; continue; }
 
       if (isFilterActive) {
-        // When filter is active: export ALL filtered entries with their original English text
-        if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
-        groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
+        // When filter is active: export only entries with English original text (skip Arabic originals)
+        if (!hasArabicChars(entry.original)) {
+          if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
+          groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
+        }
       } else {
         // No filter: export only untranslated entries
         const key = `${entry.msbtFile}:${entry.index}`;

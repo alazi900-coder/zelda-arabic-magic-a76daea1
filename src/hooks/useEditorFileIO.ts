@@ -207,20 +207,30 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     }
   };
 
-  /** Build the list of untranslated entries grouped by file */
+  /** Build the list of entries grouped by file for export.
+   *  When a filter is active, export ALL filtered entries (original English).
+   *  When no filter, export only untranslated entries. */
   const getUntranslatedGrouped = () => {
     if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0, skippedTechnical: 0 };
     const entriesToExport = isFilterActive ? filteredEntries : state.entries;
     const groupedByFile: Record<string, { index: number; original: string; label: string }[]> = {};
     let skippedTechnical = 0;
     for (const entry of entriesToExport) {
-      const key = `${entry.msbtFile}:${entry.index}`;
       // Skip technical/code entries from export
       if (isTechnicalText(entry.original)) { skippedTechnical++; continue; }
-      const translation = state.translations[key]?.trim();
-      if (!translation || translation === entry.original || translation === entry.original.trim()) {
+
+      if (isFilterActive) {
+        // When filter is active: export ALL filtered entries with their original English text
         if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
         groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
+      } else {
+        // No filter: export only untranslated entries
+        const key = `${entry.msbtFile}:${entry.index}`;
+        const translation = state.translations[key]?.trim();
+        if (!translation || translation === entry.original || translation === entry.original.trim()) {
+          if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
+          groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
+        }
       }
     }
     const totalCount = Object.values(groupedByFile).reduce((sum, arr) => sum + arr.length, 0);

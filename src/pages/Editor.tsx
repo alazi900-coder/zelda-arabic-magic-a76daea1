@@ -1536,6 +1536,11 @@ const Editor = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="bg-card border-border z-50 min-w-[240px] max-h-[70vh] overflow-y-auto">
                   <DropdownMenuLabel className="text-xs">📤 تصدير</DropdownMenuLabel>
+                  {editor.isFilterActive && (
+                    <div className="px-2 py-1.5 text-[11px] text-primary bg-primary/10 rounded mx-1 mb-1" dir="rtl">
+                      ⚠️ سيتم تصدير <strong>{editor.filteredEntries.length}</strong> جملة فقط ({editor.filterLabel})
+                    </div>
+                  )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF (memoQ/Trados)</DropdownMenuItem>

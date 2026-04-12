@@ -140,7 +140,7 @@ describe('useEditorCleanup', () => {
       const entries: ExtractedEntry[] = [{
         msbtFile: 'file', index: 0,
         original: 'Press [ML:Feeling ] to confirm',
-        label: 'file:0',
+        label: 'file:0', maxBytes: 0,
       }];
       const state = makeState(
         { 'file:0': 'اضغط ]ML:Feeling [ للتأكيد' },
@@ -160,7 +160,7 @@ describe('useEditorCleanup', () => {
       const entries: ExtractedEntry[] = [{
         msbtFile: 'file', index: 0,
         original: 'Press [ML:Feeling ] to confirm',
-        label: 'file:0',
+        label: 'file:0', maxBytes: 0,
       }];
       const state = makeState(
         { 'file:0': 'اضغط [ML:Feeling ] للتأكيد' },
@@ -207,7 +207,7 @@ describe('useEditorCleanup', () => {
       const entries: ExtractedEntry[] = [{
         msbtFile: 'file', index: 0,
         original: 'A very long English sentence here',
-        label: 'file:0',
+        label: 'file:0', maxBytes: 0,
       }];
       const longText = 'هذا النص العربي طويل جداً ويحتاج إلى تقسيم على عدة أسطر لكي يظهر بشكل جيد';
       const state = makeState({ 'file:0': longText }, entries);

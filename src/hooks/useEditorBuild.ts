@@ -6,6 +6,7 @@ import { stripBidiMarkers } from "@/lib/arabic-processing";
 import { EditorState, hasTechnicalTags, restoreTagsLocally } from "@/components/editor/types";
 import { BuildPreview } from "@/components/editor/BuildConfirmDialog";
 import type { MutableRefObject } from "react";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 export interface BuildStats {
   modifiedCount: number;
@@ -443,11 +444,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         if (mirrorPunctuation) formData.append("mirrorPunctuation", "true");
         
         setBuildProgress("إرسال للمعالجة...");
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/arabize-xenoblade?mode=build`, {
+        const response = await fetch(getEdgeFunctionUrl("arabize-xenoblade?mode=build"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey },
+          headers: getSupabaseHeaders(),
           body: formData,
         });
         if (!response.ok) {
@@ -714,11 +713,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       if (arabicNumerals) formData.append("arabicNumerals", "true");
       if (mirrorPunctuation) formData.append("mirrorPunctuation", "true");
       setBuildProgress("إرسال للمعالجة...");
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/arabize?mode=build`, {
+      const response = await fetch(getEdgeFunctionUrl("arabize?mode=build"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey },
+        headers: getSupabaseHeaders(),
         body: formData,
       });
       if (!response.ok) {

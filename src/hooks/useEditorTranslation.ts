@@ -9,6 +9,7 @@ import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
 import { splitEvenlyByLines } from "@/lib/balance-lines";
 import { fixMixedBidi } from "@/lib/arabic-processing";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
@@ -162,13 +163,10 @@ export function useEditorTranslation({
         setTimeout(() => setLastSaved(""), 3000);
         return;
       }
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       // Send original text directly — server handles tag protection (avoid double-protection)
-      const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -296,21 +294,19 @@ export function useEditorTranslation({
       signal: AbortSignal,
       depth = 0,
     ): Promise<{ translations: Record<string, string>; charsUsed?: number; glossaryStats?: any }> => {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       try {
-        const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal,
           body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
         if (response.status === 429) {
           // Rate limit: wait and retry once
           await new Promise(r => setTimeout(r, 3000));
-          const retry = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+          const retry = await fetch(getEdgeFunctionUrl("translate-entries"), {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+            headers: getSupabaseHeaders(),
             signal,
             body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
           });
@@ -458,11 +454,9 @@ export function useEditorTranslation({
         const batch = entriesToRetranslate.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
         setTranslateProgress(`🔄 إعادة ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
@@ -511,11 +505,9 @@ export function useEditorTranslation({
         const batch = entriesToFix.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
         setTranslateProgress(`🔧 إصلاح الرموز التالفة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
@@ -666,11 +658,9 @@ export function useEditorTranslation({
         setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
           body: JSON.stringify({
             entries,
@@ -857,11 +847,9 @@ export function useEditorTranslation({
             setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — دفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
             const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-            const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+            const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+              headers: getSupabaseHeaders(),
               signal: abortControllerRef.current.signal,
               body: JSON.stringify({
                 entries,

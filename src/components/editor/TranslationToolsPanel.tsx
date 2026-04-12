@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, X, Sparkles, Copy, RotateCcw, Loader2, Bookmark
 import { EditorState, ExtractedEntry, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 
 import { toast } from "@/hooks/use-toast";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 interface TranslationToolsPanelProps {
   state: EditorState;
@@ -143,11 +144,9 @@ export default function TranslationToolsPanel({ state, currentEntry, currentTran
     setBackTranslating(true);
     setBackTranslation(null);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/translation-tools`, {
+      const response = await fetch(getEdgeFunctionUrl("translation-tools"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ text: currentTranslation, style: 'back-translate' }),
       });
       if (response.status === 429) {
@@ -175,11 +174,9 @@ export default function TranslationToolsPanel({ state, currentEntry, currentTran
     setStyleTranslating(true);
     setStyleResult(null);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/translation-tools`, {
+      const response = await fetch(getEdgeFunctionUrl("translation-tools"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ text: currentEntry.original, style: selectedStyle }),
       });
       if (response.status === 429 || response.status === 402) {

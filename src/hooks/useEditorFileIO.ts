@@ -5,6 +5,7 @@ import type { EditorState } from "@/components/editor/types";
 import { ExtractedEntry, hasArabicChars, unReverseBidi, isTechnicalText } from "@/components/editor/types";
 import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
 import { fetchBundledTranslations, uploadBundledTranslations } from "@/lib/bundled-cloud";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 /** Parse a single JSON object chunk, repairing common issues */
 function repairSingleChunk(raw: string): Record<string, string> | null {
@@ -14,11 +15,7 @@ function repairSingleChunk(raw: string): Record<string, string> | null {
   if (!text.startsWith('{')) text = '{' + text;
   if (!text.endsWith('}')) {
     // ابحث عن آخر سطر مكتمل
-    const lines = text.split('\n');
-    const goodLines: string[] = [];
-    for (const line of lines) {
-      goodLines.push(line);
-    }
+    const goodLines = text.split('\n');
     // أزل الأسطر غير المكتملة من النهاية
     while (goodLines.length > 1) {
       const last = goodLines[goodLines.length - 1].trim();
@@ -1917,15 +1914,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         alert('✅ لا توجد ترجمات قصيرة تحتاج تدقيق');
         return;
       }
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const fnResp = await fetch(`${supabaseUrl}/functions/v1/proofread-bundled`, {
+      const fnResp = await fetch(getEdgeFunctionUrl("proofread-bundled"), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseKey}`,
+          ...getSupabaseHeaders(),
         },
         body: JSON.stringify({ entries: candidates }),
       });

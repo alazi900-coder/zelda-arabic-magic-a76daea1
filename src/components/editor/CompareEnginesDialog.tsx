@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 interface CompareEnginesDialogProps {
   open: boolean;
@@ -148,14 +149,11 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
     setLoadingEngines(new Set(ALL_ENGINES.map(e => e.id)));
 
     const key = `${entry.msbtFile}:${entry.index}`;
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
     const fetchEngine = async (engine: EngineConfig) => {
       try {
-        const response = await fetch(`${supabaseUrl}/functions/v1/translate-entries`, {
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({
             entries: [{ key, original: entry.original }],
             glossary,

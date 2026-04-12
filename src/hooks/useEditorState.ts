@@ -18,6 +18,7 @@ import { useEditorTranslation } from "@/hooks/useEditorTranslation";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useEditorScanResults } from "@/hooks/useEditorScanResults";
 import {
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
   ExtractedEntry, EditorState, AUTOSAVE_DELAY, AI_BATCH_SIZE, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags,
   ReviewIssue, ReviewSummary, ReviewResults, ShortSuggestion, ImproveResult,
@@ -912,11 +913,9 @@ export function useEditorState() {
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (reviewEntries.length === 0) { setReviewResults({ issues: [], summary: { total: 0, errors: 0, warnings: 0, checked: 0 } }); return; }
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -936,11 +935,9 @@ export function useEditorState() {
       const reviewEntries = state.entries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim(); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'suggest-short', aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -990,17 +987,15 @@ export function useEditorState() {
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; const t = state.translations[key]; return t?.trim() && isMixedLanguage(t); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`] }));
       if (mixedEntries.length === 0) { setTranslateProgress("لا توجد نصوص مختلطة للإصلاح"); setTimeout(() => setTranslateProgress(""), 3000); return; }
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const BATCH = 20;
       const allUpdates: Record<string, string> = {};
       let processed = 0;
       for (let i = 0; i < mixedEntries.length; i += BATCH) {
         const batch = mixedEntries.slice(i, i + BATCH);
         setTranslateProgress(`🌐 إصلاح النصوص المختلطة... ${processed}/${mixedEntries.length}`);
-        const response = await fetch(`${supabaseUrl}/functions/v1/fix-mixed-language`, {
+        const response = await fetch(getEdgeFunctionUrl("fix-mixed-language"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({ entries: batch, glossary: activeGlossary }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
@@ -1090,11 +1085,9 @@ export function useEditorState() {
         return;
       }
       setTranslateProgress(`🔬 جاري المراجعة الذكية العميقة (${reviewEntries.length} نص)...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'smart-review', aiModel }),
       });
       if (!response.ok) {
@@ -1150,11 +1143,9 @@ export function useEditorState() {
         return;
       }
       setTranslateProgress(`📝 جاري فحص القواعد النحوية (${reviewEntries.length} نص)...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'grammar-check', aiModel }),
       });
       if (!response.ok) {
@@ -1193,11 +1184,9 @@ export function useEditorState() {
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`] }));
 
       setTranslateProgress(`🎯 جاري المراجعة السياقية (${reviewEntries.length} نص)...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-review', aiModel, contextEntries }),
       });
       if (!response.ok) {
@@ -1236,15 +1225,13 @@ export function useEditorState() {
       for (let i = 0; i < reviewEntries.length; i += BATCH) batches.push(reviewEntries.slice(i, i + BATCH));
       setAutoCorrectProgress({ current: 0, total: reviewEntries.length });
       setTranslateProgress(`✏️ جاري التصحيح الإملائي (0/${reviewEntries.length})...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const allCorrections: { key: string; original: string; current: string; corrected: string }[] = [];
       let processed = 0;
       for (const batch of batches) {
         if (abortCtrl.signal.aborted) break;
-        const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        const response = await fetch(getEdgeFunctionUrl("review-translations"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({ entries: batch, action: 'auto-correct', aiModel }),
           signal: abortCtrl.signal,
         });
@@ -1294,15 +1281,13 @@ export function useEditorState() {
       for (let i = 0; i < reviewEntries.length; i += BATCH) batches.push(reviewEntries.slice(i, i + BATCH));
       setDetectWeakProgress({ current: 0, total: reviewEntries.length });
       setTranslateProgress(`🔍 جاري تقييم الجودة (0/${reviewEntries.length})...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const allWeak: { key: string; original: string; current: string; score: number; reason: string; suggestion: string }[] = [];
       let processed = 0;
       for (const batch of batches) {
         if (abortCtrl.signal.aborted) break;
-        const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+        const response = await fetch(getEdgeFunctionUrl("review-translations"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({ entries: batch, glossary: activeGlossary, action: 'detect-weak', aiModel }),
           signal: abortCtrl.signal,
         });
@@ -1358,11 +1343,9 @@ export function useEditorState() {
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`] }));
 
       setTranslateProgress(`🎯 جاري إعادة الترجمة بالسياق (${reviewEntries.length} نص)...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-retranslate', aiModel, contextEntries }),
       });
       if (!response.ok) {
@@ -1423,16 +1406,10 @@ export function useEditorState() {
       }
 
       setTranslateProgress(`🎯 جاري تحليل ${translatedEntries.length} ترجمة سياقياً...`);
-      
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      
-      const response = await fetch(`${supabaseUrl}/functions/v1/enhance-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("enhance-translations"), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'apikey': supabaseKey,
-          'Content-Type': 'application/json',
+          ...getSupabaseHeaders(),
         },
         body: JSON.stringify({
           entries: translatedEntries,
@@ -1553,9 +1530,6 @@ export function useEditorState() {
       const totalBatches = Math.ceil(totalEntries / ADVANCED_BATCH_SIZE);
       
       setTranslateProgress(`${actionLabels[action]} — ${totalEntries} نص (${totalBatches} دفعات)`);
-      
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const glossarySlice = activeGlossary?.split('\n').slice(0, 150).join('\n');
       
       // Accumulators for batch results
@@ -1606,12 +1580,10 @@ export function useEditorState() {
         setTranslateProgress(`${actionLabels[action]} — دفعة ${batchIdx + 1}/${totalBatches} (${progress}%) — ${end}/${totalEntries} نص ⏸️`);
         
         try {
-          const response = await fetch(`${supabaseUrl}/functions/v1/translation-analysis`, {
+          const response = await fetch(getEdgeFunctionUrl("translation-analysis"), {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'apikey': supabaseKey,
-              'Content-Type': 'application/json',
+              ...getSupabaseHeaders(),
             },
             body: JSON.stringify({
               entries: batchEntries,
@@ -1806,11 +1778,9 @@ export function useEditorState() {
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       if (translatedEntries.length === 0) { setTranslateProgress("⚠️ لا توجد ترجمات لتحسينها في النطاق المحدد"); setTimeout(() => setTranslateProgress(""), 3000); return; }
       setTranslateProgress(`جاري تحسين ${translatedEntries.length} ترجمة...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary, action: 'improve', aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -1845,11 +1815,9 @@ export function useEditorState() {
     setImprovingTranslations(true); setImproveResults(null);
     try {
       setTranslateProgress(`جاري تحسين الترجمة...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }], glossary: activeGlossary, action: 'improve', aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -1872,11 +1840,9 @@ export function useEditorState() {
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], file: e.msbtFile }));
       if (translatedEntries.length === 0) { setTranslateProgress("⚠️ لا توجد ترجمات للفحص"); setTimeout(() => setTranslateProgress(""), 3000); return; }
       setTranslateProgress(`جاري فحص اتساق ${translatedEntries.length} ترجمة...`);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/check-consistency`, {
+      const response = await fetch(getEdgeFunctionUrl("check-consistency"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);

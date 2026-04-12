@@ -61,6 +61,7 @@ function HighlightedOriginal({ text }: { text: string }) {
   );
 }
 import { toast } from "@/hooks/use-toast";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 interface EntryCardProps {
   entry: ExtractedEntry;
@@ -174,11 +175,9 @@ const EntryCard: React.FC<EntryCardProps> = ({
     setFetchingAlternatives(true);
     setAlternatives(null);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/review-translations`, {
+      const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({
           entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }],
           glossary,

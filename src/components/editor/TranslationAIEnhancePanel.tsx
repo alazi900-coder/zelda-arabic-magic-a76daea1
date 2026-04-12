@@ -245,7 +245,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         <div className="flex items-center gap-4 mt-2">
           <div className="flex gap-3 text-[11px] text-muted-foreground flex-1">
             <span>إجمالي: <strong className="text-foreground">{totalTranslated}</strong></span>
-            <span>تم فحصه: <strong className="text-foreground">{alreadyProcessed}</strong></span>
+            <span>تم فحصه: <strong className="text-foreground">{processedCount}</strong></span>
             <span>متبقي: <strong className={remaining > 0 ? "text-primary" : "text-green-500"}>{remaining}</strong></span>
           </div>
           {suggestions.length + grammarIssues.length > 0 && (

@@ -205,8 +205,9 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   };
 
   /** Build the list of entries grouped by file for export.
-   *  When a filter is active, export ALL filtered entries (original English).
-   *  When no filter, export only untranslated entries. */
+   *  Only entries with English original text are eligible for this export.
+   *  When a filter is active, export all filtered English entries.
+   *  When no filter, export only untranslated English entries. */
   const getUntranslatedGrouped = () => {
     if (!state) return { groupedByFile: {} as Record<string, { index: number; original: string; label: string }[]>, totalCount: 0, skippedTechnical: 0 };
     const entriesToExport = isFilterActive ? filteredEntries : state.entries;
@@ -215,13 +216,14 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     for (const entry of entriesToExport) {
       // Skip technical/code entries from export
       if (isTechnicalText(entry.original)) { skippedTechnical++; continue; }
+      // Skip any entry whose source/original text already contains Arabic.
+      // "Export English Only" should never include Arabic or mixed Arabic-source lines,
+      // even if their translation field is empty.
+      if (hasArabicChars(entry.original)) continue;
 
       if (isFilterActive) {
-        // When filter is active: export only entries with English original text (skip Arabic originals)
-        if (!hasArabicChars(entry.original)) {
-          if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
-          groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
-        }
+        if (!groupedByFile[entry.msbtFile]) groupedByFile[entry.msbtFile] = [];
+        groupedByFile[entry.msbtFile].push({ index: entry.index, original: entry.original, label: entry.label || '' });
       } else {
         // No filter: export only untranslated entries
         const key = `${entry.msbtFile}:${entry.index}`;

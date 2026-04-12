@@ -1914,11 +1914,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         alert('✅ لا توجد ترجمات قصيرة تحتاج تدقيق');
         return;
       }
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const fnResp = await fetch(`${supabaseUrl}/functions/v1/proofread-bundled`, {
+      const fnResp = await fetch(getEdgeFunctionUrl("proofread-bundled"), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

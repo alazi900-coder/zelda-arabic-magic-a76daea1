@@ -273,11 +273,7 @@ const XenobladeProcess = () => {
       if (msbtFiles.length > 0 || bdatFiles.length > 0) {
         setStage("extracting");
         addLog("📤 إرسال ملفات MSBT/JSON للمعالجة...");
-
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-        const response = await fetch(`${supabaseUrl}/functions/v1/arabize-xenoblade?mode=extract`, {
+        const response = await fetch(getEdgeFunctionUrl("arabize-xenoblade?mode=extract"), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey },
           body: formData,

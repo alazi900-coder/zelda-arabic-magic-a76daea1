@@ -144,9 +144,7 @@ export default function TranslationToolsPanel({ state, currentEntry, currentTran
     setBackTranslating(true);
     setBackTranslation(null);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/translation-tools`, {
+      const response = await fetch(getEdgeFunctionUrl("translation-tools"), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: currentTranslation, style: 'back-translate' }),
@@ -176,9 +174,7 @@ export default function TranslationToolsPanel({ state, currentEntry, currentTran
     setStyleTranslating(true);
     setStyleResult(null);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/translation-tools`, {
+      const response = await fetch(getEdgeFunctionUrl("translation-tools"), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: currentEntry.original, style: selectedStyle }),

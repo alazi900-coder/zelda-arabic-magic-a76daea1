@@ -24,6 +24,7 @@ describe("Export English Only Logic", () => {
   ): Record<string, string> {
     const englishOnly: Record<string, string> = {};
     for (const entry of entriesToExport) {
+      if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(entry.original)) continue;
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = trans[key]?.trim();
       if (!translation || translation === entry.original || translation === entry.original.trim()) {
@@ -95,5 +96,24 @@ describe("Export English Only Logic", () => {
     // Settings (empty) and Quit (same as original)
     expect(Object.keys(result)).toHaveLength(2);
     expect(result["Dialog/NPC.msbt:0"]).toBeUndefined(); // filtered out
+  });
+
+  it("should skip untranslated entries whose original text already contains Arabic", () => {
+    const mixedEntries = [
+      ...entries,
+      { msbtFile: "Dialog/Mixed.msbt", index: 0, original: "مرحبا", label: "arabic-source", maxBytes: 50 },
+      { msbtFile: "Dialog/Mixed.msbt", index: 1, original: "Hello مرحبا", label: "mixed-source", maxBytes: 50 },
+    ];
+
+    const mixedTranslations: Record<string, string> = {
+      ...translations,
+      "Dialog/Mixed.msbt:0": "",
+      "Dialog/Mixed.msbt:1": "",
+    };
+
+    const result = getEnglishOnly(mixedEntries, mixedTranslations);
+
+    expect(result["Dialog/Mixed.msbt:0"]).toBeUndefined();
+    expect(result["Dialog/Mixed.msbt:1"]).toBeUndefined();
   });
 });

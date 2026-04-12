@@ -737,6 +737,13 @@ const Editor = () => {
             translating={editor.translating}
           />
 
+            {editor.isFilterActive && !editor.translating && (
+              <div className="w-full rounded-lg bg-primary/10 border border-primary/20 px-4 py-2 text-sm font-display flex items-center gap-2" dir="rtl">
+                <Filter className="w-4 h-4 text-primary shrink-0" />
+                <span>⚠️ الفلتر نشط: <strong>{editor.filterLabel}</strong> — سيتم ترجمة <strong>{editor.filteredEntries.length}</strong> جملة فقط من أصل {editor.state?.entries.length ?? 0}</span>
+              </div>
+            )}
+
 
           <QualityChecksPanel
             state={editor.state}

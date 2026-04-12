@@ -6,7 +6,7 @@ import type { EditorState, ExtractedEntry } from '@/components/editor/types';
 function makeState(translations: Record<string, string>, entries?: ExtractedEntry[]): EditorState {
   const defaultEntries: ExtractedEntry[] = Object.keys(translations).map(key => {
     const [msbtFile, idx] = key.split(':');
-    return { msbtFile, index: Number(idx), original: 'Hello world', label: key };
+    return { msbtFile, index: Number(idx), original: 'Hello world', label: key, maxBytes: 0 };
   });
   return {
     entries: entries || defaultEntries,

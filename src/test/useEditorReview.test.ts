@@ -6,7 +6,7 @@ import type { EditorState, ExtractedEntry } from '@/components/editor/types';
 function makeState(translations: Record<string, string>): EditorState {
   const entries: ExtractedEntry[] = Object.keys(translations).map(key => {
     const [msbtFile, idx] = key.split(':');
-    return { msbtFile, index: Number(idx), original: 'Hello world', label: key };
+    return { msbtFile, index: Number(idx), original: 'Hello world', label: key, maxBytes: 0 };
   });
   return {
     entries,
@@ -161,7 +161,7 @@ describe('useEditorReview', () => {
       // These should all be safe to call with null state
       expect(() => result.current.handleFixAllStuckCharacters()).not.toThrow();
       expect(() => result.current.handleApplyAllShorterTranslations()).not.toThrow();
-      expect(() => result.current.handleApplySmartFix(0)).not.toThrow();
+      expect(() => result.current.handleApplySmartFix('key', 'fix')).not.toThrow();
       expect(() => result.current.handleCloseEnhanceResults()).not.toThrow();
     });
   });

@@ -204,7 +204,7 @@ describe('Translation Flow Integration Tests', () => {
       expect(mockClick).toHaveBeenCalled();
       const blobText = await capturedBlobTexts[capturedBlobTexts.length - 1];
       // CSV should contain header
-      expect(blobText).toContain('Key,Original,Translation');
+      expect(blobText).toContain('file,index,label,original,translation');
       // Should properly escape quotes
       expect(blobText).toContain('""علامات""');
     });

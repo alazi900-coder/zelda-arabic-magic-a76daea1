@@ -248,6 +248,9 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
     duplicate: { name: 'تكرار', emoji: '♻️' },
     spacing: { name: 'مسافة', emoji: '⬜' },
     letter: { name: 'حرف', emoji: '🔡' },
+    yaa: { name: 'ياء', emoji: 'ي' },
+    waw: { name: 'واو', emoji: 'و' },
+    haa: { name: 'هاء', emoji: 'ه' },
   };
 
   // Group typo results by category for summary

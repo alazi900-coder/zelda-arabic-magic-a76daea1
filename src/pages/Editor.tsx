@@ -1274,7 +1274,7 @@ const Editor = () => {
 
           {/* Cloud & Actions */}
           {isMobile ? (
-            <div className="flex flex-wrap gap-2 mb-6">
+            <div className="flex flex-wrap gap-1.5 mb-6">
               {/* Cloud Save/Load */}
               <Button variant="outline" size="sm" onClick={editor.handleCloudSave} disabled={!editor.user || editor.cloudSyncing} className="font-body text-xs">
                 {editor.cloudSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} حفظ

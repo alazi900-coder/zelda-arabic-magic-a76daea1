@@ -226,8 +226,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   }
 
   const totalTranslated = entries.filter(e => translations[`${e.msbtFile}:${e.index}`]?.trim()).length;
-  const alreadyProcessed = processedKeysRef.current.size;
-  const remaining = totalTranslated - alreadyProcessed;
+  const remaining = totalTranslated - processedCount;
 
   const severityConfig: Record<string, { color: string; label: string }> = {
     high: { color: "text-red-500", label: "خطير" },

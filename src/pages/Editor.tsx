@@ -1167,7 +1167,7 @@ const Editor = () => {
           </div>
 
           {/* Needs Improvement Badges */}
-          {(editor.needsImproveCount.total > 0 || editor.byteOverflowCount > 0) && !isMobile && (
+          {(editor.needsImproveCount.total > 0 || editor.byteOverflowCount > 0) && (
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="text-xs font-display text-muted-foreground">⚠️ تحتاج تحسين:</span>
               {editor.needsImproveCount.tooShort > 0 && (
@@ -1274,7 +1274,7 @@ const Editor = () => {
 
           {/* Cloud & Actions */}
           {isMobile ? (
-            <div className="flex flex-wrap gap-2 mb-6">
+            <div className="flex flex-wrap gap-1.5 mb-6">
               {/* Cloud Save/Load */}
               <Button variant="outline" size="sm" onClick={editor.handleCloudSave} disabled={!editor.user || editor.cloudSyncing} className="font-body text-xs">
                 {editor.cloudSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} حفظ
@@ -1288,7 +1288,7 @@ const Editor = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="font-body text-xs"><Download className="w-3 h-3" /> تصدير / استيراد</Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[220px] max-h-[60vh] overflow-y-auto">
+                <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[calc(100vw-1.5rem)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                   <DropdownMenuLabel className="text-xs">📤 تصدير</DropdownMenuLabel>
                   {editor.isFilterActive && (
                     <div className="px-2 py-1.5 text-[11px] text-primary bg-primary/10 rounded mx-1 mb-1" dir="rtl">
@@ -1327,7 +1327,7 @@ const Editor = () => {
                     {editor.loadingBundled ? <Loader2 className="w-3 h-3 animate-spin" /> : <Package className="w-3 h-3" />} ترجمات مدمجة{editor.bundledCount > 0 && <span className="bg-accent text-accent-foreground rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">{editor.bundledCount}</span>}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[200px]">
+                <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[calc(100vw-1.5rem)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                   <DropdownMenuLabel className="text-xs">📦 الترجمات المدمجة</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleLoadBundledTranslations} disabled={editor.loadingBundled}>
                     <Download className="w-4 h-4" /> تحميل الترجمات المدمجة
@@ -1375,7 +1375,7 @@ const Editor = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="font-body text-xs text-primary border-primary/30 gap-1.5"><BookOpen className="w-3 h-3" /> القواميس{editor.glossaryTermCount > 0 && <span className="bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">{editor.glossaryTermCount}</span>}</Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[200px]">
+                <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[calc(100vw-1.5rem)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                   <DropdownMenuLabel className="text-xs">📖 تحميل قاموس</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleImportGlossary}><BookOpen className="w-4 h-4" /> قاموس مخصص (.txt)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade المدمج</DropdownMenuItem>
@@ -1428,7 +1428,7 @@ const Editor = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="font-body text-xs"><MoreVertical className="w-3 h-3" /> أدوات</Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[220px] max-h-[70vh] overflow-y-auto">
+                <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[calc(100vw-1.5rem)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                   {/* ─── معالجة عربية ─── */}
                   <DropdownMenuLabel className="text-xs text-primary/80">🔤 معالجة عربية</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic}><Sparkles className="w-4 h-4" /> تطبيق المعالجة العربية ✨</DropdownMenuItem>

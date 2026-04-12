@@ -480,10 +480,23 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       }
     }
 
-    // Always import ALL keys regardless of active filter
+    // Build set of filtered keys when filter is active
+    const filteredKeySet = isFilterActive && filteredEntries.length > 0
+      ? new Set(filteredEntries.map(e => `${e.msbtFile}:${e.index}`))
+      : null;
+
+    let skippedByFilter = 0;
     for (const [key, value] of Object.entries(imported)) {
       if (key.startsWith('__fp__:')) continue;
+      // When filter is active, only import keys that match filtered entries
+      if (filteredKeySet && !filteredKeySet.has(key)) {
+        skippedByFilter++;
+        continue;
+      }
       cleanedImported[key] = normalizeArabicPresentationForms(value);
+    }
+    if (skippedByFilter > 0) {
+      console.log(`🔍 استيراد مفلتر: تم تجاهل ${skippedByFilter} مفتاح خارج الفلتر النشط`);
     }
 
     // ── Convert legacy "table[row].column" keys to bdat-bin format ──

@@ -153,7 +153,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
       try {
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({
             entries: [{ key, original: entry.original }],
             glossary,

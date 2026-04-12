@@ -146,7 +146,7 @@ export default function TranslationToolsPanel({ state, currentEntry, currentTran
     try {
       const response = await fetch(getEdgeFunctionUrl("translation-tools"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ text: currentTranslation, style: 'back-translate' }),
       });
       if (response.status === 429) {
@@ -176,7 +176,7 @@ export default function TranslationToolsPanel({ state, currentEntry, currentTran
     try {
       const response = await fetch(getEdgeFunctionUrl("translation-tools"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ text: currentEntry.original, style: selectedStyle }),
       });
       if (response.status === 429 || response.status === 402) {

@@ -177,7 +177,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
     try {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({
           entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }],
           glossary,

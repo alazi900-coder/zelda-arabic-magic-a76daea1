@@ -915,7 +915,7 @@ export function useEditorState() {
       if (reviewEntries.length === 0) { setReviewResults({ issues: [], summary: { total: 0, errors: 0, warnings: 0, checked: 0 } }); return; }
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -937,7 +937,7 @@ export function useEditorState() {
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'suggest-short', aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -995,7 +995,7 @@ export function useEditorState() {
         setTranslateProgress(`🌐 إصلاح النصوص المختلطة... ${processed}/${mixedEntries.length}`);
         const response = await fetch(getEdgeFunctionUrl("fix-mixed-language"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({ entries: batch, glossary: activeGlossary }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
@@ -1087,7 +1087,7 @@ export function useEditorState() {
       setTranslateProgress(`🔬 جاري المراجعة الذكية العميقة (${reviewEntries.length} نص)...`);
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'smart-review', aiModel }),
       });
       if (!response.ok) {
@@ -1145,7 +1145,7 @@ export function useEditorState() {
       setTranslateProgress(`📝 جاري فحص القواعد النحوية (${reviewEntries.length} نص)...`);
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'grammar-check', aiModel }),
       });
       if (!response.ok) {
@@ -1186,7 +1186,7 @@ export function useEditorState() {
       setTranslateProgress(`🎯 جاري المراجعة السياقية (${reviewEntries.length} نص)...`);
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-review', aiModel, contextEntries }),
       });
       if (!response.ok) {
@@ -1231,7 +1231,7 @@ export function useEditorState() {
         if (abortCtrl.signal.aborted) break;
         const response = await fetch(getEdgeFunctionUrl("review-translations"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({ entries: batch, action: 'auto-correct', aiModel }),
           signal: abortCtrl.signal,
         });
@@ -1287,7 +1287,7 @@ export function useEditorState() {
         if (abortCtrl.signal.aborted) break;
         const response = await fetch(getEdgeFunctionUrl("review-translations"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           body: JSON.stringify({ entries: batch, glossary: activeGlossary, action: 'detect-weak', aiModel }),
           signal: abortCtrl.signal,
         });
@@ -1345,7 +1345,7 @@ export function useEditorState() {
       setTranslateProgress(`🎯 جاري إعادة الترجمة بالسياق (${reviewEntries.length} نص)...`);
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-retranslate', aiModel, contextEntries }),
       });
       if (!response.ok) {
@@ -1409,9 +1409,7 @@ export function useEditorState() {
       const response = await fetch(getEdgeFunctionUrl("enhance-translations"), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'apikey': supabaseKey,
-          'Content-Type': 'application/json',
+          ...getSupabaseHeaders(),
         },
         body: JSON.stringify({
           entries: translatedEntries,
@@ -1585,9 +1583,7 @@ export function useEditorState() {
           const response = await fetch(getEdgeFunctionUrl("translation-analysis"), {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'apikey': supabaseKey,
-              'Content-Type': 'application/json',
+              ...getSupabaseHeaders(),
             },
             body: JSON.stringify({
               entries: batchEntries,
@@ -1784,7 +1780,7 @@ export function useEditorState() {
       setTranslateProgress(`جاري تحسين ${translatedEntries.length} ترجمة...`);
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary, action: 'improve', aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -1821,7 +1817,7 @@ export function useEditorState() {
       setTranslateProgress(`جاري تحسين الترجمة...`);
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }], glossary: activeGlossary, action: 'improve', aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -1846,7 +1842,7 @@ export function useEditorState() {
       setTranslateProgress(`جاري فحص اتساق ${translatedEntries.length} ترجمة...`);
       const response = await fetch(getEdgeFunctionUrl("check-consistency"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);

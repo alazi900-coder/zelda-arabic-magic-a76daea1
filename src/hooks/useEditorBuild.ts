@@ -446,7 +446,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         setBuildProgress("إرسال للمعالجة...");
         const response = await fetch(getEdgeFunctionUrl("arabize-xenoblade?mode=build"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey },
+          headers: getSupabaseHeaders(),
           body: formData,
         });
         if (!response.ok) {
@@ -715,7 +715,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       setBuildProgress("إرسال للمعالجة...");
       const response = await fetch(getEdgeFunctionUrl("arabize?mode=build"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey },
+        headers: getSupabaseHeaders(),
         body: formData,
       });
       if (!response.ok) {

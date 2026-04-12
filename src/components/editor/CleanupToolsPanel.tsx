@@ -118,10 +118,54 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
   const [numberMode, setNumberMode] = useState<'arabic' | 'western'>('arabic');
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState<CleanupResult[] | null>(null);
+  const [typoResults, setTypoResults] = useState<TypoResult[] | null>(null);
+  const [typoScanning, setTypoScanning] = useState(false);
+
+  // --- Typo checker ---
+  const handleTypoScan = useCallback(() => {
+    setTypoScanning(true);
+    setTimeout(() => {
+      const results = checkArabicTypos(state.translations, { maxResults: 500 });
+      setTypoResults(results);
+      setTypoScanning(false);
+      setOpen(true);
+    }, 50);
+  }, [state.translations]);
+
+  const handleApplyTypo = useCallback((typo: TypoResult) => {
+    const currentText = state.translations[typo.key];
+    if (!currentText) return;
+    const fixed = applyTypoFix(currentText, typo);
+    onApplyFix(typo.key, fixed);
+    setTypoResults(prev => prev?.filter(t => t !== typo) || null);
+  }, [state.translations, onApplyFix]);
+
+  const handleApplyAllTypos = useCallback(() => {
+    if (!typoResults) return;
+    // Group by key and apply all fixes per key
+    const byKey = new Map<string, TypoResult[]>();
+    for (const t of typoResults) {
+      if (!byKey.has(t.key)) byKey.set(t.key, []);
+      byKey.get(t.key)!.push(t);
+    }
+    const fixes: { key: string; value: string }[] = [];
+    for (const [key, typos] of byKey) {
+      let text = state.translations[key] || '';
+      for (const typo of typos) {
+        text = applyTypoFix(text, typo);
+      }
+      fixes.push({ key, value: text });
+    }
+    onApplyAll(fixes);
+    setTypoResults(null);
+  }, [typoResults, state.translations, onApplyAll]);
+
+  const handleRejectTypo = useCallback((typo: TypoResult) => {
+    setTypoResults(prev => prev?.filter(t => t !== typo) || null);
+  }, []);
 
   const handleScan = useCallback(() => {
     setScanning(true);
-    // Use setTimeout to not block UI
     setTimeout(() => {
       const results: CleanupResult[] = [];
 
@@ -190,11 +234,29 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
     setScanResults(prev => prev?.filter(r => r.key !== key) || null);
   }, []);
 
-  // Check if any cleanup feature is enabled
   const anyEnabled = ["hamza_unify", "quote_fix", "number_unify", "invisible_chars", "question_mark_fix", "unicode_fix"].some(id => isEnabled(id));
   if (!anyEnabled || dismissed) return null;
 
   const enabledTools = Object.keys(TOOL_LABELS).filter(id => isEnabled(id));
+
+  // Typo category labels
+  const typoCategoryLabels: Record<string, { name: string; emoji: string }> = {
+    hamza: { name: 'همزة', emoji: '🔤' },
+    taa: { name: 'تاء', emoji: 'ة' },
+    alef: { name: 'ألف', emoji: 'ى' },
+    common: { name: 'شائع', emoji: '📝' },
+    duplicate: { name: 'تكرار', emoji: '♻️' },
+    spacing: { name: 'مسافة', emoji: '⬜' },
+    letter: { name: 'حرف', emoji: '🔡' },
+  };
+
+  // Group typo results by category for summary
+  const typoCategoryCounts: Record<string, number> = {};
+  if (typoResults) {
+    for (const t of typoResults) {
+      typoCategoryCounts[t.category] = (typoCategoryCounts[t.category] || 0) + 1;
+    }
+  }
 
   return (
     <Card className="mb-4 border-sky-500/30 bg-sky-500/5">
@@ -207,22 +269,17 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
               {scanResults && scanResults.length > 0 && (
                 <Badge variant="secondary" className="text-xs">{scanResults.length} تعديل</Badge>
               )}
+              {typoResults && typoResults.length > 0 && (
+                <Badge variant="destructive" className="text-xs">{typoResults.length} خطأ إملائي</Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="sm"
-                className="text-xs h-7"
-                onClick={(e) => { e.stopPropagation(); handleScan(); }}
-                disabled={scanning}
+                className="text-xs h-7 text-muted-foreground"
+                onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
               >
-                {scanning ? (
-                  <><Sparkles className="w-3 h-3 animate-spin" /> جاري الفحص...</>
-                ) : (
-                  <><Sparkles className="w-3 h-3" /> فحص وتنظيف</>
-                )}
-              </Button>
-              <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setDismissed(true); }}>
                 <X className="w-3 h-3" />
               </Button>
               {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -230,6 +287,36 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
           </CollapsibleTrigger>
 
           <CollapsibleContent className="mt-3 space-y-3">
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="text-xs h-9 gap-1.5"
+                onClick={(e) => { e.stopPropagation(); handleScan(); }}
+                disabled={scanning}
+              >
+                {scanning ? (
+                  <><Sparkles className="w-3 h-3 animate-spin" /> جاري الفحص...</>
+                ) : (
+                  <><Wrench className="w-3 h-3" /> فحص وتنظيف</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-9 gap-1.5 border-orange-500/30 text-orange-600 hover:bg-orange-500/10"
+                onClick={(e) => { e.stopPropagation(); handleTypoScan(); }}
+                disabled={typoScanning}
+              >
+                {typoScanning ? (
+                  <><Search className="w-3 h-3 animate-spin" /> جاري الفحص...</>
+                ) : (
+                  <><Type className="w-3 h-3" /> فحص إملائي محلي</>
+                )}
+              </Button>
+            </div>
+
             {/* Enabled tools */}
             <div className="flex flex-wrap gap-2">
               {enabledTools.map(id => (
@@ -262,17 +349,83 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
               </div>
             )}
 
-            {/* No results yet */}
-            {!scanResults && !scanning && (
+            {/* ===== TYPO RESULTS ===== */}
+            {typoResults && typoResults.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold font-display flex items-center gap-1.5">
+                      <Type className="w-3.5 h-3.5 text-orange-500" />
+                      أخطاء إملائية — {typoResults.length} خطأ
+                    </h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {Object.entries(typoCategoryCounts).map(([cat, count]) => (
+                        <Badge key={cat} variant="outline" className="text-[10px] gap-0.5">
+                          {typoCategoryLabels[cat]?.emoji} {typoCategoryLabels[cat]?.name} ({count})
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="default" className="text-xs h-7 gap-1" onClick={handleApplyAllTypos}>
+                    <CheckCircle2 className="w-3 h-3" /> إصلاح الكل
+                  </Button>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto space-y-1.5">
+                  {typoResults.slice(0, 100).map((typo, i) => (
+                    <div key={`${typo.key}-${i}`} className="bg-background/40 rounded-lg p-2.5 space-y-1">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant="outline" className="text-[10px]">
+                            {typoCategoryLabels[typo.category]?.emoji} {typoCategoryLabels[typo.category]?.name}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">{typo.reason}</span>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button size="sm" variant="ghost" className="text-xs h-6 text-green-500" onClick={() => handleApplyTypo(typo)}>
+                            ✓
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-xs h-6 text-destructive" onClick={() => handleRejectTypo(typo)}>
+                            ✕
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm" dir="rtl">
+                        <span className="bg-red-500/10 px-1.5 py-0.5 rounded text-red-600 line-through font-body">{typo.word}</span>
+                        <span className="text-muted-foreground">←</span>
+                        <span className="bg-green-500/10 px-1.5 py-0.5 rounded text-green-600 font-body">{typo.suggestion}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate" dir="ltr">
+                        {typo.key.split(':').slice(0, 2).join(':')}
+                      </p>
+                    </div>
+                  ))}
+                  {typoResults.length > 100 && (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      و {typoResults.length - 100} خطأ آخر...
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {typoResults && typoResults.length === 0 && (
+              <div className="flex items-center gap-2 justify-center py-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-sm font-display">لا توجد أخطاء إملائية ✨</span>
+              </div>
+            )}
+
+            {/* ===== CLEANUP RESULTS ===== */}
+            {!scanResults && !scanning && !typoResults && (
               <p className="text-xs text-muted-foreground text-center py-2">
-                اضغط "فحص وتنظيف" لمسح جميع الترجمات وتطبيق أدوات التنظيف المفعّلة
+                اضغط أحد الأزرار لفحص جميع الترجمات
               </p>
             )}
 
-            {/* Results */}
             {scanResults && scanResults.length === 0 && (
               <div className="flex items-center gap-2 justify-center py-3">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
                 <span className="text-sm font-display">لا توجد تعديلات مطلوبة ✨</span>
               </div>
             )}
@@ -294,7 +447,7 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
                       <div className="flex items-start justify-between">
                         <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">{result.label}</span>
                         <div className="flex gap-1">
-                          <Button size="sm" variant="ghost" className="text-xs h-6 text-emerald-400" onClick={() => handleApplySingle(result)}>
+                          <Button size="sm" variant="ghost" className="text-xs h-6 text-green-500" onClick={() => handleApplySingle(result)}>
                             ✓ قبول
                           </Button>
                           <Button size="sm" variant="ghost" className="text-xs h-6 text-destructive" onClick={() => handleReject(result.key)}>
@@ -305,15 +458,14 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
                       <div className="flex flex-wrap gap-1 mb-1">
                         {result.types.map(t => (
                           <Badge key={t} variant="outline" className="text-[10px]">{TOOL_LABELS[t]?.emoji} {TOOL_LABELS[t]?.name}</Badge>
-                        ))
-                        }
+                        ))}
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="bg-destructive/10 rounded p-1.5 font-body" dir="rtl">
+                        <div className="bg-red-500/10 rounded p-1.5 font-body" dir="rtl">
                           <span className="text-[10px] text-muted-foreground block mb-0.5">قبل:</span>
                           {result.before.slice(0, 100)}{result.before.length > 100 ? '...' : ''}
                         </div>
-                        <div className="bg-emerald-500/10 rounded p-1.5 font-body" dir="rtl">
+                        <div className="bg-green-500/10 rounded p-1.5 font-body" dir="rtl">
                           <span className="text-[10px] text-muted-foreground block mb-0.5">بعد:</span>
                           {result.after.slice(0, 100)}{result.after.length > 100 ? '...' : ''}
                         </div>

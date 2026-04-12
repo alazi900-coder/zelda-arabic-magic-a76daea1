@@ -275,7 +275,7 @@ const Editor = () => {
   return (
     <TooltipProvider>
       <div
-        className="min-h-screen flex flex-col relative"
+        className="min-h-screen flex flex-col relative overflow-x-hidden max-w-[100vw]"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}

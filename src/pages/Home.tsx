@@ -46,7 +46,7 @@ const games = [
 
 const Home = () => {
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background overflow-x-hidden max-w-[100vw]">
       {/* Header */}
       <header className="py-8 px-4 text-center">
         <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 rounded-full bg-card border border-primary/30">

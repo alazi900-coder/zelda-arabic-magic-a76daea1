@@ -1268,8 +1268,27 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 3000);
   }, [state]);
 
+  const handleRestoreOriginals = useCallback(async () => {
+    if (!state) return;
+    const { idbGet } = await import("@/lib/idb-storage");
+    const savedOriginals = await idbGet<Record<string, string>>("originalTexts");
+    if (!savedOriginals) return;
+    setPreviousTranslations({ ...state.translations });
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...savedOriginals } } : null);
+    setHasStoredOriginals(false);
+    toast({ title: "✅ تم استعادة النصوص الأصلية" });
+  }, [state]);
 
-
+  const handleTogglePin = useCallback(() => {
+    if (isSearchPinned) {
+      setPinnedKeys(null);
+      setIsSearchPinned(false);
+    } else {
+      const keys = new Set(filteredEntries.map(e => `${e.msbtFile}:${e.index}`));
+      setPinnedKeys(keys);
+      setIsSearchPinned(true);
+    }
+  }, [isSearchPinned, filteredEntries]);
 
   return {
     // State

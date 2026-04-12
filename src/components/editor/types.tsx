@@ -630,17 +630,26 @@ export { isArabicChar, hasArabicChars, reverseBidi as unReverseBidi } from "@/li
 
 export function isTechnicalText(text: string): boolean {
   const t = text.trim();
+  if (!t) return true;
+  // Pure hex/numeric/path-like identifiers (e.g. "a1b2c3", "path/to/file")
   if (/^[0-9A-Fa-f\-\._:\/]+$/.test(t)) return true;
-  if (/\[[^\]]*\]/.test(text) && text.length < 50) return true;
-  if (/<[^>]+>/.test(text)) return true;
-  if (/[\\/][\w\-]+[\\/]/i.test(text)) return true;
-  if (text.length < 10 && /[{}()\[\]<>|&%$#@!]/.test(text)) return true;
+  // camelCase or snake_case identifiers (e.g. "getItemName", "item_name")
   if (/^[a-z]+([A-Z][a-z]*)+$|^[a-z]+(_[a-z]+)+$/.test(t)) return true;
   // Short alphanumeric codes (e.g. zY1, yY1, xA3) — not real sentences
   if (/^[a-zA-Z0-9]{1,6}$/.test(t) && !/^[A-Z][a-z]{2,}$/.test(t)) return true;
-  // Text that is ONLY [ML:...] / [/ML:...] tags with no real translatable content
-  const strippedML = text.replace(/\[\s*\/?\s*\w+\s*:[^\]]*\]/g, '').trim();
-  if (strippedML.length === 0 && /\[\s*\/?\s*\w+\s*:[^\]]*\]/.test(text)) return true;
+  // File paths (e.g. \path\to\file or /path/to/file)
+  if (/[\\/][\w\-]+[\\/]/i.test(t) && !/\s/.test(t)) return true;
+  // Text that is ONLY tags with no real translatable content
+  const strippedTags = t
+    .replace(/\[\s*\/?\s*\w+\s*:[^\]]*\]/g, '')   // [Tag:Value]
+    .replace(/\[\s*\w+\s*=\s*\w[^\]]*\]/g, '')     // [Tag=Value]
+    .replace(/<[^>]+>/g, '')                         // <html-like>
+    .replace(/\{[\w:]+\}/g, '')                      // {variable}
+    .replace(/[\uE000-\uE0FF\uFFF9-\uFFFC]/g, '')  // PUA/control chars
+    .trim();
+  if (strippedTags.length === 0) return true;
+  // Very short text that is ONLY special characters (no letters)
+  if (t.length < 6 && !/[a-zA-Z\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]/.test(t)) return true;
   return false;
 }
 

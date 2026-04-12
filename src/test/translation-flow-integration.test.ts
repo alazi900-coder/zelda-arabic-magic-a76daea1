@@ -86,16 +86,16 @@ describe('Translation Flow Integration Tests', () => {
       const state = makeState(entries, translations);
       const params = createHookParams(state);
 
-      capturedBlobs.length = 0;
+      capturedBlobTexts.length = 0;
       mockClick.mockClear();
 
       const { result } = renderHook(() => useEditorFileIO(params));
       act(() => result.current.handleExportTranslations());
 
       expect(mockClick).toHaveBeenCalledTimes(1);
-      expect(capturedBlobs.length).toBeGreaterThan(0);
+      expect(capturedBlobTexts.length).toBeGreaterThan(0);
 
-      const blobText = await capturedBlobs[capturedBlobs.length - 1].text();
+      const blobText = await capturedBlobTexts[capturedBlobTexts.length - 1];
       const exported = JSON.parse(blobText);
       expect(exported['file1:0']).toBe('ترجمة 1');
       expect(exported['file1:1']).toBe('ترجمة 2');
@@ -113,13 +113,13 @@ describe('Translation Flow Integration Tests', () => {
       const filtered = [entries[0]]; // only file1:0
       const params = createHookParams(state, filtered, 'مخصص');
 
-      capturedBlobs.length = 0;
+      capturedBlobTexts.length = 0;
       mockClick.mockClear();
 
       const { result } = renderHook(() => useEditorFileIO(params));
       act(() => result.current.handleExportTranslations());
 
-      const blobText = await capturedBlobs[capturedBlobs.length - 1].text();
+      const blobText = await capturedBlobTexts[capturedBlobTexts.length - 1];
       const exported = JSON.parse(blobText);
       expect(exported['file1:0']).toBe('ترجمة 1');
       expect(exported['file1:1']).toBeUndefined();
@@ -195,14 +195,14 @@ describe('Translation Flow Integration Tests', () => {
       const state = makeState(entries, translations);
       const params = createHookParams(state);
 
-      capturedBlobs.length = 0;
+      capturedBlobTexts.length = 0;
       mockClick.mockClear();
 
       const { result } = renderHook(() => useEditorFileIO(params));
       act(() => result.current.handleExportCSV());
 
       expect(mockClick).toHaveBeenCalled();
-      const blobText = await capturedBlobs[capturedBlobs.length - 1].text();
+      const blobText = await capturedBlobTexts[capturedBlobTexts.length - 1];
       // CSV should contain header
       expect(blobText).toContain('Key,Original,Translation');
       // Should properly escape quotes
@@ -266,13 +266,13 @@ describe('Translation Flow Integration Tests', () => {
       const state = makeState(entries, translations);
       const params = createHookParams(state);
 
-      capturedBlobs.length = 0;
+      capturedBlobTexts.length = 0;
       mockClick.mockClear();
 
       const { result } = renderHook(() => useEditorFileIO(params));
       act(() => result.current.handleExportXLIFF());
 
-      const blobText = await capturedBlobs[capturedBlobs.length - 1].text();
+      const blobText = await capturedBlobTexts[capturedBlobTexts.length - 1];
       expect(blobText).toContain('<?xml');
       expect(blobText).toContain('xliff');
       expect(blobText).toContain('ترجمة XLIFF');
@@ -288,13 +288,13 @@ describe('Translation Flow Integration Tests', () => {
       const state = makeState(entries, translations);
       const params = createHookParams(state);
 
-      capturedBlobs.length = 0;
+      capturedBlobTexts.length = 0;
       mockClick.mockClear();
 
       const { result } = renderHook(() => useEditorFileIO(params));
       act(() => result.current.handleExportTMX());
 
-      const blobText = await capturedBlobs[capturedBlobs.length - 1].text();
+      const blobText = await capturedBlobTexts[capturedBlobTexts.length - 1];
       expect(blobText).toContain('<?xml');
       expect(blobText).toContain('tmx');
       expect(blobText).toContain('ترجمة TMX');
@@ -326,10 +326,10 @@ describe('Translation Flow Integration Tests', () => {
 
       // Step 1: Export
       const params1 = createHookParams(state);
-      capturedBlobs.length = 0;
+      capturedBlobTexts.length = 0;
       const { result: r1 } = renderHook(() => useEditorFileIO(params1));
       act(() => r1.current.handleExportTranslations());
-      const exportedJson = await capturedBlobs[capturedBlobs.length - 1].text();
+      const exportedJson = await capturedBlobTexts[capturedBlobTexts.length - 1];
       const exported = JSON.parse(exportedJson);
 
       // Step 2: Import back into empty state

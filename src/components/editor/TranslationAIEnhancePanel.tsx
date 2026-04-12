@@ -54,11 +54,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [activeTab, setActiveTab] = useState<string>("enhance");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [processedCount, setProcessedCount] = useState(0);
   const abortRef = useRef(false);
   const processedKeysRef = useRef<Set<string>>(new Set());
 
   const resetProcessedKeys = useCallback(() => {
     processedKeysRef.current = new Set();
+    setProcessedCount(0);
   }, []);
 
   const analyzeTranslations = async (mode: "enhance" | "grammar") => {
@@ -106,8 +108,17 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               glossary: glossary?.slice(0, 5000),
             },
           });
-          if (error) throw error;
+          if (error) {
+            console.error('Edge function error:', error);
+            throw error;
+          }
+          if (data?.error) {
+            console.error('AI error response:', data.error);
+            toast({ title: data.error, variant: "destructive" });
+            return { data: null, count: textsToAnalyze.length };
+          }
           for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+          setProcessedCount(processedKeysRef.current.size);
           return { data, count: textsToAnalyze.length };
         } catch (err) {
           console.error('Batch error:', err);
@@ -119,6 +130,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000) },
               });
               for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+              setProcessedCount(processedKeysRef.current.size);
               return { data, count: textsToAnalyze.length };
             } catch { return { data: null, count: textsToAnalyze.length }; }
           }
@@ -137,6 +149,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         } else if (mode === "grammar" && data.issues) {
           allIssues = [...allIssues, ...data.issues];
           setGrammarIssues(prev => [...prev, ...data.issues]);
+        } else {
+          console.warn('No suggestions/issues in response:', data);
         }
       }
 
@@ -212,8 +226,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   }
 
   const totalTranslated = entries.filter(e => translations[`${e.msbtFile}:${e.index}`]?.trim()).length;
-  const alreadyProcessed = processedKeysRef.current.size;
-  const remaining = totalTranslated - alreadyProcessed;
+  const remaining = totalTranslated - processedCount;
 
   const severityConfig: Record<string, { color: string; label: string }> = {
     high: { color: "text-red-500", label: "خطير" },
@@ -232,7 +245,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         <div className="flex items-center gap-4 mt-2">
           <div className="flex gap-3 text-[11px] text-muted-foreground flex-1">
             <span>إجمالي: <strong className="text-foreground">{totalTranslated}</strong></span>
-            <span>تم فحصه: <strong className="text-foreground">{alreadyProcessed}</strong></span>
+            <span>تم فحصه: <strong className="text-foreground">{processedCount}</strong></span>
             <span>متبقي: <strong className={remaining > 0 ? "text-primary" : "text-green-500"}>{remaining}</strong></span>
           </div>
           {suggestions.length + grammarIssues.length > 0 && (
@@ -288,7 +301,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               <Square className="w-3 h-3" /> إيقاف
             </Button>
           )}
-          {!isAnalyzing && processedKeysRef.current.size > 0 && (
+          {!isAnalyzing && processedCount > 0 && (
             <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); }} className="gap-1.5">
               <RotateCcw className="w-3.5 h-3.5" /> إعادة فحص
             </Button>

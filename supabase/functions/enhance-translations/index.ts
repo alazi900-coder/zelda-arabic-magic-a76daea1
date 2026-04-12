@@ -108,8 +108,17 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       let parsed: { issues: any[] } = { issues: [] };
       try {
         const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        parsed = JSON.parse((jsonMatch[1] || content).trim());
-      } catch { /* ignore */ }
+        const raw = (jsonMatch[1] || content).trim();
+        // Try to extract JSON object from the response
+        const objMatch = raw.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          parsed = JSON.parse(objMatch[0]);
+        } else {
+          console.error('No JSON object found in AI response:', content.slice(0, 500));
+        }
+      } catch (e) {
+        console.error('JSON parse error:', e, 'Content:', content.slice(0, 500));
+      }
 
       const mappedIssues = (parsed.issues || []).map((i: any) => ({
         key: entries[i.index]?.key || '',
@@ -189,10 +198,18 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     const aiResult = await response.json();
     const content = aiResult.choices?.[0]?.message?.content || '';
     let parsed: { suggestions: any[] } = { suggestions: [] };
-    try {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-      parsed = JSON.parse((jsonMatch[1] || content).trim());
-    } catch { /* ignore */ }
+      try {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        const raw = (jsonMatch[1] || content).trim();
+        const objMatch = raw.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          parsed = JSON.parse(objMatch[0]);
+        } else {
+          console.error('No JSON object found in enhance response:', content.slice(0, 500));
+        }
+      } catch (e) {
+        console.error('JSON parse error (enhance):', e, 'Content:', content.slice(0, 500));
+      }
 
     const mappedSuggestions = (parsed.suggestions || []).map((s: any) => ({
       key: entries[s.index]?.key || '',

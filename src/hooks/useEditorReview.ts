@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import type { EditorState, ExtractedEntry } from "@/components/editor/types";
-import { isMixedLanguage as isMixedLangCheck } from "@/components/editor/types";
+
 import type { AnalysisAction } from "@/components/editor/AdvancedTranslationPanel";
 
 interface UseEditorReviewParams {

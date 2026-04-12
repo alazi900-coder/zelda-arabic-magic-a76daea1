@@ -6,6 +6,7 @@ import { stripBidiMarkers } from "@/lib/arabic-processing";
 import { EditorState, hasTechnicalTags, restoreTagsLocally } from "@/components/editor/types";
 import { BuildPreview } from "@/components/editor/BuildConfirmDialog";
 import type { MutableRefObject } from "react";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 export interface BuildStats {
   modifiedCount: number;

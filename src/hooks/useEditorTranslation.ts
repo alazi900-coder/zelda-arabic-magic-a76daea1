@@ -9,6 +9,7 @@ import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
 import { splitEvenlyByLines } from "@/lib/balance-lines";
 import { fixMixedBidi } from "@/lib/arabic-processing";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 

@@ -8,6 +8,7 @@ import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { categorizeBdatTable, categorizeByTableName, categorizeByColumnName, categorizeByFilename, type ExtractedEntry } from "@/components/editor/types";
 import type { BdatSchemaReport } from "@/lib/bdat-schema-inspector";
 import { loadBdatSettings, saveBdatSettings, formatMarginPct } from "@/lib/bdat-settings";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 type ProcessingStage = "idle" | "uploading" | "extracting" | "done" | "error";
 

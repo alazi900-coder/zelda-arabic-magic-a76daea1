@@ -61,6 +61,7 @@ function HighlightedOriginal({ text }: { text: string }) {
   );
 }
 import { toast } from "@/hooks/use-toast";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 interface EntryCardProps {
   entry: ExtractedEntry;

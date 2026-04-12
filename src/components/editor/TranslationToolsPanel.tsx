@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, X, Sparkles, Copy, RotateCcw, Loader2, Bookmark
 import { EditorState, ExtractedEntry, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 
 import { toast } from "@/hooks/use-toast";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 interface TranslationToolsPanelProps {
   state: EditorState;

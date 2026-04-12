@@ -5,6 +5,7 @@ import type { EditorState } from "@/components/editor/types";
 import { ExtractedEntry, hasArabicChars, unReverseBidi, isTechnicalText } from "@/components/editor/types";
 import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
 import { fetchBundledTranslations, uploadBundledTranslations } from "@/lib/bundled-cloud";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
 /** Parse a single JSON object chunk, repairing common issues */
 function repairSingleChunk(raw: string): Record<string, string> | null {

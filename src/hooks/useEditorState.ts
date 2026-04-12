@@ -17,8 +17,10 @@ import { useEditorBuild } from "@/hooks/useEditorBuild";
 import { useEditorTranslation } from "@/hooks/useEditorTranslation";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useEditorScanResults } from "@/hooks/useEditorScanResults";
-import {
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { useEditorReview } from "@/hooks/useEditorReview";
+import { useEditorCleanup } from "@/hooks/useEditorCleanup";
+import {
   ExtractedEntry, EditorState, AUTOSAVE_DELAY, AI_BATCH_SIZE, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags,
   ReviewIssue, ReviewSummary, ReviewResults, ShortSuggestion, ImproveResult,

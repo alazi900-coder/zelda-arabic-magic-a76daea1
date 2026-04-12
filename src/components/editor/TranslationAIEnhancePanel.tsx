@@ -108,8 +108,17 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               glossary: glossary?.slice(0, 5000),
             },
           });
-          if (error) throw error;
+          if (error) {
+            console.error('Edge function error:', error);
+            throw error;
+          }
+          if (data?.error) {
+            console.error('AI error response:', data.error);
+            toast({ title: data.error, variant: "destructive" });
+            return { data: null, count: textsToAnalyze.length };
+          }
           for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+          setProcessedCount(processedKeysRef.current.size);
           return { data, count: textsToAnalyze.length };
         } catch (err) {
           console.error('Batch error:', err);
@@ -121,6 +130,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000) },
               });
               for (const t of textsToAnalyze) processedKeysRef.current.add(t.key);
+              setProcessedCount(processedKeysRef.current.size);
               return { data, count: textsToAnalyze.length };
             } catch { return { data: null, count: textsToAnalyze.length }; }
           }
@@ -139,6 +149,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         } else if (mode === "grammar" && data.issues) {
           allIssues = [...allIssues, ...data.issues];
           setGrammarIssues(prev => [...prev, ...data.issues]);
+        } else {
+          console.warn('No suggestions/issues in response:', data);
         }
       }
 

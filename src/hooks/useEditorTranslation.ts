@@ -166,7 +166,7 @@ export function useEditorTranslation({
       // Send original text directly — server handles tag protection (avoid double-protection)
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
@@ -297,7 +297,7 @@ export function useEditorTranslation({
       try {
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal,
           body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
@@ -306,7 +306,7 @@ export function useEditorTranslation({
           await new Promise(r => setTimeout(r, 3000));
           const retry = await fetch(getEdgeFunctionUrl("translate-entries"), {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+            headers: getSupabaseHeaders(),
             signal,
             body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
           });
@@ -456,7 +456,7 @@ export function useEditorTranslation({
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
@@ -507,7 +507,7 @@ export function useEditorTranslation({
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: userGeminiKey || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
@@ -660,7 +660,7 @@ export function useEditorTranslation({
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
           body: JSON.stringify({
             entries,
@@ -849,7 +849,7 @@ export function useEditorTranslation({
             const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
             const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+              headers: getSupabaseHeaders(),
               signal: abortControllerRef.current.signal,
               body: JSON.stringify({
                 entries,

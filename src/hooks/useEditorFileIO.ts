@@ -1918,7 +1918,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseKey}`,
+          ...getSupabaseHeaders(),
         },
         body: JSON.stringify({ entries: candidates }),
       });

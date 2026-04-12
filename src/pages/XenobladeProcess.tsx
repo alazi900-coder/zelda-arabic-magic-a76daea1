@@ -275,7 +275,7 @@ const XenobladeProcess = () => {
         addLog("📤 إرسال ملفات MSBT/JSON للمعالجة...");
         const response = await fetch(getEdgeFunctionUrl("arabize-xenoblade?mode=extract"), {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey },
+          headers: getSupabaseHeaders(),
           body: formData,
         });
 

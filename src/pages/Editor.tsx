@@ -386,12 +386,6 @@ const Editor = () => {
               </>
             )}
 
-            {editor.isFilterActive && !editor.translating && (
-              <div className="w-full rounded-lg bg-primary/10 border border-primary/20 px-4 py-2 text-sm font-display flex items-center gap-2" dir="rtl">
-                <Filter className="w-4 h-4 text-primary shrink-0" />
-                <span>⚠️ الفلتر نشط: <strong>{editor.filterLabel}</strong> — سيتم ترجمة <strong>{editor.filteredEntries.length}</strong> جملة فقط من أصل {editor.state?.entries.length ?? 0}</span>
-              </div>
-            )}
 
             {editor.translating ? (
               <Button size={isMobile ? "default" : "lg"} variant="destructive" onClick={editor.handleStopTranslate} className="font-display font-bold px-4 md:px-6">
@@ -1296,6 +1290,11 @@ const Editor = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-card border-border z-[100] min-w-[220px] max-h-[60vh] overflow-y-auto">
                   <DropdownMenuLabel className="text-xs">📤 تصدير</DropdownMenuLabel>
+                  {editor.isFilterActive && (
+                    <div className="px-2 py-1.5 text-[11px] text-primary bg-primary/10 rounded mx-1 mb-1" dir="rtl">
+                      ⚠️ سيتم تصدير <strong>{editor.filteredEntries.length}</strong> جملة فقط ({editor.filterLabel})
+                    </div>
+                  )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
@@ -1537,6 +1536,11 @@ const Editor = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="bg-card border-border z-50 min-w-[240px] max-h-[70vh] overflow-y-auto">
                   <DropdownMenuLabel className="text-xs">📤 تصدير</DropdownMenuLabel>
+                  {editor.isFilterActive && (
+                    <div className="px-2 py-1.5 text-[11px] text-primary bg-primary/10 rounded mx-1 mb-1" dir="rtl">
+                      ⚠️ سيتم تصدير <strong>{editor.filteredEntries.length}</strong> جملة فقط ({editor.filterLabel})
+                    </div>
+                  )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF (memoQ/Trados)</DropdownMenuItem>

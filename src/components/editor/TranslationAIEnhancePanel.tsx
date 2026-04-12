@@ -301,7 +301,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               <Square className="w-3 h-3" /> إيقاف
             </Button>
           )}
-          {!isAnalyzing && processedKeysRef.current.size > 0 && (
+          {!isAnalyzing && processedCount > 0 && (
             <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); }} className="gap-1.5">
               <RotateCcw className="w-3.5 h-3.5" /> إعادة فحص
             </Button>

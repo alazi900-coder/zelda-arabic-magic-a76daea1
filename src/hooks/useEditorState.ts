@@ -906,8 +906,17 @@ export function useEditorState() {
 
 
   // === File IO (extracted to useEditorFileIO) ===
+  const filterStatusLabels: Record<string, string> = {
+    'translated': 'مترجم', 'untranslated': 'غير مترجم', 'problems': 'مشاكل',
+    'needs-improve': 'تحتاج تحسين', 'too-short': 'قصيرة', 'too-long': 'طويلة',
+    'stuck-chars': 'أحرف ملتصقة', 'mixed-lang': 'مختلط', 'has-tags': 'أوسمة',
+    'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز',
+    'has-newlines': 'أسطر متعددة',
+  };
   const filterLabel = filterCategory.length > 0 ? filterCategory.join('+')
     : filterFile !== "all" ? filterFile
+    : filterStatus !== "all" ? (filterStatusLabels[filterStatus] || filterStatus)
+    : filterTechnical !== "all" ? filterTechnical
     : "";
 
   // === Clear translations (with undo) ===

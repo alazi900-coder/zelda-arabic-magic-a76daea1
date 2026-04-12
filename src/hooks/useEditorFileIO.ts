@@ -14,11 +14,7 @@ function repairSingleChunk(raw: string): Record<string, string> | null {
   if (!text.startsWith('{')) text = '{' + text;
   if (!text.endsWith('}')) {
     // ابحث عن آخر سطر مكتمل
-    const lines = text.split('\n');
-    const goodLines: string[] = [];
-    for (const line of lines) {
-      goodLines.push(line);
-    }
+    const goodLines = text.split('\n');
     // أزل الأسطر غير المكتملة من النهاية
     while (goodLines.length > 1) {
       const last = goodLines[goodLines.length - 1].trim();

@@ -398,6 +398,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: cleaned, reason: cleaned !== trans ? '🧹 سيتم إزالة الأحرف غير المرئية' : '⚠️ لم يُعثر على أحرف غير مرئية' };
     }
 
+    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category)) {
+      const repaired = repairTranslationTagsForBuild(entry.original, trans);
+      if (repaired.text !== trans) {
+        return { fixResult: repaired.text, reason: '💲 سيتم إصلاح متغيرات $N التالفة' };
+      }
+      return { fixResult: trans, reason: '⚠️ لم يتمكن من إصلاح المتغيرات تلقائياً' };
+    }
+
     return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
   }, [entryMap, state.translations]);
 
@@ -415,6 +423,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         onApplyFix(issue.key, fixed);
       }
       toast({ title: "🔧 إصلاح", description: "تم إصلاح الوسوم" });
+      return;
+    }
+
+    // Corrupted $N vars: repair
+    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const repaired = repairTranslationTagsForBuild(entry.original, issue.translation);
+      onApplyFix(issue.key, repaired.text);
+      toast({ title: "💲 إصلاح", description: "تم إصلاح متغيرات $N" });
       return;
     }
 
@@ -459,6 +475,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         }
         toast({ title: "🔧 إصلاح", description: `تم إصلاح الوسوم في ${count} نص` });
       }
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter) && onApplyFix) {
+      let count = 0;
+      for (const key of uniqueKeys) {
+        const entry = entryMap.get(key);
+        const trans = state.translations[key];
+        if (!entry || !trans) continue;
+        const repaired = repairTranslationTagsForBuild(entry.original, trans);
+        if (repaired.text !== trans) { onApplyFix(key, repaired.text); count++; }
+      }
+      toast({ title: "💲 إصلاح جماعي", description: `تم إصلاح متغيرات $N في ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }

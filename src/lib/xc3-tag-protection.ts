@@ -38,7 +38,7 @@ const TAG_PATTERNS: RegExp[] = [
   /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]/g,          // [Tag:Value] or [/Tag:Value] or \[Tag:Value\]
   /\d+\s*\\?\[[A-Z]{2,10}\\?\]/g,       // N[TAG] patterns BEFORE generic [Word] (e.g. 1[ML])
   /\\?\[[A-Z]{2,10}\\?\]\s*\d+/g,       // [TAG]N patterns BEFORE generic [Word] (e.g. [ML]1)
-  /\\?\[\s*\w+\s*\\?\]/g,                   // \[Passive\], \[Active\], [XENO] etc. (AFTER N[TAG])
+  /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g, // \[Passive\], \[Arts Seal\], [Lock-On], [XENO]
   /\[\s*\w+\s*=\s*\w[^\]]*\]/g,      // [TAG=Value] patterns (e.g. [Color=Red])
   /\{\s*\w+\s*:\s*\w[^}]*\}/g,        // {TAG:Value} patterns (e.g. {player:name})
   /\{[\w]+\}/g,                           // {variable} placeholders

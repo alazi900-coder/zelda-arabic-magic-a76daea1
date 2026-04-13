@@ -510,6 +510,7 @@ export function hasTechnicalTags(text: string): boolean {
     || /\[\s*\/?\s*\w+\s*:[^\]]*\]/.test(text)
     || /\d+\s*\[[A-Z]{2,10}\]/.test(text)
     || /\[[A-Z]{2,10}\]\s*\d+/.test(text)
+    || /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/.test(text)
     || /\[\s*\w+\s*=\s*\w[^\]]*\]/.test(text)
     || /\{\s*\w+\s*:\s*\w[^}]*\}/.test(text);
 }

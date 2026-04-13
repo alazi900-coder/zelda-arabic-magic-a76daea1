@@ -7,6 +7,11 @@ describe('hasTechnicalBracketTag', () => {
     expect(hasTechnicalBracketTag('No tags here')).toBe(false);
     expect(hasTechnicalBracketTag('[ML:EnhanceParam paramtype=1 ]')).toBe(true);
   });
+
+  it('detects generic English word tags with spaces and hyphens', () => {
+    expect(hasTechnicalBracketTag('Use [Arts Seal] here')).toBe(true);
+    expect(hasTechnicalBracketTag('Use [Lock-On] here')).toBe(true);
+  });
 });
 
 describe('fixTagBracketsStrict', () => {

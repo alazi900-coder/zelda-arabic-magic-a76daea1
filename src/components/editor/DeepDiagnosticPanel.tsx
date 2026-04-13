@@ -591,10 +591,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       }
     }
 
-    const totalFixed = tagFixKeys.length + restoreCount + stripCount + clearCount;
+    const totalFixed = tagFixKeys.length + restoreCount + stripCount + clearCount + dollarFixCount;
     toast({
       title: "⚡ إصلاح شامل",
-      description: `تم إصلاح ${totalFixed} نص (${tagFixKeys.length} وسوم، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
+      description: `تم إصلاح ${totalFixed} نص (${tagFixKeys.length} وسوم، ${dollarFixCount} متغيرات، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
     });
     setTimeout(() => runScan(false), 500);
   }, [issues, onApplyFix, onFixSelectedLocally, entryMap, state.translations, runScan]);

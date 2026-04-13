@@ -280,6 +280,42 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
+      // === Safety gate: revert translations with missing control/PUA characters ===
+      const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
+      const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
+      let revertedCount = 0;
+      const revertedKeys: string[] = [];
+
+      // Build a lookup from key → original text
+      const entryOriginals = new Map<string, string>();
+      for (const entry of currentState.entries) {
+        const k = `${entry.msbtFile}:${entry.index}`;
+        entryOriginals.set(k, entry.original);
+      }
+
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        const orig = entryOriginals.get(key);
+        if (!orig) continue;
+
+        const origControl = (orig.match(RE_CONTROL_BUILD) || []).length;
+        const transControl = (trans.match(RE_CONTROL_BUILD) || []).length;
+        const origPua = (orig.match(RE_PUA_BUILD) || []).length;
+        const transPua = (trans.match(RE_PUA_BUILD) || []).length;
+
+        if ((origControl > 0 && transControl < origControl) || (origPua > 0 && transPua < origPua)) {
+          // Revert to original — safer than injecting broken translation
+          nonEmptyTranslations[key] = orig;
+          revertedCount++;
+          if (revertedKeys.length < 10) revertedKeys.push(key);
+        }
+      }
+
+      if (revertedCount > 0) {
+        setBuildProgress(`🛡️ حماية: استعادة النص الأصلي لـ ${revertedCount} ترجمة تالفة (رموز تحكم مفقودة)...`);
+        console.warn(`[BUILD-SAFETY] Reverted ${revertedCount} translations with missing control/PUA chars:`, revertedKeys);
+        await new Promise(r => setTimeout(r, 500));
+      }
+
       // Pre-scan: build per-file index of translations for O(1) lookup
       const perFileTranslations = new Map<string, Map<string, string>>();
       const perFileLegacy = new Map<string, Map<string, string>>();

@@ -93,4 +93,19 @@ describe("restoreTagsLocally – translated/damaged tag handling", () => {
     expect(result).toContain("[Lock-On]");
     expect(result).not.toContain("[تثبيت-الهدف]");
   });
+
+  it("restores N[Tag:Value] patterns like 1[XENO:n] and 6[XENO:n]", () => {
+    const original = "\\[Passive\\] Increases tension by $1 1[XENO:n] when battle starts.";
+    const translation = "\\[سلبي\\] يزيد التوتر بمقدار $1 عندما تبدأ المعركة.";
+    const result = restoreTagsLocally(original, translation);
+    expect(result).toContain("1[XENO:n]");
+    expect(result).toContain("\\[Passive\\]");
+  });
+
+  it("restores 2010[ML:icon icon=copyright] pattern", () => {
+    const original = "2010[ML:icon icon=copyright] Nintendo";
+    const translation = "نينتندو";
+    const result = restoreTagsLocally(original, translation);
+    expect(result).toContain("2010[ML:icon icon=copyright]");
+  });
 });

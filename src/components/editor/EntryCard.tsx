@@ -294,6 +294,18 @@ const EntryCard: React.FC<EntryCardProps> = ({
                     💲 متغير $N مترجم خطأ — سيُصلح تلقائياً عند البناء
                   </span>
                 )}
+                {/* Missing $N variable warning */}
+                {translation && /\$\d/.test(entry.original) && (() => {
+                  const origVars = (entry.original.match(/\$\d+/g) || []) as string[];
+                  const transVars = (translation.match(/\$\d+/g) || []) as string[];
+                  const missing = origVars.filter((v: string) => !transVars.includes(v));
+                  if (missing.length === 0) return null;
+                  return (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 font-semibold">
+                      🚫 متغيرات مفقودة: {missing.join('، ')} — سيُستعاد النص الأصلي عند البناء
+                    </span>
+                  );
+                })()}
                 {/msg_(ask|cq|fev|nq|sq|tlk|tq)/i.test(key) && (() => {
                   const lines = translation.split('\n');
                   const lineCount = lines.length;

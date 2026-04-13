@@ -496,7 +496,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                     🔍
                                   </Button>
                                 )}
-                                {onApplyFix && (issue.category === "control_chars" || issue.category === "pua_chars" || issue.category === "empty_translation") && (
+                                {onApplyFix && (
+                                  issue.category === "control_chars" || issue.category === "pua_chars" || 
+                                  issue.category === "empty_translation" || issue.category === "null_char" ||
+                                  issue.category === "unmatched_ruby" || issue.category === "broken_tag_syntax" ||
+                                  issue.category === "control_extra"
+                                ) && (
                                   <Button
                                     size="sm"
                                     variant="ghost"

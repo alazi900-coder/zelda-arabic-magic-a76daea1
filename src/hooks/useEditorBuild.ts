@@ -5,6 +5,7 @@ import { processArabicText, hasArabicChars as hasArabicCharsProcessing, hasArabi
 import { stripBidiMarkers } from "@/lib/arabic-processing";
 import { EditorState, hasTechnicalTags, restoreTagsLocally } from "@/components/editor/types";
 import { BuildPreview } from "@/components/editor/BuildConfirmDialog";
+import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import type { MutableRefObject } from "react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
@@ -454,7 +455,33 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await new Promise(r => setTimeout(r, 300));
       }
 
-      // Pre-scan: build per-file index of translations for O(1) lookup
+        let finalTagRepairCount = 0;
+        let finalTagSkipCount = 0;
+        for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+          const orig = entryOriginals.get(key);
+          if (!orig) continue;
+
+          const tagRepair = repairTranslationTagsForBuild(orig, trans);
+          if (tagRepair.changed) {
+            nonEmptyTranslations[key] = tagRepair.text;
+            finalTagRepairCount++;
+          }
+
+          if (!tagRepair.exactTagMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
+            delete nonEmptyTranslations[key];
+            finalTagSkipCount++;
+          }
+        }
+
+        if (finalTagRepairCount > 0 || finalTagSkipCount > 0) {
+          const parts: string[] = [];
+          if (finalTagRepairCount > 0) parts.push(`🏷️ إصلاح ${finalTagRepairCount} نص تقني`);
+          if (finalTagSkipCount > 0) parts.push(`🛡️ استبعاد ${finalTagSkipCount} نص غير آمن`);
+          setBuildProgress(`${parts.join(' | ')} قبل حقن ترجمات BDAT...`);
+          await new Promise(r => setTimeout(r, 300));
+        }
+
+        // Pre-scan: build per-file index of translations for O(1) lookup
       const perFileTranslations = new Map<string, Map<string, string>>();
       const perFileLegacy = new Map<string, Map<string, string>>();
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
@@ -600,41 +627,43 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
 
         // Hard safety gate before server build: repair what يمكن إصلاحه locally, and skip anything still dangerous
-        const closingTagRegex = /\[\s*\/\s*\w+\s*:[^\]]*\]/g;
+        let fixedTechnicalCount = 0;
         let skippedUnsafeCount = 0;
         for (const entry of currentState.entries) {
           const key = `${entry.msbtFile}:${entry.index}`;
           let trans = nonEmptyTranslations[key];
           if (!trans) continue;
 
+          const tagRepair = repairTranslationTagsForBuild(entry.original, trans);
+          trans = tagRepair.text;
+          if (tagRepair.changed) {
+            fixedTechnicalCount++;
+          }
+
           const hasNullChar = trans.includes('\x00');
           const bracketMismatch = ((trans.match(/\[/g) || []).length !== (trans.match(/\]/g) || []).length);
           const rubyOpenCount = (trans.match(/\[\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
           const rubyCloseCount = (trans.match(/\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
 
-          if (hasNullChar || bracketMismatch || rubyOpenCount !== rubyCloseCount) {
-            delete nonEmptyTranslations[key];
-            skippedUnsafeCount++;
-            continue;
-          }
-
-          const originalHasTechnical = /[\uFFF9-\uFFFC\uE000-\uE0FF]|\[[^\]]*\]|\{[^}]*\}/.test(entry.original);
-          if (originalHasTechnical) {
-            trans = restoreTagsLocally(entry.original, trans);
-          }
-
-          const origClosingTags = entry.original.match(closingTagRegex) || [];
-          const missingClosingTag = origClosingTags.some(tag => !trans.includes(tag));
-          const origTagCount = (entry.original.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
-          const transTagCount = (trans.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
-
-          if (missingClosingTag || transTagCount < origTagCount) {
+          if (
+            hasNullChar ||
+            bracketMismatch ||
+            rubyOpenCount !== rubyCloseCount ||
+            !tagRepair.exactTagMatch ||
+            tagRepair.missingClosingTags ||
+            tagRepair.missingControlOrPua
+          ) {
             delete nonEmptyTranslations[key];
             skippedUnsafeCount++;
             continue;
           }
 
           nonEmptyTranslations[key] = trans;
+        }
+
+        if (fixedTechnicalCount > 0) {
+          setBuildProgress(`🏷️ تم إصلاح ${fixedTechnicalCount} نص تقني قبل البناء...`);
+          await new Promise(r => setTimeout(r, 400));
         }
 
         if (skippedUnsafeCount > 0) {
@@ -872,33 +901,32 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const nonEmptyTranslations: Record<string, string> = {};
       for (const [k, v] of Object.entries(currentState.translations)) { if (v.trim()) nonEmptyTranslations[k] = v; }
 
-      // Auto-fix damaged tags before build
+      // Auto-fix and validate technical tags before build
       let tagFixCount = 0;
       let tagSkipCount = 0;
       let tagOkCount = 0;
       for (const entry of currentState.entries) {
-        if (!hasTechnicalTags(entry.original)) continue;
         const key = `${entry.msbtFile}:${entry.index}`;
         const trans = nonEmptyTranslations[key];
         if (!trans) continue;
-        const origTagCount = (entry.original.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
-        const transTagCount = (trans.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
-        if (transTagCount < origTagCount) {
-          const fixed = restoreTagsLocally(entry.original, trans);
+
+        const tagRepair = repairTranslationTagsForBuild(entry.original, trans);
+        const fixed = tagRepair.text;
+
+        if (tagRepair.changed) {
           nonEmptyTranslations[key] = fixed;
           tagFixCount++;
-          // Log DoCommand/LayoutMsg entries for debugging
-          if (entry.msbtFile.includes('DoCommand') || entry.msbtFile.includes('Pouch')) {
-            const fixedTagCount = (fixed.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
-            console.log(`[TAG-FIX] ${key}: orig=${origTagCount} tags, trans=${transTagCount} tags, fixed=${fixedTagCount} tags`);
-            console.log(`[TAG-FIX] Original: ${[...entry.original.substring(0, 30)].map(c => c.charCodeAt(0).toString(16).padStart(4,'0')).join(' ')}`);
-            console.log(`[TAG-FIX] Fixed: ${[...fixed.substring(0, 30)].map(c => c.charCodeAt(0).toString(16).padStart(4,'0')).join(' ')}`);
-          }
-        } else {
-          tagOkCount++;
         }
+
+        if (!tagRepair.exactTagMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
+          delete nonEmptyTranslations[key];
+          tagSkipCount++;
+          continue;
+        }
+
+        tagOkCount++;
       }
-      console.log(`[BUILD-TAGS] Fixed: ${tagFixCount}, Already OK: ${tagOkCount}, Skipped(no tags): ${tagSkipCount}`);
+      console.log(`[BUILD-TAGS] Fixed: ${tagFixCount}, Safe: ${tagOkCount}, Skipped: ${tagSkipCount}`);
       
       // Validate translations size
       const translationsJson = JSON.stringify(nonEmptyTranslations);

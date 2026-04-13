@@ -381,6 +381,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     setTimeout(() => runScan(true), 250);
   }, [activeFilter, issues, onFixSelectedLocally, runScan]);
 
+  const handleRunScan = useCallback(() => {
+    runScan(false);
+  }, [runScan]);
+
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;
   const activeFilterKeys = activeFilter
@@ -428,7 +432,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={runScan}
+                onClick={handleRunScan}
                 disabled={scanning}
                 className="font-display font-bold"
               >

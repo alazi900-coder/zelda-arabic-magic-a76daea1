@@ -217,7 +217,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
             translated++;
             if (result.qTooLong) { qTooLong++; problemKeys.add(key); }
             if (result.qNearLimit) { qNearLimit++; problemKeys.add(key); }
-            if (result.qMissingTags) { qMissingTags++; problemKeys.add(key); }
+            if (result.qMissingTags) { qMissingTags++; problemKeys.add(key); missingTagKeys.add(key); }
             if (result.qPlaceholderMismatch) { qPlaceholderMismatch++; problemKeys.add(key); }
             if (result.damagedTags) { damagedTagsCount++; damagedTagKeys.add(key); problemKeys.add(key); }
             if (result.niTooShort) { niTooShort++; needsImproveKeys.add(key); }
@@ -234,7 +234,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           // Done — commit results
           cacheRef.current = newCache;
           setCategoryProgress(progress);
-          setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, damagedTagKeys });
+          setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, damagedTagKeys, missingTagKeys });
           setNeedsImproveCount({ total: needsImproveKeys.size, tooShort: niTooShort, tooLong: niTooLong, stuck: niStuck, mixed: niMixed });
           setTranslatedCount(translated);
         }

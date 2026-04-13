@@ -33,4 +33,47 @@ describe("repairTranslationTagsForBuild", () => {
 
     expect(result.exactTagMatch).toBe(false);
   });
-});
+  });
+
+  it("fixes دولار1 back to $1", () => {
+    const result = repairTranslationTagsForBuild(
+      "\\[Passive\\] Increases tension by $1 1[XENO:n] when battle starts.",
+      "\\[سلبي\\] يزيد التوتر بمقدار دولار1 عندما تبدأ المعركة.",
+    );
+    expect(result.text).toContain("$1");
+    expect(result.text).not.toContain("دولار");
+  });
+
+  it("fixes 1.$ back to $1", () => {
+    const result = repairTranslationTagsForBuild(
+      "Deals $1 damage",
+      "يسبب 1.$ ضرر",
+    );
+    expect(result.text).toContain("$1");
+    expect(result.text).not.toContain("1.$");
+  });
+
+  it("fixes $.1 back to $1", () => {
+    const result = repairTranslationTagsForBuild(
+      "Heals $1 HP",
+      "يشفي $.1 نقطة صحة",
+    );
+    expect(result.text).toContain("$1");
+  });
+
+  it("fixes 1 دولار back to $1", () => {
+    const result = repairTranslationTagsForBuild(
+      "Boosts by $1 percent",
+      "يزيد بنسبة 1 دولار بالمئة",
+    );
+    expect(result.text).toContain("$1");
+    expect(result.text).not.toContain("دولار");
+  });
+
+  it("does not fix $N when original has no $N vars", () => {
+    const result = repairTranslationTagsForBuild(
+      "Hello world",
+      "مرحبا دولار1 بالعالم",
+    );
+    expect(result.text).toContain("دولار1");
+  });

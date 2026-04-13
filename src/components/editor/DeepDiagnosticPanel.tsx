@@ -3,11 +3,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, XCircle, AlertTriangle, Search, Loader2, Copy, Filter, Wrench } from "lucide-react";
-import { ExtractedEntry, EditorState, hasTechnicalTags } from "@/components/editor/types";
-import { hasArabicPresentationForms } from "@/lib/arabic-processing";
+import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Filter, Wrench, Zap } from "lucide-react";
+import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 
 // ═══════════════════════════════════════════════════
 // Types
@@ -23,7 +23,6 @@ interface DiagnosticIssue {
   severity: Severity;
   category: string;
   message: string;
-  fix?: string;
 }
 
 interface DiagnosticCategory {
@@ -41,8 +40,9 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "double_shaped", label: "معالجة عربية مزدوجة", icon: "🔄", severity: "critical", description: "نص معالج مرتين (Double Reshaping) — يظهر مقلوب ومفكك في اللعبة" },
   { id: "null_char", label: "رمز NULL داخل النص", icon: "💀", severity: "critical", description: "وجود \\0 (NULL) وسط النص — يقطع النص فوراً ويسبب تجمّد المحرك" },
   { id: "unmatched_ruby", label: "وسم Ruby غير مغلق", icon: "🔓", severity: "critical", description: "وسم [System:Ruby] بدون إغلاق [/System:Ruby] أو العكس — يعلّق محرك الرسائل" },
-  { id: "broken_tag_syntax", label: "وسم بصيغة تالفة", icon: "🧩", severity: "critical", description: "وسم [...] مفتوح بدون إغلاق أو أقواس متداخلة خاطئة — يتجمّد المحلل" },
+  { id: "broken_tag_syntax", label: "وسم بصيغة تالفة", icon: "🧩", severity: "critical", description: "أقواس [...] غير متوازنة (بعد استثناء الأقواس المحمية) — يتجمّد المحلل" },
   { id: "control_extra", label: "رموز تحكم زائدة", icon: "⚠️", severity: "critical", description: "رموز تحكم في الترجمة أكثر من الأصل — تُربك محرك الرسائل" },
+  { id: "translated_tags", label: "وسوم مترجمة", icon: "🔀", severity: "warning", description: "وسوم تقنية تم ترجمتها بالخطأ (عربي داخل أقواس تقنية) — يجب إصلاحها" },
   { id: "invisible_chars", label: "أحرف غير مرئية مشبوهة", icon: "👻", severity: "warning", description: "أحرف Unicode غير مرئية (ZWJ, ZWNJ, BOM, إلخ) قد تُربك المحرك" },
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم [System:...] أو [/...] مفقودة — قد تسبب خلل في العرض" },
   { id: "placeholder_mismatch", label: "عناصر نائبة مفقودة", icon: "⬛", severity: "warning", description: "رموز \uFFFC نائبة مفقودة — قد تسبب خلل في الواجهة" },
@@ -54,7 +54,7 @@ const CATEGORIES: DiagnosticCategory[] = [
 ];
 
 // ═══════════════════════════════════════════════════
-// Detection functions
+// Detection
 // ═══════════════════════════════════════════════════
 
 const RE_CONTROL = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
@@ -68,8 +68,8 @@ const RE_NULL_CHAR = /\x00/;
 const RE_INVISIBLE = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u180E]/g;
 const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
-const RE_BRACKET_OPEN = /\[/g;
-const RE_BRACKET_CLOSE = /\]/g;
+const RE_ARABIC_IN_BRACKETS = /\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]/g;
+const RE_ARABIC_NUM_TAG = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+/g;
 const encoder = new TextEncoder();
 
 function countMatches(text: string, re: RegExp): number {
@@ -82,197 +82,153 @@ function getMatches(text: string, re: RegExp): string[] {
   return text.match(re) || [];
 }
 
+/** Count unescaped brackets (exclude \[ and \]) */
+function countUnescapedBrackets(text: string): { open: number; close: number } {
+  let open = 0, close = 0;
+  for (let i = 0; i < text.length; i++) {
+    const prev = i > 0 ? text[i - 1] : '';
+    if (text[i] === '[' && prev !== '\\') open++;
+    if (text[i] === ']' && prev !== '\\') close++;
+  }
+  return { open, close };
+}
+
 function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIssue[] {
   const key = `${entry.msbtFile}:${entry.index}`;
   const trimmed = translation.trim();
   const issues: DiagnosticIssue[] = [];
   const base = { key, label: entry.label, original: entry.original, translation };
 
-  // 1. Control characters missing (CRITICAL - causes crashes)
+  // 1. Control characters missing
   const origControl = countMatches(entry.original, RE_CONTROL);
   const transControl = countMatches(trimmed, RE_CONTROL);
   if (origControl > 0 && transControl < origControl) {
-    issues.push({
-      ...base,
-      severity: "critical",
-      category: "control_chars",
-      message: `${origControl - transControl} رمز تحكم مفقود من أصل ${origControl} (U+FFF9-FFFC)`,
-    });
+    issues.push({ ...base, severity: "critical", category: "control_chars",
+      message: `${origControl - transControl} رمز تحكم مفقود من أصل ${origControl}` });
   }
 
-  // 2. PUA characters missing (CRITICAL - icons/colors)
+  // 2. PUA characters missing
   const origPua = countMatches(entry.original, RE_PUA);
   const transPua = countMatches(trimmed, RE_PUA);
   if (origPua > 0 && transPua < origPua) {
-    issues.push({
-      ...base,
-      severity: "critical",
-      category: "pua_chars",
-      message: `${origPua - transPua} رمز خاص مفقود من أصل ${origPua} (U+E000-E0FF)`,
-    });
+    issues.push({ ...base, severity: "critical", category: "pua_chars",
+      message: `${origPua - transPua} رمز خاص مفقود من أصل ${origPua}` });
   }
 
-  // 3. Byte overflow (CRITICAL - corrupts string table)
+  // 3. Byte overflow
   if (entry.maxBytes > 0) {
     const byteLen = encoder.encode(trimmed).length;
     if (byteLen > entry.maxBytes) {
-      issues.push({
-        ...base,
-        severity: "critical",
-        category: "byte_overflow",
-        message: `${byteLen} بايت من حد أقصى ${entry.maxBytes} (تجاوز ${byteLen - entry.maxBytes} بايت)`,
-      });
+      issues.push({ ...base, severity: "critical", category: "byte_overflow",
+        message: `${byteLen} بايت من حد أقصى ${entry.maxBytes} (تجاوز ${byteLen - entry.maxBytes})` });
     }
   }
 
-  // 4. Double-shaped Arabic (CRITICAL - text appears reversed/broken)
-  if (RE_PRESENTATION_B.test(trimmed) || RE_PRESENTATION_A.test(trimmed)) {
-    if (RE_ARABIC_STANDARD.test(trimmed)) {
-      // Has BOTH standard Arabic AND presentation forms = double shaped
-      issues.push({
-        ...base,
-        severity: "critical",
-        category: "double_shaped",
-        message: "النص يحتوي حروف عربية عادية ومعالجة في نفس الوقت — معالجة مزدوجة",
-      });
-    }
+  // 4. Double-shaped Arabic
+  if ((RE_PRESENTATION_B.test(trimmed) || RE_PRESENTATION_A.test(trimmed)) && RE_ARABIC_STANDARD.test(trimmed)) {
+    issues.push({ ...base, severity: "critical", category: "double_shaped",
+      message: "النص يحتوي حروف عربية عادية ومعالجة في نفس الوقت — معالجة مزدوجة" });
   }
 
-  // 5. NULL character inside text (CRITICAL - truncates string, freezes engine)
+  // 5. NULL character
   if (RE_NULL_CHAR.test(trimmed)) {
-    issues.push({
-      ...base,
-      severity: "critical",
-      category: "null_char",
-      message: "يحتوي رمز NULL (\\0) — يقطع النص ويسبب تجمّد المحرك",
-    });
+    issues.push({ ...base, severity: "critical", category: "null_char",
+      message: "يحتوي رمز NULL (\\0) — يقطع النص ويسبب تجمّد المحرك" });
   }
 
-  // 6. Unmatched Ruby tags (CRITICAL - hangs message parser)
+  // 6. Unmatched Ruby tags
   const rubyOpens = countMatches(trimmed, RE_RUBY_OPEN);
   const rubyCloses = countMatches(trimmed, RE_RUBY_CLOSE);
   if (rubyOpens !== rubyCloses) {
-    issues.push({
-      ...base,
-      severity: "critical",
-      category: "unmatched_ruby",
-      message: `${rubyOpens} فتح [System:Ruby] مقابل ${rubyCloses} إغلاق [/System:Ruby] — غير متطابقة`,
-    });
+    issues.push({ ...base, severity: "critical", category: "unmatched_ruby",
+      message: `${rubyOpens} فتح [System:Ruby] مقابل ${rubyCloses} إغلاق — غير متطابقة` });
   }
 
-  // 7. Broken bracket syntax (CRITICAL - parser hang)
-  const bracketOpens = countMatches(trimmed, RE_BRACKET_OPEN);
-  const bracketCloses = countMatches(trimmed, RE_BRACKET_CLOSE);
-  if (bracketOpens !== bracketCloses) {
-    issues.push({
-      ...base,
-      severity: "critical",
-      category: "broken_tag_syntax",
-      message: `${bracketOpens} قوس '[' مقابل ${bracketCloses} قوس ']' — أقواس غير متوازنة`,
-    });
+  // 7. Broken bracket syntax — use smart counting that excludes \[ \]
+  const origBrackets = countUnescapedBrackets(entry.original);
+  const transBrackets = countUnescapedBrackets(trimmed);
+  // Only flag if translation brackets are unbalanced AND original was balanced
+  if (transBrackets.open !== transBrackets.close && origBrackets.open === origBrackets.close) {
+    issues.push({ ...base, severity: "critical", category: "broken_tag_syntax",
+      message: `${transBrackets.open} قوس '[' مقابل ${transBrackets.close} قوس ']' — أقواس غير متوازنة` });
   }
 
-  // 8. Extra control characters (more than original - confuses engine)
+  // 8. Extra control characters
   if (transControl > origControl && origControl > 0) {
-    issues.push({
-      ...base,
-      severity: "critical",
-      category: "control_extra",
-      message: `${transControl - origControl} رمز تحكم زائد (${transControl} في الترجمة مقابل ${origControl} في الأصل)`,
-    });
+    issues.push({ ...base, severity: "critical", category: "control_extra",
+      message: `${transControl - origControl} رمز تحكم زائد (${transControl} مقابل ${origControl} في الأصل)` });
   }
 
-  // 9. Invisible/suspicious Unicode characters
-  const invisibleMatches = getMatches(trimmed, RE_INVISIBLE);
-  if (invisibleMatches.length > 0) {
-    const codepoints = invisibleMatches.slice(0, 5).map(c => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`);
-    issues.push({
-      ...base,
-      severity: "warning",
-      category: "invisible_chars",
-      message: `${invisibleMatches.length} حرف غير مرئي: ${codepoints.join(', ')}${invisibleMatches.length > 5 ? '...' : ''}`,
-    });
-  }
-
-  // 5 (orig). Tag mismatch [System:...] etc
+  // 9. Translated tags — Arabic text inside bracket patterns
   const origTags = getMatches(entry.original, RE_TAG);
   if (origTags.length > 0) {
-    const missingTags = origTags.filter(t => !trimmed.includes(t));
-    if (missingTags.length > 0) {
-      issues.push({
-        ...base,
-        severity: "warning",
-        category: "tag_mismatch",
-        message: `${missingTags.length} وسم مفقود: ${missingTags.slice(0, 3).join(', ')}${missingTags.length > 3 ? '...' : ''}`,
-      });
+    const arabicInBrackets = getMatches(trimmed, RE_ARABIC_IN_BRACKETS);
+    const arabicNumTags = getMatches(trimmed, RE_ARABIC_NUM_TAG);
+    const translatedTags = [...arabicInBrackets, ...arabicNumTags];
+    if (translatedTags.length > 0) {
+      issues.push({ ...base, severity: "warning", category: "translated_tags",
+        message: `${translatedTags.length} وسم مترجم: ${translatedTags.slice(0, 3).join(', ')}${translatedTags.length > 3 ? '...' : ''}` });
     }
   }
 
-  // 6 (orig). Placeholder mismatch
+  // 10. Invisible characters
+  const invisibleMatches = getMatches(trimmed, RE_INVISIBLE);
+  if (invisibleMatches.length > 0) {
+    const codepoints = invisibleMatches.slice(0, 5).map(c => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`);
+    issues.push({ ...base, severity: "warning", category: "invisible_chars",
+      message: `${invisibleMatches.length} حرف غير مرئي: ${codepoints.join(', ')}${invisibleMatches.length > 5 ? '...' : ''}` });
+  }
+
+  // 11. Tag mismatch
+  if (origTags.length > 0) {
+    const missingTags = origTags.filter(t => !trimmed.includes(t));
+    if (missingTags.length > 0) {
+      issues.push({ ...base, severity: "warning", category: "tag_mismatch",
+        message: `${missingTags.length} وسم مفقود: ${missingTags.slice(0, 3).join(', ')}${missingTags.length > 3 ? '...' : ''}` });
+    }
+  }
+
+  // 12. Placeholder mismatch
   const origPh = countMatches(entry.original, RE_PLACEHOLDER);
   const transPh = countMatches(trimmed, RE_PLACEHOLDER);
   if (origPh > 0 && origPh !== transPh) {
-    issues.push({
-      ...base,
-      severity: "warning",
-      category: "placeholder_mismatch",
-      message: `${origPh} عنصر نائب في الأصل، ${transPh} في الترجمة`,
-    });
+    issues.push({ ...base, severity: "warning", category: "placeholder_mismatch",
+      message: `${origPh} عنصر نائب في الأصل، ${transPh} في الترجمة` });
   }
 
-  // 10. Newline count mismatch (warning)
+  // 13. Newline mismatch
   const origNewlines = (entry.original.match(/\n/g) || []).length;
   const transNewlines = (trimmed.match(/\n/g) || []).length;
   if (origNewlines > 0 && Math.abs(transNewlines - origNewlines) >= 2) {
-    issues.push({
-      ...base,
-      severity: "warning",
-      category: "newline_mismatch",
-      message: `${origNewlines} سطر في الأصل مقابل ${transNewlines} في الترجمة (فرق ${Math.abs(transNewlines - origNewlines)})`,
-    });
+    issues.push({ ...base, severity: "warning", category: "newline_mismatch",
+      message: `${origNewlines} سطر في الأصل مقابل ${transNewlines} في الترجمة (فرق ${Math.abs(transNewlines - origNewlines)})` });
   }
 
-  // 11. Byte budget — translation > 200% of original byte size
+  // 14. Byte budget
   const origBytes = encoder.encode(entry.original).length;
   const transBytes = encoder.encode(trimmed).length;
   if (origBytes > 10 && transBytes > origBytes * 2) {
     const pct = Math.round((transBytes / origBytes) * 100);
-    issues.push({
-      ...base,
-      severity: "warning",
-      category: "byte_budget",
-      message: `${transBytes} بايت مقابل ${origBytes} في الأصل (${pct}%) — قد تستنفد ذاكرة المحرك`,
-    });
+    issues.push({ ...base, severity: "warning", category: "byte_budget",
+      message: `${transBytes} بايت مقابل ${origBytes} في الأصل (${pct}%) — قد تستنفد ذاكرة المحرك` });
   }
 
-  // 12. Excessive lines — translation has 3+ more lines than original
+  // 15. Excessive lines
   if (transNewlines >= origNewlines + 3) {
-    issues.push({
-      ...base,
-      severity: "warning",
-      category: "excessive_lines",
-      message: `${transNewlines + 1} سطر في الترجمة مقابل ${origNewlines + 1} في الأصل — زيادة ${transNewlines - origNewlines} سطر`,
-    });
+    issues.push({ ...base, severity: "warning", category: "excessive_lines",
+      message: `${transNewlines + 1} سطر مقابل ${origNewlines + 1} في الأصل — زيادة ${transNewlines - origNewlines}` });
   }
 
-  // 7 (orig). Empty/whitespace only
+  // 16. Empty translation
   if (translation.length > 0 && trimmed.length === 0) {
-    issues.push({
-      ...base,
-      severity: "warning",
-      category: "empty_translation",
-      message: "الترجمة تحتوي مسافات أو أحرف غير مرئية فقط",
-    });
+    issues.push({ ...base, severity: "warning", category: "empty_translation",
+      message: "الترجمة تحتوي مسافات أو أحرف غير مرئية فقط" });
   }
 
-  // 8 (orig). Identical to original (info)
+  // 17. Identical to original
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
-    issues.push({
-      ...base,
-      severity: "info",
-      category: "identical_to_original",
-      message: "النص مطابق للأصل الإنجليزي (لم يُترجم)",
-    });
+    issues.push({ ...base, severity: "info", category: "identical_to_original",
+      message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });
   }
 
   return issues;
@@ -291,7 +247,7 @@ interface DeepDiagnosticPanelProps {
 }
 
 // Categories fixable via restoreTagsLocally
-const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch"]);
+const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", "translated_tags"]);
 // Categories fixable by restoring original text
 const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped"]);
 // Categories fixable by stripping invisible chars
@@ -305,8 +261,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [scanned, setScanned] = useState(false);
   const [issues, setIssues] = useState<DiagnosticIssue[]>([]);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const latestStateRef = useRef(state);
+
+  // Build entry lookup map for O(1) access
+  const entryMap = useMemo(() => {
+    const map = new Map<string, ExtractedEntry>();
+    for (const entry of state.entries) {
+      map.set(`${entry.msbtFile}:${entry.index}`, entry);
+    }
+    return map;
+  }, [state.entries]);
 
   useEffect(() => {
     latestStateRef.current = state;
@@ -317,7 +281,6 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     setScanned(false);
     if (!preserveActiveFilter) setActiveFilter(null);
 
-    // Use setTimeout to avoid blocking UI
     setTimeout(() => {
       const currentState = latestStateRef.current;
       const allIssues: DiagnosticIssue[] = [];
@@ -325,8 +288,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const key = `${entry.msbtFile}:${entry.index}`;
         const translation = currentState.translations[key];
         if (!translation) continue;
-        const entryIssues = detectIssues(entry, translation);
-        allIssues.push(...entryIssues);
+        allIssues.push(...detectIssues(entry, translation));
       }
       setIssues(allIssues);
       setScanning(false);
@@ -337,9 +299,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const cat of CATEGORIES) counts[cat.id] = 0;
-    for (const issue of issues) {
-      counts[issue.category] = (counts[issue.category] || 0) + 1;
-    }
+    for (const issue of issues) counts[issue.category] = (counts[issue.category] || 0) + 1;
     return counts;
   }, [issues]);
 
@@ -362,108 +322,162 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
   }, [issues, onFilterByKeys]);
 
-  const handleRestoreTags = useCallback((issue: DiagnosticIssue) => {
-    if (!onApplyFix) return;
-    // For control_chars and pua_chars: copy missing chars from original
-    const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === issue.key);
+  /** Fix a single issue */
+  const handleFixSingle = useCallback((issue: DiagnosticIssue) => {
+    const entry = entryMap.get(issue.key);
     if (!entry) return;
 
-    let fixed = issue.translation;
-    
-    if (issue.category === "control_chars" || issue.category === "pua_chars") {
-      const re = issue.category === "control_chars" ? RE_CONTROL : RE_PUA;
-      const origChars = getMatches(entry.original, re);
-      const transChars = getMatches(fixed, re);
-      
-      // Find which specific characters are missing
-      const transCopy = [...transChars];
-      const missing: { char: string; origIndex: number }[] = [];
-      
-      for (let i = 0; i < origChars.length; i++) {
-        const idx = transCopy.indexOf(origChars[i]);
-        if (idx !== -1) {
-          transCopy.splice(idx, 1);
-        } else {
-          missing.push({ char: origChars[i], origIndex: i });
-        }
+    // Tag-fixable: use restoreTagsLocally
+    if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+      if (onFixSelectedLocally) {
+        onFixSelectedLocally([issue.key]);
+      } else if (onApplyFix) {
+        const fixed = restoreTagsLocally(entry.original, issue.translation);
+        onApplyFix(issue.key, fixed);
       }
-      
-      // Strategy: use original text structure, replace only the translatable parts
-      // This is safest — use original as base and inject translated content
-      onApplyFix(issue.key, entry.original); // Reset to original as safe fallback
-      toast({ title: "↩️ استعادة", description: "تم استعادة النص الأصلي كإجراء آمن" });
+      toast({ title: "🔧 إصلاح", description: "تم إصلاح الوسوم" });
       return;
     }
 
-    if (issue.category === "empty_translation") {
-      // Remove empty translation
+    // Invisible chars: strip
+    if (issue.category === "invisible_chars" && onApplyFix) {
+      onApplyFix(issue.key, issue.translation.replace(RE_INVISIBLE, ''));
+      toast({ title: "🧹 تنظيف", description: "تم إزالة الأحرف غير المرئية" });
+      return;
+    }
+
+    // Empty translation: clear
+    if (issue.category === "empty_translation" && onApplyFix) {
       onApplyFix(issue.key, "");
       return;
     }
 
-    onApplyFix(issue.key, entry.original);
-    toast({ title: "↩️ استعادة النص الأصلي" });
-  }, [state.entries, onApplyFix]);
+    // Default: restore original
+    if (onApplyFix) {
+      onApplyFix(issue.key, entry.original);
+      toast({ title: "↩️ استعادة النص الأصلي" });
+    }
+  }, [entryMap, onApplyFix, onFixSelectedLocally]);
 
+  /** Fix all issues in active category */
   const handleLocalFixAll = useCallback(() => {
     if (!activeFilter) return;
     const categoryIssues = issues.filter(issue => issue.category === activeFilter);
     const uniqueKeys = [...new Set(categoryIssues.map(issue => issue.key))];
     if (uniqueKeys.length === 0) return;
 
-    // Strategy 1: Tag restoration (restoreTagsLocally)
-    if (TAG_FIXABLE_CATEGORIES.has(activeFilter) && onFixSelectedLocally) {
-      onFixSelectedLocally(uniqueKeys);
+    if (TAG_FIXABLE_CATEGORIES.has(activeFilter)) {
+      if (onFixSelectedLocally) {
+        onFixSelectedLocally(uniqueKeys);
+      } else if (onApplyFix) {
+        let count = 0;
+        for (const key of uniqueKeys) {
+          const entry = entryMap.get(key);
+          const trans = state.translations[key];
+          if (!entry || !trans) continue;
+          const fixed = restoreTagsLocally(entry.original, trans);
+          if (fixed !== trans) { onApplyFix(key, fixed); count++; }
+        }
+        toast({ title: "🔧 إصلاح", description: `تم إصلاح الوسوم في ${count} نص` });
+      }
       setTimeout(() => runScan(true), 250);
       return;
     }
 
-    // Strategy 2: Restore original text
     if (RESTORE_ORIGINAL_CATEGORIES.has(activeFilter) && onApplyFix) {
-      const fixedKeys = new Set<string>();
+      let count = 0;
       for (const key of uniqueKeys) {
-        const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
-        if (entry) {
-          onApplyFix(key, entry.original);
-          fixedKeys.add(key);
-        }
+        const entry = entryMap.get(key);
+        if (entry) { onApplyFix(key, entry.original); count++; }
       }
-      toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixedKeys.size} نص` });
+      toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
 
-    // Strategy 3: Strip invisible characters
     if (STRIP_INVISIBLE_CATEGORIES.has(activeFilter) && onApplyFix) {
-      let fixCount = 0;
+      let count = 0;
       for (const key of uniqueKeys) {
-        const translation = state.translations[key];
-        if (!translation) continue;
-        const cleaned = translation.replace(RE_INVISIBLE, '');
-        if (cleaned !== translation) {
-          onApplyFix(key, cleaned);
-          fixCount++;
-        }
+        const trans = state.translations[key];
+        if (!trans) continue;
+        const cleaned = trans.replace(RE_INVISIBLE, '');
+        if (cleaned !== trans) { onApplyFix(key, cleaned); count++; }
       }
-      toast({ title: "🧹 تنظيف", description: `تم إزالة الأحرف غير المرئية من ${fixCount} نص` });
+      toast({ title: "🧹 تنظيف", description: `تم إزالة الأحرف غير المرئية من ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
 
-    // Strategy 4: Empty translations — clear them
     if (activeFilter === "empty_translation" && onApplyFix) {
-      for (const key of uniqueKeys) {
-        onApplyFix(key, "");
-      }
+      for (const key of uniqueKeys) onApplyFix(key, "");
       toast({ title: "🗑️ حذف", description: `تم مسح ${uniqueKeys.length} ترجمة فارغة` });
       setTimeout(() => runScan(true), 250);
-      return;
     }
-  }, [activeFilter, issues, onFixSelectedLocally, onApplyFix, state, runScan]);
+  }, [activeFilter, issues, onFixSelectedLocally, onApplyFix, entryMap, state.translations, runScan]);
 
-  const handleRunScan = useCallback(() => {
-    runScan(false);
-  }, [runScan]);
+  /** Fix ALL fixable issues across all categories at once */
+  const handleFixEverything = useCallback(() => {
+    if (!onApplyFix) return;
+    const allFixableIssues = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
+    const processedKeys = new Set<string>();
+    let tagFixKeys: string[] = [];
+    let restoreCount = 0, stripCount = 0, clearCount = 0;
+
+    for (const issue of allFixableIssues) {
+      if (processedKeys.has(issue.key)) continue;
+
+      if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+        tagFixKeys.push(issue.key);
+        processedKeys.add(issue.key);
+        continue;
+      }
+
+      if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
+        const entry = entryMap.get(issue.key);
+        if (entry) { onApplyFix(issue.key, entry.original); restoreCount++; }
+        processedKeys.add(issue.key);
+        continue;
+      }
+
+      if (STRIP_INVISIBLE_CATEGORIES.has(issue.category)) {
+        const trans = state.translations[issue.key];
+        if (trans) {
+          const cleaned = trans.replace(RE_INVISIBLE, '');
+          if (cleaned !== trans) { onApplyFix(issue.key, cleaned); stripCount++; }
+        }
+        processedKeys.add(issue.key);
+        continue;
+      }
+
+      if (issue.category === "empty_translation") {
+        onApplyFix(issue.key, "");
+        clearCount++;
+        processedKeys.add(issue.key);
+      }
+    }
+
+    // Process tag fixes
+    if (tagFixKeys.length > 0) {
+      if (onFixSelectedLocally) {
+        onFixSelectedLocally(tagFixKeys);
+      } else {
+        for (const key of tagFixKeys) {
+          const entry = entryMap.get(key);
+          const trans = state.translations[key];
+          if (!entry || !trans) continue;
+          const fixed = restoreTagsLocally(entry.original, trans);
+          if (fixed !== trans) onApplyFix(key, fixed);
+        }
+      }
+    }
+
+    const totalFixed = tagFixKeys.length + restoreCount + stripCount + clearCount;
+    toast({
+      title: "⚡ إصلاح شامل",
+      description: `تم إصلاح ${totalFixed} نص (${tagFixKeys.length} وسوم، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
+    });
+    setTimeout(() => runScan(false), 500);
+  }, [issues, onApplyFix, onFixSelectedLocally, entryMap, state.translations, runScan]);
 
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;
@@ -476,6 +490,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     LOCAL_FIXABLE_CATEGORIES.has(activeFilter) &&
     activeFilterKeys.size > 0
   );
+  const totalFixable = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).length;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -491,7 +506,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                     <Badge variant="destructive" className="text-xs">{criticalCount} حرج</Badge>
                   )}
                   {warningCount > 0 && (
-                    <Badge className="text-xs bg-yellow-600">{warningCount} تحذير</Badge>
+                    <Badge className="text-xs bg-amber-600">{warningCount} تحذير</Badge>
                   )}
                   {criticalCount === 0 && warningCount === 0 && (
                     <Badge className="text-xs bg-secondary">✅ سليم</Badge>
@@ -509,13 +524,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           <CardContent className="p-3 space-y-3">
             {/* Scan button */}
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={handleRunScan}
-                disabled={scanning}
-                className="font-display font-bold"
-              >
+              <Button size="sm" variant="destructive" onClick={() => runScan(false)} disabled={scanning} className="font-display font-bold">
                 {scanning ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Search className="w-4 h-4 ml-1" />}
                 {scanning ? "جاري الفحص..." : "فحص شامل"}
               </Button>
@@ -531,11 +540,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                 {/* Summary */}
                 <div className={`p-3 rounded-lg border ${
                   criticalCount > 0 ? 'bg-destructive/10 border-destructive/30' :
-                  warningCount > 0 ? 'bg-yellow-500/10 border-yellow-500/30' :
+                  warningCount > 0 ? 'bg-amber-500/10 border-amber-500/30' :
                   'bg-secondary/10 border-secondary/30'
                 }`}>
                   <p className="text-sm font-display font-bold mb-2">
-                    {criticalCount > 0 
+                    {criticalCount > 0
                       ? `⛔ ${criticalCount} مشكلة حرجة ستسبب مشاكل في اللعبة!`
                       : `⚠️ ${warningCount} تحذير — قد تؤثر على جودة العرض`
                     }
@@ -549,7 +558,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                           key={cat.id}
                           variant={cat.severity === "critical" ? "destructive" : "outline"}
                           className={`text-xs cursor-pointer ${activeFilter === cat.id ? 'ring-2 ring-primary' : ''} ${
-                            cat.severity === "warning" ? 'border-yellow-500 text-yellow-400' : ''
+                            cat.severity === "warning" ? 'border-amber-500 text-amber-400' : ''
                           }`}
                           onClick={() => setActiveFilter(activeFilter === cat.id ? null : cat.id)}
                         >
@@ -560,6 +569,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                   </div>
                 </div>
 
+                {/* Fix All button */}
+                {totalFixable > 0 && (onApplyFix || onFixSelectedLocally) && (
+                  <Button size="sm" variant="destructive" className="w-full font-display font-bold text-sm" onClick={handleFixEverything}>
+                    <Zap className="w-4 h-4 ml-1" />
+                    ⚡ إصلاح كل المشاكل دفعة واحدة ({new Set(issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
+                  </Button>
+                )}
+
                 {/* Category details */}
                 {activeFilter && (
                   <div className="space-y-2">
@@ -569,14 +586,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {canLocalFixActiveFilter && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="text-xs h-7"
-                            onClick={handleLocalFixAll}
-                          >
+                          <Button size="sm" variant="default" className="text-xs h-7" onClick={handleLocalFixAll}>
                             <Wrench className="w-3 h-3 ml-1" />
-                            {activeFilter && RESTORE_ORIGINAL_CATEGORIES.has(activeFilter)
+                            {RESTORE_ORIGINAL_CATEGORIES.has(activeFilter)
                               ? `↩️ استعادة الأصل (${activeFilterKeys.size})`
                               : activeFilter === "invisible_chars"
                               ? `🧹 تنظيف (${activeFilterKeys.size})`
@@ -584,12 +596,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                             }
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-xs h-7"
-                          onClick={() => handleFilterInEditor(activeFilter)}
-                        >
+                        <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => handleFilterInEditor(activeFilter)}>
                           <Filter className="w-3 h-3 ml-1" />
                           عرض في المحرر
                         </Button>
@@ -603,7 +610,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                             key={`${issue.key}-${i}`}
                             className={`p-2 rounded text-xs border ${
                               issue.severity === "critical" ? "bg-destructive/5 border-destructive/20" :
-                              issue.severity === "warning" ? "bg-yellow-500/5 border-yellow-500/20" :
+                              issue.severity === "warning" ? "bg-amber-500/5 border-amber-500/20" :
                               "bg-muted/20 border-border/50"
                             }`}
                           >
@@ -614,30 +621,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                               </div>
                               <div className="flex gap-1 shrink-0">
                                 {onNavigateToEntry && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 w-6 p-0"
-                                    onClick={() => onNavigateToEntry(issue.key)}
-                                    title="انتقل للنص"
-                                  >
+                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
+                                    onClick={() => onNavigateToEntry(issue.key)} title="انتقل للنص">
                                     🔍
                                   </Button>
                                 )}
-                                {onApplyFix && (
-                                  issue.category === "control_chars" || issue.category === "pua_chars" || 
-                                  issue.category === "empty_translation" || issue.category === "null_char" ||
-                                  issue.category === "unmatched_ruby" || issue.category === "broken_tag_syntax" ||
-                                  issue.category === "control_extra"
-                                ) && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 w-6 p-0"
-                                    onClick={() => handleRestoreTags(issue)}
-                                    title="استعادة النص الأصلي"
-                                  >
-                                    ↩️
+                                {LOCAL_FIXABLE_CATEGORIES.has(issue.category) && (onApplyFix || onFixSelectedLocally) && (
+                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
+                                    onClick={() => handleFixSingle(issue)}
+                                    title={TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح الوسوم" :
+                                           RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "استعادة الأصل" :
+                                           issue.category === "invisible_chars" ? "تنظيف" : "إصلاح"}>
+                                    {TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🔧" :
+                                     RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "↩️" :
+                                     issue.category === "invisible_chars" ? "🧹" : "🔧"}
                                   </Button>
                                 )}
                               </div>
@@ -653,34 +650,6 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                     </ScrollArea>
                   </div>
                 )}
-
-                {/* Bulk fix critical */}
-                {criticalCount > 0 && onApplyFix && (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="font-display font-bold text-xs"
-                      onClick={() => {
-                        const fixableCategories = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra"]);
-                        const criticalIssues = issues.filter(i => i.severity === "critical" && fixableCategories.has(i.category));
-                        const fixedKeys = new Set<string>();
-                        for (const issue of criticalIssues) {
-                          if (fixedKeys.has(issue.key)) continue;
-                          const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === issue.key);
-                          if (entry) {
-                            onApplyFix(issue.key, entry.original);
-                            fixedKeys.add(issue.key);
-                          }
-                        }
-                        toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixedKeys.size} نص تالف` });
-                        setTimeout(runScan, 500);
-                      }}
-                    >
-                      ↩️ استعادة النصوص الأصلية للمشاكل الحرجة ({new Set(issues.filter(i => i.severity === "critical").map(i => i.key)).size})
-                    </Button>
-                  </div>
-                )}
               </>
             )}
 
@@ -688,9 +657,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               <div className="text-center p-4 bg-secondary/10 rounded-lg border border-secondary/30">
                 <CheckCircle2 className="w-8 h-8 text-secondary mx-auto mb-2" />
                 <p className="text-sm font-display font-bold">✅ لا توجد مشاكل حرجة</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  كل الترجمات سليمة ولا تحتوي رموز مفقودة أو تالفة
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">كل الترجمات سليمة ولا تحتوي رموز مفقودة أو تالفة</p>
               </div>
             )}
           </CardContent>

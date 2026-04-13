@@ -320,8 +320,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
         const controlMissing = origControlChars.length > 0 && transControlChars.length < origControlChars.length;
         const puaMissing = origPuaChars.length > 0 && transPuaChars.length < origPuaChars.length;
+        const missingControlN = controlMissing ? origControlChars.length - transControlChars.length : 0;
+        const missingPuaN = puaMissing ? origPuaChars.length - transPuaChars.length : 0;
 
         if (!controlMissing && !puaMissing) continue;
+        const entryLabel = entryLabels.get(key) || key;
 
         // Smart repair: use original as structural template, inject translated content
         // Split original by special chars to get the "frame"

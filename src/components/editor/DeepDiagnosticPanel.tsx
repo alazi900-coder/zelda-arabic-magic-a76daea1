@@ -406,12 +406,60 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   }, [state.entries, onApplyFix]);
 
   const handleLocalFixAll = useCallback(() => {
-    if (!activeFilter || !onFixSelectedLocally || !LOCAL_FIXABLE_CATEGORIES.has(activeFilter)) return;
-    const keys = [...new Set(issues.filter(issue => issue.category === activeFilter).map(issue => issue.key))];
-    if (keys.length === 0) return;
-    onFixSelectedLocally(keys);
-    setTimeout(() => runScan(true), 250);
-  }, [activeFilter, issues, onFixSelectedLocally, runScan]);
+    if (!activeFilter) return;
+    const categoryIssues = issues.filter(issue => issue.category === activeFilter);
+    const uniqueKeys = [...new Set(categoryIssues.map(issue => issue.key))];
+    if (uniqueKeys.length === 0) return;
+
+    // Strategy 1: Tag restoration (restoreTagsLocally)
+    if (TAG_FIXABLE_CATEGORIES.has(activeFilter) && onFixSelectedLocally) {
+      onFixSelectedLocally(uniqueKeys);
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    // Strategy 2: Restore original text
+    if (RESTORE_ORIGINAL_CATEGORIES.has(activeFilter) && onApplyFix) {
+      const fixedKeys = new Set<string>();
+      for (const key of uniqueKeys) {
+        const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
+        if (entry) {
+          onApplyFix(key, entry.original);
+          fixedKeys.add(key);
+        }
+      }
+      toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixedKeys.size} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    // Strategy 3: Strip invisible characters
+    if (STRIP_INVISIBLE_CATEGORIES.has(activeFilter) && onApplyFix) {
+      let fixCount = 0;
+      for (const key of uniqueKeys) {
+        const translation = state.translations[key];
+        if (!translation) continue;
+        const cleaned = translation.replace(RE_INVISIBLE, '');
+        if (cleaned !== translation) {
+          onApplyFix(key, cleaned);
+          fixCount++;
+        }
+      }
+      toast({ title: "🧹 تنظيف", description: `تم إزالة الأحرف غير المرئية من ${fixCount} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    // Strategy 4: Empty translations — clear them
+    if (activeFilter === "empty_translation" && onApplyFix) {
+      for (const key of uniqueKeys) {
+        onApplyFix(key, "");
+      }
+      toast({ title: "🗑️ حذف", description: `تم مسح ${uniqueKeys.length} ترجمة فارغة` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+  }, [activeFilter, issues, onFixSelectedLocally, onApplyFix, state, runScan]);
 
   const handleRunScan = useCallback(() => {
     runScan(false);

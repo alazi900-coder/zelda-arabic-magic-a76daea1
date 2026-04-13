@@ -530,13 +530,24 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const allFixableIssues = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
     const processedKeys = new Set<string>();
     let tagFixKeys: string[] = [];
-    let restoreCount = 0, stripCount = 0, clearCount = 0;
+    let restoreCount = 0, stripCount = 0, clearCount = 0, dollarFixCount = 0;
 
     for (const issue of allFixableIssues) {
       if (processedKeys.has(issue.key)) continue;
 
       if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
         tagFixKeys.push(issue.key);
+        processedKeys.add(issue.key);
+        continue;
+      }
+
+      if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category)) {
+        const entry = entryMap.get(issue.key);
+        const trans = state.translations[issue.key];
+        if (entry && trans) {
+          const repaired = repairTranslationTagsForBuild(entry.original, trans);
+          if (repaired.text !== trans) { onApplyFix(issue.key, repaired.text); dollarFixCount++; }
+        }
         processedKeys.add(issue.key);
         continue;
       }

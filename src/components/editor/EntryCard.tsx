@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
+import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
+import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { balanceLines, hasOrphanLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
 import { fixMixedBidi } from "@/lib/arabic-processing";
@@ -137,6 +139,13 @@ const EntryCard: React.FC<EntryCardProps> = ({
     if (!isDamagedTag || !translation?.trim()) return null;
     return previewTagRestore(entry.original, translation);
   }, [isDamagedTag, entry.original, translation]);
+
+  const technicalDiff = useMemo(() => {
+    if (!translation?.trim() || !hasTechnicalTags(entry.original)) return null;
+    const diff = diffTechnicalTags(entry.original, translation);
+    if (diff.exactTagMatch) return null;
+    return diff;
+  }, [entry.original, translation]);
 
   const handleCopyTags = () => {
     const charRegex = /[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
@@ -285,6 +294,31 @@ const EntryCard: React.FC<EntryCardProps> = ({
                 )}
                 {isDamagedTag && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">⚠️ رموز تالفة</span>
+                )}
+                {technicalDiff && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 font-semibold flex items-center gap-1">
+                    🧷 رموز تقنية مختلفة
+                    {technicalDiff.missingTags.length > 0 && ` (${technicalDiff.missingTags.length} مفقود)`}
+                    {technicalDiff.extraTags.length > 0 && ` (${technicalDiff.extraTags.length} زائد)`}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 px-1 text-[10px] text-primary hover:bg-primary/10 ml-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const fixed = restoreTagsLocally(entry.original, translation);
+                        if (fixed !== translation) {
+                          updateTranslation(key, fixed);
+                          toast({ title: "🔧 إصلاح تلقائي", description: "تم إصلاح الرموز التقنية" });
+                        } else {
+                          updateTranslation(key, entry.original);
+                          toast({ title: "↩️ استعادة", description: "لم يُصلح تلقائياً — تم استعادة الأصل" });
+                        }
+                      }}
+                    >
+                      إصلاح ⚡
+                    </Button>
+                  </span>
                 )}
                 {/* Corrupted $N variable warning */}
                 {translation && /\$\d/.test(entry.original) && (

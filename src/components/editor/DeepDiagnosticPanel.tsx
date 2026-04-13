@@ -39,8 +39,14 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "pua_chars", label: "رموز خاصة مفقودة", icon: "🔴", severity: "critical", description: "رموز المنطقة الخاصة (U+E000-E0FF) مفقودة — تتحكم بالأيقونات والألوان" },
   { id: "byte_overflow", label: "تجاوز حد البايت", icon: "📏", severity: "critical", description: "الترجمة تتجاوز الحد الأقصى للبايتات — تُفسد جدول النصوص" },
   { id: "double_shaped", label: "معالجة عربية مزدوجة", icon: "🔄", severity: "critical", description: "نص معالج مرتين (Double Reshaping) — يظهر مقلوب ومفكك في اللعبة" },
+  { id: "null_char", label: "رمز NULL داخل النص", icon: "💀", severity: "critical", description: "وجود \\0 (NULL) وسط النص — يقطع النص فوراً ويسبب تجمّد المحرك" },
+  { id: "unmatched_ruby", label: "وسم Ruby غير مغلق", icon: "🔓", severity: "critical", description: "وسم [System:Ruby] بدون إغلاق [/System:Ruby] أو العكس — يعلّق محرك الرسائل" },
+  { id: "broken_tag_syntax", label: "وسم بصيغة تالفة", icon: "🧩", severity: "critical", description: "وسم [...] مفتوح بدون إغلاق أو أقواس متداخلة خاطئة — يتجمّد المحلل" },
+  { id: "control_extra", label: "رموز تحكم زائدة", icon: "⚠️", severity: "critical", description: "رموز تحكم في الترجمة أكثر من الأصل — تُربك محرك الرسائل" },
+  { id: "invisible_chars", label: "أحرف غير مرئية مشبوهة", icon: "👻", severity: "warning", description: "أحرف Unicode غير مرئية (ZWJ, ZWNJ, BOM, إلخ) قد تُربك المحرك" },
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم [System:...] أو [/...] مفقودة — قد تسبب خلل في العرض" },
   { id: "placeholder_mismatch", label: "عناصر نائبة مفقودة", icon: "⬛", severity: "warning", description: "رموز \uFFFC نائبة مفقودة — قد تسبب خلل في الواجهة" },
+  { id: "newline_mismatch", label: "فرق كبير بعدد الأسطر", icon: "📄", severity: "warning", description: "عدد الأسطر في الترجمة يختلف كثيراً عن الأصل — قد يكسر صندوق الحوار" },
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
 ];
@@ -56,6 +62,12 @@ const RE_PLACEHOLDER = /\uFFFC/g;
 const RE_PRESENTATION_B = /[\uFE70-\uFEFF]/;
 const RE_PRESENTATION_A = /[\uFB50-\uFDFF]/;
 const RE_ARABIC_STANDARD = /[\u0600-\u06FF]/;
+const RE_NULL_CHAR = /\x00/;
+const RE_INVISIBLE = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u180E]/g;
+const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
+const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
+const RE_BRACKET_OPEN = /\[/g;
+const RE_BRACKET_CLOSE = /\]/g;
 const encoder = new TextEncoder();
 
 function countMatches(text: string, re: RegExp): number {
@@ -124,7 +136,63 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     }
   }
 
-  // 5. Tag mismatch [System:...] etc
+  // 5. NULL character inside text (CRITICAL - truncates string, freezes engine)
+  if (RE_NULL_CHAR.test(trimmed)) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "null_char",
+      message: "يحتوي رمز NULL (\\0) — يقطع النص ويسبب تجمّد المحرك",
+    });
+  }
+
+  // 6. Unmatched Ruby tags (CRITICAL - hangs message parser)
+  const rubyOpens = countMatches(trimmed, RE_RUBY_OPEN);
+  const rubyCloses = countMatches(trimmed, RE_RUBY_CLOSE);
+  if (rubyOpens !== rubyCloses) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "unmatched_ruby",
+      message: `${rubyOpens} فتح [System:Ruby] مقابل ${rubyCloses} إغلاق [/System:Ruby] — غير متطابقة`,
+    });
+  }
+
+  // 7. Broken bracket syntax (CRITICAL - parser hang)
+  const bracketOpens = countMatches(trimmed, RE_BRACKET_OPEN);
+  const bracketCloses = countMatches(trimmed, RE_BRACKET_CLOSE);
+  if (bracketOpens !== bracketCloses) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "broken_tag_syntax",
+      message: `${bracketOpens} قوس '[' مقابل ${bracketCloses} قوس ']' — أقواس غير متوازنة`,
+    });
+  }
+
+  // 8. Extra control characters (more than original - confuses engine)
+  if (transControl > origControl && origControl > 0) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "control_extra",
+      message: `${transControl - origControl} رمز تحكم زائد (${transControl} في الترجمة مقابل ${origControl} في الأصل)`,
+    });
+  }
+
+  // 9. Invisible/suspicious Unicode characters
+  const invisibleMatches = getMatches(trimmed, RE_INVISIBLE);
+  if (invisibleMatches.length > 0) {
+    const codepoints = invisibleMatches.slice(0, 5).map(c => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`);
+    issues.push({
+      ...base,
+      severity: "warning",
+      category: "invisible_chars",
+      message: `${invisibleMatches.length} حرف غير مرئي: ${codepoints.join(', ')}${invisibleMatches.length > 5 ? '...' : ''}`,
+    });
+  }
+
+  // 5 (orig). Tag mismatch [System:...] etc
   const origTags = getMatches(entry.original, RE_TAG);
   if (origTags.length > 0) {
     const missingTags = origTags.filter(t => !trimmed.includes(t));
@@ -138,7 +206,7 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     }
   }
 
-  // 6. Placeholder mismatch
+  // 6 (orig). Placeholder mismatch
   const origPh = countMatches(entry.original, RE_PLACEHOLDER);
   const transPh = countMatches(trimmed, RE_PLACEHOLDER);
   if (origPh > 0 && origPh !== transPh) {
@@ -150,7 +218,19 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     });
   }
 
-  // 7. Empty/whitespace only
+  // 10. Newline count mismatch (warning)
+  const origNewlines = (entry.original.match(/\n/g) || []).length;
+  const transNewlines = (trimmed.match(/\n/g) || []).length;
+  if (origNewlines > 0 && Math.abs(transNewlines - origNewlines) >= 2) {
+    issues.push({
+      ...base,
+      severity: "warning",
+      category: "newline_mismatch",
+      message: `${origNewlines} سطر في الأصل مقابل ${transNewlines} في الترجمة (فرق ${Math.abs(transNewlines - origNewlines)})`,
+    });
+  }
+
+  // 7 (orig). Empty/whitespace only
   if (translation.length > 0 && trimmed.length === 0) {
     issues.push({
       ...base,
@@ -160,7 +240,7 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     });
   }
 
-  // 8. Identical to original (info)
+  // 8 (orig). Identical to original (info)
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
     issues.push({
       ...base,
@@ -416,7 +496,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                     🔍
                                   </Button>
                                 )}
-                                {onApplyFix && (issue.category === "control_chars" || issue.category === "pua_chars" || issue.category === "empty_translation") && (
+                                {onApplyFix && (
+                                  issue.category === "control_chars" || issue.category === "pua_chars" || 
+                                  issue.category === "empty_translation" || issue.category === "null_char" ||
+                                  issue.category === "unmatched_ruby" || issue.category === "broken_tag_syntax" ||
+                                  issue.category === "control_extra"
+                                ) && (
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -449,20 +534,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                       variant="destructive"
                       className="font-display font-bold text-xs"
                       onClick={() => {
-                        const criticalIssues = issues.filter(i => i.severity === "critical" && (i.category === "control_chars" || i.category === "pua_chars"));
-                        let fixed = 0;
+                        const fixableCategories = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra"]);
+                        const criticalIssues = issues.filter(i => i.severity === "critical" && fixableCategories.has(i.category));
+                        const fixedKeys = new Set<string>();
                         for (const issue of criticalIssues) {
+                          if (fixedKeys.has(issue.key)) continue;
                           const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === issue.key);
                           if (entry) {
                             onApplyFix(issue.key, entry.original);
-                            fixed++;
+                            fixedKeys.add(issue.key);
                           }
                         }
-                        toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixed} نص تالف` });
+                        toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixedKeys.size} نص تالف` });
                         setTimeout(runScan, 500);
                       }}
                     >
-                      ↩️ استعادة النصوص الأصلية للمشاكل الحرجة ({issues.filter(i => i.severity === "critical" && (i.category === "control_chars" || i.category === "pua_chars")).length})
+                      ↩️ استعادة النصوص الأصلية للمشاكل الحرجة ({new Set(issues.filter(i => i.severity === "critical").map(i => i.key)).size})
                     </Button>
                   </div>
                 )}

@@ -2,11 +2,22 @@
  * XC3 Tag Restoration System
  * Restores missing control characters AND multi-char technical tags
  * from original text into translations.
- * Extracted from types.tsx for cleaner architecture.
+ * Handles: missing tags, translated tags, reversed brackets, damaged tags.
  */
+
+import { fixTagBracketsStrict } from './tag-bracket-fix';
 
 /** Unified regex matching ALL technical tag formats */
 const TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+
+/** Regex to detect Arabic text inside bracket-like tag structures (translated tags) */
+const TRANSLATED_TAG_REGEX = /\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]|\\\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\\]/g;
+
+/** Regex to detect N[ArabicTag] or [ArabicTag]N patterns */
+const TRANSLATED_NUM_TAG_REGEX = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+/g;
+
+/** Regex for {ArabicTag} translated brace tags */
+const TRANSLATED_BRACE_TAG_REGEX = /\{[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\}/g;
 
 /**
  * Extract all technical tag tokens from text (as ordered array of strings).
@@ -16,20 +27,62 @@ function extractTags(text: string): string[] {
 }
 
 /**
+ * Strip invisible Unicode chars that break tag matching
+ */
+function stripInvisible(text: string): string {
+  return text.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '');
+}
+
+/**
+ * Remove "translated" tags — Arabic text inside bracket/brace patterns
+ * that are clearly corrupted versions of original English tags.
+ */
+function stripTranslatedTags(text: string, origTags: string[]): string {
+  // Only strip if original has tags (avoid false positives on user-added brackets)
+  if (origTags.length === 0) return text;
+  
+  let result = text;
+  
+  // Strip Arabic text inside \[...\] or [...] patterns
+  result = result.replace(TRANSLATED_TAG_REGEX, ' ');
+  
+  // Strip N[ArabicTag] or [ArabicTag]N patterns
+  result = result.replace(TRANSLATED_NUM_TAG_REGEX, ' ');
+  
+  // Strip {ArabicTag} patterns
+  result = result.replace(TRANSLATED_BRACE_TAG_REGEX, ' ');
+  
+  // Clean up multiple spaces
+  return result.replace(/  +/g, ' ').trim();
+}
+
+/**
  * Locally restore missing technical tags from original into translation
- * without using AI — only inserts MISSING tags, preserving existing correct ones.
- * Also strips AI-invented tags that don't exist in original (e.g. [ML:icon icon=btn_a ]).
+ * without using AI — handles missing, translated, reversed, and damaged tags.
+ * 
+ * Pipeline:
+ * 1. Strip invisible Unicode chars
+ * 2. Fix reversed/mismatched brackets (via fixTagBracketsStrict)
+ * 3. Strip "translated" tags (Arabic content inside brackets)
+ * 4. Compare tag multisets
+ * 5. Re-insert missing tags at proportional positions
  */
 export function restoreTagsLocally(original: string, translation: string): string {
   const origTags = extractTags(original);
   if (origTags.length === 0) return translation;
 
-  const transTags = extractTags(translation);
-
-  // Check if all original tags are present (exact multiset match)
+  // Step 1: Strip invisible chars
+  let working = stripInvisible(translation);
+  
+  // Step 2: Fix reversed/mismatched brackets
+  const { text: bracketFixed } = fixTagBracketsStrict(original, working);
+  working = bracketFixed;
+  
+  // Step 3: Check if tags are now all present after bracket fix
+  let transTags = extractTags(working);
   const origCount = new Map<string, number>();
   for (const t of origTags) origCount.set(t, (origCount.get(t) || 0) + 1);
-  const transCount = new Map<string, number>();
+  let transCount = new Map<string, number>();
   for (const t of transTags) transCount.set(t, (transCount.get(t) || 0) + 1);
 
   let allPresent = true;
@@ -39,31 +92,31 @@ export function restoreTagsLocally(original: string, translation: string): strin
     if (tc < count) { allPresent = false; break; }
     if (tc > count) { hasExtra = true; }
   }
-  // Check for foreign tags (tags in translation not in original)
   let hasForeign = false;
   for (const t of transTags) {
     if (!origCount.has(t)) { hasForeign = true; break; }
   }
+  
   if (allPresent && !hasExtra && !hasForeign) {
-    return translation; // Perfect match — nothing to do
+    return working; // Perfect match after bracket fix
   }
   if (allPresent) {
-    // All original tags present but has extras or foreign — enforce exact multiset
-    return enforceExactTagMultiset(original, translation, origTags, origCount);
+    return enforceExactTagMultiset(original, working, origTags, origCount);
   }
 
-  // Some tags are missing — rebuild
-  // Step 1: Strip ALL tags from translation (both correct and incorrect)
-  const cleanTranslation = translation.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '').trim();
+  // Step 4: Strip translated tags (Arabic inside brackets) before rebuild
+  const afterTranslatedStrip = stripTranslatedTags(working, origTags);
+  
+  // Step 5: Strip ALL remaining detected tags from translation
+  const cleanTranslation = afterTranslatedStrip.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '').replace(/  +/g, ' ').trim();
 
-  // Step 2: Compute relative positions of each tag in original
+  // Step 6: Compute relative positions of each tag in original
   const origPlain = original.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '');
   const origLength = Math.max(origPlain.length, 1);
 
   interface TagPosition { tag: string; relPos: number }
   const tagPositions: TagPosition[] = [];
   let plainIdx = 0;
-  let i = 0;
   const origMatchAll = [...original.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))];
   let matchIdx = 0;
 
@@ -79,10 +132,10 @@ export function restoreTagsLocally(original: string, translation: string): strin
     }
   }
 
-  // Step 3: Insert tags into clean translation at proportional positions
+  // Step 7: Insert tags into clean translation at proportional positions
   const transLength = Math.max(cleanTranslation.length, 1);
   
-  // Find word boundary positions in clean translation
+  // Find word boundary positions
   const wordBounds = [0];
   for (let j = 0; j < cleanTranslation.length; j++) {
     if (cleanTranslation[j] === ' ' || cleanTranslation[j] === '\n') {
@@ -118,43 +171,32 @@ export function restoreTagsLocally(original: string, translation: string): strin
 
 /**
  * Enforce exact multiset: remove foreign tags AND extra duplicates of original tags.
- * Final tag counts must exactly match original counts.
  */
 function enforceExactTagMultiset(original: string, translation: string, origTags: string[], origCount: Map<string, number>): string {
-  const transTags = extractTags(translation);
-  
-  // Build allowed remaining count per tag
   const remaining = new Map<string, number>();
   for (const [tag, count] of origCount) remaining.set(tag, count);
   
-  // Walk through translation tags and decide which to keep
+  const allMatches = [...translation.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))];
   const tagsToRemove: { tag: string; index: number }[] = [];
   
-  // Find all tag matches in translation with their positions
-  const allMatches = [...translation.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))];
-  
-  // Process in order — keep first N occurrences, mark rest for removal
   for (const m of allMatches) {
     const tag = m[0];
     const rem = remaining.get(tag);
     if (rem !== undefined && rem > 0) {
-      remaining.set(tag, rem - 1); // keep this one
+      remaining.set(tag, rem - 1);
     } else {
-      // Either foreign or extra duplicate — remove
       tagsToRemove.push({ tag, index: m.index! });
     }
   }
   
   if (tagsToRemove.length === 0) return translation;
   
-  // Remove from end to start to preserve indices
   let result = translation;
   for (let i = tagsToRemove.length - 1; i >= 0; i--) {
     const { tag, index } = tagsToRemove[i];
     result = result.slice(0, index) + result.slice(index + tag.length);
   }
   
-  // Clean up double spaces
   return result.replace(/  +/g, ' ').trim();
 }
 

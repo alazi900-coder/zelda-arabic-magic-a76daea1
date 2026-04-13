@@ -1945,6 +1945,7 @@ const Editor = () => {
               setShowQualityStats={editor.setShowQualityStats}
               onFixDamagedTags={() => setShowTagRepair(true)}
               onFilterMissingTags={() => editor.setFilterStatus(editor.filterStatus === "missing-tags" ? "all" : "missing-tags")}
+              onFixMissingTags={() => editor.handleLocalFixSelectedTags([...editor.qualityStats.missingTagKeys])}
             />
           )}
 

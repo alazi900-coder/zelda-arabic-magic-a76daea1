@@ -290,7 +290,14 @@ interface DeepDiagnosticPanelProps {
   onFixSelectedLocally?: (keys: string[]) => void;
 }
 
-const LOCAL_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch"]);
+// Categories fixable via restoreTagsLocally
+const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch"]);
+// Categories fixable by restoring original text
+const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped"]);
+// Categories fixable by stripping invisible chars
+const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
+// All locally fixable categories
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);

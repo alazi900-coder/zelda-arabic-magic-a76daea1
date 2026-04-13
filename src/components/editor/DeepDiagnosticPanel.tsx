@@ -529,20 +529,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                       variant="destructive"
                       className="font-display font-bold text-xs"
                       onClick={() => {
-                        const criticalIssues = issues.filter(i => i.severity === "critical" && (i.category === "control_chars" || i.category === "pua_chars"));
-                        let fixed = 0;
+                        const fixableCategories = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra"]);
+                        const criticalIssues = issues.filter(i => i.severity === "critical" && fixableCategories.has(i.category));
+                        const fixedKeys = new Set<string>();
                         for (const issue of criticalIssues) {
+                          if (fixedKeys.has(issue.key)) continue;
                           const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === issue.key);
                           if (entry) {
                             onApplyFix(issue.key, entry.original);
-                            fixed++;
+                            fixedKeys.add(issue.key);
                           }
                         }
-                        toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixed} نص تالف` });
+                        toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixedKeys.size} نص تالف` });
                         setTimeout(runScan, 500);
                       }}
                     >
-                      ↩️ استعادة النصوص الأصلية للمشاكل الحرجة ({issues.filter(i => i.severity === "critical" && (i.category === "control_chars" || i.category === "pua_chars")).length})
+                      ↩️ استعادة النصوص الأصلية للمشاكل الحرجة ({new Set(issues.filter(i => i.severity === "critical").map(i => i.key)).size})
                     </Button>
                   </div>
                 )}

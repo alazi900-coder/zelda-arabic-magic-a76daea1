@@ -16,7 +16,7 @@ import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsible
 
 type Severity = "critical" | "warning" | "info";
 
-interface DiagnosticIssue {
+export interface DiagnosticIssue {
   key: string;
   label: string;
   original: string;
@@ -45,7 +45,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "control_extra", label: "رموز تحكم زائدة", icon: "⚠️", severity: "critical", description: "رموز تحكم في الترجمة أكثر من الأصل — تُربك محرك الرسائل" },
   { id: "translated_tags", label: "وسوم مترجمة", icon: "🔀", severity: "warning", description: "وسوم تقنية تم ترجمتها بالخطأ (عربي داخل أقواس تقنية) — يجب إصلاحها" },
   { id: "invisible_chars", label: "أحرف غير مرئية مشبوهة", icon: "👻", severity: "warning", description: "أحرف Unicode غير مرئية (ZWJ, ZWNJ, BOM, إلخ) قد تُربك المحرك" },
-  { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم [System:...] أو [/...] مفقودة — قد تسبب خلل في العرض" },
+  { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم أصلية مفقودة فعلياً بعد استثناء الوسوم التي تُرجمت بالخطأ — قد تسبب خلل في العرض" },
   { id: "placeholder_mismatch", label: "عناصر نائبة مفقودة", icon: "⬛", severity: "warning", description: "رموز \uFFFC نائبة مفقودة — قد تسبب خلل في الواجهة" },
   { id: "newline_mismatch", label: "فرق كبير بعدد الأسطر", icon: "📄", severity: "warning", description: "عدد الأسطر في الترجمة يختلف كثيراً عن الأصل — قد يكسر صندوق الحوار" },
   { id: "byte_budget", label: "تجاوز ميزانية البايتات", icon: "💾", severity: "warning", description: "الترجمة أكبر من ضعف حجم الأصل بالبايتات — قد تستنفد ذاكرة المحرك" },
@@ -60,7 +60,7 @@ const CATEGORIES: DiagnosticCategory[] = [
 
 const RE_CONTROL = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
 const RE_PUA = /[\uE000-\uE0FF]/g;
-const RE_TAG = /\\?\[[^\]]*\\?\]/g;
+const RE_TECHNICAL_SLOT = /\d+\s*\\?\[[^\]]*\\?\]|\\?\[[^\]]*\\?\]\s*\d+|\\?\[[^\]]*\\?\]|\{[^}]*\}/g;
 const RE_PLACEHOLDER = /\uFFFC/g;
 const RE_PRESENTATION_B = /[\uFE70-\uFEFF]/;
 const RE_PRESENTATION_A = /[\uFB50-\uFDFF]/;
@@ -69,9 +69,10 @@ const RE_NULL_CHAR = /\x00/;
 const RE_INVISIBLE = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u180E]/g;
 const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
-const RE_ARABIC_IN_BRACKETS = /\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]/g;
-const RE_ARABIC_NUM_TAG = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+/g;
+const RE_TRANSLATED_TECHNICAL_SLOT = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]|\{[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\}/g;
 const encoder = new TextEncoder();
+
+type TechnicalTagKind = "bracket" | "brace";
 
 function countMatches(text: string, re: RegExp): number {
   re.lastIndex = 0;
@@ -81,6 +82,33 @@ function countMatches(text: string, re: RegExp): number {
 function getMatches(text: string, re: RegExp): string[] {
   re.lastIndex = 0;
   return text.match(re) || [];
+}
+
+function getTechnicalTagKind(tag: string): TechnicalTagKind {
+  return tag.trim().startsWith("{") ? "brace" : "bracket";
+}
+
+function excludeTranslatedReplacementTags(missingTags: string[], translatedTags: string[]): string[] {
+  const translatedSlots = {
+    bracket: 0,
+    brace: 0,
+  } satisfies Record<TechnicalTagKind, number>;
+
+  for (const tag of translatedTags) {
+    translatedSlots[getTechnicalTagKind(tag)]++;
+  }
+
+  const unresolved: string[] = [];
+  for (const tag of missingTags) {
+    const kind = getTechnicalTagKind(tag);
+    if (translatedSlots[kind] > 0) {
+      translatedSlots[kind]--;
+      continue;
+    }
+    unresolved.push(tag);
+  }
+
+  return unresolved;
 }
 
 /** Count unescaped brackets (exclude \[ and \]) */
@@ -94,7 +122,7 @@ function countUnescapedBrackets(text: string): { open: number; close: number } {
   return { open, close };
 }
 
-function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIssue[] {
+export function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIssue[] {
   const key = `${entry.msbtFile}:${entry.index}`;
   const trimmed = translation.trim();
   const issues: DiagnosticIssue[] = [];
@@ -161,11 +189,11 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
   }
 
   // 9. Translated tags — Arabic text inside bracket patterns
-  const origTags = getMatches(entry.original, RE_TAG);
+  const origTags = getMatches(entry.original, RE_TECHNICAL_SLOT);
+  const translatedTags = origTags.length > 0
+    ? getMatches(trimmed, RE_TRANSLATED_TECHNICAL_SLOT)
+    : [];
   if (origTags.length > 0) {
-    const arabicInBrackets = getMatches(trimmed, RE_ARABIC_IN_BRACKETS);
-    const arabicNumTags = getMatches(trimmed, RE_ARABIC_NUM_TAG);
-    const translatedTags = [...arabicInBrackets, ...arabicNumTags];
     if (translatedTags.length > 0) {
       issues.push({ ...base, severity: "warning", category: "translated_tags",
         message: `${translatedTags.length} وسم مترجم: ${translatedTags.slice(0, 3).join(', ')}${translatedTags.length > 3 ? '...' : ''}` });
@@ -183,9 +211,10 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
   // 11. Tag mismatch
   if (origTags.length > 0) {
     const missingTags = origTags.filter(t => !trimmed.includes(t));
-    if (missingTags.length > 0) {
+    const unresolvedMissingTags = excludeTranslatedReplacementTags(missingTags, translatedTags);
+    if (unresolvedMissingTags.length > 0) {
       issues.push({ ...base, severity: "warning", category: "tag_mismatch",
-        message: `${missingTags.length} وسم مفقود: ${missingTags.slice(0, 3).join(', ')}${missingTags.length > 3 ? '...' : ''}` });
+        message: `${unresolvedMissingTags.length} وسم مفقود: ${unresolvedMissingTags.slice(0, 3).join(', ')}${unresolvedMissingTags.length > 3 ? '...' : ''}` });
     }
   }
 

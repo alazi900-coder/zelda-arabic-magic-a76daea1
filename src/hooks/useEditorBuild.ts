@@ -451,6 +451,14 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await new Promise(r => setTimeout(r, 400));
       }
 
+      // === Safety gate: smart-repair translations with missing control/PUA characters ===
+      const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
+      const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
+      const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
+      let repairedCount = 0;
+      let revertedCount = 0;
+      const repairLog: SafetyRepairEntry[] = [];
+
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         const orig = entryOriginals.get(key);
         if (!orig) continue;

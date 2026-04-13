@@ -300,11 +300,13 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       let revertedCount = 0;
       const repairLog: SafetyRepairEntry[] = [];
 
-      // Build a lookup from key → original text
+      // Build lookups from key → original text and key → label
       const entryOriginals = new Map<string, string>();
+      const entryLabels = new Map<string, string>();
       for (const entry of currentState.entries) {
         const k = `${entry.msbtFile}:${entry.index}`;
         entryOriginals.set(k, entry.original);
+        entryLabels.set(k, entry.label);
       }
 
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {

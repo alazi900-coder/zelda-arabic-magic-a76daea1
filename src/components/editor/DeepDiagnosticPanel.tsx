@@ -62,6 +62,12 @@ const RE_PLACEHOLDER = /\uFFFC/g;
 const RE_PRESENTATION_B = /[\uFE70-\uFEFF]/;
 const RE_PRESENTATION_A = /[\uFB50-\uFDFF]/;
 const RE_ARABIC_STANDARD = /[\u0600-\u06FF]/;
+const RE_NULL_CHAR = /\x00/;
+const RE_INVISIBLE = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u180E]/g;
+const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
+const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
+const RE_BRACKET_OPEN = /\[/g;
+const RE_BRACKET_CLOSE = /\]/g;
 const encoder = new TextEncoder();
 
 function countMatches(text: string, re: RegExp): number {

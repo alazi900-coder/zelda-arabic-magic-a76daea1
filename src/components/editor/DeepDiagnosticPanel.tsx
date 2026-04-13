@@ -472,7 +472,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     : new Set<string>();
   const canLocalFixActiveFilter = Boolean(
     activeFilter &&
-    onFixSelectedLocally &&
+    (onFixSelectedLocally || onApplyFix) &&
     LOCAL_FIXABLE_CATEGORIES.has(activeFilter) &&
     activeFilterKeys.size > 0
   );

@@ -342,6 +342,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           // No real text in translation — revert to original
           nonEmptyTranslations[key] = orig;
           revertedCount++;
+          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'ترجمة فارغة بعد إزالة الرموز', missingControl: missingControlN, missingPua: missingPuaN });
           continue;
         }
 
@@ -377,6 +378,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             // Simple case: just prefix + translated text + suffix
             nonEmptyTranslations[key] = prefix + pureTransText + suffix;
             repairedCount++;
+            repairLog.push({ key, label: entryLabel, action: 'repaired', reason: 'حقن رموز في بداية/نهاية النص', missingControl: missingControlN, missingPua: missingPuaN });
           } else {
             // Has inline specials — try to distribute them proportionally in the translated text
             // Split translated text roughly into same number of segments
@@ -406,11 +408,13 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             rebuilt += suffix;
             nonEmptyTranslations[key] = rebuilt;
             repairedCount++;
+            repairLog.push({ key, label: entryLabel, action: 'repaired', reason: 'توزيع رموز داخلية في النص', missingControl: missingControlN, missingPua: missingPuaN });
           }
         } else {
           // Complex/unexpected structure — fall back to original for safety
           nonEmptyTranslations[key] = orig;
           revertedCount++;
+          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'بنية رموز معقدة لا يمكن إصلاحها', missingControl: missingControlN, missingPua: missingPuaN });
         }
       }
 

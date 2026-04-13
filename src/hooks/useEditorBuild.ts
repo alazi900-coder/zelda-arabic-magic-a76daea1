@@ -291,6 +291,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
+
       // === Safety gate: smart-repair translations with missing control/PUA characters ===
       // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
       // then inject the Arabic translation text into that frame, preserving all technical markers.
@@ -310,7 +311,32 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         entryLabels.set(k, entry.label);
       }
 
-      // === Protection: revert translations for technical/measurement BDAT tables ===
+      // === Post-BiDi bracket tag validation ===
+      // After Arabic processing, bracket tags [Tag:Value] may get corrupted by BiDi reversal.
+      // Verify that all original bracket tags survived intact; revert entries where they didn't.
+      const BRACKET_TAG_RE_BUILD = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
+      let bracketRevertCount = 0;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        const orig = entryOriginals.get(key);
+        if (!orig) continue;
+        const origBracketTags = orig.match(BRACKET_TAG_RE_BUILD) || [];
+        if (origBracketTags.length === 0) continue;
+        // Check each original bracket tag exists in the processed translation
+        const missingTags = origBracketTags.filter(tag => !trans.includes(tag));
+        if (missingTags.length > 0) {
+          // Bracket tags were corrupted by BiDi — revert to original
+          nonEmptyTranslations[key] = orig;
+          bracketRevertCount++;
+          console.warn(`[BUILD-SAFETY] Bracket tag corrupted in ${key}: missing ${missingTags.join(', ')}`);
+        }
+      }
+      if (bracketRevertCount > 0) {
+        setBuildProgress(`🔒 استعادة ${bracketRevertCount} نص (أقواس تقنية تالفة بعد المعالجة العربية)...`);
+        console.warn(`[BUILD-SAFETY] Reverted ${bracketRevertCount} entries with corrupted bracket tags after Arabic processing`);
+        await new Promise(r => setTimeout(r, 400));
+      }
+
+
       // Tables like MNU_style_standard_ms contain font metrics the engine uses for
       // layout calculations. Translating them causes freezes/crashes.
       const PROTECTED_TABLE_PATTERNS = [
@@ -540,7 +566,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
 
         // === Build Summary Log ===
-        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount;
+        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount + bracketRevertCount;
         const totalRepairedAll = repairedCount + finalTagRepairCount;
         const keptCount = nonEmptyCount - totalRevertedAll;
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
@@ -548,7 +574,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         console.log(`[BUILD-LOG]  ├─ إجمالي الترجمات: ${nonEmptyCount}`);
         console.log(`[BUILD-LOG]  ├─ ✅ تم الحفاظ عليها: ${keptCount}`);
         console.log(`[BUILD-LOG]  ├─ 🔧 تم إصلاحها: ${totalRepairedAll} (رموز: ${repairedCount}, وسوم: ${finalTagRepairCount})`);
-        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, جداول محمية: ${protectedRevertCount})`);
+        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, جداول محمية: ${protectedRevertCount}, أقواس تالفة: ${bracketRevertCount})`);
         if (autoProcessedCountBin > 0) console.log(`[BUILD-LOG]  ├─ 🔤 معالجة عربية تلقائية: ${autoProcessedCountBin}`);
         if (truncatedCount > 0) console.log(`[BUILD-LOG]  ├─ ✂️ تم تقليصها: ${truncatedCount}`);
         if (strippedNewlineCount > 0) console.log(`[BUILD-LOG]  ├─ 🫧 إزالة أسطر فقاعية: ${strippedNewlineCount}`);

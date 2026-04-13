@@ -781,7 +781,11 @@ const Editor = () => {
                       editor.setCurrentPage(page);
                       setTimeout(() => {
                         const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
-                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          el.classList.add('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'animate-pulse');
+                          setTimeout(() => el.classList.remove('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'animate-pulse'), 2500);
+                        }
                       }, 100);
                     }
                   }, 50);

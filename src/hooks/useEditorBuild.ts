@@ -291,6 +291,15 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
+      // Build lookups from key → original text and key → label (needed by all protections below)
+      const entryOriginals = new Map<string, string>();
+      const entryLabels = new Map<string, string>();
+      for (const entry of currentState.entries) {
+        const k = `${entry.msbtFile}:${entry.index}`;
+        entryOriginals.set(k, entry.original);
+        entryLabels.set(k, entry.label);
+      }
+
       // === NEW PROTECTION 1: Fix broken/unclosed bracket tags ===
       // Detect tags like [XENO:wait wait=key  (missing ]) that cause engine freezes
       let brokenBracketFixCount = 0;
@@ -298,17 +307,12 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         const orig = entryOriginals.get(key);
         if (!orig) continue;
-        
-        // Count opened vs properly closed known engine tags
         const openCount = (trans.match(/\[(?:XENO|System|ML):/g) || []).length;
         const closedCount = (trans.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
-        
         if (openCount > closedCount) {
-          // Try to fix by appending missing ]
           let fixed = trans.replace(/(\[(?:XENO|System|ML):[^\]\[]{0,200})(?=\[|$)/g, '$1]');
           const fixedOpen = (fixed.match(/\[(?:XENO|System|ML):/g) || []).length;
           const fixedClosed = (fixed.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
-          
           if (fixedOpen === fixedClosed) {
             nonEmptyTranslations[key] = fixed;
             brokenBracketFixCount++;
@@ -389,26 +393,6 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       if (dollarVarFixCount > 0) {
         setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N مفقودة...`);
         await new Promise(r => setTimeout(r, 300));
-      }
-
-
-      // === Safety gate: smart-repair translations with missing control/PUA characters ===
-      // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
-      // then inject the Arabic translation text into that frame, preserving all technical markers.
-      const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
-      const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
-      const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
-      let repairedCount = 0;
-      let revertedCount = 0;
-      const repairLog: SafetyRepairEntry[] = [];
-
-      // Build lookups from key → original text and key → label
-      const entryOriginals = new Map<string, string>();
-      const entryLabels = new Map<string, string>();
-      for (const entry of currentState.entries) {
-        const k = `${entry.msbtFile}:${entry.index}`;
-        entryOriginals.set(k, entry.original);
-        entryLabels.set(k, entry.label);
       }
 
       // === Post-BiDi bracket tag validation ===

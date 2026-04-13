@@ -7,30 +7,40 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import UpdateBanner from "@/components/UpdateBanner";
 
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, forwardRef, type ComponentType } from "react";
 import { Loader2 } from "lucide-react";
 
-const Home = lazy(() => import("./pages/Home"));
-const Xenoblade = lazy(() => import("./pages/Xenoblade"));
-const XenobladeProcess = lazy(() => import("./pages/XenobladeProcess"));
-const WilayViewer = lazy(() => import("./pages/WilayViewer"));
-const Pokemon = lazy(() => import("./pages/Pokemon"));
-const PokemonProcess = lazy(() => import("./pages/PokemonProcess"));
-const Editor = lazy(() => import("./pages/Editor"));
-const Auth = lazy(() => import("./pages/Auth"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const Install = lazy(() => import("./pages/Install"));
-const ModPackager = lazy(() => import("./pages/ModPackager"));
-const Danganronpa = lazy(() => import("./pages/Danganronpa"));
-const DanganronpaProcess = lazy(() => import("./pages/DanganronpaProcess"));
-const DanganronpaClassicProcess = lazy(() => import("./pages/DanganronpaClassicProcess"));
+const lazyWithIgnoredRef = (importer: () => Promise<{ default: ComponentType<any> }>) =>
+  lazy(async () => {
+    const mod = await importer();
+    const Component = mod.default as ComponentType<any>;
+    const Wrapped = forwardRef<unknown, any>((props, _ref) => <Component {...props} />);
+    Wrapped.displayName = `LazyWithIgnoredRef(${Component.displayName || Component.name || "Component"})`;
+    return { default: Wrapped };
+  });
 
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
+const Home = lazyWithIgnoredRef(() => import("./pages/Home"));
+const Xenoblade = lazyWithIgnoredRef(() => import("./pages/Xenoblade"));
+const XenobladeProcess = lazyWithIgnoredRef(() => import("./pages/XenobladeProcess"));
+const WilayViewer = lazyWithIgnoredRef(() => import("./pages/WilayViewer"));
+const Pokemon = lazyWithIgnoredRef(() => import("./pages/Pokemon"));
+const PokemonProcess = lazyWithIgnoredRef(() => import("./pages/PokemonProcess"));
+const Editor = lazyWithIgnoredRef(() => import("./pages/Editor"));
+const Auth = lazyWithIgnoredRef(() => import("./pages/Auth"));
+const NotFound = lazyWithIgnoredRef(() => import("./pages/NotFound"));
+const Install = lazyWithIgnoredRef(() => import("./pages/Install"));
+const ModPackager = lazyWithIgnoredRef(() => import("./pages/ModPackager"));
+const Danganronpa = lazyWithIgnoredRef(() => import("./pages/Danganronpa"));
+const DanganronpaProcess = lazyWithIgnoredRef(() => import("./pages/DanganronpaProcess"));
+const DanganronpaClassicProcess = lazyWithIgnoredRef(() => import("./pages/DanganronpaClassicProcess"));
+
+const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
+  <div ref={ref} className="min-h-screen flex items-center justify-center bg-background" {...props}>
     <Loader2 className="w-8 h-8 animate-spin text-primary" />
   </div>
-);
+));
 
+PageLoader.displayName = "PageLoader";
 
 const queryClient = new QueryClient();
 
@@ -41,8 +51,8 @@ const App = () => (
         <Toaster />
         <Sonner />
         <UpdateBanner />
-        
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+
+        <BrowserRouter>
           <ErrorBoundary fallbackTitle="حدث خطأ في التطبيق">
             <Suspense fallback={<PageLoader />}>
               <Routes>

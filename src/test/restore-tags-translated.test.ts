@@ -75,4 +75,22 @@ describe("restoreTagsLocally – translated/damaged tag handling", () => {
     expect(result).toContain("[ML:number digit=2 ]");
     expect(result).not.toContain("مرحلةML:number digit=2 ]");
   });
+
+  it("restores translated multi-word tags like \\[Arts Seal\\]", () => {
+    const original = "\\[Arts Seal\\] Debuff [XENO]1";
+    const translation = "\\[ختم الفنون\\] تأثير سلبي [زينو]1";
+    const result = restoreTagsLocally(original, translation);
+    expect(result).toContain("\\[Arts Seal\\]");
+    expect(result).toContain("[XENO]1");
+    expect(result).not.toContain("\\[ختم الفنون\\]");
+    expect(result).not.toContain("[زينو]");
+  });
+
+  it("restores translated hyphenated tags like [Lock-On]", () => {
+    const original = "[Lock-On] prevents evasion";
+    const translation = "[تثبيت-الهدف] يمنع المراوغة";
+    const result = restoreTagsLocally(original, translation);
+    expect(result).toContain("[Lock-On]");
+    expect(result).not.toContain("[تثبيت-الهدف]");
+  });
 });

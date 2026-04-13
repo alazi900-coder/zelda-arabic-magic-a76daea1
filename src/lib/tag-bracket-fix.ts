@@ -30,6 +30,9 @@ const NUM_TAG_BRACKET_REGEX = /\d+\[[A-Z]{2,10}\]/g;
 /** Regex to match [TAG=Value] patterns e.g. [Color=Red] */
 const TAG_EQUALS_REGEX = /\[\w+=\w[^\]]*\]/g;
 
+/** Regex to match generic English bracket tags like [Passive], [Arts Seal], [Lock-On] */
+const TAG_GENERIC_WORD_REGEX = /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g;
+
 /** Regex to match {TAG:Value} patterns e.g. {player:name} */
 const BRACE_TAG_REGEX = /\{\w+:\w[^}]*\}/g;
 
@@ -40,8 +43,14 @@ export function hasTechnicalBracketTag(original: string): boolean {
   return /\[\s*\/?\s*\w+\s*:[^\]]*?\s*\]/.test(original) 
     || /\[[A-Z]{2,10}\]\d+/.test(original)
     || /\d+\[[A-Z]{2,10}\]/.test(original)
+    || /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/.test(original)
     || /\[\w+=\w[^\]]*\]/.test(original)
     || /\{\w+:\w[^}]*\}/.test(original);
+}
+
+function extractBracketInner(tag: string): string | null {
+  if (!/^\\?\[/.test(tag) || !/\\?\]$/.test(tag)) return null;
+  return tag.replace(/^\\?\[/, '').replace(/\\?\]$/, '');
 }
 
 /**
@@ -143,6 +152,34 @@ export function fixTagBracketsStrict(original: string, translation: string): Tag
         break;
       }
     }
+  }
+
+  // 1.5 Handle generic bracket tags like [Passive], [Arts Seal], [Lock-On]
+  const genericBracketTags = [...original.matchAll(new RegExp(TAG_GENERIC_WORD_REGEX.source, TAG_GENERIC_WORD_REGEX.flags))].map(m => m[0]);
+  for (const tag of genericBracketTags) {
+    if (result.includes(tag)) continue;
+    const inner = extractBracketInner(tag);
+    if (!inner) continue;
+    const esc = flexibleEsc(escapeRegex(inner));
+
+    const patterns: [RegExp, 'reversed' | 'mismatched' | 'bare'][] = [
+      [new RegExp(`\\]${FLEX_WS}${esc}${FLEX_WS}\\[`), 'reversed'],
+      [new RegExp(`\\]${FLEX_WS}${esc}${FLEX_WS}\\]`), 'mismatched'],
+      [new RegExp(`\\[${FLEX_WS}${esc}${FLEX_WS}\\[`), 'mismatched'],
+      [new RegExp(`(?<!\\[)${esc}(?!\\])`), 'bare'],
+    ];
+
+    let fixed = false;
+    for (const [pat, type] of patterns) {
+      if (pat.test(result)) {
+        result = result.replace(pat, tag);
+        stats[type]++;
+        stats.total++;
+        fixed = true;
+        break;
+      }
+    }
+    if (fixed) continue;
   }
 
   // 2. Handle [TAG]N style tags (e.g. [ML]1, [SE]0)

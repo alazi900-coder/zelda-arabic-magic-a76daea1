@@ -220,4 +220,14 @@ describe("XC3 Tag Protection", () => {
     expect(fixed).toContain("2[ML]");
     expect(fixed).not.toContain("[ML:icon");
   });
+
+  it("should protect generic English word tags like [Arts Seal] and [Lock-On]", () => {
+    const text = "\\[Arts Seal\\] Debuff [Lock-On] active";
+    const { cleanText, tags } = protectTags(text);
+    expect(cleanText).not.toContain("Arts Seal");
+    expect(cleanText).not.toContain("Lock-On");
+    expect(tags.some(tag => tag.original === "\\[Arts Seal\\]")).toBe(true);
+    expect(tags.some(tag => tag.original === "[Lock-On]")).toBe(true);
+    expect(restoreTags(cleanText, tags)).toBe(text);
+  });
 });

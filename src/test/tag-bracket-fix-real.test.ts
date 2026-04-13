@@ -85,6 +85,14 @@ describe("fixTagBracketsStrict – real-world duplication prevention", () => {
     expect(text).toContain("[Color=Red]");
     expect((text.match(/\[Color=Red\]/g) || []).length).toBe(1);
   });
+
+  it("fixes reversed generic tags like ]Arts Seal[", () => {
+    const original = "Use [Arts Seal] now";
+    const translation = "استخدم ]Arts Seal[ الآن";
+    const { text } = fixTagBracketsStrict(original, translation);
+    expect(text).toContain("[Arts Seal]");
+    expect((text.match(/\[Arts Seal\]/g) || []).length).toBe(1);
+  });
 });
 
 describe("hasTechnicalBracketTag", () => {
@@ -96,6 +104,10 @@ describe("hasTechnicalBracketTag", () => {
   });
   it("detects [ML]1 style", () => {
     expect(hasTechnicalBracketTag("[ML]1 text")).toBe(true);
+  });
+  it("detects [Arts Seal] and [Lock-On] style", () => {
+    expect(hasTechnicalBracketTag("[Arts Seal] text")).toBe(true);
+    expect(hasTechnicalBracketTag("[Lock-On] text")).toBe(true);
   });
   it("returns false for plain text", () => {
     expect(hasTechnicalBracketTag("just plain text")).toBe(false);

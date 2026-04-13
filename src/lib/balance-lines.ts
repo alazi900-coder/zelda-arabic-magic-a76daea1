@@ -3,7 +3,7 @@
  * Mirrors the logic from the translate-entries edge function.
  */
 
-const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\[\s*\w+\s*:[^\]]*?\s*\]|[\uFFF9-\uFFFC]+/g;
+const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}|[\uFFF9-\uFFFC]+/g;
 
 /** Calculate visual length: each tag counts as 1 character (renders as single icon in-game) */
 export function visualLength(text: string): number {

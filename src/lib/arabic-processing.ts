@@ -182,7 +182,7 @@ export function reshapeArabic(text: string): string {
 
 export function reverseBidi(text: string): string {
   // Protect technical tags as atomic placeholders before BiDi processing
-  const tagPattern = /\[\s*\w+\s*:[^\]]*?\s*\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}|\{[\w]+\}|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+/g;
+  const tagPattern = /\\?\[\s*\w+\s*:[^\]]*?\s*\\?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}|\{[\w]+\}|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g;
   const tagSlots: string[] = [];
   const shielded = text.replace(tagPattern, (match) => {
     const idx = tagSlots.length;
@@ -304,7 +304,7 @@ export function processArabicText(text: string, options?: { arabicNumerals?: boo
 
 const LRI = '\u2068'; // Left-to-Right Isolate
 const PDI = '\u2069'; // Pop Directional Isolate
-const TAG_BIDI_RE = /\[[^\]]*\]|\{[^}]*\}|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC]/g;
+const TAG_BIDI_RE = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[[^\]]*=.+?\]|\{[^}]*\}|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC]/g;
 const ENG_SEQ_RE = /[a-zA-Z][a-zA-Z0-9]*(?:[\s/\\-][a-zA-Z][a-zA-Z0-9]*)*/g;
 const ARABIC_CHECK_BIDI_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
 

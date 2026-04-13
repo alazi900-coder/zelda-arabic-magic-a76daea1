@@ -8,7 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
-import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { diffTechnicalTags, repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 
 // ═══════════════════════════════════════════════════
@@ -47,6 +47,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "translated_tags", label: "وسوم مترجمة", icon: "🔀", severity: "warning", description: "وسوم تقنية تم ترجمتها بالخطأ (عربي داخل أقواس تقنية) — يجب إصلاحها" },
   { id: "invisible_chars", label: "أحرف غير مرئية مشبوهة", icon: "👻", severity: "warning", description: "أحرف Unicode غير مرئية (ZWJ, ZWNJ, BOM, إلخ) قد تُربك المحرك" },
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم أصلية مفقودة فعلياً بعد استثناء الوسوم التي تُرجمت بالخطأ — قد تسبب خلل في العرض" },
+  { id: "technical_mismatch", label: "اختلاف الرموز التقنية", icon: "🧷", severity: "critical", description: "مجموعة الرموز التقنية لا تطابق الأصل بدقة حتى لو كان العدد متساوياً — قد تسبب تجمّد اللعبة" },
   { id: "placeholder_mismatch", label: "عناصر نائبة مفقودة", icon: "⬛", severity: "warning", description: "رموز \uFFFC نائبة مفقودة — قد تسبب خلل في الواجهة" },
   { id: "newline_mismatch", label: "فرق كبير بعدد الأسطر", icon: "📄", severity: "warning", description: "عدد الأسطر في الترجمة يختلف كثيراً عن الأصل — قد يكسر صندوق الحوار" },
   { id: "byte_budget", label: "تجاوز ميزانية البايتات", icon: "💾", severity: "warning", description: "الترجمة أكبر من ضعف حجم الأصل بالبايتات — قد تستنفد ذاكرة المحرك" },
@@ -76,6 +77,18 @@ const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_TRANSLATED_TECHNICAL_SLOT = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]|\{[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\}/g;
 const encoder = new TextEncoder();
+const SPECIFIC_TECHNICAL_ISSUE_CATEGORIES = new Set([
+  "control_chars",
+  "pua_chars",
+  "unmatched_ruby",
+  "broken_tag_syntax",
+  "control_extra",
+  "translated_tags",
+  "tag_mismatch",
+  "placeholder_mismatch",
+  "corrupted_vars",
+  "missing_vars",
+]);
 
 type TechnicalTagKind = "bracket" | "brace";
 
@@ -91,6 +104,15 @@ function getMatches(text: string, re: RegExp): string[] {
 
 function getTechnicalTagKind(tag: string): TechnicalTagKind {
   return tag.trim().startsWith("{") ? "brace" : "bracket";
+}
+
+function formatTechnicalToken(token: string): string {
+  return Array.from(token).map((char) => {
+    if (/[\uFFF9-\uFFFC\uE000-\uE0FF]/.test(char)) {
+      return `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
+    }
+    return char;
+  }).join("");
 }
 
 function excludeTranslatedReplacementTags(missingTags: string[], translatedTags: string[]): string[] {
@@ -282,6 +304,31 @@ export function detectIssues(entry: ExtractedEntry, translation: string): Diagno
     }
   }
 
+  const technicalDiff = diffTechnicalTags(entry.original, trimmed);
+  const hasSpecificTechnicalIssue = issues.some(issue => SPECIFIC_TECHNICAL_ISSUE_CATEGORIES.has(issue.category));
+  if (!technicalDiff.exactTagMatch && !hasSpecificTechnicalIssue) {
+    const messageParts: string[] = [];
+
+    if (technicalDiff.missingTags.length > 0) {
+      messageParts.push(
+        `مفقود: ${technicalDiff.missingTags.slice(0, 3).map(formatTechnicalToken).join('، ')}${technicalDiff.missingTags.length > 3 ? '...' : ''}`
+      );
+    }
+
+    if (technicalDiff.extraTags.length > 0) {
+      messageParts.push(
+        `مختلف/زائد: ${technicalDiff.extraTags.slice(0, 3).map(formatTechnicalToken).join('، ')}${technicalDiff.extraTags.length > 3 ? '...' : ''}`
+      );
+    }
+
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "technical_mismatch",
+      message: messageParts.length > 0 ? messageParts.join(" — ") : "مجموعة الرموز التقنية لا تطابق الأصل بدقة",
+    });
+  }
+
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
     issues.push({ ...base, severity: "info", category: "identical_to_original",
       message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });
@@ -307,7 +354,7 @@ const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", 
 // Categories fixable by repairing $N variables
 const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
-const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars"]);
+const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars", "technical_mismatch"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // All locally fixable categories

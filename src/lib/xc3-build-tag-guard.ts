@@ -39,28 +39,40 @@ function buildTagCountMap(tags: string[]): Map<string, number> {
   return counts;
 }
 
-function hasExactTagMultiset(original: string, translation: string): boolean {
-  const originalTags = extractTechnicalTags(original);
-  const translatedTags = extractTechnicalTags(translation);
+function expandTagCountDiff(source: Map<string, number>, target: Map<string, number>): string[] {
+  const diff: string[] = [];
 
-  if (originalTags.length !== translatedTags.length) {
-    return false;
-  }
-
-  const originalCounts = buildTagCountMap(originalTags);
-  const translatedCounts = buildTagCountMap(translatedTags);
-
-  if (originalCounts.size !== translatedCounts.size) {
-    return false;
-  }
-
-  for (const [tag, count] of originalCounts) {
-    if ((translatedCounts.get(tag) || 0) !== count) {
-      return false;
+  for (const [tag, count] of source) {
+    const remaining = count - (target.get(tag) || 0);
+    for (let i = 0; i < remaining; i++) {
+      diff.push(tag);
     }
   }
 
-  return true;
+  return diff;
+}
+
+export interface TechnicalTagDiffResult {
+  exactTagMatch: boolean;
+  missingTags: string[];
+  extraTags: string[];
+}
+
+export function diffTechnicalTags(original: string, translation: string): TechnicalTagDiffResult {
+  const originalCounts = buildTagCountMap(extractTechnicalTags(original));
+  const translatedCounts = buildTagCountMap(extractTechnicalTags(translation));
+  const missingTags = expandTagCountDiff(originalCounts, translatedCounts);
+  const extraTags = expandTagCountDiff(translatedCounts, originalCounts);
+
+  return {
+    exactTagMatch: missingTags.length === 0 && extraTags.length === 0,
+    missingTags,
+    extraTags,
+  };
+}
+
+function hasExactTagMultiset(original: string, translation: string): boolean {
+  return diffTechnicalTags(original, translation).exactTagMatch;
 }
 
 function hasMissingClosingTags(original: string, translation: string): boolean {

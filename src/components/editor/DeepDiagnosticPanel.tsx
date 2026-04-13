@@ -710,6 +710,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                             <Wrench className="w-3 h-3 ml-1" />
                             {RESTORE_ORIGINAL_CATEGORIES.has(activeFilter)
                               ? `↩️ استعادة الأصل (${activeFilterKeys.size})`
+                              : DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter)
+                              ? `💲 إصلاح المتغيرات (${activeFilterKeys.size})`
                               : activeFilter === "invisible_chars"
                               ? `🧹 تنظيف (${activeFilterKeys.size})`
                               : `🔧 إصلاح الكل محلياً (${activeFilterKeys.size})`

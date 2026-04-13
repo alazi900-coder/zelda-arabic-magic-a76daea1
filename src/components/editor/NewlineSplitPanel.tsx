@@ -154,9 +154,12 @@ const NewlineSplitPanel: React.FC<NewlineSplitPanelProps> = ({
 
                 <div className="flex items-start gap-2">
                   <span className="text-[10px] text-secondary shrink-0 mt-1">بعد:</span>
-                  <p className="text-sm font-body text-foreground bg-secondary/5 rounded px-2 py-1 flex-1 whitespace-pre-wrap" dir="rtl">
-                    {item.after}
-                  </p>
+                  <div className="flex-1">
+                    <p className="text-sm font-body text-foreground bg-secondary/5 rounded px-2 py-1 whitespace-pre-wrap" dir="rtl">
+                      {item.after}
+                    </p>
+                    <LineBalanceBars text={item.after} charLimit={charLimit} />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 justify-end">

@@ -8,6 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
+import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 
 // ═══════════════════════════════════════════════════
@@ -51,6 +52,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "byte_budget", label: "تجاوز ميزانية البايتات", icon: "💾", severity: "warning", description: "الترجمة أكبر من ضعف حجم الأصل بالبايتات — قد تستنفد ذاكرة المحرك" },
   { id: "excessive_lines", label: "أسطر زائدة عن الأصل", icon: "📐", severity: "warning", description: "الترجمة تحتوي أسطر أكثر بكثير من الأصل (+3) — قد تكسر صندوق الحوار" },
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
+  { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
 ];
 
@@ -67,6 +69,8 @@ const RE_PRESENTATION_A = /[\uFB50-\uFDFF]/;
 const RE_ARABIC_STANDARD = /[\u0600-\u06FF]/;
 const RE_NULL_CHAR = /\x00/;
 const RE_INVISIBLE = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u180E]/g;
+const RE_ORIG_DOLLAR_VARS = /\$\d+/g;
+const RE_CORRUPTED_DOLLAR = /دولار\s*\$?\d+|\d+\s*\.\s*\$|\$\s*\.\s*\d+|\d+\s+دولار|\$\d+\.(?!\d)/g;
 const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_TRANSLATED_TECHNICAL_SLOT = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]|\{[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\}/g;
@@ -255,7 +259,16 @@ export function detectIssues(entry: ExtractedEntry, translation: string): Diagno
       message: "الترجمة تحتوي مسافات أو أحرف غير مرئية فقط" });
   }
 
-  // 17. Identical to original
+  // 17. Corrupted $N variables (دولار1, 1.$, etc.)
+  const origDollarVars = getMatches(entry.original, RE_ORIG_DOLLAR_VARS);
+  if (origDollarVars.length > 0) {
+    const corruptedMatches = getMatches(trimmed, RE_CORRUPTED_DOLLAR);
+    if (corruptedMatches.length > 0) {
+      issues.push({ ...base, severity: "critical", category: "corrupted_vars",
+        message: `${corruptedMatches.length} متغير تالف: ${corruptedMatches.slice(0, 3).join('، ')} — يجب أن تكون ${origDollarVars.join('، ')}` });
+    }
+  }
+
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
     issues.push({ ...base, severity: "info", category: "identical_to_original",
       message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });
@@ -278,12 +291,14 @@ interface DeepDiagnosticPanelProps {
 
 // Categories fixable via restoreTagsLocally
 const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", "translated_tags"]);
+// Categories fixable by repairing $N variables
+const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
 const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -383,6 +398,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: cleaned, reason: cleaned !== trans ? '🧹 سيتم إزالة الأحرف غير المرئية' : '⚠️ لم يُعثر على أحرف غير مرئية' };
     }
 
+    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category)) {
+      const repaired = repairTranslationTagsForBuild(entry.original, trans);
+      if (repaired.text !== trans) {
+        return { fixResult: repaired.text, reason: '💲 سيتم إصلاح متغيرات $N التالفة' };
+      }
+      return { fixResult: trans, reason: '⚠️ لم يتمكن من إصلاح المتغيرات تلقائياً' };
+    }
+
     return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
   }, [entryMap, state.translations]);
 
@@ -400,6 +423,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         onApplyFix(issue.key, fixed);
       }
       toast({ title: "🔧 إصلاح", description: "تم إصلاح الوسوم" });
+      return;
+    }
+
+    // Corrupted $N vars: repair
+    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const repaired = repairTranslationTagsForBuild(entry.original, issue.translation);
+      onApplyFix(issue.key, repaired.text);
+      toast({ title: "💲 إصلاح", description: "تم إصلاح متغيرات $N" });
       return;
     }
 
@@ -448,6 +479,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter) && onApplyFix) {
+      let count = 0;
+      for (const key of uniqueKeys) {
+        const entry = entryMap.get(key);
+        const trans = state.translations[key];
+        if (!entry || !trans) continue;
+        const repaired = repairTranslationTagsForBuild(entry.original, trans);
+        if (repaired.text !== trans) { onApplyFix(key, repaired.text); count++; }
+      }
+      toast({ title: "💲 إصلاح جماعي", description: `تم إصلاح متغيرات $N في ${count} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
     if (RESTORE_ORIGINAL_CATEGORIES.has(activeFilter) && onApplyFix) {
       let count = 0;
       for (const key of uniqueKeys) {
@@ -485,13 +530,24 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const allFixableIssues = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
     const processedKeys = new Set<string>();
     let tagFixKeys: string[] = [];
-    let restoreCount = 0, stripCount = 0, clearCount = 0;
+    let restoreCount = 0, stripCount = 0, clearCount = 0, dollarFixCount = 0;
 
     for (const issue of allFixableIssues) {
       if (processedKeys.has(issue.key)) continue;
 
       if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
         tagFixKeys.push(issue.key);
+        processedKeys.add(issue.key);
+        continue;
+      }
+
+      if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category)) {
+        const entry = entryMap.get(issue.key);
+        const trans = state.translations[issue.key];
+        if (entry && trans) {
+          const repaired = repairTranslationTagsForBuild(entry.original, trans);
+          if (repaired.text !== trans) { onApplyFix(issue.key, repaired.text); dollarFixCount++; }
+        }
         processedKeys.add(issue.key);
         continue;
       }
@@ -535,10 +591,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       }
     }
 
-    const totalFixed = tagFixKeys.length + restoreCount + stripCount + clearCount;
+    const totalFixed = tagFixKeys.length + restoreCount + stripCount + clearCount + dollarFixCount;
     toast({
       title: "⚡ إصلاح شامل",
-      description: `تم إصلاح ${totalFixed} نص (${tagFixKeys.length} وسوم، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
+      description: `تم إصلاح ${totalFixed} نص (${tagFixKeys.length} وسوم، ${dollarFixCount} متغيرات، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
     });
     setTimeout(() => runScan(false), 500);
   }, [issues, onApplyFix, onFixSelectedLocally, entryMap, state.translations, runScan]);
@@ -654,6 +710,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                             <Wrench className="w-3 h-3 ml-1" />
                             {RESTORE_ORIGINAL_CATEGORIES.has(activeFilter)
                               ? `↩️ استعادة الأصل (${activeFilterKeys.size})`
+                              : DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter)
+                              ? `💲 إصلاح المتغيرات (${activeFilterKeys.size})`
                               : activeFilter === "invisible_chars"
                               ? `🧹 تنظيف (${activeFilterKeys.size})`
                               : `🔧 إصلاح الكل محلياً (${activeFilterKeys.size})`
@@ -699,9 +757,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
                                     onClick={() => handleFixSingle(issue)}
                                     title={TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح الوسوم" :
+                                           DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح المتغيرات" :
                                            RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "استعادة الأصل" :
                                            issue.category === "invisible_chars" ? "تنظيف" : "إصلاح"}>
                                     {TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🔧" :
+                                     DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "💲" :
                                      RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "↩️" :
                                      issue.category === "invisible_chars" ? "🧹" : "🔧"}
                                   </Button>

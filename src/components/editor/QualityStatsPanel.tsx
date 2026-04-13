@@ -14,7 +14,7 @@ interface QualityStatsPanelProps {
   onFilterMissingTags?: () => void;
 }
 
-const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, needsImproveCount, translatedCount, setFilterStatus, setShowQualityStats }) => {
+const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, needsImproveCount, translatedCount, setFilterStatus, setShowQualityStats, onFixDamagedTags, onFilterMissingTags }) => {
   const totalProblems = qualityStats.total + needsImproveCount.total;
 
   return (

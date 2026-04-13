@@ -72,6 +72,7 @@ import TagBracketFixPanel from "@/components/editor/TagBracketFixPanel";
 import NewlineSplitPanel from "@/components/editor/NewlineSplitPanel";
 import PageTranslationCompare from "@/components/editor/PageTranslationCompare";
 import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
+import DeepDiagnosticPanel from "@/components/editor/DeepDiagnosticPanel";
 import CleanupToolsPanel from "@/components/editor/CleanupToolsPanel";
 import LineBalancePanel from "@/components/editor/LineBalancePanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
@@ -741,6 +742,29 @@ const Editor = () => {
 
 
 
+
+          <DeepDiagnosticPanel
+            state={editor.state}
+            onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
+            onFilterByKeys={(keys) => {
+              editor.setFilterStatus('problems');
+            }}
+            onNavigateToEntry={(key) => {
+              editor.setFilterStatus('all');
+              editor.setSearch('');
+              setTimeout(() => {
+                const idx = editor.state.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key);
+                if (idx >= 0) {
+                  const page = Math.floor(idx / 50);
+                  editor.setCurrentPage(page);
+                  setTimeout(() => {
+                    const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 100);
+                }
+              }, 50);
+            }}
+          />
 
           <QualityChecksPanel
             state={editor.state}

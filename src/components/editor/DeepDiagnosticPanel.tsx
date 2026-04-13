@@ -790,18 +790,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                         {filteredIssues.slice(0, 100).map((issue, i) => (
                           <div
                             key={`${issue.key}-${i}`}
-                            className={`p-2 rounded text-xs border ${
+                            className={`p-2 rounded text-xs border cursor-pointer hover:ring-1 hover:ring-primary/40 transition-all ${
                               issue.severity === "critical" ? "bg-destructive/5 border-destructive/20" :
                               issue.severity === "warning" ? "bg-amber-500/5 border-amber-500/20" :
                               "bg-muted/20 border-border/50"
                             }`}
+                            onClick={() => onNavigateToEntry?.(issue.key)}
+                            title="اضغط للانتقال لهذا النص في المحرر"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
                                 <p className="font-mono text-[10px] text-muted-foreground truncate">{issue.label}</p>
-                                <p className="text-foreground mt-0.5">{issue.message}</p>
+                                <p className="text-foreground mt-0.5 cursor-pointer" onClick={() => onNavigateToEntry?.(issue.key)}>{issue.message}</p>
                               </div>
-                              <div className="flex gap-1 shrink-0">
+                              <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                                 <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
                                   onClick={() => setExpandedIssue(expandedIssue === `${issue.key}-${i}` ? null : `${issue.key}-${i}`)}
                                   title="تفاصيل التشخيص">

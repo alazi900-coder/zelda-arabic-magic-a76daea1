@@ -42,6 +42,7 @@ const XenobladeProcess = () => {
   const [dangerFilter, setDangerFilter] = useState<"all" | "critical" | "limited">("all");
   const [safetyMargin, setSafetyMargin] = useState<number>(() => loadBdatSettings().safetyMargin);
   const [arabicMultiplier, setArabicMultiplier] = useState<number>(() => loadBdatSettings().arabicMultiplier);
+  const [truncationLimit, setTruncationLimit] = useState<number>(() => loadBdatSettings().truncationLimit);
   const [showSettings, setShowSettings] = useState(false);
   const navigate = useNavigate();
 
@@ -767,7 +768,7 @@ const XenobladeProcess = () => {
               <Settings2 className="w-4 h-4 text-secondary" />
               <span className="text-sm font-display font-bold flex-1 text-right">⚙️ إعدادات المشروع</span>
               <span className="text-xs text-muted-foreground">
-                هامش: <strong>{formatMarginPct(safetyMargin)}</strong> | مضاعف عربي: <strong>×{arabicMultiplier.toFixed(1)}</strong>
+                هامش: <strong>{formatMarginPct(safetyMargin)}</strong> | مضاعف عربي: <strong>×{arabicMultiplier.toFixed(1)}</strong> | حد التقليص: <strong>×{truncationLimit.toFixed(1)}</strong>
               </span>
               <span className="text-muted-foreground text-xs">{showSettings ? "▲" : "▼"}</span>
             </button>
@@ -877,6 +878,63 @@ const XenobladeProcess = () => {
                         }}
                         className={`px-2 py-1 rounded text-xs font-mono transition-all ${
                           Math.abs(arabicMultiplier - p.value) < 0.05
+                            ? "bg-secondary text-secondary-foreground"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Truncation Limit */}
+                <div>
+                  <label className="block text-xs font-display font-semibold mb-1 text-foreground">
+                    حد تقليص البناء
+                    <span className="mr-2 text-secondary font-mono">×{truncationLimit.toFixed(1)}</span>
+                  </label>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    النصوص التي تتجاوز هذا الحد (مضاعف حجم الأصل) يتم تقليصها تلقائياً عند البناء. زيادة القيمة تسمح بنصوص أطول لكن قد تسبب تجمد اللعبة.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={200}
+                      max={500}
+                      step={10}
+                      value={Math.round(truncationLimit * 100)}
+                      onChange={e => {
+                        const newVal = Number(e.target.value) / 100;
+                        setTruncationLimit(newVal);
+                        saveBdatSettings({ truncationLimit: newVal });
+                      }}
+                      className="flex-1 accent-secondary cursor-pointer"
+                    />
+                    <span className="text-xs font-mono text-secondary w-10 text-center">×{truncationLimit.toFixed(1)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>×2.0</span>
+                    <span>×3.0</span>
+                    <span>×4.0</span>
+                    <span>×5.0</span>
+                  </div>
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {[
+                      { label: "×2.5 (افتراضي)", value: 2.5 },
+                      { label: "×3.0", value: 3.0 },
+                      { label: "×3.5", value: 3.5 },
+                      { label: "×4.0 (واسع)", value: 4.0 },
+                      { label: "×5.0 (أقصى)", value: 5.0 },
+                    ].map(p => (
+                      <button
+                        key={p.value}
+                        onClick={() => {
+                          setTruncationLimit(p.value);
+                          saveBdatSettings({ truncationLimit: p.value });
+                        }}
+                        className={`px-2 py-1 rounded text-xs font-mono transition-all ${
+                          Math.abs(truncationLimit - p.value) < 0.05
                             ? "bg-secondary text-secondary-foreground"
                             : "bg-muted text-muted-foreground hover:bg-muted/80"
                         }`}

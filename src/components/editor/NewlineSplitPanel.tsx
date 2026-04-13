@@ -2,8 +2,50 @@ import React, { useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, RefreshCw, X, XCircle } from "lucide-react";
-import { Slider } from "@/components/ui/slider";
 import { visualLength } from "@/lib/balance-lines";
+
+/** Visual bar showing line lengths for balance preview */
+const LineBalanceBars: React.FC<{ text: string; charLimit: number }> = ({ text, charLimit }) => {
+  const lines = text.split('\n');
+  if (lines.length <= 1) return null;
+  const lengths = lines.map(l => visualLength(l));
+  const maxLen = Math.max(...lengths, 1);
+  const barMax = Math.max(maxLen, charLimit);
+
+  return (
+    <div className="space-y-1 mt-1">
+      {lines.map((line, i) => {
+        const len = lengths[i];
+        const pct = Math.min((len / barMax) * 100, 100);
+        const isOver = len > charLimit;
+        const isShort = len < (Math.min(...lengths) * 1.2) && lengths.length > 1 && len < maxLen * 0.5;
+        const color = isOver
+          ? 'bg-destructive/70'
+          : isShort
+            ? 'bg-amber-500/60'
+            : 'bg-secondary/60';
+        return (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-full h-3 bg-muted/30 rounded-full overflow-hidden relative">
+              <div
+                className={`h-full rounded-full transition-all ${color}`}
+                style={{ width: `${pct}%` }}
+              />
+              {/* char limit marker */}
+              <div
+                className="absolute top-0 h-full w-px bg-foreground/30"
+                style={{ left: `${Math.min((charLimit / barMax) * 100, 100)}%` }}
+              />
+            </div>
+            <span className={`text-[9px] font-mono shrink-0 w-6 text-left ${isOver ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+              {len}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 export interface NewlineSplitResult {
   key: string;

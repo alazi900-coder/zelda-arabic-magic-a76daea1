@@ -647,6 +647,7 @@ export function useEditorState() {
         (filterStatus === "mixed-lang" && isTranslated && isMixedLanguage(translation)) ||
         (filterStatus === "has-tags" && hasTechnicalTags(e.original)) ||
         (filterStatus === "damaged-tags" && qualityStats.damagedTagKeys.has(key)) ||
+        (filterStatus === "missing-tags" && isTranslated && qualityStats.problemKeys.has(key) && (() => { const origTags: string[] = []; const re = /\[[^\]]*\]/g; let m2; while ((m2 = re.exec(e.original)) !== null) origTags.push(m2[0]); return origTags.some(t => !translation.includes(t)); })()) ||
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
         (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && new TextEncoder().encode(translation).length > e.maxBytes) ||
         (filterStatus === "has-newlines" && e.original.includes('\n'));

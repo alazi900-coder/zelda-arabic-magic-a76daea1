@@ -27,6 +27,15 @@ export interface BdatFileStat {
   hasError?: boolean;
 }
 
+export interface SafetyRepairEntry {
+  key: string;
+  label: string;
+  action: 'repaired' | 'reverted';
+  reason: string;
+  missingControl: number;
+  missingPua: number;
+}
+
 interface UseEditorBuildProps {
   state: EditorState | null;
   setState: React.Dispatch<React.SetStateAction<EditorState | null>>;
@@ -52,7 +61,8 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
   const [integrityResult, setIntegrityResult] = useState<IntegrityCheckResult | null>(null);
   const [showIntegrityDialog, setShowIntegrityDialog] = useState(false);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
-
+  const [safetyRepairs, setSafetyRepairs] = useState<SafetyRepairEntry[]>([]);
+  const [showSafetyReport, setShowSafetyReport] = useState(false);
 
   const handleApplyArabicProcessing = () => {
     const currentState = stateRef.current;

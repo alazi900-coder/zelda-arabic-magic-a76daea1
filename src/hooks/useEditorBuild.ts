@@ -298,6 +298,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
       let repairedCount = 0;
       let revertedCount = 0;
+      const repairLog: SafetyRepairEntry[] = [];
 
       // Build a lookup from key → original text
       const entryOriginals = new Map<string, string>();

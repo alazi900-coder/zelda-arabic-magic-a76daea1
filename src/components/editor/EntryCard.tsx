@@ -286,6 +286,14 @@ const EntryCard: React.FC<EntryCardProps> = ({
                 {isDamagedTag && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">⚠️ رموز تالفة</span>
                 )}
+                {/* Corrupted $N variable warning */}
+                {translation && /\$\d/.test(entry.original) && (
+                  /دولار\s*\$?\d|(\d)\s*\.\s*\$|\$\s*\.\s*\d|\d+\s+دولار|\$\d+\.(?!\d)/.test(translation)
+                ) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 font-semibold">
+                    💲 متغير $N مترجم خطأ — سيُصلح تلقائياً عند البناء
+                  </span>
+                )}
                 {/msg_(ask|cq|fev|nq|sq|tlk|tq)/i.test(key) && (() => {
                   const lines = translation.split('\n');
                   const lineCount = lines.length;

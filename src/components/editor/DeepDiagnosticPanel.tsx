@@ -290,7 +290,14 @@ interface DeepDiagnosticPanelProps {
   onFixSelectedLocally?: (keys: string[]) => void;
 }
 
-const LOCAL_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch"]);
+// Categories fixable via restoreTagsLocally
+const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch"]);
+// Categories fixable by restoring original text
+const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped"]);
+// Categories fixable by stripping invisible chars
+const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
+// All locally fixable categories
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -399,12 +406,60 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   }, [state.entries, onApplyFix]);
 
   const handleLocalFixAll = useCallback(() => {
-    if (!activeFilter || !onFixSelectedLocally || !LOCAL_FIXABLE_CATEGORIES.has(activeFilter)) return;
-    const keys = [...new Set(issues.filter(issue => issue.category === activeFilter).map(issue => issue.key))];
-    if (keys.length === 0) return;
-    onFixSelectedLocally(keys);
-    setTimeout(() => runScan(true), 250);
-  }, [activeFilter, issues, onFixSelectedLocally, runScan]);
+    if (!activeFilter) return;
+    const categoryIssues = issues.filter(issue => issue.category === activeFilter);
+    const uniqueKeys = [...new Set(categoryIssues.map(issue => issue.key))];
+    if (uniqueKeys.length === 0) return;
+
+    // Strategy 1: Tag restoration (restoreTagsLocally)
+    if (TAG_FIXABLE_CATEGORIES.has(activeFilter) && onFixSelectedLocally) {
+      onFixSelectedLocally(uniqueKeys);
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    // Strategy 2: Restore original text
+    if (RESTORE_ORIGINAL_CATEGORIES.has(activeFilter) && onApplyFix) {
+      const fixedKeys = new Set<string>();
+      for (const key of uniqueKeys) {
+        const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
+        if (entry) {
+          onApplyFix(key, entry.original);
+          fixedKeys.add(key);
+        }
+      }
+      toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${fixedKeys.size} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    // Strategy 3: Strip invisible characters
+    if (STRIP_INVISIBLE_CATEGORIES.has(activeFilter) && onApplyFix) {
+      let fixCount = 0;
+      for (const key of uniqueKeys) {
+        const translation = state.translations[key];
+        if (!translation) continue;
+        const cleaned = translation.replace(RE_INVISIBLE, '');
+        if (cleaned !== translation) {
+          onApplyFix(key, cleaned);
+          fixCount++;
+        }
+      }
+      toast({ title: "🧹 تنظيف", description: `تم إزالة الأحرف غير المرئية من ${fixCount} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    // Strategy 4: Empty translations — clear them
+    if (activeFilter === "empty_translation" && onApplyFix) {
+      for (const key of uniqueKeys) {
+        onApplyFix(key, "");
+      }
+      toast({ title: "🗑️ حذف", description: `تم مسح ${uniqueKeys.length} ترجمة فارغة` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+  }, [activeFilter, issues, onFixSelectedLocally, onApplyFix, state, runScan]);
 
   const handleRunScan = useCallback(() => {
     runScan(false);
@@ -417,7 +472,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     : new Set<string>();
   const canLocalFixActiveFilter = Boolean(
     activeFilter &&
-    onFixSelectedLocally &&
+    (onFixSelectedLocally || onApplyFix) &&
     LOCAL_FIXABLE_CATEGORIES.has(activeFilter) &&
     activeFilterKeys.size > 0
   );
@@ -521,7 +576,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                             onClick={handleLocalFixAll}
                           >
                             <Wrench className="w-3 h-3 ml-1" />
-                            إصلاح الكل محلياً
+                            {activeFilter && RESTORE_ORIGINAL_CATEGORIES.has(activeFilter)
+                              ? `↩️ استعادة الأصل (${activeFilterKeys.size})`
+                              : activeFilter === "invisible_chars"
+                              ? `🧹 تنظيف (${activeFilterKeys.size})`
+                              : `🔧 إصلاح الكل محلياً (${activeFilterKeys.size})`
+                            }
                           </Button>
                         )}
                         <Button

@@ -566,7 +566,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
 
         // === Build Summary Log ===
-        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount;
+        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount + bracketRevertCount;
         const totalRepairedAll = repairedCount + finalTagRepairCount;
         const keptCount = nonEmptyCount - totalRevertedAll;
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
@@ -574,7 +574,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         console.log(`[BUILD-LOG]  ├─ إجمالي الترجمات: ${nonEmptyCount}`);
         console.log(`[BUILD-LOG]  ├─ ✅ تم الحفاظ عليها: ${keptCount}`);
         console.log(`[BUILD-LOG]  ├─ 🔧 تم إصلاحها: ${totalRepairedAll} (رموز: ${repairedCount}, وسوم: ${finalTagRepairCount})`);
-        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, جداول محمية: ${protectedRevertCount})`);
+        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, جداول محمية: ${protectedRevertCount}, أقواس تالفة: ${bracketRevertCount})`);
         if (autoProcessedCountBin > 0) console.log(`[BUILD-LOG]  ├─ 🔤 معالجة عربية تلقائية: ${autoProcessedCountBin}`);
         if (truncatedCount > 0) console.log(`[BUILD-LOG]  ├─ ✂️ تم تقليصها: ${truncatedCount}`);
         if (strippedNewlineCount > 0) console.log(`[BUILD-LOG]  ├─ 🫧 إزالة أسطر فقاعية: ${strippedNewlineCount}`);

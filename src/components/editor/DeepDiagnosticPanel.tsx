@@ -53,6 +53,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "excessive_lines", label: "أسطر زائدة عن الأصل", icon: "📐", severity: "warning", description: "الترجمة تحتوي أسطر أكثر بكثير من الأصل (+3) — قد تكسر صندوق الحوار" },
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
+  { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
 ];
 
@@ -262,10 +263,22 @@ export function detectIssues(entry: ExtractedEntry, translation: string): Diagno
   // 17. Corrupted $N variables (دولار1, 1.$, etc.)
   const origDollarVars = getMatches(entry.original, RE_ORIG_DOLLAR_VARS);
   if (origDollarVars.length > 0) {
+    // 17a. Corrupted $N
     const corruptedMatches = getMatches(trimmed, RE_CORRUPTED_DOLLAR);
     if (corruptedMatches.length > 0) {
       issues.push({ ...base, severity: "critical", category: "corrupted_vars",
         message: `${corruptedMatches.length} متغير تالف: ${corruptedMatches.slice(0, 3).join('، ')} — يجب أن تكون ${origDollarVars.join('، ')}` });
+    }
+
+    // 17b. Missing $N completely
+    const transDollarVars = getMatches(trimmed, RE_ORIG_DOLLAR_VARS);
+    // If there are corrupted matches, skip missing check (corrupted_vars covers it)
+    if (corruptedMatches.length === 0) {
+      const allMissing = origDollarVars.filter(v => !transDollarVars.includes(v));
+      if (allMissing.length > 0) {
+        issues.push({ ...base, severity: "critical", category: "missing_vars",
+          message: `${allMissing.length} متغير مفقود: ${allMissing.join('، ')} — غير موجود في الترجمة` });
+      }
     }
   }
 
@@ -294,7 +307,7 @@ const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", 
 // Categories fixable by repairing $N variables
 const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
-const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped"]);
+const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // All locally fixable categories

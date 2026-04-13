@@ -57,4 +57,22 @@ describe("restoreTagsLocally – translated/damaged tag handling", () => {
     expect(result).toContain("{player:name}");
     expect(result).not.toContain("{لاعب:اسم}");
   });
+
+  it("pulls Arabic text out of hybrid corrupted ML icon tags", () => {
+    const original = "While holding [ML:icon icon=btn_zl ]";
+    const translation = "[اثناء الضغط مطوالML:icon icon=btn_zl ]";
+    const result = restoreTagsLocally(original, translation);
+    expect(result).toContain("اثناء الضغط مطوال");
+    expect(result).toContain("[ML:icon icon=btn_zl ]");
+    expect(result).not.toContain("[اثناء الضغط مطوالML:icon icon=btn_zl ]");
+  });
+
+  it("restores ML:number tags when the opening bracket is lost into Arabic text", () => {
+    const original = "Stage [ML:number digit=2 ]";
+    const translation = "مرحلةML:number digit=2 ]";
+    const result = restoreTagsLocally(original, translation);
+    expect(result).toContain("مرحلة");
+    expect(result).toContain("[ML:number digit=2 ]");
+    expect(result).not.toContain("مرحلةML:number digit=2 ]");
+  });
 });

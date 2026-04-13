@@ -492,25 +492,39 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const orig = entryOriginals.get(key);
           if (!orig) continue;
 
+          // After Arabic processing (reshaping + BiDi), only control chars (U+FFF9-FFFC)
+          // and PUA chars (U+E000-E0FF) survive unchanged. Bracket tags like [Tag:Value]
+          // and \[Word\] get distorted by BiDi reversal, so comparing full tag multisets
+          // here causes false positives that revert valid translations to English.
+          // FIX: Only check control/PUA char integrity at this stage.
+          const origCC = (orig.match(RE_CONTROL_BUILD) || []).length;
+          const transCC = (trans.match(RE_CONTROL_BUILD) || []).length;
+          const origPUA = (orig.match(RE_PUA_BUILD) || []).length;
+          const transPUA = (trans.match(RE_PUA_BUILD) || []).length;
+          const ccBroken = origCC > 0 && transCC !== origCC;
+          const puaBroken = origPUA > 0 && transPUA !== origPUA;
+          if (!ccBroken && !puaBroken) continue; // tags are fine after Arabic processing
+
+          // Try smart repair
           const tagRepair = repairTranslationTagsForBuild(orig, trans);
           if (tagRepair.changed) {
             nonEmptyTranslations[key] = tagRepair.text;
             finalTagRepairCount++;
-          }
-
-          // If tags are still broken after repair, revert to original instead of deleting
-          if (!tagRepair.exactTagMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
+            // Re-check after repair
+            const fixedCC = (tagRepair.text.match(RE_CONTROL_BUILD) || []).length;
+            const fixedPUA = (tagRepair.text.match(RE_PUA_BUILD) || []).length;
+            if ((origCC > 0 && fixedCC !== origCC) || (origPUA > 0 && fixedPUA !== origPUA)) {
+              nonEmptyTranslations[key] = orig;
+              finalTagRevertCount++;
+              repairLog.push({ key, label: entryLabels.get(key) || key, action: 'reverted',
+                reason: 'رموز تحكم/خاصة مفقودة بعد الإصلاح', missingControl: origCC - fixedCC, missingPua: origPUA - fixedPUA });
+            }
+          } else {
             nonEmptyTranslations[key] = orig;
             finalTagRevertCount++;
-            const entryLabel = entryLabels.get(key) || key;
-            repairLog.push({
-              key,
-              label: entryLabel,
-              action: 'reverted',
-              reason: !tagRepair.exactTagMatch ? 'وسوم تقنية غير مطابقة' : tagRepair.missingClosingTags ? 'وسوم إغلاق مفقودة' : 'رموز تحكم مفقودة',
-              missingControl: tagRepair.missingControlOrPua ? 1 : 0,
-              missingPua: 0,
-            });
+            repairLog.push({ key, label: entryLabels.get(key) || key, action: 'reverted',
+              reason: ccBroken ? 'رموز تحكم مفقودة' : 'رموز خاصة مفقودة',
+              missingControl: ccBroken ? origCC - transCC : 0, missingPua: puaBroken ? origPUA - transPUA : 0 });
           }
         }
 

@@ -272,7 +272,6 @@ export function detectIssues(entry: ExtractedEntry, translation: string): Diagno
 
     // 17b. Missing $N completely
     const transDollarVars = getMatches(trimmed, RE_ORIG_DOLLAR_VARS);
-    const missingVars = origDollarVars.filter(v => !transDollarVars.includes(v) && !corruptedMatches.length);
     // If there are corrupted matches, skip missing check (corrupted_vars covers it)
     if (corruptedMatches.length === 0) {
       const allMissing = origDollarVars.filter(v => !transDollarVars.includes(v));

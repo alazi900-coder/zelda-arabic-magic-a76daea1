@@ -539,6 +539,24 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 300));
         }
 
+        // === Build Summary Log ===
+        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount;
+        const totalRepairedAll = repairedCount + finalTagRepairCount;
+        const keptCount = nonEmptyCount - totalRevertedAll;
+        console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
+        console.log(`%c[BUILD-LOG] 📊 ملخص البناء`, 'color: #6366f1; font-weight: bold');
+        console.log(`[BUILD-LOG]  ├─ إجمالي الترجمات: ${nonEmptyCount}`);
+        console.log(`[BUILD-LOG]  ├─ ✅ تم الحفاظ عليها: ${keptCount}`);
+        console.log(`[BUILD-LOG]  ├─ 🔧 تم إصلاحها: ${totalRepairedAll} (رموز: ${repairedCount}, وسوم: ${finalTagRepairCount})`);
+        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, جداول محمية: ${protectedRevertCount})`);
+        if (autoProcessedCountBin > 0) console.log(`[BUILD-LOG]  ├─ 🔤 معالجة عربية تلقائية: ${autoProcessedCountBin}`);
+        if (truncatedCount > 0) console.log(`[BUILD-LOG]  ├─ ✂️ تم تقليصها: ${truncatedCount}`);
+        if (strippedNewlineCount > 0) console.log(`[BUILD-LOG]  ├─ 🫧 إزالة أسطر فقاعية: ${strippedNewlineCount}`);
+        console.log(`[BUILD-LOG]  └─ نسبة النجاح: ${nonEmptyCount > 0 ? Math.round((keptCount / nonEmptyCount) * 100) : 0}%`);
+        console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
+        setBuildProgress(`📊 ملخص: ${keptCount} ترجمة محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
+        await new Promise(r => setTimeout(r, 500));
+
         // Pre-scan: build per-file index of translations for O(1) lookup
       const perFileTranslations = new Map<string, Map<string, string>>();
       const perFileLegacy = new Map<string, Map<string, string>>();

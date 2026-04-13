@@ -576,7 +576,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                             onClick={handleLocalFixAll}
                           >
                             <Wrench className="w-3 h-3 ml-1" />
-                            إصلاح الكل محلياً
+                            {activeFilter && RESTORE_ORIGINAL_CATEGORIES.has(activeFilter)
+                              ? `↩️ استعادة الأصل (${activeFilterKeys.size})`
+                              : activeFilter === "invisible_chars"
+                              ? `🧹 تنظيف (${activeFilterKeys.size})`
+                              : `🔧 إصلاح الكل محلياً (${activeFilterKeys.size})`
+                            }
                           </Button>
                         )}
                         <Button

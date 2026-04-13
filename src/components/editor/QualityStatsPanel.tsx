@@ -5,13 +5,14 @@ import { Progress } from "@/components/ui/progress";
 import { BarChart3, Filter, Wrench } from "lucide-react";
 
 interface QualityStatsPanelProps {
-  qualityStats: { tooLong: number; nearLimit: number; missingTags: number; placeholderMismatch: number; total: number; problemKeys: Set<string>; damagedTags: number; damagedTagKeys: Set<string> };
+  qualityStats: { tooLong: number; nearLimit: number; missingTags: number; placeholderMismatch: number; total: number; problemKeys: Set<string>; damagedTags: number; damagedTagKeys: Set<string>; missingTagKeys: Set<string> };
   needsImproveCount: { total: number; tooShort: number; tooLong: number; stuck: number; mixed: number };
   translatedCount: number;
   setFilterStatus: (status: any) => void;
   setShowQualityStats: (show: boolean) => void;
   onFixDamagedTags?: () => void;
   onFilterMissingTags?: () => void;
+  onFixMissingTags?: () => void;
 }
 
 const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, needsImproveCount, translatedCount, setFilterStatus, setShowQualityStats, onFixDamagedTags, onFilterMissingTags }) => {

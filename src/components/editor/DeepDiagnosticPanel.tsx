@@ -136,7 +136,63 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     }
   }
 
-  // 5. Tag mismatch [System:...] etc
+  // 5. NULL character inside text (CRITICAL - truncates string, freezes engine)
+  if (RE_NULL_CHAR.test(trimmed)) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "null_char",
+      message: "يحتوي رمز NULL (\\0) — يقطع النص ويسبب تجمّد المحرك",
+    });
+  }
+
+  // 6. Unmatched Ruby tags (CRITICAL - hangs message parser)
+  const rubyOpens = countMatches(trimmed, RE_RUBY_OPEN);
+  const rubyCloses = countMatches(trimmed, RE_RUBY_CLOSE);
+  if (rubyOpens !== rubyCloses) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "unmatched_ruby",
+      message: `${rubyOpens} فتح [System:Ruby] مقابل ${rubyCloses} إغلاق [/System:Ruby] — غير متطابقة`,
+    });
+  }
+
+  // 7. Broken bracket syntax (CRITICAL - parser hang)
+  const bracketOpens = countMatches(trimmed, RE_BRACKET_OPEN);
+  const bracketCloses = countMatches(trimmed, RE_BRACKET_CLOSE);
+  if (bracketOpens !== bracketCloses) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "broken_tag_syntax",
+      message: `${bracketOpens} قوس '[' مقابل ${bracketCloses} قوس ']' — أقواس غير متوازنة`,
+    });
+  }
+
+  // 8. Extra control characters (more than original - confuses engine)
+  if (transControl > origControl && origControl > 0) {
+    issues.push({
+      ...base,
+      severity: "critical",
+      category: "control_extra",
+      message: `${transControl - origControl} رمز تحكم زائد (${transControl} في الترجمة مقابل ${origControl} في الأصل)`,
+    });
+  }
+
+  // 9. Invisible/suspicious Unicode characters
+  const invisibleMatches = getMatches(trimmed, RE_INVISIBLE);
+  if (invisibleMatches.length > 0) {
+    const codepoints = invisibleMatches.slice(0, 5).map(c => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`);
+    issues.push({
+      ...base,
+      severity: "warning",
+      category: "invisible_chars",
+      message: `${invisibleMatches.length} حرف غير مرئي: ${codepoints.join(', ')}${invisibleMatches.length > 5 ? '...' : ''}`,
+    });
+  }
+
+  // 5 (orig). Tag mismatch [System:...] etc
   const origTags = getMatches(entry.original, RE_TAG);
   if (origTags.length > 0) {
     const missingTags = origTags.filter(t => !trimmed.includes(t));
@@ -150,7 +206,7 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     }
   }
 
-  // 6. Placeholder mismatch
+  // 6 (orig). Placeholder mismatch
   const origPh = countMatches(entry.original, RE_PLACEHOLDER);
   const transPh = countMatches(trimmed, RE_PLACEHOLDER);
   if (origPh > 0 && origPh !== transPh) {
@@ -162,7 +218,19 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     });
   }
 
-  // 7. Empty/whitespace only
+  // 10. Newline count mismatch (warning)
+  const origNewlines = (entry.original.match(/\n/g) || []).length;
+  const transNewlines = (trimmed.match(/\n/g) || []).length;
+  if (origNewlines > 0 && Math.abs(transNewlines - origNewlines) >= 2) {
+    issues.push({
+      ...base,
+      severity: "warning",
+      category: "newline_mismatch",
+      message: `${origNewlines} سطر في الأصل مقابل ${transNewlines} في الترجمة (فرق ${Math.abs(transNewlines - origNewlines)})`,
+    });
+  }
+
+  // 7 (orig). Empty/whitespace only
   if (translation.length > 0 && trimmed.length === 0) {
     issues.push({
       ...base,
@@ -172,7 +240,7 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
     });
   }
 
-  // 8. Identical to original (info)
+  // 8 (orig). Identical to original (info)
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
     issues.push({
       ...base,

@@ -2,17 +2,20 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BarChart3, Filter } from "lucide-react";
+import { BarChart3, Filter, Wrench } from "lucide-react";
 
 interface QualityStatsPanelProps {
-  qualityStats: { tooLong: number; nearLimit: number; missingTags: number; placeholderMismatch: number; total: number; problemKeys: Set<string>; damagedTags: number; damagedTagKeys: Set<string> };
+  qualityStats: { tooLong: number; nearLimit: number; missingTags: number; placeholderMismatch: number; total: number; problemKeys: Set<string>; damagedTags: number; damagedTagKeys: Set<string>; missingTagKeys: Set<string> };
   needsImproveCount: { total: number; tooShort: number; tooLong: number; stuck: number; mixed: number };
   translatedCount: number;
   setFilterStatus: (status: any) => void;
   setShowQualityStats: (show: boolean) => void;
+  onFixDamagedTags?: () => void;
+  onFilterMissingTags?: () => void;
+  onFixMissingTags?: () => void;
 }
 
-const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, needsImproveCount, translatedCount, setFilterStatus, setShowQualityStats }) => {
+const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, needsImproveCount, translatedCount, setFilterStatus, setShowQualityStats, onFixDamagedTags, onFilterMissingTags, onFixMissingTags }) => {
   const totalProblems = qualityStats.total + needsImproveCount.total;
 
   return (
@@ -34,6 +37,20 @@ const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, nee
           <div className="p-3 rounded border border-destructive/30 bg-destructive/5 text-center">
             <p className="text-2xl font-display font-bold text-destructive">{qualityStats.missingTags}</p>
             <p className="text-xs text-muted-foreground">Tags مفقودة</p>
+            {qualityStats.missingTags > 0 && (
+              <div className="flex gap-1 mt-1 justify-center">
+                {onFilterMissingTags && (
+                  <Button size="sm" variant="outline" onClick={onFilterMissingTags} className="text-[10px] h-6 px-2">
+                    <Filter className="w-3 h-3" /> عرض
+                  </Button>
+                )}
+                {onFixMissingTags && (
+                  <Button size="sm" variant="outline" onClick={onFixMissingTags} className="text-[10px] h-6 px-2">
+                    <Wrench className="w-3 h-3" /> إصلاح
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
           <div className="p-3 rounded border border-destructive/30 bg-destructive/5 text-center">
             <p className="text-2xl font-display font-bold text-destructive">{qualityStats.placeholderMismatch}</p>
@@ -50,6 +67,11 @@ const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, nee
           <div className="p-3 rounded border border-destructive/30 bg-destructive/5 text-center">
             <p className="text-2xl font-display font-bold text-destructive">{qualityStats.damagedTags}</p>
             <p className="text-xs text-muted-foreground">رموز تالفة</p>
+            {qualityStats.damagedTags > 0 && onFixDamagedTags && (
+              <Button size="sm" variant="outline" onClick={onFixDamagedTags} className="mt-1 text-[10px] h-6 px-2">
+                <Wrench className="w-3 h-3" /> إصلاح
+              </Button>
+            )}
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2">

@@ -11,6 +11,7 @@ export interface QualityStats {
   problemKeys: Set<string>;
   damagedTags: number;
   damagedTagKeys: Set<string>;
+  missingTagKeys: Set<string>;
 }
 
 export interface NeedsImproveCount {
@@ -121,7 +122,7 @@ function computeEntryResult(entry: ExtractedEntry, translation: string, cat: str
 
 export function useEditorQuality({ state }: UseEditorQualityProps) {
   const [categoryProgress, setCategoryProgress] = useState<Record<string, { total: number; translated: number }>>({});
-  const [qualityStats, setQualityStats] = useState<QualityStats>({ tooLong: 0, nearLimit: 0, missingTags: 0, placeholderMismatch: 0, total: 0, problemKeys: new Set<string>(), damagedTags: 0, damagedTagKeys: new Set<string>() });
+  const [qualityStats, setQualityStats] = useState<QualityStats>({ tooLong: 0, nearLimit: 0, missingTags: 0, placeholderMismatch: 0, total: 0, problemKeys: new Set<string>(), damagedTags: 0, damagedTagKeys: new Set<string>(), missingTagKeys: new Set<string>() });
   const [needsImproveCount, setNeedsImproveCount] = useState<NeedsImproveCount>({ total: 0, tooShort: 0, tooLong: 0, stuck: 0, mixed: 0 });
   const [translatedCount, setTranslatedCount] = useState(0);
   const combinedStatsTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -183,6 +184,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
       let translated = 0;
       let damagedTagsCount = 0;
       const damagedTagKeys = new Set<string>();
+      const missingTagKeys = new Set<string>();
 
       let idx = 0;
 
@@ -215,7 +217,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
             translated++;
             if (result.qTooLong) { qTooLong++; problemKeys.add(key); }
             if (result.qNearLimit) { qNearLimit++; problemKeys.add(key); }
-            if (result.qMissingTags) { qMissingTags++; problemKeys.add(key); }
+            if (result.qMissingTags) { qMissingTags++; problemKeys.add(key); missingTagKeys.add(key); }
             if (result.qPlaceholderMismatch) { qPlaceholderMismatch++; problemKeys.add(key); }
             if (result.damagedTags) { damagedTagsCount++; damagedTagKeys.add(key); problemKeys.add(key); }
             if (result.niTooShort) { niTooShort++; needsImproveKeys.add(key); }
@@ -232,7 +234,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           // Done — commit results
           cacheRef.current = newCache;
           setCategoryProgress(progress);
-          setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, damagedTagKeys });
+          setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, damagedTagKeys, missingTagKeys });
           setNeedsImproveCount({ total: needsImproveKeys.size, tooShort: niTooShort, tooLong: niTooLong, stuck: niStuck, mixed: niMixed });
           setTranslatedCount(translated);
         }

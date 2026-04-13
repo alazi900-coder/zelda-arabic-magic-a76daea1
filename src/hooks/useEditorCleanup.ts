@@ -344,43 +344,146 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, lineSyncResults]);
 
-  // === Unified Split ===
+  // === Unified Split (improved) ===
   const handleScanAllSplits = useCallback(() => {
     if (!state) return;
     const results: any[] = [];
     const entriesToScan = isFilterActive ? filteredEntries : state.entries;
-    const processedKeys = new Set<string>();
+    const protectedSet = state.protectedEntries || new Set<string>();
+
     for (const entry of entriesToScan) {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key];
       if (!translation?.trim()) continue;
+
+      // Skip protected entries
+      if (protectedSet.has(key)) continue;
+
       const isNpcFile = NPC_FILE_RE.test(key);
       const isBubbleFile = BUBBLE_FILE_RE.test(key);
       const englishLineCount = entry.original.split('\n').length;
-      const arabicLineCount = translation.split('\n').length;
-      const flat = translation.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      const arabicLines = translation.split('\n');
+      const arabicLineCount = arabicLines.length;
 
-      if (isNpcFile) {
-        let after: string;
-        if (englishLineCount <= 1) after = flat;
-        else after = splitEvenlyByLines(flat, englishLineCount);
-        if (after !== translation) { results.push({ key, originalLines: englishLineCount, translationLines: arabicLineCount, before: translation, after, original: entry.original, status: 'pending' }); processedKeys.add(key); }
+      // Clean up: normalize whitespace, remove empty lines, trim each line
+      const cleanedLines = translation.split('\n').map(l => l.replace(/\s{2,}/g, ' ').trim()).filter(l => l.length > 0);
+      const flat = cleanedLines.join(' ').trim();
+
+      if (!flat) continue;
+
+      // === Bubble files: should have NO newlines (game hides text after \n) ===
+      if (isBubbleFile) {
+        if (translation.includes('\n')) {
+          results.push({ key, originalLines: 1, translationLines: arabicLineCount, before: translation, after: flat, original: entry.original, status: 'pending' });
+        }
         continue;
       }
-      if (englishLineCount !== arabicLineCount && !processedKeys.has(key)) {
-        let after: string;
-        if (englishLineCount <= 1) after = flat;
-        else after = splitEvenlyByLines(flat, englishLineCount);
-        if (after !== translation) { results.push({ key, originalLines: englishLineCount, translationLines: arabicLineCount, before: translation, after, original: entry.original, status: 'pending' }); processedKeys.add(key); }
+
+      let needsSplit = false;
+      let reason = '';
+
+      // Check 1: Line count mismatch with original
+      if (englishLineCount !== arabicLineCount) {
+        needsSplit = true;
+        reason = 'line_count_mismatch';
       }
-      if (!processedKeys.has(key) && !isBubbleFile && !translation.includes('\n') && visualLength(translation) > newlineSplitCharLimit) {
-        const targetLines = Math.max(2, Math.ceil(visualLength(translation) / newlineSplitCharLimit));
-        const after = splitEvenlyByLines(translation, targetLines);
-        if (after !== translation) { results.push({ key, originalLines: after.split('\n').length, translationLines: 1, before: translation, after, original: entry.original, status: 'pending' }); processedKeys.add(key); }
+      // Check 2: Already multi-line but has orphan lines (single word on a line)
+      else if (arabicLineCount > 1) {
+        const hasOrphan = arabicLines.some((line, idx) => {
+          if (arabicLineCount <= 1) return false;
+          const lexical = line.trim().split(/\s+/).filter(w => w.length > 1).length;
+          return lexical <= 1 && line.trim().length > 0;
+        });
+        // Check for imbalanced lines (one line is >2x the length of another)
+        const lineLengths = arabicLines.map(l => visualLength(l.trim()));
+        const maxLen = Math.max(...lineLengths);
+        const minLen = Math.min(...lineLengths.filter(l => l > 0));
+        const isImbalanced = minLen > 0 && maxLen > minLen * 2.5 && maxLen > 15;
+
+        if (hasOrphan || isImbalanced) {
+          needsSplit = true;
+          reason = hasOrphan ? 'orphan_word' : 'imbalanced';
+        }
+      }
+      // Check 3: Single-line text that's too long (non-NPC)
+      else if (!isNpcFile && arabicLineCount === 1 && englishLineCount <= 1 && visualLength(flat) > newlineSplitCharLimit) {
+        needsSplit = true;
+        reason = 'too_long_single';
+      }
+      // Check 4: NPC files — always sync line count and check balance
+      if (isNpcFile && !needsSplit) {
+        // Even if line count matches, check balance quality
+        if (arabicLineCount > 1) {
+          const lineLengths = arabicLines.map(l => visualLength(l.trim()));
+          const maxLen = Math.max(...lineLengths);
+          const minLen = Math.min(...lineLengths.filter(l => l > 0));
+          if (minLen > 0 && maxLen > minLen * 2.5 && maxLen > 15) {
+            needsSplit = true;
+            reason = 'npc_imbalanced';
+          }
+        }
+      }
+
+      if (!needsSplit) continue;
+
+      // Determine target line count
+      let targetLines: number;
+      if (reason === 'too_long_single') {
+        targetLines = Math.max(2, Math.ceil(visualLength(flat) / newlineSplitCharLimit));
+      } else {
+        // Sync with English line count
+        targetLines = englishLineCount;
+      }
+
+      // For single-line originals, flatten the translation
+      let after: string;
+      if (targetLines <= 1) {
+        after = flat;
+      } else {
+        after = splitEvenlyByLines(flat, targetLines);
+      }
+
+      // Ensure tag integrity: if original had technical tags, verify they survive
+      if (hasTechnicalTags(entry.original)) {
+        const origTagCount = (entry.original.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
+        const afterTagCount = (after.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
+        if (afterTagCount < origTagCount) {
+          // Tag was lost during split — try restoring from original
+          after = restoreTagsLocally(entry.original, after);
+        }
+      }
+
+      // Only add if actually changed
+      if (after !== translation) {
+        results.push({
+          key,
+          originalLines: englishLineCount,
+          translationLines: arabicLineCount,
+          before: translation,
+          after,
+          original: entry.original,
+          status: 'pending',
+        });
       }
     }
+
+    // Sort: critical issues first (line count mismatch), then quality improvements
+    results.sort((a: any, b: any) => {
+      const aMismatch = a.originalLines !== a.translationLines ? 0 : 1;
+      const bMismatch = b.originalLines !== b.translationLines ? 0 : 1;
+      return aMismatch - bMismatch;
+    });
+
     setUnifiedSplitResults(results);
-    if (results.length === 0) { setLastSaved("✅ لا توجد نصوص تحتاج تقسيم أو مزامنة"); setTimeout(() => setLastSaved(""), 4000); }
+    if (results.length === 0) {
+      setLastSaved("✅ لا توجد نصوص تحتاج تقسيم أو مزامنة");
+      setTimeout(() => setLastSaved(""), 4000);
+    } else {
+      toast({
+        title: `✂️ وُجدت ${results.length} ترجمة تحتاج تقسيم/مزامنة`,
+        description: `${results.filter((r: any) => r.originalLines !== r.translationLines).length} عدم تطابق أسطر، ${results.filter((r: any) => r.originalLines === r.translationLines).length} تحسين توازن`,
+      });
+    }
   }, [state, isFilterActive, filteredEntries, newlineSplitCharLimit, npcSplitCharLimit, npcMode, npcMaxLines]);
 
   const handleApplyUnifiedSplit = useCallback((key: string) => {

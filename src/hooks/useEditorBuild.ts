@@ -419,12 +419,16 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       }
 
       if (repairedCount > 0 || revertedCount > 0) {
+        setSafetyRepairs(repairLog);
         const parts: string[] = [];
         if (repairedCount > 0) parts.push(`🔧 إصلاح ${repairedCount} ترجمة (حقن رموز مفقودة)`);
         if (revertedCount > 0) parts.push(`↩️ استعادة ${revertedCount} نص أصلي (بنية معقدة)`);
-        setBuildProgress(`🛡️ حماية: ${parts.join(' | ')}`);
+        setBuildProgress(`🛡️ حماية: ${parts.join(' | ')} — اضغط لعرض التقرير`);
+        setShowSafetyReport(true);
         console.warn(`[BUILD-SAFETY] Repaired: ${repairedCount}, Reverted: ${revertedCount}`);
         await new Promise(r => setTimeout(r, 500));
+      } else {
+        setSafetyRepairs([]);
       }
 
       // Pre-scan: build per-file index of translations for O(1) lookup

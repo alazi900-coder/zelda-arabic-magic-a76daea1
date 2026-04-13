@@ -757,9 +757,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
                                     onClick={() => handleFixSingle(issue)}
                                     title={TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح الوسوم" :
+                                           DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح المتغيرات" :
                                            RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "استعادة الأصل" :
                                            issue.category === "invisible_chars" ? "تنظيف" : "إصلاح"}>
                                     {TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🔧" :
+                                     DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "💲" :
                                      RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "↩️" :
                                      issue.category === "invisible_chars" ? "🧹" : "🔧"}
                                   </Button>

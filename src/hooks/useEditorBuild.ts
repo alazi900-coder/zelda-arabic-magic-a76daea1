@@ -658,21 +658,21 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
 
         // === Build Summary Log ===
-        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount + bracketRevertCount;
-        const totalRepairedAll = repairedCount + finalTagRepairCount;
+        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount + bracketRevertCount + brokenBracketRevertCount + nullCharFixCount + dollarVarFixCount;
+        const totalRepairedAll = repairedCount + finalTagRepairCount + brokenBracketFixCount + mixedFormsFixCount + strayLatinFixCount;
         const keptCount = nonEmptyCount - totalRevertedAll;
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
         console.log(`%c[BUILD-LOG] 📊 ملخص البناء`, 'color: #6366f1; font-weight: bold');
         console.log(`[BUILD-LOG]  ├─ إجمالي الترجمات: ${nonEmptyCount}`);
         console.log(`[BUILD-LOG]  ├─ ✅ تم الحفاظ عليها: ${keptCount}`);
-        console.log(`[BUILD-LOG]  ├─ 🔧 تم إصلاحها: ${totalRepairedAll} (رموز: ${repairedCount}, وسوم: ${finalTagRepairCount})`);
-        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, جداول محمية: ${protectedRevertCount}, أقواس تالفة: ${bracketRevertCount})`);
+        console.log(`[BUILD-LOG]  ├─ 🔧 تم إصلاحها: ${totalRepairedAll} (رموز: ${repairedCount}, وسوم: ${finalTagRepairCount}, أقواس: ${brokenBracketFixCount}, مختلط: ${mixedFormsFixCount}, لاتيني: ${strayLatinFixCount})`);
+        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, محمية: ${protectedRevertCount}, BiDi: ${bracketRevertCount}, أقواس: ${brokenBracketRevertCount}, NULL: ${nullCharFixCount}, $N: ${dollarVarFixCount})`);
         if (autoProcessedCountBin > 0) console.log(`[BUILD-LOG]  ├─ 🔤 معالجة عربية تلقائية: ${autoProcessedCountBin}`);
         if (truncatedCount > 0) console.log(`[BUILD-LOG]  ├─ ✂️ تم تقليصها: ${truncatedCount}`);
         if (strippedNewlineCount > 0) console.log(`[BUILD-LOG]  ├─ 🫧 إزالة أسطر فقاعية: ${strippedNewlineCount}`);
         console.log(`[BUILD-LOG]  └─ نسبة النجاح: ${nonEmptyCount > 0 ? Math.round((keptCount / nonEmptyCount) * 100) : 0}%`);
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
-        setBuildProgress(`📊 ملخص: ${keptCount} ترجمة محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
+        setBuildProgress(`📊 ملخص: ${keptCount} محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
         await new Promise(r => setTimeout(r, 500));
 
         // Pre-scan: build per-file index of translations for O(1) lookup

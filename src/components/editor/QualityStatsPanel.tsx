@@ -57,6 +57,11 @@ const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, nee
           <div className="p-3 rounded border border-destructive/30 bg-destructive/5 text-center">
             <p className="text-2xl font-display font-bold text-destructive">{qualityStats.damagedTags}</p>
             <p className="text-xs text-muted-foreground">رموز تالفة</p>
+            {qualityStats.damagedTags > 0 && onFixDamagedTags && (
+              <Button size="sm" variant="outline" onClick={onFixDamagedTags} className="mt-1 text-[10px] h-6 px-2">
+                <Wrench className="w-3 h-3" /> إصلاح
+              </Button>
+            )}
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2">

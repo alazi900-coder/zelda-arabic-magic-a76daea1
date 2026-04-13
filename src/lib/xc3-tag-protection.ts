@@ -35,6 +35,8 @@ const ABBREV_PATTERN = new RegExp(
 const TAG_PATTERNS: RegExp[] = [
   /\[\s*\w+:\w[^\]]*\][^[]*?\[\/\s*\w+:\w[^\]]*\]/g, // Paired tags: [System:Ruby rt=x ]content[/System:Ruby]
   /[\uE000-\uE0FF]+/g,                     // PUA icons (consecutive = atomic block)
+  /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]/g,    // N[Tag:Value] patterns (e.g. 1[XENO:n], 2010[ML:icon icon=copyright])
+  /\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+/g,    // [Tag:Value]N patterns
   /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]/g,          // [Tag:Value] or [/Tag:Value] or \[Tag:Value\]
   /\d+\s*\\?\[[A-Z]{2,10}\\?\]/g,       // N[TAG] patterns BEFORE generic [Word] (e.g. 1[ML])
   /\\?\[[A-Z]{2,10}\\?\]\s*\d+/g,       // [TAG]N patterns BEFORE generic [Word] (e.g. [ML]1)

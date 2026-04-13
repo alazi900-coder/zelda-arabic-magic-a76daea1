@@ -291,24 +291,108 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
-
-      // === Safety gate: smart-repair translations with missing control/PUA characters ===
-      // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
-      // then inject the Arabic translation text into that frame, preserving all technical markers.
-      const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
-      const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
-      const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
-      let repairedCount = 0;
-      let revertedCount = 0;
-      const repairLog: SafetyRepairEntry[] = [];
-
-      // Build lookups from key → original text and key → label
+      // Build lookups from key → original text and key → label (needed by all protections below)
       const entryOriginals = new Map<string, string>();
       const entryLabels = new Map<string, string>();
       for (const entry of currentState.entries) {
         const k = `${entry.msbtFile}:${entry.index}`;
         entryOriginals.set(k, entry.original);
         entryLabels.set(k, entry.label);
+      }
+
+      // === NEW PROTECTION 1: Fix broken/unclosed bracket tags ===
+      // Detect tags like [XENO:wait wait=key  (missing ]) that cause engine freezes
+      let brokenBracketFixCount = 0;
+      let brokenBracketRevertCount = 0;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        const orig = entryOriginals.get(key);
+        if (!orig) continue;
+        const openCount = (trans.match(/\[(?:XENO|System|ML):/g) || []).length;
+        const closedCount = (trans.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
+        if (openCount > closedCount) {
+          let fixed = trans.replace(/(\[(?:XENO|System|ML):[^\]\[]{0,200})(?=\[|$)/g, '$1]');
+          const fixedOpen = (fixed.match(/\[(?:XENO|System|ML):/g) || []).length;
+          const fixedClosed = (fixed.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
+          if (fixedOpen === fixedClosed) {
+            nonEmptyTranslations[key] = fixed;
+            brokenBracketFixCount++;
+          } else {
+            nonEmptyTranslations[key] = orig;
+            brokenBracketRevertCount++;
+          }
+        }
+      }
+      if (brokenBracketFixCount > 0 || brokenBracketRevertCount > 0) {
+        const parts: string[] = [];
+        if (brokenBracketFixCount > 0) parts.push(`🔧 إصلاح ${brokenBracketFixCount} قوس مكسور`);
+        if (brokenBracketRevertCount > 0) parts.push(`↩️ استعادة ${brokenBracketRevertCount} نص (أقواس غير قابلة للإصلاح)`);
+        setBuildProgress(`🔒 ${parts.join(' | ')}...`);
+        console.warn(`[BUILD-SAFETY] Broken brackets: fixed=${brokenBracketFixCount}, reverted=${brokenBracketRevertCount}`);
+        await new Promise(r => setTimeout(r, 400));
+      }
+
+      // === NEW PROTECTION 2: Fix MIXED_FORMS (partially processed Arabic) ===
+      const RAW_ARABIC_RE = /[\u0621-\u064A]/;
+      const PRES_FORMS_RE = /[\uFB50-\uFDFF\uFE70-\uFEFF]/;
+      let mixedFormsFixCount = 0;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (!RAW_ARABIC_RE.test(trans) || !PRES_FORMS_RE.test(trans)) continue;
+        const { reverseBidi: revBidi, removeArabicPresentationForms: removePF } = await import("@/lib/arabic-processing");
+        const rawText = removePF(revBidi(trans));
+        nonEmptyTranslations[key] = processArabicText(rawText, { arabicNumerals, mirrorPunct: mirrorPunctuation });
+        mixedFormsFixCount++;
+      }
+      if (mixedFormsFixCount > 0) {
+        setBuildProgress(`🔄 إعادة معالجة ${mixedFormsFixCount} نص عربي بمعالجة ناقصة...`);
+        console.warn(`[BUILD-SAFETY] Re-processed ${mixedFormsFixCount} MIXED_FORMS entries`);
+        await new Promise(r => setTimeout(r, 400));
+      }
+
+      // === NEW PROTECTION 3: Remove stray Latin characters in Arabic text ===
+      let strayLatinFixCount = 0;
+      const STRAY_LATIN_RE = /(?<=[^\x00-\x7F])([a-zA-Z])(?=[^\x00-\x7F])/g;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (!hasArabicCharsProcessing(trans)) continue;
+        const cleaned = trans.replace(STRAY_LATIN_RE, '');
+        if (cleaned !== trans) {
+          nonEmptyTranslations[key] = cleaned;
+          strayLatinFixCount++;
+        }
+      }
+      if (strayLatinFixCount > 0) {
+        setBuildProgress(`🧹 إزالة أحرف لاتينية شاردة من ${strayLatinFixCount} نص...`);
+        console.warn(`[BUILD-SAFETY] Removed stray Latin chars from ${strayLatinFixCount} entries`);
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      // === NEW PROTECTION 4: Revert entries with NULL characters ===
+      let nullCharFixCount = 0;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (trans.includes('\x00')) {
+          const orig = entryOriginals.get(key);
+          if (orig) { nonEmptyTranslations[key] = orig; nullCharFixCount++; }
+        }
+      }
+      if (nullCharFixCount > 0) {
+        setBuildProgress(`⛔ استعادة ${nullCharFixCount} نص يحتوي على رموز NULL...`);
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      // === NEW PROTECTION 5: Revert entries with missing $N variables ===
+      let dollarVarFixCount = 0;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        const orig = entryOriginals.get(key);
+        if (!orig) continue;
+        const origVars = orig.match(/\$\d+/g);
+        if (!origVars || origVars.length === 0) continue;
+        if (origVars.some(v => !trans.includes(v))) {
+          nonEmptyTranslations[key] = orig;
+          dollarVarFixCount++;
+        }
+      }
+      if (dollarVarFixCount > 0) {
+        setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N مفقودة...`);
+        await new Promise(r => setTimeout(r, 300));
       }
 
       // === Post-BiDi bracket tag validation ===
@@ -366,6 +450,14 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         console.warn(`[BUILD-SAFETY] Protected ${protectedRevertCount} technical table entries from translation`);
         await new Promise(r => setTimeout(r, 400));
       }
+
+      // === Safety gate: smart-repair translations with missing control/PUA characters ===
+      const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
+      const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
+      const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
+      let repairedCount = 0;
+      let revertedCount = 0;
+      const repairLog: SafetyRepairEntry[] = [];
 
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         const orig = entryOriginals.get(key);
@@ -566,21 +658,21 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
 
         // === Build Summary Log ===
-        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount + bracketRevertCount;
-        const totalRepairedAll = repairedCount + finalTagRepairCount;
+        const totalRevertedAll = revertedCount + finalTagRevertCount + protectedRevertCount + bracketRevertCount + brokenBracketRevertCount + nullCharFixCount + dollarVarFixCount;
+        const totalRepairedAll = repairedCount + finalTagRepairCount + brokenBracketFixCount + mixedFormsFixCount + strayLatinFixCount;
         const keptCount = nonEmptyCount - totalRevertedAll;
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
         console.log(`%c[BUILD-LOG] 📊 ملخص البناء`, 'color: #6366f1; font-weight: bold');
         console.log(`[BUILD-LOG]  ├─ إجمالي الترجمات: ${nonEmptyCount}`);
         console.log(`[BUILD-LOG]  ├─ ✅ تم الحفاظ عليها: ${keptCount}`);
-        console.log(`[BUILD-LOG]  ├─ 🔧 تم إصلاحها: ${totalRepairedAll} (رموز: ${repairedCount}, وسوم: ${finalTagRepairCount})`);
-        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, جداول محمية: ${protectedRevertCount}, أقواس تالفة: ${bracketRevertCount})`);
+        console.log(`[BUILD-LOG]  ├─ 🔧 تم إصلاحها: ${totalRepairedAll} (رموز: ${repairedCount}, وسوم: ${finalTagRepairCount}, أقواس: ${brokenBracketFixCount}, مختلط: ${mixedFormsFixCount}, لاتيني: ${strayLatinFixCount})`);
+        console.log(`[BUILD-LOG]  ├─ ↩️ أُرجعت للأصل: ${totalRevertedAll} (رموز: ${revertedCount}, وسوم: ${finalTagRevertCount}, محمية: ${protectedRevertCount}, BiDi: ${bracketRevertCount}, أقواس: ${brokenBracketRevertCount}, NULL: ${nullCharFixCount}, $N: ${dollarVarFixCount})`);
         if (autoProcessedCountBin > 0) console.log(`[BUILD-LOG]  ├─ 🔤 معالجة عربية تلقائية: ${autoProcessedCountBin}`);
         if (truncatedCount > 0) console.log(`[BUILD-LOG]  ├─ ✂️ تم تقليصها: ${truncatedCount}`);
         if (strippedNewlineCount > 0) console.log(`[BUILD-LOG]  ├─ 🫧 إزالة أسطر فقاعية: ${strippedNewlineCount}`);
         console.log(`[BUILD-LOG]  └─ نسبة النجاح: ${nonEmptyCount > 0 ? Math.round((keptCount / nonEmptyCount) * 100) : 0}%`);
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
-        setBuildProgress(`📊 ملخص: ${keptCount} ترجمة محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
+        setBuildProgress(`📊 ملخص: ${keptCount} محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
         await new Promise(r => setTimeout(r, 500));
 
         // Pre-scan: build per-file index of translations for O(1) lookup

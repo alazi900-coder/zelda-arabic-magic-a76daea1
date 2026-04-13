@@ -59,7 +59,7 @@ const CATEGORIES: DiagnosticCategory[] = [
 
 const RE_CONTROL = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
 const RE_PUA = /[\uE000-\uE0FF]/g;
-const RE_TAG = /\[[^\]]*\]/g;
+const RE_TAG = /\\?\[[^\]]*\\?\]/g;
 const RE_PLACEHOLDER = /\uFFFC/g;
 const RE_PRESENTATION_B = /[\uFE70-\uFEFF]/;
 const RE_PRESENTATION_A = /[\uFB50-\uFDFF]/;

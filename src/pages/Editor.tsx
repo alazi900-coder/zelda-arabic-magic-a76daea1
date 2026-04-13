@@ -52,6 +52,7 @@ import FileLoadReport from "@/components/editor/FileLoadReport";
 import IntegrityCheckDialog from "@/components/editor/IntegrityCheckDialog";
 import PreBuildDiagnostic from "@/components/editor/PreBuildDiagnostic";
 import CompareEnginesDialog from "@/components/editor/CompareEnginesDialog";
+import SafetyRepairReport from "@/components/editor/SafetyRepairReport";
 
 import NewlineCleanPanel from "@/components/editor/NewlineCleanPanel";
 import DiacriticsCleanPanel from "@/components/editor/DiacriticsCleanPanel";
@@ -2033,6 +2034,26 @@ const Editor = () => {
         </AlertDialog>
 
         <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
+        <SafetyRepairReport
+          open={editor.showSafetyReport}
+          onOpenChange={editor.setShowSafetyReport}
+          repairs={editor.safetyRepairs}
+          onNavigateToEntry={(key) => {
+            editor.setFilterStatus('all');
+            editor.setSearch('');
+            setTimeout(() => {
+              const idx = editor.state.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key);
+              if (idx >= 0) {
+                const page = Math.floor(idx / 50);
+                editor.setCurrentPage(page);
+                setTimeout(() => {
+                  const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }
+            }, 50);
+          }}
+        />
         <IntegrityCheckDialog
           open={editor.showIntegrityDialog}
           onOpenChange={editor.setShowIntegrityDialog}

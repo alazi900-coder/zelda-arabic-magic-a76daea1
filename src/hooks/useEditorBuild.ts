@@ -27,6 +27,15 @@ export interface BdatFileStat {
   hasError?: boolean;
 }
 
+export interface SafetyRepairEntry {
+  key: string;
+  label: string;
+  action: 'repaired' | 'reverted';
+  reason: string;
+  missingControl: number;
+  missingPua: number;
+}
+
 interface UseEditorBuildProps {
   state: EditorState | null;
   setState: React.Dispatch<React.SetStateAction<EditorState | null>>;
@@ -52,7 +61,8 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
   const [integrityResult, setIntegrityResult] = useState<IntegrityCheckResult | null>(null);
   const [showIntegrityDialog, setShowIntegrityDialog] = useState(false);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
-
+  const [safetyRepairs, setSafetyRepairs] = useState<SafetyRepairEntry[]>([]);
+  const [showSafetyReport, setShowSafetyReport] = useState(false);
 
   const handleApplyArabicProcessing = () => {
     const currentState = stateRef.current;
@@ -288,12 +298,15 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
       let repairedCount = 0;
       let revertedCount = 0;
+      const repairLog: SafetyRepairEntry[] = [];
 
-      // Build a lookup from key → original text
+      // Build lookups from key → original text and key → label
       const entryOriginals = new Map<string, string>();
+      const entryLabels = new Map<string, string>();
       for (const entry of currentState.entries) {
         const k = `${entry.msbtFile}:${entry.index}`;
         entryOriginals.set(k, entry.original);
+        entryLabels.set(k, entry.label);
       }
 
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
@@ -307,8 +320,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
         const controlMissing = origControlChars.length > 0 && transControlChars.length < origControlChars.length;
         const puaMissing = origPuaChars.length > 0 && transPuaChars.length < origPuaChars.length;
+        const missingControlN = controlMissing ? origControlChars.length - transControlChars.length : 0;
+        const missingPuaN = puaMissing ? origPuaChars.length - transPuaChars.length : 0;
 
         if (!controlMissing && !puaMissing) continue;
+        const entryLabel = entryLabels.get(key) || key;
 
         // Smart repair: use original as structural template, inject translated content
         // Split original by special chars to get the "frame"
@@ -326,6 +342,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           // No real text in translation — revert to original
           nonEmptyTranslations[key] = orig;
           revertedCount++;
+          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'ترجمة فارغة بعد إزالة الرموز', missingControl: missingControlN, missingPua: missingPuaN });
           continue;
         }
 
@@ -361,6 +378,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             // Simple case: just prefix + translated text + suffix
             nonEmptyTranslations[key] = prefix + pureTransText + suffix;
             repairedCount++;
+            repairLog.push({ key, label: entryLabel, action: 'repaired', reason: 'حقن رموز في بداية/نهاية النص', missingControl: missingControlN, missingPua: missingPuaN });
           } else {
             // Has inline specials — try to distribute them proportionally in the translated text
             // Split translated text roughly into same number of segments
@@ -390,21 +408,27 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             rebuilt += suffix;
             nonEmptyTranslations[key] = rebuilt;
             repairedCount++;
+            repairLog.push({ key, label: entryLabel, action: 'repaired', reason: 'توزيع رموز داخلية في النص', missingControl: missingControlN, missingPua: missingPuaN });
           }
         } else {
           // Complex/unexpected structure — fall back to original for safety
           nonEmptyTranslations[key] = orig;
           revertedCount++;
+          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'بنية رموز معقدة لا يمكن إصلاحها', missingControl: missingControlN, missingPua: missingPuaN });
         }
       }
 
       if (repairedCount > 0 || revertedCount > 0) {
+        setSafetyRepairs(repairLog);
         const parts: string[] = [];
         if (repairedCount > 0) parts.push(`🔧 إصلاح ${repairedCount} ترجمة (حقن رموز مفقودة)`);
         if (revertedCount > 0) parts.push(`↩️ استعادة ${revertedCount} نص أصلي (بنية معقدة)`);
-        setBuildProgress(`🛡️ حماية: ${parts.join(' | ')}`);
+        setBuildProgress(`🛡️ حماية: ${parts.join(' | ')} — اضغط لعرض التقرير`);
+        setShowSafetyReport(true);
         console.warn(`[BUILD-SAFETY] Repaired: ${repairedCount}, Reverted: ${revertedCount}`);
         await new Promise(r => setTimeout(r, 500));
+      } else {
+        setSafetyRepairs([]);
       }
 
       // Pre-scan: build per-file index of translations for O(1) lookup
@@ -899,6 +923,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
     showBuildConfirm,
     setShowBuildConfirm,
     bdatFileStats,
+    safetyRepairs,
+    showSafetyReport,
+    setShowSafetyReport,
     integrityResult,
     showIntegrityDialog,
     setShowIntegrityDialog,

@@ -8,6 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
+import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 
 // ═══════════════════════════════════════════════════
 // Types
@@ -260,7 +261,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [issues, setIssues] = useState<DiagnosticIssue[]>([]);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null); 
+  const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const latestStateRef = useRef(state);
 
   // Build entry lookup map for O(1) access
@@ -321,6 +323,39 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       toast({ title: "🔍 تصفية", description: `عرض ${keys.size} نص في المحرر` });
     }
   }, [issues, onFilterByKeys]);
+
+  /** Generate debug info for why an issue wasn't auto-fixed */
+  const getFixDebugInfo = useCallback((issue: DiagnosticIssue): { fixResult: string; reason: string } => {
+    const entry = entryMap.get(issue.key);
+    if (!entry) return { fixResult: '', reason: '❌ المدخلة غير موجودة في الخريطة' };
+    const trans = state.translations[issue.key] || '';
+    if (!trans.trim()) return { fixResult: '', reason: '❌ الترجمة فارغة' };
+
+    if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+      const fixed = restoreTagsLocally(entry.original, trans);
+      if (fixed === trans) {
+        return { fixResult: fixed, reason: '⚠️ restoreTagsLocally أعاد نفس النص — لم يكتشف فرقاً' };
+      }
+      // Check if fix would resolve THIS specific issue
+      const fixedIssues = detectIssues(entry, fixed);
+      const stillHas = fixedIssues.some(fi => fi.category === issue.category);
+      if (stillHas) {
+        return { fixResult: fixed, reason: '⚠️ الإصلاح طُبّق لكن المشكلة لا تزال موجودة بعد الإصلاح' };
+      }
+      return { fixResult: fixed, reason: '✅ الإصلاح سيحل المشكلة' };
+    }
+
+    if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
+      return { fixResult: entry.original, reason: '↩️ سيتم استعادة النص الأصلي الإنجليزي' };
+    }
+
+    if (issue.category === 'invisible_chars') {
+      const cleaned = trans.replace(RE_INVISIBLE, '');
+      return { fixResult: cleaned, reason: cleaned !== trans ? '🧹 سيتم إزالة الأحرف غير المرئية' : '⚠️ لم يُعثر على أحرف غير مرئية' };
+    }
+
+    return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
+  }, [entryMap, state.translations]);
 
   /** Fix a single issue */
   const handleFixSingle = useCallback((issue: DiagnosticIssue) => {
@@ -620,6 +655,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                 <p className="text-foreground mt-0.5">{issue.message}</p>
                               </div>
                               <div className="flex gap-1 shrink-0">
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
+                                  onClick={() => setExpandedIssue(expandedIssue === `${issue.key}-${i}` ? null : `${issue.key}-${i}`)}
+                                  title="تفاصيل التشخيص">
+                                  🔬
+                                </Button>
                                 {onNavigateToEntry && (
                                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
                                     onClick={() => onNavigateToEntry(issue.key)} title="انتقل للنص">
@@ -639,6 +679,30 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                 )}
                               </div>
                             </div>
+                            {expandedIssue === `${issue.key}-${i}` && (() => {
+                              const entry = entryMap.get(issue.key);
+                              const trans = state.translations[issue.key] || '';
+                              const debug = getFixDebugInfo(issue);
+                              return (
+                                <div className="mt-2 space-y-1.5 border-t border-border/30 pt-2">
+                                  <div>
+                                    <span className="text-[10px] text-muted-foreground font-bold">الأصل:</span>
+                                    <pre className="text-[10px] bg-muted/30 p-1 rounded mt-0.5 whitespace-pre-wrap break-all font-mono max-h-20 overflow-auto" dir="ltr">{entry?.original || '—'}</pre>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-muted-foreground font-bold">الترجمة الحالية:</span>
+                                    <pre className="text-[10px] bg-muted/30 p-1 rounded mt-0.5 whitespace-pre-wrap break-all font-mono max-h-20 overflow-auto" dir="rtl">{trans || '—'}</pre>
+                                  </div>
+                                  {debug.fixResult && (
+                                    <div>
+                                      <span className="text-[10px] text-muted-foreground font-bold">نتيجة الإصلاح:</span>
+                                      <pre className="text-[10px] bg-secondary/20 p-1 rounded mt-0.5 whitespace-pre-wrap break-all font-mono max-h-20 overflow-auto" dir="rtl">{debug.fixResult}</pre>
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] font-bold">{debug.reason}</p>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ))}
                         {filteredIssues.length > 100 && (

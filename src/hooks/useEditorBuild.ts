@@ -280,11 +280,14 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
-      // === Safety gate: revert translations with missing control/PUA characters ===
+      // === Safety gate: smart-repair translations with missing control/PUA characters ===
+      // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
+      // then inject the Arabic translation text into that frame, preserving all technical markers.
       const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
       const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
+      const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
+      let repairedCount = 0;
       let revertedCount = 0;
-      const revertedKeys: string[] = [];
 
       // Build a lookup from key → original text
       const entryOriginals = new Map<string, string>();
@@ -297,22 +300,110 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const orig = entryOriginals.get(key);
         if (!orig) continue;
 
-        const origControl = (orig.match(RE_CONTROL_BUILD) || []).length;
-        const transControl = (trans.match(RE_CONTROL_BUILD) || []).length;
-        const origPua = (orig.match(RE_PUA_BUILD) || []).length;
-        const transPua = (trans.match(RE_PUA_BUILD) || []).length;
+        const origControlChars = orig.match(RE_CONTROL_BUILD) || [];
+        const transControlChars = trans.match(RE_CONTROL_BUILD) || [];
+        const origPuaChars = orig.match(RE_PUA_BUILD) || [];
+        const transPuaChars = trans.match(RE_PUA_BUILD) || [];
 
-        if ((origControl > 0 && transControl < origControl) || (origPua > 0 && transPua < origPua)) {
-          // Revert to original — safer than injecting broken translation
+        const controlMissing = origControlChars.length > 0 && transControlChars.length < origControlChars.length;
+        const puaMissing = origPuaChars.length > 0 && transPuaChars.length < origPuaChars.length;
+
+        if (!controlMissing && !puaMissing) continue;
+
+        // Smart repair: use original as structural template, inject translated content
+        // Split original by special chars to get the "frame"
+        const origParts = orig.split(RE_SPECIAL);
+        const origSpecials: string[] = [];
+        let m: RegExpExecArray | null;
+        RE_SPECIAL.lastIndex = 0;
+        while ((m = RE_SPECIAL.exec(orig)) !== null) origSpecials.push(m[0]);
+
+        // Strip all special chars from translation to get pure translated text
+        RE_SPECIAL.lastIndex = 0;
+        const pureTransText = trans.replace(RE_SPECIAL, '').trim();
+
+        if (!pureTransText) {
+          // No real text in translation — revert to original
           nonEmptyTranslations[key] = orig;
           revertedCount++;
-          if (revertedKeys.length < 10) revertedKeys.push(key);
+          continue;
+        }
+
+        // If original has simple structure (special chars only at start/end), 
+        // wrap the translation with the same prefix/suffix
+        if (origParts.length === origSpecials.length + 1) {
+          // Reconstruct: origPart[0] may be empty (prefix specials), 
+          // replace the middle text parts with translated text
+          // Strategy: keep prefix specials + translated text + suffix specials
+          let prefix = '';
+          let suffix = '';
+          
+          // Collect leading specials (where original text parts are empty)
+          let leadIdx = 0;
+          while (leadIdx < origParts.length - 1 && origParts[leadIdx].trim() === '') {
+            prefix += origParts[leadIdx] + origSpecials[leadIdx];
+            leadIdx++;
+          }
+          
+          // Collect trailing specials (where original text parts are empty)
+          let trailIdx = origParts.length - 1;
+          const trailParts: string[] = [];
+          while (trailIdx > leadIdx && origParts[trailIdx].trim() === '') {
+            trailParts.unshift(origSpecials[trailIdx - 1] + origParts[trailIdx]);
+            trailIdx--;
+          }
+          suffix = trailParts.join('');
+
+          // Middle specials that are between actual text
+          const middleSpecials = origSpecials.slice(leadIdx, trailIdx);
+          
+          if (middleSpecials.length === 0) {
+            // Simple case: just prefix + translated text + suffix
+            nonEmptyTranslations[key] = prefix + pureTransText + suffix;
+            repairedCount++;
+          } else {
+            // Has inline specials — try to distribute them proportionally in the translated text
+            // Split translated text roughly into same number of segments
+            const segments = middleSpecials.length + 1;
+            const avgLen = Math.ceil(pureTransText.length / segments);
+            let rebuilt = prefix;
+            let pos = 0;
+            for (let s = 0; s < segments; s++) {
+              if (s === segments - 1) {
+                rebuilt += pureTransText.slice(pos);
+              } else {
+                // Find a good break point near avgLen (prefer space)
+                let breakAt = pos + avgLen;
+                if (breakAt >= pureTransText.length) breakAt = pureTransText.length;
+                else {
+                  // Look for nearest space
+                  const spaceAfter = pureTransText.indexOf(' ', breakAt);
+                  const spaceBefore = pureTransText.lastIndexOf(' ', breakAt);
+                  if (spaceAfter !== -1 && spaceAfter - breakAt < 10) breakAt = spaceAfter + 1;
+                  else if (spaceBefore > pos) breakAt = spaceBefore + 1;
+                }
+                rebuilt += pureTransText.slice(pos, breakAt);
+                rebuilt += middleSpecials[s];
+                pos = breakAt;
+              }
+            }
+            rebuilt += suffix;
+            nonEmptyTranslations[key] = rebuilt;
+            repairedCount++;
+          }
+        } else {
+          // Complex/unexpected structure — fall back to original for safety
+          nonEmptyTranslations[key] = orig;
+          revertedCount++;
         }
       }
 
-      if (revertedCount > 0) {
-        setBuildProgress(`🛡️ حماية: استعادة النص الأصلي لـ ${revertedCount} ترجمة تالفة (رموز تحكم مفقودة)...`);
-        console.warn(`[BUILD-SAFETY] Reverted ${revertedCount} translations with missing control/PUA chars:`, revertedKeys);
+      if (repairedCount > 0 || revertedCount > 0) {
+        const parts: string[] = [];
+        if (repairedCount > 0) parts.push(`🔧 إصلاح ${repairedCount} ترجمة (حقن رموز مفقودة)`);
+        if (revertedCount > 0) parts.push(`↩️ استعادة ${revertedCount} نص أصلي (بنية معقدة)`);
+        setBuildProgress(`🛡️ حماية: ${parts.join(' | ')}`);
+        console.warn(`[BUILD-SAFETY] Repaired: ${repairedCount}, Reverted: ${revertedCount}`);
         await new Promise(r => setTimeout(r, 500));
       }
 

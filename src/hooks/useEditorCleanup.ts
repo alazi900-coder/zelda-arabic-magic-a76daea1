@@ -430,6 +430,9 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
       let targetLines: number;
       if (reason === 'too_long_single') {
         targetLines = Math.max(2, Math.ceil(visualLength(flat) / newlineSplitCharLimit));
+      } else if (reason === 'orphan_word' || reason === 'imbalanced' || reason === 'npc_imbalanced') {
+        // Rebalance only: keep the same number of lines, just redistribute words
+        targetLines = arabicLineCount;
       } else {
         // Sync with English line count
         targetLines = englishLineCount;

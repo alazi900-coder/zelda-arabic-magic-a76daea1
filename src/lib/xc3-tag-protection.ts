@@ -35,15 +35,15 @@ const ABBREV_PATTERN = new RegExp(
 const TAG_PATTERNS: RegExp[] = [
   /\[\s*\w+:\w[^\]]*\][^[]*?\[\/\s*\w+:\w[^\]]*\]/g, // Paired tags: [System:Ruby rt=x ]content[/System:Ruby]
   /[\uE000-\uE0FF]+/g,                     // PUA icons (consecutive = atomic block)
-  /\[\s*\/?\s*\w+\s*:[^\]]*?\s*\]/g,                // [Tag:Value] or [/Tag:Value] closing tags
-  /\d+\s*\[[A-Z]{2,10}\]/g,             // N[TAG] patterns (e.g. 1[ML], 1 [ML])
-  /\[[A-Z]{2,10}\]\s*\d+/g,             // [TAG]N patterns (e.g. [ML]1, [ML] 1)
+  /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]/g,          // [Tag:Value] or [/Tag:Value] or \[Tag:Value\] closing tags
+  /\\?\[\s*\w+\s*\\?\]/g,                   // \[Passive\], \[Active\], [XENO] etc.
+  /\d+\s*\\?\[[A-Z]{2,10}\\?\]/g,       // N[TAG] patterns (e.g. 1[ML], 1\[XENO\])
+  /\\?\[[A-Z]{2,10}\\?\]\s*\d+/g,       // [TAG]N patterns (e.g. [ML]1, [XENO]1)
   /\[\s*\w+\s*=\s*\w[^\]]*\]/g,      // [TAG=Value] patterns (e.g. [Color=Red])
   /\{\s*\w+\s*:\s*\w[^}]*\}/g,        // {TAG:Value} patterns (e.g. {player:name})
   /\{[\w]+\}/g,                           // {variable} placeholders
   /[\uFFF9-\uFFFC]/g,                      // Unicode special markers
   /<[\w\/][^>]*>/g,                        // HTML-like tags
-  // Removed: standalone descriptive parentheses - these are translatable content
   ABBREV_PATTERN,                            // Game abbreviations (EXP, CP, SP, etc.)
 ];
 

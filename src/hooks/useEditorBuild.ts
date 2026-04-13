@@ -431,6 +431,29 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         setSafetyRepairs([]);
       }
 
+      // === Auto-truncation: cap translations at 2.5x original byte length ===
+      let truncatedCount = 0;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        const orig = entryOriginals.get(key);
+        if (!orig || orig.length < 10) continue;
+        const origLen = new TextEncoder().encode(orig).length;
+        const transLen = new TextEncoder().encode(trans).length;
+        const maxAllowed = Math.max(origLen * 2.5, 200);
+        if (transLen > maxAllowed) {
+          // Truncate by characters to stay under byte limit
+          let truncated = trans;
+          while (new TextEncoder().encode(truncated).length > maxAllowed && truncated.length > 1) {
+            truncated = truncated.slice(0, Math.floor(truncated.length * 0.9));
+          }
+          nonEmptyTranslations[key] = truncated;
+          truncatedCount++;
+        }
+      }
+      if (truncatedCount > 0) {
+        setBuildProgress(`✂️ تم تقليص ${truncatedCount} نص طويل جداً (أكثر من 2.5x الأصل)...`);
+        await new Promise(r => setTimeout(r, 300));
+      }
+
       // Pre-scan: build per-file index of translations for O(1) lookup
       const perFileTranslations = new Map<string, Map<string, string>>();
       const perFileLegacy = new Map<string, Map<string, string>>();

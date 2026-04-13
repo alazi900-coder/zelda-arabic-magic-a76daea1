@@ -47,6 +47,8 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم [System:...] أو [/...] مفقودة — قد تسبب خلل في العرض" },
   { id: "placeholder_mismatch", label: "عناصر نائبة مفقودة", icon: "⬛", severity: "warning", description: "رموز \uFFFC نائبة مفقودة — قد تسبب خلل في الواجهة" },
   { id: "newline_mismatch", label: "فرق كبير بعدد الأسطر", icon: "📄", severity: "warning", description: "عدد الأسطر في الترجمة يختلف كثيراً عن الأصل — قد يكسر صندوق الحوار" },
+  { id: "byte_budget", label: "تجاوز ميزانية البايتات", icon: "💾", severity: "warning", description: "الترجمة أكبر من ضعف حجم الأصل بالبايتات — قد تستنفد ذاكرة المحرك" },
+  { id: "excessive_lines", label: "أسطر زائدة عن الأصل", icon: "📐", severity: "warning", description: "الترجمة تحتوي أسطر أكثر بكثير من الأصل (+3) — قد تكسر صندوق الحوار" },
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
 ];
@@ -227,6 +229,29 @@ function detectIssues(entry: ExtractedEntry, translation: string): DiagnosticIss
       severity: "warning",
       category: "newline_mismatch",
       message: `${origNewlines} سطر في الأصل مقابل ${transNewlines} في الترجمة (فرق ${Math.abs(transNewlines - origNewlines)})`,
+    });
+  }
+
+  // 11. Byte budget — translation > 200% of original byte size
+  const origBytes = encoder.encode(entry.original).length;
+  const transBytes = encoder.encode(trimmed).length;
+  if (origBytes > 10 && transBytes > origBytes * 2) {
+    const pct = Math.round((transBytes / origBytes) * 100);
+    issues.push({
+      ...base,
+      severity: "warning",
+      category: "byte_budget",
+      message: `${transBytes} بايت مقابل ${origBytes} في الأصل (${pct}%) — قد تستنفد ذاكرة المحرك`,
+    });
+  }
+
+  // 12. Excessive lines — translation has 3+ more lines than original
+  if (transNewlines >= origNewlines + 3) {
+    issues.push({
+      ...base,
+      severity: "warning",
+      category: "excessive_lines",
+      message: `${transNewlines + 1} سطر في الترجمة مقابل ${origNewlines + 1} في الأصل — زيادة ${transNewlines - origNewlines} سطر`,
     });
   }
 

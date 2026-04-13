@@ -487,7 +487,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       }
 
         let finalTagRepairCount = 0;
-        let finalTagSkipCount = 0;
+        let finalTagRevertCount = 0;
         for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
           const orig = entryOriginals.get(key);
           if (!orig) continue;
@@ -498,17 +498,30 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             finalTagRepairCount++;
           }
 
+          // If tags are still broken after repair, revert to original instead of deleting
           if (!tagRepair.exactTagMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
-            delete nonEmptyTranslations[key];
-            finalTagSkipCount++;
+            nonEmptyTranslations[key] = orig;
+            finalTagRevertCount++;
+            const entryLabel = entryLabels.get(key) || key;
+            repairLog.push({
+              key,
+              label: entryLabel,
+              action: 'reverted',
+              reason: !tagRepair.exactTagMatch ? 'وسوم تقنية غير مطابقة' : tagRepair.missingClosingTags ? 'وسوم إغلاق مفقودة' : 'رموز تحكم مفقودة',
+              missingControl: tagRepair.missingControlOrPua ? 1 : 0,
+              missingPua: 0,
+            });
           }
         }
 
-        if (finalTagRepairCount > 0 || finalTagSkipCount > 0) {
+        if (finalTagRepairCount > 0 || finalTagRevertCount > 0) {
+          // Update safety report with any new reverts
+          if (finalTagRevertCount > 0) setSafetyRepairs([...repairLog]);
           const parts: string[] = [];
-          if (finalTagRepairCount > 0) parts.push(`🏷️ إصلاح ${finalTagRepairCount} نص تقني`);
-          if (finalTagSkipCount > 0) parts.push(`🛡️ استبعاد ${finalTagSkipCount} نص غير آمن`);
+          if (finalTagRepairCount > 0) parts.push(`🏷️ إصلاح ${finalTagRepairCount} نص (وسوم + متغيرات $N)`);
+          if (finalTagRevertCount > 0) parts.push(`↩️ استعادة ${finalTagRevertCount} نص أصلي (وسوم غير قابلة للإصلاح)`);
           setBuildProgress(`${parts.join(' | ')} قبل حقن ترجمات BDAT...`);
+          if (finalTagRevertCount > 0) setShowSafetyReport(true);
           await new Promise(r => setTimeout(r, 300));
         }
 

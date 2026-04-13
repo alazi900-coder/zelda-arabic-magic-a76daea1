@@ -8,6 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
+import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 
 // ═══════════════════════════════════════════════════
@@ -290,12 +291,14 @@ interface DeepDiagnosticPanelProps {
 
 // Categories fixable via restoreTagsLocally
 const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", "translated_tags"]);
+// Categories fixable by repairing $N variables
+const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
 const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);

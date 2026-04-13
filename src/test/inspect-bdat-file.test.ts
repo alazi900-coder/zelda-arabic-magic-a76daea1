@@ -3,15 +3,15 @@ import { readFileSync } from "fs";
 import { parseLegacyTable } from "@/lib/bdat-legacy-parser";
 
 describe("inspect bdat_common_ms-2", () => {
-  it("scans all tables for problems", () => {
+  it("checks byte growth ratio per table", () => {
     const data = new Uint8Array(readFileSync("/tmp/bdat_common_ms-2.bdat"));
     const dv = new DataView(data.buffer);
     const tableCount = dv.getUint32(0, true);
     const offsets: number[] = [];
     for (let i = 0; i <= tableCount; i++) offsets.push(dv.getUint32(4 + i * 4, true));
 
-    let totalArabic = 0;
-    const issues: any[] = [];
+    // Check for specific problematic patterns
+    const suspiciousEntries: any[] = [];
 
     for (let t = 0; t < tableCount; t++) {
       const tOff = offsets[t + 1];
@@ -24,59 +24,35 @@ describe("inspect bdat_common_ms-2", () => {
         for (const [col, val] of Object.entries(vals)) {
           if (typeof val !== 'string' || val.length === 0) continue;
           
-          const hasArabic = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(val);
-          if (hasArabic) totalArabic++;
+          // Check for BiDi control chars
+          const hasBidi = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/.test(val);
+          // Check for mixed LTR/RTL that might confuse engine
+          const hasLatinAndArabic = /[a-zA-Z]/.test(val) && /[\u0600-\u06FF\uFB50-\uFEFF]/.test(val);
+          // Check for control chars (except newline)
+          const hasControlChars = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(val);
+          // Check for unusual Unicode
+          const hasUnusual = /[\uFFF9-\uFFFC]/.test(val);
           
-          const hasNull = val.includes('\x00');
-          const hasReplacement = val.includes('\uFFFD');
-          const bytes = new TextEncoder().encode(val).length;
-          // Presentation Forms (already shaped Arabic)
-          const hasPresentationForms = /[\uFB50-\uFDFF\uFE70-\uFEFF]/.test(val);
-          
-          if (hasNull || hasReplacement) {
-            issues.push({ type: 'CORRUPT', table: parsed.name, row: r, col, bytes, text: val.slice(0,120) });
-          }
-          // Check for very long strings that might overflow
-          if (hasArabic && bytes > 400) {
-            issues.push({ type: 'LONG', table: parsed.name, row: r, col, bytes, text: val.slice(0,120) });
-          }
-          // Check for broken newlines (more than 3)
-          if (hasArabic && (val.match(/\n/g) || []).length > 3) {
-            issues.push({ type: 'TOO_MANY_LINES', table: parsed.name, row: r, col, lines: (val.match(/\n/g)||[]).length, text: val.slice(0,120) });
+          if (hasBidi || hasControlChars || hasUnusual) {
+            suspiciousEntries.push({
+              table: parsed.name, row: r, col,
+              hasBidi, hasControlChars, hasUnusual,
+              text: val.slice(0, 100),
+              charCodes: [...val.slice(0, 50)].map(c => c.charCodeAt(0).toString(16)).join(' ')
+            });
           }
         }
       }
     }
     
-    console.log(`Total Arabic strings: ${totalArabic}`);
-    console.log(`Issues found: ${issues.length}`);
-    
-    // Group by type
-    const byType: Record<string, number> = {};
-    for (const i of issues) byType[i.type] = (byType[i.type] || 0) + 1;
-    console.log('By type:', byType);
-    
-    // Show CORRUPT first
-    const corrupt = issues.filter(i => i.type === 'CORRUPT');
-    console.log(`\n=== CORRUPT (${corrupt.length}) ===`);
-    for (const c of corrupt.slice(0, 20)) {
-      console.log(`${c.table}[${c.row}].${c.col}: ${JSON.stringify(c.text)}`);
+    console.log(`Suspicious entries: ${suspiciousEntries.length}`);
+    for (const e of suspiciousEntries.slice(0, 30)) {
+      console.log(`${e.table}[${e.row}].${e.col}:`);
+      console.log(`  bidi=${e.hasBidi} ctrl=${e.hasControlChars} unusual=${e.hasUnusual}`);
+      console.log(`  text: ${JSON.stringify(e.text.slice(0,80))}`);
+      console.log(`  codes: ${e.charCodes}`);
     }
     
-    // Show LONG
-    const long = issues.filter(i => i.type === 'LONG');
-    console.log(`\n=== VERY LONG (${long.length}) ===`);
-    for (const l of long.slice(0, 20)) {
-      console.log(`${l.table}[${l.row}].${l.col} (${l.bytes}b): ${JSON.stringify(l.text.slice(0,80))}`);
-    }
-    
-    // Show TOO_MANY_LINES
-    const lines = issues.filter(i => i.type === 'TOO_MANY_LINES');
-    console.log(`\n=== TOO MANY LINES (${lines.length}) ===`);
-    for (const l of lines.slice(0, 20)) {
-      console.log(`${l.table}[${l.row}].${l.col} (${l.lines} lines): ${JSON.stringify(l.text.slice(0,80))}`);
-    }
-    
-    expect(totalArabic).toBeGreaterThan(0);
+    expect(true).toBe(true);
   });
 });

@@ -184,6 +184,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
       let translated = 0;
       let damagedTagsCount = 0;
       const damagedTagKeys = new Set<string>();
+      const missingTagKeys = new Set<string>();
 
       let idx = 0;
 

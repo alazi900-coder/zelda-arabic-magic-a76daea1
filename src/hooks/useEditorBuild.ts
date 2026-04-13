@@ -575,18 +575,48 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           setBuildProgress(`✅ تمت معالجة ${autoProcessedCountMsbt} نص عربي تلقائياً...`);
           await new Promise(r => setTimeout(r, 800));
         }
-        
-        // Auto-fix damaged tags before build
+
+        // Hard safety gate before server build: repair what يمكن إصلاحه locally, and skip anything still dangerous
+        const closingTagRegex = /\[\s*\/\s*\w+\s*:[^\]]*\]/g;
+        let skippedUnsafeCount = 0;
         for (const entry of currentState.entries) {
-          if (!/[\uFFF9-\uFFFC\uE000-\uE0FF]/.test(entry.original)) continue;
           const key = `${entry.msbtFile}:${entry.index}`;
-          const trans = nonEmptyTranslations[key];
+          let trans = nonEmptyTranslations[key];
           if (!trans) continue;
+
+          const hasNullChar = trans.includes('\x00');
+          const bracketMismatch = ((trans.match(/\[/g) || []).length !== (trans.match(/\]/g) || []).length);
+          const rubyOpenCount = (trans.match(/\[\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
+          const rubyCloseCount = (trans.match(/\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
+
+          if (hasNullChar || bracketMismatch || rubyOpenCount !== rubyCloseCount) {
+            delete nonEmptyTranslations[key];
+            skippedUnsafeCount++;
+            continue;
+          }
+
+          const originalHasTechnical = /[\uFFF9-\uFFFC\uE000-\uE0FF]|\[[^\]]*\]|\{[^}]*\}/.test(entry.original);
+          if (originalHasTechnical) {
+            trans = restoreTagsLocally(entry.original, trans);
+          }
+
+          const origClosingTags = entry.original.match(closingTagRegex) || [];
+          const missingClosingTag = origClosingTags.some(tag => !trans.includes(tag));
           const origTagCount = (entry.original.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
           const transTagCount = (trans.match(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g) || []).length;
-          if (transTagCount < origTagCount) {
-            nonEmptyTranslations[key] = restoreTagsLocally(entry.original, trans);
+
+          if (missingClosingTag || transTagCount < origTagCount) {
+            delete nonEmptyTranslations[key];
+            skippedUnsafeCount++;
+            continue;
           }
+
+          nonEmptyTranslations[key] = trans;
+        }
+
+        if (skippedUnsafeCount > 0) {
+          setBuildProgress(`🛡️ تم استبعاد ${skippedUnsafeCount} نص خطر تلقائياً لحماية اللعبة...`);
+          await new Promise(r => setTimeout(r, 800));
         }
         
         formData.append("translations", JSON.stringify(nonEmptyTranslations));

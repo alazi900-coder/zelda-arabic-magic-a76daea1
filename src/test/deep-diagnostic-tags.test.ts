@@ -41,4 +41,14 @@ describe("Deep diagnostic translated tag deduping", () => {
     expect(categories).toContain("translated_tags");
     expect(categories).not.toContain("tag_mismatch");
   });
+
+  it("detects technical symbol mismatches even when the counts still match", () => {
+    const entry = makeEntry(`رمز \uE001 تقني`.replace("\\uE001", "\uE001"));
+    const issues = detectIssues(entry, `رمز \uE002 تقني`.replace("\\uE002", "\uE002"));
+    const mismatch = issues.find(issue => issue.category === "technical_mismatch");
+
+    expect(mismatch).toBeDefined();
+    expect(mismatch?.message).toContain("U+E001");
+    expect(mismatch?.message).toContain("U+E002");
+  });
 });

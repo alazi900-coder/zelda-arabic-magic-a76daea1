@@ -18,6 +18,8 @@ const TRANSLATED_NUM_TAG_REGEX = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\
 
 /** Regex for {ArabicTag} translated brace tags */
 const TRANSLATED_BRACE_TAG_REGEX = /\{[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\}/g;
+const ARABIC_CHAR_REGEX = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const ARABIC_FRAGMENT_REGEX = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+/g;
 
 /**
  * Extract all technical tag tokens from text (as ordered array of strings).
@@ -26,11 +28,69 @@ function extractTags(text: string): string[] {
   return [...text.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))].map(m => m[0]);
 }
 
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Strip invisible Unicode chars that break tag matching
  */
 function stripInvisible(text: string): string {
   return text.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '');
+}
+
+function extractBracketInner(tag: string): string | null {
+  if (!/^\\?\[/.test(tag) || !/\\?\]$/.test(tag)) return null;
+  return tag.replace(/^\\?\[/, '').replace(/\\?\]$/, '');
+}
+
+function extractArabicFragment(text: string): string {
+  return (text.match(ARABIC_FRAGMENT_REGEX) || []).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Repair hybrid corruptions like:
+ * - [اثناء الضغط مطولاًML:icon icon=btn_zl ]
+ * - مرحلةML:number digit=2 ]
+ * by moving Arabic text outside the tag and restoring the exact original tag.
+ */
+function normalizeCorruptedEmbeddedTags(text: string, origTags: string[]): string {
+  if (origTags.length === 0) return text;
+
+  let result = text;
+
+  for (const tag of origTags) {
+    const inner = extractBracketInner(tag);
+    if (!inner) continue;
+
+    const innerEsc = escapeRegex(inner);
+
+    const wrappedCorruption = new RegExp(`\\\\?\\[([^\\]\\n]{0,120}?)${innerEsc}([^\\]\\n]{0,120}?)\\\\?\\]`, 'g');
+    result = result.replace(wrappedCorruption, (match, before = '', after = '') => {
+      if (match === tag) return match;
+      if (!ARABIC_CHAR_REGEX.test(`${before}${after}`)) return match;
+
+      const prefix = extractArabicFragment(before);
+      const suffix = extractArabicFragment(after);
+      return [prefix, tag, suffix].filter(Boolean).join(' ');
+    });
+
+    const missingOpening = new RegExp(`([\\u0600-\\u06FF\\u0750-\\u077F\\uFB50-\\uFDFF\\uFE70-\\uFEFF\\s]{1,120})${innerEsc}\\\\?\\]`, 'g');
+    result = result.replace(missingOpening, (match, prefix = '') => {
+      const cleanPrefix = extractArabicFragment(prefix);
+      if (!cleanPrefix) return match;
+      return `${cleanPrefix} ${tag}`;
+    });
+
+    const missingClosing = new RegExp(`\\\\?\\[${innerEsc}([\\u0600-\\u06FF\\u0750-\\u077F\\uFB50-\\uFDFF\\uFE70-\\uFEFF\\s]{1,120})`, 'g');
+    result = result.replace(missingClosing, (match, suffix = '') => {
+      const cleanSuffix = extractArabicFragment(suffix);
+      if (!cleanSuffix) return match;
+      return `${tag} ${cleanSuffix}`;
+    });
+  }
+
+  return result.replace(/  +/g, ' ');
 }
 
 /**
@@ -77,8 +137,11 @@ export function restoreTagsLocally(original: string, translation: string): strin
   // Step 2: Fix reversed/mismatched brackets
   const { text: bracketFixed } = fixTagBracketsStrict(original, working);
   working = bracketFixed;
+
+  // Step 3: Pull Arabic text back out of hybrid-corrupted technical tags
+  working = normalizeCorruptedEmbeddedTags(working, origTags);
   
-  // Step 3: Check if tags are now all present after bracket fix
+  // Step 4: Check if tags are now all present after normalization
   let transTags = extractTags(working);
   const origCount = new Map<string, number>();
   for (const t of origTags) origCount.set(t, (origCount.get(t) || 0) + 1);
@@ -104,13 +167,13 @@ export function restoreTagsLocally(original: string, translation: string): strin
     return enforceExactTagMultiset(original, working, origTags, origCount);
   }
 
-  // Step 4: Strip translated tags (Arabic inside brackets) before rebuild
+  // Step 5: Strip translated tags (Arabic inside brackets) before rebuild
   const afterTranslatedStrip = stripTranslatedTags(working, origTags);
   
-  // Step 5: Strip ALL remaining detected tags from translation
+  // Step 6: Strip ALL remaining detected tags from translation
   const cleanTranslation = afterTranslatedStrip.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '').replace(/  +/g, ' ').trim();
 
-  // Step 6: Compute relative positions of each tag in original
+  // Step 7: Compute relative positions of each tag in original
   const origPlain = original.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '');
   const origLength = Math.max(origPlain.length, 1);
 
@@ -132,7 +195,7 @@ export function restoreTagsLocally(original: string, translation: string): strin
     }
   }
 
-  // Step 7: Insert tags into clean translation at proportional positions
+  // Step 8: Insert tags into clean translation at proportional positions
   const transLength = Math.max(cleanTranslation.length, 1);
   
   // Find word boundary positions

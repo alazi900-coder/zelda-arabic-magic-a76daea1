@@ -258,7 +258,16 @@ export function detectIssues(entry: ExtractedEntry, translation: string): Diagno
       message: "الترجمة تحتوي مسافات أو أحرف غير مرئية فقط" });
   }
 
-  // 17. Identical to original
+  // 17. Corrupted $N variables (دولار1, 1.$, etc.)
+  const origDollarVars = getMatches(entry.original, RE_ORIG_DOLLAR_VARS);
+  if (origDollarVars.length > 0) {
+    const corruptedMatches = getMatches(trimmed, RE_CORRUPTED_DOLLAR);
+    if (corruptedMatches.length > 0) {
+      issues.push({ ...base, severity: "critical", category: "corrupted_vars",
+        message: `${corruptedMatches.length} متغير تالف: ${corruptedMatches.slice(0, 3).join('، ')} — يجب أن تكون ${origDollarVars.join('، ')}` });
+    }
+  }
+
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
     issues.push({ ...base, severity: "info", category: "identical_to_original",
       message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });

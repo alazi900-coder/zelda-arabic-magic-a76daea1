@@ -122,7 +122,7 @@ function computeEntryResult(entry: ExtractedEntry, translation: string, cat: str
 
 export function useEditorQuality({ state }: UseEditorQualityProps) {
   const [categoryProgress, setCategoryProgress] = useState<Record<string, { total: number; translated: number }>>({});
-  const [qualityStats, setQualityStats] = useState<QualityStats>({ tooLong: 0, nearLimit: 0, missingTags: 0, placeholderMismatch: 0, total: 0, problemKeys: new Set<string>(), damagedTags: 0, damagedTagKeys: new Set<string>() });
+  const [qualityStats, setQualityStats] = useState<QualityStats>({ tooLong: 0, nearLimit: 0, missingTags: 0, placeholderMismatch: 0, total: 0, problemKeys: new Set<string>(), damagedTags: 0, damagedTagKeys: new Set<string>(), missingTagKeys: new Set<string>() });
   const [needsImproveCount, setNeedsImproveCount] = useState<NeedsImproveCount>({ total: 0, tooShort: 0, tooLong: 0, stuck: 0, mixed: 0 });
   const [translatedCount, setTranslatedCount] = useState(0);
   const combinedStatsTimerRef = useRef<ReturnType<typeof setTimeout>>();

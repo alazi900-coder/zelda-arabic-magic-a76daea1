@@ -291,6 +291,25 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
+      // === Safety gate: smart-repair translations with missing control/PUA characters ===
+      // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
+      // then inject the Arabic translation text into that frame, preserving all technical markers.
+      const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
+      const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
+      const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
+      let repairedCount = 0;
+      let revertedCount = 0;
+      const repairLog: SafetyRepairEntry[] = [];
+
+      // Build lookups from key → original text and key → label
+      const entryOriginals = new Map<string, string>();
+      const entryLabels = new Map<string, string>();
+      for (const entry of currentState.entries) {
+        const k = `${entry.msbtFile}:${entry.index}`;
+        entryOriginals.set(k, entry.original);
+        entryLabels.set(k, entry.label);
+      }
+
       // === Protection: revert translations for technical/measurement BDAT tables ===
       // Tables like MNU_style_standard_ms contain font metrics the engine uses for
       // layout calculations. Translating them causes freezes/crashes.
@@ -301,7 +320,6 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         /^sys_/i,                      // System tables (config, not dialogue)
       ];
 
-      // Additional fine-grained: any label whose table name matches a protected pattern
       let protectedRevertCount = 0;
       for (const [key, _trans] of Object.entries(nonEmptyTranslations)) {
         const label = entryLabels.get(key) || '';
@@ -321,25 +339,6 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         setBuildProgress(`🛡️ حماية: تم استعادة ${protectedRevertCount} نص تقني (جداول قياس/نظام) لمنع تجمد اللعبة`);
         console.warn(`[BUILD-SAFETY] Protected ${protectedRevertCount} technical table entries from translation`);
         await new Promise(r => setTimeout(r, 400));
-      }
-
-      // === Safety gate: smart-repair translations with missing control/PUA characters ===
-      // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
-      // then inject the Arabic translation text into that frame, preserving all technical markers.
-      const RE_CONTROL_BUILD = /[\uFFF9\uFFFA\uFFFB\uFFFC]/g;
-      const RE_PUA_BUILD = /[\uE000-\uE0FF]/g;
-      const RE_SPECIAL = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
-      let repairedCount = 0;
-      let revertedCount = 0;
-      const repairLog: SafetyRepairEntry[] = [];
-
-      // Build lookups from key → original text and key → label
-      const entryOriginals = new Map<string, string>();
-      const entryLabels = new Map<string, string>();
-      for (const entry of currentState.entries) {
-        const k = `${entry.msbtFile}:${entry.index}`;
-        entryOriginals.set(k, entry.original);
-        entryLabels.set(k, entry.label);
       }
 
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {

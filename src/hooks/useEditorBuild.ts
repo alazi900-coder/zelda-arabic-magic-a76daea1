@@ -291,6 +291,30 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
+        // === Post-BiDi bracket tag validation ===
+        // After Arabic processing, bracket tags [Tag:Value] may get corrupted by BiDi reversal.
+        // Verify that all original bracket tags survived intact; revert entries where they didn't.
+        const BRACKET_TAG_RE = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
+        let bracketRevertCount = 0;
+        for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+          const orig = entryOriginals.get(key);
+          if (!orig) continue;
+          const origBracketTags = orig.match(BRACKET_TAG_RE) || [];
+          if (origBracketTags.length === 0) continue;
+          // Check each original bracket tag exists in the processed translation
+          const missingTags = origBracketTags.filter(tag => !trans.includes(tag));
+          if (missingTags.length > 0) {
+            // Bracket tags were corrupted by BiDi — revert to original
+            nonEmptyTranslations[key] = orig;
+            bracketRevertCount++;
+          }
+        }
+        if (bracketRevertCount > 0) {
+          setBuildProgress(`🔒 استعادة ${bracketRevertCount} نص (أقواس تقنية تالفة بعد المعالجة العربية)...`);
+          console.warn(`[BUILD-SAFETY] Reverted ${bracketRevertCount} entries with corrupted bracket tags after Arabic processing`);
+          await new Promise(r => setTimeout(r, 400));
+        }
+
       // === Safety gate: smart-repair translations with missing control/PUA characters ===
       // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
       // then inject the Arabic translation text into that frame, preserving all technical markers.

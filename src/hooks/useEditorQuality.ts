@@ -11,6 +11,7 @@ export interface QualityStats {
   problemKeys: Set<string>;
   damagedTags: number;
   damagedTagKeys: Set<string>;
+  missingTagKeys: Set<string>;
 }
 
 export interface NeedsImproveCount {

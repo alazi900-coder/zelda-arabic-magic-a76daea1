@@ -291,6 +291,38 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await new Promise(r => setTimeout(r, 200));
         }
 
+      // === Protection: revert translations for technical/measurement BDAT tables ===
+      // Tables like MNU_style_standard_ms contain font metrics the engine uses for
+      // layout calculations. Translating them causes freezes/crashes.
+      const PROTECTED_TABLE_PATTERNS = [
+        /^MNU_style_standard_ms$/i,
+        /^MNU_style_\w+_ms$/i,        // All MNU style measurement tables
+        /^MNU_font_/i,                 // Font configuration tables
+        /^sys_/i,                      // System tables (config, not dialogue)
+      ];
+
+      // Additional fine-grained: any label whose table name matches a protected pattern
+      let protectedRevertCount = 0;
+      for (const [key, _trans] of Object.entries(nonEmptyTranslations)) {
+        const label = entryLabels.get(key) || '';
+        // Extract table name from label like "TableName[row].column"
+        const tableMatch = label.match(/^([^\[]+)\[/);
+        if (!tableMatch) continue;
+        const tableName = tableMatch[1];
+        if (PROTECTED_TABLE_PATTERNS.some(p => p.test(tableName))) {
+          const orig = entryOriginals.get(key);
+          if (orig) {
+            nonEmptyTranslations[key] = orig;
+            protectedRevertCount++;
+          }
+        }
+      }
+      if (protectedRevertCount > 0) {
+        setBuildProgress(`🛡️ حماية: تم استعادة ${protectedRevertCount} نص تقني (جداول قياس/نظام) لمنع تجمد اللعبة`);
+        console.warn(`[BUILD-SAFETY] Protected ${protectedRevertCount} technical table entries from translation`);
+        await new Promise(r => setTimeout(r, 400));
+      }
+
       // === Safety gate: smart-repair translations with missing control/PUA characters ===
       // Strategy: extract the structural "frame" (control/PUA chars + positions) from the original,
       // then inject the Arabic translation text into that frame, preserving all technical markers.

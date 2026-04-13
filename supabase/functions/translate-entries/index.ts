@@ -39,15 +39,15 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
 
   const patterns: RegExp[] = [
     /[\uE000-\uE0FF]+/g,                     // PUA icons (consecutive = atomic block)
-    /\[\s*\/?\s*\w+\s*:[^\]]*?\s*\]/g,        // [Tag:Value] and [/Tag:Value]
-    /\d+\s*\[[A-Z]{2,10}\]/g,              // N[TAG] patterns (e.g. 1[ML], 1 [ML])
-    /\[[A-Z]{2,10}\]\s*\d+/g,              // [TAG]N patterns (e.g. [ML]1, [ML] 1)
+    /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]/g, // [Tag:Value] and [/Tag:Value] and \[Tag:Value\]
+    /\\?\[\s*\w+\s*\\?\]/g,                  // \[Passive\], \[Active\], [XENO] etc.
+    /\d+\s*\\?\[[A-Z]{2,10}\\?\]/g,       // N[TAG] patterns (e.g. 1[ML], 1\[XENO\])
+    /\\?\[[A-Z]{2,10}\\?\]\s*\d+/g,       // [TAG]N patterns (e.g. [ML]1, [XENO]1)
     /\[\s*\w+\s*=\s*\w[^\]]*\]/g,       // [TAG=Value] patterns (e.g. [Color=Red])
     /\{\s*\w+\s*:\s*\w[^}]*\}/g,         // {TAG:Value} patterns (e.g. {player:name})
     /\{[\w]+\}/g,                            // {variable} placeholders
     /[\uFFF9-\uFFFC]/g,                       // Unicode special markers
     /<[\w\/][^>]*>/g,                         // HTML-like tags
-    // Removed: standalone descriptive parentheses - these are translatable content
     ABBREV_PATTERN,                             // Game abbreviations
   ];
 
@@ -161,7 +161,7 @@ function restoreAndEnforce(original: string, translated: string, tags: Map<strin
 }
 
 /** Tag shielding: replace technical tags with short placeholders for balanced splitting */
-const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\[\s*\/?\s*\w+\s*:[^\]]*?\s*\]|[\uFFF9-\uFFFC]+/g;
+const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]|\\?\[\s*\w+\s*\\?\]|[\uFFF9-\uFFFC]+/g;
 
 interface ShieldResult {
   shielded: string;
@@ -485,7 +485,7 @@ function fixOrphansPreservingNewlines(text: string): string {
 }
 
 /** Unified regex matching all supported technical tag formats */
-const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\[\s*\/?\s*\w+\s*:[^\]]*?\s*\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\](?:\s*\([^)]{1,100}\))?|\\?\[\s*\w+\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
 
 function extractTechTags(text: string): string[] {
   return [...text.matchAll(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags))].map(m => m[0]);

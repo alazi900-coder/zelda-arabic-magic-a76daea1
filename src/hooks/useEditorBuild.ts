@@ -431,16 +431,16 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         setSafetyRepairs([]);
       }
 
-      // === Auto-truncation: cap translations at 2.5x original byte length ===
+      // === Auto-truncation: cap translations at Nx original byte length ===
+      const truncLimit = (await import('@/lib/bdat-settings')).loadBdatSettings().truncationLimit;
       let truncatedCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         const orig = entryOriginals.get(key);
         if (!orig || orig.length < 10) continue;
         const origLen = new TextEncoder().encode(orig).length;
         const transLen = new TextEncoder().encode(trans).length;
-        const maxAllowed = Math.max(origLen * 2.5, 200);
+        const maxAllowed = Math.max(origLen * truncLimit, 200);
         if (transLen > maxAllowed) {
-          // Truncate by characters to stay under byte limit
           let truncated = trans;
           while (new TextEncoder().encode(truncated).length > maxAllowed && truncated.length > 1) {
             truncated = truncated.slice(0, Math.floor(truncated.length * 0.9));
@@ -450,7 +450,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
       }
       if (truncatedCount > 0) {
-        setBuildProgress(`✂️ تم تقليص ${truncatedCount} نص طويل جداً (أكثر من 2.5x الأصل)...`);
+        setBuildProgress(`✂️ تم تقليص ${truncatedCount} نص طويل جداً (أكثر من ${truncLimit}x الأصل)...`);
         await new Promise(r => setTimeout(r, 300));
       }
 

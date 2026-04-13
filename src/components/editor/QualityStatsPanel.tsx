@@ -2,7 +2,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BarChart3, Filter } from "lucide-react";
+import { BarChart3, Filter, Wrench } from "lucide-react";
 
 interface QualityStatsPanelProps {
   qualityStats: { tooLong: number; nearLimit: number; missingTags: number; placeholderMismatch: number; total: number; problemKeys: Set<string>; damagedTags: number; damagedTagKeys: Set<string> };
@@ -10,6 +10,8 @@ interface QualityStatsPanelProps {
   translatedCount: number;
   setFilterStatus: (status: any) => void;
   setShowQualityStats: (show: boolean) => void;
+  onFixDamagedTags?: () => void;
+  onFilterMissingTags?: () => void;
 }
 
 const QualityStatsPanel: React.FC<QualityStatsPanelProps> = ({ qualityStats, needsImproveCount, translatedCount, setFilterStatus, setShowQualityStats }) => {

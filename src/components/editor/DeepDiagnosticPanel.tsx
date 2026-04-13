@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, XCircle, AlertTriangle, Search, Loader2, Copy, Filter } from "lucide-react";
+import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, XCircle, AlertTriangle, Search, Loader2, Copy, Filter, Wrench } from "lucide-react";
 import { ExtractedEntry, EditorState, hasTechnicalTags } from "@/components/editor/types";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { toast } from "@/hooks/use-toast";
@@ -262,27 +262,36 @@ interface DeepDiagnosticPanelProps {
   onNavigateToEntry?: (key: string) => void;
   onApplyFix?: (key: string, fixedText: string) => void;
   onFilterByKeys?: (keys: Set<string>) => void;
+  onFixSelectedLocally?: (keys: string[]) => void;
 }
 
-export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys }: DeepDiagnosticPanelProps) {
+const LOCAL_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch"]);
+
+export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [issues, setIssues] = useState<DiagnosticIssue[]>([]);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const latestStateRef = useRef(state);
 
-  const runScan = useCallback(() => {
+  useEffect(() => {
+    latestStateRef.current = state;
+  }, [state]);
+
+  const runScan = useCallback((preserveActiveFilter = false) => {
     setScanning(true);
     setScanned(false);
-    setActiveFilter(null);
+    if (!preserveActiveFilter) setActiveFilter(null);
 
     // Use setTimeout to avoid blocking UI
     setTimeout(() => {
+      const currentState = latestStateRef.current;
       const allIssues: DiagnosticIssue[] = [];
-      for (const entry of state.entries) {
+      for (const entry of currentState.entries) {
         const key = `${entry.msbtFile}:${entry.index}`;
-        const translation = state.translations[key];
+        const translation = currentState.translations[key];
         if (!translation) continue;
         const entryIssues = detectIssues(entry, translation);
         allIssues.push(...entryIssues);
@@ -291,7 +300,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       setScanning(false);
       setScanned(true);
     }, 50);
-  }, [state.entries, state.translations]);
+  }, []);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -364,8 +373,29 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     toast({ title: "↩️ استعادة النص الأصلي" });
   }, [state.entries, onApplyFix]);
 
+  const handleLocalFixAll = useCallback(() => {
+    if (!activeFilter || !onFixSelectedLocally || !LOCAL_FIXABLE_CATEGORIES.has(activeFilter)) return;
+    const keys = [...new Set(issues.filter(issue => issue.category === activeFilter).map(issue => issue.key))];
+    if (keys.length === 0) return;
+    onFixSelectedLocally(keys);
+    setTimeout(() => runScan(true), 250);
+  }, [activeFilter, issues, onFixSelectedLocally, runScan]);
+
+  const handleRunScan = useCallback(() => {
+    runScan(false);
+  }, [runScan]);
+
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;
+  const activeFilterKeys = activeFilter
+    ? new Set(issues.filter(issue => issue.category === activeFilter).map(issue => issue.key))
+    : new Set<string>();
+  const canLocalFixActiveFilter = Boolean(
+    activeFilter &&
+    onFixSelectedLocally &&
+    LOCAL_FIXABLE_CATEGORIES.has(activeFilter) &&
+    activeFilterKeys.size > 0
+  );
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -402,7 +432,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={runScan}
+                onClick={handleRunScan}
                 disabled={scanning}
                 className="font-display font-bold"
               >
@@ -453,19 +483,32 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                 {/* Category details */}
                 {activeFilter && (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-muted-foreground">
                         {CATEGORIES.find(c => c.id === activeFilter)?.description}
                       </p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-7"
-                        onClick={() => handleFilterInEditor(activeFilter)}
-                      >
-                        <Filter className="w-3 h-3 ml-1" />
-                        عرض في المحرر
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        {canLocalFixActiveFilter && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="text-xs h-7"
+                            onClick={handleLocalFixAll}
+                          >
+                            <Wrench className="w-3 h-3 ml-1" />
+                            إصلاح الكل محلياً
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7"
+                          onClick={() => handleFilterInEditor(activeFilter)}
+                        >
+                          <Filter className="w-3 h-3 ml-1" />
+                          عرض في المحرر
+                        </Button>
+                      </div>
                     </div>
 
                     <ScrollArea className="max-h-64" dir="rtl">

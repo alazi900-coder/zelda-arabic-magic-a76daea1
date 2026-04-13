@@ -758,6 +758,7 @@ const Editor = () => {
               <DeepDiagnosticPanel
                 state={editor.state}
                 onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
+                onFixSelectedLocally={(keys) => editor.handleLocalFixSelectedTags(keys)}
                 onFilterByKeys={(keys) => {
                   editor.setFilterStatus('problems');
                 }}

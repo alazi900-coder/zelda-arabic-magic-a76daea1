@@ -14,7 +14,10 @@ describe("inspect bdat_common_ms-2", () => {
       const tOff = offsets[t + 1];
       if (tOff >= data.length || tOff < 4) continue;
       let parsed;
-      try { parsed = parseLegacyTable(data, tOff); } catch { continue; }
+      const nextOffset = offsets[t + 2] ?? data.length;
+      const maxExtent = nextOffset > tOff ? nextOffset - tOff : undefined;
+      try { parsed = parseLegacyTable(data, tOff, t, maxExtent); } catch { continue; }
+      if (!parsed) continue;
       
       if (parsed.name === 'MNU_style_standard_ms') {
         console.log(`MNU_style_standard_ms: ${parsed.rows.length} rows`);

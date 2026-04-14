@@ -377,9 +377,13 @@ export function parseBdatFile(data: Uint8Array, unhashFn?: (hash: number) => str
     version = 0;
     fileSize = data.byteLength;
     
+    // Legacy offset table has tableCount + 1 entries:
+    // entries 0..tableCount-1 are table offsets, entry tableCount is the sentinel (= file size)
     allLegacyOffsets = [];
-    for (let t = 0; t < tableCount; t++) {
-      allLegacyOffsets.push(view.getUint32(4 + t * 4, true));
+    for (let t = 0; t <= tableCount; t++) {
+      if (4 + t * 4 + 4 <= data.byteLength) {
+        allLegacyOffsets.push(view.getUint32(4 + t * 4, true));
+      }
     }
     
     tableOffsets = [];
@@ -389,7 +393,7 @@ export function parseBdatFile(data: Uint8Array, unhashFn?: (hash: number) => str
         tableOffsets.push(off);
       }
     }
-    console.log(`[BDAT-PARSER] Legacy format detected: ${tableCount} entries, ${tableOffsets.length} valid tables`);
+    console.log(`[BDAT-PARSER] Legacy format detected: ${tableCount} entries (${allLegacyOffsets.length} offset slots incl. sentinel), ${tableOffsets.length} valid tables`);
   }
 
   const tables: BdatTable[] = [];

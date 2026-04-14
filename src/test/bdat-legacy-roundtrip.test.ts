@@ -212,3 +212,97 @@ describe("Legacy BDAT Integration: Parse → Patch → Verify", () => {
     expect(newStrLen).toBeGreaterThan(origStrLen);
   });
 });
+
+  it("should write correct sentinel entry at end of offset table", () => {
+    // Build a legacy file with 2 tables
+    const buildTable = (name: string, text: string) => {
+      const enc = new TextEncoder();
+      const nameBytes = enc.encode(name);
+      const textBytes = enc.encode(text);
+      const headerSize = 64;
+      const colInfoSize = 4;
+      const colNodeSize = 6;
+      const rowDataOffset = headerSize + colInfoSize + colNodeSize;
+      const rowLength = 4;
+      const rowCount = 1;
+      const hashTableOffset = rowDataOffset + rowLength * rowCount;
+      const nameTableOffset = hashTableOffset;
+      const stringTableOffset = nameTableOffset + nameBytes.length + 1;
+      const stringTableLength = 1 + nameBytes.length + 1 + textBytes.length + 1;
+      const totalSize = stringTableOffset + stringTableLength;
+      const buf = new Uint8Array(totalSize);
+      const v = new DataView(buf.buffer);
+      buf.set([0x42, 0x44, 0x41, 0x54]); // BDAT
+      buf[4] = 0; // flags
+      v.setUint16(0x06, nameTableOffset, true);
+      v.setUint16(0x08, rowLength, true);
+      v.setUint16(0x0A, hashTableOffset, true);
+      v.setUint16(0x0C, 0, true);
+      v.setUint16(0x0E, rowDataOffset, true);
+      v.setUint16(0x10, rowCount, true);
+      v.setUint16(0x12, 0, true);
+      v.setUint16(0x16, 0, true);
+      v.setUint32(0x18, stringTableOffset, true);
+      v.setUint32(0x1C, stringTableLength, true);
+      v.setUint16(0x20, headerSize, true);
+      v.setUint16(0x22, 1, true);
+      // col info (Value, String, offset 0)
+      buf[headerSize] = 1; buf[headerSize + 1] = 7;
+      v.setUint16(headerSize + 2, 0, true);
+      // col node
+      const nodeOff = headerSize;
+      v.setUint16(nodeOff + 4, nameTableOffset, true); // name → table name
+      v.setUint16(headerSize + colInfoSize, headerSize, true); // infoOffset
+      v.setUint16(headerSize + colInfoSize + 2, 0, true); // linked
+      v.setUint16(headerSize + colInfoSize + 4, nameTableOffset, true); // nameOffset → reuse table name
+      // row data: absolute pointer to text string
+      const textAbsOff = stringTableOffset + 1 + nameBytes.length + 1;
+      v.setUint32(rowDataOffset, textAbsOff, true);
+      // name table
+      buf.set(nameBytes, nameTableOffset);
+      buf[nameTableOffset + nameBytes.length] = 0;
+      // string table: flag(0) + name + text
+      buf[stringTableOffset] = 0;
+      buf.set(nameBytes, stringTableOffset + 1);
+      buf[stringTableOffset + 1 + nameBytes.length] = 0;
+      buf.set(textBytes, textAbsOff);
+      buf[textAbsOff + textBytes.length] = 0;
+      return buf;
+    };
+
+    const t1 = buildTable("TableA_ms", "Hello");
+    const t2 = buildTable("TableB_ms", "World");
+    // Legacy file: u32 count + (count+1) u32 offsets + table data
+    const count = 2;
+    const headerSize = 4 + (count + 1) * 4; // 16 bytes
+    const fileSize = headerSize + t1.length + t2.length;
+    const file = new Uint8Array(fileSize);
+    const fv = new DataView(file.buffer);
+    fv.setUint32(0, count, true);
+    fv.setUint32(4, headerSize, true); // table 0 offset
+    fv.setUint32(8, headerSize + t1.length, true); // table 1 offset
+    fv.setUint32(12, fileSize, true); // sentinel
+    file.set(t1, headerSize);
+    file.set(t2, headerSize + t1.length);
+
+    const parsed = parseBdatFile(file);
+    expect(parsed.tables.length).toBe(2);
+
+    const translations = new Map<string, string>();
+    translations.set("TableA_ms:0:TableA_ms", "مرحبا بالعالم العربي");
+    const { result } = patchBdatFile(parsed, translations);
+
+    // Verify sentinel
+    const rv = new DataView(result.buffer);
+    const newCount = rv.getUint32(0, true);
+    expect(newCount).toBe(2);
+    const sentinel = rv.getUint32(4 + newCount * 4, true);
+    expect(sentinel).toBe(result.byteLength); // sentinel must equal file size
+
+    // Verify no "BDAT" written into offset table area
+    for (let i = 0; i <= newCount; i++) {
+      const off = rv.getUint32(4 + i * 4, true);
+      // Offset must be a valid position, not 0x54414442 ("BDAT" as int)
+      expect(off).not.toBe(0x54414442);
+    }
+  });

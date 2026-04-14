@@ -669,6 +669,8 @@ export function patchBdatFile(
         resultView.setUint32(4 + i * 4, newFileSize, true);
       }
     }
+    // Write sentinel entry (index = entryCount) = file size
+    resultView.setUint32(4 + entryCount * 4, newFileSize, true);
   } else {
     result.set(originalData.subarray(0, 16));
     resultView.setUint32(12, newFileSize, true);

@@ -478,16 +478,32 @@ export function parseBdatFile(data: Uint8Array, unhashFn?: (hash: number) => str
   if (allLegacyOffsets) {
     legacyOffsetEntries = [];
     const validOffsetsSet = new Set(tableOffsets);
+    // Sort allLegacyOffsets to compute extent for each entry
+    const sortedAllOffsets = [...allLegacyOffsets].filter(o => o < data.byteLength).sort((a, b) => a - b);
+    
     for (let i = 0; i < allLegacyOffsets.length; i++) {
       const off = allLegacyOffsets[i];
       const isTable = validOffsetsSet.has(off);
       if (isTable) {
         const tbl = tables.find(t => t._raw.tableOffset === off);
-        legacyOffsetEntries.push({
-          offset: off,
-          data: tbl ? tbl._raw.tableData : data.slice(off, off),
-          isTable: true,
-        });
+        if (tbl) {
+          legacyOffsetEntries.push({
+            offset: off,
+            data: tbl._raw.originalTableData ?? tbl._raw.tableData,
+            isTable: true,
+          });
+        } else {
+          // Table had BDAT magic but failed to parse — preserve raw bytes
+          const sortIdx = sortedAllOffsets.indexOf(off);
+          const nextOff = sortIdx + 1 < sortedAllOffsets.length ? sortedAllOffsets[sortIdx + 1] : data.byteLength;
+          const rawBytes = data.slice(off, nextOff);
+          console.warn(`[BDAT-PARSER] Preserving unparsed table at offset ${off} (${rawBytes.length} bytes)`);
+          legacyOffsetEntries.push({
+            offset: off,
+            data: rawBytes,
+            isTable: true,
+          });
+        }
       } else {
         legacyOffsetEntries.push({ offset: off, data: new Uint8Array(0), isTable: false });
       }

@@ -597,6 +597,9 @@ export function patchBdatFile(
     for (const entry of entries) {
       if (entry.isTable) {
         const buf = tableBufferMap.get(entry.offset) || entry.data;
+        if (buf.length === 0) {
+          console.error(`[BDAT-WRITER] WARNING: Table at offset ${entry.offset} has EMPTY data — this would drop the table!`);
+        }
         newEntryOffsets.push({ offset: currentOffset, data: buf });
         currentOffset += buf.length;
       } else {

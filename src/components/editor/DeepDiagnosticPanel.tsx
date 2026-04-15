@@ -361,7 +361,7 @@ interface DeepDiagnosticPanelProps {
 }
 
 // Categories fixable via restoreTagsLocally
-const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", "translated_tags"]);
+const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", "translated_tags", "tag_order_mismatch"]);
 // Categories fixable by repairing $N variables
 const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text

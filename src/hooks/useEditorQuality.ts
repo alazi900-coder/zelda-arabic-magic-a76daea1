@@ -192,8 +192,10 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
       const needsImproveKeys = new Set<string>();
       let translated = 0;
       let damagedTagsCount = 0;
+      let tagOrderMismatchCount = 0;
       const damagedTagKeys = new Set<string>();
       const missingTagKeys = new Set<string>();
+      const tagOrderKeys = new Set<string>();
 
       let idx = 0;
 
@@ -229,6 +231,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
             if (result.qMissingTags) { qMissingTags++; problemKeys.add(key); missingTagKeys.add(key); }
             if (result.qPlaceholderMismatch) { qPlaceholderMismatch++; problemKeys.add(key); }
             if (result.damagedTags) { damagedTagsCount++; damagedTagKeys.add(key); problemKeys.add(key); }
+            if (result.tagOrderMismatch) { tagOrderMismatchCount++; tagOrderKeys.add(key); problemKeys.add(key); }
             if (result.niTooShort) { niTooShort++; needsImproveKeys.add(key); }
             if (result.niTooLong) { niTooLong++; needsImproveKeys.add(key); }
             if (result.niStuck) { niStuck++; needsImproveKeys.add(key); }
@@ -243,7 +246,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           // Done — commit results
           cacheRef.current = newCache;
           setCategoryProgress(progress);
-          setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, damagedTagKeys, missingTagKeys });
+          setQualityStats({ tooLong: qTooLong, nearLimit: qNearLimit, missingTags: qMissingTags, placeholderMismatch: qPlaceholderMismatch, total: problemKeys.size, problemKeys, damagedTags: damagedTagsCount, tagOrderMismatch: tagOrderMismatchCount, damagedTagKeys, missingTagKeys, tagOrderKeys });
           setNeedsImproveCount({ total: needsImproveKeys.size, tooShort: niTooShort, tooLong: niTooLong, stuck: niStuck, mixed: niMixed });
           setTranslatedCount(translated);
         }

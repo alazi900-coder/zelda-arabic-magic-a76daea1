@@ -13,11 +13,73 @@ import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/ara
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { computeConfidence, detectLiteralTranslation } from "./TranslationProgressDashboard";
 
+/** Classify a tag token for color-coding */
+function getTagDisplayInfo(tag: string): { label: string; color: string; title: string } {
+  // PUA characters (private use area — game engine icons/glyphs)
+  if (/^[\uE000-\uE0FF]+$/.test(tag)) {
+    const codes = [...tag].map(c => `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`).join(' ');
+    return { label: `🎨 PUA ${codes}`, color: 'bg-purple-500/15 text-purple-400 border-purple-500/25', title: `رمز رسومي خاص: ${codes}` };
+  }
+  // Control characters (FFF9–FFFC: ruby/annotation)
+  if (/^[\uFFF9-\uFFFC]$/.test(tag)) {
+    const names: Record<number, string> = { 0xFFF9: 'ANCHOR', 0xFFFA: 'SEPARATOR', 0xFFFB: 'TERMINATOR', 0xFFFC: 'OBJ' };
+    const code = tag.charCodeAt(0);
+    const name = names[code] || `U+${code.toString(16).toUpperCase()}`;
+    return { label: `⚙ ${name}`, color: 'bg-sky-500/15 text-sky-400 border-sky-500/25', title: `رمز تحكم: ${name}` };
+  }
+  // Brace tags {key} or {key:value}
+  if (/^\{/.test(tag)) {
+    const inner = tag.slice(1, -1);
+    return { label: `📌 ${inner}`, color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', title: `متغير: ${tag}` };
+  }
+  // Bracket tags — extract the tag name for display
+  const bracketMatch = tag.match(/\\?\[\s*\/?\s*(\w+)\s*(?::([^\]]*?))?\\?\]/);
+  if (bracketMatch) {
+    const tagName = bracketMatch[1];
+    const params = bracketMatch[2]?.trim();
+    const numPrefix = tag.match(/^(\d+)\s*\\?\[/)?.[1];
+    const numSuffix = tag.match(/\\?\]\s*(\d+)$/)?.[1];
+    const num = numPrefix || numSuffix;
+    const isClosing = /\\?\[\s*\//.test(tag);
+
+    let color = 'bg-teal-500/15 text-teal-400 border-teal-500/25';
+    const nameLower = tagName.toLowerCase();
+    if (nameLower === 'xeno') color = 'bg-blue-500/15 text-blue-400 border-blue-500/25';
+    else if (nameLower === 'ml') color = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25';
+    else if (/^(passive|active|party|class|hero|gem|skill|art)/i.test(tagName)) color = 'bg-rose-500/15 text-rose-400 border-rose-500/25';
+
+    let label = isClosing ? `/${tagName}` : tagName;
+    if (params) {
+      const paramShort = params.length > 20 ? params.slice(0, 18) + '…' : params;
+      label += `:${paramShort}`;
+    }
+    if (num) label = `${num}[${label}]`;
+    else label = `[${label}]`;
+
+    return { label, color, title: `وسم تقني: ${tag}` };
+  }
+  // Simple uppercase bracket tags [XENO] etc.
+  const simpleMatch = tag.match(/\\?\[\s*([A-Z]{2,10})\s*\\?\]/);
+  if (simpleMatch) {
+    return { label: `[${simpleMatch[1]}]`, color: 'bg-teal-500/15 text-teal-400 border-teal-500/25', title: `وسم: ${tag}` };
+  }
+  // [key=value] pattern
+  if (/^\[.+=/.test(tag)) {
+    return { label: tag.length > 25 ? tag.slice(0, 23) + '…]' : tag, color: 'bg-orange-500/15 text-orange-400 border-orange-500/25', title: `وسم: ${tag}` };
+  }
+  // Escaped bracket tags \[Name\]
+  const escapedMatch = tag.match(/\\?\[\s*([A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*)\s*\\?\]/);
+  if (escapedMatch) {
+    return { label: `\\[${escapedMatch[1]}\\]`, color: 'bg-rose-500/15 text-rose-400 border-rose-500/25', title: `عبارة محمية: ${tag}` };
+  }
+  // Fallback
+  return { label: tag.length > 20 ? tag.slice(0, 18) + '…' : tag, color: 'bg-accent/15 text-accent border-accent/25', title: `وسم تقني: ${tag}` };
+}
+
 /** Renders text with technical tags highlighted visually */
 function HighlightedOriginal({ text }: { text: string }) {
-  const tagPattern = /(\[\s*\w+\s*:[^\]]*?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:\s*[^}]*\}|\{[\w]+\}|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC])/g;
+  const tagPattern = /(\[\s*\w+\s*:[^\]]*?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:\s*[^}]*\}|\{[\w]+\}|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC])/g;
 
-  // Split by newlines first, then highlight tags within each line
   const lines = text.split('\n');
 
   const renderLine = (line: string, lineIdx: number) => {
@@ -27,20 +89,22 @@ function HighlightedOriginal({ text }: { text: string }) {
     }
     return (
       <span key={lineIdx}>
-        {parts.map((part, i) =>
-          tagPattern.test(part) ? (
-            <span
-              key={i}
-              className="inline-flex items-center px-1 py-0.5 mx-0.5 rounded text-[11px] font-mono bg-accent/15 text-accent border border-accent/25 leading-tight"
-              dir="ltr"
-              title="وسم تقني — لا تحذفه"
-            >
-              {displayOriginal(part)}
-            </span>
-          ) : (
-            <span key={i}>{displayOriginal(part)}</span>
-          )
-        )}
+        {parts.map((part, i) => {
+          if (tagPattern.test(part)) {
+            const info = getTagDisplayInfo(part);
+            return (
+              <span
+                key={i}
+                className={`inline-flex items-center px-1 py-0.5 mx-0.5 rounded text-[11px] font-mono ${info.color} leading-tight`}
+                dir="ltr"
+                title={info.title}
+              >
+                {info.label}
+              </span>
+            );
+          }
+          return <span key={i}>{displayOriginal(part)}</span>;
+        })}
       </span>
     );
   };

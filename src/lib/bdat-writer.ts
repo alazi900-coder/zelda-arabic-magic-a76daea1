@@ -631,6 +631,15 @@ export function patchBdatFile(
       }
     }
     
+    // Post-build verification: count tables in output vs input
+    const inputTableCount = entries.filter(e => e.isTable).length;
+    const outputTableCount = newEntryOffsets.filter((e, i) => entries[i].isTable && e.data.length > 0).length;
+    if (outputTableCount !== inputTableCount) {
+      console.error(`[BDAT-WRITER] ⚠️ TABLE COUNT MISMATCH: input=${inputTableCount}, output=${outputTableCount} — ${inputTableCount - outputTableCount} tables DROPPED!`);
+    } else {
+      console.log(`[BDAT-WRITER] ✅ All ${outputTableCount} tables preserved in output`);
+    }
+    
     console.log(`[BDAT-WRITER] Patch complete: ${patchedCount} patched, ${skippedCount} skipped, ${overflowErrors.length} errors`);
     console.log(`[BDAT-WRITER] Legacy file: ${originalData.byteLength} → ${newFileSize} bytes`);
     for (const stat of tableStats) {

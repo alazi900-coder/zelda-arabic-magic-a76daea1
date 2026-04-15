@@ -109,6 +109,7 @@ export interface BuildTagRepairResult {
   text: string;
   changed: boolean;
   exactTagMatch: boolean;
+  sequenceMatch: boolean;
   missingClosingTags: boolean;
   missingControlOrPua: boolean;
 }
@@ -158,10 +159,13 @@ export function repairTranslationTagsForBuild(original: string, translation: str
     ? restoreTagsLocally(original, working)
     : working;
 
+  const diff = diffTechnicalTags(original, repairedText);
+
   return {
     text: repairedText,
     changed: repairedText !== translation,
-    exactTagMatch: hasExactTagMultiset(original, repairedText),
+    exactTagMatch: diff.exactTagMatch,
+    sequenceMatch: diff.sequenceMatch,
     missingClosingTags: hasMissingClosingTags(original, repairedText),
     missingControlOrPua: countRegexMatches(repairedText, BUILD_CONTROL_OR_PUA_REGEX) < countRegexMatches(original, BUILD_CONTROL_OR_PUA_REGEX),
   };

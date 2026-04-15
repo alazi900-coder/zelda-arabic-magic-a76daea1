@@ -67,6 +67,7 @@ function computeEntryResult(entry: ExtractedEntry, translation: string, cat: str
   const isTranslated = trimmed !== '';
   let qTooLong = false, qNearLimit = false, qMissingTags = false, qPlaceholderMismatch = false;
   let damagedTags = false;
+  let tagOrderMismatch = false;
   let niTooShort = false, niTooLong = false, niStuck = false, niMixed = false;
 
   if (isTranslated) {
@@ -96,6 +97,10 @@ function computeEntryResult(entry: ExtractedEntry, translation: string, cat: str
       RE_CONTROL_CHARS.lastIndex = 0;
       const transCC = (trimmed.match(RE_CONTROL_CHARS) || []).length;
       if (transCC < origCC) damagedTags = true;
+      // Check tag sequence order
+      if (!damagedTags && !checkTagSequenceMatch(entry.original, trimmed)) {
+        tagOrderMismatch = true;
+      }
     }
 
     const origTrimmed = entry.original?.trim();
@@ -121,12 +126,12 @@ function computeEntryResult(entry: ExtractedEntry, translation: string, cat: str
     }
   }
 
-  return { translation, cat, isTranslated, qTooLong, qNearLimit, qMissingTags, qPlaceholderMismatch, damagedTags, niTooShort, niTooLong, niStuck, niMixed };
+  return { translation, cat, isTranslated, qTooLong, qNearLimit, qMissingTags, qPlaceholderMismatch, damagedTags, tagOrderMismatch, niTooShort, niTooLong, niStuck, niMixed };
 }
 
 export function useEditorQuality({ state }: UseEditorQualityProps) {
   const [categoryProgress, setCategoryProgress] = useState<Record<string, { total: number; translated: number }>>({});
-  const [qualityStats, setQualityStats] = useState<QualityStats>({ tooLong: 0, nearLimit: 0, missingTags: 0, placeholderMismatch: 0, total: 0, problemKeys: new Set<string>(), damagedTags: 0, damagedTagKeys: new Set<string>(), missingTagKeys: new Set<string>() });
+  const [qualityStats, setQualityStats] = useState<QualityStats>({ tooLong: 0, nearLimit: 0, missingTags: 0, placeholderMismatch: 0, total: 0, problemKeys: new Set<string>(), damagedTags: 0, tagOrderMismatch: 0, damagedTagKeys: new Set<string>(), missingTagKeys: new Set<string>(), tagOrderKeys: new Set<string>() });
   const [needsImproveCount, setNeedsImproveCount] = useState<NeedsImproveCount>({ total: 0, tooShort: 0, tooLong: 0, stuck: 0, mixed: 0 });
   const [translatedCount, setTranslatedCount] = useState(0);
   const combinedStatsTimerRef = useRef<ReturnType<typeof setTimeout>>();

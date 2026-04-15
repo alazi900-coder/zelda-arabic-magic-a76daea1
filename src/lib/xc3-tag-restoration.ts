@@ -173,11 +173,11 @@ export function restoreTagsLocally(original: string, translation: string): strin
   // Step 6: Strip ALL remaining detected tags from translation
   const cleanTranslation = afterTranslatedStrip.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '').replace(/  +/g, ' ').trim();
 
-  // Step 7: Compute relative positions of each tag in original
+  // Step 7: Compute relative positions of each tag in original (with source indices)
   const origPlain = original.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '');
   const origLength = Math.max(origPlain.length, 1);
 
-  interface TagPosition { tag: string; relPos: number }
+  interface TagPosition { tag: string; relPos: number; startIdx: number; endIdx: number }
   const tagPositions: TagPosition[] = [];
   let plainIdx = 0;
   const origMatchAll = [...original.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))];
@@ -186,7 +186,7 @@ export function restoreTagsLocally(original: string, translation: string): strin
   for (let ci = 0; ci < original.length; ) {
     if (matchIdx < origMatchAll.length && ci === origMatchAll[matchIdx].index) {
       const m = origMatchAll[matchIdx];
-      tagPositions.push({ tag: m[0], relPos: plainIdx / origLength });
+      tagPositions.push({ tag: m[0], relPos: plainIdx / origLength, startIdx: ci, endIdx: ci + m[0].length });
       ci += m[0].length;
       matchIdx++;
     } else {
@@ -195,7 +195,35 @@ export function restoreTagsLocally(original: string, translation: string): strin
     }
   }
 
-  // Step 8: Insert tags into clean translation at proportional positions
+  // Step 8: Atomic grouping — group adjacent tags of same type
+  interface TagGroup { tags: string[]; relPos: number; origOrder: number }
+  const groups: TagGroup[] = [];
+
+  for (let i = 0; i < tagPositions.length; i++) {
+    const tp = tagPositions[i];
+    const prev = groups.length > 0 ? groups[groups.length - 1] : null;
+    const prevTp = i > 0 ? tagPositions[i - 1] : null;
+
+    let merged = false;
+    if (prev && prevTp) {
+      // Check adjacency: only whitespace between previous tag end and current tag start
+      const between = original.slice(prevTp.endIdx, tp.startIdx);
+      const isAdjacent = /^[\s]*$/.test(between);
+      // Check same type
+      const prevType = getTagType(prevTp.tag);
+      const curType = getTagType(tp.tag);
+      if (isAdjacent && prevType === curType) {
+        prev.tags.push(tp.tag);
+        merged = true;
+      }
+    }
+
+    if (!merged) {
+      groups.push({ tags: [tp.tag], relPos: tp.relPos, origOrder: i });
+    }
+  }
+
+  // Step 9: Insert groups into clean translation at proportional positions
   const transLength = Math.max(cleanTranslation.length, 1);
   
   // Find word boundary positions
@@ -207,30 +235,28 @@ export function restoreTagsLocally(original: string, translation: string): strin
   }
   wordBounds.push(cleanTranslation.length);
 
-  // Map each tag to nearest word boundary, preserving original order index
-  const insertions: { pos: number; tag: string; origOrder: number }[] = [];
-  for (let i = 0; i < tagPositions.length; i++) {
-    const tp = tagPositions[i];
-    const rawPos = Math.round(tp.relPos * transLength);
+  // Map each group to nearest word boundary
+  const insertions: { pos: number; text: string; origOrder: number }[] = [];
+  for (const group of groups) {
+    const rawPos = Math.round(group.relPos * transLength);
     let bestPos = rawPos;
     let bestDist = Infinity;
     for (const wb of wordBounds) {
       const dist = Math.abs(wb - rawPos);
       if (dist < bestDist) { bestDist = dist; bestPos = wb; }
     }
-    insertions.push({ pos: bestPos, tag: tp.tag, origOrder: i });
+    insertions.push({ pos: bestPos, text: group.tags.join(''), origOrder: group.origOrder });
   }
 
-  // Sort by position ASCENDING — insert from beginning to end
-  // This preserves the original tag order when multiple tags map to the same position
+  // Sort by position, then original order
   insertions.sort((a, b) => a.pos - b.pos || a.origOrder - b.origOrder);
 
   let result = cleanTranslation;
   let offset = 0;
   for (const ins of insertions) {
     const pos = Math.min(ins.pos + offset, result.length);
-    result = result.slice(0, pos) + ins.tag + result.slice(pos);
-    offset += ins.tag.length;
+    result = result.slice(0, pos) + ins.text + result.slice(pos);
+    offset += ins.text.length;
   }
 
   return result;

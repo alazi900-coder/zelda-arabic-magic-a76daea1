@@ -422,22 +422,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
       // === PROTECTION 6: Tag SEQUENCE order validation ===
       // Tags may be present (multiset ok) but in wrong order — causes cinematic freezes
-      const { checkTagSequenceMatch } = await import("@/lib/xc3-build-tag-guard");
       let tagOrderRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         const orig = entryOriginals.get(key);
         if (!orig) continue;
-        // Only check entries that have technical tags
         if (!hasTechnicalTags(orig)) continue;
-        // First try repair
+        // Repair and check sequence in one step
         const repaired = repairTranslationTagsForBuild(orig, trans);
         if (repaired.changed) {
           nonEmptyTranslations[key] = repaired.text;
         }
-        // After repair, check sequence
-        const current = nonEmptyTranslations[key];
-        if (!checkTagSequenceMatch(orig, current)) {
-          // Tag order is wrong — revert to original for safety
+        if (!repaired.sequenceMatch) {
           nonEmptyTranslations[key] = orig;
           tagOrderRevertCount++;
           console.warn(`[BUILD-SAFETY] Tag sequence mismatch in ${key} — reverted to original`);

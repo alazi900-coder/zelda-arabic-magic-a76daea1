@@ -8,7 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
-import { diffTechnicalTags, repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { diffTechnicalTags, repairTranslationTagsForBuild, checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 
 // ═══════════════════════════════════════════════════
@@ -332,7 +332,6 @@ export function detectIssues(entry: ExtractedEntry, translation: string): Diagno
 
   // Tag order mismatch: multiset ok but sequence wrong — causes cinematic freezes
   if (technicalDiff.exactTagMatch && !technicalDiff.sequenceMatch) {
-    const { checkTagSequenceMatch } = await import("@/lib/xc3-build-tag-guard") as any;
     issues.push({
       ...base,
       severity: "critical",

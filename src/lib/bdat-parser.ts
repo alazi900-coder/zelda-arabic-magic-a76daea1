@@ -387,7 +387,10 @@ export function parseBdatFile(data: Uint8Array, unhashFn?: (hash: number) => str
     }
     
     tableOffsets = [];
+    const seenOffsets = new Set<number>();
     for (const off of allLegacyOffsets) {
+      if (seenOffsets.has(off)) continue; // deduplicate
+      seenOffsets.add(off);
       if (off < data.byteLength && off + 4 <= data.byteLength &&
           data[off] === 0x42 && data[off+1] === 0x44 && data[off+2] === 0x41 && data[off+3] === 0x54) {
         tableOffsets.push(off);

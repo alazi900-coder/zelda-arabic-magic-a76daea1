@@ -597,6 +597,9 @@ export function patchBdatFile(
     for (const entry of entries) {
       if (entry.isTable) {
         const buf = tableBufferMap.get(entry.offset) || entry.data;
+        if (buf.length === 0) {
+          console.error(`[BDAT-WRITER] WARNING: Table at offset ${entry.offset} has EMPTY data — this would drop the table!`);
+        }
         newEntryOffsets.push({ offset: currentOffset, data: buf });
         currentOffset += buf.length;
       } else {
@@ -626,6 +629,15 @@ export function patchBdatFile(
       if (entries[i].isTable && newEntryOffsets[i].data.length > 0) {
         result.set(newEntryOffsets[i].data, newEntryOffsets[i].offset);
       }
+    }
+    
+    // Post-build verification: count tables in output vs input
+    const inputTableCount = entries.filter(e => e.isTable).length;
+    const outputTableCount = newEntryOffsets.filter((e, i) => entries[i].isTable && e.data.length > 0).length;
+    if (outputTableCount !== inputTableCount) {
+      console.error(`[BDAT-WRITER] ⚠️ TABLE COUNT MISMATCH: input=${inputTableCount}, output=${outputTableCount} — ${inputTableCount - outputTableCount} tables DROPPED!`);
+    } else {
+      console.log(`[BDAT-WRITER] ✅ All ${outputTableCount} tables preserved in output`);
     }
     
     console.log(`[BDAT-WRITER] Patch complete: ${patchedCount} patched, ${skippedCount} skipped, ${overflowErrors.length} errors`);

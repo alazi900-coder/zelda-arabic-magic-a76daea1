@@ -207,9 +207,10 @@ export function restoreTagsLocally(original: string, translation: string): strin
   }
   wordBounds.push(cleanTranslation.length);
 
-  // Map each tag to nearest word boundary
-  const insertions: { pos: number; tag: string }[] = [];
-  for (const tp of tagPositions) {
+  // Map each tag to nearest word boundary, preserving original order index
+  const insertions: { pos: number; tag: string; origOrder: number }[] = [];
+  for (let i = 0; i < tagPositions.length; i++) {
+    const tp = tagPositions[i];
     const rawPos = Math.round(tp.relPos * transLength);
     let bestPos = rawPos;
     let bestDist = Infinity;
@@ -217,16 +218,19 @@ export function restoreTagsLocally(original: string, translation: string): strin
       const dist = Math.abs(wb - rawPos);
       if (dist < bestDist) { bestDist = dist; bestPos = wb; }
     }
-    insertions.push({ pos: bestPos, tag: tp.tag });
+    insertions.push({ pos: bestPos, tag: tp.tag, origOrder: i });
   }
 
-  // Sort by position descending to insert from end
-  insertions.sort((a, b) => b.pos - a.pos);
+  // Sort by position ASCENDING — insert from beginning to end
+  // This preserves the original tag order when multiple tags map to the same position
+  insertions.sort((a, b) => a.pos - b.pos || a.origOrder - b.origOrder);
 
   let result = cleanTranslation;
+  let offset = 0;
   for (const ins of insertions) {
-    const pos = Math.min(ins.pos, result.length);
+    const pos = Math.min(ins.pos + offset, result.length);
     result = result.slice(0, pos) + ins.tag + result.slice(pos);
+    offset += ins.tag.length;
   }
 
   return result;

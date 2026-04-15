@@ -420,8 +420,36 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await new Promise(r => setTimeout(r, 400));
       }
 
+      // === PROTECTION 6: Tag SEQUENCE order validation ===
+      // Tags may be present (multiset ok) but in wrong order — causes cinematic freezes
+      const { checkTagSequenceMatch } = await import("@/lib/xc3-build-tag-guard");
+      let tagOrderRevertCount = 0;
+      for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        const orig = entryOriginals.get(key);
+        if (!orig) continue;
+        // Only check entries that have technical tags
+        if (!hasTechnicalTags(orig)) continue;
+        // First try repair
+        const repaired = repairTranslationTagsForBuild(orig, trans);
+        if (repaired.changed) {
+          nonEmptyTranslations[key] = repaired.text;
+        }
+        // After repair, check sequence
+        const current = nonEmptyTranslations[key];
+        if (!checkTagSequenceMatch(orig, current)) {
+          // Tag order is wrong — revert to original for safety
+          nonEmptyTranslations[key] = orig;
+          tagOrderRevertCount++;
+          console.warn(`[BUILD-SAFETY] Tag sequence mismatch in ${key} — reverted to original`);
+        }
+      }
+      if (tagOrderRevertCount > 0) {
+        setBuildProgress(`🔀 استعادة ${tagOrderRevertCount} نص (ترتيب الوسوم التقنية مختلف عن الأصل)...`);
+        console.warn(`[BUILD-SAFETY] Reverted ${tagOrderRevertCount} entries with wrong tag sequence order`);
+        await new Promise(r => setTimeout(r, 400));
+      }
 
-      // Tables like MNU_style_standard_ms contain font metrics the engine uses for
+
       // layout calculations. Translating them causes freezes/crashes.
       const PROTECTED_TABLE_PATTERNS = [
         /^MNU_style_standard_ms$/i,

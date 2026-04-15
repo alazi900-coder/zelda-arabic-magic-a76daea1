@@ -54,18 +54,43 @@ function expandTagCountDiff(source: Map<string, number>, target: Map<string, num
 
 export interface TechnicalTagDiffResult {
   exactTagMatch: boolean;
+  sequenceMatch: boolean;
   missingTags: string[];
   extraTags: string[];
 }
 
+/**
+ * Check if the ordered sequence of technical tags in translation matches the original.
+ * This catches cases where multiset is correct but order is flipped.
+ */
+export function checkTagSequenceMatch(original: string, translation: string): boolean {
+  const origTags = extractTechnicalTags(original);
+  const transTags = extractTechnicalTags(translation);
+  if (origTags.length !== transTags.length) return false;
+  for (let i = 0; i < origTags.length; i++) {
+    if (origTags[i] !== transTags[i]) return false;
+  }
+  return true;
+}
+
 export function diffTechnicalTags(original: string, translation: string): TechnicalTagDiffResult {
-  const originalCounts = buildTagCountMap(extractTechnicalTags(original));
-  const translatedCounts = buildTagCountMap(extractTechnicalTags(translation));
+  const origTags = extractTechnicalTags(original);
+  const transTags = extractTechnicalTags(translation);
+  const originalCounts = buildTagCountMap(origTags);
+  const translatedCounts = buildTagCountMap(transTags);
   const missingTags = expandTagCountDiff(originalCounts, translatedCounts);
   const extraTags = expandTagCountDiff(translatedCounts, originalCounts);
+  const exactTagMatch = missingTags.length === 0 && extraTags.length === 0;
+
+  // Sequence check: even if multiset matches, order may be wrong
+  let sequenceMatch = exactTagMatch;
+  if (exactTagMatch && origTags.length > 0) {
+    sequenceMatch = checkTagSequenceMatch(original, translation);
+  }
 
   return {
-    exactTagMatch: missingTags.length === 0 && extraTags.length === 0,
+    exactTagMatch,
+    sequenceMatch,
     missingTags,
     extraTags,
   };

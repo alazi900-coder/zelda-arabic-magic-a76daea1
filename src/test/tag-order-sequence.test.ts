@@ -75,4 +75,37 @@ describe("restoreTagsLocally preserves tag order", () => {
     const idx2 = result.indexOf("[ML:Dash 2]");
     expect(idx1).toBeLessThan(idx2);
   });
+
+  it("keeps adjacent same-type tags as atomic block (no text between)", () => {
+    const orig = "[XENO:wait wait=key ][XENO:del del=key ] text";
+    const damaged = "نص";
+    const result = restoreTagsLocally(orig, damaged);
+    // Must stay together as one block with no text splitting them
+    expect(result).toMatch(/\[XENO:wait wait=key \]\[XENO:del del=key \]/);
+  });
+
+  it("does NOT merge tags separated by content in original", () => {
+    const orig = "[XENO:wait wait=key ]Hello[XENO:del del=key ]";
+    const damaged = "مرحبا";
+    const result = restoreTagsLocally(orig, damaged);
+    // They must NOT be adjacent — there should be text between them
+    expect(result).not.toMatch(/\[XENO:wait wait=key \]\[XENO:del del=key \]/);
+  });
+
+  it("does NOT merge PUA with bracket tags even if adjacent", () => {
+    const orig = "\uE000[XENO:wait wait=key ] text";
+    const damaged = "نص";
+    const result = restoreTagsLocally(orig, damaged);
+    expect(result).toContain("\uE000");
+    expect(result).toContain("[XENO:wait wait=key ]");
+    // PUA and bracket are different types — should not form one atomic block
+  });
+
+  it("groups adjacent PUA chars as one block", () => {
+    const orig = "\uE000\uE001\uE002 text \uE003";
+    const damaged = "نص";
+    const result = restoreTagsLocally(orig, damaged);
+    // First 3 PUA chars must stay together
+    expect(result).toMatch(/\uE000\uE001\uE002/);
+  });
 });

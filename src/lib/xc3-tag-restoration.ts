@@ -32,6 +32,14 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Classify a tag token for grouping: only same-type tags can form atomic blocks */
+function getTagType(tag: string): 'pua' | 'control' | 'bracket' | 'brace' {
+  if (/^[\uE000-\uE0FF]+$/.test(tag)) return 'pua';
+  if (/^[\uFFF9-\uFFFC]$/.test(tag)) return 'control';
+  if (/^\{/.test(tag)) return 'brace';
+  return 'bracket';
+}
+
 /**
  * Strip invisible Unicode chars that break tag matching
  */

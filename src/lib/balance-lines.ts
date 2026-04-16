@@ -166,8 +166,8 @@ function dpSplitShielded(
           const shortBy = ideal * 0.7 - ll;
           cost += shortBy * shortBy * 6;
         }
-        // Reward breaking after punctuation (XC3 natural reading)
-        cost += punctuationBreakBonus(words[i - 1], isLastLine);
+        // Reward breaking after [XENO:n ] tag (the original line-break marker)
+
 
         const total = dp[j][k - 1] + cost;
         if (total < dp[i][k]) {

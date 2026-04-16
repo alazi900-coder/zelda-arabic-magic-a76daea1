@@ -386,7 +386,6 @@ const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // All locally fixable categories
 const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
-const TAG_REPAIR_UNSAFE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, "technical_mismatch", "control_chars", "pua_chars", "unmatched_ruby", "broken_tag_syntax", "control_extra"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);

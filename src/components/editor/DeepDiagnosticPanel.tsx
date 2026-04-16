@@ -386,6 +386,7 @@ interface DeepDiagnosticPanelProps {
   state: EditorState;
   onNavigateToEntry?: (key: string) => void;
   onApplyFix?: (key: string, fixedText: string) => void;
+  onApplyFixesBatch?: (updates: Record<string, string>) => number;
   onFilterByKeys?: (keys: Set<string>) => void;
   onFixSelectedLocally?: (keys: string[]) => void;
 }
@@ -403,7 +404,7 @@ const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
 // All locally fixable categories
 const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, "empty_translation"]);
 
-export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
+export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -431,18 +432,35 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     setScanned(false);
     if (!preserveActiveFilter) setActiveFilter(null);
 
+    const CHUNK_SIZE = 250;
+
     setTimeout(() => {
       const currentState = latestStateRef.current;
       const allIssues: DiagnosticIssue[] = [];
-      for (const entry of currentState.entries) {
-        const key = `${entry.msbtFile}:${entry.index}`;
-        const translation = currentState.translations[key];
-        if (!translation) continue;
-        allIssues.push(...detectIssues(entry, translation));
-      }
-      setIssues(allIssues);
-      setScanning(false);
-      setScanned(true);
+      let index = 0;
+
+      const processChunk = () => {
+        const end = Math.min(index + CHUNK_SIZE, currentState.entries.length);
+
+        for (; index < end; index++) {
+          const entry = currentState.entries[index];
+          const key = `${entry.msbtFile}:${entry.index}`;
+          const translation = currentState.translations[key];
+          if (!translation) continue;
+          allIssues.push(...detectIssues(entry, translation));
+        }
+
+        if (index < currentState.entries.length) {
+          requestAnimationFrame(processChunk);
+          return;
+        }
+
+        setIssues(allIssues);
+        setScanning(false);
+        setScanned(true);
+      };
+
+      requestAnimationFrame(processChunk);
     }, 50);
   }, []);
 
@@ -463,6 +481,34 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     if (!activeFilter) return issues;
     return issues.filter(i => i.category === activeFilter);
   }, [issues, activeFilter]);
+
+  const issuesByKey = useMemo(() => {
+    const map = new Map<string, DiagnosticIssue[]>();
+    for (const issue of issues) {
+      const existing = map.get(issue.key);
+      if (existing) existing.push(issue);
+      else map.set(issue.key, [issue]);
+    }
+    return map;
+  }, [issues]);
+
+  const applyBatchUpdates = useCallback((updates: Record<string, string>) => {
+    const entries = Object.entries(updates);
+    if (entries.length === 0) return 0;
+
+    if (onApplyFixesBatch) {
+      return onApplyFixesBatch(updates);
+    }
+
+    if (onApplyFix) {
+      for (const [key, value] of entries) {
+        onApplyFix(key, value);
+      }
+      return entries.length;
+    }
+
+    return 0;
+  }, [onApplyFix, onApplyFixesBatch]);
 
   const handleFilterInEditor = useCallback((categoryId: string) => {
     const keys = new Set(issues.filter(i => i.category === categoryId).map(i => i.key));
@@ -545,19 +591,18 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const applyTagFixes = useCallback((keys: string[]): number => {
     if (keys.length === 0) return 0;
 
-    if (onApplyFix) {
-      let count = 0;
+    if (onApplyFixesBatch || onApplyFix) {
+      const updates: Record<string, string> = {};
       for (const key of keys) {
         const entry = entryMap.get(key);
         const trans = state.translations[key];
         if (!entry || !trans) continue;
         const safeRepair = getSafeTagRepair(entry, trans);
         if (safeRepair.changed) {
-          onApplyFix(key, safeRepair.finalText);
-          count++;
+          updates[key] = safeRepair.finalText;
         }
       }
-      return count;
+      return applyBatchUpdates(updates);
     }
 
     if (onFixSelectedLocally) {
@@ -566,7 +611,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     return 0;
-  }, [entryMap, getSafeTagRepair, onApplyFix, onFixSelectedLocally, state.translations]);
+  }, [applyBatchUpdates, entryMap, getSafeTagRepair, onApplyFix, onApplyFixesBatch, onFixSelectedLocally, state.translations]);
 
   /** Fix a single issue */
   const handleFixSingle = useCallback((issue: DiagnosticIssue) => {
@@ -643,59 +688,70 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
-    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter) && onApplyFix) {
-      let count = 0;
+    if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
       for (const key of uniqueKeys) {
         const entry = entryMap.get(key);
         const trans = state.translations[key];
         if (!entry || !trans) continue;
         const repaired = repairTranslationTagsForBuild(entry.original, trans);
-        if (repaired.text !== trans) { onApplyFix(key, repaired.text); count++; }
+        if (repaired.text !== trans) updates[key] = repaired.text;
       }
+      const count = applyBatchUpdates(updates);
       toast({ title: '💲 إصلاح جماعي', description: `تم إصلاح متغيرات $N في ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
 
-    if (RESTORE_ORIGINAL_CATEGORIES.has(activeFilter) && onApplyFix) {
-      let count = 0;
+    if (RESTORE_ORIGINAL_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
       for (const key of uniqueKeys) {
         const entry = entryMap.get(key);
-        if (entry) { onApplyFix(key, entry.original); count++; }
+        if (entry) updates[key] = entry.original;
       }
+      const count = applyBatchUpdates(updates);
       toast({ title: '↩️ استعادة جماعية', description: `تم استعادة النص الأصلي لـ ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
 
-    if (STRIP_INVISIBLE_CATEGORIES.has(activeFilter) && onApplyFix) {
-      let count = 0;
+    if (STRIP_INVISIBLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
       for (const key of uniqueKeys) {
         const trans = state.translations[key];
         if (!trans) continue;
         const cleaned = trans.replace(RE_INVISIBLE, '');
-        if (cleaned !== trans) { onApplyFix(key, cleaned); count++; }
+        if (cleaned !== trans) updates[key] = cleaned;
       }
+      const count = applyBatchUpdates(updates);
       toast({ title: '🧹 تنظيف', description: `تم إزالة الأحرف غير المرئية من ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
 
-    if (XENO_N_FIXABLE_CATEGORIES.has(activeFilter) && onApplyFix) {
-      // Chunked processing to avoid freezing the browser on huge batches (10k+ entries)
+    if (XENO_N_FIXABLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
       const CHUNK = 200;
       let count = 0;
       let i = 0;
       toast({ title: '↩️ بدء الإصلاح الجماعي', description: `جاري معالجة ${uniqueKeys.length} نص على دفعات...` });
+
       const processChunk = () => {
+        const updates: Record<string, string> = {};
         const end = Math.min(i + CHUNK, uniqueKeys.length);
+
         for (; i < end; i++) {
           const key = uniqueKeys[i];
           const trans = state.translations[key];
           if (!trans) continue;
           const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
-          if (fixed !== trans) { onApplyFix(key, fixed); count++; }
+          if (fixed !== trans) {
+            updates[key] = fixed;
+            count++;
+          }
         }
+
+        applyBatchUpdates(updates);
+
         if (i < uniqueKeys.length) {
           requestAnimationFrame(processChunk);
         } else {
@@ -703,20 +759,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           setTimeout(() => runScan(true), 250);
         }
       };
+
       requestAnimationFrame(processChunk);
       return;
     }
 
-    if (activeFilter === 'empty_translation' && onApplyFix) {
-      for (const key of uniqueKeys) onApplyFix(key, '');
-      toast({ title: '🗑️ حذف', description: `تم مسح ${uniqueKeys.length} ترجمة فارغة` });
+    if (activeFilter === 'empty_translation' && (onApplyFix || onApplyFixesBatch)) {
+      const updates = Object.fromEntries(uniqueKeys.map((key) => [key, '']));
+      const count = applyBatchUpdates(updates);
+      toast({ title: '🗑️ حذف', description: `تم مسح ${count} ترجمة فارغة` });
       setTimeout(() => runScan(true), 250);
     }
-  }, [activeFilter, applyTagFixes, issues, onApplyFix, entryMap, state.translations, runScan]);
+  }, [activeFilter, applyBatchUpdates, applyTagFixes, issues, onApplyFix, onApplyFixesBatch, entryMap, state.translations, runScan]);
 
   /** Fix ALL fixable issues across all categories at once (chunked to avoid browser freeze) */
   const handleFixEverything = useCallback(() => {
-    if (!onApplyFix) return;
+    if (!onApplyFix && !onApplyFixesBatch) return;
     const allFixableIssues = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
     const processedKeys = new Set<string>();
     const tagFixKeys: string[] = [];
@@ -733,7 +791,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     let idx = 0;
 
     const processNonTagChunk = () => {
+      const updates: Record<string, string> = {};
       const end = Math.min(idx + CHUNK, allFixableIssues.length);
+
       for (; idx < end; idx++) {
         const issue = allFixableIssues[idx];
         if (processedKeys.has(issue.key)) continue;
@@ -751,7 +811,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           if (entry && trans) {
             const repaired = repairTranslationTagsForBuild(entry.original, trans);
             if (repaired.text !== trans) {
-              onApplyFix(issue.key, repaired.text);
+              updates[issue.key] = repaired.text;
               counters.dollar++;
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '💲 تم إصلاح متغيرات $N' });
             } else {
@@ -765,7 +825,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
           const entry = entryMap.get(issue.key);
           if (entry) {
-            onApplyFix(issue.key, entry.original);
+            updates[issue.key] = entry.original;
             counters.restore++;
             reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'restored', reason: '↩️ تمت استعادة النص الأصلي الإنجليزي (المشكلة غير قابلة للإصلاح مع الحفاظ على الترجمة)' });
           }
@@ -778,7 +838,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           if (trans) {
             const cleaned = trans.replace(RE_INVISIBLE, '');
             if (cleaned !== trans) {
-              onApplyFix(issue.key, cleaned);
+              updates[issue.key] = cleaned;
               counters.strip++;
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧹 تم إزالة الأحرف غير المرئية' });
             } else {
@@ -794,7 +854,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           if (trans) {
             const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
             if (fixed !== trans) {
-              onApplyFix(issue.key, fixed);
+              updates[issue.key] = fixed;
               counters.xenoN++;
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \\n بعد [XENO:n ]' });
             } else {
@@ -806,72 +866,79 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         }
 
         if (issue.category === 'empty_translation') {
-          onApplyFix(issue.key, '');
+          updates[issue.key] = '';
           counters.clear++;
           reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة' });
           processedKeys.add(issue.key);
         }
       }
 
+      applyBatchUpdates(updates);
+
       if (idx < allFixableIssues.length) {
         requestAnimationFrame(processNonTagChunk);
-      } else {
-        // Phase 2: process tag-fixable keys (heavier work)
-        let tagIdx = 0;
-        const processTagChunk = () => {
-          const tagEnd = Math.min(tagIdx + CHUNK, tagFixKeys.length);
-          for (; tagIdx < tagEnd; tagIdx++) {
-            const key = tagFixKeys[tagIdx];
-            const entry = entryMap.get(key);
-            const trans = state.translations[key];
-            if (!entry || !trans) continue;
-
-            const safeRepair = getSafeTagRepair(entry, trans);
-            const catLabel = 'وسوم تقنية';
-            const issuesForKey = issues.filter(i => i.key === key);
-            const cats = issuesForKey.map(i => CATEGORIES.find(c => c.id === i.category)?.label || i.category).join('، ');
-
-            if (safeRepair.changed) {
-              onApplyFix(key, safeRepair.finalText);
-              if (safeRepair.restoredOriginal) {
-                counters.restore++;
-                reportEntries.push({ key, label: entry.label, category: catLabel, action: 'restored', reason: `↩️ بقي النص غير آمن بعد محاولة الإصلاح (${cats})، فتمت استعادة الأصل الإنجليزي لمنع التجمّد` });
-              } else {
-                counters.tagFixed++;
-                reportEntries.push({ key, label: entry.label, category: catLabel, action: 'fixed', reason: '🔧 تم إصلاح الوسوم التقنية وترتيبها عبر حارس البناء' });
-              }
-            } else {
-              reportEntries.push({ key, label: entry.label, category: catLabel, action: 'unchanged', reason: `⚠️ حارس البناء أعاد نفس النص — المشاكل (${cats}) تحتاج إصلاحاً يدوياً` });
-            }
-          }
-
-          if (tagIdx < tagFixKeys.length) {
-            requestAnimationFrame(processTagChunk);
-          } else {
-            const totalFixed = counters.tagFixed + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN;
-            const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
-            const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
-            const report: FixReport = {
-              totalAttempted: reportEntries.length,
-              totalFixed,
-              totalUnchanged,
-              totalRestored,
-              entries: reportEntries,
-            };
-            setFixReport(report);
-            toast({
-              title: totalFixed > 0 ? '⚡ إصلاح شامل مكتمل' : '⚠️ لم يتم تعديل أي نص',
-              description: `تم تعديل ${totalFixed} نص — اضغط 📋 لعرض التقرير التفصيلي`,
-            });
-            setTimeout(() => runScan(false), 500);
-          }
-        };
-        requestAnimationFrame(processTagChunk);
+        return;
       }
+
+      let tagIdx = 0;
+      const processTagChunk = () => {
+        const updates: Record<string, string> = {};
+        const tagEnd = Math.min(tagIdx + CHUNK, tagFixKeys.length);
+
+        for (; tagIdx < tagEnd; tagIdx++) {
+          const key = tagFixKeys[tagIdx];
+          const entry = entryMap.get(key);
+          const trans = state.translations[key];
+          if (!entry || !trans) continue;
+
+          const safeRepair = getSafeTagRepair(entry, trans);
+          const catLabel = 'وسوم تقنية';
+          const issuesForKey = issuesByKey.get(key) || [];
+          const cats = issuesForKey.map(i => CATEGORIES.find(c => c.id === i.category)?.label || i.category).join('، ');
+
+          if (safeRepair.changed) {
+            updates[key] = safeRepair.finalText;
+            if (safeRepair.restoredOriginal) {
+              counters.restore++;
+              reportEntries.push({ key, label: entry.label, category: catLabel, action: 'restored', reason: `↩️ بقي النص غير آمن بعد محاولة الإصلاح (${cats})، فتمت استعادة الأصل الإنجليزي لمنع التجمّد` });
+            } else {
+              counters.tagFixed++;
+              reportEntries.push({ key, label: entry.label, category: catLabel, action: 'fixed', reason: '🔧 تم إصلاح الوسوم التقنية وترتيبها عبر حارس البناء' });
+            }
+          } else {
+            reportEntries.push({ key, label: entry.label, category: catLabel, action: 'unchanged', reason: `⚠️ حارس البناء أعاد نفس النص — المشاكل (${cats}) تحتاج إصلاحاً يدوياً` });
+          }
+        }
+
+        applyBatchUpdates(updates);
+
+        if (tagIdx < tagFixKeys.length) {
+          requestAnimationFrame(processTagChunk);
+        } else {
+          const totalFixed = counters.tagFixed + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN;
+          const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
+          const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
+          const report: FixReport = {
+            totalAttempted: reportEntries.length,
+            totalFixed,
+            totalUnchanged,
+            totalRestored,
+            entries: reportEntries,
+          };
+          setFixReport(report);
+          toast({
+            title: totalFixed > 0 ? '⚡ إصلاح شامل مكتمل' : '⚠️ لم يتم تعديل أي نص',
+            description: `تم تعديل ${totalFixed} نص — اضغط 📋 لعرض التقرير التفصيلي`,
+          });
+          setTimeout(() => runScan(false), 500);
+        }
+      };
+
+      requestAnimationFrame(processTagChunk);
     };
 
     requestAnimationFrame(processNonTagChunk);
-  }, [entryMap, getSafeTagRepair, issues, onApplyFix, runScan, state.translations]);
+  }, [applyBatchUpdates, entryMap, getSafeTagRepair, issues, issuesByKey, onApplyFix, onApplyFixesBatch, runScan, state.translations]);
 
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;
@@ -880,7 +947,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     : new Set<string>();
   const canLocalFixActiveFilter = Boolean(
     activeFilter &&
-    (onFixSelectedLocally || onApplyFix) &&
+    (onFixSelectedLocally || onApplyFix || onApplyFixesBatch) &&
     LOCAL_FIXABLE_CATEGORIES.has(activeFilter) &&
     activeFilterKeys.size > 0
   );
@@ -965,7 +1032,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                 </div>
 
                 {/* Fix All button + Report button */}
-                {totalFixable > 0 && (onApplyFix || onFixSelectedLocally) && (
+                {totalFixable > 0 && (onApplyFix || onFixSelectedLocally || onApplyFixesBatch) && (
                   <div className="flex gap-2">
                     <Button size="sm" variant="destructive" className="flex-1 font-display font-bold text-sm" onClick={handleFixEverything}>
                       <Zap className="w-4 h-4 ml-1" />

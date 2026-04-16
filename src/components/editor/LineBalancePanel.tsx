@@ -234,13 +234,27 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
                 <Badge variant="secondary" className="text-xs">{results.length} نص</Badge>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs h-7 gap-1"
+                onClick={(e) => { e.stopPropagation(); handleRebalanceAll(); }}
+                disabled={rebalancing || scanning}
+                title="يمر على كل الترجمات ويعيد موازنتها مع احترام [XENO:n ] كحد إلزامي"
+              >
+                {rebalancing ? (
+                  <><Wand2 className="w-3 h-3 animate-pulse" /> {rebalanceProgress.current}/{rebalanceProgress.total}</>
+                ) : (
+                  <><Wand2 className="w-3 h-3" /> إعادة موازنة الكل (XENO:n)</>
+                )}
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
                 className="text-xs h-7"
                 onClick={(e) => { e.stopPropagation(); handleScan(); }}
-                disabled={scanning}
+                disabled={scanning || rebalancing}
               >
                 {scanning ? (
                   <><Sparkles className="w-3 h-3 animate-spin" /> جاري الفحص...</>
@@ -254,6 +268,20 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
               {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </div>
           </CollapsibleTrigger>
+
+          {/* Live progress bar for global re-balance */}
+          {rebalancing && (
+            <div className="mt-3 space-y-1.5 bg-background/40 rounded-lg p-2 border border-accent/20">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono">
+                <span>إعادة موازنة شاملة...</span>
+                <span>{rebalanceProgress.current.toLocaleString()} / {rebalanceProgress.total.toLocaleString()} • مُصلَح: {rebalanceProgress.fixed}</span>
+              </div>
+              <Progress
+                value={rebalanceProgress.total > 0 ? (rebalanceProgress.current / rebalanceProgress.total) * 100 : 0}
+                className="h-1.5"
+              />
+            </div>
+          )}
 
           <CollapsibleContent className="mt-3 space-y-3">
             {/* No results yet */}

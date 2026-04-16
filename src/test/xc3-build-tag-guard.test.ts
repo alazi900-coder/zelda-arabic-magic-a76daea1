@@ -104,3 +104,4 @@ describe("repairTranslationTagsForBuild", () => {
     );
     expect(result.text).toContain("$1");
   });
+});

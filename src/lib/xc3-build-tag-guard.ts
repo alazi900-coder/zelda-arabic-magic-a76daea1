@@ -247,6 +247,9 @@ export function repairTranslationTagsForBuild(original: string, translation: str
     repairedText = repairedText.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
   }
 
+  // Step 5: Final whitespace cleanup — never produce more blank lines than original had
+  repairedText = normalizeWhitespaceAfterReorder(repairedText, original);
+
   const diff = diffTechnicalTags(original, repairedText);
 
   return {

@@ -3,13 +3,30 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Filter, Wrench, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Filter, Wrench, Zap, FileText } from "lucide-react";
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags, repairTranslationTagsForBuild, checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+interface FixReportEntry {
+  key: string;
+  label: string;
+  category: string;
+  action: 'fixed' | 'unchanged' | 'restored';
+  reason: string;
+}
+
+interface FixReport {
+  totalAttempted: number;
+  totalFixed: number;
+  totalUnchanged: number;
+  totalRestored: number;
+  entries: FixReportEntry[];
+}
 
 // ═══════════════════════════════════════════════════
 // Types
@@ -378,6 +395,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [issues, setIssues] = useState<DiagnosticIssue[]>([]);
   const [activeFilter, setActiveFilter] = useState<string | null>(null); 
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
+  const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const latestStateRef = useRef(state);
 
   // Build entry lookup map for O(1) access
@@ -615,9 +633,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const processedKeys = new Set<string>();
     let tagFixKeys: string[] = [];
     let restoreCount = 0, stripCount = 0, clearCount = 0, dollarFixCount = 0;
+    const reportEntries: FixReportEntry[] = [];
 
     for (const issue of allFixableIssues) {
       if (processedKeys.has(issue.key)) continue;
+      const catLabel = CATEGORIES.find(c => c.id === issue.category)?.label || issue.category;
 
       if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
         tagFixKeys.push(issue.key);
@@ -630,7 +650,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const trans = state.translations[issue.key];
         if (entry && trans) {
           const repaired = repairTranslationTagsForBuild(entry.original, trans);
-          if (repaired.text !== trans) { onApplyFix(issue.key, repaired.text); dollarFixCount++; }
+          if (repaired.text !== trans) {
+            onApplyFix(issue.key, repaired.text);
+            dollarFixCount++;
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '💲 تم إصلاح متغيرات $N' });
+          } else {
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ محرك الإصلاح لم يجد تعديلاً فعلياً للمتغيرات' });
+          }
         }
         processedKeys.add(issue.key);
         continue;
@@ -638,7 +664,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
       if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
         const entry = entryMap.get(issue.key);
-        if (entry) { onApplyFix(issue.key, entry.original); restoreCount++; }
+        if (entry) {
+          onApplyFix(issue.key, entry.original);
+          restoreCount++;
+          reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'restored', reason: '↩️ تمت استعادة النص الأصلي الإنجليزي (المشكلة غير قابلة للإصلاح مع الحفاظ على الترجمة)' });
+        }
         processedKeys.add(issue.key);
         continue;
       }
@@ -647,7 +677,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const trans = state.translations[issue.key];
         if (trans) {
           const cleaned = trans.replace(RE_INVISIBLE, '');
-          if (cleaned !== trans) { onApplyFix(issue.key, cleaned); stripCount++; }
+          if (cleaned !== trans) {
+            onApplyFix(issue.key, cleaned);
+            stripCount++;
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧹 تم إزالة الأحرف غير المرئية' });
+          } else {
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على أحرف غير مرئية فعلية' });
+          }
         }
         processedKeys.add(issue.key);
         continue;
@@ -656,20 +692,50 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       if (issue.category === "empty_translation") {
         onApplyFix(issue.key, "");
         clearCount++;
+        reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة' });
         processedKeys.add(issue.key);
       }
     }
 
-    // Process tag fixes
-    const tagFixedCount = applyTagFixes(tagFixKeys);
+    // Process tag fixes with detailed reporting
+    let tagFixedCount = 0;
+    for (const key of tagFixKeys) {
+      const entry = entryMap.get(key);
+      const trans = state.translations[key];
+      if (!entry || !trans) continue;
+      const fixed = restoreTagsLocally(entry.original, trans);
+      const catLabel = 'وسوم تقنية';
+      if (fixed !== trans) {
+        if (onApplyFix) onApplyFix(key, fixed);
+        tagFixedCount++;
+        reportEntries.push({ key, label: entry.label, category: catLabel, action: 'fixed', reason: '🔧 تم إصلاح الوسوم التقنية' });
+      } else {
+        // Diagnose why it didn't change
+        const issuesForKey = issues.filter(i => i.key === key);
+        const cats = issuesForKey.map(i => CATEGORIES.find(c => c.id === i.category)?.label || i.category).join('، ');
+        reportEntries.push({ key, label: entry.label, category: catLabel, action: 'unchanged', reason: `⚠️ محرك الإصلاح أعاد نفس النص — المشاكل (${cats}) تحتاج إصلاحاً يدوياً` });
+      }
+    }
 
     const totalFixed = tagFixedCount + restoreCount + stripCount + clearCount + dollarFixCount;
+    const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
+    const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
+
+    const report: FixReport = {
+      totalAttempted: reportEntries.length,
+      totalFixed,
+      totalUnchanged,
+      totalRestored,
+      entries: reportEntries,
+    };
+    setFixReport(report);
+
     toast({
       title: totalFixed > 0 ? "⚡ إصلاح شامل" : "⚠️ لم يتم تعديل أي نص",
-      description: `تم تعديل ${totalFixed} نص (${tagFixedCount} وسوم، ${dollarFixCount} متغيرات، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
+      description: `تم تعديل ${totalFixed} نص — اضغط 📋 لعرض التقرير التفصيلي`,
     });
     setTimeout(() => runScan(false), 500);
-  }, [issues, onApplyFix, entryMap, state.translations, runScan, applyTagFixes]);
+  }, [issues, onApplyFix, entryMap, state.translations, runScan]);
 
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;
@@ -685,6 +751,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const totalFixable = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).length;
 
   return (
+    <>
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <Card className="cursor-pointer hover:bg-muted/30 transition-colors border-destructive/30">
@@ -761,12 +828,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                   </div>
                 </div>
 
-                {/* Fix All button */}
+                {/* Fix All button + Report button */}
                 {totalFixable > 0 && (onApplyFix || onFixSelectedLocally) && (
-                  <Button size="sm" variant="destructive" className="w-full font-display font-bold text-sm" onClick={handleFixEverything}>
-                    <Zap className="w-4 h-4 ml-1" />
-                    ⚡ إصلاح كل المشاكل دفعة واحدة ({new Set(issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="destructive" className="flex-1 font-display font-bold text-sm" onClick={handleFixEverything}>
+                      <Zap className="w-4 h-4 ml-1" />
+                      ⚡ إصلاح كل المشاكل ({new Set(issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
+                    </Button>
+                    {fixReport && (
+                      <Button size="sm" variant="outline" className="text-xs" onClick={() => setFixReport({ ...fixReport })}>
+                        <FileText className="w-4 h-4 ml-1" />
+                        📋 التقرير
+                      </Button>
+                    )}
+                  </div>
                 )}
 
                 {/* Category details */}
@@ -891,5 +966,97 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         </Card>
       </CollapsibleContent>
     </Collapsible>
+
+    {/* Fix Report Dialog */}
+    <Dialog open={fixReport !== null} onOpenChange={(open) => { if (!open) setFixReport(null); }}>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="font-display text-base">📋 تقرير الإصلاح الشامل</DialogTitle>
+        </DialogHeader>
+        {fixReport && (
+          <div className="space-y-3">
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2 rounded-lg bg-secondary/20 border border-secondary/30">
+                <p className="text-lg font-bold text-secondary">{fixReport.totalFixed}</p>
+                <p className="text-[10px] text-muted-foreground">✅ تم إصلاحه</p>
+              </div>
+              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <p className="text-lg font-bold text-amber-400">{fixReport.totalUnchanged}</p>
+                <p className="text-[10px] text-muted-foreground">⚠️ لم يتغير</p>
+              </div>
+              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <p className="text-lg font-bold text-blue-400">{fixReport.totalRestored}</p>
+                <p className="text-[10px] text-muted-foreground">↩️ استعادة أصل</p>
+              </div>
+            </div>
+
+            {/* Unchanged entries - most important */}
+            {fixReport.entries.filter(e => e.action === 'unchanged').length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-amber-400">⚠️ نصوص لم تتغير ({fixReport.entries.filter(e => e.action === 'unchanged').length}):</p>
+                <ScrollArea className="max-h-40">
+                  <div className="space-y-1">
+                    {fixReport.entries.filter(e => e.action === 'unchanged').map((entry, i) => (
+                      <div key={i} className="p-2 rounded text-xs bg-amber-500/5 border border-amber-500/20 cursor-pointer hover:ring-1 hover:ring-primary/40"
+                        onClick={() => { setFixReport(null); onNavigateToEntry?.(entry.key); }}>
+                        <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
+                        <p className="text-[10px] mt-0.5">{entry.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Restored entries */}
+            {fixReport.entries.filter(e => e.action === 'restored').length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-blue-400">↩️ نصوص أُعيدت للأصل الإنجليزي ({fixReport.entries.filter(e => e.action === 'restored').length}):</p>
+                <ScrollArea className="max-h-32">
+                  <div className="space-y-1">
+                    {fixReport.entries.filter(e => e.action === 'restored').map((entry, i) => (
+                      <div key={i} className="p-2 rounded text-xs bg-blue-500/5 border border-blue-500/20 cursor-pointer hover:ring-1 hover:ring-primary/40"
+                        onClick={() => { setFixReport(null); onNavigateToEntry?.(entry.key); }}>
+                        <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
+                        <p className="text-[10px] mt-0.5">{entry.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Fixed entries (collapsed by default) */}
+            {fixReport.entries.filter(e => e.action === 'fixed').length > 0 && (
+              <InnerCollapsible>
+                <InnerCollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full text-xs text-secondary">
+                    ✅ نصوص تم إصلاحها ({fixReport.entries.filter(e => e.action === 'fixed').length}) — اضغط للتفاصيل
+                  </Button>
+                </InnerCollapsibleTrigger>
+                <InnerCollapsibleContent>
+                  <ScrollArea className="max-h-32 mt-1">
+                    <div className="space-y-1">
+                      {fixReport.entries.filter(e => e.action === 'fixed').map((entry, i) => (
+                        <div key={i} className="p-1.5 rounded text-xs bg-secondary/5 border border-secondary/20">
+                          <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
+                          <p className="text-[10px] mt-0.5">{entry.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </InnerCollapsibleContent>
+              </InnerCollapsible>
+            )}
+
+            <p className="text-[10px] text-muted-foreground text-center">
+              💡 النصوص التي لم تتغير تحتاج إصلاحاً يدوياً — اضغط عليها للانتقال إليها في المحرر
+            </p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

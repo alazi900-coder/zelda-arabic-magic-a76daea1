@@ -456,6 +456,29 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
   }, [issues, onFilterByKeys]);
 
+  /** Run the same build guard used during export; if result is still unsafe, restore English */
+  const getSafeTagRepair = useCallback((entry: ExtractedEntry, text: string) => {
+    const repaired = repairTranslationTagsForBuild(entry.original, text);
+    const repairedIssues = detectIssues(entry, repaired.text);
+    const stillCritical = repairedIssues.some((issue) => issue.severity === "critical");
+    const mustRestoreOriginal =
+      !repaired.exactTagMatch ||
+      !repaired.sequenceMatch ||
+      repaired.missingClosingTags ||
+      repaired.missingControlOrPua ||
+      stillCritical;
+
+    const finalText = mustRestoreOriginal ? entry.original : repaired.text;
+
+    return {
+      finalText,
+      repairedText: repaired.text,
+      changed: finalText !== text,
+      restoredOriginal: mustRestoreOriginal && entry.original !== text,
+      repairedIssues,
+    };
+  }, []);
+
   /** Generate debug info for why an issue wasn't auto-fixed */
   const getFixDebugInfo = useCallback((issue: DiagnosticIssue): { fixResult: string; reason: string } => {
     const entry = entryMap.get(issue.key);
@@ -464,17 +487,18 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     if (!trans.trim()) return { fixResult: '', reason: '❌ الترجمة فارغة' };
 
     if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
-      const fixed = restoreTagsLocally(entry.original, trans);
-      if (fixed === trans) {
-        return { fixResult: fixed, reason: '⚠️ restoreTagsLocally أعاد نفس النص — لم يكتشف فرقاً' };
+      const safeRepair = getSafeTagRepair(entry, trans);
+      if (!safeRepair.changed) {
+        return { fixResult: safeRepair.finalText, reason: '⚠️ حارس البناء أعاد نفس النص — لم يجد تعديلاً آمناً فعلياً' };
       }
-      // Check if fix would resolve THIS specific issue
-      const fixedIssues = detectIssues(entry, fixed);
-      const stillHas = fixedIssues.some(fi => fi.category === issue.category);
+      if (safeRepair.restoredOriginal) {
+        return { fixResult: safeRepair.finalText, reason: '↩️ محاولة الإصلاح أبقت النص غير آمن، لذا سيتم استعادة الأصل الإنجليزي لمنع التجمّد' };
+      }
+      const stillHas = safeRepair.repairedIssues.some(fi => fi.category === issue.category);
       if (stillHas) {
-        return { fixResult: fixed, reason: '⚠️ الإصلاح طُبّق لكن المشكلة لا تزال موجودة بعد الإصلاح' };
+        return { fixResult: safeRepair.finalText, reason: '⚠️ تم تعديل النص لكن هذه المشكلة لا تزال موجودة بعد الحماية' };
       }
-      return { fixResult: fixed, reason: '✅ الإصلاح سيحل المشكلة' };
+      return { fixResult: safeRepair.finalText, reason: '✅ سيتم إصلاح الوسوم بآلية الحماية نفسها المستخدمة وقت البناء' };
     }
 
     if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
@@ -495,7 +519,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
-  }, [entryMap, state.translations]);
+  }, [entryMap, state.translations, getSafeTagRepair]);
 
   const applyTagFixes = useCallback((keys: string[]): number => {
     if (keys.length === 0) return 0;
@@ -506,9 +530,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const entry = entryMap.get(key);
         const trans = state.translations[key];
         if (!entry || !trans) continue;
-        const fixed = restoreTagsLocally(entry.original, trans);
-        if (fixed !== trans) {
-          onApplyFix(key, fixed);
+        const safeRepair = getSafeTagRepair(entry, trans);
+        if (safeRepair.changed) {
+          onApplyFix(key, safeRepair.finalText);
           count++;
         }
       }
@@ -521,50 +545,61 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     return 0;
-  }, [entryMap, onApplyFix, onFixSelectedLocally, state.translations]);
+  }, [entryMap, getSafeTagRepair, onApplyFix, onFixSelectedLocally, state.translations]);
 
   /** Fix a single issue */
   const handleFixSingle = useCallback((issue: DiagnosticIssue) => {
     const entry = entryMap.get(issue.key);
     if (!entry) return;
 
-    // Tag-fixable: use restoreTagsLocally
     if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+      if (onApplyFix) {
+        const safeRepair = getSafeTagRepair(entry, issue.translation);
+        if (safeRepair.changed) {
+          onApplyFix(issue.key, safeRepair.finalText);
+          toast({
+            title: safeRepair.restoredOriginal ? '↩️ استعادة آمنة' : '🔧 إصلاح آمن',
+            description: safeRepair.restoredOriginal
+              ? 'بقي النص غير آمن بعد محاولة الإصلاح، فتمت استعادة الأصل الإنجليزي'
+              : 'تم إصلاح الوسوم وترتيبها عبر حارس البناء',
+          });
+        } else {
+          toast({ title: '⚠️ لم يتغير النص', description: 'حارس البناء لم يجد تعديلاً آمناً فعلياً لهذا النص' });
+        }
+        return;
+      }
+
       const fixedCount = applyTagFixes([issue.key]);
       toast({
-        title: fixedCount > 0 ? "🔧 إصلاح" : "⚠️ لم يتغير النص",
-        description: fixedCount > 0 ? "تم إصلاح الوسوم" : "لم يتم العثور على تعديل فعلي لهذه الوسوم",
+        title: fixedCount > 0 ? '🛡️ تعديل' : '⚠️ لم يتغير النص',
+        description: fixedCount > 0 ? 'تم تعديل النص عبر حارس الحماية' : 'لم يتم العثور على تعديل فعلي لهذه الوسوم',
       });
       return;
     }
 
-    // Corrupted $N vars: repair
     if (DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
       const repaired = repairTranslationTagsForBuild(entry.original, issue.translation);
       onApplyFix(issue.key, repaired.text);
-      toast({ title: "💲 إصلاح", description: "تم إصلاح متغيرات $N" });
+      toast({ title: '💲 إصلاح', description: 'تم إصلاح متغيرات $N' });
       return;
     }
 
-    // Invisible chars: strip
-    if (issue.category === "invisible_chars" && onApplyFix) {
+    if (issue.category === 'invisible_chars' && onApplyFix) {
       onApplyFix(issue.key, issue.translation.replace(RE_INVISIBLE, ''));
-      toast({ title: "🧹 تنظيف", description: "تم إزالة الأحرف غير المرئية" });
+      toast({ title: '🧹 تنظيف', description: 'تم إزالة الأحرف غير المرئية' });
       return;
     }
 
-    // Empty translation: clear
-    if (issue.category === "empty_translation" && onApplyFix) {
-      onApplyFix(issue.key, "");
+    if (issue.category === 'empty_translation' && onApplyFix) {
+      onApplyFix(issue.key, '');
       return;
     }
 
-    // Default: restore original
     if (onApplyFix) {
       onApplyFix(issue.key, entry.original);
-      toast({ title: "↩️ استعادة النص الأصلي" });
+      toast({ title: '↩️ استعادة النص الأصلي' });
     }
-  }, [entryMap, onApplyFix, onFixSelectedLocally]);
+  }, [applyTagFixes, entryMap, getSafeTagRepair, onApplyFix]);
 
   /** Fix all issues in active category */
   const handleLocalFixAll = useCallback(() => {
@@ -575,7 +610,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
     if (TAG_FIXABLE_CATEGORIES.has(activeFilter)) {
       const count = applyTagFixes(uniqueKeys);
-      toast({ title: count > 0 ? "🔧 إصلاح" : "⚠️ لم يتغير شيء", description: `تم تعديل ${count} نص من مشاكل الوسوم` });
+      toast({ title: count > 0 ? '🛡️ إصلاح آمن' : '⚠️ لم يتغير شيء', description: `تم تعديل ${count} نص عبر حارس البناء` });
       setTimeout(() => runScan(true), 250);
       return;
     }
@@ -589,7 +624,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const repaired = repairTranslationTagsForBuild(entry.original, trans);
         if (repaired.text !== trans) { onApplyFix(key, repaired.text); count++; }
       }
-      toast({ title: "💲 إصلاح جماعي", description: `تم إصلاح متغيرات $N في ${count} نص` });
+      toast({ title: '💲 إصلاح جماعي', description: `تم إصلاح متغيرات $N في ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
@@ -600,7 +635,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const entry = entryMap.get(key);
         if (entry) { onApplyFix(key, entry.original); count++; }
       }
-      toast({ title: "↩️ استعادة جماعية", description: `تم استعادة النص الأصلي لـ ${count} نص` });
+      toast({ title: '↩️ استعادة جماعية', description: `تم استعادة النص الأصلي لـ ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
@@ -613,17 +648,17 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const cleaned = trans.replace(RE_INVISIBLE, '');
         if (cleaned !== trans) { onApplyFix(key, cleaned); count++; }
       }
-      toast({ title: "🧹 تنظيف", description: `تم إزالة الأحرف غير المرئية من ${count} نص` });
+      toast({ title: '🧹 تنظيف', description: `تم إزالة الأحرف غير المرئية من ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
 
-    if (activeFilter === "empty_translation" && onApplyFix) {
-      for (const key of uniqueKeys) onApplyFix(key, "");
-      toast({ title: "🗑️ حذف", description: `تم مسح ${uniqueKeys.length} ترجمة فارغة` });
+    if (activeFilter === 'empty_translation' && onApplyFix) {
+      for (const key of uniqueKeys) onApplyFix(key, '');
+      toast({ title: '🗑️ حذف', description: `تم مسح ${uniqueKeys.length} ترجمة فارغة` });
       setTimeout(() => runScan(true), 250);
     }
-  }, [activeFilter, issues, onFixSelectedLocally, onApplyFix, entryMap, state.translations, runScan]);
+  }, [activeFilter, applyTagFixes, issues, onApplyFix, entryMap, state.translations, runScan]);
 
   /** Fix ALL fixable issues across all categories at once */
   const handleFixEverything = useCallback(() => {
@@ -688,31 +723,55 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         continue;
       }
 
-      if (issue.category === "empty_translation") {
-        onApplyFix(issue.key, "");
+      if (issue.category === 'empty_translation') {
+        onApplyFix(issue.key, '');
         clearCount++;
         reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة' });
         processedKeys.add(issue.key);
       }
     }
 
-    // Process tag fixes with detailed reporting
     let tagFixedCount = 0;
     for (const key of tagFixKeys) {
       const entry = entryMap.get(key);
       const trans = state.translations[key];
       if (!entry || !trans) continue;
-      const fixed = restoreTagsLocally(entry.original, trans);
+
+      const safeRepair = getSafeTagRepair(entry, trans);
       const catLabel = 'وسوم تقنية';
-      if (fixed !== trans) {
-        if (onApplyFix) onApplyFix(key, fixed);
-        tagFixedCount++;
-        reportEntries.push({ key, label: entry.label, category: catLabel, action: 'fixed', reason: '🔧 تم إصلاح الوسوم التقنية' });
+      const issuesForKey = issues.filter(i => i.key === key);
+      const cats = issuesForKey.map(i => CATEGORIES.find(c => c.id === i.category)?.label || i.category).join('، ');
+
+      if (safeRepair.changed) {
+        onApplyFix(key, safeRepair.finalText);
+
+        if (safeRepair.restoredOriginal) {
+          restoreCount++;
+          reportEntries.push({
+            key,
+            label: entry.label,
+            category: catLabel,
+            action: 'restored',
+            reason: `↩️ بقي النص غير آمن بعد محاولة الإصلاح (${cats})، فتمت استعادة الأصل الإنجليزي لمنع التجمّد`,
+          });
+        } else {
+          tagFixedCount++;
+          reportEntries.push({
+            key,
+            label: entry.label,
+            category: catLabel,
+            action: 'fixed',
+            reason: '🔧 تم إصلاح الوسوم التقنية وترتيبها عبر حارس البناء',
+          });
+        }
       } else {
-        // Diagnose why it didn't change
-        const issuesForKey = issues.filter(i => i.key === key);
-        const cats = issuesForKey.map(i => CATEGORIES.find(c => c.id === i.category)?.label || i.category).join('، ');
-        reportEntries.push({ key, label: entry.label, category: catLabel, action: 'unchanged', reason: `⚠️ محرك الإصلاح أعاد نفس النص — المشاكل (${cats}) تحتاج إصلاحاً يدوياً` });
+        reportEntries.push({
+          key,
+          label: entry.label,
+          category: catLabel,
+          action: 'unchanged',
+          reason: `⚠️ حارس البناء أعاد نفس النص — المشاكل (${cats}) تحتاج إصلاحاً يدوياً`,
+        });
       }
     }
 
@@ -730,11 +789,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     setFixReport(report);
 
     toast({
-      title: totalFixed > 0 ? "⚡ إصلاح شامل" : "⚠️ لم يتم تعديل أي نص",
+      title: totalFixed > 0 ? '⚡ إصلاح شامل' : '⚠️ لم يتم تعديل أي نص',
       description: `تم تعديل ${totalFixed} نص — اضغط 📋 لعرض التقرير التفصيلي`,
     });
     setTimeout(() => runScan(false), 500);
-  }, [issues, onApplyFix, entryMap, state.translations, runScan]);
+  }, [entryMap, getSafeTagRepair, issues, onApplyFix, runScan, state.translations]);
 
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;

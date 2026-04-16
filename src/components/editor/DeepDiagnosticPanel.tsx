@@ -633,9 +633,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const processedKeys = new Set<string>();
     let tagFixKeys: string[] = [];
     let restoreCount = 0, stripCount = 0, clearCount = 0, dollarFixCount = 0;
+    const reportEntries: FixReportEntry[] = [];
 
     for (const issue of allFixableIssues) {
       if (processedKeys.has(issue.key)) continue;
+      const catLabel = CATEGORIES.find(c => c.id === issue.category)?.label || issue.category;
 
       if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
         tagFixKeys.push(issue.key);
@@ -648,7 +650,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const trans = state.translations[issue.key];
         if (entry && trans) {
           const repaired = repairTranslationTagsForBuild(entry.original, trans);
-          if (repaired.text !== trans) { onApplyFix(issue.key, repaired.text); dollarFixCount++; }
+          if (repaired.text !== trans) {
+            onApplyFix(issue.key, repaired.text);
+            dollarFixCount++;
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '💲 تم إصلاح متغيرات $N' });
+          } else {
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ محرك الإصلاح لم يجد تعديلاً فعلياً للمتغيرات' });
+          }
         }
         processedKeys.add(issue.key);
         continue;
@@ -656,7 +664,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
       if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
         const entry = entryMap.get(issue.key);
-        if (entry) { onApplyFix(issue.key, entry.original); restoreCount++; }
+        if (entry) {
+          onApplyFix(issue.key, entry.original);
+          restoreCount++;
+          reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'restored', reason: '↩️ تمت استعادة النص الأصلي الإنجليزي (المشكلة غير قابلة للإصلاح مع الحفاظ على الترجمة)' });
+        }
         processedKeys.add(issue.key);
         continue;
       }
@@ -665,7 +677,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const trans = state.translations[issue.key];
         if (trans) {
           const cleaned = trans.replace(RE_INVISIBLE, '');
-          if (cleaned !== trans) { onApplyFix(issue.key, cleaned); stripCount++; }
+          if (cleaned !== trans) {
+            onApplyFix(issue.key, cleaned);
+            stripCount++;
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧹 تم إزالة الأحرف غير المرئية' });
+          } else {
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على أحرف غير مرئية فعلية' });
+          }
         }
         processedKeys.add(issue.key);
         continue;
@@ -674,20 +692,50 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       if (issue.category === "empty_translation") {
         onApplyFix(issue.key, "");
         clearCount++;
+        reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة' });
         processedKeys.add(issue.key);
       }
     }
 
-    // Process tag fixes
-    const tagFixedCount = applyTagFixes(tagFixKeys);
+    // Process tag fixes with detailed reporting
+    let tagFixedCount = 0;
+    for (const key of tagFixKeys) {
+      const entry = entryMap.get(key);
+      const trans = state.translations[key];
+      if (!entry || !trans) continue;
+      const fixed = restoreTagsLocally(entry.original, trans);
+      const catLabel = 'وسوم تقنية';
+      if (fixed !== trans) {
+        if (onApplyFix) onApplyFix(key, fixed);
+        tagFixedCount++;
+        reportEntries.push({ key, label: entry.label, category: catLabel, action: 'fixed', reason: '🔧 تم إصلاح الوسوم التقنية' });
+      } else {
+        // Diagnose why it didn't change
+        const issuesForKey = issues.filter(i => i.key === key);
+        const cats = issuesForKey.map(i => CATEGORIES.find(c => c.id === i.category)?.label || i.category).join('، ');
+        reportEntries.push({ key, label: entry.label, category: catLabel, action: 'unchanged', reason: `⚠️ محرك الإصلاح أعاد نفس النص — المشاكل (${cats}) تحتاج إصلاحاً يدوياً` });
+      }
+    }
 
     const totalFixed = tagFixedCount + restoreCount + stripCount + clearCount + dollarFixCount;
+    const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
+    const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
+
+    const report: FixReport = {
+      totalAttempted: reportEntries.length,
+      totalFixed,
+      totalUnchanged,
+      totalRestored,
+      entries: reportEntries,
+    };
+    setFixReport(report);
+
     toast({
       title: totalFixed > 0 ? "⚡ إصلاح شامل" : "⚠️ لم يتم تعديل أي نص",
-      description: `تم تعديل ${totalFixed} نص (${tagFixedCount} وسوم، ${dollarFixCount} متغيرات، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
+      description: `تم تعديل ${totalFixed} نص — اضغط 📋 لعرض التقرير التفصيلي`,
     });
     setTimeout(() => runScan(false), 500);
-  }, [issues, onApplyFix, entryMap, state.translations, runScan, applyTagFixes]);
+  }, [issues, onApplyFix, entryMap, state.translations, runScan]);
 
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;

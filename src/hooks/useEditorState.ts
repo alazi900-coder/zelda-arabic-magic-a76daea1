@@ -342,6 +342,25 @@ export function useEditorState() {
 
   useEffect(() => {
     const loadState = async () => {
+      // Phase 1 — Schema versioning gate. Runs BEFORE any read so that an
+      // incompatible old structure can be auto-backed-up + wiped first.
+      try {
+        const result = await checkAndMigrateSchema(APP_VERSION);
+        if (result.status === "migrated") {
+          toast({
+            title: "🔄 ترقية بنية البيانات",
+            description: result.backupTriggered
+              ? `تم تنزيل نسخة احتياطية تلقائياً (من v${result.storedSchemaVersion} إلى v المستقرة) ثم مسح البيانات القديمة. يمكنك إعادة استيراد JSON.`
+              : "تم تحديث بنية البيانات. لا توجد ترجمات قديمة لاسترجاعها.",
+            duration: 12000,
+          });
+        } else if (result.status === "appVersionChanged") {
+          console.info(`[idb] App version changed ${result.storedAppVersion} → ${APP_VERSION}`);
+        }
+      } catch (err) {
+        console.error("[idb] schema check failed:", err);
+      }
+
       // Check if stored originals exist
       const savedOriginals = await idbGet<Record<string, string>>("originalTexts");
       if (savedOriginals && Object.keys(savedOriginals).length > 0) {

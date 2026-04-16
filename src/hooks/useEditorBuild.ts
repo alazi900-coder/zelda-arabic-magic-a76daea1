@@ -616,9 +616,25 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         if (transLen > maxAllowed) {
           let truncated = trans;
           while (new TextEncoder().encode(truncated).length > maxAllowed && truncated.length > 1) {
-            truncated = truncated.slice(0, Math.floor(truncated.length * 0.9));
+            // Cut at word boundary (last space) instead of mid-character
+            const cutPoint = Math.floor(truncated.length * 0.9);
+            const spaceIdx = truncated.lastIndexOf(' ', cutPoint);
+            truncated = truncated.slice(0, spaceIdx > cutPoint * 0.5 ? spaceIdx : cutPoint);
           }
-          nonEmptyTranslations[key] = truncated;
+
+          // Post-truncation safety: verify control chars & PUA survived
+          const origControlCount = (orig.match(/[\uFFF9-\uFFFC]/g) || []).length;
+          const origPuaCount = (orig.match(/[\uE000-\uE0FF]/g) || []).length;
+          const truncControlCount = (truncated.match(/[\uFFF9-\uFFFC]/g) || []).length;
+          const truncPuaCount = (truncated.match(/[\uE000-\uE0FF]/g) || []).length;
+
+          if (truncControlCount < origControlCount || truncPuaCount < origPuaCount) {
+            // Truncation destroyed vital chars — revert to original English
+            nonEmptyTranslations[key] = orig;
+            console.warn(`[BUILD-TRUNC] Reverted "${key}" to English: truncation lost control/PUA chars`);
+          } else {
+            nonEmptyTranslations[key] = truncated;
+          }
           truncatedCount++;
         }
       }
@@ -867,6 +883,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             bracketMismatch ||
             rubyOpenCount !== rubyCloseCount ||
             !tagRepair.exactTagMatch ||
+            !tagRepair.sequenceMatch ||
             tagRepair.missingClosingTags ||
             tagRepair.missingControlOrPua
           ) {

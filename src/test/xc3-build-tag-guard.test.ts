@@ -33,7 +33,6 @@ describe("repairTranslationTagsForBuild", () => {
 
     expect(result.exactTagMatch).toBe(false);
   });
-  });
 
   it("fixes دولار1 back to $1", () => {
     const result = repairTranslationTagsForBuild(

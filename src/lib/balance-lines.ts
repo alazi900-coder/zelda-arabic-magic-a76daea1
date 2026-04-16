@@ -190,11 +190,20 @@ function dpSplitShielded(
   return lines;
 }
 
-/** Rebalance text lines to fix orphan words. Client-side mirror of edge function logic. */
-export function balanceLines(text: string, targetMax?: number, maxLines?: number): string {
-  const limit = targetMax ?? TARGET_MAX;
-  const hardMax = limit + 6;
-  const stripped = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+/**
+ * XC3 cinematic line-break marker. The game treats `[XENO:n ]` as a HARD line break:
+ * the very next character must be a newline, and the word that follows is the start
+ * of a brand-new visual line. We split on this marker FIRST, then balance each chunk
+ * independently — never letting the DP redistribute words across it.
+ */
+const XENO_N_HARD_BREAK = /\[\s*XENO\s*:\s*n\s*\]\s*\n?/g;
+
+/**
+ * Internal: balance a SINGLE chunk (no [XENO:n ] inside) into lines using DP.
+ */
+function balanceChunk(chunk: string, limit: number, hardMax: number, maxLines?: number): string {
+  const stripped = chunk.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  if (!stripped) return stripped;
   const { shielded, map } = shieldTagsForBalance(stripped);
 
   let displayLen = shielded.length;
@@ -218,27 +227,18 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
 
   const totalLen = words.reduce((s, w) => s + wordDisplayLen(w), 0) + (words.length - 1);
   let numLines = Math.max(2, Math.ceil(totalLen / limit));
-
-  // Enforce maxLines cap if provided
-  if (maxLines && maxLines > 0) {
-    numLines = Math.min(numLines, maxLines);
-  }
+  if (maxLines && maxLines > 0) numLines = Math.min(numLines, maxLines);
 
   let bestResult: string[] | null = null;
   let bestCost = Infinity;
-
   const upperBound = maxLines ? Math.min(numLines, maxLines) : Math.min(numLines + 1, words.length);
   for (let nLines = numLines; nLines <= upperBound; nLines++) {
     const result = dpSplitShielded(words, nLines, wordDisplayLen, hardMax);
     if (result) {
       const cost = scoreSplit(
-        result.map((line) => {
-          const displayLine = line
-            .split(/\s+/)
-            .map((w) => 'x'.repeat(wordDisplayLen(w)))
-            .join(' ');
-          return displayLine;
-        })
+        result.map((line) =>
+          line.split(/\s+/).map((w) => 'x'.repeat(wordDisplayLen(w))).join(' ')
+        )
       );
       if (cost < bestCost) {
         bestCost = cost;
@@ -253,12 +253,58 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
 }
 
 /**
- * XC3 cinematic line-break marker. The game treats `[XENO:n ]` as a HARD line break:
- * the very next character must be a newline, and the word that follows is the start
- * of a brand-new visual line. We therefore split on this marker FIRST, then balance
- * each chunk independently — never letting the DP redistribute words across it.
+ * Rebalance text lines.
+ *
+ * CRITICAL XC3 BEHAVIOR: `[XENO:n ]` is a HARD cinematic line break in the original.
+ * We split on `[XENO:n ]` boundaries first, balance each chunk independently with
+ * its own DP pass, then re-join — the DP never crosses the tag, and the word that
+ * follows it never ends up alone on its own line by accident.
  */
-const XENO_N_HARD_BREAK = /\[\s*XENO\s*:\s*n\s*\]\s*\n?/g;
+export function balanceLines(text: string, targetMax?: number, maxLines?: number): string {
+  const limit = targetMax ?? TARGET_MAX;
+  const hardMax = limit + 6;
+
+  // Step 1: split on hard XENO:n breaks (the tag stays at the end of its chunk).
+  const chunks: string[] = [];
+  const re = new RegExp(XENO_N_HARD_BREAK.source, 'g');
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index).replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]/);
+    const tagText = tagMatch ? tagMatch[0] : '[XENO:n ]';
+    chunks.push((before ? before + ' ' : '') + tagText);
+    lastIndex = match.index + match[0].length;
+  }
+  const tail = text.slice(lastIndex).replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  if (tail) chunks.push(tail);
+
+  // No XENO:n found — legacy single-chunk behavior.
+  if (chunks.length <= 1) {
+    return balanceChunk(text, limit, hardMax, maxLines);
+  }
+
+  // Step 2: distribute the maxLines budget across chunks proportionally to word count.
+  let perChunkMax: number[] | undefined;
+  if (maxLines && maxLines > 0) {
+    const wordCounts = chunks.map(c =>
+      c.replace(XENO_N_HARD_BREAK, ' ').split(/\s+/).filter(Boolean).length
+    );
+    const total = wordCounts.reduce((a, b) => a + b, 0) || 1;
+    const extra = Math.max(0, maxLines - chunks.length);
+    perChunkMax = chunks.map((_, i) =>
+      Math.max(1, 1 + Math.round((wordCounts[i] / total) * extra))
+    );
+  }
+
+  // Step 3: balance each chunk independently — DP never crosses [XENO:n ].
+  const balanced = chunks.map((chunk, i) =>
+    balanceChunk(chunk, limit, hardMax, perChunkMax ? perChunkMax[i] : undefined)
+  );
+
+  return balanced.join('\n');
+}
+
 
 function splitChunkEvenly(
   chunk: string,

@@ -178,7 +178,7 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   for (let i = 0; i < origTags.length; i++) {
     if (origTags[i] !== transTags[i]) { alreadyCorrect = false; break; }
   }
-  if (alreadyCorrect) return ensureXenoNNewlines(translation);
+  if (alreadyCorrect) return normalizeWhitespaceAfterReorder(ensureXenoNNewlines(translation), original);
 
   // Replace each tag in the translation, in order, with the tag at the matching index in original
   let result = '';
@@ -191,13 +191,39 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   }
   result += translation.slice(cursor);
 
-  // Final safety pass: ensure every [XENO:n ] is followed by \n
-  return ensureXenoNNewlines(result);
+  // Final safety pass: ensure every [XENO:n ] is followed by \n, then clean whitespace
+  result = ensureXenoNNewlines(result);
+  return normalizeWhitespaceAfterReorder(result, original);
 }
 
 /** Force every [XENO:n ] in the text to be followed by a newline char. */
 function ensureXenoNNewlines(text: string): string {
   return text.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+}
+
+/**
+ * Clean up artifacts created by reordering:
+ * - Collapse 3+ consecutive newlines to 2 (max one blank line)
+ * - Remove blank lines that the original didn't have
+ * - Trim trailing spaces on each line
+ * - Remove spaces immediately before/after [XENO:n ]\n boundary
+ */
+function normalizeWhitespaceAfterReorder(text: string, original: string): string {
+  let result = text;
+  // Trim trailing spaces on each line
+  result = result.replace(/[ \t]+\n/g, '\n');
+  // Remove leading spaces after newline that came from tag movement
+  result = result.replace(/\n[ \t]+/g, '\n');
+  // Collapse 3+ newlines into 2
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  // If original has no blank lines (no \n\n), strip them from result too
+  if (!/\n\s*\n/.test(original)) {
+    result = result.replace(/\n\s*\n/g, '\n');
+  }
+  // Collapse runs of spaces (but not newlines) to single space
+  result = result.replace(/[ \t]{2,}/g, ' ');
+  return result;
 }
 
 export function repairTranslationTagsForBuild(original: string, translation: string): BuildTagRepairResult {
@@ -220,6 +246,9 @@ export function repairTranslationTagsForBuild(original: string, translation: str
   if (/\[XENO:n\s*\]\n/.test(original)) {
     repairedText = repairedText.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
   }
+
+  // Step 5: Final whitespace cleanup — never produce more blank lines than original had
+  repairedText = normalizeWhitespaceAfterReorder(repairedText, original);
 
   const diff = diffTechnicalTags(original, repairedText);
 

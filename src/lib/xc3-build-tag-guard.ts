@@ -200,6 +200,31 @@ function ensureXenoNNewlines(text: string): string {
   return text.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
 }
 
+/**
+ * Clean up artifacts created by reordering:
+ * - Collapse 3+ consecutive newlines to 2 (max one blank line)
+ * - Remove blank lines that the original didn't have
+ * - Trim trailing spaces on each line
+ * - Remove spaces immediately before/after [XENO:n ]\n boundary
+ */
+function normalizeWhitespaceAfterReorder(text: string, original: string): string {
+  let result = text;
+  // Trim trailing spaces on each line
+  result = result.replace(/[ \t]+\n/g, '\n');
+  // Remove leading spaces after newline that came from tag movement
+  result = result.replace(/\n[ \t]+/g, '\n');
+  // Collapse 3+ newlines into 2
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  // If original has no blank lines (no \n\n), strip them from result too
+  if (!/\n\s*\n/.test(original)) {
+    result = result.replace(/\n\s*\n/g, '\n');
+  }
+  // Collapse runs of spaces (but not newlines) to single space
+  result = result.replace(/[ \t]{2,}/g, ' ');
+  return result;
+}
+
 export function repairTranslationTagsForBuild(original: string, translation: string): BuildTagRepairResult {
   // Step 1: Fix corrupted $N variables first
   let working = repairDollarVars(original, translation);

@@ -19,6 +19,8 @@ export default function UpdateBanner() {
   const [updating, setUpdating] = useState(false);
   const [forceUpdating, setForceUpdating] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;

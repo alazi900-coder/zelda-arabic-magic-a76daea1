@@ -3,10 +3,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil } from "lucide-react";
+import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil, Wand2 } from "lucide-react";
 import { EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 import { balanceLines, hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { toast } from "sonner";
 
 interface BalanceResult {
   key: string;

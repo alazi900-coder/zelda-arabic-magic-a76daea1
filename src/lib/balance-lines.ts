@@ -372,8 +372,8 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
   const re = new RegExp(XENO_N_HARD_BREAK.source, 'g');
   while ((match = re.exec(text)) !== null) {
     const before = text.slice(lastIndex, match.index).trim();
-    // Re-attach the [XENO:n ] tag (without trailing whitespace) to the preceding chunk.
-    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]/);
+    // Re-attach the hard-break tag (without trailing whitespace) to the preceding chunk.
+    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/);
     const tagText = tagMatch ? tagMatch[0] : '[XENO:n ]';
     chunks.push((before ? before + ' ' : '') + tagText);
     lastIndex = match.index + match[0].length;

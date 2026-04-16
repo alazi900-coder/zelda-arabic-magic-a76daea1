@@ -832,7 +832,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       }
     }
 
-    const totalFixed = tagFixedCount + restoreCount + stripCount + clearCount + dollarFixCount;
+    const totalFixed = tagFixedCount + restoreCount + stripCount + clearCount + dollarFixCount + xenoNFixCount;
     const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
     const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
 

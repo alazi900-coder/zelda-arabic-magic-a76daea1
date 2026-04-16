@@ -685,11 +685,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ]' });
       return;
     }
-
-    if (issue.category === 'empty_translation' && onApplyFix) {
-      onApplyFix(issue.key, '');
+    if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const englishLineCount = entry.original.split('\n').length;
+      const rebalanced = englishLineCount > 1
+        ? splitEvenlyByLines(issue.translation, englishLineCount)
+        : balanceLines(issue.translation);
+      if (rebalanced !== issue.translation) {
+        onApplyFix(issue.key, rebalanced);
+        toast({ title: '⚖️ إعادة موازنة', description: 'أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]' });
+      } else {
+        toast({ title: '✨ متوازن بالفعل', description: 'النص موزّع بشكل صحيح' });
+      }
       return;
     }
+
 
     if (onApplyFix) {
       onApplyFix(issue.key, entry.original);

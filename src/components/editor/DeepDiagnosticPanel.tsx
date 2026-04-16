@@ -832,6 +832,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (activeFilter === 'empty_translation' && (onApplyFix || onApplyFixesBatch)) {
+      const updates = Object.fromEntries(uniqueKeys.map((key) => [key, '']));
+      const count = applyBatchUpdates(updates);
+      toast({ title: '🗑️ حذف', description: `تم مسح ${count} ترجمة فارغة` });
+      setTimeout(() => runScan(true), 250);
+    }
+  }, [activeFilter, applyBatchUpdates, applyTagFixes, issues, onApplyFix, onApplyFixesBatch, entryMap, state.translations, runScan]);
 
   /** Fix ALL fixable issues across all categories at once (chunked to avoid browser freeze) */
   const handleFixEverything = useCallback(() => {

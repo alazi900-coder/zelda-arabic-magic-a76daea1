@@ -72,6 +72,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
+  { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
 ];
 
@@ -356,6 +357,19 @@ export function detectIssues(entry: ExtractedEntry, translation: string): Diagno
     });
   }
 
+  // [XENO:n ] not followed by \n
+  const xenoNMatches = [...trimmed.matchAll(/\[XENO:n\s*\]/g)];
+  if (xenoNMatches.length > 0) {
+    const missingNewline = xenoNMatches.filter(m => {
+      const afterIdx = m.index! + m[0].length;
+      return afterIdx >= trimmed.length || trimmed[afterIdx] !== '\n';
+    });
+    if (missingNewline.length > 0) {
+      issues.push({ ...base, severity: "warning", category: "xeno_n_no_newline",
+        message: `${missingNewline.length} وسم [XENO:n ] غير متبوع بسطر جديد (\\n) — يمنع كسر السطر` });
+    }
+  }
+
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
     issues.push({ ...base, severity: "info", category: "identical_to_original",
       message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });
@@ -384,8 +398,10 @@ const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars", "technical_mismatch"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
+// Categories fixable by inserting \n after [XENO:n ]
+const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);

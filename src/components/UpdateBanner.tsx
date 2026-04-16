@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Download, Save } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { RefreshCw, Download, Save, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { exportEditorStateBackup } from "@/lib/idb-storage";
+import { exportEditorStateBackup, importEditorStateBackup } from "@/lib/idb-storage";
 
 /**
  * Global update UI:

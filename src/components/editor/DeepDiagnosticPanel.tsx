@@ -933,7 +933,27 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           continue;
         }
 
-        if (issue.category === 'empty_translation') {
+        if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
+          const entry = entryMap.get(issue.key);
+          const trans = state.translations[issue.key];
+          if (entry && trans) {
+            const englishLineCount = entry.original.split('\n').length;
+            const rebalanced = englishLineCount > 1
+              ? splitEvenlyByLines(trans, englishLineCount)
+              : balanceLines(trans);
+            if (rebalanced !== trans) {
+              updates[issue.key] = rebalanced;
+              counters.xenoN++; // reuse counter (closest semantic)
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '⚖️ أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]' });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ النص متوازن بالفعل' });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
+
+
           updates[issue.key] = '';
           counters.clear++;
           reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة' });

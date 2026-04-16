@@ -59,6 +59,8 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [rebalancing, setRebalancing] = useState(false);
+  const [rebalanceProgress, setRebalanceProgress] = useState({ current: 0, total: 0, fixed: 0 });
 
   const handleScan = useCallback(() => {
     setScanning(true);

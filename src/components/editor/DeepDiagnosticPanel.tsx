@@ -3,13 +3,30 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Filter, Wrench, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Filter, Wrench, Zap, FileText } from "lucide-react";
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags, repairTranslationTagsForBuild, checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+interface FixReportEntry {
+  key: string;
+  label: string;
+  category: string;
+  action: 'fixed' | 'unchanged' | 'restored';
+  reason: string;
+}
+
+interface FixReport {
+  totalAttempted: number;
+  totalFixed: number;
+  totalUnchanged: number;
+  totalRestored: number;
+  entries: FixReportEntry[];
+}
 
 // ═══════════════════════════════════════════════════
 // Types

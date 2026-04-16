@@ -77,3 +77,31 @@ describe("repairTranslationTagsForBuild", () => {
     );
     expect(result.text).toContain("دولار1");
   });
+
+  it("preserves $1 position in Arabic text without flipping", () => {
+    const result = repairTranslationTagsForBuild(
+      "You earned $1 points",
+      "حصلت على $1 نقطة",
+    );
+    expect(result.text).toBe("حصلت على $1 نقطة");
+    expect(result.exactTagMatch).toBe(true);
+  });
+
+  it("preserves multiple $N vars in correct order", () => {
+    const result = repairTranslationTagsForBuild(
+      "$1 dealt $2 damage to $3",
+      "$1 سبّب $2 ضرر لـ $3",
+    );
+    expect(result.text).toContain("$1");
+    expect(result.text).toContain("$2");
+    expect(result.text).toContain("$3");
+    expect(result.exactTagMatch).toBe(true);
+  });
+
+  it("restores missing $1 in Arabic translation", () => {
+    const result = repairTranslationTagsForBuild(
+      "Gained $1 EXP",
+      "حصلت على 1 نقطة خبرة",
+    );
+    expect(result.text).toContain("$1");
+  });

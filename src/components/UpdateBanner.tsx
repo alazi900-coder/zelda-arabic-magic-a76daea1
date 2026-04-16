@@ -96,6 +96,46 @@ export default function UpdateBanner() {
     }
   }, [backingUp]);
 
+  const handleImportClick = useCallback(() => {
+    if (importing) return;
+    fileInputRef.current?.click();
+  }, [importing]);
+
+  const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so the user can pick the same file again later.
+    e.target.value = "";
+    if (!file) return;
+
+    if (!confirm("سيتم استبدال جميع الترجمات الحالية بمحتوى ملف النسخة الاحتياطية. هل تريد المتابعة؟")) {
+      return;
+    }
+
+    setImporting(true);
+    toast.info("⏳ جارٍ استيراد النسخة الاحتياطية...");
+    try {
+      const result = await importEditorStateBackup(file);
+      if (!result.ok) {
+        toast.error("فشل الاستيراد", { description: result.reason ?? "ملف غير صالح" });
+        return;
+      }
+      const parts: string[] = [];
+      if (result.importedEditorState) parts.push("الترجمات");
+      if (result.importedOriginals) parts.push("النصوص الأصلية");
+      toast.success("✅ تم الاستيراد بنجاح", {
+        description: `تمت استعادة: ${parts.join(" + ")}. سيتم إعادة التحميل...`,
+      });
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) {
+      console.error(err);
+      toast.error("فشل الاستيراد", {
+        description: err instanceof Error ? err.message : "خطأ غير معروف",
+      });
+    } finally {
+      setImporting(false);
+    }
+  }, []);
+
   /**
    * FORCE-UPDATE: clears every layer of caching (Service Worker, Cache Storage,
    * sessionStorage) and triggers a hard reload — IndexedDB editor state is

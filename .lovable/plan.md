@@ -1,68 +1,84 @@
 
 
-# خطة إصلاح تجمّد اللعبة أثناء المشاهد السينمائية
+## تقييمي للتحليل
 
-## المشكلة
-اللعبة تتجمّد أثناء المشاهد السينمائية رغم كل أنظمة الحماية الموجودة. بعد فحص شامل لكود البناء وجدت **3 ثغرات** تسمح لنصوص تالفة بالمرور:
+التحليل دقيق ومتقدم جداً. هذه قراءتي بصراحة:
 
----
+**أصاب فيه (100%):**
+- **غياب Single Source of Truth** — النص يمر بـ7+ تحويلات وكل طبقة تعيد تفسيره.
+- **`[XENO:n ]` كـ semantic anchor** — حلّيناها جزئياً (hard-break في balancing) لكنها لم تصبح Token حقيقي في كامل الـpipeline.
+- **Cache/versioning** — حرج. لا يوجد `SCHEMA_VERSION` يمسح IndexedDB عند تغيّر بنية البيانات.
+- **Non-deterministic pipeline** — صحيح جزئياً. ترتيب arabic-processing + tag-protection + balance أحياناً يعطي مخرجات مختلفة.
+- **Web Worker للأداء** — صحيح للجوال.
 
-## الأخطاء المكتشفة
+**مبالغ فيه:**
+- **"Parser based بدل regex"** — ROI منخفض، الـregex يغطي >98%.
+- **"Timing weight سينمائي"** — micro-optimization، لن يحل تجمّد اللعبة.
+- **"Fingerprint للملفات المبنية"** — موجود جزئياً عبر `mapPresentationFormsToStandard`.
 
-### 1. التقليص يقطع الوسوم التقنية (خطير)
-في `useEditorBuild.ts` سطر 618، عند تقليص النصوص الطويلة:
-```
-truncated = truncated.slice(0, Math.floor(truncated.length * 0.9))
-```
-هذا يقطع النص بشكل عشوائي — قد يقطع في منتصف رمز تحكم `U+FFF9` أو وسم `[XENO:wait]`, مما ينتج نصاً تالفاً يمر من بقية الفحوصات.
+**ما لم يذكره وهو حرج:**
+- **Service Worker caching للأصول** — السبب الحقيقي لـ"التحديثات لا تصل"، أهم من schema versioning.
+- **IndexedDB migration** — بدون migration script، حتى مع SCHEMA_VERSION ستفقد ترجمات المستخدمين.
 
-### 2. بوابة حماية MSBT لا تفحص ترتيب الوسوم
-في `useEditorBuild.ts` سطور 865-876، بوابة الحماية لملفات MSBT (مسار السيرفر) تتحقق من `exactTagMatch` لكن **لا تتحقق من `sequenceMatch`**. الوسوم قد تكون موجودة لكن بترتيب مقلوب — وهذا يسبب تجمّد المشاهد.
+## إعادة ترتيب الأولويات حسب الأثر الفعلي
 
-### 3. لا يوجد فحص بعد التقليص
-بعد تقليص النصوص (سطر 607-628)، لا يتم إعادة فحص سلامة رموز التحكم والوسوم. نص مقطوع يمر مباشرة للبناء.
-
----
-
-## خطة الإصلاح
-
-### الملف: `src/hooks/useEditorBuild.ts`
-
-**إصلاح 1 — تقليص آمن للوسوم:**
-تعديل حلقة التقليص (سطر 607-628) لتصبح "ذكية":
-- بعد تقليص النص، فحص سلامة رموز التحكم (U+FFF9-FFFC) و PUA (U+E000-E0FF)
-- إذا فقد أي رمز، استعادة النص الأصلي بدلاً من استخدام النص المقطوع
-- القطع عند حدود الكلمات (مسافة) وليس في منتصف حرف
-
-**إصلاح 2 — إضافة `sequenceMatch` لبوابة MSBT:**
-في سطر 865، إضافة `!tagRepair.sequenceMatch` لشرط الاستبعاد:
-```typescript
-if (
-  hasNullChar ||
-  bracketMismatch ||
-  rubyOpenCount !== rubyCloseCount ||
-  !tagRepair.exactTagMatch ||
-  !tagRepair.sequenceMatch ||  // ← جديد
-  tagRepair.missingClosingTags ||
-  tagRepair.missingControlOrPua
-)
+```text
+1. Schema versioning + IndexedDB migration  ← يحل "التحديثات لا تصل"
+2. XENO:n كـ Token حقيقي في كامل الـpipeline ← يحل تجمّد المشاهد + drift
+3. Pipeline deterministic (pure functions)   ← يحل عدم الاتساق
+4. Web Worker للمعالجة الثقيلة              ← يحل تهنيج الجوال
+5. Parser-based / Timing weight             ← مؤجل
 ```
 
-**إصلاح 3 — فحص ما بعد التقليص:**
-إضافة حلقة فحص بعد التقليص مباشرة (بعد سطر 628):
-- لكل نص مُقلّص، فحص تطابق رموز التحكم/PUA مع الأصل
-- إذا فقد رموز → استعادة النص الأصلي الإنجليزي
-- تسجيل عدد النصوص المُستعادة في تقرير الحماية
+## الخطة (3 مراحل)
 
-### الملف: `src/test/xc3-build-tag-guard.test.ts`
+### المرحلة 1 — Schema Versioning (الأكثر أثراً، صغيرة)
+- إضافة `SCHEMA_VERSION = 1` في `src/lib/idb-storage.ts`.
+- عند فتح IndexedDB: فحص النسخة المخزّنة → migration أو wipe آمن.
+- تخزين `appVersion` (من `version.ts`) داخل IndexedDB.
+- عند فتح المحرر: إذا اختلفت النسخة → toast يقترح "جلب التحديث" تلقائياً.
+- زر "نسخ احتياطي قبل الترقية" يصدّر JSON.
 
-**إصلاح 4 — إصلاح خطأ بناء الاختبارات:**
-سطر 35 يحتوي `});` زائدة تغلق `describe` مبكراً — الاختبارات بعدها (fixes دولار1, etc.) خارج نطاق `describe`. هذا خطأ بناء.
+**ملفات متأثرة:** `src/lib/idb-storage.ts`, `src/hooks/useEditorState.ts`, `src/components/UpdateBanner.tsx`.
 
----
+### المرحلة 2 — XENO:n / PageBreak كـ Token حقيقي
+- ملف جديد `src/lib/text-tokens.ts`:
+  ```ts
+  type TextToken =
+    | { kind: 'text'; value: string }
+    | { kind: 'hardBreak'; raw: string }   // [XENO:n ]\n + [System:PageBreak ]
+    | { kind: 'tag'; raw: string }
+    | { kind: 'pua'; raw: string }
+    | { kind: 'control'; raw: string }
+  ```
+- تحديث `balance-lines.ts` و`xc3-tag-protection.ts` ليستخدما الـtokens مباشرة.
+- ضمان: لا توجد عملية تنقل/تحذف `hardBreak`.
 
-## الأثر المتوقع
-- النصوص المقطوعة لن تفقد وسوم تقنية بعد الآن
-- ملفات MSBT ستُحمى من ترتيب الوسوم المقلوب
-- تقرير الحماية سيُظهر النصوص التي استُعيدت بسبب التقليص
+### المرحلة 3 — Web Worker للجوال
+- `src/workers/diagnostic.worker.ts` ينقل: `detectIssues` + الموازنة الجماعية.
+- Wrapper يستخدم Worker إذا متاح، وإلا fallback main thread.
+
+## توصيتي
+
+ابدأ بـ**المرحلة 1 فقط** الآن:
+- تحل المشكلة الفورية ("التحديثات لا تصل")
+- ~3 ملفات
+- لا تكسر شيئاً
+- ROI فوري ومرئي
+
+ثم نقيّم قبل الانتقال لـ2 و3.
+
+## أسئلة للحسم
+
+**1. نطاق التنفيذ؟**
+- (أ) المرحلة 1 فقط — موصى به
+- (ب) المرحلتان 1 و2 معاً
+- (ج) الثلاث دفعة واحدة
+
+**2. عند ترقية الـschema، ماذا نفعل بترجمات المستخدم القديمة؟**
+- (أ) تنزيل JSON تلقائي قبل المسح — الأكثر أماناً ✅
+- (ب) Dialog يسأل المستخدم
+- (ج) مسح فوري بدون سؤال
+
+أخبرني بإجاباتك وسأبدأ التنفيذ فور الموافقة.
 

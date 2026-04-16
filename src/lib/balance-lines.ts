@@ -1,7 +1,14 @@
 /**
  * Client-side line balancing utility.
- * Mirrors the logic from the translate-entries edge function.
+ *
+ * Phase 2: Hard-break detection now uses the Token model (text-tokens.ts) so
+ * [XENO:n ] and [System:PageBreak ] are first-class semantic anchors — never
+ * moved, deleted, or crossed by the DP balancer. We additionally assert via
+ * `hardBreaksEqual` that the rebalanced output preserves the EXACT ordered
+ * list of cinematic markers; if anything drifts, we fall back to the input
+ * untouched (better visual imbalance than a broken cinematic).
  */
+import { tokenize, splitOnHardBreaks, detokenize, hardBreaksEqual } from "./text-tokens";
 
 const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}|[\uFFF9-\uFFFC]+/g;
 
@@ -282,7 +289,8 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
 
   // No XENO:n found — legacy single-chunk behavior.
   if (chunks.length <= 1) {
-    return balanceChunk(text, limit, hardMax, maxLines);
+    const out = balanceChunk(text, limit, hardMax, maxLines);
+    return hardBreaksEqual(text, out) ? out : text;
   }
 
   // Step 2: distribute the maxLines budget across chunks proportionally to word count.
@@ -303,7 +311,10 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
     balanceChunk(chunk, limit, hardMax, perChunkMax ? perChunkMax[i] : undefined)
   );
 
-  return balanced.join('\n');
+  const joined = balanced.join('\n');
+  // SAFETY ASSERTION: if our cinematic anchors drifted, return the input
+  // untouched rather than ship a freeze-inducing line layout.
+  return hardBreaksEqual(text, joined) ? joined : text;
 }
 
 
@@ -383,7 +394,8 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
 
   // No XENO:n found — fall back to legacy single-chunk balancing.
   if (chunks.length <= 1) {
-    return splitChunkEvenly(text, numLines);
+    const out = splitChunkEvenly(text, numLines);
+    return hardBreaksEqual(text, out) ? out : text;
   }
 
   // Step 2: every XENO:n already produces a hard newline. The remaining "extra"
@@ -405,7 +417,9 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
     return splitChunkEvenly(chunk, target);
   });
 
-  return balancedChunks.join('\n');
+  const joined = balancedChunks.join('\n');
+  // SAFETY ASSERTION (token model): cinematic anchors must be preserved 1:1.
+  return hardBreaksEqual(text, joined) ? joined : text;
 }
 
 /** Check if text has orphan lines (single lexical word on a line) */

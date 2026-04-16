@@ -2,6 +2,27 @@ const DB_NAME = "arabize-editor";
 const STORE_NAME = "files";
 const DB_VERSION = 1;
 
+/**
+ * SCHEMA_VERSION — bump this whenever the SHAPE of stored objects in IndexedDB
+ * changes in a backwards-incompatible way (e.g. translations key format,
+ * entry structure, protected-set encoding). On mismatch we will:
+ *   1. Auto-export a JSON backup of `editorState` to the user's downloads.
+ *   2. Wipe IDB (preserving nothing).
+ *   3. Reload so the app starts on the fresh schema.
+ *
+ * Do NOT bump for cosmetic / additive changes — only when old data would
+ * actively misbehave under new code.
+ */
+export const SCHEMA_VERSION = 1;
+
+const META_KEY = "__schema_meta__";
+
+interface SchemaMeta {
+  schemaVersion: number;
+  appVersion?: string;
+  updatedAt: string;
+}
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -55,5 +76,136 @@ export async function idbClearExcept(keepKeys: string[]): Promise<void> {
   // Restore preserved keys
   for (const [key, val] of Object.entries(preserved)) {
     await idbSet(key, val);
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Schema versioning + migration
+// ───────────────────────────────────────────────────────────────────────────
+
+export async function getSchemaMeta(): Promise<SchemaMeta | undefined> {
+  return idbGet<SchemaMeta>(META_KEY);
+}
+
+export async function setSchemaMeta(meta: Partial<SchemaMeta>): Promise<void> {
+  const existing = (await getSchemaMeta()) ?? {
+    schemaVersion: SCHEMA_VERSION,
+    updatedAt: new Date().toISOString(),
+  };
+  await idbSet(META_KEY, {
+    ...existing,
+    ...meta,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Trigger a JSON download in the browser. Safe to call from anywhere. */
+function downloadJson(filename: string, data: unknown): void {
+  try {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    console.error("[idb] Failed to trigger backup download:", err);
+  }
+}
+
+export interface SchemaCheckResult {
+  status: "fresh" | "match" | "appVersionChanged" | "migrated";
+  storedSchemaVersion?: number;
+  storedAppVersion?: string;
+  backupTriggered: boolean;
+}
+
+/**
+ * Run on app start. Compares stored schema/app versions against the running
+ * build:
+ *   - Schema mismatch → auto-export `editorState` as JSON backup, then wipe IDB.
+ *   - App version changed → return "appVersionChanged" so the UI can surface a
+ *     "تحديث متاح" toast (we do NOT wipe in this case — only on schema change).
+ *   - First run → write meta and return "fresh".
+ */
+export async function checkAndMigrateSchema(currentAppVersion: string): Promise<SchemaCheckResult> {
+  const meta = await getSchemaMeta();
+
+  // First run — no meta yet.
+  if (!meta) {
+    await setSchemaMeta({ schemaVersion: SCHEMA_VERSION, appVersion: currentAppVersion });
+    return { status: "fresh", backupTriggered: false };
+  }
+
+  // Schema mismatch — auto-backup then wipe.
+  if (meta.schemaVersion !== SCHEMA_VERSION) {
+    let backupTriggered = false;
+    try {
+      const editorState = await idbGet<unknown>("editorState");
+      const originals = await idbGet<unknown>("originalTexts");
+      if (editorState || originals) {
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        downloadJson(`arabize-backup-schema-v${meta.schemaVersion}-to-v${SCHEMA_VERSION}-${ts}.json`, {
+          schemaVersion: meta.schemaVersion,
+          appVersion: meta.appVersion,
+          exportedAt: new Date().toISOString(),
+          editorState,
+          originalTexts: originals,
+        });
+        backupTriggered = true;
+      }
+    } catch (err) {
+      console.error("[idb] backup before migration failed:", err);
+    }
+
+    await idbClear();
+    await setSchemaMeta({ schemaVersion: SCHEMA_VERSION, appVersion: currentAppVersion });
+    return {
+      status: "migrated",
+      storedSchemaVersion: meta.schemaVersion,
+      storedAppVersion: meta.appVersion,
+      backupTriggered,
+    };
+  }
+
+  // App version changed but schema is still compatible — just refresh meta.
+  if (meta.appVersion !== currentAppVersion) {
+    await setSchemaMeta({ schemaVersion: SCHEMA_VERSION, appVersion: currentAppVersion });
+    return {
+      status: "appVersionChanged",
+      storedSchemaVersion: meta.schemaVersion,
+      storedAppVersion: meta.appVersion,
+      backupTriggered: false,
+    };
+  }
+
+  return {
+    status: "match",
+    storedSchemaVersion: meta.schemaVersion,
+    storedAppVersion: meta.appVersion,
+    backupTriggered: false,
+  };
+}
+
+/** Manual backup — used by the "نسخة احتياطية قبل الترقية" button. */
+export async function exportEditorStateBackup(label = "manual"): Promise<boolean> {
+  try {
+    const editorState = await idbGet<unknown>("editorState");
+    const originals = await idbGet<unknown>("originalTexts");
+    if (!editorState && !originals) return false;
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadJson(`arabize-backup-${label}-${ts}.json`, {
+      schemaVersion: SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      editorState,
+      originalTexts: originals,
+    });
+    return true;
+  } catch (err) {
+    console.error("[idb] manual backup failed:", err);
+    return false;
   }
 }

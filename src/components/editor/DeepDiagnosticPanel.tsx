@@ -992,17 +992,36 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         <Card className="mt-1 border-destructive/20">
           <CardContent className="p-3 space-y-3">
             {/* Scan button */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant="destructive" onClick={() => runScan(false)} disabled={scanning} className="font-display font-bold">
                 {scanning ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Search className="w-4 h-4 ml-1" />}
                 {scanning ? "جاري الفحص..." : "فحص شامل"}
               </Button>
-              {scanned && (
+              {scanned && !scanning && (
                 <span className="text-xs text-muted-foreground">
                   فُحص {state.entries.length} نص — وُجدت {issues.length} مشكلة
                 </span>
               )}
             </div>
+
+            {/* Progress bar during scan */}
+            {scanning && scanProgress.total > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
+                  <span>جاري الفحص...</span>
+                  <span>
+                    {scanProgress.done.toLocaleString()} / {scanProgress.total.toLocaleString()} (
+                    {Math.round((scanProgress.done / scanProgress.total) * 100)}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-destructive transition-all duration-150 ease-out"
+                    style={{ width: `${(scanProgress.done / scanProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {scanned && issues.length > 0 && (
               <>

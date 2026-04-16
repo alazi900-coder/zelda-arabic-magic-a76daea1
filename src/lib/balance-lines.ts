@@ -57,10 +57,20 @@ function scoreSplit(lines: string[]): number {
   if (lines.length <= 1) return 0;
   const lengths = lines.map((l) => l.length);
   const avg = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+  const maxLen = Math.max(...lengths);
+  const minLen = Math.min(...lengths);
   let cost = 0;
+  // Strong penalty for imbalance between longest and shortest line
+  const spread = maxLen - minLen;
+  cost += spread * spread * 2;
   for (let i = 0; i < lines.length; i++) {
     const dev = lengths[i] - avg;
     cost += dev * dev;
+    // Penalize lines that are far below average (under 60% of avg)
+    if (lengths[i] < avg * 0.6 && lines.length > 1) {
+      const shortBy = avg * 0.6 - lengths[i];
+      cost += shortBy * shortBy * 3;
+    }
     if (i > 0 && i < lines.length - 1) {
       const lexical = countLexicalWords(lines[i]);
       if (lexical <= 1) cost += 50000;
@@ -69,6 +79,7 @@ function scoreSplit(lines: string[]): number {
   }
   return cost;
 }
+
 
 function fixOrphans(lines: string[]): string[] {
   if (lines.length <= 1) return lines;

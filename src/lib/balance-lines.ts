@@ -289,7 +289,8 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
 
   // No XENO:n found — legacy single-chunk behavior.
   if (chunks.length <= 1) {
-    return balanceChunk(text, limit, hardMax, maxLines);
+    const out = balanceChunk(text, limit, hardMax, maxLines);
+    return hardBreaksEqual(text, out) ? out : text;
   }
 
   // Step 2: distribute the maxLines budget across chunks proportionally to word count.
@@ -310,7 +311,10 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
     balanceChunk(chunk, limit, hardMax, perChunkMax ? perChunkMax[i] : undefined)
   );
 
-  return balanced.join('\n');
+  const joined = balanced.join('\n');
+  // SAFETY ASSERTION: if our cinematic anchors drifted, return the input
+  // untouched rather than ship a freeze-inducing line layout.
+  return hardBreaksEqual(text, joined) ? joined : text;
 }
 
 

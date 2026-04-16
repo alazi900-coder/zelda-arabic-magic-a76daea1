@@ -751,6 +751,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const totalFixable = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).length;
 
   return (
+    <>
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <Card className="cursor-pointer hover:bg-muted/30 transition-colors border-destructive/30">

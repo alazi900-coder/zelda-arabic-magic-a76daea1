@@ -764,6 +764,21 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         continue;
       }
 
+      if (XENO_N_FIXABLE_CATEGORIES.has(issue.category)) {
+        const trans = state.translations[issue.key];
+        if (trans) {
+          const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+          if (fixed !== trans) {
+            onApplyFix(issue.key, fixed);
+            xenoNFixCount++;
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \\n بعد [XENO:n ]' });
+          } else {
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على وسم بدون سطر جديد فعلياً' });
+          }
+        }
+        processedKeys.add(issue.key);
+        continue;
+
       if (issue.category === 'empty_translation') {
         onApplyFix(issue.key, '');
         clearCount++;

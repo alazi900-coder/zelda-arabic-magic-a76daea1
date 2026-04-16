@@ -209,13 +209,8 @@ const Editor = () => {
   // حساب عدد النصوص غير المترجمة (يحترم الفلتر النشط)
   const untranslatedCount = React.useMemo(() => {
     if (!editor.state) return 0;
-    const entries = editor.isFilterActive ? editor.filteredEntries : editor.state.entries;
-    return entries.filter(e => {
-      const key = `${e.msbtFile}:${e.index}`;
-      const t = editor.state!.translations[key]?.trim();
-      return !t || t === e.original || t === e.original.trim();
-    }).length;
-  }, [editor.state, editor.filteredEntries, editor.isFilterActive]);
+    return editor.getUntranslatedCount?.() ?? 0;
+  }, [editor.state, editor.filteredEntries, editor.isFilterActive, editor.getUntranslatedCount]);
 
   const skippedTechnicalCount = React.useMemo(() => {
     return editor.getSkippedTechnicalCount?.() ?? 0;

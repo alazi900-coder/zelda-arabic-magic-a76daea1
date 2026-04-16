@@ -26,12 +26,14 @@ describe("XC3 PageBreak + XENO:n + XENO:wait sequence integrity", () => {
     expect(result.missingControlOrPua).toBe(false);
   });
 
-  it("fails (multiset mismatch) when PageBreak is missing entirely", () => {
+  it("auto-restores missing PageBreak/XENO:n tags from original", () => {
     const badTranslation =
       "مرحبًا.[XENO:wait wait=key ]همم، ماذا أُحضّر للعشاء؟[XENO:wait wait=key ]ربما لفائف ملفوف؟[XENO:wait wait=key ][XENO:del del=this ]";
     const result = repairTranslationTagsForBuild(ORIGINAL, badTranslation);
-    // PageBreak and XENO:n are missing — should NOT pass exactTagMatch
-    expect(result.exactTagMatch).toBe(false);
+    // Missing tags should be restored automatically
+    expect(result.exactTagMatch).toBe(true);
+    expect(result.text).toContain("[System:PageBreak ]");
+    expect(result.text).toContain("[XENO:n ]");
   });
 
   it("preserves [XENO:n ]\\n adjacency after reorder (no XENO:n stripped from newline)", () => {

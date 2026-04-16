@@ -706,8 +706,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     if (!onApplyFix) return;
     const allFixableIssues = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
     const processedKeys = new Set<string>();
-    let xenoNFixCount = 0;
-    let restoreCount = 0, stripCount = 0, clearCount = 0, dollarFixCount = 0;
+    let tagFixKeys: string[] = [];
+    let restoreCount = 0, stripCount = 0, clearCount = 0, dollarFixCount = 0, xenoNFixCount = 0;
     const reportEntries: FixReportEntry[] = [];
 
     for (const issue of allFixableIssues) {

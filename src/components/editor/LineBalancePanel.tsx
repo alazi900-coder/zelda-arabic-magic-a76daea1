@@ -3,10 +3,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil } from "lucide-react";
+import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil, Wand2 } from "lucide-react";
 import { EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 import { balanceLines, hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { toast } from "sonner";
 
 interface BalanceResult {
   key: string;
@@ -57,6 +59,73 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [rebalancing, setRebalancing] = useState(false);
+  const [rebalanceProgress, setRebalanceProgress] = useState({ current: 0, total: 0, fixed: 0 });
+
+  /**
+   * Re-balance ALL translations that contain [XENO:n ] (or any orphan / line-count mismatch)
+   * with the new XENO:n hard-break logic. Runs in chunks via requestAnimationFrame to keep
+   * the UI responsive on mobile and shows a live progress bar.
+   */
+  const handleRebalanceAll = useCallback(() => {
+    if (rebalancing) return;
+    const entries = state.entries;
+    setRebalancing(true);
+    setRebalanceProgress({ current: 0, total: entries.length, fixed: 0 });
+
+    const fixes: { key: string; value: string }[] = [];
+    const CHUNK = 200;
+    let i = 0;
+
+    const processChunk = () => {
+      const end = Math.min(i + CHUNK, entries.length);
+      for (; i < end; i++) {
+        const entry = entries[i];
+        const key = `${entry.msbtFile}:${entry.index}`;
+        const translation = state.translations[key]?.trim();
+        if (!translation) continue;
+
+        const englishLineCount = entry.original.split('\n').length;
+        const hasXenoN = /\[\s*XENO\s*:\s*n\s*\]/.test(entry.original) || /\[\s*XENO\s*:\s*n\s*\]/.test(translation);
+        const arabicLineCount = translation.split('\n').length;
+        const hasOrphan = hasOrphanLines(translation);
+        const lineMismatch = englishLineCount !== arabicLineCount;
+
+        // Only touch entries that need it: have XENO:n OR orphan OR line-count drift
+        if (!hasXenoN && !hasOrphan && !lineMismatch) continue;
+
+        let rebalanced: string;
+        if (englishLineCount > 1) {
+          rebalanced = splitEvenlyByLines(translation, englishLineCount);
+        } else {
+          rebalanced = balanceLines(translation);
+        }
+
+        if (rebalanced && rebalanced !== translation) {
+          fixes.push({ key, value: rebalanced });
+        }
+      }
+      setRebalanceProgress({ current: i, total: entries.length, fixed: fixes.length });
+
+      if (i < entries.length) {
+        requestAnimationFrame(processChunk);
+      } else {
+        if (fixes.length > 0) {
+          onApplyAll(fixes);
+          toast.success(`✨ تمت إعادة موازنة ${fixes.length} نص بنجاح`, {
+            description: `فُحص ${entries.length} نص — لا تغيير على الباقي.`,
+          });
+        } else {
+          toast.info('لا توجد نصوص بحاجة لإعادة موازنة', {
+            description: `جميع الـ ${entries.length} نص متوازنة بالفعل ✨`,
+          });
+        }
+        setRebalancing(false);
+      }
+    };
+
+    requestAnimationFrame(processChunk);
+  }, [state.entries, state.translations, onApplyAll, rebalancing]);
 
   const handleScan = useCallback(() => {
     setScanning(true);
@@ -165,13 +234,27 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
                 <Badge variant="secondary" className="text-xs">{results.length} نص</Badge>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs h-7 gap-1"
+                onClick={(e) => { e.stopPropagation(); handleRebalanceAll(); }}
+                disabled={rebalancing || scanning}
+                title="يمر على كل الترجمات ويعيد موازنتها مع احترام [XENO:n ] كحد إلزامي"
+              >
+                {rebalancing ? (
+                  <><Wand2 className="w-3 h-3 animate-pulse" /> {rebalanceProgress.current}/{rebalanceProgress.total}</>
+                ) : (
+                  <><Wand2 className="w-3 h-3" /> إعادة موازنة الكل (XENO:n)</>
+                )}
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
                 className="text-xs h-7"
                 onClick={(e) => { e.stopPropagation(); handleScan(); }}
-                disabled={scanning}
+                disabled={scanning || rebalancing}
               >
                 {scanning ? (
                   <><Sparkles className="w-3 h-3 animate-spin" /> جاري الفحص...</>
@@ -185,6 +268,20 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
               {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </div>
           </CollapsibleTrigger>
+
+          {/* Live progress bar for global re-balance */}
+          {rebalancing && (
+            <div className="mt-3 space-y-1.5 bg-background/40 rounded-lg p-2 border border-accent/20">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono">
+                <span>إعادة موازنة شاملة...</span>
+                <span>{rebalanceProgress.current.toLocaleString()} / {rebalanceProgress.total.toLocaleString()} • مُصلَح: {rebalanceProgress.fixed}</span>
+              </div>
+              <Progress
+                value={rebalanceProgress.total > 0 ? (rebalanceProgress.current / rebalanceProgress.total) * 100 : 0}
+                className="h-1.5"
+              />
+            </div>
+          )}
 
           <CollapsibleContent className="mt-3 space-y-3">
             {/* No results yet */}

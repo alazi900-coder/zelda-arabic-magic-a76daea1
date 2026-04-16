@@ -153,11 +153,19 @@ function repairDollarVars(original: string, translation: string): string {
 /**
  * Reorder tags in translation to match the sequence in original.
  * Only works when multiset matches (same tags, wrong order).
+ *
+ * STRATEGY: Replace each tag occurrence in the translation, in order, with the
+ * tag that should appear at that position in the original. This preserves all
+ * surrounding text (including \n) exactly as the translator wrote it.
+ *
+ * SAFETY: After reordering, every [XENO:n ] is force-followed by \n if missing,
+ * preventing the cinematic-freeze bug from orphaned line-break tags.
  */
 function reorderTagsToMatchOriginal(original: string, translation: string): string {
   const tagRegex = new RegExp(BUILD_TECH_TAG_REGEX.source, BUILD_TECH_TAG_REGEX.flags);
   const origTags = [...original.matchAll(tagRegex)].map(m => m[0]);
-  const transTags = [...translation.matchAll(tagRegex)].map(m => m[0]);
+  const transTagMatches = [...translation.matchAll(tagRegex)];
+  const transTags = transTagMatches.map(m => m[0]);
 
   // Only reorder if same multiset but different order
   if (origTags.length === 0 || origTags.length !== transTags.length) return translation;
@@ -165,57 +173,31 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   const transSorted = [...transTags].sort().join('|');
   if (origSorted !== transSorted) return translation;
 
-  // Check if already in correct order
+  // Already in correct order?
   let alreadyCorrect = true;
   for (let i = 0; i < origTags.length; i++) {
     if (origTags[i] !== transTags[i]) { alreadyCorrect = false; break; }
   }
-  if (alreadyCorrect) return translation;
+  if (alreadyCorrect) return ensureXenoNNewlines(translation);
 
-  // Strip all tags from translation, then re-insert in original order
-  const textParts = translation.split(tagRegex).filter(p => p !== undefined);
-  // We have N tags and up to N+1 text segments
-  // Strategy: place tags at the same relative positions as original
-  const origLen = original.replace(tagRegex, '').length;
-  const transText = textParts.join('');
-  const transLen = transText.length;
-
-  if (transLen === 0) {
-    // No text content, just return tags in original order
-    return origTags.join('');
-  }
-
-  // Calculate where each tag sits proportionally in the original
-  interface TagSlot { tag: string; relPos: number }
-  const slots: TagSlot[] = [];
-  let origTextSoFar = 0;
-  const origParts = original.split(tagRegex).filter(p => p !== undefined);
-  for (let i = 0; i < origTags.length; i++) {
-    origTextSoFar += (origParts[i] || '').length;
-    slots.push({ tag: origTags[i], relPos: origLen > 0 ? origTextSoFar / origLen : i / origTags.length });
-  }
-
-  // Build result: insert tags at proportional positions in the Arabic text
+  // Replace each tag in the translation, in order, with the tag at the matching index in original
   let result = '';
-  let inserted = 0;
-  for (let ci = 0; ci <= transLen; ci++) {
-    // Insert all tags whose relative position is at or before this point
-    while (inserted < slots.length) {
-      const targetPos = slots[inserted].relPos * transLen;
-      if (ci >= Math.round(targetPos)) {
-        result += slots[inserted].tag;
-        inserted++;
-      } else break;
-    }
-    if (ci < transLen) result += transText[ci];
+  let cursor = 0;
+  for (let i = 0; i < transTagMatches.length; i++) {
+    const m = transTagMatches[i];
+    result += translation.slice(cursor, m.index!);
+    result += origTags[i];
+    cursor = m.index! + m[0].length;
   }
-  // Append remaining tags
-  while (inserted < slots.length) {
-    result += slots[inserted].tag;
-    inserted++;
-  }
+  result += translation.slice(cursor);
 
-  return result;
+  // Final safety pass: ensure every [XENO:n ] is followed by \n
+  return ensureXenoNNewlines(result);
+}
+
+/** Force every [XENO:n ] in the text to be followed by a newline char. */
+function ensureXenoNNewlines(text: string): string {
+  return text.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
 }
 
 export function repairTranslationTagsForBuild(original: string, translation: string): BuildTagRepairResult {
@@ -231,6 +213,12 @@ export function repairTranslationTagsForBuild(original: string, translation: str
   const diffBefore = diffTechnicalTags(original, repairedText);
   if (diffBefore.exactTagMatch && !diffBefore.sequenceMatch) {
     repairedText = reorderTagsToMatchOriginal(original, repairedText);
+  }
+
+  // Step 4: Final safety pass — original [XENO:n] is always followed by \n in well-formed XC3 text.
+  // If our pipeline lost that newline, restore it to prevent cinematic freezes.
+  if (/\[XENO:n\s*\]\n/.test(original)) {
+    repairedText = repairedText.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
   }
 
   const diff = diffTechnicalTags(original, repairedText);

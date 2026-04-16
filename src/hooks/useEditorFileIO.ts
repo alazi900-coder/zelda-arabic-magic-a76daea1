@@ -156,11 +156,13 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     const cleanTranslations: Record<string, string> = {};
 
     if (isFilterActive) {
-      const allowedKeys = new Set(filteredEntries.map(e => `${e.msbtFile}:${e.index}`));
-      for (const [key, value] of Object.entries(state.translations)) {
-        if (allowedKeys.has(key)) {
-          cleanTranslations[key] = normalizeArabicPresentationForms(value);
-        }
+      for (const entry of filteredEntries) {
+        const key = `${entry.msbtFile}:${entry.index}`;
+        const value = state.translations[key]?.trim();
+        // مترجم → العربية، غير مترجم → النص الإنجليزي الأصلي
+        cleanTranslations[key] = value
+          ? normalizeArabicPresentationForms(value)
+          : entry.original;
       }
     } else {
       for (const [key, value] of Object.entries(state.translations)) {

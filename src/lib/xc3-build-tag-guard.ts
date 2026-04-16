@@ -178,7 +178,7 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   for (let i = 0; i < origTags.length; i++) {
     if (origTags[i] !== transTags[i]) { alreadyCorrect = false; break; }
   }
-  if (alreadyCorrect) return ensureXenoNNewlines(translation);
+  if (alreadyCorrect) return normalizeWhitespaceAfterReorder(ensureXenoNNewlines(translation), original);
 
   // Replace each tag in the translation, in order, with the tag at the matching index in original
   let result = '';

@@ -150,14 +150,88 @@ function repairDollarVars(original: string, translation: string): string {
   return result;
 }
 
+/**
+ * Reorder tags in translation to match the sequence in original.
+ * Only works when multiset matches (same tags, wrong order).
+ */
+function reorderTagsToMatchOriginal(original: string, translation: string): string {
+  const tagRegex = new RegExp(BUILD_TECH_TAG_REGEX.source, BUILD_TECH_TAG_REGEX.flags);
+  const origTags = [...original.matchAll(tagRegex)].map(m => m[0]);
+  const transTags = [...translation.matchAll(tagRegex)].map(m => m[0]);
+
+  // Only reorder if same multiset but different order
+  if (origTags.length === 0 || origTags.length !== transTags.length) return translation;
+  const origSorted = [...origTags].sort().join('|');
+  const transSorted = [...transTags].sort().join('|');
+  if (origSorted !== transSorted) return translation;
+
+  // Check if already in correct order
+  let alreadyCorrect = true;
+  for (let i = 0; i < origTags.length; i++) {
+    if (origTags[i] !== transTags[i]) { alreadyCorrect = false; break; }
+  }
+  if (alreadyCorrect) return translation;
+
+  // Strip all tags from translation, then re-insert in original order
+  const textParts = translation.split(tagRegex).filter(p => p !== undefined);
+  // We have N tags and up to N+1 text segments
+  // Strategy: place tags at the same relative positions as original
+  const origLen = original.replace(tagRegex, '').length;
+  const transText = textParts.join('');
+  const transLen = transText.length;
+
+  if (transLen === 0) {
+    // No text content, just return tags in original order
+    return origTags.join('');
+  }
+
+  // Calculate where each tag sits proportionally in the original
+  interface TagSlot { tag: string; relPos: number }
+  const slots: TagSlot[] = [];
+  let origTextSoFar = 0;
+  const origParts = original.split(tagRegex).filter(p => p !== undefined);
+  for (let i = 0; i < origTags.length; i++) {
+    origTextSoFar += (origParts[i] || '').length;
+    slots.push({ tag: origTags[i], relPos: origLen > 0 ? origTextSoFar / origLen : i / origTags.length });
+  }
+
+  // Build result: insert tags at proportional positions in the Arabic text
+  let result = '';
+  let inserted = 0;
+  for (let ci = 0; ci <= transLen; ci++) {
+    // Insert all tags whose relative position is at or before this point
+    while (inserted < slots.length) {
+      const targetPos = slots[inserted].relPos * transLen;
+      if (ci >= Math.round(targetPos)) {
+        result += slots[inserted].tag;
+        inserted++;
+      } else break;
+    }
+    if (ci < transLen) result += transText[ci];
+  }
+  // Append remaining tags
+  while (inserted < slots.length) {
+    result += slots[inserted].tag;
+    inserted++;
+  }
+
+  return result;
+}
+
 export function repairTranslationTagsForBuild(original: string, translation: string): BuildTagRepairResult {
   // Step 1: Fix corrupted $N variables first
   let working = repairDollarVars(original, translation);
 
   // Step 2: Restore technical tags
-  const repairedText = extractTechnicalTags(original).length > 0
+  let repairedText = extractTechnicalTags(original).length > 0
     ? restoreTagsLocally(original, working)
     : working;
+
+  // Step 3: If tags are present but in wrong order, reorder to match original
+  const diffBefore = diffTechnicalTags(original, repairedText);
+  if (diffBefore.exactTagMatch && !diffBefore.sequenceMatch) {
+    repairedText = reorderTagsToMatchOriginal(original, repairedText);
+  }
 
   const diff = diffTechnicalTags(original, repairedText);
 

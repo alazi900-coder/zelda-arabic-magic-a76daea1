@@ -104,4 +104,19 @@ describe("repairTranslationTagsForBuild", () => {
     );
     expect(result.text).toContain("$1");
   });
+
+  it("auto-reorders flipped tags to match original sequence", () => {
+    const result = repairTranslationTagsForBuild(
+      "If I'm late for drills again, old Square-tache[XENO:n ]\nis gonna kill me.[XENO:wait wait=key ][XENO:act act=EVT_EXT3 ][XENO:del del=this ]",
+      "إذا تأخرت عن التدريبات مرة أخرى، فإن\n(ذو الشارب [XENO:n ]المربع) القديم سيقتلني.[XENO:del del=this ][XENO:act act=EVT_EXT3 ][XENO:wait wait=key ]",
+    );
+    expect(result.sequenceMatch).toBe(true);
+    expect(result.exactTagMatch).toBe(true);
+    // Verify wait comes before act and del
+    const waitIdx = result.text.indexOf("[XENO:wait");
+    const actIdx = result.text.indexOf("[XENO:act act=EVT_EXT3");
+    const delIdx = result.text.indexOf("[XENO:del");
+    expect(waitIdx).toBeLessThan(actIdx);
+    expect(actIdx).toBeLessThan(delIdx);
+  });
 });

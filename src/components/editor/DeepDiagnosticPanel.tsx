@@ -8,6 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { diffTechnicalTags, repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -401,8 +402,10 @@ const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]
 const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
+// Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
+const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -592,6 +595,19 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ]' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
     }
 
+    if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
+      const englishLineCount = entry.original.split('\n').length;
+      const rebalanced = englishLineCount > 1
+        ? splitEvenlyByLines(trans, englishLineCount)
+        : balanceLines(trans);
+      return {
+        fixResult: rebalanced,
+        reason: rebalanced !== trans
+          ? '⚖️ سيتم إعادة موازنة الأسطر مع احترام [XENO:n ] و [System:PageBreak] كحدود إلزامية'
+          : '⚠️ النص متوازن بالفعل بحسب الخوارزمية الجديدة',
+      };
+    }
+
     return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
   }, [entryMap, state.translations, getSafeTagRepair]);
 
@@ -669,11 +685,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ]' });
       return;
     }
-
-    if (issue.category === 'empty_translation' && onApplyFix) {
-      onApplyFix(issue.key, '');
+    if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const englishLineCount = entry.original.split('\n').length;
+      const rebalanced = englishLineCount > 1
+        ? splitEvenlyByLines(issue.translation, englishLineCount)
+        : balanceLines(issue.translation);
+      if (rebalanced !== issue.translation) {
+        onApplyFix(issue.key, rebalanced);
+        toast({ title: '⚖️ إعادة موازنة', description: 'أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]' });
+      } else {
+        toast({ title: '✨ متوازن بالفعل', description: 'النص موزّع بشكل صحيح' });
+      }
       return;
     }
+
 
     if (onApplyFix) {
       onApplyFix(issue.key, entry.original);
@@ -767,6 +792,42 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         }
       };
 
+      requestAnimationFrame(processChunk);
+      return;
+    }
+
+    if (LINE_REBALANCE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const CHUNK = 200;
+      let count = 0;
+      let i = 0;
+      toast({ title: '⚖️ بدء إعادة الموازنة', description: `جاري إعادة موازنة ${uniqueKeys.length} نص على دفعات...` });
+
+      const processChunk = () => {
+        const updates: Record<string, string> = {};
+        const end = Math.min(i + CHUNK, uniqueKeys.length);
+        for (; i < end; i++) {
+          const key = uniqueKeys[i];
+          const entry = entryMap.get(key);
+          const trans = state.translations[key];
+          if (!entry || !trans) continue;
+          const englishLineCount = entry.original.split('\n').length;
+          const rebalanced = englishLineCount > 1
+            ? splitEvenlyByLines(trans, englishLineCount)
+            : balanceLines(trans);
+          if (rebalanced !== trans) {
+            updates[key] = rebalanced;
+            count++;
+          }
+        }
+        applyBatchUpdates(updates);
+
+        if (i < uniqueKeys.length) {
+          requestAnimationFrame(processChunk);
+        } else {
+          toast({ title: '⚖️ إعادة الموازنة مكتملة', description: `أُعيد توزيع الأسطر في ${count} نص` });
+          setTimeout(() => runScan(true), 250);
+        }
+      };
       requestAnimationFrame(processChunk);
       return;
     }
@@ -866,6 +927,26 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \\n بعد [XENO:n ]' });
             } else {
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على وسم بدون سطر جديد فعلياً' });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
+
+        if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
+          const entry = entryMap.get(issue.key);
+          const trans = state.translations[issue.key];
+          if (entry && trans) {
+            const englishLineCount = entry.original.split('\n').length;
+            const rebalanced = englishLineCount > 1
+              ? splitEvenlyByLines(trans, englishLineCount)
+              : balanceLines(trans);
+            if (rebalanced !== trans) {
+              updates[issue.key] = rebalanced;
+              counters.xenoN++; // reuse counter (closest semantic)
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '⚖️ أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]' });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ النص متوازن بالفعل' });
             }
           }
           processedKeys.add(issue.key);

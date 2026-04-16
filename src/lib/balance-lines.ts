@@ -191,12 +191,13 @@ function dpSplitShielded(
 }
 
 /**
- * XC3 cinematic line-break marker. The game treats `[XENO:n ]` as a HARD line break:
- * the very next character must be a newline, and the word that follows is the start
- * of a brand-new visual line. We split on this marker FIRST, then balance each chunk
- * independently — never letting the DP redistribute words across it.
+ * XC3 cinematic HARD line-break markers. The game treats these as mandatory
+ * boundaries — words must NEVER be redistributed across them by the balancer:
+ *   - `[XENO:n ]`         → next character is a newline (single-line break)
+ *   - `[System:PageBreak ]` → flushes the dialogue box (page break)
+ * We split on either marker FIRST, then balance each chunk independently.
  */
-const XENO_N_HARD_BREAK = /\[\s*XENO\s*:\s*n\s*\]\s*\n?/g;
+const XENO_N_HARD_BREAK = /\[\s*XENO\s*:\s*n\s*\]\s*\n?|\[\s*System\s*:\s*PageBreak\s*\]\s*\n?/g;
 
 /**
  * Internal: balance a SINGLE chunk (no [XENO:n ] inside) into lines using DP.
@@ -271,7 +272,7 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     const before = text.slice(lastIndex, match.index).replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]/);
+    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/);
     const tagText = tagMatch ? tagMatch[0] : '[XENO:n ]';
     chunks.push((before ? before + ' ' : '') + tagText);
     lastIndex = match.index + match[0].length;
@@ -371,8 +372,8 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
   const re = new RegExp(XENO_N_HARD_BREAK.source, 'g');
   while ((match = re.exec(text)) !== null) {
     const before = text.slice(lastIndex, match.index).trim();
-    // Re-attach the [XENO:n ] tag (without trailing whitespace) to the preceding chunk.
-    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]/);
+    // Re-attach the hard-break tag (without trailing whitespace) to the preceding chunk.
+    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/);
     const tagText = tagMatch ? tagMatch[0] : '[XENO:n ]';
     chunks.push((before ? before + ' ' : '') + tagText);
     lastIndex = match.index + match[0].length;

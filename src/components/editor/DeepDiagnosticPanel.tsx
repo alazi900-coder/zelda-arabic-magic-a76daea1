@@ -798,38 +798,30 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (LINE_REBALANCE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
-      const CHUNK = 200;
-      let count = 0;
-      let i = 0;
-      toast({ title: '⚖️ بدء إعادة الموازنة', description: `جاري إعادة موازنة ${uniqueKeys.length} نص على دفعات...` });
+      // Phase 3 — offload to Web Worker (with main-thread fallback) so the UI
+      // stays responsive even on mobile when rebalancing thousands of entries.
+      const items: RebalanceItem[] = [];
+      for (const key of uniqueKeys) {
+        const entry = entryMap.get(key);
+        const trans = state.translations[key];
+        if (!entry || !trans) continue;
+        items.push({
+          key,
+          original: entry.original,
+          translation: trans,
+          englishLineCount: entry.original.split('\n').length,
+        });
+      }
 
-      const processChunk = () => {
+      toast({ title: '⚖️ بدء إعادة الموازنة', description: `جاري إعادة موازنة ${items.length} نص (Web Worker)...` });
+
+      runRebalanceBatch(items).then((results) => {
         const updates: Record<string, string> = {};
-        const end = Math.min(i + CHUNK, uniqueKeys.length);
-        for (; i < end; i++) {
-          const key = uniqueKeys[i];
-          const entry = entryMap.get(key);
-          const trans = state.translations[key];
-          if (!entry || !trans) continue;
-          const englishLineCount = entry.original.split('\n').length;
-          const rebalanced = englishLineCount > 1
-            ? splitEvenlyByLines(trans, englishLineCount)
-            : balanceLines(trans);
-          if (rebalanced !== trans) {
-            updates[key] = rebalanced;
-            count++;
-          }
-        }
-        applyBatchUpdates(updates);
-
-        if (i < uniqueKeys.length) {
-          requestAnimationFrame(processChunk);
-        } else {
-          toast({ title: '⚖️ إعادة الموازنة مكتملة', description: `أُعيد توزيع الأسطر في ${count} نص` });
-          setTimeout(() => runScan(true), 250);
-        }
-      };
-      requestAnimationFrame(processChunk);
+        for (const r of results) updates[r.key] = r.fixed;
+        const count = applyBatchUpdates(updates);
+        toast({ title: '⚖️ إعادة الموازنة مكتملة', description: `أُعيد توزيع الأسطر في ${count} نص` });
+        setTimeout(() => runScan(true), 250);
+      });
       return;
     }
 

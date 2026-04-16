@@ -185,6 +185,28 @@ export default function UpdateBanner() {
         </div>
       )}
 
+      {/* Hidden file input used by the import-backup button. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleImportFile}
+      />
+
+      {/* Import-backup FAB — sits above the backup FAB so the user can restore
+          a previously-exported JSON after a schema migration. */}
+      <Button
+        onClick={handleImportClick}
+        disabled={importing}
+        aria-label="استيراد نسخة احتياطية JSON"
+        variant="outline"
+        className="fixed bottom-32 left-4 z-[99] h-10 px-3 gap-2 rounded-full shadow-lg bg-background/90 backdrop-blur border-2 border-accent/40 hover:bg-background hover:scale-105 transition-all font-bold text-xs"
+      >
+        <Upload className={`h-4 w-4 ${importing ? "animate-pulse" : ""}`} />
+        <span className="hidden xs:inline sm:inline">{importing ? "جارٍ الاستيراد..." : "استيراد نسخة"}</span>
+      </Button>
+
       {/* Backup FAB — sits above the update FAB so the user can always export
           a JSON safety-net before pulling a new build. */}
       <Button

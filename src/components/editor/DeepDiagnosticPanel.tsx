@@ -682,15 +682,28 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (XENO_N_FIXABLE_CATEGORIES.has(activeFilter) && onApplyFix) {
+      // Chunked processing to avoid freezing the browser on huge batches (10k+ entries)
+      const CHUNK = 200;
       let count = 0;
-      for (const key of uniqueKeys) {
-        const trans = state.translations[key];
-        if (!trans) continue;
-        const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
-        if (fixed !== trans) { onApplyFix(key, fixed); count++; }
-      }
-      toast({ title: '↩️ إصلاح جماعي', description: `تم إضافة \\n بعد [XENO:n ] في ${count} نص` });
-      setTimeout(() => runScan(true), 250);
+      let i = 0;
+      toast({ title: '↩️ بدء الإصلاح الجماعي', description: `جاري معالجة ${uniqueKeys.length} نص على دفعات...` });
+      const processChunk = () => {
+        const end = Math.min(i + CHUNK, uniqueKeys.length);
+        for (; i < end; i++) {
+          const key = uniqueKeys[i];
+          const trans = state.translations[key];
+          if (!trans) continue;
+          const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+          if (fixed !== trans) { onApplyFix(key, fixed); count++; }
+        }
+        if (i < uniqueKeys.length) {
+          requestAnimationFrame(processChunk);
+        } else {
+          toast({ title: '↩️ إصلاح جماعي مكتمل', description: `تم إضافة \\n بعد [XENO:n ] في ${count} نص` });
+          setTimeout(() => runScan(true), 250);
+        }
+      };
+      requestAnimationFrame(processChunk);
       return;
     }
 

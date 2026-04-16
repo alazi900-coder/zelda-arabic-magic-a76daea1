@@ -1,20 +1,24 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Download } from "lucide-react";
+import { RefreshCw, Download, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { exportEditorStateBackup } from "@/lib/idb-storage";
 
 /**
  * Global update UI:
- *   1. A LARGE always-visible floating button (bottom-left) so the user can
- *      manually pull the latest version from any page at any time. This is
- *      critical because the PWA cache + IndexedDB can otherwise hide updates.
- *   2. A top banner that appears automatically when a new Service Worker is
- *      ready and applies it on click (existing behavior).
+ *   1. Top banner — auto-shows when a new SW is waiting.
+ *   2. Floating "جلب التحديث" button — bottom-left, always visible. Clears
+ *      every cache layer (SW + Cache Storage + sessionStorage) and hard-reloads.
+ *      IndexedDB is preserved on purpose so translations survive.
+ *   3. Floating "نسخة احتياطية" button — bottom-left (above the update FAB).
+ *      Triggers a JSON download of the current `editorState` so the user
+ *      always has a safety net before applying updates.
  */
 export default function UpdateBanner() {
   const [showUpdate, setShowUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [forceUpdating, setForceUpdating] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -70,6 +74,26 @@ export default function UpdateBanner() {
     });
   };
 
+  const handleBackup = useCallback(async () => {
+    if (backingUp) return;
+    setBackingUp(true);
+    try {
+      const ok = await exportEditorStateBackup("manual");
+      if (ok) {
+        toast.success("✅ تم تنزيل نسخة احتياطية", {
+          description: "ملف JSON يحتوي كل الترجمات والنصوص الأصلية",
+        });
+      } else {
+        toast.info("لا توجد بيانات للنسخ الاحتياطي بعد");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("فشل النسخ الاحتياطي");
+    } finally {
+      setBackingUp(false);
+    }
+  }, [backingUp]);
+
   /**
    * FORCE-UPDATE: clears every layer of caching (Service Worker, Cache Storage,
    * sessionStorage) and triggers a hard reload — IndexedDB editor state is
@@ -81,27 +105,19 @@ export default function UpdateBanner() {
     toast.info("⏳ جلب آخر تحديث...", { description: "يتم مسح الذاكرة المؤقتة وإعادة التحميل" });
 
     try {
-      // 1. Tell the active SW to skip waiting if any update is queued.
       const reg = await navigator.serviceWorker?.getRegistration();
       if (reg?.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
-
-      // 2. Force the SW to check the network for a new version.
       await reg?.update().catch(() => {});
 
-      // 3. Wipe Cache Storage so the next load fetches fresh assets.
       if ("caches" in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
-
-      // 4. Clear sessionStorage (transient UI state) but keep IndexedDB
-      //    (where the editor saves its translations).
       sessionStorage.clear();
     } catch {
       // Ignore — we still hard-reload below.
     }
 
-    // 5. Cache-busting hard reload.
     const url = new URL(window.location.href);
     url.searchParams.set("_v", Date.now().toString());
     window.location.replace(url.toString());
@@ -109,7 +125,6 @@ export default function UpdateBanner() {
 
   return (
     <>
-      {/* Auto banner — shown when a new SW is waiting */}
       {showUpdate && (
         <div className="fixed top-0 inset-x-0 z-[100] bg-gradient-to-l from-primary to-accent text-primary-foreground py-2.5 px-4 flex items-center justify-center gap-4 shadow-xl animate-in slide-in-from-top duration-300">
           <div className="flex items-center gap-2">
@@ -128,8 +143,20 @@ export default function UpdateBanner() {
         </div>
       )}
 
-      {/* Persistent floating force-update button — visible on every page,
-          large and unmistakable so the user can always pull the latest build. */}
+      {/* Backup FAB — sits above the update FAB so the user can always export
+          a JSON safety-net before pulling a new build. */}
+      <Button
+        onClick={handleBackup}
+        disabled={backingUp}
+        aria-label="نسخة احتياطية للترجمات"
+        variant="outline"
+        className="fixed bottom-20 left-4 z-[99] h-10 px-3 gap-2 rounded-full shadow-lg bg-background/90 backdrop-blur border-2 border-primary/40 hover:bg-background hover:scale-105 transition-all font-bold text-xs"
+      >
+        <Save className={`h-4 w-4 ${backingUp ? "animate-pulse" : ""}`} />
+        <span className="hidden xs:inline sm:inline">{backingUp ? "جارٍ التنزيل..." : "نسخة احتياطية"}</span>
+      </Button>
+
+      {/* Force-update FAB */}
       <Button
         onClick={handleForceUpdate}
         disabled={forceUpdating}

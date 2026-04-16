@@ -595,6 +595,19 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ]' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
     }
 
+    if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
+      const englishLineCount = entry.original.split('\n').length;
+      const rebalanced = englishLineCount > 1
+        ? splitEvenlyByLines(trans, englishLineCount)
+        : balanceLines(trans);
+      return {
+        fixResult: rebalanced,
+        reason: rebalanced !== trans
+          ? '⚖️ سيتم إعادة موازنة الأسطر مع احترام [XENO:n ] و [System:PageBreak] كحدود إلزامية'
+          : '⚠️ النص متوازن بالفعل بحسب الخوارزمية الجديدة',
+      };
+    }
+
     return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
   }, [entryMap, state.translations, getSafeTagRepair]);
 

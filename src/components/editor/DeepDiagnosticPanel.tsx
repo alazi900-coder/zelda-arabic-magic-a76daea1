@@ -827,12 +827,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                   </div>
                 </div>
 
-                {/* Fix All button */}
+                {/* Fix All button + Report button */}
                 {totalFixable > 0 && (onApplyFix || onFixSelectedLocally) && (
-                  <Button size="sm" variant="destructive" className="w-full font-display font-bold text-sm" onClick={handleFixEverything}>
-                    <Zap className="w-4 h-4 ml-1" />
-                    ⚡ إصلاح كل المشاكل دفعة واحدة ({new Set(issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="destructive" className="flex-1 font-display font-bold text-sm" onClick={handleFixEverything}>
+                      <Zap className="w-4 h-4 ml-1" />
+                      ⚡ إصلاح كل المشاكل ({new Set(issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
+                    </Button>
+                    {fixReport && (
+                      <Button size="sm" variant="outline" className="text-xs" onClick={() => setFixReport({ ...fixReport })}>
+                        <FileText className="w-4 h-4 ml-1" />
+                        📋 التقرير
+                      </Button>
+                    )}
+                  </div>
                 )}
 
                 {/* Category details */}

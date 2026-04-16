@@ -72,7 +72,7 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
     } catch {
       return [];
     }
-  }, [findText, replaceText, useRegex, caseSensitive, searchInOriginal, entries, translations]);
+  }, [findText, replaceText, useRegex, caseSensitive, searchInOriginal, wholeWord, entries, translations]);
 
   // Reset applied state when search changes
   useEffect(() => {

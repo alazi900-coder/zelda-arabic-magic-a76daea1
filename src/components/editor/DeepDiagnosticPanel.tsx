@@ -395,6 +395,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [issues, setIssues] = useState<DiagnosticIssue[]>([]);
   const [activeFilter, setActiveFilter] = useState<string | null>(null); 
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
+  const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const latestStateRef = useRef(state);
 
   // Build entry lookup map for O(1) access

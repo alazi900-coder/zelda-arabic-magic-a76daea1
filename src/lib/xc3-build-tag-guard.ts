@@ -215,6 +215,12 @@ export function repairTranslationTagsForBuild(original: string, translation: str
     repairedText = reorderTagsToMatchOriginal(original, repairedText);
   }
 
+  // Step 4: Final safety pass — original [XENO:n] is always followed by \n in well-formed XC3 text.
+  // If our pipeline lost that newline, restore it to prevent cinematic freezes.
+  if (/\[XENO:n\s*\]\n/.test(original)) {
+    repairedText = repairedText.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+  }
+
   const diff = diffTechnicalTags(original, repairedText);
 
   return {

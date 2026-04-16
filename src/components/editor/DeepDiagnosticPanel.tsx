@@ -427,6 +427,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     latestStateRef.current = state;
   }, [state]);
 
+  const [scanProgress, setScanProgress] = useState({ done: 0, total: 0 });
+
   const runScan = useCallback((preserveActiveFilter = false) => {
     setScanning(true);
     setScanned(false);
@@ -438,9 +440,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       const currentState = latestStateRef.current;
       const allIssues: DiagnosticIssue[] = [];
       let index = 0;
+      const total = currentState.entries.length;
+      setScanProgress({ done: 0, total });
 
       const processChunk = () => {
-        const end = Math.min(index + CHUNK_SIZE, currentState.entries.length);
+        const end = Math.min(index + CHUNK_SIZE, total);
 
         for (; index < end; index++) {
           const entry = currentState.entries[index];
@@ -450,7 +454,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           allIssues.push(...detectIssues(entry, translation));
         }
 
-        if (index < currentState.entries.length) {
+        setScanProgress({ done: index, total });
+
+        if (index < total) {
           requestAnimationFrame(processChunk);
           return;
         }
@@ -463,6 +469,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       requestAnimationFrame(processChunk);
     }, 50);
   }, []);
+
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -985,17 +992,36 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         <Card className="mt-1 border-destructive/20">
           <CardContent className="p-3 space-y-3">
             {/* Scan button */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant="destructive" onClick={() => runScan(false)} disabled={scanning} className="font-display font-bold">
                 {scanning ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Search className="w-4 h-4 ml-1" />}
                 {scanning ? "جاري الفحص..." : "فحص شامل"}
               </Button>
-              {scanned && (
+              {scanned && !scanning && (
                 <span className="text-xs text-muted-foreground">
                   فُحص {state.entries.length} نص — وُجدت {issues.length} مشكلة
                 </span>
               )}
             </div>
+
+            {/* Progress bar during scan */}
+            {scanning && scanProgress.total > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground font-mono">
+                  <span>جاري الفحص...</span>
+                  <span>
+                    {scanProgress.done.toLocaleString()} / {scanProgress.total.toLocaleString()} (
+                    {Math.round((scanProgress.done / scanProgress.total) * 100)}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-destructive transition-all duration-150 ease-out"
+                    style={{ width: `${(scanProgress.done / scanProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {scanned && issues.length > 0 && (
               <>

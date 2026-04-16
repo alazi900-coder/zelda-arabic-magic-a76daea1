@@ -57,10 +57,20 @@ function scoreSplit(lines: string[]): number {
   if (lines.length <= 1) return 0;
   const lengths = lines.map((l) => l.length);
   const avg = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+  const maxLen = Math.max(...lengths);
+  const minLen = Math.min(...lengths);
   let cost = 0;
+  // Strong penalty for imbalance between longest and shortest line
+  const spread = maxLen - minLen;
+  cost += spread * spread * 2;
   for (let i = 0; i < lines.length; i++) {
     const dev = lengths[i] - avg;
     cost += dev * dev;
+    // Penalize lines that are far below average (under 60% of avg)
+    if (lengths[i] < avg * 0.6 && lines.length > 1) {
+      const shortBy = avg * 0.6 - lengths[i];
+      cost += shortBy * shortBy * 3;
+    }
     if (i > 0 && i < lines.length - 1) {
       const lexical = countLexicalWords(lines[i]);
       if (lexical <= 1) cost += 50000;
@@ -69,6 +79,7 @@ function scoreSplit(lines: string[]): number {
   }
   return cost;
 }
+
 
 function fixOrphans(lines: string[]): string[] {
   if (lines.length <= 1) return lines;
@@ -141,9 +152,20 @@ function dpSplitShielded(
         let cost = deviation * deviation;
         const lexicalCount = countLexicalWords(words.slice(j, i).join(' '));
         const isMiddleLine = k > 1 && k < nLines;
+        const isLastLine = k === nLines;
         if (lexicalCount <= 1 && isMiddleLine) cost += 50000;
         if (i - j === 1 && isMiddleLine) cost += 50000;
         if (ll < ideal * 0.4 && lexicalCount < 3) cost += 5000;
+        // Strong penalty when any line is much shorter than the ideal — keeps lines visually balanced
+        if (ll < ideal * 0.6 && nLines > 1) {
+          const shortBy = ideal * 0.6 - ll;
+          cost += shortBy * shortBy * 4;
+        }
+        // Extra penalty if the LAST line is too short (the most visually obvious imbalance)
+        if (isLastLine && ll < ideal * 0.7 && nLines > 1) {
+          const shortBy = ideal * 0.7 - ll;
+          cost += shortBy * shortBy * 6;
+        }
 
         const total = dp[j][k - 1] + cost;
         if (total < dp[i][k]) {

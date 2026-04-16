@@ -191,6 +191,14 @@ function dpSplitShielded(
 }
 
 /**
+ * XC3 cinematic line-break marker. The game treats `[XENO:n ]` as a HARD line break:
+ * the very next character must be a newline, and the word that follows is the start
+ * of a brand-new visual line. We split on this marker FIRST, then balance each chunk
+ * independently — never letting the DP redistribute words across it.
+ */
+const XENO_N_HARD_BREAK = /\[\s*XENO\s*:\s*n\s*\]\s*\n?/g;
+
+/**
  * Internal: balance a SINGLE chunk (no [XENO:n ] inside) into lines using DP.
  */
 function balanceChunk(chunk: string, limit: number, hardMax: number, maxLines?: number): string {

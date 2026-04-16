@@ -965,5 +965,97 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         </Card>
       </CollapsibleContent>
     </Collapsible>
+
+    {/* Fix Report Dialog */}
+    <Dialog open={fixReport !== null} onOpenChange={(open) => { if (!open) setFixReport(null); }}>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="font-display text-base">📋 تقرير الإصلاح الشامل</DialogTitle>
+        </DialogHeader>
+        {fixReport && (
+          <div className="space-y-3">
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2 rounded-lg bg-secondary/20 border border-secondary/30">
+                <p className="text-lg font-bold text-secondary">{fixReport.totalFixed}</p>
+                <p className="text-[10px] text-muted-foreground">✅ تم إصلاحه</p>
+              </div>
+              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <p className="text-lg font-bold text-amber-400">{fixReport.totalUnchanged}</p>
+                <p className="text-[10px] text-muted-foreground">⚠️ لم يتغير</p>
+              </div>
+              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <p className="text-lg font-bold text-blue-400">{fixReport.totalRestored}</p>
+                <p className="text-[10px] text-muted-foreground">↩️ استعادة أصل</p>
+              </div>
+            </div>
+
+            {/* Unchanged entries - most important */}
+            {fixReport.entries.filter(e => e.action === 'unchanged').length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-amber-400">⚠️ نصوص لم تتغير ({fixReport.entries.filter(e => e.action === 'unchanged').length}):</p>
+                <ScrollArea className="max-h-40">
+                  <div className="space-y-1">
+                    {fixReport.entries.filter(e => e.action === 'unchanged').map((entry, i) => (
+                      <div key={i} className="p-2 rounded text-xs bg-amber-500/5 border border-amber-500/20 cursor-pointer hover:ring-1 hover:ring-primary/40"
+                        onClick={() => { setFixReport(null); onNavigateToEntry?.(entry.key); }}>
+                        <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
+                        <p className="text-[10px] mt-0.5">{entry.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Restored entries */}
+            {fixReport.entries.filter(e => e.action === 'restored').length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-blue-400">↩️ نصوص أُعيدت للأصل الإنجليزي ({fixReport.entries.filter(e => e.action === 'restored').length}):</p>
+                <ScrollArea className="max-h-32">
+                  <div className="space-y-1">
+                    {fixReport.entries.filter(e => e.action === 'restored').map((entry, i) => (
+                      <div key={i} className="p-2 rounded text-xs bg-blue-500/5 border border-blue-500/20 cursor-pointer hover:ring-1 hover:ring-primary/40"
+                        onClick={() => { setFixReport(null); onNavigateToEntry?.(entry.key); }}>
+                        <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
+                        <p className="text-[10px] mt-0.5">{entry.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Fixed entries (collapsed by default) */}
+            {fixReport.entries.filter(e => e.action === 'fixed').length > 0 && (
+              <InnerCollapsible>
+                <InnerCollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full text-xs text-secondary">
+                    ✅ نصوص تم إصلاحها ({fixReport.entries.filter(e => e.action === 'fixed').length}) — اضغط للتفاصيل
+                  </Button>
+                </InnerCollapsibleTrigger>
+                <InnerCollapsibleContent>
+                  <ScrollArea className="max-h-32 mt-1">
+                    <div className="space-y-1">
+                      {fixReport.entries.filter(e => e.action === 'fixed').map((entry, i) => (
+                        <div key={i} className="p-1.5 rounded text-xs bg-secondary/5 border border-secondary/20">
+                          <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
+                          <p className="text-[10px] mt-0.5">{entry.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </InnerCollapsibleContent>
+              </InnerCollapsible>
+            )}
+
+            <p className="text-[10px] text-muted-foreground text-center">
+              💡 النصوص التي لم تتغير تحتاج إصلاحاً يدوياً — اضغط عليها للانتقال إليها في المحرر
+            </p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

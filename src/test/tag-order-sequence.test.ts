@@ -45,6 +45,17 @@ describe("diffTechnicalTags with sequenceMatch", () => {
 });
 
 describe("restoreTagsLocally preserves tag order", () => {
+  it("reorders swapped tags back to the original sequence", () => {
+    const orig = "[XENO:wait wait=key ] text [XENO:del del=key ]";
+    const damaged = "[XENO:del del=key ] نص [XENO:wait wait=key ]";
+    const result = restoreTagsLocally(orig, damaged);
+    const waitIdx = result.indexOf("[XENO:wait");
+    const delIdx = result.indexOf("[XENO:del");
+    expect(waitIdx).toBeGreaterThanOrEqual(0);
+    expect(delIdx).toBeGreaterThanOrEqual(0);
+    expect(waitIdx).toBeLessThan(delIdx);
+  });
+
   it("does not flip order of adjacent XENO tags", () => {
     const orig = "[XENO:wait wait=key ] text [XENO:del del=key ]";
     const damaged = "نص";

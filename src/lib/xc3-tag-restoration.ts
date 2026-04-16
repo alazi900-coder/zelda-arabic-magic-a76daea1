@@ -124,6 +124,107 @@ function stripTranslatedTags(text: string, origTags: string[]): string {
   return result.replace(/  +/g, ' ').trim();
 }
 
+function hasTagSequenceMatch(origTags: string[], transTags: string[]): boolean {
+  if (origTags.length !== transTags.length) return false;
+  for (let i = 0; i < origTags.length; i++) {
+    if (origTags[i] !== transTags[i]) return false;
+  }
+  return true;
+}
+
+function stripAllTechnicalTags(text: string): string {
+  return text.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '').replace(/  +/g, ' ').trim();
+}
+
+/**
+ * Rebuild the technical-tag layout from the original string so the final
+ * translation keeps the exact original tag order even if the translated text
+ * had the right tags but in the wrong sequence.
+ */
+function rebuildTagLayoutFromOriginal(original: string, cleanTranslation: string): string {
+  const origPlain = original.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '');
+  const origLength = Math.max(origPlain.length, 1);
+
+  interface TagPosition { tag: string; relPos: number; startIdx: number; endIdx: number }
+  const tagPositions: TagPosition[] = [];
+  let plainIdx = 0;
+  const origMatchAll = [...original.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))];
+  let matchIdx = 0;
+
+  for (let ci = 0; ci < original.length; ) {
+    if (matchIdx < origMatchAll.length && ci === origMatchAll[matchIdx].index) {
+      const m = origMatchAll[matchIdx];
+      tagPositions.push({ tag: m[0], relPos: plainIdx / origLength, startIdx: ci, endIdx: ci + m[0].length });
+      ci += m[0].length;
+      matchIdx++;
+    } else {
+      plainIdx++;
+      ci++;
+    }
+  }
+
+  interface TagGroup { tags: string[]; relPos: number; origOrder: number }
+  const groups: TagGroup[] = [];
+
+  for (let i = 0; i < tagPositions.length; i++) {
+    const tp = tagPositions[i];
+    const prev = groups.length > 0 ? groups[groups.length - 1] : null;
+    const prevTp = i > 0 ? tagPositions[i - 1] : null;
+
+    let merged = false;
+    if (prev && prevTp) {
+      const between = original.slice(prevTp.endIdx, tp.startIdx);
+      const isAdjacent = /^[\s]*$/.test(between);
+      const prevType = getTagType(prevTp.tag);
+      const curType = getTagType(tp.tag);
+      if (isAdjacent && prevType === curType) {
+        prev.tags.push(tp.tag);
+        merged = true;
+      }
+    }
+
+    if (!merged) {
+      groups.push({ tags: [tp.tag], relPos: tp.relPos, origOrder: i });
+    }
+  }
+
+  const transLength = Math.max(cleanTranslation.length, 1);
+  const wordBounds = [0];
+  for (let j = 0; j < cleanTranslation.length; j++) {
+    if (cleanTranslation[j] === ' ' || cleanTranslation[j] === '\n') {
+      wordBounds.push(j + 1);
+    }
+  }
+  wordBounds.push(cleanTranslation.length);
+
+  const insertions: { pos: number; text: string; origOrder: number }[] = [];
+  for (const group of groups) {
+    const rawPos = Math.round(group.relPos * transLength);
+    let bestPos = rawPos;
+    let bestDist = Infinity;
+    for (const wb of wordBounds) {
+      const dist = Math.abs(wb - rawPos);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestPos = wb;
+      }
+    }
+    insertions.push({ pos: bestPos, text: group.tags.join(''), origOrder: group.origOrder });
+  }
+
+  insertions.sort((a, b) => a.pos - b.pos || a.origOrder - b.origOrder);
+
+  let result = cleanTranslation;
+  let offset = 0;
+  for (const ins of insertions) {
+    const pos = Math.min(ins.pos + offset, result.length);
+    result = result.slice(0, pos) + ins.text + result.slice(pos);
+    offset += ins.text.length;
+  }
+
+  return result;
+}
+
 /**
  * Locally restore missing technical tags from original into translation
  * without using AI — handles missing, translated, reversed, and damaged tags.
@@ -167,107 +268,30 @@ export function restoreTagsLocally(original: string, translation: string): strin
   for (const t of transTags) {
     if (!origCount.has(t)) { hasForeign = true; break; }
   }
+  const sequenceMatch = hasTagSequenceMatch(origTags, transTags);
   
   if (allPresent && !hasExtra && !hasForeign) {
-    return working; // Perfect match after bracket fix
+    if (sequenceMatch) {
+      return working;
+    }
+    return rebuildTagLayoutFromOriginal(original, stripAllTechnicalTags(working));
   }
   if (allPresent) {
-    return enforceExactTagMultiset(original, working, origTags, origCount);
+    const exactMultiset = enforceExactTagMultiset(original, working, origTags, origCount);
+    const exactTags = extractTags(exactMultiset);
+    if (hasTagSequenceMatch(origTags, exactTags)) {
+      return exactMultiset;
+    }
+    return rebuildTagLayoutFromOriginal(original, stripAllTechnicalTags(exactMultiset));
   }
 
   // Step 5: Strip translated tags (Arabic inside brackets) before rebuild
   const afterTranslatedStrip = stripTranslatedTags(working, origTags);
   
   // Step 6: Strip ALL remaining detected tags from translation
-  const cleanTranslation = afterTranslatedStrip.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '').replace(/  +/g, ' ').trim();
+  const cleanTranslation = stripAllTechnicalTags(afterTranslatedStrip);
 
-  // Step 7: Compute relative positions of each tag in original (with source indices)
-  const origPlain = original.replace(new RegExp(TAG_REGEX.source, TAG_REGEX.flags), '');
-  const origLength = Math.max(origPlain.length, 1);
-
-  interface TagPosition { tag: string; relPos: number; startIdx: number; endIdx: number }
-  const tagPositions: TagPosition[] = [];
-  let plainIdx = 0;
-  const origMatchAll = [...original.matchAll(new RegExp(TAG_REGEX.source, TAG_REGEX.flags))];
-  let matchIdx = 0;
-
-  for (let ci = 0; ci < original.length; ) {
-    if (matchIdx < origMatchAll.length && ci === origMatchAll[matchIdx].index) {
-      const m = origMatchAll[matchIdx];
-      tagPositions.push({ tag: m[0], relPos: plainIdx / origLength, startIdx: ci, endIdx: ci + m[0].length });
-      ci += m[0].length;
-      matchIdx++;
-    } else {
-      plainIdx++;
-      ci++;
-    }
-  }
-
-  // Step 8: Atomic grouping — group adjacent tags of same type
-  interface TagGroup { tags: string[]; relPos: number; origOrder: number }
-  const groups: TagGroup[] = [];
-
-  for (let i = 0; i < tagPositions.length; i++) {
-    const tp = tagPositions[i];
-    const prev = groups.length > 0 ? groups[groups.length - 1] : null;
-    const prevTp = i > 0 ? tagPositions[i - 1] : null;
-
-    let merged = false;
-    if (prev && prevTp) {
-      // Check adjacency: only whitespace between previous tag end and current tag start
-      const between = original.slice(prevTp.endIdx, tp.startIdx);
-      const isAdjacent = /^[\s]*$/.test(between);
-      // Check same type
-      const prevType = getTagType(prevTp.tag);
-      const curType = getTagType(tp.tag);
-      if (isAdjacent && prevType === curType) {
-        prev.tags.push(tp.tag);
-        merged = true;
-      }
-    }
-
-    if (!merged) {
-      groups.push({ tags: [tp.tag], relPos: tp.relPos, origOrder: i });
-    }
-  }
-
-  // Step 9: Insert groups into clean translation at proportional positions
-  const transLength = Math.max(cleanTranslation.length, 1);
-  
-  // Find word boundary positions
-  const wordBounds = [0];
-  for (let j = 0; j < cleanTranslation.length; j++) {
-    if (cleanTranslation[j] === ' ' || cleanTranslation[j] === '\n') {
-      wordBounds.push(j + 1);
-    }
-  }
-  wordBounds.push(cleanTranslation.length);
-
-  // Map each group to nearest word boundary
-  const insertions: { pos: number; text: string; origOrder: number }[] = [];
-  for (const group of groups) {
-    const rawPos = Math.round(group.relPos * transLength);
-    let bestPos = rawPos;
-    let bestDist = Infinity;
-    for (const wb of wordBounds) {
-      const dist = Math.abs(wb - rawPos);
-      if (dist < bestDist) { bestDist = dist; bestPos = wb; }
-    }
-    insertions.push({ pos: bestPos, text: group.tags.join(''), origOrder: group.origOrder });
-  }
-
-  // Sort by position, then original order
-  insertions.sort((a, b) => a.pos - b.pos || a.origOrder - b.origOrder);
-
-  let result = cleanTranslation;
-  let offset = 0;
-  for (const ins of insertions) {
-    const pos = Math.min(ins.pos + offset, result.length);
-    result = result.slice(0, pos) + ins.text + result.slice(pos);
-    offset += ins.text.length;
-  }
-
-  return result;
+  return rebuildTagLayoutFromOriginal(original, cleanTranslation);
 }
 
 /**

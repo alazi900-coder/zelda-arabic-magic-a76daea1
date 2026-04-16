@@ -31,6 +31,7 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
   const [useRegex, setUseRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [searchInOriginal, setSearchInOriginal] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [applied, setApplied] = useState(false);
@@ -40,11 +41,13 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
 
     try {
       let regex: RegExp;
+      const flags = caseSensitive ? "g" : "gi";
       if (useRegex) {
-        regex = new RegExp(findText, caseSensitive ? "g" : "gi");
+        regex = new RegExp(findText, flags);
       } else {
         const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        regex = new RegExp(escaped, caseSensitive ? "g" : "gi");
+        const pattern = wholeWord ? `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])` : escaped;
+        regex = new RegExp(pattern, flags + "u");
       }
 
       const results: FindReplaceMatch[] = [];
@@ -69,12 +72,12 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
     } catch {
       return [];
     }
-  }, [findText, replaceText, useRegex, caseSensitive, searchInOriginal, entries, translations]);
+  }, [findText, replaceText, useRegex, caseSensitive, searchInOriginal, wholeWord, entries, translations]);
 
   // Reset applied state when search changes
   useEffect(() => {
     setApplied(false);
-  }, [findText, replaceText, useRegex, caseSensitive, searchInOriginal]);
+  }, [findText, replaceText, useRegex, caseSensitive, searchInOriginal, wholeWord]);
 
   // Auto-select all matches
   useEffect(() => {
@@ -166,6 +169,10 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
           <div className="flex items-center gap-2">
             <Switch id="fr-original" checked={searchInOriginal} onCheckedChange={setSearchInOriginal} />
             <Label htmlFor="fr-original" className="text-xs font-body cursor-pointer">بحث في النص الأصلي</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch id="fr-whole" checked={wholeWord} onCheckedChange={setWholeWord} disabled={useRegex} />
+            <Label htmlFor="fr-whole" className="text-xs font-body cursor-pointer">كلمة كاملة</Label>
           </div>
         </div>
 

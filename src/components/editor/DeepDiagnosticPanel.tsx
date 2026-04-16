@@ -953,7 +953,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           continue;
         }
 
-
+        if (issue.category === 'empty_translation') {
           updates[issue.key] = '';
           counters.clear++;
           reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة' });

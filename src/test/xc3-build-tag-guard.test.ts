@@ -33,7 +33,6 @@ describe("repairTranslationTagsForBuild", () => {
 
     expect(result.exactTagMatch).toBe(false);
   });
-  });
 
   it("fixes دولار1 back to $1", () => {
     const result = repairTranslationTagsForBuild(
@@ -105,3 +104,4 @@ describe("repairTranslationTagsForBuild", () => {
     );
     expect(result.text).toContain("$1");
   });
+});

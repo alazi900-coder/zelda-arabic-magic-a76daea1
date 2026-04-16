@@ -41,11 +41,13 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
 
     try {
       let regex: RegExp;
+      const flags = caseSensitive ? "g" : "gi";
       if (useRegex) {
-        regex = new RegExp(findText, caseSensitive ? "g" : "gi");
+        regex = new RegExp(findText, flags);
       } else {
         const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        regex = new RegExp(escaped, caseSensitive ? "g" : "gi");
+        const pattern = wholeWord ? `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])` : escaped;
+        regex = new RegExp(pattern, flags + "u");
       }
 
       const results: FindReplaceMatch[] = [];

@@ -480,6 +480,32 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
   }, [entryMap, state.translations]);
 
+  const applyTagFixes = useCallback((keys: string[]): number => {
+    if (keys.length === 0) return 0;
+
+    if (onApplyFix) {
+      let count = 0;
+      for (const key of keys) {
+        const entry = entryMap.get(key);
+        const trans = state.translations[key];
+        if (!entry || !trans) continue;
+        const fixed = restoreTagsLocally(entry.original, trans);
+        if (fixed !== trans) {
+          onApplyFix(key, fixed);
+          count++;
+        }
+      }
+      return count;
+    }
+
+    if (onFixSelectedLocally) {
+      onFixSelectedLocally(keys);
+      return keys.length;
+    }
+
+    return 0;
+  }, [entryMap, onApplyFix, onFixSelectedLocally, state.translations]);
+
   /** Fix a single issue */
   const handleFixSingle = useCallback((issue: DiagnosticIssue) => {
     const entry = entryMap.get(issue.key);
@@ -487,13 +513,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
     // Tag-fixable: use restoreTagsLocally
     if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
-      if (onFixSelectedLocally) {
-        onFixSelectedLocally([issue.key]);
-      } else if (onApplyFix) {
-        const fixed = restoreTagsLocally(entry.original, issue.translation);
-        onApplyFix(issue.key, fixed);
-      }
-      toast({ title: "🔧 إصلاح", description: "تم إصلاح الوسوم" });
+      const fixedCount = applyTagFixes([issue.key]);
+      toast({
+        title: fixedCount > 0 ? "🔧 إصلاح" : "⚠️ لم يتغير النص",
+        description: fixedCount > 0 ? "تم إصلاح الوسوم" : "لم يتم العثور على تعديل فعلي لهذه الوسوم",
+      });
       return;
     }
 
@@ -533,19 +557,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     if (uniqueKeys.length === 0) return;
 
     if (TAG_FIXABLE_CATEGORIES.has(activeFilter)) {
-      if (onFixSelectedLocally) {
-        onFixSelectedLocally(uniqueKeys);
-      } else if (onApplyFix) {
-        let count = 0;
-        for (const key of uniqueKeys) {
-          const entry = entryMap.get(key);
-          const trans = state.translations[key];
-          if (!entry || !trans) continue;
-          const fixed = restoreTagsLocally(entry.original, trans);
-          if (fixed !== trans) { onApplyFix(key, fixed); count++; }
-        }
-        toast({ title: "🔧 إصلاح", description: `تم إصلاح الوسوم في ${count} نص` });
-      }
+      const count = applyTagFixes(uniqueKeys);
+      toast({ title: count > 0 ? "🔧 إصلاح" : "⚠️ لم يتغير شيء", description: `تم تعديل ${count} نص من مشاكل الوسوم` });
       setTimeout(() => runScan(true), 250);
       return;
     }
@@ -648,27 +661,15 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     // Process tag fixes
-    if (tagFixKeys.length > 0) {
-      if (onFixSelectedLocally) {
-        onFixSelectedLocally(tagFixKeys);
-      } else {
-        for (const key of tagFixKeys) {
-          const entry = entryMap.get(key);
-          const trans = state.translations[key];
-          if (!entry || !trans) continue;
-          const fixed = restoreTagsLocally(entry.original, trans);
-          if (fixed !== trans) onApplyFix(key, fixed);
-        }
-      }
-    }
+    const tagFixedCount = applyTagFixes(tagFixKeys);
 
-    const totalFixed = tagFixKeys.length + restoreCount + stripCount + clearCount + dollarFixCount;
+    const totalFixed = tagFixedCount + restoreCount + stripCount + clearCount + dollarFixCount;
     toast({
-      title: "⚡ إصلاح شامل",
-      description: `تم إصلاح ${totalFixed} نص (${tagFixKeys.length} وسوم، ${dollarFixCount} متغيرات، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
+      title: totalFixed > 0 ? "⚡ إصلاح شامل" : "⚠️ لم يتم تعديل أي نص",
+      description: `تم تعديل ${totalFixed} نص (${tagFixedCount} وسوم، ${dollarFixCount} متغيرات، ${restoreCount} استعادة، ${stripCount} تنظيف، ${clearCount} حذف)`,
     });
     setTimeout(() => runScan(false), 500);
-  }, [issues, onApplyFix, onFixSelectedLocally, entryMap, state.translations, runScan]);
+  }, [issues, onApplyFix, entryMap, state.translations, runScan, applyTagFixes]);
 
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;

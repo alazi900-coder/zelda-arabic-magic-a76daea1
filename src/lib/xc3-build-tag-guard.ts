@@ -191,8 +191,9 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   }
   result += translation.slice(cursor);
 
-  // Final safety pass: ensure every [XENO:n ] is followed by \n
-  return ensureXenoNNewlines(result);
+  // Final safety pass: ensure every [XENO:n ] is followed by \n, then clean whitespace
+  result = ensureXenoNNewlines(result);
+  return normalizeWhitespaceAfterReorder(result, original);
 }
 
 /** Force every [XENO:n ] in the text to be followed by a newline char. */

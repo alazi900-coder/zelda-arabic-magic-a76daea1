@@ -190,6 +190,74 @@ export async function checkAndMigrateSchema(currentAppVersion: string): Promise<
   };
 }
 
+export interface BackupImportResult {
+  ok: boolean;
+  reason?: string;
+  importedEditorState: boolean;
+  importedOriginals: boolean;
+  schemaVersion?: number;
+}
+
+/**
+ * Import a previously-exported backup JSON file. Validates shape, then writes
+ * `editorState` and `originalTexts` back into IDB. Caller should reload after.
+ */
+export async function importEditorStateBackup(file: File): Promise<BackupImportResult> {
+  try {
+    const text = await file.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return { ok: false, reason: "ملف JSON غير صالح", importedEditorState: false, importedOriginals: false };
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      return { ok: false, reason: "بنية الملف غير متوقعة", importedEditorState: false, importedOriginals: false };
+    }
+
+    const obj = parsed as Record<string, unknown>;
+    const editorState = obj.editorState;
+    const originalTexts = obj.originalTexts;
+    const schemaVersion = typeof obj.schemaVersion === "number" ? obj.schemaVersion : undefined;
+
+    if (editorState === undefined && originalTexts === undefined) {
+      return {
+        ok: false,
+        reason: "الملف لا يحتوي على ترجمات (editorState/originalTexts مفقودة)",
+        importedEditorState: false,
+        importedOriginals: false,
+      };
+    }
+
+    let importedEditorState = false;
+    let importedOriginals = false;
+
+    if (editorState !== undefined) {
+      await idbSet("editorState", editorState);
+      importedEditorState = true;
+    }
+    if (originalTexts !== undefined) {
+      await idbSet("originalTexts", originalTexts);
+      importedOriginals = true;
+    }
+
+    // Mark current schema as the active one — the data we just imported is now
+    // canonical, regardless of what version it was exported from.
+    await setSchemaMeta({ schemaVersion: SCHEMA_VERSION });
+
+    return { ok: true, importedEditorState, importedOriginals, schemaVersion };
+  } catch (err) {
+    console.error("[idb] import backup failed:", err);
+    return {
+      ok: false,
+      reason: err instanceof Error ? err.message : "خطأ غير معروف",
+      importedEditorState: false,
+      importedOriginals: false,
+    };
+  }
+}
+
 /** Manual backup — used by the "نسخة احتياطية قبل الترقية" button. */
 export async function exportEditorStateBackup(label = "manual"): Promise<boolean> {
   try {

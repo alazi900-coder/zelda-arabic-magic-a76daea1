@@ -170,6 +170,10 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
             <Switch id="fr-original" checked={searchInOriginal} onCheckedChange={setSearchInOriginal} />
             <Label htmlFor="fr-original" className="text-xs font-body cursor-pointer">بحث في النص الأصلي</Label>
           </div>
+          <div className="flex items-center gap-2">
+            <Switch id="fr-whole" checked={wholeWord} onCheckedChange={setWholeWord} disabled={useRegex} />
+            <Label htmlFor="fr-whole" className="text-xs font-body cursor-pointer">كلمة كاملة</Label>
+          </div>
         </div>
 
         {/* Stats */}

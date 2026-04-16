@@ -394,7 +394,8 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
 
   // No XENO:n found — fall back to legacy single-chunk balancing.
   if (chunks.length <= 1) {
-    return splitChunkEvenly(text, numLines);
+    const out = splitChunkEvenly(text, numLines);
+    return hardBreaksEqual(text, out) ? out : text;
   }
 
   // Step 2: every XENO:n already produces a hard newline. The remaining "extra"
@@ -416,7 +417,9 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
     return splitChunkEvenly(chunk, target);
   });
 
-  return balancedChunks.join('\n');
+  const joined = balancedChunks.join('\n');
+  // SAFETY ASSERTION (token model): cinematic anchors must be preserved 1:1.
+  return hardBreaksEqual(text, joined) ? joined : text;
 }
 
 /** Check if text has orphan lines (single lexical word on a line) */

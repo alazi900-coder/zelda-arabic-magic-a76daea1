@@ -153,6 +153,9 @@ function repairDollarVars(original: string, translation: string): string {
 /**
  * Reorder tags in translation to match the sequence in original.
  * Only works when multiset matches (same tags, wrong order).
+ *
+ * SAFETY: [XENO:n ] followed by \n is treated as one atomic unit and never split.
+ * This prevents game freezes caused by orphaned line-break tags.
  */
 function reorderTagsToMatchOriginal(original: string, translation: string): string {
   const tagRegex = new RegExp(BUILD_TECH_TAG_REGEX.source, BUILD_TECH_TAG_REGEX.flags);
@@ -172,46 +175,68 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   }
   if (alreadyCorrect) return translation;
 
-  // Strip all tags from translation, then re-insert in original order
-  const textParts = translation.split(tagRegex).filter(p => p !== undefined);
-  // We have N tags and up to N+1 text segments
-  // Strategy: place tags at the same relative positions as original
-  const origLen = original.replace(tagRegex, '').length;
-  const transText = textParts.join('');
+  // Build a list of "tokens": either a tag (or atomic [XENO:n]\n unit) or a text chunk
+  // We strip all tags+(their following \n if XENO:n) from translation,
+  // then re-insert them in original order at proportional positions.
+  const XENO_N = /^\[XENO:n\s*\]$/;
+  const isXenoN = (t: string) => XENO_N.test(t);
+
+  // Split translation into [text segments, tags] preserving order
+  const transTagMatches = [...translation.matchAll(tagRegex)];
+  const transSegments: string[] = [];
+  let cursor = 0;
+  for (const m of transTagMatches) {
+    transSegments.push(translation.slice(cursor, m.index!));
+    cursor = m.index! + m[0].length;
+    // If this is [XENO:n] and next char is \n, swallow the \n into the tag-unit
+    if (isXenoN(m[0]) && translation[cursor] === '\n') {
+      cursor++;
+    }
+  }
+  const trailingText = translation.slice(cursor);
+  const transText = transSegments.join('') + trailingText;
   const transLen = transText.length;
 
   if (transLen === 0) {
-    // No text content, just return tags in original order
-    return origTags.join('');
+    // No text content, just return tags in original order with \n preserved after XENO:n
+    return origTags.map(t => isXenoN(t) ? t + '\n' : t).join('');
   }
 
-  // Calculate where each tag sits proportionally in the original
-  interface TagSlot { tag: string; relPos: number }
+  // Calculate where each tag sits proportionally in the original (text chars only)
+  const origTextOnly = original.replace(tagRegex, '').length;
+  const origTagMatches = [...original.matchAll(tagRegex)];
+  interface TagSlot { tag: string; relPos: number; followedByNewline: boolean }
   const slots: TagSlot[] = [];
   let origTextSoFar = 0;
-  const origParts = original.split(tagRegex).filter(p => p !== undefined);
-  for (let i = 0; i < origTags.length; i++) {
-    origTextSoFar += (origParts[i] || '').length;
-    slots.push({ tag: origTags[i], relPos: origLen > 0 ? origTextSoFar / origLen : i / origTags.length });
+  let prevEnd = 0;
+  for (const m of origTagMatches) {
+    origTextSoFar += original.slice(prevEnd, m.index!).length;
+    const followedByNewline = isXenoN(m[0]) && original[m.index! + m[0].length] === '\n';
+    slots.push({
+      tag: m[0],
+      relPos: origTextOnly > 0 ? origTextSoFar / origTextOnly : slots.length / origTagMatches.length,
+      followedByNewline,
+    });
+    prevEnd = m.index! + m[0].length + (followedByNewline ? 1 : 0);
   }
 
-  // Build result: insert tags at proportional positions in the Arabic text
+  // Build result: insert tags (as atomic units) at proportional positions
   let result = '';
   let inserted = 0;
   for (let ci = 0; ci <= transLen; ci++) {
-    // Insert all tags whose relative position is at or before this point
     while (inserted < slots.length) {
       const targetPos = slots[inserted].relPos * transLen;
       if (ci >= Math.round(targetPos)) {
         result += slots[inserted].tag;
+        if (slots[inserted].followedByNewline) result += '\n';
         inserted++;
       } else break;
     }
     if (ci < transLen) result += transText[ci];
   }
-  // Append remaining tags
   while (inserted < slots.length) {
     result += slots[inserted].tag;
+    if (slots[inserted].followedByNewline) result += '\n';
     inserted++;
   }
 

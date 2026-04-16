@@ -51,4 +51,18 @@ describe("Deep diagnostic translated tag deduping", () => {
     expect(mismatch?.message).toContain("U+E001");
     expect(mismatch?.message).toContain("U+E002");
   });
+
+  it("detects [XENO:n ] not followed by newline", () => {
+    const entry = makeEntry("Hello[XENO:n ]\nworld");
+    const issues = detectIssues(entry, "مرحبا[XENO:n ]بالعالم");
+    const xenoN = issues.find(i => i.category === "xeno_n_no_newline");
+    expect(xenoN).toBeDefined();
+    expect(xenoN?.message).toContain("[XENO:n ]");
+  });
+
+  it("does not flag [XENO:n ] when followed by newline", () => {
+    const entry = makeEntry("Hello[XENO:n ]\nworld");
+    const issues = detectIssues(entry, "مرحبا[XENO:n ]\nبالعالم");
+    expect(issues.find(i => i.category === "xeno_n_no_newline")).toBeUndefined();
+  });
 });

@@ -778,6 +778,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         }
         processedKeys.add(issue.key);
         continue;
+      }
 
       if (issue.category === 'empty_translation') {
         onApplyFix(issue.key, '');

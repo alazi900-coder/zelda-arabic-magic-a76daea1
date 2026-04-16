@@ -117,6 +117,24 @@ function fixOrphans(lines: string[]): string[] {
   return result;
 }
 
+/** Punctuation that marks a natural line-break opportunity (Arabic + Latin). */
+const STRONG_PUNCT_RE = /[.!?؟…:؛]["'»”’)\]]?\s*$/;
+const WEAK_PUNCT_RE = /[,،;]["'»”’)\]]?\s*$/;
+
+/** Return a punctuation-break score for ending a line at the given word.
+ *  Negative = good (reward), positive = bad (penalty).
+ *  We strip shielded tag placeholders before testing. */
+function punctuationBreakBonus(lastWord: string, isLastLine: boolean): number {
+  // Strip shielded placeholders so we look at the real text ending
+  const clean = lastWord.replace(/◆\d+◆/g, '').trim();
+  if (!clean) return 0;
+  if (STRONG_PUNCT_RE.test(clean)) return -3000; // strong reward: end on . ! ? : ؛
+  if (WEAK_PUNCT_RE.test(clean)) return -1500;   // medium reward: end on , ، ;
+  // No punctuation at line end (and not the final line) → small penalty
+  if (!isLastLine) return 800;
+  return 0;
+}
+
 function dpSplitShielded(
   words: string[],
   nLines: number,
@@ -166,6 +184,8 @@ function dpSplitShielded(
           const shortBy = ideal * 0.7 - ll;
           cost += shortBy * shortBy * 6;
         }
+        // Reward breaking after punctuation (XC3 natural reading)
+        cost += punctuationBreakBonus(words[i - 1], isLastLine);
 
         const total = dp[j][k - 1] + cost;
         if (total < dp[i][k]) {

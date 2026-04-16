@@ -401,8 +401,10 @@ const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]
 const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
+// Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
+const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);

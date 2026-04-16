@@ -31,6 +31,7 @@ const FindReplacePanel: React.FC<FindReplacePanelProps> = ({
   const [useRegex, setUseRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [searchInOriginal, setSearchInOriginal] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [applied, setApplied] = useState(false);

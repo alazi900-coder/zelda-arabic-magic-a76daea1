@@ -252,9 +252,19 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
   return bestResult.map((line) => unshieldTagsAfterBalance(line, map)).join('\n');
 }
 
-/** Split text evenly into N lines by word count (no character limit, only line count matters) */
-export function splitEvenlyByLines(text: string, numLines: number): string {
-  const flat = text.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+/**
+ * XC3 cinematic line-break marker. The game treats `[XENO:n ]` as a HARD line break:
+ * the very next character must be a newline, and the word that follows is the start
+ * of a brand-new visual line. We therefore split on this marker FIRST, then balance
+ * each chunk independently — never letting the DP redistribute words across it.
+ */
+const XENO_N_HARD_BREAK = /\[\s*XENO\s*:\s*n\s*\]\s*\n?/g;
+
+function splitChunkEvenly(
+  chunk: string,
+  numLines: number,
+): string {
+  const flat = chunk.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
   if (numLines <= 1 || !flat) return flat;
 
   const { shielded, map } = shieldTagsForBalance(flat);
@@ -271,10 +281,8 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
     return len;
   };
 
-  // Use DP to split evenly without hard character limit
   const result = dpSplitShielded(words, numLines, wordDisplayLen, 99999);
   if (!result) {
-    // Fallback: distribute words evenly
     const perLine = Math.ceil(words.length / numLines);
     const lines: string[] = [];
     for (let i = 0; i < numLines; i++) {
@@ -284,6 +292,73 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
   }
 
   return result.map(line => unshieldTagsAfterBalance(line, map)).join('\n');
+}
+
+/**
+ * Split text evenly into N lines by word count.
+ *
+ * CRITICAL XC3 BEHAVIOR: `[XENO:n ]` is a HARD cinematic line break in the original
+ * English. We never redistribute words across it. Instead we:
+ *   1. Split the text into chunks separated by `[XENO:n ]` (the tag stays at the
+ *      end of its chunk, followed by the newline the engine requires).
+ *   2. Distribute the requested `numLines` across those chunks proportionally to
+ *      their word count.
+ *   3. Balance each chunk independently with the DP splitter.
+ *
+ * This prevents the "كلمة وحيدة بعد [XENO:n ] في سطر منفصل" bug where the DP used
+ * to flatten everything and place the word right after the tag on its own line,
+ * which then exploded the total line count and triggered the deep diagnostic
+ * "أسطر زائدة عن الأصل" / "فرق كبير بعدد الأسطر" warnings by the thousands.
+ */
+export function splitEvenlyByLines(text: string, numLines: number): string {
+  if (!text) return text;
+  if (numLines <= 1) {
+    // Even when collapsing to a single visual line, we MUST preserve [XENO:n ] breaks.
+    return text;
+  }
+
+  // Step 1: split on hard XENO:n breaks (preserve the tag at chunk-end).
+  const chunks: string[] = [];
+  let lastIndex = 0;
+  XENO_N_HARD_BREAK.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const re = new RegExp(XENO_N_HARD_BREAK.source, 'g');
+  while ((match = re.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index).trim();
+    // Re-attach the [XENO:n ] tag (without trailing whitespace) to the preceding chunk.
+    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]/);
+    const tagText = tagMatch ? tagMatch[0] : '[XENO:n ]';
+    chunks.push((before ? before + ' ' : '') + tagText);
+    lastIndex = match.index + match[0].length;
+  }
+  const tail = text.slice(lastIndex).replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  if (tail) chunks.push(tail);
+
+  // No XENO:n found — fall back to legacy single-chunk balancing.
+  if (chunks.length <= 1) {
+    return splitChunkEvenly(text, numLines);
+  }
+
+  // Step 2: every XENO:n already produces a hard newline. The remaining "extra"
+  // lines we still need to introduce equals numLines - chunks.length. Distribute
+  // them across chunks proportionally to word count.
+  const chunkWordCounts = chunks.map(c =>
+    c.replace(XENO_N_HARD_BREAK, ' ').split(/\s+/).filter(Boolean).length
+  );
+  const extraLinesNeeded = Math.max(0, numLines - chunks.length);
+  const totalWords = chunkWordCounts.reduce((a, b) => a + b, 0) || 1;
+
+  const linesPerChunk = chunks.map((_, i) =>
+    1 + Math.round((chunkWordCounts[i] / totalWords) * extraLinesNeeded)
+  );
+
+  // Step 3: balance each chunk independently with the assigned line budget.
+  const balancedChunks = chunks.map((chunk, i) => {
+    const target = Math.max(1, linesPerChunk[i]);
+    return splitChunkEvenly(chunk, target);
+  });
+
+  return balancedChunks.join('\n');
 }
 
 /** Check if text has orphan lines (single lexical word on a line) */

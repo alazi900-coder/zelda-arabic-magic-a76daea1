@@ -743,6 +743,6 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     // Tag brackets
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
     // Arabic text fixes
-    handleScanArabicTextFixes, handleApplyArabicTextFix, handleRejectArabicTextFix, handleApplyAllArabicTextFixes,
+    handleScanArabicTextFixes, handleApplyArabicTextFix, handleRejectArabicTextFix, handleApplyAllArabicTextFixes, handleScanLonelyLam,
   };
 }

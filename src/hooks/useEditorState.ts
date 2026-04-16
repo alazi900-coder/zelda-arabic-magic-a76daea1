@@ -732,6 +732,28 @@ export function useEditorState() {
     }
   };
 
+  const updateTranslationsBatch = useCallback((updates: Record<string, string>) => {
+    if (!state) return 0;
+
+    const nextUpdates: Record<string, string> = {};
+    const prevTranslationsBatch: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(updates)) {
+      const prev = state.translations[key] || '';
+      if (prev === value) continue;
+      prevTranslationsBatch[key] = prev;
+      nextUpdates[key] = value;
+    }
+
+    const changedCount = Object.keys(nextUpdates).length;
+    if (changedCount === 0) return 0;
+
+    setPreviousTranslations(old => ({ ...old, ...prevTranslationsBatch }));
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...nextUpdates } } : null);
+
+    return changedCount;
+  }, [state, setState, setPreviousTranslations]);
+
   const handleUndoTranslation = (key: string) => {
     if (previousTranslations[key] !== undefined) {
       setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: previousTranslations[key] } } : null);
@@ -1359,7 +1381,7 @@ export function useEditorState() {
     // Handlers
     toggleProtection, toggleTechnicalBypass,
     handleProtectAllArabic, handleFixReversed, handleFixAllReversed,
-    updateTranslation, handleUndoTranslation,
+    updateTranslation, updateTranslationsBatch, handleUndoTranslation,
     handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate,
     glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview,
     handleRetranslatePage, handleFixDamagedTags, handleLocalFixDamagedTag, handleLocalFixAllDamagedTags, handleLocalFixSelectedTags, handleRedistributeTags, handleReviewTranslations,

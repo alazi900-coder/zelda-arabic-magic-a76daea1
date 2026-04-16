@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
-import { idbSet, idbGet } from "@/lib/idb-storage";
+import { idbSet, idbGet, checkAndMigrateSchema } from "@/lib/idb-storage";
+import { APP_VERSION } from "@/lib/version";
 import { processArabicText, hasArabicChars as hasArabicCharsProcessing, hasArabicPresentationForms, removeArabicPresentationForms } from "@/lib/arabic-processing";
 
 import { useAuth } from "@/contexts/AuthContext";

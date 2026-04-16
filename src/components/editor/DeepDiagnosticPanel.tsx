@@ -427,6 +427,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     latestStateRef.current = state;
   }, [state]);
 
+  const [scanProgress, setScanProgress] = useState({ done: 0, total: 0 });
+
   const runScan = useCallback((preserveActiveFilter = false) => {
     setScanning(true);
     setScanned(false);
@@ -438,9 +440,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       const currentState = latestStateRef.current;
       const allIssues: DiagnosticIssue[] = [];
       let index = 0;
+      const total = currentState.entries.length;
+      setScanProgress({ done: 0, total });
 
       const processChunk = () => {
-        const end = Math.min(index + CHUNK_SIZE, currentState.entries.length);
+        const end = Math.min(index + CHUNK_SIZE, total);
 
         for (; index < end; index++) {
           const entry = currentState.entries[index];
@@ -450,7 +454,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           allIssues.push(...detectIssues(entry, translation));
         }
 
-        if (index < currentState.entries.length) {
+        setScanProgress({ done: index, total });
+
+        if (index < total) {
           requestAnimationFrame(processChunk);
           return;
         }
@@ -463,6 +469,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       requestAnimationFrame(processChunk);
     }, 50);
   }, []);
+
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};

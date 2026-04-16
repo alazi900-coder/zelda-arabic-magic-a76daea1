@@ -919,6 +919,10 @@ export function useEditorState() {
     : filterFile !== "all" ? filterFile
     : filterStatus !== "all" ? (filterStatusLabels[filterStatus] || filterStatus)
     : filterTechnical !== "all" ? filterTechnical
+    : search.trim().length > 0 ? `بحث: ${search.trim()}`
+    : filterTable !== "all" ? filterTable
+    : filterColumn !== "all" ? filterColumn
+    : pinnedKeys !== null ? "مثبّتة"
     : "";
 
   // === Clear translations (with undo) ===

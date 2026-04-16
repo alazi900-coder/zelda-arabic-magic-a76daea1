@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Download, Save } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { RefreshCw, Download, Save, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { exportEditorStateBackup } from "@/lib/idb-storage";
+import { exportEditorStateBackup, importEditorStateBackup } from "@/lib/idb-storage";
 
 /**
  * Global update UI:
@@ -19,6 +19,8 @@ export default function UpdateBanner() {
   const [updating, setUpdating] = useState(false);
   const [forceUpdating, setForceUpdating] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -94,6 +96,46 @@ export default function UpdateBanner() {
     }
   }, [backingUp]);
 
+  const handleImportClick = useCallback(() => {
+    if (importing) return;
+    fileInputRef.current?.click();
+  }, [importing]);
+
+  const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so the user can pick the same file again later.
+    e.target.value = "";
+    if (!file) return;
+
+    if (!confirm("سيتم استبدال جميع الترجمات الحالية بمحتوى ملف النسخة الاحتياطية. هل تريد المتابعة؟")) {
+      return;
+    }
+
+    setImporting(true);
+    toast.info("⏳ جارٍ استيراد النسخة الاحتياطية...");
+    try {
+      const result = await importEditorStateBackup(file);
+      if (!result.ok) {
+        toast.error("فشل الاستيراد", { description: result.reason ?? "ملف غير صالح" });
+        return;
+      }
+      const parts: string[] = [];
+      if (result.importedEditorState) parts.push("الترجمات");
+      if (result.importedOriginals) parts.push("النصوص الأصلية");
+      toast.success("✅ تم الاستيراد بنجاح", {
+        description: `تمت استعادة: ${parts.join(" + ")}. سيتم إعادة التحميل...`,
+      });
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) {
+      console.error(err);
+      toast.error("فشل الاستيراد", {
+        description: err instanceof Error ? err.message : "خطأ غير معروف",
+      });
+    } finally {
+      setImporting(false);
+    }
+  }, []);
+
   /**
    * FORCE-UPDATE: clears every layer of caching (Service Worker, Cache Storage,
    * sessionStorage) and triggers a hard reload — IndexedDB editor state is
@@ -142,6 +184,28 @@ export default function UpdateBanner() {
           </Button>
         </div>
       )}
+
+      {/* Hidden file input used by the import-backup button. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleImportFile}
+      />
+
+      {/* Import-backup FAB — sits above the backup FAB so the user can restore
+          a previously-exported JSON after a schema migration. */}
+      <Button
+        onClick={handleImportClick}
+        disabled={importing}
+        aria-label="استيراد نسخة احتياطية JSON"
+        variant="outline"
+        className="fixed bottom-32 left-4 z-[99] h-10 px-3 gap-2 rounded-full shadow-lg bg-background/90 backdrop-blur border-2 border-accent/40 hover:bg-background hover:scale-105 transition-all font-bold text-xs"
+      >
+        <Upload className={`h-4 w-4 ${importing ? "animate-pulse" : ""}`} />
+        <span className="hidden xs:inline sm:inline">{importing ? "جارٍ الاستيراد..." : "استيراد نسخة"}</span>
+      </Button>
 
       {/* Backup FAB — sits above the update FAB so the user can always export
           a JSON safety-net before pulling a new build. */}

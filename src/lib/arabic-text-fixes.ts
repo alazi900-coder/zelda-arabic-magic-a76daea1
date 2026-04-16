@@ -319,3 +319,21 @@ export function scanAllTextFixes(translations: Record<string, string>): TextFixR
   
   return results;
 }
+
+/** Scan only for lonely-lam (ل → لا) fixes */
+export function scanLonelyLamFixes(translations: Record<string, string>): TextFixResult[] {
+  const results: TextFixResult[] = [];
+  for (const [key, value] of Object.entries(translations)) {
+    if (!value?.trim()) continue;
+    const lamResult = fixLonelyLam(value);
+    if (lamResult.changes > 0) {
+      results.push({
+        key, before: value, after: lamResult.fixed,
+        fixType: 'lonely-lam', fixLabel: 'ل → لا',
+        details: `${lamResult.changes} إصلاح (ل المنفردة)`,
+        status: 'pending',
+      });
+    }
+  }
+  return results;
+}

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { toast } from "@/hooks/use-toast";
 import { fixTagBracketsStrict, hasTechnicalBracketTag } from "@/lib/tag-bracket-fix";
-import { scanAllTextFixes } from "@/lib/arabic-text-fixes";
+import { scanAllTextFixes, scanLonelyLamFixes } from "@/lib/arabic-text-fixes";
 import { visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 import { restoreTagsLocally, hasTechnicalTags } from "@/components/editor/types";
 import type { EditorState, ExtractedEntry } from "@/components/editor/types";
@@ -692,6 +692,14 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     else toast({ title: `✨ تم العثور على ${results.length} مشكلة`, description: "راجع النتائج وقرر ما تريد تطبيقه" });
   }, [state]);
 
+  const handleScanLonelyLam = useCallback(() => {
+    if (!state) return;
+    const results = scanLonelyLamFixes(state.translations);
+    setArabicTextFixResults(results);
+    if (results.length === 0) { setLastSaved("✅ لا توجد لام منفردة (ل) تحتاج إصلاح"); setTimeout(() => setLastSaved(""), 4000); }
+    else toast({ title: `🚫 تم العثور على ${results.length} لام منفردة`, description: "راجع النتائج واختر ما تريد إصلاحه (ل → لا)" });
+  }, [state]);
+
   const handleApplyArabicTextFix = useCallback((key: string, fixType: string) => {
     if (!state || !arabicTextFixResults) return;
     const item = arabicTextFixResults.find((r: any) => r.key === key && r.fixType === fixType);
@@ -735,6 +743,6 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     // Tag brackets
     handleScanTagBrackets, handleApplyTagBracketFix, handleRejectTagBracketFix, handleApplyAllTagBracketFixes,
     // Arabic text fixes
-    handleScanArabicTextFixes, handleApplyArabicTextFix, handleRejectArabicTextFix, handleApplyAllArabicTextFixes,
+    handleScanArabicTextFixes, handleApplyArabicTextFix, handleRejectArabicTextFix, handleApplyAllArabicTextFixes, handleScanLonelyLam,
   };
 }

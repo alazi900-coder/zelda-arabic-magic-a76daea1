@@ -534,6 +534,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: trans, reason: '⚠️ لم يتمكن من إصلاح المتغيرات تلقائياً' };
     }
 
+    if (XENO_N_FIXABLE_CATEGORIES.has(issue.category)) {
+      const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+      return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ]' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
+    }
+
     return { fixResult: '', reason: '❓ لا توجد استراتيجية إصلاح لهذه الفئة' };
   }, [entryMap, state.translations, getSafeTagRepair]);
 
@@ -606,6 +611,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (XENO_N_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const fixed = issue.translation.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+      if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
+      toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ]' });
+      return;
+    }
+
     if (issue.category === 'empty_translation' && onApplyFix) {
       onApplyFix(issue.key, '');
       return;
@@ -665,6 +677,19 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         if (cleaned !== trans) { onApplyFix(key, cleaned); count++; }
       }
       toast({ title: '🧹 تنظيف', description: `تم إزالة الأحرف غير المرئية من ${count} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    if (XENO_N_FIXABLE_CATEGORIES.has(activeFilter) && onApplyFix) {
+      let count = 0;
+      for (const key of uniqueKeys) {
+        const trans = state.translations[key];
+        if (!trans) continue;
+        const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+        if (fixed !== trans) { onApplyFix(key, fixed); count++; }
+      }
+      toast({ title: '↩️ إصلاح جماعي', description: `تم إضافة \\n بعد [XENO:n ] في ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }

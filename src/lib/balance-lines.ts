@@ -152,9 +152,20 @@ function dpSplitShielded(
         let cost = deviation * deviation;
         const lexicalCount = countLexicalWords(words.slice(j, i).join(' '));
         const isMiddleLine = k > 1 && k < nLines;
+        const isLastLine = k === nLines;
         if (lexicalCount <= 1 && isMiddleLine) cost += 50000;
         if (i - j === 1 && isMiddleLine) cost += 50000;
         if (ll < ideal * 0.4 && lexicalCount < 3) cost += 5000;
+        // Strong penalty when any line is much shorter than the ideal — keeps lines visually balanced
+        if (ll < ideal * 0.6 && nLines > 1) {
+          const shortBy = ideal * 0.6 - ll;
+          cost += shortBy * shortBy * 4;
+        }
+        // Extra penalty if the LAST line is too short (the most visually obvious imbalance)
+        if (isLastLine && ll < ideal * 0.7 && nLines > 1) {
+          const shortBy = ideal * 0.7 - ll;
+          cost += shortBy * shortBy * 6;
+        }
 
         const total = dp[j][k - 1] + cost;
         if (total < dp[i][k]) {

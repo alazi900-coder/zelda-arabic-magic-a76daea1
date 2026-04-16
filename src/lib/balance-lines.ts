@@ -272,7 +272,7 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     const before = text.slice(lastIndex, match.index).replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]/);
+    const tagMatch = match[0].match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/);
     const tagText = tagMatch ? tagMatch[0] : '[XENO:n ]';
     chunks.push((before ? before + ' ' : '') + tagText);
     lastIndex = match.index + match[0].length;

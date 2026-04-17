@@ -1222,6 +1222,62 @@ const Editor = () => {
                 )}
               </div>
             )}
+
+            {/* Quick-fix bar for deep diagnostic filters */}
+            {(['xeno-n-missing', 'excessive-lines', 'newline-diff', 'identical-original'] as const).includes(editor.filterStatus as any) && editor.filteredEntries.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 p-2 rounded bg-primary/5 border border-primary/20">
+                <span className="text-xs font-display text-primary">
+                  🔧 {editor.filteredEntries.length} نص مطابق للفلتر
+                </span>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="font-body text-xs h-7"
+                  onClick={async () => {
+                    const updates: Record<string, string> = {};
+                    let removed = 0;
+                    for (const e of editor.filteredEntries) {
+                      const key = `${e.msbtFile}:${e.index}`;
+                      const trans = editor.state!.translations[key] || '';
+                      if (!trans) continue;
+                      if (editor.filterStatus === 'xeno-n-missing') {
+                        const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+                        if (fixed !== trans) updates[key] = fixed;
+                      } else if (editor.filterStatus === 'identical-original') {
+                        updates[key] = '';
+                        removed++;
+                      } else if (editor.filterStatus === 'excessive-lines' || editor.filterStatus === 'newline-diff') {
+                        // Re-balance using DP (matches LineBalancePanel logic)
+                        try {
+                          const { splitEvenlyByLines } = await import('@/lib/balance-lines');
+                          const origLines = (e.original.match(/\n/g) || []).length + 1;
+                          const fixed = splitEvenlyByLines(trans, origLines);
+                          if (fixed !== trans) updates[key] = fixed;
+                        } catch { /* skip on failure */ }
+                      }
+                    }
+                    const count = editor.updateTranslationsBatch(updates);
+                    if (count > 0) {
+                      const { toast } = await import('@/hooks/use-toast');
+                      toast({
+                        title: '✅ تم الإصلاح',
+                        description: editor.filterStatus === 'identical-original'
+                          ? `تم مسح ${removed} ترجمة مطابقة للأصل`
+                          : `تم إصلاح ${count} نص`,
+                      });
+                    }
+                  }}
+                >
+                  <Wand2 className="w-3 h-3 ml-1" />
+                  {editor.filterStatus === 'identical-original' ? 'مسح كل الترجمات المطابقة' :
+                   editor.filterStatus === 'xeno-n-missing' ? 'إضافة \\n بعد كل [XENO:n ]' :
+                   'إعادة موازنة الأسطر'}
+                </Button>
+                <Button variant="ghost" size="sm" className="font-body text-xs h-7" onClick={() => editor.setFilterStatus('all')}>
+                  إلغاء الفلتر
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Needs Improvement Badges */}

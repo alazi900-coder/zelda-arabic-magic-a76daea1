@@ -7,9 +7,10 @@ import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Fil
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { diffTechnicalTags, repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
-import { runRebalanceBatch, type RebalanceItem } from "@/lib/diagnostic-runner";
+import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
+import { detectIssues as detectIssuesPure, type DiagnosticIssue as PureDiagnosticIssue, type Severity as PureSeverity } from "@/lib/diagnostic-detect";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 

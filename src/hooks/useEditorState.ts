@@ -22,6 +22,7 @@ import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { useEditorReview } from "@/hooks/useEditorReview";
 import { useEditorCleanup } from "@/hooks/useEditorCleanup";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
+import { deepDiagPredicates, matchesDeepDiagFilter, type DeepDiagFilterId } from "@/lib/deep-diagnostic-predicates";
 import {
   ExtractedEntry, EditorState, AUTOSAVE_DELAY, AI_BATCH_SIZE, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags,

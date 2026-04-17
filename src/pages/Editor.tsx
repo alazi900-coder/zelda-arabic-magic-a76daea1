@@ -1145,6 +1145,11 @@ const Editor = () => {
                     {editor.newlinesCount > 0 && <option value="has-newlines">↵ يحتوي أسطر ({editor.newlinesCount})</option>}
                     {editor.fuzzyCount > 0 && <option value="fuzzy">🔍 مطابقة جزئية ({editor.fuzzyCount})</option>}
                     {editor.byteOverflowCount > 0 && <option value="byte-overflow">⛔ تجاوز البايتات ({editor.byteOverflowCount})</option>}
+                    {editor.deepDiagnosticCounts.xenoNMissing > 0 && <option value="xeno-n-missing">↩️ [XENO:n] بدون \n ({editor.deepDiagnosticCounts.xenoNMissing})</option>}
+                    {editor.deepDiagnosticCounts.excessiveLines > 0 && <option value="excessive-lines">📐 أسطر زائدة ({editor.deepDiagnosticCounts.excessiveLines})</option>}
+                    {editor.deepDiagnosticCounts.byteBudget > 0 && <option value="byte-budget">💾 تجاوز ميزانية البايتات ({editor.deepDiagnosticCounts.byteBudget})</option>}
+                    {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر كبير ({editor.deepDiagnosticCounts.newlineDiff})</option>}
+                    {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 ترجمة مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
                   </select>
                   <select value={editor.filterFile} onChange={e => editor.setFilterFile(e.target.value)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[200px]">
                     <option value="all">كل الملفات</option>
@@ -1193,6 +1198,11 @@ const Editor = () => {
                   {editor.newlinesCount > 0 && <option value="has-newlines">↵ يحتوي أسطر ({editor.newlinesCount})</option>}
                   {editor.fuzzyCount > 0 && <option value="fuzzy">🔍 مطابقة جزئية ({editor.fuzzyCount})</option>}
                   {editor.byteOverflowCount > 0 && <option value="byte-overflow">⛔ تجاوز البايتات ({editor.byteOverflowCount})</option>}
+                  {editor.deepDiagnosticCounts.xenoNMissing > 0 && <option value="xeno-n-missing">↩️ [XENO:n] بدون \n ({editor.deepDiagnosticCounts.xenoNMissing})</option>}
+                  {editor.deepDiagnosticCounts.excessiveLines > 0 && <option value="excessive-lines">📐 أسطر زائدة ({editor.deepDiagnosticCounts.excessiveLines})</option>}
+                  {editor.deepDiagnosticCounts.byteBudget > 0 && <option value="byte-budget">💾 تجاوز ميزانية ({editor.deepDiagnosticCounts.byteBudget})</option>}
+                  {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر ({editor.deepDiagnosticCounts.newlineDiff})</option>}
+                  {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
                 </select>
                 <select value={editor.filterFile} onChange={e => editor.setFilterFile(e.target.value)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
                   <option value="all">كل الملفات</option>

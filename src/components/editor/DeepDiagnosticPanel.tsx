@@ -31,20 +31,12 @@ interface FixReport {
 }
 
 // ═══════════════════════════════════════════════════
-// Types
+// Types — re-exported from the pure detection module so the worker, main
+// thread, and existing callers all share the same shape.
 // ═══════════════════════════════════════════════════
 
-type Severity = "critical" | "warning" | "info";
-
-export interface DiagnosticIssue {
-  key: string;
-  label: string;
-  original: string;
-  translation: string;
-  severity: Severity;
-  category: string;
-  message: string;
-}
+export type Severity = PureSeverity;
+export type DiagnosticIssue = PureDiagnosticIssue;
 
 interface DiagnosticCategory {
   id: string;

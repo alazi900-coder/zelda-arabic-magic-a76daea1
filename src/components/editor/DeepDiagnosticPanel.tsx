@@ -79,6 +79,9 @@ const CATEGORIES: DiagnosticCategory[] = [
 
 export const detectIssues = detectIssuesPure;
 
+// Local helpers retained for fixers / sanitizers below — kept tiny on purpose.
+const RE_INVISIBLE = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u180E]/g;
+
 // ═══════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════

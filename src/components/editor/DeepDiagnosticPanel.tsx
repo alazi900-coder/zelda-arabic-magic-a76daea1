@@ -140,40 +140,43 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     setScanned(false);
     if (!preserveActiveFilter) setActiveFilter(null);
 
-    const CHUNK_SIZE = 250;
+    // Build a transferable batch of {entry, translation} pairs and run the
+    // scan inside the diagnostic Web Worker — this keeps the main thread
+    // responsive on mobile while we run regex over thousands of entries.
+    const currentState = latestStateRef.current;
+    const batch: DetectItem[] = [];
+    for (const entry of currentState.entries) {
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = currentState.translations[key];
+      if (!translation) continue;
+      batch.push({
+        entry: {
+          msbtFile: entry.msbtFile,
+          index: entry.index,
+          label: entry.label,
+          original: entry.original,
+          maxBytes: entry.maxBytes,
+        },
+        translation,
+      });
+    }
 
-    setTimeout(() => {
-      const currentState = latestStateRef.current;
-      const allIssues: DiagnosticIssue[] = [];
-      let index = 0;
-      const total = currentState.entries.length;
-      setScanProgress({ done: 0, total });
+    setScanProgress({ done: 0, total: batch.length });
 
-      const processChunk = () => {
-        const end = Math.min(index + CHUNK_SIZE, total);
-
-        for (; index < end; index++) {
-          const entry = currentState.entries[index];
-          const key = `${entry.msbtFile}:${entry.index}`;
-          const translation = currentState.translations[key];
-          if (!translation) continue;
-          allIssues.push(...detectIssues(entry, translation));
-        }
-
-        setScanProgress({ done: index, total });
-
-        if (index < total) {
-          requestAnimationFrame(processChunk);
-          return;
-        }
-
+    runDetectBatch(batch, ({ done, total }) => {
+      setScanProgress({ done, total });
+    })
+      .then((allIssues) => {
         setIssues(allIssues);
         setScanning(false);
         setScanned(true);
-      };
-
-      requestAnimationFrame(processChunk);
-    }, 50);
+      })
+      .catch((err) => {
+        console.error("[deep-diagnostic] scan failed:", err);
+        setIssues([]);
+        setScanning(false);
+        setScanned(true);
+      });
   }, []);
 
 

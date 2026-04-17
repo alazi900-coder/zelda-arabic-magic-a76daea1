@@ -583,6 +583,32 @@ export function useEditorState() {
     return count;
   }, [state?.entries, state?.translations]);
 
+  // === Deep diagnostic counts (lightweight, computed lazily) ===
+  const deepDiagnosticCounts = useMemo(() => {
+    const counts = { xenoNMissing: 0, excessiveLines: 0, byteBudget: 0, newlineDiff: 0, identicalOriginal: 0 };
+    if (!state) return counts;
+    const enc = new TextEncoder();
+    for (const e of state.entries) {
+      const key = `${e.msbtFile}:${e.index}`;
+      const t = (state.translations[key] || '').trim();
+      if (!t) continue;
+      // [XENO:n ] not followed by \n
+      if (/\[XENO:n\s*\](?!\n)/.test(t)) counts.xenoNMissing++;
+      const origLines = (e.original.match(/\n/g) || []).length;
+      const transLines = (t.match(/\n/g) || []).length;
+      // newline_mismatch: diff >= 2
+      if (origLines > 0 && Math.abs(transLines - origLines) >= 2) counts.newlineDiff++;
+      // excessive_lines: trans has +3 over original
+      if (transLines >= origLines + 3) counts.excessiveLines++;
+      // byte_budget: trans > 2x original bytes (when origin > 10 bytes)
+      const origBytes = enc.encode(e.original).length;
+      if (origBytes > 10 && enc.encode(t).length > origBytes * 2) counts.byteBudget++;
+      // identical_to_original: same as English, length > 6
+      if (t === e.original.trim() && t.length > 6) counts.identicalOriginal++;
+    }
+    return counts;
+  }, [state?.entries, state?.translations]);
+
   // === Extract unique BDAT table and column names from labels ===
   const bdatTableNames = useMemo(() => {
     if (!state) return [];

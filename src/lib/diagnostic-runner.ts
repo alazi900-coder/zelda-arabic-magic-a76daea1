@@ -3,6 +3,10 @@
  * automatic main-thread fallback if Web Workers are unavailable (e.g. older
  * mobile browsers, restricted environments, or if the worker fails to spawn).
  *
+ * Both directions of the wire (request → worker, response → main) use packed
+ * `ArrayBuffer`s passed through the `postMessage` transfer list so we avoid
+ * structured-clone copies entirely on big batches.
+ *
  * Two operations supported:
  *   • runRebalanceBatch — DP line-balancer for "Fix all" workflows.
  *   • runDetectBatch    — `detectIssues` for the deep diagnostic scan.
@@ -14,8 +18,17 @@ import {
   type DetectableEntry,
   type DiagnosticIssue,
 } from "@/lib/diagnostic-detect";
+import {
+  packRebalanceBatch,
+  unpackRebalanceResults,
+  packDetectBatch,
+  unpackIssueBatch,
+  codeToSeverity,
+  type RebalanceRecord,
+  type DetectRecord,
+} from "@/lib/worker-codec";
 
-// ───────────────────────── Rebalance ─────────────────────────
+// ───────────────────────── Public types ─────────────────────────
 
 export interface RebalanceItem {
   key: string;
@@ -33,8 +46,6 @@ export interface RebalanceResult {
   key: string;
   fixed: string;
 }
-
-// ───────────────────────── Detect ─────────────────────────
 
 export interface DetectItem {
   entry: DetectableEntry;
@@ -78,6 +89,14 @@ export function runRebalanceBatch(
   if (!worker) return runRebalanceMainThread(batch, onProgress);
 
   const id = nextId++;
+  const records: RebalanceRecord[] = batch.map((b) => ({
+    key: b.key,
+    original: b.original,
+    translation: b.translation,
+    englishLineCount: b.englishLineCount,
+  }));
+  const packed = packRebalanceBatch(records);
+
   return new Promise<RebalanceResult[]>((resolve, reject) => {
     const handler = (ev: MessageEvent) => {
       const msg = ev.data;
@@ -86,7 +105,12 @@ export function runRebalanceBatch(
         onProgress({ done: msg.done, total: msg.total });
       } else if (msg.type === "rebalance:done") {
         worker.removeEventListener("message", handler);
-        resolve(msg.results as RebalanceResult[]);
+        try {
+          const results = unpackRebalanceResults(msg.buffer as ArrayBuffer);
+          resolve(results);
+        } catch (err) {
+          reject(err);
+        }
       }
     };
     const errHandler = (err: ErrorEvent) => {
@@ -97,7 +121,11 @@ export function runRebalanceBatch(
     };
     worker.addEventListener("message", handler);
     worker.addEventListener("error", errHandler, { once: true });
-    worker.postMessage({ type: "rebalance", id, batch });
+    // Transfer the packed buffer with zero-copy semantics.
+    worker.postMessage(
+      { type: "rebalance", id, buffer: packed.buffer },
+      [packed.buffer],
+    );
   });
 }
 
@@ -135,10 +163,6 @@ function runRebalanceMainThread(
 
 // ───────────────────────── Detect API ─────────────────────────
 
-/**
- * Run `detectIssues` over every entry/translation pair off the main thread.
- * Falls back to a chunked main-thread loop if the worker is unavailable.
- */
 export function runDetectBatch(
   batch: DetectItem[],
   onProgress?: (p: DetectProgress) => void,
@@ -147,6 +171,18 @@ export function runDetectBatch(
   if (!worker) return runDetectMainThread(batch, onProgress);
 
   const id = nextId++;
+  const records: DetectRecord[] = batch.map((b) => ({
+    msbtFile: b.entry.msbtFile,
+    // `index` may be a number on the main thread — coerce to string for the
+    // wire so we can use the variable-length string codec.
+    index: String(b.entry.index),
+    label: b.entry.label,
+    original: b.entry.original,
+    maxBytes: b.entry.maxBytes,
+    translation: b.translation,
+  }));
+  const packed = packDetectBatch(records);
+
   return new Promise<DiagnosticIssue[]>((resolve, reject) => {
     const handler = (ev: MessageEvent) => {
       const msg = ev.data;
@@ -155,7 +191,21 @@ export function runDetectBatch(
         onProgress({ done: msg.done, total: msg.total });
       } else if (msg.type === "detect:done") {
         worker.removeEventListener("message", handler);
-        resolve(msg.issues as DiagnosticIssue[]);
+        try {
+          const packedIssues = unpackIssueBatch(msg.buffer as ArrayBuffer);
+          const issues: DiagnosticIssue[] = packedIssues.map((p) => ({
+            key: p.key,
+            label: p.label,
+            original: p.original,
+            translation: p.translation,
+            severity: codeToSeverity(p.severity),
+            category: p.category,
+            message: p.message,
+          }));
+          resolve(issues);
+        } catch (err) {
+          reject(err);
+        }
       }
     };
     const errHandler = (err: ErrorEvent) => {
@@ -166,7 +216,10 @@ export function runDetectBatch(
     };
     worker.addEventListener("message", handler);
     worker.addEventListener("error", errHandler, { once: true });
-    worker.postMessage({ type: "detect", id, batch });
+    worker.postMessage(
+      { type: "detect", id, buffer: packed.buffer },
+      [packed.buffer],
+    );
   });
 }
 

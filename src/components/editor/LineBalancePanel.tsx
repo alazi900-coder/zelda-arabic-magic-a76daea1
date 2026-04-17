@@ -64,68 +64,74 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
   const [rebalanceProgress, setRebalanceProgress] = useState({ current: 0, total: 0, fixed: 0 });
 
   /**
-   * Re-balance ALL translations that contain [XENO:n ] (or any orphan / line-count mismatch)
-   * with the new XENO:n hard-break logic. Runs in chunks via requestAnimationFrame to keep
-   * the UI responsive on mobile and shows a live progress bar.
+   * Re-balance ALL translations using the Web Worker pipeline (zero-copy).
+   * Pre-filters entries on the main thread (cheap regex/length checks) so we
+   * only ship candidates needing re-balance to the worker. The worker handles
+   * the heavy DP `splitEvenlyByLines` / `balanceLines` calls off-thread,
+   * keeping the UI responsive on mobile even with 50k+ entries.
    */
   const handleRebalanceAll = useCallback(() => {
     if (rebalancing) return;
     const entries = state.entries;
+
+    // ───── Pre-filter on main thread (cheap, no DP) ─────
+    const candidates: RebalanceItem[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key]?.trim();
+      if (!translation) continue;
+
+      const englishLineCount = entry.original.split('\n').length;
+      const hasXenoN = /\[\s*XENO\s*:\s*n\s*\]/.test(entry.original) || /\[\s*XENO\s*:\s*n\s*\]/.test(translation);
+      const arabicLineCount = translation.split('\n').length;
+      const hasOrphan = hasOrphanLines(translation);
+      const lineMismatch = englishLineCount !== arabicLineCount;
+      if (!hasXenoN && !hasOrphan && !lineMismatch) continue;
+
+      candidates.push({ key, original: entry.original, translation, englishLineCount });
+    }
+
+    if (candidates.length === 0) {
+      toast.info('لا توجد نصوص بحاجة لإعادة موازنة', {
+        description: `جميع الـ ${entries.length.toLocaleString()} نص متوازنة بالفعل ✨`,
+      });
+      return;
+    }
+
     setRebalancing(true);
-    setRebalanceProgress({ current: 0, total: entries.length, fixed: 0 });
+    setRebalanceProgress({ current: 0, total: candidates.length, fixed: 0 });
+    toast.info('⚖️ بدء إعادة الموازنة', {
+      description: `جاري معالجة ${candidates.length.toLocaleString()} نص في الخلفية (Web Worker)...`,
+    });
 
-    const fixes: { key: string; value: string }[] = [];
-    const CHUNK = 200;
-    let i = 0;
+    runRebalanceBatch(candidates, (p) => {
+      setRebalanceProgress({ current: p.done, total: p.total, fixed: 0 });
+    })
+      .then((results) => {
+        const fixes = results.map((r) => ({ key: r.key, value: r.fixed }));
+        setRebalanceProgress({ current: candidates.length, total: candidates.length, fixed: fixes.length });
 
-    const processChunk = () => {
-      const end = Math.min(i + CHUNK, entries.length);
-      for (; i < end; i++) {
-        const entry = entries[i];
-        const key = `${entry.msbtFile}:${entry.index}`;
-        const translation = state.translations[key]?.trim();
-        if (!translation) continue;
-
-        const englishLineCount = entry.original.split('\n').length;
-        const hasXenoN = /\[\s*XENO\s*:\s*n\s*\]/.test(entry.original) || /\[\s*XENO\s*:\s*n\s*\]/.test(translation);
-        const arabicLineCount = translation.split('\n').length;
-        const hasOrphan = hasOrphanLines(translation);
-        const lineMismatch = englishLineCount !== arabicLineCount;
-
-        // Only touch entries that need it: have XENO:n OR orphan OR line-count drift
-        if (!hasXenoN && !hasOrphan && !lineMismatch) continue;
-
-        let rebalanced: string;
-        if (englishLineCount > 1) {
-          rebalanced = splitEvenlyByLines(translation, englishLineCount);
-        } else {
-          rebalanced = balanceLines(translation);
-        }
-
-        if (rebalanced && rebalanced !== translation) {
-          fixes.push({ key, value: rebalanced });
-        }
-      }
-      setRebalanceProgress({ current: i, total: entries.length, fixed: fixes.length });
-
-      if (i < entries.length) {
-        requestAnimationFrame(processChunk);
-      } else {
         if (fixes.length > 0) {
           onApplyAll(fixes);
-          toast.success(`✨ تمت إعادة موازنة ${fixes.length} نص بنجاح`, {
-            description: `فُحص ${entries.length} نص — لا تغيير على الباقي.`,
+          // ✅ Confirmation that the update reached the editor state
+          toast.success(`✨ تمت إعادة موازنة ${fixes.length.toLocaleString()} نص بنجاح`, {
+            description: `فُحص ${entries.length.toLocaleString()} نص — ${candidates.length.toLocaleString()} مرشّح — ${fixes.length.toLocaleString()} تغيير مُطبَّق على المحرر.`,
+            duration: 6000,
           });
         } else {
           toast.info('لا توجد نصوص بحاجة لإعادة موازنة', {
-            description: `جميع الـ ${entries.length} نص متوازنة بالفعل ✨`,
+            description: `فُحص ${candidates.length.toLocaleString()} مرشّح — لا تغييرات مطلوبة ✨`,
           });
         }
+      })
+      .catch((err) => {
+        console.error('[rebalance] worker error:', err);
+        toast.error('فشل إعادة الموازنة', { description: String(err?.message ?? err) });
+      })
+      .finally(() => {
         setRebalancing(false);
-      }
-    };
-
-    requestAnimationFrame(processChunk);
+      });
   }, [state.entries, state.translations, onApplyAll, rebalancing]);
 
   const handleScan = useCallback(() => {

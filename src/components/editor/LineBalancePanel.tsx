@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil, Wand2 } from "lucide-react";
 import { EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 import { balanceLines, hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { runRebalanceBatch, type RebalanceItem } from "@/lib/diagnostic-runner";
 import { toast } from "sonner";
 
 interface BalanceResult {

@@ -697,7 +697,19 @@ export function useEditorState() {
         (filterStatus === "missing-tags" && qualityStats.missingTagKeys.has(key)) ||
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
         (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && new TextEncoder().encode(translation).length > e.maxBytes) ||
-        (filterStatus === "has-newlines" && e.original.includes('\n'));
+        (filterStatus === "has-newlines" && e.original.includes('\n')) ||
+        (filterStatus === "xeno-n-missing" && isTranslated && /\[XENO:n\s*\](?!\n)/.test(translation)) ||
+        (filterStatus === "excessive-lines" && isTranslated && ((translation.match(/\n/g) || []).length >= (e.original.match(/\n/g) || []).length + 3)) ||
+        (filterStatus === "byte-budget" && isTranslated && (() => {
+          const ob = new TextEncoder().encode(e.original).length;
+          return ob > 10 && new TextEncoder().encode(translation).length > ob * 2;
+        })()) ||
+        (filterStatus === "newline-diff" && isTranslated && (() => {
+          const o = (e.original.match(/\n/g) || []).length;
+          const t = (translation.match(/\n/g) || []).length;
+          return o > 0 && Math.abs(t - o) >= 2;
+        })()) ||
+        (filterStatus === "identical-original" && isTranslated && translation.trim() === e.original.trim() && translation.trim().length > 6);
       const matchTechnical = 
         filterTechnical === "all" ||
         (filterTechnical === "only" && isTechnical) ||

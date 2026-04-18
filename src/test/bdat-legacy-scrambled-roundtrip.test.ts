@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBdatFile } from "@/lib/bdat-parser";
+import { parseBdatFile, type BdatFile, type BdatTable, BdatValueType } from "@/lib/bdat-parser";
 import { patchBdatFile } from "@/lib/bdat-writer";
 
 function scrambleSection(buf: Uint8Array, startIdx: number, endIdx: number, key: number): void {
@@ -129,5 +129,70 @@ describe("Legacy BDAT scrambled roundtrip", () => {
     expect(reparsed.tables[0].columns.map(c => c.name)).toEqual(["caption"]);
     expect(reparsed.tables[0].rows[0].values["caption"]).toBe("مرحبا");
     expect(reparsed.tables[0].rows[1].values["caption"]).toBe("Quest");
+  });
+
+  it("should preserve original scrambled bytes when skipping a legacy table after overflow", () => {
+    const tableData = new Uint8Array(128);
+    const originalTableData = new Uint8Array(128).fill(0xaa);
+    const tableOffset = 8;
+    const stringTableOffset = 100;
+    const stringBytes = new TextEncoder().encode("A\0");
+
+    tableData.set([0x42, 0x44, 0x41, 0x54], 0);
+    tableData[4] = 0x02;
+    new DataView(tableData.buffer).setUint16(40, 1, true);
+    tableData.set(stringBytes, stringTableOffset + 1);
+
+    const table: BdatTable = {
+      name: "SkipLegacy_ms",
+      nameHash: null,
+      columns: [{ valueType: BdatValueType.MessageId, nameOffset: 0, name: "msg", offset: 0 }],
+      rows: [{ id: 0, values: { msg: "A" } }],
+      baseId: 0,
+      _raw: {
+        tableOffset,
+        tableData,
+        originalTableData,
+        columnCount: 1,
+        rowCount: 1,
+        rowLength: 2,
+        columnDefsOffset: 32,
+        hashTableOffset: 32,
+        rowDataOffset: 40,
+        stringTableOffset,
+        stringTableLength: 4,
+        hashedNames: false,
+        baseId: 0,
+        isU32Layout: false,
+        isLegacy: true,
+        isScrambled: true,
+        scrambleKey: 0x1234,
+      },
+    };
+
+    const fileData = new Uint8Array(8 + originalTableData.length);
+    const fileView = new DataView(fileData.buffer);
+    fileView.setUint32(0, 1, true);
+    fileView.setUint32(4, tableOffset, true);
+    fileData.set(originalTableData, tableOffset);
+
+    const bdatFile: BdatFile = {
+      tables: [table],
+      version: 0,
+      fileSize: fileData.length,
+      _raw: fileData,
+      _legacyOffsetEntries: [
+        { offset: tableOffset, data: originalTableData, isTable: true },
+        { offset: fileData.length, data: new Uint8Array(0), isTable: false },
+      ],
+    };
+
+    const translations = new Map<string, string>();
+    translations.set("SkipLegacy_ms:0:msg", "ب".repeat(70000));
+
+    const result = patchBdatFile(bdatFile, translations);
+    expect(result.overflowErrors.length).toBeGreaterThan(0);
+    expect(result.patchedCount).toBe(0);
+    expect(result.result.slice(tableOffset, tableOffset + originalTableData.length)).toEqual(originalTableData);
   });
 });

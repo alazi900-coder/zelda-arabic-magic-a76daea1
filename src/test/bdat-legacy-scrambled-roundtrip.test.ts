@@ -198,7 +198,7 @@ describe("Legacy BDAT scrambled roundtrip", () => {
 
     const translations = new Map<string, string>();
     for (let i = 0; i < rowCount; i++) {
-      translations.set(`SkipLegacy_ms:${i}:msg`, "ب".repeat(1700));
+      translations.set(`SkipLegacy_ms:${i}:msg`, `${"ب".repeat(1700)}${i}`);
     }
 
     const result = patchBdatFile(bdatFile, translations);

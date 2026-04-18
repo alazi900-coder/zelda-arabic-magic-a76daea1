@@ -132,35 +132,44 @@ describe("Legacy BDAT scrambled roundtrip", () => {
   });
 
   it("should preserve original scrambled bytes when skipping a legacy table after overflow", () => {
-    const tableData = new Uint8Array(128);
-    const originalTableData = new Uint8Array(128).fill(0xaa);
+    const rowCount = 40;
+    const rowLength = 2;
+    const rowDataOffset = 40;
+    const stringTableOffset = rowDataOffset + rowCount * rowLength;
+    const stringTableLength = 240;
+    const tableData = new Uint8Array(stringTableOffset + stringTableLength);
+    const originalTableData = new Uint8Array(tableData.length).fill(0xaa);
     const tableOffset = 8;
-    const stringTableOffset = 100;
-    const stringBytes = new TextEncoder().encode("A\0");
+    const view = new DataView(tableData.buffer);
 
     tableData.set([0x42, 0x44, 0x41, 0x54], 0);
     tableData[4] = 0x02;
-    new DataView(tableData.buffer).setUint16(40, 1, true);
-    tableData.set(stringBytes, stringTableOffset + 1);
+    let writePtr = stringTableOffset + 1;
+    for (let i = 0; i < rowCount; i++) {
+      const bytes = new TextEncoder().encode(`s${i}\0`);
+      view.setUint16(rowDataOffset + i * rowLength, writePtr - stringTableOffset, true);
+      tableData.set(bytes, writePtr);
+      writePtr += bytes.length;
+    }
 
     const table: BdatTable = {
       name: "SkipLegacy_ms",
       nameHash: null,
       columns: [{ valueType: BdatValueType.MessageId, nameOffset: 0, name: "msg", offset: 0 }],
-      rows: [{ id: 0, values: { msg: "A" } }],
+      rows: Array.from({ length: rowCount }, (_, i) => ({ id: i, values: { msg: `s${i}` } })),
       baseId: 0,
       _raw: {
         tableOffset,
         tableData,
         originalTableData,
         columnCount: 1,
-        rowCount: 1,
-        rowLength: 2,
+        rowCount,
+        rowLength,
         columnDefsOffset: 32,
         hashTableOffset: 32,
-        rowDataOffset: 40,
+        rowDataOffset,
         stringTableOffset,
-        stringTableLength: 4,
+        stringTableLength,
         hashedNames: false,
         baseId: 0,
         isU32Layout: false,
@@ -188,7 +197,9 @@ describe("Legacy BDAT scrambled roundtrip", () => {
     };
 
     const translations = new Map<string, string>();
-    translations.set("SkipLegacy_ms:0:msg", "ب".repeat(70000));
+    for (let i = 0; i < rowCount; i++) {
+      translations.set(`SkipLegacy_ms:${i}:msg`, "ب".repeat(1700));
+    }
 
     const result = patchBdatFile(bdatFile, translations);
     expect(result.overflowErrors.length).toBeGreaterThan(0);

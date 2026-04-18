@@ -270,17 +270,22 @@ export function patchBdatFile(
       }
     }
 
-    // ---- Step 2: Resolve shared strings with different translations ----
-    // Group cells by their original string offset
+    // ---- Step 2: Resolve strings to write ----
+    // Group cells by their original string offset so modern tables can still rebuild
+    // shared strings safely when multiple cells point at the same source text.
     const offsetGroups = new Map<number, CellRef[]>();
     for (const cell of cellRefs) {
       const group = offsetGroups.get(cell.origStrOffset) || [];
       group.push(cell);
       offsetGroups.set(cell.origStrOffset, group);
+      if (cell.translation !== undefined) {
+        tablePatchedCount++;
+      }
     }
 
-    // Build the list of unique strings to write
-    // Each entry: { bytes, cells[] }
+    // Build the list of unique strings to write.
+    // For legacy tables we preserve the original string region byte-for-byte and append
+    // translated payloads after it, which keeps any opaque/unparsed tail data intact.
     interface NewStringEntry {
       bytes: Uint8Array;  // string bytes WITHOUT null terminator
       cells: CellRef[];   // cells that should point to this string
@@ -288,38 +293,47 @@ export function patchBdatFile(
 
     const newStringEntries: NewStringEntry[] = [];
 
-    for (const [origOff, cells] of offsetGroups) {
-      // Group cells by their effective text (original or translated)
-      const textGroups = new Map<string, CellRef[]>();
-      for (const cell of cells) {
-        const effectiveText = cell.translation !== undefined ? cell.translation : cell.origStr;
-        const group = textGroups.get(effectiveText) || [];
+    let metadataEnd: number;
+    if (isLegacyTable) {
+      const translatedTextGroups = new Map<string, CellRef[]>();
+      for (const cell of cellRefs) {
+        if (cell.translation === undefined || cell.translation === cell.origStr) continue;
+        const group = translatedTextGroups.get(cell.translation) || [];
         group.push(cell);
-        textGroups.set(effectiveText, group);
+        translatedTextGroups.set(cell.translation, group);
       }
 
-      // Create one string entry per unique text
-      for (const [text, groupCells] of textGroups) {
-        const bytes = encoder.encode(text);
-        newStringEntries.push({ bytes, cells: groupCells });
+      for (const [text, groupCells] of translatedTextGroups) {
+        newStringEntries.push({ bytes: encoder.encode(text), cells: groupCells });
+      }
 
-        // Count patches
-        for (const cell of groupCells) {
-          if (cell.translation !== undefined) {
-            tablePatchedCount++;
-          }
+      metadataEnd = raw.stringTableLength;
+    } else {
+      for (const [, cells] of offsetGroups) {
+        // Group cells by their effective text (original or translated)
+        const textGroups = new Map<string, CellRef[]>();
+        for (const cell of cells) {
+          const effectiveText = cell.translation !== undefined ? cell.translation : cell.origStr;
+          const group = textGroups.get(effectiveText) || [];
+          group.push(cell);
+          textGroups.set(effectiveText, group);
+        }
+
+        // Create one string entry per unique text
+        for (const [text, groupCells] of textGroups) {
+          const bytes = encoder.encode(text);
+          newStringEntries.push({ bytes, cells: groupCells });
         }
       }
+
+      // Preserve metadata prefix (flag byte, table name hash, column name hashes)
+      const allOrigOffsets = [...offsetGroups.keys()].sort((a, b) => a - b);
+      metadataEnd = allOrigOffsets.length > 0
+        ? Math.min(...allOrigOffsets)
+        : raw.stringTableLength;
     }
 
     // ---- Step 3: Build new string table ----
-    // Preserve metadata prefix (flag byte, table name hash, column name hashes)
-    const allOrigOffsets = [...offsetGroups.keys()].sort((a, b) => a - b);
-
-    // The metadata portion is everything from start of string table to the first referenced string
-    const metadataEnd = allOrigOffsets.length > 0
-      ? Math.min(...allOrigOffsets)
-      : raw.stringTableLength;
 
     // Assign new offsets to each string entry
     let currentNewOffset = metadataEnd;

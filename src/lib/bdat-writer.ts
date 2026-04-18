@@ -434,7 +434,10 @@ export function patchBdatFile(
     // If there are still unresolvable u16 overflows, skip this table entirely
     if (hasU16Overflow) {
       console.error(`[BDAT-WRITER] Table "${table.name}": SKIPPING due to unresolvable u16 overflow`);
-      newTableBuffers.push(origTableData);
+      // IMPORTANT: when skipping a legacy scrambled table, preserve the original on-disk
+      // bytes, not the parsed/unscrambled view. Writing plain bytes back here corrupts
+      // the file structure at runtime even though parsing may still appear valid locally.
+      newTableBuffers.push(originalTableBytes);
       skippedCount += tableSkippedCount;
       tableStats.push({
         tableName: table.name,

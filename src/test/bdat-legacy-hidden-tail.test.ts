@@ -74,9 +74,9 @@ describe("Legacy BDAT keeps opaque tail data", () => {
 
     const tableOffset = new DataView(result.result.buffer).getUint32(4, true);
     const patchedTable = result.result.slice(tableOffset);
-    expect(
+    expect(Array.from(
       patchedTable.slice(hiddenTailOffset, hiddenTailOffset + hiddenTailBytes.length)
-    ).toEqual(hiddenTailBytes);
+    )).toEqual(Array.from(hiddenTailBytes));
 
     const reparsed = parseBdatFile(result.result);
     expect(reparsed.tables[0].rows[0].values["caption"]).toBe("مرحبا بالعالم");

@@ -204,6 +204,7 @@ describe("Legacy BDAT scrambled roundtrip", () => {
     const result = patchBdatFile(bdatFile, translations);
     expect(result.overflowErrors.length).toBeGreaterThan(0);
     expect(result.patchedCount).toBe(0);
-    expect(result.result.slice(tableOffset, tableOffset + originalTableData.length)).toEqual(originalTableData);
+    const rebuiltTableOffset = new DataView(result.result.buffer).getUint32(4, true);
+    expect(result.result.slice(rebuiltTableOffset, rebuiltTableOffset + originalTableData.length)).toEqual(originalTableData);
   });
 });

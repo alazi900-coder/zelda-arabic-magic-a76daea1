@@ -293,45 +293,61 @@ export function patchBdatFile(
 
     const newStringEntries: NewStringEntry[] = [];
 
-    let metadataEnd: number;
-    if (isLegacyTable) {
-      const translatedTextGroups = new Map<string, CellRef[]>();
-      for (const cell of cellRefs) {
-        if (cell.translation === undefined || cell.translation === cell.origStr) continue;
-        const group = translatedTextGroups.get(cell.translation) || [];
+    // ─────────────────────────────────────────────────────────────────
+    // FIX (size bloat): Build a COMPACT string table without dead strings.
+    //
+    // Previous behavior kept ALL original strings (translated or not) AND
+    // appended translations after them — doubling the string table size.
+    //
+    // New behavior:
+    //   1. For each unique original offset group: deduplicate by effective text.
+    //   2. If a row in the group is translated AND another shares the same
+    //      original text untranslated, both share the new translation entry
+    //      (avoids creating a separate dead-English entry).
+    //   3. Rebuild the string-table prefix (flag byte + name area) only —
+    //      everything past it is replaced with the new compact entries.
+    // ─────────────────────────────────────────────────────────────────
+
+    for (const [, cells] of offsetGroups) {
+      // Group cells by their effective text (original or translated).
+      // Optimisation: when the SAME original string appears in multiple rows
+      // and at least one of those rows has a translation, route all of them
+      // to that translation. This avoids keeping the dead English entry just
+      // because some rows in the group weren't translated.
+      const groupHasTranslation = cells.some(c => c.translation !== undefined && c.translation !== c.origStr);
+
+      const textGroups = new Map<string, CellRef[]>();
+      for (const cell of cells) {
+        let effectiveText: string;
+        if (cell.translation !== undefined && cell.translation !== cell.origStr) {
+          effectiveText = cell.translation;
+        } else if (groupHasTranslation) {
+          // Route untranslated cells to the FIRST translation in this group
+          // so they share the same string entry (no duplicate English).
+          effectiveText = cells.find(c => c.translation !== undefined && c.translation !== c.origStr)!.translation!;
+        } else {
+          effectiveText = cell.origStr;
+        }
+        const group = textGroups.get(effectiveText) || [];
         group.push(cell);
-        translatedTextGroups.set(cell.translation, group);
+        textGroups.set(effectiveText, group);
       }
 
-      for (const [text, groupCells] of translatedTextGroups) {
-        newStringEntries.push({ bytes: encoder.encode(text), cells: groupCells });
+      // Create one string entry per unique text
+      for (const [text, groupCells] of textGroups) {
+        const bytes = encoder.encode(text);
+        newStringEntries.push({ bytes, cells: groupCells });
       }
-
-      metadataEnd = raw.stringTableLength;
-    } else {
-      for (const [, cells] of offsetGroups) {
-        // Group cells by their effective text (original or translated)
-        const textGroups = new Map<string, CellRef[]>();
-        for (const cell of cells) {
-          const effectiveText = cell.translation !== undefined ? cell.translation : cell.origStr;
-          const group = textGroups.get(effectiveText) || [];
-          group.push(cell);
-          textGroups.set(effectiveText, group);
-        }
-
-        // Create one string entry per unique text
-        for (const [text, groupCells] of textGroups) {
-          const bytes = encoder.encode(text);
-          newStringEntries.push({ bytes, cells: groupCells });
-        }
-      }
-
-      // Preserve metadata prefix (flag byte, table name hash, column name hashes)
-      const allOrigOffsets = [...offsetGroups.keys()].sort((a, b) => a - b);
-      metadataEnd = allOrigOffsets.length > 0
-        ? Math.min(...allOrigOffsets)
-        : raw.stringTableLength;
     }
+
+    // Preserve metadata prefix (flag byte, table/column name area).
+    // Both modern and legacy tables: keep ONLY up to the first referenced
+    // string offset. The remainder of the original string table is discarded
+    // (those bytes are replaced by our new compact entries).
+    const allOrigOffsets = [...offsetGroups.keys()].sort((a, b) => a - b);
+    const metadataEnd: number = allOrigOffsets.length > 0
+      ? Math.min(...allOrigOffsets)
+      : raw.stringTableLength;
 
     // ---- Step 3: Build new string table ----
 

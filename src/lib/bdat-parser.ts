@@ -108,13 +108,13 @@ function readNullTerminatedString(data: Uint8Array, offset: number): string {
 
 // ============= Parser =============
 
-function parseTableHeader(data: Uint8Array, tableOffset: number): BdatTable['_raw'] & { valid: boolean } {
+function parseTableHeader(data: Uint8Array, tableOffset: number): (BdatTable['_raw'] & { valid: true }) | { valid: false } {
   const view = new DataView(data.buffer, data.byteOffset + tableOffset);
-  
+
   // Check magic "BDAT"
   const magic = String.fromCharCode(data[tableOffset], data[tableOffset + 1], data[tableOffset + 2], data[tableOffset + 3]);
   if (magic !== 'BDAT') {
-    return { valid: false } as any;
+    return { valid: false };
   }
 
   // Detect header layout from table version.

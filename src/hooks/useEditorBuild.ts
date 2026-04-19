@@ -240,10 +240,19 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
       if (hasBdatBinary) {
         setBuildProgress("معالجة ملفات BDAT الثنائية محلياً...");
-        const { parseBdatFile } = await import("@/lib/bdat-parser");
-        const { patchBdatFile } = await import("@/lib/bdat-writer");
-        const { unhashLabel } = await import("@/lib/bdat-hash-dictionary");
-        const { processArabicText, hasArabicPresentationForms: hasPF } = await import("@/lib/arabic-processing");
+        const [
+          { parseBdatFile },
+          { patchBdatFile },
+          { unhashLabel },
+          { processArabicText, hasArabicPresentationForms: hasPF },
+        ] = await Promise.all([
+          import("@/lib/bdat-parser"),
+          import("@/lib/bdat-writer"),
+          import("@/lib/bdat-hash-dictionary"),
+          import("@/lib/arabic-processing"),
+        ]).catch(() => {
+          throw new Error("فشل تحميل مكتبات البناء، يرجى تحديث الصفحة والمحاولة مجدداً");
+        });
 
         const nonEmptyTranslations: Record<string, string> = {};
         for (const [k, v] of Object.entries(currentState.translations)) { if (v.trim()) nonEmptyTranslations[k] = v; }
@@ -918,8 +927,16 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         });
         if (!response.ok) {
           const ct = response.headers.get('content-type') || '';
-          if (ct.includes('json')) { const err = await response.json(); throw new Error(err.error || `خطأ ${response.status}`); }
-          throw new Error(`خطأ ${response.status}`);
+          if (ct.includes('json')) {
+            try {
+              const err = await response.json();
+              throw new Error(err.error || `خطأ من الخادم: ${response.status}`);
+            } catch (jsonErr) {
+              if (jsonErr instanceof Error && jsonErr.message.startsWith('خطأ')) throw jsonErr;
+              throw new Error(`خطأ من الخادم: ${response.status}`);
+            }
+          }
+          throw new Error(`خطأ من الخادم: ${response.status}`);
         }
         setBuildProgress("تحميل الملف...");
         const blob = await response.blob();

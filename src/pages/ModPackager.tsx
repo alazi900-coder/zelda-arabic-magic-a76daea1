@@ -72,7 +72,11 @@ export default function ModPackager() {
 
   // Initialize zstd-wasm once
   useEffect(() => {
-    initZstd().then(() => setZstdReady(true)).catch(() => {});
+    initZstd().then(() => setZstdReady(true)).catch((e) => {
+      console.error("فشل تحميل مكتبة الضغط zstd:", e);
+      setStatus("⚠️ فشل تحميل مكتبة الضغط — عمليات فك الضغط لن تعمل، يرجى تحديث الصفحة");
+      setTimeout(() => setStatus(""), 8000);
+    });
   }, []);
 
   const atlasCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -355,7 +359,9 @@ export default function ModPackager() {
       try {
         const result = await decodeWilayTextureAsync(newData, t);
         if (result) previews.set(t.index, result.canvas);
-      } catch {}
+      } catch (e) {
+        console.warn("فشل فك تشفير texture رقم", t.index, e);
+      }
     }
     setWilayPreviews(previews);
   }, [wilayFile, wilayInfo]);
@@ -413,8 +419,8 @@ export default function ModPackager() {
               decompressedSize = decompressed.length;
               decompressedMagic = getMagicString(decompressed);
               decompressedBytes = decompressed;
-            } catch {
-              // تجاهل الملف الذي فشل فك ضغطه مع الاستمرار في الباقي
+            } catch (e) {
+              console.warn("فشل فك ضغط الملف:", file.name, e);
             }
           }
 
@@ -527,14 +533,16 @@ export default function ModPackager() {
             decompressedData.set(chunk, offset);
             offset += chunk.length;
           }
-        } catch {
+        } catch (e) {
+          console.warn("فشل فك ضغط zlib:", e);
           return null;
         }
       } else if (compressionType === 3) {
         if (!zstdReady) return null;
         try {
           decompressedData = zstdDecompress(compressedStream);
-        } catch {
+        } catch (e) {
+          console.warn("فشل فك ضغط zstd:", e);
           return null;
         }
       } else {
@@ -547,7 +555,8 @@ export default function ModPackager() {
       try {
         const decompressedData = zstdDecompress(bytes);
         return { archiveName: "", compressionType: 3, decompressedSize: decompressedData.length, compressedSize: bytes.length, decompressedData };
-      } catch {
+      } catch (e) {
+        console.warn("فشل فك ضغط zstd للملف:", e);
         return null;
       }
     }
@@ -576,7 +585,9 @@ export default function ModPackager() {
         }
         return { archiveName: "", compressionType: 1, decompressedSize: totalLen, compressedSize: bytes.length, decompressedData };
       }
-    } catch {}
+    } catch (e) {
+      console.warn("فشل فك ضغط deflate، سيُعامل الملف كملف خام:", e);
+    }
 
     // Raw file - return as-is so user can inspect it
     return { archiveName: "", compressionType: -1, decompressedSize: bytes.length, compressedSize: bytes.length, decompressedData: bytes };
@@ -618,8 +629,8 @@ export default function ModPackager() {
               decompressedData: parsed.decompressedData,
             });
           }
-        } catch {
-          // تجاهل الملف الفاشل مع الاستمرار
+        } catch (e) {
+          console.warn("فشل معالجة الملف:", e);
         }
       }
 
@@ -667,8 +678,8 @@ export default function ModPackager() {
           } else {
             setXbc1Status(`⚠️ "${files[i].name}" ليس ملف xbc1`);
           }
-        } catch {
-          // تجاهل الملف الفاشل مع الاستمرار
+        } catch (e) {
+          console.warn("فشل معالجة الملف:", e);
         }
       }
       setXbc1Files(results);

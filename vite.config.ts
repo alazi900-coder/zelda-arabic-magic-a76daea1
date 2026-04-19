@@ -6,6 +6,7 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  base: mode === "production" ? "/zelda-arabic-magic-a76daea1/" : "/",
   server: {
     host: "::",
     port: 8080,

@@ -121,7 +121,9 @@ describe("Legacy BDAT scrambled roundtrip", () => {
 
     const result = patchBdatFile(parsed, translations);
     expect(result.patchedCount).toBe(1);
-    expect(result.result.byteLength).toBeGreaterThanOrEqual(fileData.byteLength);
+    // NOTE: After the size-bloat fix, the rebuilt file may be SMALLER than the
+    // original because we no longer carry over dead English strings. We only
+    // require that data round-trips logically through re-parse.
 
     const reparsed = parseBdatFile(result.result);
     expect(reparsed.tables.length).toBe(1);

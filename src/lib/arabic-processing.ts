@@ -183,11 +183,19 @@ export function reshapeArabic(text: string): string {
 export function reverseBidi(text: string): string {
   // Protect technical tags as atomic placeholders before BiDi processing
   const tagPattern = /\\?\[\s*\w+\s*:[^\]]*?\s*\\?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}|\{[\w]+\}|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g;
+  // Slot range: \uE0A0–\uE0FF = 96 slots (indices 0–95).
+  // Beyond that the char code exits the range and the restoration regex won't match,
+  // so we leave overflow tags unshielded (they consist of ASCII/bracket chars that
+  // BiDi reversal won't destroy in practice).
+  const MAX_SLOTS = 96;
   const tagSlots: string[] = [];
   const shielded = text.replace(tagPattern, (match) => {
     const idx = tagSlots.length;
+    if (idx >= MAX_SLOTS) {
+      console.warn('[reverseBidi] tag slot overflow — tag left unshielded:', match.slice(0, 40));
+      return match;
+    }
     tagSlots.push(match);
-    // Use a single PUA char sequence that reverseBidi treats as atomic
     return `\uE0F0\uE0F1${String.fromCharCode(0xE0A0 + idx)}\uE0F1\uE0F0`;
   });
 

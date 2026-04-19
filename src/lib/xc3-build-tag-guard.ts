@@ -140,10 +140,14 @@ function repairDollarVars(original: string, translation: string): string {
   // Verify all original $N vars are present; if any missing, try to find close matches
   for (const v of origVars) {
     if (!result.includes(v)) {
-      // Last resort: if the number exists standalone, prefix with $
+      // Last resort: if exactly ONE standalone occurrence of the number exists, prefix with $
+      // Using multiple occurrences would be ambiguous — skip to avoid wrong replacements.
       const num = v.slice(1);
-      // Match standalone number not already preceded by $
-      result = result.replace(new RegExp(`(?<!\\$)\\b${num}\\b`), v);
+      const standaloneRe = new RegExp(`(?<!\\$)\\b${num}\\b`, 'g');
+      const occurrences = (result.match(standaloneRe) || []).length;
+      if (occurrences === 1) {
+        result = result.replace(standaloneRe, v);
+      }
     }
   }
 

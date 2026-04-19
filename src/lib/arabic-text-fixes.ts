@@ -16,7 +16,10 @@ function shieldTags(text: string): { shielded: string; tags: string[] } {
 }
 
 function unshieldTags(text: string, tags: string[]): string {
-  return text.replace(/\uE800(\d+)\uE801/g, (_, i) => tags[parseInt(i)] || '');
+  return text.replace(/\uE800(\d+)\uE801/g, (match, i) => {
+    const idx = parseInt(i);
+    return (idx >= 0 && idx < tags.length) ? tags[idx] : match;
+  });
 }
 
 // Arabic char class (no word boundary — \b doesn't work with Arabic in JS)

@@ -352,7 +352,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         if (!RAW_ARABIC_RE.test(trans) || !PRES_FORMS_RE.test(trans)) continue;
         const { reverseBidi: revBidi, removeArabicPresentationForms: removePF } = await import("@/lib/arabic-processing");
         const rawText = removePF(revBidi(trans));
-        nonEmptyTranslations[key] = processArabicText(rawText, { arabicNumerals, mirrorPunct: mirrorPunctuation });
+        const reprocessed = processArabicText(rawText, { arabicNumerals, mirrorPunct: mirrorPunctuation });
+        // Verify control/PUA chars survived the reprocessing before committing
+        const origCC = (trans.match(/[\uFFF9-\uFFFC]/g) || []).length;
+        const origPUA = (trans.match(/[\uE000-\uE0FF]/g) || []).length;
+        const newCC  = (reprocessed.match(/[\uFFF9-\uFFFC]/g) || []).length;
+        const newPUA = (reprocessed.match(/[\uE000-\uE0FF]/g) || []).length;
+        if (origCC > 0 && newCC !== origCC || origPUA > 0 && newPUA !== origPUA) {
+          console.warn(`[BUILD-SAFETY] Mixed forms re-process lost tags for ${key} — skipped`);
+          continue;
+        }
+        nonEmptyTranslations[key] = reprocessed;
         mixedFormsFixCount++;
       }
       if (mixedFormsFixCount > 0) {

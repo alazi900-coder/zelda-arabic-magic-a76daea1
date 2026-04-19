@@ -125,8 +125,13 @@ function encodeLine(text: string): Uint16Array {
     }
     const group = parseInt(match[1], 16);
     const type  = parseInt(match[2], 16);
+    if (isNaN(group) || isNaN(type)) {
+      console.warn("[pokemon-text-parser] تجاهل tag بقيم hex غير صالحة:", match[0]);
+      lastIdx = match.index + match[0].length;
+      continue;
+    }
     const params = match[3]
-      ? match[3].split(',').map(p => parseInt(p.trim(), 16))
+      ? match[3].split(',').map(p => parseInt(p.trim(), 16)).filter(n => !isNaN(n))
       : [];
     codes.push(0x0010, group, type, params.length, ...params);
     lastIdx = match.index + match[0].length;

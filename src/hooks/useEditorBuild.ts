@@ -9,6 +9,9 @@ import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import type { MutableRefObject } from "react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
+// Yields to the browser event loop for one frame so React can flush state updates (progress messages).
+const yieldToUI = () => new Promise<void>(r => setTimeout(r, 16));
+
 export interface BuildStats {
   modifiedCount: number;
   expandedCount: number;
@@ -254,13 +257,14 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           throw new Error("فشل تحميل مكتبات البناء، يرجى تحديث الصفحة والمحاولة مجدداً");
         });
 
+        // Working copy — intentionally mutable; each processing step below transforms values in sequence.
         const nonEmptyTranslations: Record<string, string> = {};
         for (const [k, v] of Object.entries(currentState.translations)) { if (v.trim()) nonEmptyTranslations[k] = v; }
-        
+
         const totalKeys = Object.keys(currentState.translations).length;
         const nonEmptyCount = Object.keys(nonEmptyTranslations).length;
         setBuildProgress(`📊 وجدت ${nonEmptyCount} ترجمة من أصل ${totalKeys} مفتاح...`);
-        await new Promise(r => setTimeout(r, 200));
+        await yieldToUI();
         console.log('[BUILD] ✅ State has', totalKeys, 'total keys,', nonEmptyCount, 'non-empty');
         
         if (nonEmptyCount === 0) {
@@ -293,11 +297,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
         if (strippedNewlineCount > 0) {
           setBuildProgress(`🫧 إزالة فواصل أسطر من ${strippedNewlineCount} نص فقاعي (tlk/fev/cq)...`);
-          await new Promise(r => setTimeout(r, 200));
+          await yieldToUI();
         }
         if (autoProcessedCountBin > 0) {
           setBuildProgress(`✅ تمت معالجة ${autoProcessedCountBin} نص عربي تلقائياً...`);
-          await new Promise(r => setTimeout(r, 200));
+          await yieldToUI();
         }
 
       // Build lookups from key → original text and key → label (needed by all protections below)
@@ -337,7 +341,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         if (brokenBracketRevertCount > 0) parts.push(`↩️ استعادة ${brokenBracketRevertCount} نص (أقواس غير قابلة للإصلاح)`);
         setBuildProgress(`🔒 ${parts.join(' | ')}...`);
         console.warn(`[BUILD-SAFETY] Broken brackets: fixed=${brokenBracketFixCount}, reverted=${brokenBracketRevertCount}`);
-        await new Promise(r => setTimeout(r, 400));
+        await yieldToUI();
       }
 
       // === NEW PROTECTION 2: Fix MIXED_FORMS (partially processed Arabic) ===
@@ -354,7 +358,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       if (mixedFormsFixCount > 0) {
         setBuildProgress(`🔄 إعادة معالجة ${mixedFormsFixCount} نص عربي بمعالجة ناقصة...`);
         console.warn(`[BUILD-SAFETY] Re-processed ${mixedFormsFixCount} MIXED_FORMS entries`);
-        await new Promise(r => setTimeout(r, 400));
+        await yieldToUI();
       }
 
       // === NEW PROTECTION 3: Remove stray Latin characters in Arabic text ===
@@ -371,7 +375,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       if (strayLatinFixCount > 0) {
         setBuildProgress(`🧹 إزالة أحرف لاتينية شاردة من ${strayLatinFixCount} نص...`);
         console.warn(`[BUILD-SAFETY] Removed stray Latin chars from ${strayLatinFixCount} entries`);
-        await new Promise(r => setTimeout(r, 300));
+        await yieldToUI();
       }
 
       // === NEW PROTECTION 4: Revert entries with NULL characters ===
@@ -384,7 +388,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       }
       if (nullCharFixCount > 0) {
         setBuildProgress(`⛔ استعادة ${nullCharFixCount} نص يحتوي على رموز NULL...`);
-        await new Promise(r => setTimeout(r, 300));
+        await yieldToUI();
       }
 
       // === NEW PROTECTION 5: Revert entries with missing $N variables ===
@@ -401,7 +405,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       }
       if (dollarVarFixCount > 0) {
         setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N مفقودة...`);
-        await new Promise(r => setTimeout(r, 300));
+        await yieldToUI();
       }
 
       // === Post-BiDi bracket tag validation ===
@@ -426,7 +430,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       if (bracketRevertCount > 0) {
         setBuildProgress(`🔒 استعادة ${bracketRevertCount} نص (أقواس تقنية تالفة بعد المعالجة العربية)...`);
         console.warn(`[BUILD-SAFETY] Reverted ${bracketRevertCount} entries with corrupted bracket tags after Arabic processing`);
-        await new Promise(r => setTimeout(r, 400));
+        await yieldToUI();
       }
 
       // === PROTECTION 6: Tag SEQUENCE order validation ===
@@ -450,7 +454,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       if (tagOrderRevertCount > 0) {
         setBuildProgress(`🔀 استعادة ${tagOrderRevertCount} نص (ترتيب الوسوم التقنية مختلف عن الأصل)...`);
         console.warn(`[BUILD-SAFETY] Reverted ${tagOrderRevertCount} entries with wrong tag sequence order`);
-        await new Promise(r => setTimeout(r, 400));
+        await yieldToUI();
       }
 
 
@@ -480,7 +484,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       if (protectedRevertCount > 0) {
         setBuildProgress(`🛡️ حماية: تم استعادة ${protectedRevertCount} نص تقني (جداول قياس/نظام) لمنع تجمد اللعبة`);
         console.warn(`[BUILD-SAFETY] Protected ${protectedRevertCount} technical table entries from translation`);
-        await new Promise(r => setTimeout(r, 400));
+        await yieldToUI();
       }
 
       // === Safety gate: smart-repair translations with missing control/PUA characters ===
@@ -608,7 +612,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         setBuildProgress(`🛡️ حماية: ${parts.join(' | ')} — اضغط لعرض التقرير`);
         setShowSafetyReport(true);
         console.warn(`[BUILD-SAFETY] Repaired: ${repairedCount}, Reverted: ${revertedCount}`);
-        await new Promise(r => setTimeout(r, 500));
+        await yieldToUI();
       } else {
         setSafetyRepairs([]);
       }
@@ -649,7 +653,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       }
       if (truncatedCount > 0) {
         setBuildProgress(`✂️ تم تقليص ${truncatedCount} نص طويل جداً (أكثر من ${truncLimit}x الأصل)...`);
-        await new Promise(r => setTimeout(r, 300));
+        await yieldToUI();
       }
 
         let finalTagRepairCount = 0;
@@ -702,7 +706,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           if (finalTagRevertCount > 0) parts.push(`↩️ استعادة ${finalTagRevertCount} نص أصلي (وسوم غير قابلة للإصلاح)`);
           setBuildProgress(`${parts.join(' | ')} قبل حقن ترجمات BDAT...`);
           if (finalTagRevertCount > 0) setShowSafetyReport(true);
-          await new Promise(r => setTimeout(r, 300));
+          await yieldToUI();
         }
 
         // === Build Summary Log ===
@@ -721,7 +725,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         console.log(`[BUILD-LOG]  └─ نسبة النجاح: ${nonEmptyCount > 0 ? Math.round((keptCount / nonEmptyCount) * 100) : 0}%`);
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
         setBuildProgress(`📊 ملخص: ${keptCount} محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
-        await new Promise(r => setTimeout(r, 500));
+        await yieldToUI();
 
         // Pre-scan: build per-file index of translations for O(1) lookup
       const perFileTranslations = new Map<string, Map<string, string>>();
@@ -752,7 +756,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const skippedCount = bdatBinaryFileNames!.length - filesToBuild.length;
       if (skippedCount > 0) {
         setBuildProgress(`⏭️ تخطي ${skippedCount} ملف بدون ترجمات، بناء ${filesToBuild.length} ملف فقط...`);
-        await new Promise(r => setTimeout(r, 300));
+        await yieldToUI();
       }
 
       // Process files in batches to keep UI responsive
@@ -826,7 +830,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           }
         }
         // Yield to UI between batches
-        await new Promise(r => setTimeout(r, 0));
+        await yieldToUI();
       }
 
         // Update stats state so UI can display per-file breakdown
@@ -865,7 +869,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
         if (autoProcessedCountMsbt > 0) {
           setBuildProgress(`✅ تمت معالجة ${autoProcessedCountMsbt} نص عربي تلقائياً...`);
-          await new Promise(r => setTimeout(r, 800));
+          await yieldToUI();
         }
 
         // Hard safety gate before server build: repair what يمكن إصلاحه locally, and skip anything still dangerous
@@ -906,12 +910,12 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
         if (fixedTechnicalCount > 0) {
           setBuildProgress(`🏷️ تم إصلاح ${fixedTechnicalCount} نص تقني قبل البناء...`);
-          await new Promise(r => setTimeout(r, 400));
+          await yieldToUI();
         }
 
         if (skippedUnsafeCount > 0) {
           setBuildProgress(`🛡️ تم استبعاد ${skippedUnsafeCount} نص خطر تلقائياً لحماية اللعبة...`);
-          await new Promise(r => setTimeout(r, 800));
+          await yieldToUI();
         }
         
         formData.append("translations", JSON.stringify(nonEmptyTranslations));

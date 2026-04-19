@@ -1,0 +1,244 @@
+# قاموس مصطلحات Tears of the Kingdom الإضافي
+# مصطلحات جديدة غير موجودة في القاموس الأساسي
+
+# === قدرات زوناي الجديدة ===
+Ultrahand Ability = قدرة اليد الفائقة
+Fuse Ability = قدرة الدمج
+Ascend Ability = قدرة الصعود
+Recall Ability = قدرة الاسترجاع
+Autobuild Ability = قدرة البناء التلقائي
+Schema Stone = حجر المخطط
+Yiga Schematic = مخطط الييغا
+Favorite = المفضلة
+History = السجل
+
+# === أجهزة زوناي ===
+Zonai Wing = جناح زوناي
+Zonai Fan = مروحة زوناي
+Zonai Rocket = صاروخ زوناي
+Zonai Flame Emitter = باعث لهب زوناي
+Zonai Frost Emitter = باعث صقيع زوناي
+Zonai Shock Emitter = باعث صدمة زوناي
+Zonai Beam Emitter = باعث شعاع زوناي
+Zonai Spring = نابض زوناي
+Zonai Steering Stick = عصا توجيه زوناي
+Zonai Cart = عربة زوناي
+Zonai Sled = مزلجة زوناي
+Zonai Balloon = بالون زوناي
+Zonai Time Bomb = قنبلة زوناي موقوتة
+Zonai Stabilizer = موازن زوناي
+Zonai Homing Cart = عربة موجهة زوناي
+Zonai Big Wheel = عجلة زوناي كبيرة
+Zonai Small Wheel = عجلة زوناي صغيرة
+Zonai Battery = بطارية زوناي
+Zonai Big Battery = بطارية زوناي كبيرة
+Zonai Mirror = مرآة زوناي
+Zonai Light = مصباح زوناي
+Zonai Hydrant = صنبور زوناي
+Zonai Construct Head = رأس آلة زوناي
+Zonai Portable Pot = قدر زوناي المحمول
+Dispenser = موزع الكبسولات
+Gacha = كبسولة زوناي
+Energy Cell = خلية طاقة
+Large Zonai Charge = شحنة زوناي كبيرة
+
+# === معابد TOTK ===
+Wind Temple = معبد الريح
+Fire Temple = معبد النار
+Water Temple = معبد الماء
+Lightning Temple = معبد البرق
+Spirit Temple = معبد الروح
+Hyrule Castle Depths = أعماق قلعة هايرول
+Demon King's Army = جيش ملك الشياطين
+Secret Stone = الحجر السري
+Imprisoning War = حرب الحبس
+
+# === شخصيات TOTK الجديدة ===
+Josha = جوشا
+Robbie = روبي
+Penn = بين
+Traysi = ترايسي
+Wortsworth = وورتسوورث
+Lucky Clover Gazette = صحيفة البرسيم المحظوظ
+Cece = سيسي
+Paya = بايا
+Tauro = تاورو
+Jerrin = جيرين
+Captain Aster = الكابتن أستر
+
+# === حكماء TOTK ===
+Sage of Water = حكيم الماء
+Sage of Fire = حكيم النار
+Sage of Wind = حكيم الريح
+Sage of Lightning = حكيم البرق
+Sage of Spirit = حكيم الروح
+Sage's Will = إرادة الحكيم
+Sage's Vow = عهد الحكيم
+Vow of Sidon = عهد سيدون
+Vow of Yunobo = عهد يونوبو
+Vow of Tulin = عهد تولين
+Vow of Riju = عهد ريجو
+
+# === أعداء TOTK الجديدة ===
+Soldier Construct = آلة جندي
+Captain Construct = آلة قائد
+Steward Construct = آلة وكيل
+Training Construct = آلة تدريب
+Flux Construct I = آلة التدفق I
+Flux Construct II = آلة التدفق II
+Flux Construct III = آلة التدفق III
+King Gleeok = ملك الغليوك
+Flame Gleeok = غليوك اللهب
+Frost Gleeok = غليوك الصقيع
+Thunder Gleeok = غليوك الرعد
+Silver Bokoblin = بوكوبلين فضي
+Silver Moblin = موبلين فضي
+Silver Lizalfos = ليزالفوس فضي
+Silver Lynel = لاينل فضي
+Blue-Maned Lynel = لاينل أزرق العرف
+White-Maned Lynel = لاينل أبيض العرف
+Silver-Maned Lynel = لاينل فضي العرف
+Stalnox = ستالنوكس
+Phantom Ganon = غانون الشبح
+Demon King Ganondorf = ملك الشياطين غاننودورف
+Gloom Spawn = يرقة الظلام
+Evermean = الشجرة الشريرة
+Aerocuda = أيروكودا
+Like Like Rock = لايك لايك صخري
+Like Like Fire = لايك لايك ناري
+Like Like Ice = لايك لايك جليدي
+Boss Bokoblin = بوكوبلين زعيم
+Moth Gibdo = غيبدو فراشة
+
+# === مواد ومكونات TOTK ===
+Zonaite = زونايت
+Large Zonaite = زونايت كبير
+Puffshroom = فطر الدخان
+Muddle Bud = برعم التشويش
+Dazzlefruit = فاكهة الإبهار
+Splash Fruit = فاكهة الماء
+Fire Fruit = فاكهة النار
+Ice Fruit = فاكهة الجليد
+Shock Fruit = فاكهة الصدمة
+Brightbloom Seed = بذرة الزهرة المضيئة
+Giant Brightbloom Seed = بذرة الزهرة المضيئة العملاقة
+Dark Clump = كتلة مظلمة
+Gloom-Resist = مقاومة الظلام
+Bubbul Gem = جوهرة بوبول
+Bubbulfrog = ضفدع بوبول
+Koltin = كولتين
+Kilton = كيلتون
+Monster Parts = أجزاء الوحش
+Fuse Material = مادة الدمج
+Eldin Ostrich = نعامة إلدين
+Dondon = دوندون
+
+# === مواقع TOTK الجديدة ===
+Great Sky Island = جزيرة السماء الكبرى
+Room of Awakening = غرفة الصحوة
+Temple of Time = معبد الزمن
+Temple of Time Ruins = أطلال معبد الزمن
+Nachoyah Shrine = مزار ناتشوياه
+Gutanbac Shrine = مزار غوتانباك
+In-isa Shrine = مزار إن-إيسا
+Ukouh Shrine = مزار أوكوه
+Underground Ruins = الأطلال تحت الأرضية
+Thunderhead Isles = جزر رأس الرعد
+Water Temple Island = جزيرة معبد الماء
+Rising Island Chain = سلسلة الجزر الصاعدة
+Eventide Island = جزيرة إيفينتايد
+Dragonhead Island = جزيرة رأس التنين
+Typhlo Ruins = أطلال تيفلو
+Ring Ruins = أطلال الحلقة
+Abandoned Lurelin Village = قرية لوريلين المهجورة
+Korok Forest = غابة كوروك
+Deku Tree = شجرة ديكو
+Master Sword Light = نور السيف الأسطوري
+Forgotten Foundation = الأساس المنسي
+
+# === دروع ومعدات TOTK ===
+Glide Set = طقم الانزلاق
+Glide Shirt = قميص الانزلاق
+Glide Tights = سروال الانزلاق
+Glide Mask = قناع الانزلاق
+Miner's Set = طقم المنجمي
+Miner's Top = قميص المنجمي
+Miner's Trousers = سروال المنجمي
+Miner's Mask = قناع المنجمي
+Depths Set = طقم الأعماق
+Ember Set = طقم الجمر
+Frostbite Set = طقم الصقيع
+Charged Set = طقم الشحن
+Mystic Set = طقم الغموض
+Mystic Robe = رداء الغموض
+Mystic Trousers = سروال الغموض
+Mystic Mask = قناع الغموض
+Fierce Deity Set = طقم الإله الشرس
+Fierce Deity Armor = درع الإله الشرس
+Fierce Deity Boots = حذاء الإله الشرس
+Fierce Deity Mask = قناع الإله الشرس
+Evil Spirit Set = طقم الروح الشريرة
+Phantom Set = طقم الشبح
+Tingle Set = طقم تينغل
+Lobster Shirt = قميص الكركند
+Island Lobster Shirt = قميص كركند الجزيرة
+Yiga Set = طقم الييغا
+Yiga Armor = درع الييغا
+Yiga Tights = سروال الييغا
+Yiga Mask = قناع الييغا
+Dark Set = طقم الظلام
+Dark Hood = غطاء مظلم
+Dark Tunic = سترة مظلمة
+Dark Trousers = سروال مظلم
+
+# === مهام ومصطلحات لعب TOTK ===
+Dragon's Tear = دمعة التنين
+Geoglyph = رسم أرضي
+Light Dragon = تنين النور
+Draconification = التحول إلى تنين
+Decayed Master Sword = السيف الأسطوري المتحلل
+Gloom Sword = سيف الظلام
+Gloom Club = هراوة الظلام
+Gloom Spear = رمح الظلام
+Demon King's Bow = قوس ملك الشياطين
+Demon King's Sword = سيف ملك الشياطين
+Gloom Weapons = أسلحة الظلام
+Decay = تحلل
+Fused Weapon = سلاح مدمج
+Throw Material = رمي المادة
+Fuse Attack Power = قوة هجوم الدمج
+Attach to Shield = تثبيت على الدرع
+Attach to Arrow = تثبيت على السهم
+Shield Surf = تزلج الدرع
+Hudson Construction = شركة بناء هدسون
+Addison = أديسون
+President Hudson = الرئيس هدسون
+Sign = لافتة
+Stable Points = نقاط الإسطبل
+Pony Points = نقاط الحصان
+Horse God = إله الأحصنة
+Malanya = مالانيا
+Hestu = هيستو
+Korok Seed = بذرة كوروك
+Inventory Expansion = توسيع المخزون
+
+# === مصطلحات واجهة TOTK ===
+Purah Pad = لوحة بورا
+Map Pin = دبوس الخريطة
+Stamp = طابع
+Travel Log = سجل الرحلات
+Hyrule Compendium = دليل هايرول
+Album = الألبوم
+Tips = النصائح
+Adventure Log = سجل المغامرات
+Key Items = أشياء رئيسية
+Important Items = أشياء مهمة
+Material Pouch = حقيبة المواد
+Armor Pouch = حقيبة الدروع
+Fuse Count = عدد الدمج
+Attach Count = عدد التثبيت
+Durability Up = زيادة المتانة
+Long Throw = رمي بعيد
+Quick Shot = رمي سريع
+Multishot = رمي متعدد
+Zoom = تقريب

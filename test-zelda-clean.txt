@@ -1,0 +1,154 @@
+Sword
+Master Sword
+Bow
+Shield
+Hylian Shield
+Arrow
+Spear
+Claymore
+Rod
+Boomerang
+Trident
+Scepter
+Scimitar
+Blade
+Dagger
+Hammer
+Club
+Axe
+Longsword
+Broadsword
+Apple
+Mushroom
+Ruby
+Sapphire
+Diamond
+Topaz
+Opal
+Amber
+Flint
+Wood
+Rock Salt
+Luminous Stone
+Star Fragment
+Fairy
+Elixir
+Potion
+Meat
+Fish
+Fruit
+Herb
+Flower
+Nut
+Honey
+Butter
+Milk
+Egg
+Rice
+Wheat
+Pumpkin
+Carrot
+Radish
+Pepper
+Salt
+Sugar
+Oil
+Acorn
+Rupee
+Heart Container
+Stamina Vessel
+Heart
+Stamina
+Stamina Wheel
+Health
+Defense
+Attack
+Durability
+Damage
+Power
+Speed
+Stealth
+Resistance
+Ultrahand
+Fuse
+Ascend
+Recall
+Autobuild
+Paraglider
+Glider
+Camera
+Sensor
+Scope
+Map
+Shrine
+Tower
+Skyview Tower
+Lightroot
+Temple
+Dungeon
+Cave
+Well
+Spring
+Stable
+Village
+Town
+Castle
+Bridge
+Lake
+River
+Mountain
+Forest
+Desert
+Volcano
+Island
+Ruins
+Depths
+Surface
+Sky
+Korok
+Korok Seed
+Spirit Orb
+Zonai
+Zonai Device
+Zonai Charge
+Hyrule
+Hyrule Castle
+Hyrule Field
+Death Mountain
+Zora's Domain
+Goron City
+Rito Village
+Gerudo Town
+Kakariko Village
+Hateno Village
+Tarrey Town
+Lookout Landing
+Great Sky Island
+Forgotten Temple
+Lost Woods
+Great Fairy
+Great Fairy Fountain
+Zelda
+Link
+Ganondorf
+Ganon
+Purah
+Impa
+Sidon
+Yunobo
+Tulin
+Riju
+Rauru
+Sonia
+Mineru
+King
+Queen
+Princess
+Hero
+Champion
+Sage
+Demon King
+Soldier
+Guardian
+Traveler
+Merchant

@@ -1,0 +1,480 @@
+# قاموس المواقع والشخصيات - Zelda: Tears of the Kingdom
+# جميع الأسماء مأخوذة من اللعبة الرسمية
+
+# ═══════════════════════════════════════════
+# === الشخصيات الرئيسية ===
+# ═══════════════════════════════════════════
+Link = لينك
+Princess Zelda = الأميرة زيلدا
+Ganondorf = غاننودورف
+Demon King Ganondorf = ملك الشياطين غاننودورف
+Rauru = راورو
+Sonia = سونيا
+Mineru = مينيرو
+Ancient Hero = البطل القديم
+
+# === حكماء TOTK ===
+Sidon = سيدون
+Yunobo = يونوبو
+Tulin = تولين
+Riju = ريجو
+
+# === شخصيات مرسى المراقبة ===
+Purah = بورا
+Josha = جوشا
+Robbie = روبي
+Penn = بين
+Traysi = ترايسي
+Wortsworth = وورتسوورث
+
+# === شخصيات زورا ===
+Dorephan = دوريفان
+Mipha = ميفا
+Yona = يونا
+Bazz = باز
+Dunma = دنما
+Fronk = فرونك
+Finley = فينلي
+Dento = دينتو
+Jiahto = جياتو
+Chroma = كروما
+
+# === شخصيات غورون ===
+Bludo = بلودو
+Daruk = داروك
+Offrak = أوفراك
+Pelison = بيليسون
+Ramella = راميلا
+Greyson = غرايسون
+Fugo = فوغو
+Bayge = بايغ
+
+# === شخصيات ريتو ===
+Teba = تيبا
+Revali = ريفالي
+Harth = هارث
+Kass = كاس
+Amali = أمالي
+Saki = ساكي
+Cecili = سيسيلي
+Bedoli = بيدولي
+Gesane = غيسان
+
+# === شخصيات غيرودو ===
+Urbosa = أوربوسا
+Buliara = بوليارا
+Isha = إيشا
+Padda = بادا
+Babi = بابي
+Dalia = داليا
+Furosa = فوروسا
+Dorrah = دورا
+Ashai = آشاي
+Malena = مالينا
+
+# === شخصيات كاكاريكو ===
+Impa = إمبا
+Paya = بايا
+Cado = كادو
+Dorian = دوريان
+Claree = كلاري
+Lasli = لاسلي
+Calip = كاليب
+Cottla = كوتلا
+Koko = كوكو
+
+# === شخصيات هاتينو ===
+Cece = سيسي
+Sophie = صوفي
+Reede = ريد
+Clavia = كلافيا
+Nack = ناك
+Dantz = دانتز
+Medda = ميدا
+Tamana = تامانا
+
+# === شخصيات بلدة تاري ===
+Hudson = هدسون
+Rhondson = روندسون
+Addison = أديسون
+Bolson = بولسون
+Karson = كارسون
+Pelison = بيليسون
+Greyson = غرايسون
+
+# === شخصيات أخرى مهمة ===
+Beedle = بيدل
+Hestu = هيستو
+Kilton = كيلتون
+Koltin = كولتين
+Tauro = تاورو
+Jerrin = جيرين
+Captain Aster = الكابتن أستر
+Malanya = مالانيا
+Goddess Hylia = الإلهة هايليا
+Great Fairy = الجنية العظيمة
+Great Fairy Tera = الجنية العظيمة تيرا
+Great Fairy Mija = الجنية العظيمة ميجا
+Great Fairy Kaysa = الجنية العظيمة كايسا
+Great Fairy Cotera = الجنية العظيمة كوتيرا
+Deku Tree = شجرة ديكو
+Bargainer Statue = تمثال المساوم
+Batreaux = باتروكس
+Bozai = بوزاي
+Brigo = بريغو
+Calyban = كاليبان
+
+# === التنانين ===
+Dinraal = دينرال
+Naydra = نايدرا
+Farosh = فاروش
+Light Dragon = تنين النور
+
+# ═══════════════════════════════════════════
+# === الأعراق والأجناس ===
+# ═══════════════════════════════════════════
+Hylian = هايليان
+Zora = زورا
+Goron = غورون
+Rito = ريتو
+Gerudo = غيرودو
+Sheikah = شيكا
+Zonai = زوناي
+Korok = كوروك
+Yiga Clan = عشيرة الييغا
+Hylians = الهايليون
+Gorons = الغورون
+Rito = الريتو
+Sheikah = الشيكا
+
+# ═══════════════════════════════════════════
+# === المناطق الرئيسية (Provinces) ===
+# ═══════════════════════════════════════════
+Hyrule = هايرول
+Central Hyrule = وسط هايرول
+Akkala = أكالا
+Eldin = إلدين
+Faron = فارون
+Gerudo = غيرودو
+Hebra = هيبرا
+Lanayru = لناييرو
+Necluda = نيكلودا
+
+# === المناطق الفرعية (Subregions) - السطح ===
+Akkala Highlands = مرتفعات أكالا
+Akkala Sea = بحر أكالا
+Deep Akkala = أكالا العميقة
+Death Mountain = جبل الموت
+Eldin Canyon = وادي إلدين
+Eldin Mountains = جبال إلدين
+East Necluda = شرق نيكلودا
+West Necluda = غرب نيكلودا
+Faron Grasslands = مراعي فارون
+Faron Sea = بحر فارون
+Gerudo Desert = صحراء غيرودو
+Gerudo Highlands = مرتفعات غيرودو
+Great Hyrule Forest = غابة هايرول العظيمة
+Hebra Mountains = جبال هيبرا
+Hyrule Field = حقل هايرول
+Hyrule Ridge = تلال هايرول
+Lake Hylia = بحيرة هايليا
+Lanayru Great Spring = ينبوع لناييرو العظيم
+Lanayru Sea = بحر لناييرو
+Lanayru Wetlands = أراضي لناييرو الرطبة
+Mount Lanayru = جبل لناييرو
+Necluda Sea = بحر نيكلودا
+Tabantha Frontier = حدود تابانثا
+
+# === المناطق الفرعية - السماء ===
+Great Sky Island = جزيرة السماء الكبرى
+Central Hyrule Sky Archipelago = أرخبيل سماء وسط هايرول
+Eldin Sky Archipelago = أرخبيل سماء إلدين
+Faron Sky Archipelago = أرخبيل سماء فارون
+Lanayru Sky Archipelago = أرخبيل سماء لناييرو
+Necluda Sky Archipelago = أرخبيل سماء نيكلودا
+North Akkala Sky Archipelago = أرخبيل سماء شمال أكالا
+North Hyrule Sky Archipelago = أرخبيل سماء شمال هايرول
+South Hyrule Sky Archipelago = أرخبيل سماء جنوب هايرول
+Rising Island Chain = سلسلة الجزر الصاعدة
+Thunderhead Isles = جزر رأس الرعد
+Wellspring Island = جزيرة الينبوع
+Dragonhead Island = جزيرة رأس التنين
+Eventide Island = جزيرة إيفينتايد
+Water Temple Island = جزيرة معبد الماء
+
+# === المناطق الفرعية - الأعماق ===
+The Depths = الأعماق
+Great Abandoned Central Mine = المنجم المركزي المهجور الكبير
+Abandoned Eldin Mine = منجم إلدين المهجور
+Abandoned Gerudo Mine = منجم غيرودو المهجور
+Abandoned Hateno Mine = منجم هاتينو المهجور
+Abandoned Hebra Mine = منجم هيبرا المهجور
+Abandoned Kakariko Mine = منجم كاكاريكو المهجور
+Abandoned Kara Kara Mine = منجم كارا كارا المهجور
+Abandoned Lanayru Mine = منجم لناييرو المهجور
+Abandoned Lurelin Mine = منجم لوريلين المهجور
+Abandoned Tarrey Mine = منجم تاري المهجور
+
+# ═══════════════════════════════════════════
+# === القرى والمدن ===
+# ═══════════════════════════════════════════
+Lookout Landing = مرسى المراقبة
+Hyrule Castle = قلعة هايرول
+Hyrule Castle Town = بلدة قلعة هايرول
+Zora's Domain = مملكة الزورا
+Goron City = مدينة الغورون
+Rito Village = قرية الريتو
+Gerudo Town = بلدة الغيرودو
+Kakariko Village = قرية كاكاريكو
+Hateno Village = قرية هاتينو
+Tarrey Town = بلدة تاري
+Lurelin Village = قرية لوريلين
+Abandoned Lurelin Village = قرية لوريلين المهجورة
+Korok Forest = غابة كوروك
+Akkala Ancient Tech Lab = مختبر أكالا التقني القديم
+Hateno Ancient Tech Lab = مختبر هاتينو التقني القديم
+Gerudo Shelter = ملجأ الغيرودو
+YunoboCo HQ = مقر شركة يونوبو
+
+# ═══════════════════════════════════════════
+# === الإسطبلات ===
+# ═══════════════════════════════════════════
+Dueling Peaks Stable = إسطبل القمم المتبارزة
+East Akkala Stable = إسطبل شرق أكالا
+Foothill Stable = إسطبل سفح الجبل
+Gerudo Canyon Stable = إسطبل وادي غيرودو
+Highland Stable = إسطبل المرتفعات
+Lakeside Stable = إسطبل ضفة البحيرة
+New Serenne Stable = إسطبل سيريني الجديد
+Outskirt Stable = إسطبل الأطراف
+Riverside Stable = إسطبل ضفة النهر
+Snowfield Stable = إسطبل حقل الثلج
+South Akkala Stable = إسطبل جنوب أكالا
+Tabantha Bridge Stable = إسطبل جسر تابانثا
+Wetland Stable = إسطبل الأراضي الرطبة
+Woodland Stable = إسطبل الغابات
+
+# ═══════════════════════════════════════════
+# === أبراج المراقبة السماوية ===
+# ═══════════════════════════════════════════
+Skyview Tower = برج المراقبة السماوي
+Eldin Canyon Skyview Tower = برج مراقبة وادي إلدين
+Gerudo Canyon Skyview Tower = برج مراقبة وادي غيرودو
+Gerudo Highlands Skyview Tower = برج مراقبة مرتفعات غيرودو
+Hyrule Field Skyview Tower = برج مراقبة حقل هايرول
+Lindor's Brow Skyview Tower = برج مراقبة حاجب ليندور
+Lookout Landing Skyview Tower = برج مراقبة مرسى المراقبة
+Mount Lanayru Skyview Tower = برج مراقبة جبل لناييرو
+Pikida Stonegrove Skyview Tower = برج مراقبة بستان بيكيدا الحجري
+Popla Foothills Skyview Tower = برج مراقبة تلال بوبلا
+Rabella Wetlands Skyview Tower = برج مراقبة أراضي رابيلا الرطبة
+Rospro Pass Skyview Tower = برج مراقبة ممر روسبرو
+Sahasra Slope Skyview Tower = برج مراقبة منحدر ساهاسرا
+Thyphlo Ruins Skyview Tower = برج مراقبة أطلال تيفلو
+Ulri Mountain Skyview Tower = برج مراقبة جبل أولري
+Upland Zorana Skyview Tower = برج مراقبة مرتفعات زورانا
+
+# ═══════════════════════════════════════════
+# === المعابد والزنازين ===
+# ═══════════════════════════════════════════
+Wind Temple = معبد الريح
+Fire Temple = معبد النار
+Water Temple = معبد الماء
+Lightning Temple = معبد البرق
+Spirit Temple = معبد الروح
+Construct Factory = مصنع الآلات
+Forgotten Foundation = الأساس المنسي
+Hyrule Castle Depths = أعماق قلعة هايرول
+Temple of Time = معبد الزمن
+Temple of Time Ruins = أطلال معبد الزمن
+Room of Awakening = غرفة الصحوة
+Forgotten Temple = المعبد المنسي
+
+# ═══════════════════════════════════════════
+# === مواقع بارزة ===
+# ═══════════════════════════════════════════
+Lost Woods = الغابة الضائعة
+Typhlo Ruins = أطلال تيفلو
+Ring Ruins = أطلال الحلقة
+Dueling Peaks = القمم المتبارزة
+Mount Hylia = جبل هايليا
+Satori Mountain = جبل ساتوري
+Hyrule Castle Town Ruins = أطلال بلدة قلعة هايرول
+Coliseum Ruins = أطلال الكولوسيوم
+Sacred Ground Ruins = أطلال الأرض المقدسة
+Tanagar Canyon = وادي تاناغار
+Deplian Badlands = أراضي ديبليان الوعرة
+Tabantha Great Bridge = جسر تابانثا العظيم
+Great Plateau = الهضبة العظيمة
+Crenel Hills = تلال كرينيل
+Mabe Village Ruins = أطلال قرية مابي
+Exchange Ruins = أطلال التبادل
+Ranch Ruins = أطلال المزرعة
+Rauru Settlement Ruins = أطلال مستوطنة راورو
+Fort Hateno = حصن هاتينو
+Goponga Village Ruins = أطلال قرية غوبونغا
+Kakariko Bridge = جسر كاكاريكو
+Proxim Bridge = جسر بروكسيم
+Rebonae Bridge = جسر ريبوناي
+Owlan Bridge = جسر أولان
+Horwell Bridge = جسر هورويل
+Eagus Bridge = جسر إيغوس
+Gleeok Bridge = جسر غليوك
+Bottomless Swamp = المستنقع بلا قاع
+Eldin Bridge = جسر إلدين
+
+# === المنابع والشلالات ===
+Zora's Waterfall = شلال الزورا
+East Reservoir Lake = بحيرة الخزان الشرقية
+Mipha Court = ساحة ميفا
+Ancient Zora Waterworks = قنوات الزورا القديمة
+Ralis Pond = بركة رالس
+Lulu Lake = بحيرة لولو
+Toto Lake = بحيرة توتو
+Great Fairy Fountain = نافورة الجنية العظيمة
+
+# === معالم صحراء غيرودو ===
+Gerudo Canyon = وادي غيرودو
+Kara Kara Bazaar = سوق كارا كارا
+Arbiter's Grounds = ساحة الحكم
+Spectacle Rock = صخرة النظارة
+Gerudo Great Skeleton = هيكل غيرودو العظيم
+East Gerudo Ruins = أطلال شرق غيرودو
+West Gerudo Ruins = أطلال غرب غيرودو
+South Lomei Labyrinth = متاهة لومي الجنوبية
+North Lomei Labyrinth = متاهة لومي الشمالية
+Lomei Labyrinth Island = جزيرة متاهة لومي
+
+# === معالم جبلية ===
+Hebra Peak = قمة هيبرا
+Hebra North Summit = قمة هيبرا الشمالية
+Hebra South Summit = قمة هيبرا الجنوبية
+Pikida Stonegrove = بستان بيكيدا الحجري
+Rito Stable = إسطبل الريتو
+Biron Snowshelf = رف بيرون الجليدي
+Corvash Peak = قمة كورفاش
+Talonto Peak = قمة تالونتو
+
+# === معالم أخرى ===
+Spring of Wisdom = ينبوع الحكمة
+Spring of Courage = ينبوع الشجاعة
+Spring of Power = ينبوع القوة
+Goddess Statue = تمثال الإلهة
+Hylia Bridge = جسر هايليا
+Horned Statue = التمثال ذو القرون
+Cherry Blossom Tree = شجرة أزهار الكرز
+Akkala Citadel Ruins = أطلال قلعة أكالا
+Akkala Tower = برج أكالا
+Skull Lake = بحيرة الجمجمة
+Gut Check Rock = صخرة اختبار الشجاعة
+Goron Hot Springs = ينابيع الغورون الحارة
+Bridge of Hylia = جسر هايليا
+Faron Tower = برج فارون
+Floria Bridge = جسر فلوريا
+Floria Falls = شلالات فلوريا
+Lurelin Beach = شاطئ لوريلين
+Eventide Island = جزيرة إيفينتايد
+
+# ═══════════════════════════════════════════
+# === زعماء المعابد (Bosses) ===
+# ═══════════════════════════════════════════
+Colgera = كولجيرا
+Marbled Gohma = غوما المرمرية
+Mucktorok = ماكتوروك
+Queen Gibdo = ملكة غيبدو
+Seized Construct = الآلة المحتلة
+Phantom Ganon = غانون الشبح
+Demon Dragon = التنين الشيطاني
+Gloom Hands = أيدي الظلام
+Gloom Spawn = يرقة الظلام
+
+# ═══════════════════════════════════════════
+# === المهام الرئيسية والأحداث ===
+# ═══════════════════════════════════════════
+Regional Phenomena = الظواهر الإقليمية
+Hebra Regional Phenomena = ظاهرة هيبرا الإقليمية
+Eldin Regional Phenomena = ظاهرة إلدين الإقليمية
+Lanayru Regional Phenomena = ظاهرة لناييرو الإقليمية
+Gerudo Regional Phenomena = ظاهرة غيرودو الإقليمية
+Crisis at Hyrule Castle = أزمة قلعة هايرول
+Tulin of Rito Village = تولين من قرية الريتو
+Yunobo of Goron City = يونوبو من مدينة الغورون
+Sidon of the Zora = سيدون من الزورا
+Riju of Gerudo Town = ريجو من بلدة الغيرودو
+Secret of the Ring Ruins = سر أطلال الحلقة
+Imprisoning War = حرب الحبس
+Dragon's Tear = دمعة التنين
+Geoglyph = رسم أرضي
+Draconification = التحول إلى تنين
+Secret Stone = الحجر السري
+
+# === مصطلحات القصة ===
+Demon King's Army = جيش ملك الشياطين
+Sage of Water = حكيم الماء
+Sage of Fire = حكيم النار
+Sage of Wind = حكيم الريح
+Sage of Lightning = حكيم البرق
+Sage of Spirit = حكيم الروح
+Sage's Will = إرادة الحكيم
+Sage's Vow = عهد الحكيم
+Vow of Sidon = عهد سيدون
+Vow of Yunobo = عهد يونوبو
+Vow of Tulin = عهد تولين
+Vow of Riju = عهد ريجو
+Fifth Sage = الحكيم الخامس
+Zelda's Golden Prayer = دعاء زيلدا الذهبي
+Master Sword Light = نور السيف الأسطوري
+
+# ═══════════════════════════════════════════
+# === المنشآت والخدمات ===
+# ═══════════════════════════════════════════
+Lucky Clover Gazette = صحيفة البرسيم المحظوظ
+Hudson Construction = شركة بناء هدسون
+Hateno Dye Shop = متجر صبغة هاتينو
+Enchanted Armor Shop = متجر الدروع المسحورة
+Gerudo Secret Club = نادي غيرودو السري
+Armor Shop = متجر الدروع
+General Store = المتجر العام
+Inn = نُزل
+Cooking Pot = قدر الطبخ
+Campfire = نار المخيم
+Horse God Bridge = جسر إله الأحصنة
+Dispenser = موزع الكبسولات
+
+# ═══════════════════════════════════════════
+# === مصطلحات جغرافية عامة ===
+# ═══════════════════════════════════════════
+Cave = كهف
+Well = بئر
+Shrine = مزار
+Tower = برج
+Bridge = جسر
+Lake = بحيرة
+River = نهر
+Mountain = جبل
+Forest = غابة
+Desert = صحراء
+Island = جزيرة
+Ruins = أطلال
+Stable = إسطبل
+Village = قرية
+Town = بلدة
+Castle = قلعة
+Spring = ينبوع
+Volcano = بركان
+Canyon = وادي
+Cliff = جرف
+Waterfall = شلال
+Beach = شاطئ
+Swamp = مستنقع
+Meadow = مرج
+Pass = ممر
+Valley = وادي
+Peak = قمة
+Plain = سهل
+Plateau = هضبة
+Archipelago = أرخبيل
+Labyrinth = متاهة
+Mine = منجم
+Hot Spring = ينبوع حار
+Underground Ruins = الأطلال تحت الأرضية

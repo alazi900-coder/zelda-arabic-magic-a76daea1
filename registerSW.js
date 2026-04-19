@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/zelda-arabic-magic-a76daea1/sw.js', { scope: '/zelda-arabic-magic-a76daea1/' })})}

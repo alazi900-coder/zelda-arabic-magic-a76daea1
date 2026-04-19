@@ -1,0 +1,387 @@
+# قاموس واجهة المستخدم والقوائم والأزرار - زيلدا: دموع المملكة
+# التنسيق: English Term = المصطلح العربي
+
+# === شاشة العنوان والبداية ===
+The Legend of Zelda = أسطورة زيلدا
+Tears of the Kingdom = دموع المملكة
+Press Any Button = اضغط أي زر
+Continue = متابعة
+New Game = لعبة جديدة
+Start = ابدأ
+Title Screen = شاشة العنوان
+Loading = جارٍ التحميل
+Now Loading = جارٍ التحميل الآن
+Please Wait = يرجى الانتظار
+
+# === القائمة الرئيسية (Pause Menu) ===
+Inventory = الحقيبة
+Adventure Log = سجل المغامرات
+Map = الخريطة
+System = النظام
+Weapons = الأسلحة
+Bows = الأقواس
+Shields = الدروع
+Armor = الدروع الجسدية
+Materials = المواد
+Food = الطعام
+Key Items = الأدوات الخاصة
+Important Items = الأغراض المهمة
+
+# === قائمة النظام (System Menu) ===
+Save = حفظ
+Load = تحميل
+Save Game = حفظ اللعبة
+Load Game = تحميل اللعبة
+Options = الخيارات
+Settings = الإعدادات
+Quit to Title = العودة للعنوان
+Return to Title Screen = العودة لشاشة العنوان
+Manual Save = حفظ يدوي
+Auto Save = حفظ تلقائي
+Overwrite = استبدال
+Delete = حذف
+Cancel = إلغاء
+Confirm = تأكيد
+Yes = نعم
+No = لا
+OK = حسناً
+Back = رجوع
+Close = إغلاق
+
+# === الإعدادات (Options/Settings) ===
+Camera Sensitivity = حساسية الكاميرا
+Camera Controls = التحكم بالكاميرا
+Normal = عادي
+Inverted = معكوس
+Motion Controls = التحكم بالحركة
+HUD = واجهة العرض
+HUD Mode = وضع واجهة العرض
+Pro = احترافي
+Normal HUD = واجهة عادية
+Pro HUD = واجهة احترافية
+Minimap = الخريطة المصغرة
+Sound = الصوت
+Volume = مستوى الصوت
+BGM Volume = مستوى الموسيقى
+SFX Volume = مستوى المؤثرات
+Voice Volume = مستوى الأصوات
+Brightness = السطوع
+Language = اللغة
+Subtitles = الترجمة
+Gyroscope = الجيروسكوب
+Aim Sensitivity = حساسية التصويب
+First-Person Camera = كاميرا شخص أول
+Jump Button = زر القفز
+Crouch Toggle = تبديل الانحناء
+
+# === أزرار التفاعل (Button Prompts) ===
+Talk = تحدث
+Examine = افحص
+Open = افتح
+Pick Up = التقط
+Grab = أمسك
+Drop = أسقط
+Throw = ارمِ
+Eat = كل
+Cook = اطبخ
+Read = اقرأ
+Sit = اجلس
+Sleep = نَم
+Board = اركب
+Mount = اركب
+Dismount = انزل
+Push = ادفع
+Pull = اسحب
+Climb = تسلّق
+Swim = اسبح
+Dive = غُص
+Paraglide = حلّق
+Glide = انزلق
+Attack = هاجم
+Jump = اقفز
+Dash = اندفع
+Crouch = انحنِ
+Sneak = تسلّل
+Dodge = تفادَ
+Parry = صدّ
+Shield Surf = تزلّج بالدرع
+Interact = تفاعل
+Use = استخدم
+Equip = جهّز
+Unequip = أزل التجهيز
+Hold = أمسك
+Release = أطلق
+Aim = صوّب
+Shoot = أطلق
+Charge = اشحن
+Recall = استرجع
+Lock On = ثبّت الهدف
+Target = استهدف
+Sprint = اركض
+Rest = استرح
+Pray = صلِّ
+Fuse = ادمج
+Unfuse = افصل
+Ultrahand = اليد الفائقة
+Ascend = اصعد
+Autobuild = البناء التلقائي
+Recall = الاسترجاع
+
+# === واجهة القتال والعرض (HUD Elements) ===
+Hearts = القلوب
+Heart Container = حاوية قلب
+Stamina = القدرة
+Stamina Wheel = عجلة القدرة
+Temperature = الحرارة
+Noise = الضوضاء
+Stealth = التخفي
+Time = الوقت
+Weather = الطقس
+Rupees = الروبيات
+Health = الصحة
+Defense = الدفاع
+Attack Power = قوة الهجوم
+Attack Up = زيادة الهجوم
+Defense Up = زيادة الدفاع
+Speed Up = زيادة السرعة
+Stealth Up = زيادة التخفي
+Cold Resistance = مقاومة البرد
+Heat Resistance = مقاومة الحرارة
+Shock Resistance = مقاومة الصدمات
+Fire Resistance = مقاومة النار
+Swim Speed Up = زيادة سرعة السباحة
+Gloom Resistance = مقاومة القتامة
+Durability = المتانة
+Low Durability = متانة منخفضة
+Badly Damaged = متضررة بشدة
+Master Mode = الوضع الرئيسي
+
+# === سجل المغامرات (Adventure Log) ===
+Main Quests = المهام الرئيسية
+Side Adventures = المغامرات الجانبية
+Side Quests = المهام الجانبية
+Shrine Quests = مهام الأضرحة
+Memories = الذكريات
+Quest Complete = اكتملت المهمة
+New Quest = مهمة جديدة
+Quest Updated = تحديث المهمة
+Objective = الهدف
+Completed = مكتمل
+In Progress = قيد التنفيذ
+Not Started = لم تبدأ
+
+# === الخريطة (Map) ===
+Map = الخريطة
+Pin = دبوس
+Place Pin = ضع دبوساً
+Remove Pin = أزل الدبوس
+Stamp = طابع
+Place Stamp = ضع طابعاً
+Remove Stamp = أزل الطابع
+Travel = سافر
+Fast Travel = السفر السريع
+Zoom In = تكبير
+Zoom Out = تصغير
+Surface = السطح
+Depths = الأعماق
+Sky = السماء
+Skyview Tower = برج سكاي فيو
+Shrine = ضريح
+Lightroot = جذر ضوئي
+Stable = إسطبل
+Village = قرية
+Town = مدينة
+Tower = برج
+Cave = كهف
+Well = بئر
+Cherry Blossom Tree = شجرة أزهار الكرز
+
+# === الطبخ (Cooking) ===
+Cook = اطبخ
+Cooking Pot = قدر الطبخ
+Hold = أمسك
+Recipe = وصفة
+Ingredients = المكونات
+Effect = التأثير
+Duration = المدة
+Add = أضف
+Remove = أزل
+Select = اختر
+Dish = طبق
+Elixir = إكسير
+Dubious Food = طعام مريب
+Rock-Hard Food = طعام صلب كالصخر
+
+# === التجارة (Shop/Trading) ===
+Buy = اشترِ
+Sell = بِع
+Price = السعر
+Quantity = الكمية
+Total = المجموع
+How many? = كم تريد؟
+Not enough Rupees = لا يوجد روبيات كافية
+Sold Out = نفد المخزون
+Shop = متجر
+Inn = نزل
+Stay = أقِم
+Bed = سرير
+
+# === الأضرحة والمعابد (Shrines & Temples) ===
+Shrine of Light = ضريح النور
+Blessing = نعمة
+Rauru's Blessing = نعمة راورو
+Spirit Orb = كرة الروح
+Light of Blessing = نور النعمة
+Pray = صلِّ
+Exchange = استبدل
+Heart Container = حاوية قلب
+Stamina Vessel = وعاء القدرة
+
+# === القدرات (Abilities) ===
+Ultrahand = اليد الفائقة
+Fuse = الدمج
+Ascend = الصعود
+Recall = الاسترجاع
+Autobuild = البناء التلقائي
+Camera = الكاميرا
+Purah Pad = لوح بورا
+Hyrule Compendium = موسوعة هايرول
+Album = الألبوم
+Take Picture = التقط صورة
+amiibo = أميبو
+Master Cycle = الدراجة الرئيسية
+Sage's Vow = عهد الحكيم
+
+# === رسائل النظام (System Messages) ===
+Game Over = انتهت اللعبة
+Continue? = متابعة؟
+Retry = إعادة المحاولة
+You Got = حصلت على
+Obtained = حصلت على
+Registered = تم التسجيل
+Discovered = تم الاكتشاف
+Updated = تم التحديث
+New Entry = إدخال جديد
+Unlocked = تم الفتح
+Cannot be used here = لا يمكن استخدامه هنا
+Inventory is full = الحقيبة ممتلئة
+Not enough space = لا توجد مساحة كافية
+Would you like to discard something? = هل تريد التخلص من شيء؟
+Discard = تخلّص
+Are you sure? = هل أنت متأكد؟
+Data has been saved = تم حفظ البيانات
+Saving = جارٍ الحفظ
+Do not turn off the power = لا تقم بإيقاف التشغيل
+Blood Moon = قمر الدم
+A Blood Moon rises = يرتفع قمر الدم
+
+# === إحصائيات المعدات (Equipment Stats) ===
+Attack = الهجوم
+Durability = المتانة
+Guard = الحماية
+Set Bonus = مكافأة الطقم
+Upgrade = ترقية
+Level = المستوى
+Star = نجمة
+Base Power = القوة الأساسية
+Fused Power = القوة المدمجة
+Total Power = القوة الإجمالية
+Range = المدى
+Modifier = مُعدّل
+Attack Up = زيادة الهجوم
+Durability Up = زيادة المتانة
+Critical Hit = ضربة حرجة
+Long Throw = رمية بعيدة
+Quick Shot = رمية سريعة
+Shield Guard Up = زيادة حماية الدرع
+Surf Master = خبير التزلج
+
+# === الإشعارات والتنبيهات (Notifications) ===
+New = جديد
+Tutorial = تعليمات
+Tip = نصيحة
+Warning = تحذير
+Danger = خطر
+Alert = تنبيه
+Received = تم الاستلام
+Collected = تم الجمع
+Defeated = تم الهزيمة
+Cleared = تم الإنجاز
+
+# === وضع البناء Zonai (Zonai Build Mode) ===
+Attach = ألصق
+Detach = افصل
+Rotate = دوّر
+Shake = هزّ
+Build = ابنِ
+Activate = فعّل
+Charge = اشحن
+Battery = البطارية
+Energy Cell = خلية الطاقة
+Zonai Device = جهاز زوناي
+Dispenser = موزع
+Capsule = كبسولة
+
+# === الملابس والتجهيزات (Armor/Outfit) ===
+Head = الرأس
+Body = الجسد
+Legs = الأرجل
+Set = طقم
+Dye = صبغ
+Color = اللون
+Original Color = اللون الأصلي
+Great Fairy = الجنية الكبرى
+Enhance = عزّز
+Enhance Armor = عزّز الدرع
+
+# === التصوير والموسوعة (Camera & Compendium) ===
+Hyrule Compendium = موسوعة هايرول
+Creatures = المخلوقات
+Monsters = الوحوش
+Equipment = المعدات
+Materials = المواد
+Treasure = الكنوز
+Common Locations = المواقع الشائعة
+Recoverable Materials = المواد القابلة للاسترداد
+No Data = لا توجد بيانات
+Picture = صورة
+Take Picture = التقط صورة
+Delete Picture = احذف الصورة
+Register = سجّل
+
+# === الخيل والإسطبلات (Horses & Stables) ===
+Register Horse = سجّل الحصان
+Take Horse = خذ الحصان
+Board Horse = أودع الحصان
+Name = الاسم
+Mane = العُرف
+Saddle = السرج
+Bridle = اللجام
+Bond = الرابطة
+Speed = السرعة
+Strength = القوة
+Stamina = القدرة
+Temperament = المزاج
+Gentle = لطيف
+Wild = بري
+
+# === متفرقات (Miscellaneous) ===
+Korok = كوروك
+Hestu = هيستو
+Expand Inventory = وسّع الحقيبة
+Weapon Slots = خانات الأسلحة
+Bow Slots = خانات الأقواس
+Shield Slots = خانات الدروع
+Pony Points = نقاط المهر
+Side Quest Complete = اكتملت المهمة الجانبية
+Shrine Complete = اكتمل الضريح
+Tower Activated = تم تفعيل البرج
+Paraglider = المظلة الشراعية
+Purah Pad = لوح بورا
+Sage = حكيم
+Champion = بطل
+Tulin = تولين
+Sidon = سيدون
+Yunobo = يونوبو
+Riju = ريجو
+Mineru = مينيرو

@@ -615,7 +615,7 @@ const Editor = () => {
 
                 {editor.translationProvider === 'deepseek' && (
                   <div className="flex flex-col gap-2">
-                    <p className="text-xs text-muted-foreground font-body">🧠 DeepSeek V3 — جودة عالية في الترجمة، يحتاج مفتاح API شخصي. سعر منخفض جداً (0.27$/مليون رمز).</p>
+                    <p className="text-xs text-muted-foreground font-body">🧠 DeepSeek V3 — جودة عالية في الترجمة. يعمل مجاناً عبر Lovable AI بدون مفتاح، أو أضف مفتاحك الشخصي لحد أعلى.</p>
                     <div className="flex gap-2">
                       <input
                         type="password"
@@ -630,15 +630,15 @@ const Editor = () => {
                       )}
                     </div>
                     {editor.userDeepSeekKey
-                      ? <p className="text-xs text-secondary font-body">✅ سيتم استخدام DeepSeek للترجمة</p>
-                      : <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">احصل على مفتاح DeepSeek ↗</a>
+                      ? <p className="text-xs text-secondary font-body">✅ مفتاحك الشخصي — حد أعلى وأسرع</p>
+                      : <p className="text-xs text-secondary font-body">✅ يعمل مجاناً عبر Lovable AI — أو أضف مفتاحك لحد أعلى</p>
                     }
                   </div>
                 )}
 
                 {editor.translationProvider === 'groq' && (
                   <div className="flex flex-col gap-2">
-                    <p className="text-xs text-muted-foreground font-body">⚡ Groq — سرعة استثنائية مع Llama 3.3 70B. مجاني بحد يومي سخي (يحتاج مفتاح API مجاني).</p>
+                    <p className="text-xs text-muted-foreground font-body">⚡ Groq (Llama 3.3 70B) — سرعة استثنائية. يعمل مجاناً عبر Lovable AI بدون مفتاح، أو أضف مفتاحك لمزيد من الطلبات.</p>
                     <div className="flex gap-2">
                       <input
                         type="password"
@@ -653,8 +653,8 @@ const Editor = () => {
                       )}
                     </div>
                     {editor.userGroqKey
-                      ? <p className="text-xs text-secondary font-body">✅ سيتم استخدام Groq للترجمة</p>
-                      : <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">احصل على مفتاح Groq المجاني ↗</a>
+                      ? <p className="text-xs text-secondary font-body">✅ مفتاحك الشخصي — حد أعلى وأسرع</p>
+                      : <p className="text-xs text-secondary font-body">✅ يعمل مجاناً عبر Lovable AI — أو أضف مفتاحك لمزيد من الطلبات</p>
                     }
                   </div>
                 )}

@@ -303,7 +303,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
-      const englishLineCount = entry.original.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
       const rebalanced = englishLineCount > 1
         ? splitEvenlyByLines(trans, englishLineCount)
         : balanceLines(trans);

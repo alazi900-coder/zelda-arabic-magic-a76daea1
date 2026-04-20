@@ -170,19 +170,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       }
     }
 
-    // Add fingerprint mappings: "__fp__:filename:row:col" → original key
-    // This ensures imports work even if hash names change between extractions
-    const fingerprintMap: Record<string, string> = {};
-    for (const key of Object.keys(cleanTranslations)) {
-      const fp = bdatKeyFingerprint(key);
-      if (fp) {
-        fingerprintMap[`__fp__:${fp.exact}`] = key;
-      }
-    }
-    if (Object.keys(fingerprintMap).length > 0) {
-      Object.assign(cleanTranslations, fingerprintMap);
-    }
-
     const data = JSON.stringify(cleanTranslations, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -478,14 +465,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     let cleanedImported: Record<string, string> = {};
 
-    // Extract embedded fingerprint map (__fp__: entries → original key)
-    const embeddedFpMap = new Map<string, string>();
-    for (const [key, value] of Object.entries(imported)) {
-      if (key.startsWith('__fp__:')) {
-        embeddedFpMap.set(key.slice(6), value);
-      }
-    }
-
     // Build set of filtered keys when filter is active
     const filteredKeySet = isFilterActive && filteredEntries.length > 0
       ? new Set(filteredEntries.map(e => `${e.msbtFile}:${e.index}`))
@@ -605,21 +584,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     if ((state?.entries || []).length > 0) {
       const maps = buildEntryFpMaps();
 
-      // Build reverse map from old embedded fps: oldKey → base fp (for old-format compat)
-      // Old format: "filename:row:0" — treat as base fp "filename:*:row:*"
-      const oldKeyToBaseFp = new Map<string, string>();
-      if (embeddedFpMap.size > 0) {
-        for (const [fpStr, oldKey] of embeddedFpMap.entries()) {
-          const fpParts = fpStr.split(':');
-          if (fpParts.length === 3) {
-            // Old format: filename:row:0 → base = "filename:*:row:*"
-            oldKeyToBaseFp.set(oldKey, `${fpParts[0]}:*:${fpParts[1]}:*`);
-          } else if (fpParts.length === 4) {
-            // New format: filename:tableHash:rowIndex:colHash — already handled by bdatKeyFingerprint
-          }
-        }
-      }
-
       const remapped: Record<string, string> = {};
       for (const [oldKey, value] of Object.entries(cleanedImported)) {
         if (entryKeySet.has(oldKey)) {
@@ -627,15 +591,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           continue;
         }
         // Try multi-level fingerprint matching from key structure
-        let newKey = findNewKey(oldKey, maps);
-        // Fallback: use old-format embedded fp as base-level match
-        if (!newKey && oldKeyToBaseFp.has(oldKey)) {
-          const baseFp = oldKeyToBaseFp.get(oldKey)!;
-          const candidates = maps.baseMap.get(baseFp);
-          if (candidates && candidates.length === 1) {
-            newKey = candidates[0];
-          }
-        }
+        const newKey = findNewKey(oldKey, maps);
         if (newKey && !remapped[newKey]) {
           remapped[newKey] = value;
           fpRemappedTotal++;

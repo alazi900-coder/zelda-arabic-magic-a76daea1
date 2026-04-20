@@ -298,15 +298,18 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (XENO_N_FIXABLE_CATEGORIES.has(issue.category)) {
-      const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
-      return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ]' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
+      let fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+      // Re-balance after adding newlines so the total line count stays reasonable
+      if (fixed !== trans) fixed = balanceLines(fixed);
+      return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
     }
 
     if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
       const englishLineCount = countEffectiveLines(entry.original);
-      const rebalanced = englishLineCount > 1
-        ? splitEvenlyByLines(trans, englishLineCount)
-        : balanceLines(trans);
+      const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;
+      const rebalanced = origHardBreaks > 0 || englishLineCount <= 1
+        ? balanceLines(trans)
+        : splitEvenlyByLines(trans, englishLineCount);
       return {
         fixResult: rebalanced,
         reason: rebalanced !== trans
@@ -387,16 +390,18 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (XENO_N_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
-      const fixed = issue.translation.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+      let fixed = issue.translation.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+      if (fixed !== issue.translation) fixed = balanceLines(fixed);
       if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
-      toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ]' });
+      toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' });
       return;
     }
     if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
       const englishLineCount = countEffectiveLines(entry.original);
-      const rebalanced = englishLineCount > 1
-        ? splitEvenlyByLines(issue.translation, englishLineCount)
-        : balanceLines(issue.translation);
+      const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;
+      const rebalanced = origHardBreaks > 0 || englishLineCount <= 1
+        ? balanceLines(issue.translation)
+        : splitEvenlyByLines(issue.translation, englishLineCount);
       if (rebalanced !== issue.translation) {
         onApplyFix(issue.key, rebalanced);
         toast({ title: '⚖️ إعادة موازنة', description: 'أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]' });

@@ -515,7 +515,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           key,
           original: entry.original,
           translation: trans,
-          englishLineCount: entry.original.split('\n').length,
+          englishLineCount: countEffectiveLines(entry.original),
         });
       }
 

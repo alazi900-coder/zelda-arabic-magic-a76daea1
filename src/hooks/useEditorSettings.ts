@@ -23,12 +23,36 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch {}
   }, []);
 
-  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google'>(() => {
-    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google') || 'gemini'; } catch { return 'gemini'; }
+  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'glm'>(() => {
+    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'glm') || 'gemini'; } catch { return 'gemini'; }
   });
-  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google') => {
+  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'glm') => {
     _setTranslationProvider(p);
     try { localStorage.setItem('translationProvider', p); } catch {}
+  }, []);
+
+  const [userDeepSeekKey, _setUserDeepSeekKey] = useState(() => {
+    try { return localStorage.getItem('userDeepSeekKey') || ''; } catch { return ''; }
+  });
+  const setUserDeepSeekKey = useCallback((key: string) => {
+    _setUserDeepSeekKey(key);
+    try { if (key) localStorage.setItem('userDeepSeekKey', key); else localStorage.removeItem('userDeepSeekKey'); } catch {}
+  }, []);
+
+  const [userGroqKey, _setUserGroqKey] = useState(() => {
+    try { return localStorage.getItem('userGroqKey') || ''; } catch { return ''; }
+  });
+  const setUserGroqKey = useCallback((key: string) => {
+    _setUserGroqKey(key);
+    try { if (key) localStorage.setItem('userGroqKey', key); else localStorage.removeItem('userGroqKey'); } catch {}
+  }, []);
+
+  const [userGlmKey, _setUserGlmKey] = useState(() => {
+    try { return localStorage.getItem('userGlmKey') || ''; } catch { return ''; }
+  });
+  const setUserGlmKey = useCallback((key: string) => {
+    _setUserGlmKey(key);
+    try { if (key) localStorage.setItem('userGlmKey', key); else localStorage.removeItem('userGlmKey'); } catch {}
   }, []);
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
@@ -167,6 +191,9 @@ export function useEditorSettings() {
     arabicNumerals, setArabicNumerals,
     mirrorPunctuation, setMirrorPunctuation,
     userGeminiKey, setUserGeminiKey,
+    userDeepSeekKey, setUserDeepSeekKey,
+    userGroqKey, setUserGroqKey,
+    userGlmKey, setUserGlmKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,
     myMemoryEmail, setMyMemoryEmail,

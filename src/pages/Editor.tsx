@@ -478,6 +478,30 @@ const Editor = () => {
                     >
                       🤖 Lovable AI (Gemini)
                     </Button>
+                    <Button
+                      size="sm"
+                      variant={editor.translationProvider === 'deepseek' ? 'default' : 'outline'}
+                      onClick={() => editor.setTranslationProvider('deepseek')}
+                      className="text-xs font-display"
+                    >
+                      🧠 DeepSeek (مفتاحك)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={editor.translationProvider === 'groq' ? 'default' : 'outline'}
+                      onClick={() => editor.setTranslationProvider('groq')}
+                      className="text-xs font-display"
+                    >
+                      ⚡ Groq (مجاني سريع)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={editor.translationProvider === 'glm' ? 'default' : 'outline'}
+                      onClick={() => editor.setTranslationProvider('glm')}
+                      className="text-xs font-display"
+                    >
+                      🌟 GLM-4 Flash (مجاني)
+                    </Button>
                   </div>
                 </div>
 
@@ -586,6 +610,75 @@ const Editor = () => {
                     ) : (
                       <p className="text-xs text-muted-foreground font-body">بدون مفتاح: يستخدم نقاط Lovable AI المدمجة</p>
                     )}
+                  </div>
+                )}
+
+                {editor.translationProvider === 'deepseek' && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground font-body">🧠 DeepSeek V3 — جودة عالية في الترجمة، يحتاج مفتاح API شخصي. سعر منخفض جداً (0.27$/مليون رمز).</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        placeholder="الصق مفتاح DeepSeek API هنا..."
+                        value={editor.userDeepSeekKey}
+                        onChange={(e) => editor.setUserDeepSeekKey(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                        dir="ltr"
+                      />
+                      {editor.userDeepSeekKey && (
+                        <Button variant="ghost" size="sm" onClick={() => editor.setUserDeepSeekKey('')} className="text-xs text-destructive shrink-0">مسح</Button>
+                      )}
+                    </div>
+                    {editor.userDeepSeekKey
+                      ? <p className="text-xs text-secondary font-body">✅ سيتم استخدام DeepSeek للترجمة</p>
+                      : <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">احصل على مفتاح DeepSeek ↗</a>
+                    }
+                  </div>
+                )}
+
+                {editor.translationProvider === 'groq' && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground font-body">⚡ Groq — سرعة استثنائية مع Llama 3.3 70B. مجاني بحد يومي سخي (يحتاج مفتاح API مجاني).</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        placeholder="الصق مفتاح Groq API هنا..."
+                        value={editor.userGroqKey}
+                        onChange={(e) => editor.setUserGroqKey(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                        dir="ltr"
+                      />
+                      {editor.userGroqKey && (
+                        <Button variant="ghost" size="sm" onClick={() => editor.setUserGroqKey('')} className="text-xs text-destructive shrink-0">مسح</Button>
+                      )}
+                    </div>
+                    {editor.userGroqKey
+                      ? <p className="text-xs text-secondary font-body">✅ سيتم استخدام Groq للترجمة</p>
+                      : <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">احصل على مفتاح Groq المجاني ↗</a>
+                    }
+                  </div>
+                )}
+
+                {editor.translationProvider === 'glm' && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground font-body">🌟 GLM-4 Flash من Zhipu AI — مجاني تماماً بدون حد يومي. أداء جيد للترجمة. يحتاج مفتاح API مجاني.</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        placeholder="الصق مفتاح GLM API هنا..."
+                        value={editor.userGlmKey}
+                        onChange={(e) => editor.setUserGlmKey(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                        dir="ltr"
+                      />
+                      {editor.userGlmKey && (
+                        <Button variant="ghost" size="sm" onClick={() => editor.setUserGlmKey('')} className="text-xs text-destructive shrink-0">مسح</Button>
+                      )}
+                    </div>
+                    {editor.userGlmKey
+                      ? <p className="text-xs text-secondary font-body">✅ سيتم استخدام GLM-4 Flash للترجمة</p>
+                      : <a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">احصل على مفتاح GLM المجاني ↗</a>
+                    }
                   </div>
                 )}
               </div>

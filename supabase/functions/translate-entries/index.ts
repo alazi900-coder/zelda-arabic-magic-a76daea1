@@ -910,7 +910,7 @@ function buildTranslationMemory(context: { key: string; original: string; transl
   return tmMap;
 }
 
-// --- AI translation (Gemini / Lovable gateway) ---
+// --- AI translation (Gemini / Lovable gateway / DeepSeek / Groq) ---
 async function translateWithAI(
   entries: { key: string; original: string }[],
   protectedEntries: { key: string; cleaned: string; tags: Map<string, string> }[],
@@ -918,6 +918,8 @@ async function translateWithAI(
   context: { key: string; original: string; translation?: string }[] | undefined,
   userApiKey: string | undefined,
   aiModel: string | undefined,
+  provider?: string,
+  providerApiKey?: string,
 ): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
   const glossaryMap = glossary ? parseGlossaryToMap(glossary) : new Map<string, string>();
   const tmMap = buildTranslationMemory(context);
@@ -1194,6 +1196,43 @@ ${textsBlock}
     return result;
   };
 
+  // --- OpenAI-compatible providers: DeepSeek & Groq ---
+  if ((provider === 'deepseek' || provider === 'groq' || provider === 'glm') && providerApiKey?.trim()) {
+    const url = provider === 'deepseek'
+      ? 'https://api.deepseek.com/v1/chat/completions'
+      : provider === 'groq'
+      ? 'https://api.groq.com/openai/v1/chat/completions'
+      : 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+    const model = provider === 'deepseek' ? 'deepseek-chat' : provider === 'groq' ? 'llama-3.3-70b-versatile' : 'glm-4-flash';
+    const systemMsg = 'You are a game text translator for Arabic localization. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ or TAG_N or NEWLINE_N placeholders. ALWAYS use glossary terms exactly. CRITICAL: Never use unescaped double quotes inside values. Ensure the JSON is complete and valid.';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${providerApiKey.trim()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemMsg },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.3,
+      }),
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`${provider} API error:`, response.status, errText.slice(0, 200));
+      const providerName = provider === 'deepseek' ? 'DeepSeek' : provider === 'groq' ? 'Groq' : 'GLM';
+      if (response.status === 401) throw new Error(`مفتاح ${providerName} API غير صالح`);
+      if (response.status === 429) throw new Error(`تم تجاوز حد ${providerName} — حاول لاحقاً`);
+      throw new Error(`خطأ ${provider}: ${response.status}`);
+    }
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    const translationsObj = extractJsonObject(content);
+    const aiResult = parseAndUnlock(translationsObj);
+    console.log(`${provider} translated ${Object.keys(aiResult).length}/${needsAI.length} entries`);
+    return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+  }
+
   if (effectiveKey) {
     // Map model names for direct Gemini API; only gemini models work with personal key
     const geminiModelName = (aiModel === 'gemini-2.5-pro') ? 'gemini-2.5-pro' : (aiModel === 'gemini-2.5-flash') ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
@@ -1309,11 +1348,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary, context, userApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel } = await req.json() as {
+    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
       userApiKey?: string;
+      providerApiKey?: string;
       provider?: string;
       myMemoryEmail?: string;
       rebalanceNewlines?: boolean;
@@ -1350,7 +1390,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {
-      const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
+      const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel, provider, providerApiKey);
       return new Response(JSON.stringify({ translations, glossaryStats }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

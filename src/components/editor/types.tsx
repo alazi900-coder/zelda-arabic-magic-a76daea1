@@ -171,6 +171,11 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-dlc", label: "المحتوى الإضافي (DLC)", emoji: "🎮", icon: "Gamepad2", color: "text-pink-400" },
   { id: "bdat-system", label: "إعدادات النظام", emoji: "⚙️", icon: "Settings", color: "text-slate-400" },
   { id: "bdat-dialogue", label: "الحوارات والمشاهد", emoji: "🎬", icon: "Clapperboard", color: "text-purple-400" },
+  { id: "bdat-cutscene", label: "المشاهد السينمائية", emoji: "🎞️", icon: "Film", color: "text-purple-500" },
+  { id: "bdat-quest-dialogue", label: "حوارات المهام القصصية", emoji: "📜", icon: "ScrollText", color: "text-orange-500" },
+  { id: "bdat-kizuna-talk", label: "محادثات Heart-to-Heart", emoji: "❤️", icon: "Heart", color: "text-pink-400" },
+  { id: "bdat-npc-talk", label: "حوارات الشخصيات (NPC)", emoji: "💬", icon: "MessageCircle", color: "text-cyan-400" },
+  { id: "bdat-camp-talk", label: "محادثات المعسكر", emoji: "🏕️", icon: "Tent", color: "text-teal-400" },
   { id: "bdat-message", label: "أرشيف الرسائل", emoji: "💬", icon: "MessageSquare", color: "text-teal-400" },
   { id: "bdat-gimmick", label: "الآليات والألغاز", emoji: "🔧", icon: "Wrench", color: "text-gray-400" },
   { id: "bdat-settings", label: "إعدادات الصوت والعرض", emoji: "🎚️", icon: "SlidersHorizontal", color: "text-fuchsia-400" },
@@ -336,6 +341,28 @@ export function categorizeByTableName(tbl: string): string | null {
   // === النصائح والشروحات — must be checked BEFORE generic menu catch-all ===
   if (/^(tip_|hlp_|tut_|mnu_tutorial)/i.test(tbl)) return "bdat-tips";
   if (/^msg_mnu_tutorial/i.test(tbl)) return "bdat-tips";
+
+  // === محادثات Heart-to-Heart (Kizuna Talk) — XC3 script_msg tables ===
+  // أمثلة: addkizunatalk001_ms, kizunatalk_ms, kzn_talk_xxx
+  if (/^(addkizunatalk|kizunatalk|kzn_?talk|heart_?to_?heart|h2h_?talk)/i.test(tbl)) return "bdat-kizuna-talk";
+
+  // === محادثات المعسكر (Camp Talk) ===
+  // أمثلة: addcamptalk001_ms, camptalk_xxx_ms, camp_talk_ms
+  if (/^(addcamptalk|camptalk|camp_?talk|camp_?msg)/i.test(tbl)) return "bdat-camp-talk";
+
+  // === حوارات NPC (Field NPC dialogue) ===
+  // أمثلة: addnpctalk001_ms, npctalk_xxx_ms, talk_npc_xxx
+  if (/^(addnpctalk|npctalk|talk_?npc|fld_?npctalk_?ms|addnpc_?talk)/i.test(tbl)) return "bdat-npc-talk";
+
+  // === المشاهد السينمائية (Cutscenes / Visual Scene dialogue) ===
+  // أمثلة: vs01070100_ms, vs02110100_ms — جداول الحوارات الموجودة في المشاهد السينمائية
+  if (/^vs\d{2,}/i.test(tbl)) return "bdat-cutscene";
+  if (/^(scene|cutscene|cinematic|movie|demo)_?\d/i.test(tbl)) return "bdat-cutscene";
+
+  // === حوارات المهام القصصية (Quest dialogue tables in script_msg) ===
+  // أمثلة: qst001301_ms, qst020602_ms — أرقام المهام
+  if (/^qst\d{3,}/i.test(tbl)) return "bdat-quest-dialogue";
+
 
   // === قوائم المتاجر ===
   if (/^mnu_shop/i.test(tbl) || /mnu_shop/i.test(tbl)) return "bdat-menu-shop";

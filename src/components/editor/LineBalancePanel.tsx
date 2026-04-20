@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil, Wand2 } from "lucide-react";
 import { EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
 import { balanceLines, hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, type RebalanceItem } from "@/lib/diagnostic-runner";
 import { toast } from "sonner";
 
@@ -82,9 +83,9 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
       const translation = state.translations[key]?.trim();
       if (!translation) continue;
 
-      const englishLineCount = entry.original.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
       const hasXenoN = /\[\s*XENO\s*:\s*n\s*\]/.test(entry.original) || /\[\s*XENO\s*:\s*n\s*\]/.test(translation);
-      const arabicLineCount = translation.split('\n').length;
+      const arabicLineCount = countEffectiveLines(translation);
       const hasOrphan = hasOrphanLines(translation);
       const lineMismatch = englishLineCount !== arabicLineCount;
       if (!hasXenoN && !hasOrphan && !lineMismatch) continue;
@@ -147,7 +148,7 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
         if (!translation) continue;
 
         if (hasOrphanLines(translation)) {
-          const englishLineCount = entry.original.split('\n').length;
+          const englishLineCount = countEffectiveLines(entry.original);
           const balanced = englishLineCount > 1
             ? splitEvenlyByLines(translation, englishLineCount)
             : translation;

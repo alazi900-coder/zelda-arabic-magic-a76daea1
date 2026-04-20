@@ -8,6 +8,7 @@ import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
 import { splitEvenlyByLines } from "@/lib/balance-lines";
+import { countEffectiveLines } from "@/lib/text-tokens";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 
@@ -47,7 +48,7 @@ export function useEditorTranslation({
   /** Auto-sync Arabic line count to match English \n count (universal — all files) */
   const autoSyncLines = (key: string, translated: string, originalEntry?: ExtractedEntry): string => {
     if (!originalEntry) return translated;
-    const englishLineCount = originalEntry.original.split('\n').length;
+    const englishLineCount = countEffectiveLines(originalEntry.original);
 
     // Protect tags before any text manipulation
     const { cleanText, tags } = protectTags(translated);

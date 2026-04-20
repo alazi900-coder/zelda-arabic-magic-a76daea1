@@ -1,4 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
+/** Read a File as text using FileReader (better Android/WebView compatibility than file.text()) */
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve((e.target?.result as string) || '');
+    reader.onerror = () => reject(reader.error ?? new Error('فشل قراءة الملف'));
+    reader.readAsText(file, 'utf-8');
+  });
+}
 import type { ImportConflict } from "@/components/editor/ImportConflictDialog";
 import { removeArabicPresentationForms } from "@/lib/arabic-processing";
 import type { EditorState } from "@/components/editor/types";
@@ -872,7 +882,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     if (dataTransfer.files && dataTransfer.files.length > 0) {
       const file = dataTransfer.files[0];
       try {
-        const rawText = (await file.text()).trim();
+        const rawText = (await readFileAsText(file)).trim();
         await processJsonImport(rawText, file.name);
       } catch (err) {
         console.error('Drop import error:', err);
@@ -900,7 +910,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const rawText = (await file.text()).trim();
+        const rawText = (await readFileAsText(file)).trim();
         await processJsonImport(rawText, file.name);
       } catch (err) {
         console.error('JSON import error:', err);
@@ -950,7 +960,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const text = await file.text();
+        const text = await readFileAsText(file);
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         if (lines.length < 2) { alert('ملف CSV فارغ أو غير صالح'); return; }
 
@@ -1043,7 +1053,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const rawText = (await file.text()).trim();
+        const rawText = (await readFileAsText(file)).trim();
         await processJsonImport(rawText, file.name);
       } catch (err) {
         console.error('External JSON import error:', err);
@@ -1148,7 +1158,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const text = await file.text();
+        const text = await readFileAsText(file);
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, 'text/xml');
         const parseError = doc.querySelector('parsererror');
@@ -1215,7 +1225,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const text = await file.text();
+        const text = await readFileAsText(file);
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, 'text/xml');
         const parseError = doc.querySelector('parsererror');
@@ -1395,7 +1405,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const rawText = (await file.text()).trim();
+        const rawText = (await readFileAsText(file)).trim();
         const repaired = repairJson(rawText);
         const imported = repaired.parsed;
         const totalInFile = Object.keys(imported).length;

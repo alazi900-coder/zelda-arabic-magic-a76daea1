@@ -854,6 +854,111 @@ async function translateWithGoogle(
   return { translations: result, charsUsed, glossaryStats: stats };
 }
 
+// --- OpenAI-compatible translation (DeepSeek / Groq) ---
+async function translateWithOpenAICompat(
+  entries: { key: string; original: string }[],
+  protectedEntries: { key: string; cleaned: string; tags: Map<string, string> }[],
+  glossaryMap: Map<string, string> | undefined,
+  apiKey: string,
+  baseUrl: string,
+  model: string,
+): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
+  const result: Record<string, string> = {};
+  const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
+
+  // Separate direct glossary matches from entries needing AI
+  const needsAI: { entry: typeof entries[0]; pe: typeof protectedEntries[0]; termLocks: TermLockResult }[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const pe = protectedEntries[i];
+    const norm = pe.cleaned.trim().toLowerCase();
+    if (isTagOnlyOrSymbolic(pe.cleaned)) {
+      result[entry.key] = restoreAndEnforce(entry.original, pe.cleaned, pe.tags, entry.key);
+      continue;
+    }
+    if (glossaryMap) {
+      const hit = glossaryMap.get(norm);
+      if (hit) {
+        result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
+        stats.directMatches++;
+        continue;
+      }
+    }
+    const termLocks = glossaryMap ? lockTermsInText(pe.cleaned, glossaryMap) : { lockedText: pe.cleaned, locks: [] };
+    stats.lockedTerms += termLocks.locks.length;
+    needsAI.push({ entry, pe, termLocks });
+  }
+
+  if (needsAI.length === 0) return { translations: result, glossaryStats: stats };
+
+  function escapeForJsonString(s: string): string {
+    return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t').replace(/[\x00-\x1F\x7F]/g, '');
+  }
+
+  const textsBlock = needsAI.map((item, i) => `"K${i}": "${escapeForJsonString(item.termLocks.lockedText)}"`).join(',\n');
+  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles 3. Translate the following game texts from English to Arabic.
+
+CRITICAL RULES:
+1. ⟪T0⟫, ⟪T1⟫ etc. are LOCKED TERMS — copy them EXACTLY as-is.
+2. NEVER remove or modify TAG_0, TAG_1 etc. placeholders.
+3. Keep translation length close to original to fit in-game text boxes.
+4. Return ONLY a JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}
+5. Return EXACTLY ${needsAI.length} entries. Do NOT skip or merge entries.
+6. Do NOT insert \\n newlines — line breaking is handled separately.
+7. Do NOT add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ).
+
+Input:
+{
+${textsBlock}
+}`;
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY valid JSON with keys K0, K1... and Arabic translation values. Never modify ⟪T#⟫ placeholders.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.3,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`${model} error ${response.status}: ${err.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || '';
+
+  // Extract JSON from response
+  let translationsObj: Record<string, string> = {};
+  const cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start !== -1 && end !== -1) {
+    try { translationsObj = JSON.parse(cleaned.substring(start, end + 1)); } catch {
+      try { translationsObj = JSON.parse(cleaned.substring(start, end + 1).replace(/,\s*}/g, '}')); } catch {}
+    }
+  }
+
+  for (let i = 0; i < needsAI.length; i++) {
+    const item = needsAI[i];
+    let translated = translationsObj[`K${i}`]?.trim();
+    if (!translated) continue;
+    translated = normalizeTagPlaceholders(translated);
+    translated = normalizeLockedTermPlaceholders(translated);
+    translated = unlockTerms(translated, item.termLocks.locks);
+    translated = stripUnexpectedPlaceholders(translated, new Set(item.pe.tags.keys()));
+    if (glossaryMap) translated = applyGlossaryPost(translated, glossaryMap);
+    result[item.entry.key] = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
+  }
+
+  return { translations: result, glossaryStats: stats };
+}
+
 // --- Parse glossary text into a map ---
 function parseGlossaryToMap(glossary: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -1309,11 +1414,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary, context, userApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel } = await req.json() as {
+    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
       userApiKey?: string;
+      providerApiKey?: string;
       provider?: string;
       myMemoryEmail?: string;
       rebalanceNewlines?: boolean;
@@ -1347,6 +1453,34 @@ Deno.serve(async (req) => {
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const { translations, charsUsed, glossaryStats } = await translateWithGoogle(entries, protectedEntries, glossaryMap);
       return new Response(JSON.stringify({ translations, charsUsed, glossaryStats }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } else if (provider === 'deepseek') {
+      if (!providerApiKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const { translations, glossaryStats } = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, providerApiKey,
+        'https://api.deepseek.com', 'deepseek-chat',
+      );
+      return new Response(JSON.stringify({ translations, glossaryStats }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } else if (provider === 'groq') {
+      if (!providerApiKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج Groq مفتاح API — أضفه في الإعدادات' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const { translations, glossaryStats } = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, providerApiKey,
+        'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile',
+      );
+      return new Response(JSON.stringify({ translations, glossaryStats }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {

@@ -478,6 +478,22 @@ const Editor = () => {
                     >
                       🤖 Lovable AI (Gemini)
                     </Button>
+                    <Button
+                      size="sm"
+                      variant={editor.translationProvider === 'deepseek' ? 'default' : 'outline'}
+                      onClick={() => editor.setTranslationProvider('deepseek')}
+                      className="text-xs font-display"
+                    >
+                      🐋 DeepSeek
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={editor.translationProvider === 'groq' ? 'default' : 'outline'}
+                      onClick={() => editor.setTranslationProvider('groq')}
+                      className="text-xs font-display"
+                    >
+                      ⚡ Groq (Llama)
+                    </Button>
                   </div>
                 </div>
 
@@ -523,6 +539,70 @@ const Editor = () => {
                   <div className="flex flex-col gap-1">
                     <p className="text-xs text-secondary font-body">🌐 ترجمة Google مجانية بالكامل — بدون حد يومي ولا حاجة لمفتاح API</p>
                     <p className="text-xs text-muted-foreground font-body">ترجمة آلية سريعة مع دعم دفعات متعددة. جودة أقل من Gemini AI لكنها مجانية تماماً.</p>
+                  </div>
+                )}
+
+                {editor.translationProvider === 'deepseek' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2 flex-1">
+                      <input
+                        type="password"
+                        placeholder="الصق مفتاح DeepSeek API هنا..."
+                        value={editor.userDeepSeekKey}
+                        onChange={(e) => editor.setUserDeepSeekKey(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                        dir="ltr"
+                      />
+                      {editor.userDeepSeekKey && (
+                        <Button variant="ghost" size="sm" onClick={() => editor.setUserDeepSeekKey('')} className="text-xs text-destructive shrink-0">
+                          مسح
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground font-body">
+                        {editor.userDeepSeekKey
+                          ? '✅ مفتاح DeepSeek مفعّل — جودة ممتازة للعربية'
+                          : '⚠️ يحتاج مفتاح API — سجّل مجاناً على platform.deepseek.com'}
+                      </p>
+                      {!editor.userDeepSeekKey && (
+                        <a href="https://platform.deepseek.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
+                          احصل على مفتاح ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {editor.translationProvider === 'groq' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2 flex-1">
+                      <input
+                        type="password"
+                        placeholder="الصق مفتاح Groq API هنا..."
+                        value={editor.userGroqKey}
+                        onChange={(e) => editor.setUserGroqKey(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                        dir="ltr"
+                      />
+                      {editor.userGroqKey && (
+                        <Button variant="ghost" size="sm" onClick={() => editor.setUserGroqKey('')} className="text-xs text-destructive shrink-0">
+                          مسح
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground font-body">
+                        {editor.userGroqKey
+                          ? '✅ مفتاح Groq مفعّل — Llama 3.3 70B (14,400 طلب/يوم مجاناً)'
+                          : '⚠️ يحتاج مفتاح API — سجّل مجاناً على console.groq.com'}
+                      </p>
+                      {!editor.userGroqKey && (
+                        <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
+                          احصل على مفتاح ↗
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
 

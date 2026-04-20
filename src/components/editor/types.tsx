@@ -172,6 +172,8 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-system", label: "إعدادات النظام", emoji: "⚙️", icon: "Settings", color: "text-slate-400" },
   { id: "bdat-dialogue", label: "الحوارات والمشاهد", emoji: "🎬", icon: "Clapperboard", color: "text-purple-400" },
   { id: "bdat-cutscene", label: "المشاهد السينمائية", emoji: "🎞️", icon: "Film", color: "text-purple-500" },
+  { id: "bdat-event-dialogue", label: "حوارات الأحداث", emoji: "🎭", icon: "Drama", color: "text-indigo-400" },
+  { id: "bdat-battlefield-dialogue", label: "حوارات ساحة المعركة", emoji: "⚔️", icon: "Swords", color: "text-red-500" },
   { id: "bdat-quest-dialogue", label: "حوارات المهام القصصية", emoji: "📜", icon: "ScrollText", color: "text-orange-500" },
   { id: "bdat-kizuna-talk", label: "محادثات Heart-to-Heart", emoji: "❤️", icon: "Heart", color: "text-pink-400" },
   { id: "bdat-npc-talk", label: "حوارات الشخصيات (NPC)", emoji: "💬", icon: "MessageCircle", color: "text-cyan-400" },

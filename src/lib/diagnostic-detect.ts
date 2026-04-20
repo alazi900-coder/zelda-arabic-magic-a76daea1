@@ -14,6 +14,7 @@
  */
 
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
+import { countEffectiveLines } from "@/lib/text-tokens";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types

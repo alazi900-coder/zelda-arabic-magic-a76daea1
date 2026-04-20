@@ -3,6 +3,7 @@ import { toast } from "@/hooks/use-toast";
 import { fixTagBracketsStrict, hasTechnicalBracketTag } from "@/lib/tag-bracket-fix";
 import { scanAllTextFixes, scanLonelyLamFixes } from "@/lib/arabic-text-fixes";
 import { visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
+import { countEffectiveLines } from "@/lib/text-tokens";
 import { restoreTagsLocally, hasTechnicalTags } from "@/components/editor/types";
 import type { EditorState, ExtractedEntry } from "@/components/editor/types";
 

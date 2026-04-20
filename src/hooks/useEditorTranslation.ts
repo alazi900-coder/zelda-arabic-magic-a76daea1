@@ -636,7 +636,7 @@ export function useEditorTranslation({
     }
 
     // AI mode: translate in batches of 10
-    const PAGE_AI_BATCH = 10;
+    const PAGE_AI_BATCH = 5;
     const needsAI = candidates;
     setTmStats({ reused: 0, sent: needsAI.length });
     if (needsAI.length === 0) {

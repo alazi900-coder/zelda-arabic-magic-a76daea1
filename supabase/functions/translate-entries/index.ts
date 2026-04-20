@@ -1191,6 +1191,12 @@ ${textsBlock}
       if (glossaryMap.size > 0) {
         translated = applyGlossaryPost(translated, glossaryMap);
       }
+      // Remove stray single Latin chars directly attached to Arabic letters (e.g. "أناm" → "أنا")
+      translated = translated.replace(/([\u0600-\u06FF])([a-z])(?!\w)/g, '$1');
+      // Remove trailing isolated period after Arabic text when original has none
+      if (!/[.!?]$/.test(item.entry.original.trim())) {
+        translated = translated.replace(/([\u0600-\u06FF])\s*\.\s*$/, '$1');
+      }
       result[item.entry.key] = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
     }
     return result;

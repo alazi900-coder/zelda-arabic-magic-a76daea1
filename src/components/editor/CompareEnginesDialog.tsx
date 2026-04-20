@@ -15,6 +15,9 @@ interface CompareEnginesDialogProps {
   onSelect: (key: string, translation: string) => void;
   glossary: string;
   userGeminiKey: string;
+  userDeepSeekKey: string;
+  userGroqKey: string;
+  userGlmKey: string;
   myMemoryEmail: string;
   aiModel?: string;
 }
@@ -31,8 +34,9 @@ interface EngineConfig {
 const ALL_ENGINES: EngineConfig[] = [
   { id: 'gemini-flash', label: 'Gemini 2.5 Flash', emoji: '⚡', provider: 'gemini', model: 'gemini-2.5-flash', description: 'سريع ومتوازن' },
   { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
-  { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
-  { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
+  { id: 'deepseek', label: 'DeepSeek V3', emoji: '🧠', provider: 'deepseek', description: 'جودة عالية' },
+  { id: 'groq', label: 'Groq (Llama 3.3)', emoji: '⚡', provider: 'groq', description: 'سريع جداً' },
+  { id: 'glm', label: 'GLM-4 Flash', emoji: '🌟', provider: 'glm', description: 'مجاني بالكامل' },
   { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
   { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
 ];
@@ -134,7 +138,7 @@ function renderTranslationWithProtectedTags(text: string) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, myMemoryEmail,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userGroqKey, userGlmKey, myMemoryEmail,
 }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, string | null>>({});
@@ -159,6 +163,10 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
             glossary,
             provider: engine.provider,
             userApiKey: engine.provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+            providerApiKey: engine.provider === 'deepseek' ? (userDeepSeekKey || undefined)
+              : engine.provider === 'groq' ? (userGroqKey || undefined)
+              : engine.provider === 'glm' ? (userGlmKey || undefined)
+              : undefined,
             myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
             aiModel: engine.model || undefined,
           }),

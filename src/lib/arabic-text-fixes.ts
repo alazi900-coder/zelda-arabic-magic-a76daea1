@@ -166,7 +166,7 @@ export function fixRepeatedWords(text: string): { fixed: string; changes: number
 // 4. AI translation artifacts cleanup
 // ============================================================
 
-const AI_ARTIFACT_PATTERNS: { pattern: RegExp; label: string }[] = [
+const AI_ARTIFACT_PATTERNS: { pattern: RegExp; label: string; replacement?: string }[] = [
   { pattern: /^(بالتأكيد[!!\s]*[،,]?\s*)/u, label: 'بالتأكيد' },
   { pattern: /^(بالطبع[!!\s]*[،,]?\s*)/u, label: 'بالطبع' },
   { pattern: /^(حسنا[ً]?[!!\s]*[،,]?\s*)/u, label: 'حسناً' },
@@ -179,8 +179,11 @@ const AI_ARTIFACT_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /^(Translation[:\s]*)/i, label: 'Translation prefix' },
   { pattern: /^(Sure[!,.\s]*(?:here(?:'s| is)[:\s]*)?)/i, label: 'Sure prefix' },
   { pattern: /(\s*\(ترجمة\)|\s*\(مترجم\)|\s*\(translated\))\s*$/iu, label: 'suffix tag' },
-  // Quotation wrapping the entire text
-  { pattern: /^["«"](.+)["»"]$/u, label: 'wrapping quotes' },
+  { pattern: /^["«"](.+)["»"]$/u, label: 'wrapping quotes', replacement: '$1' },
+  // Stray single lowercase Latin char directly attached to Arabic (e.g. "أناm" → "أنا")
+  { pattern: /([\u0600-\u06FF])([a-z])(?!\w)/gu, label: 'حرف لاتيني زائد', replacement: '$1' },
+  // Trailing period after Arabic text (AI artifact)
+  { pattern: /([\u0600-\u06FF])\s*\.\s*$/u, label: 'نقطة زائدة', replacement: '$1' },
 ];
 
 export function cleanAIArtifacts(text: string): { fixed: string; changes: number; removedLabels: string[] } {
@@ -188,14 +191,12 @@ export function cleanAIArtifacts(text: string): { fixed: string; changes: number
   let changes = 0;
   const removedLabels: string[] = [];
   
-  for (const { pattern, label } of AI_ARTIFACT_PATTERNS) {
-    if (pattern.test(fixed)) {
+  for (const { pattern, label, replacement } of AI_ARTIFACT_PATTERNS) {
+    const re = new RegExp(pattern.source, pattern.flags);
+    if (re.test(fixed)) {
       const before = fixed;
-      if (label === 'wrapping quotes') {
-        fixed = fixed.replace(pattern, '$1');
-      } else {
-        fixed = fixed.replace(pattern, '');
-      }
+      const re2 = new RegExp(pattern.source, pattern.flags);
+      fixed = fixed.replace(re2, replacement ?? '');
       if (fixed !== before) {
         changes++;
         removedLabels.push(label);
@@ -242,7 +243,7 @@ export interface TextFixResult {
   key: string;
   before: string;
   after: string;
-  fixType: 'taa-haa' | 'yaa-alef' | 'repeated' | 'ai-artifact' | 'lonely-lam';
+  fixType: 'taa-haa' | 'yaa-alef' | 'repeated' | 'ai-artifact' | 'lonely-lam' | 'stray-char';
   fixLabel: string;
   details: string;
   status: 'pending' | 'accepted' | 'rejected';

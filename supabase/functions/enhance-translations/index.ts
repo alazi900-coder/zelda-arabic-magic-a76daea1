@@ -9,33 +9,75 @@ interface EnhanceEntry {
   key: string;
   original: string;
   translation: string;
-  fileName?: string;
-  tableName?: string;
+}
+
+/** Robust JSON extractor — handles markdown fences, trailing commas, partial responses */
+function extractJson(raw: string): any {
+  let text = raw.trim();
+  // Strip markdown code fences
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) text = fence[1].trim();
+  // Find outermost { }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1) return null;
+  let slice = text.slice(start, end + 1);
+  // Fix trailing commas before ] or }
+  slice = slice.replace(/,\s*([\]}])/g, '$1');
+  try {
+    return JSON.parse(slice);
+  } catch {
+    return null;
+  }
+}
+
+/** Map AI result back to entry using key (primary) or numeric index (fallback) */
+function resolveEntry(item: any, entries: EnhanceEntry[]): EnhanceEntry | undefined {
+  // Primary: match by key field the AI echoed back
+  if (item.key) {
+    const found = entries.find(e => e.key === item.key);
+    if (found) return found;
+  }
+  // Fallback: use numeric index
+  const idx = typeof item.index === 'number' ? item.index : parseInt(item.index, 10);
+  if (!isNaN(idx) && idx >= 0 && idx < entries.length) return entries[idx];
+  return undefined;
+}
+
+async function callAI(LOVABLE_API_KEY: string, messages: any[]): Promise<string> {
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error('AI gateway error:', response.status, errText.slice(0, 300));
+    if (response.status === 402) throw Object.assign(new Error('انتهى رصيد الذكاء الاصطناعي — استخدم مفتاح Gemini الشخصي'), { code: 402 });
+    if (response.status === 429) throw Object.assign(new Error('تم تجاوز حد الطلبات — حاول بعد دقيقة'), { code: 429 });
+    throw new Error(`AI error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || '';
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { entries, mode, glossary, aiModel } = await req.json() as {
+    const { entries, mode, glossary } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar';
       glossary?: string;
-      aiModel?: string;
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
-    const gatewayModelMap: Record<string, string> = {
-      'gemini-2.5-flash': 'google/gemini-2.5-flash',
-      'gemini-2.5-pro': 'google/gemini-2.5-pro',
-      'gemini-3-flash-preview': 'google/gemini-3-flash-preview',
-      'gpt-5': 'openai/gpt-5',
-    };
-    const resolvedModel = (aiModel && gatewayModelMap[aiModel]) || 'google/gemini-3-flash-preview';
+    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY غير مُعدَّل');
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [] }), {
@@ -43,193 +85,130 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Grammar check mode
+    // Build entry list with both index AND key for AI to echo back
+    const entryList = entries.map((e, i) =>
+      `[${i}] key="${e.key}"\nالأصل: ${e.original}\nالترجمة: ${e.translation}`
+    ).join('\n\n');
+
     if (mode === 'grammar') {
-      const grammarPrompt = `أنت مدقق لغوي عربي متخصص في ترجمات ألعاب الفيديو.
+      const prompt = `أنت مدقق لغوي عربي متخصص في ترجمات ألعاب الفيديو.
 
-افحص كل ترجمة بدقة وابحث عن:
-1. **أخطاء إملائية**: همزات خاطئة (إ/أ/ا)، تاء مربوطة/مفتوحة، ألف مقصورة/ممدودة
-2. **أخطاء نحوية**: رفع/نصب/جر، مطابقة المذكر/المؤنث، جمع/مفرد
-3. **حروف ناقصة أو زائدة**: كلمات بها حرف محذوف أو مكرر خطأً
-4. **علامات ترقيم**: فواصل ونقاط في غير موضعها
-5. **مسافات**: مسافات مزدوجة أو ناقصة بين الكلمات
-6. **أرقام ورموز**: تنسيق غير صحيح
+افحص الترجمات التالية وابحث عن أخطاء حقيقية فقط:
+1. أخطاء إملائية: همزات خاطئة، تاء مربوطة/مفتوحة خاطئة، ألف مقصورة/ممدودة خاطئة
+2. أخطاء نحوية: مذكر/مؤنث، رفع/نصب/جر
+3. حروف ناقصة أو زائدة في الكلمة
+4. علامات ترقيم خاطئة
+5. مسافات مزدوجة أو ناقصة
 
-لكل خطأ، حدد مستوى الخطورة:
-- high: خطأ يغير المعنى أو يجعل النص غير مفهوم
+مستوى الخطورة:
+- high: خطأ يغير المعنى
 - medium: خطأ إملائي أو نحوي واضح
-- low: تحسين بسيط في الترقيم أو التنسيق
+- low: ترقيم أو تنسيق بسيط
 
 النصوص:
-${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${entryList}
 
-أجب بـ JSON فقط:
+أجب بـ JSON فقط — أعِد فقط الإدخالات التي بها أخطاء فعلية:
 {
   "issues": [
-    {"index": 0, "issue": "وصف الخطأ بدقة", "suggestion": "النص المصحح كاملاً", "severity": "high|medium|low"}
+    {"index": 0, "key": "المفتاح كما هو", "issue": "وصف دقيق", "suggestion": "النص المصحح كاملاً", "severity": "high|medium|low"}
   ]
-}
+}`;
 
-أعِد فقط النصوص التي بها أخطاء فعلية. لا تقترح تحسينات أسلوبية هنا.`;
+      const content = await callAI(LOVABLE_API_KEY, [
+        { role: 'system', content: 'أنت مدقق لغوي عربي. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبية.' },
+        { role: 'user', content: prompt },
+      ]);
 
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: resolvedModel,
-          messages: [
-            { role: 'system', content: 'أنت مدقق لغوي عربي. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبية — فقط أخطاء موضوعية.' },
-            { role: 'user', content: grammarPrompt }
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('Grammar check error:', response.status, errText);
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: 'تم تجاوز حد الطلبات' }), {
-            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: 'الرصيد غير كافٍ' }), {
-            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        throw new Error(`AI error: ${response.status}`);
+      const parsed = extractJson(content);
+      if (!parsed) {
+        console.error('Grammar: failed to parse JSON:', content.slice(0, 400));
+        return new Response(JSON.stringify({ issues: [], parseError: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
-      const aiResult = await response.json();
-      const content = aiResult.choices?.[0]?.message?.content || '';
-      let parsed: { issues: any[] } = { issues: [] };
-      try {
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        const raw = (jsonMatch[1] || content).trim();
-        // Try to extract JSON object from the response
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          parsed = JSON.parse(objMatch[0]);
-        } else {
-          console.error('No JSON object found in AI response:', content.slice(0, 500));
-        }
-      } catch (e) {
-        console.error('JSON parse error:', e, 'Content:', content.slice(0, 500));
-      }
+      const issues = (parsed.issues || []).map((item: any) => {
+        const entry = resolveEntry(item, entries);
+        if (!entry || !item.suggestion?.trim()) return null;
+        return {
+          key: entry.key,
+          original: entry.original,
+          translation: entry.translation,
+          issue: item.issue || '',
+          suggestion: item.suggestion,
+          severity: item.severity || 'medium',
+        };
+      }).filter(Boolean);
 
-      const mappedIssues = (parsed.issues || []).map((i: any) => ({
-        key: entries[i.index]?.key || '',
-        original: entries[i.index]?.original || '',
-        translation: entries[i.index]?.translation || '',
-        issue: i.issue,
-        suggestion: i.suggestion,
-        severity: i.severity || 'medium',
-      })).filter((i: any) => i.key && i.suggestion);
-
-      return new Response(JSON.stringify({ issues: mappedIssues }), {
+      return new Response(JSON.stringify({ issues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Enhanced style/quality check mode
-    const enhancePrompt = `أنت مترجم ألعاب فيديو محترف ومراجع لغوي. راجع الترجمات التالية واقترح تحسينات.
+    // ── Enhance mode ──
+    const glossarySection = glossary?.trim()
+      ? `\n**القاموس المعتمد:**\n${glossary.slice(0, 3000)}\n`
+      : '';
 
-**أنواع المشاكل التي يجب البحث عنها:**
-1. **missing_char** — حرف ناقص أو زائد في كلمة (مثل "المعركه" بدل "المعركة")
-2. **grammar** — خطأ نحوي واضح (مذكر/مؤنث، رفع/نصب)
-3. **terminology** — مصطلح مترجم بشكل خاطئ أو غير متسق مع القاموس
-4. **accuracy** — ترجمة غير دقيقة تحرف المعنى الأصلي
-5. **style** — صياغة ركيكة أو حرفية جداً يمكن تحسينها
-6. **consistency** — نفس المصطلح مترجم بطرق مختلفة
-7. **punctuation** — علامات ترقيم خاطئة أو ناقصة
+    const prompt = `أنت مترجم ألعاب فيديو محترف. راجع الترجمات التالية واقترح تحسينات للمشاكل الحقيقية فقط.
 
-${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
+أنواع المشاكل:
+- missing_char: حرف ناقص أو زائد (مثل "المعركه" → "المعركة")
+- grammar: خطأ نحوي (مذكر/مؤنث، رفع/نصب)
+- terminology: مصطلح خاطئ أو غير متسق مع القاموس
+- accuracy: ترجمة تحرف المعنى الأصلي
+- style: صياغة ركيكة أو حرفية جداً
+- consistency: نفس المصطلح مترجم بطرق مختلفة
+- punctuation: علامات ترقيم خاطئة أو ناقصة
+${glossarySection}
+النصوص:
+${entryList}
 
-**النصوص للمراجعة:**
-${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
-
-أجب بـ JSON فقط:
+أجب بـ JSON فقط — أعِد فقط الإدخالات التي بها مشاكل حقيقية:
 {
   "suggestions": [
-    {"index": 0, "suggested": "النص المحسن كاملاً", "reason": "شرح مختصر للمشكلة", "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation"}
+    {"index": 0, "key": "المفتاح كما هو", "suggested": "النص المحسن كاملاً", "reason": "شرح مختصر", "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation"}
   ]
 }
 
-**مهم:**
-- أعِد فقط الترجمات التي بها مشاكل حقيقية
-- لا تقترح تعديلات تفضيلية بحتة
-- ركز على الأخطاء الموضوعية والحروف الناقصة أولاً
-- إذا كان النص صحيحاً لا تُعِده`;
+مهم: لا تقترح تعديلات تفضيلية بحتة. ركز على الأخطاء الموضوعية.`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: resolvedModel,
-        messages: [
-          { role: 'system', content: 'أنت مترجم ومراجع محترف. أجب بـ JSON صالح فقط. ركز على الأخطاء الحقيقية لا الأسلوبية.' },
-          { role: 'user', content: enhancePrompt }
-        ],
-      }),
-    });
+    const content = await callAI(LOVABLE_API_KEY, [
+      { role: 'system', content: 'أنت مترجم ومراجع محترف. أجب بـ JSON صالح فقط. ركز على الأخطاء الحقيقية.' },
+      { role: 'user', content: prompt },
+    ]);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Enhance error:', response.status, errText);
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: 'تم تجاوز حد الطلبات' }), {
-          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'الرصيد غير كافٍ' }), {
-          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw new Error(`AI error: ${response.status}`);
+    const parsed = extractJson(content);
+    if (!parsed) {
+      console.error('Enhance: failed to parse JSON:', content.slice(0, 400));
+      return new Response(JSON.stringify({ suggestions: [], parseError: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    const aiResult = await response.json();
-    const content = aiResult.choices?.[0]?.message?.content || '';
-    let parsed: { suggestions: any[] } = { suggestions: [] };
-      try {
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        const raw = (jsonMatch[1] || content).trim();
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          parsed = JSON.parse(objMatch[0]);
-        } else {
-          console.error('No JSON object found in enhance response:', content.slice(0, 500));
-        }
-      } catch (e) {
-        console.error('JSON parse error (enhance):', e, 'Content:', content.slice(0, 500));
-      }
+    const suggestions = (parsed.suggestions || []).map((item: any) => {
+      const entry = resolveEntry(item, entries);
+      if (!entry || !item.suggested?.trim()) return null;
+      return {
+        key: entry.key,
+        original: entry.original,
+        current: entry.translation,
+        suggested: item.suggested,
+        reason: item.reason || '',
+        type: item.type || 'style',
+      };
+    }).filter(Boolean);
 
-    const mappedSuggestions = (parsed.suggestions || []).map((s: any) => ({
-      key: entries[s.index]?.key || '',
-      original: entries[s.index]?.original || '',
-      current: entries[s.index]?.translation || '',
-      suggested: s.suggested,
-      reason: s.reason,
-      type: s.type || 'style',
-    })).filter((s: any) => s.key && s.suggested);
-
-    return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
+    return new Response(JSON.stringify({ suggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error) {
-    console.error('Enhancement error:', error);
-    return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'خطأ غير متوقع',
-    }), {
-      status: 500,
+  } catch (err: any) {
+    console.error('Enhancement error:', err);
+    const code = err.code === 402 ? 402 : err.code === 429 ? 429 : 500;
+    return new Response(JSON.stringify({ error: err.message || 'خطأ غير متوقع' }), {
+      status: code,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

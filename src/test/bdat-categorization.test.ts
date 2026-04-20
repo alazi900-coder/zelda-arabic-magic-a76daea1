@@ -33,6 +33,17 @@ describe("categorizeBdatTable - script_msg cinematic & talk subcategories", () =
     expect(categorizeBdatTable("vs01070100_ms[0].name")).toBe("bdat-cutscene");
     expect(categorizeBdatTable("vs02110100_ms[3].text")).toBe("bdat-cutscene");
   });
+  it("classifies bf* tables as battlefield dialogue", () => {
+    expect(categorizeBdatTable("bf01010100_ms[0].name")).toBe("bdat-battlefield-dialogue");
+    expect(categorizeBdatTable("bf03020100_ms[5].text")).toBe("bdat-battlefield-dialogue");
+  });
+  it("classifies ev* tables as event dialogue", () => {
+    expect(categorizeBdatTable("ev01010100_ms[0].name")).toBe("bdat-event-dialogue");
+    expect(categorizeBdatTable("ev02030100_ms[2].text")).toBe("bdat-event-dialogue");
+  });
+  it("does NOT misclassify EVT_ as event dialogue (preserves story)", () => {
+    expect(categorizeBdatTable("EVT_Scene[1].Text")).toBe("bdat-story");
+  });
   it("classifies addkizunatalk* as Heart-to-Heart", () => {
     expect(categorizeBdatTable("addkizunatalk001_ms[0].name")).toBe("bdat-kizuna-talk");
     expect(categorizeBdatTable("addkizunatalk012_ms[5].text")).toBe("bdat-kizuna-talk");

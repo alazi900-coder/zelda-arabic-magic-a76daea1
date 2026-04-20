@@ -28,6 +28,30 @@ describe("categorizeBdatTable - table name prefixes", () => {
   });
 });
 
+describe("categorizeBdatTable - script_msg cinematic & talk subcategories", () => {
+  it("classifies vs* tables as cutscene", () => {
+    expect(categorizeBdatTable("vs01070100_ms[0].name")).toBe("bdat-cutscene");
+    expect(categorizeBdatTable("vs02110100_ms[3].text")).toBe("bdat-cutscene");
+  });
+  it("classifies addkizunatalk* as Heart-to-Heart", () => {
+    expect(categorizeBdatTable("addkizunatalk001_ms[0].name")).toBe("bdat-kizuna-talk");
+    expect(categorizeBdatTable("addkizunatalk012_ms[5].text")).toBe("bdat-kizuna-talk");
+  });
+  it("classifies qst<digits>_ms as quest dialogue", () => {
+    expect(categorizeBdatTable("qst001301_ms[0].name")).toBe("bdat-quest-dialogue");
+    expect(categorizeBdatTable("qst020602_ms[3].text")).toBe("bdat-quest-dialogue");
+  });
+  it("preserves QST_ list classification (not dialogue)", () => {
+    expect(categorizeBdatTable("QST_List[0].Title")).toBe("bdat-quest");
+  });
+  it("classifies addnpctalk* as NPC talk", () => {
+    expect(categorizeBdatTable("addnpctalk001_ms[0].text")).toBe("bdat-npc-talk");
+  });
+  it("classifies addcamptalk* as camp talk", () => {
+    expect(categorizeBdatTable("addcamptalk001_ms[0].text")).toBe("bdat-camp-talk");
+  });
+});
+
 describe("categorizeBdatTable - column name fallback (smart classification)", () => {
   it("classifies unknown table with Window column as menu", () => {
     expect(categorizeBdatTable("UnknownTable[0].WindowTitle")).toBe("bdat-menu");

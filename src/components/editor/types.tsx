@@ -172,6 +172,8 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-system", label: "إعدادات النظام", emoji: "⚙️", icon: "Settings", color: "text-slate-400" },
   { id: "bdat-dialogue", label: "الحوارات والمشاهد", emoji: "🎬", icon: "Clapperboard", color: "text-purple-400" },
   { id: "bdat-cutscene", label: "المشاهد السينمائية", emoji: "🎞️", icon: "Film", color: "text-purple-500" },
+  { id: "bdat-event-dialogue", label: "حوارات الأحداث", emoji: "🎭", icon: "Drama", color: "text-indigo-400" },
+  { id: "bdat-battlefield-dialogue", label: "حوارات ساحة المعركة", emoji: "⚔️", icon: "Swords", color: "text-red-500" },
   { id: "bdat-quest-dialogue", label: "حوارات المهام القصصية", emoji: "📜", icon: "ScrollText", color: "text-orange-500" },
   { id: "bdat-kizuna-talk", label: "محادثات Heart-to-Heart", emoji: "❤️", icon: "Heart", color: "text-pink-400" },
   { id: "bdat-npc-talk", label: "حوارات الشخصيات (NPC)", emoji: "💬", icon: "MessageCircle", color: "text-cyan-400" },
@@ -358,6 +360,14 @@ export function categorizeByTableName(tbl: string): string | null {
   // أمثلة: vs01070100_ms, vs02110100_ms — جداول الحوارات الموجودة في المشاهد السينمائية
   if (/^vs\d{2,}/i.test(tbl)) return "bdat-cutscene";
   if (/^(scene|cutscene|cinematic|movie|demo)_?\d/i.test(tbl)) return "bdat-cutscene";
+
+  // === حوارات ساحة المعركة (Battle Field dialogue) ===
+  // أمثلة: bf01010100_ms, bf03020100_ms — حوارات تظهر أثناء/قبل المعارك
+  if (/^bf\d{2,}/i.test(tbl)) return "bdat-battlefield-dialogue";
+
+  // === حوارات الأحداث (Event dialogue) ===
+  // أمثلة: ev01010100_ms, ev02030100_ms — حوارات الأحداث القصصية والجانبية
+  if (/^ev\d{2,}/i.test(tbl)) return "bdat-event-dialogue";
 
   // === حوارات المهام القصصية (Quest dialogue tables in script_msg) ===
   // أمثلة: qst001301_ms, qst020602_ms — أرقام المهام

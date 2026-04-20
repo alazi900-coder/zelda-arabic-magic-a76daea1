@@ -361,6 +361,14 @@ export function categorizeByTableName(tbl: string): string | null {
   if (/^vs\d{2,}/i.test(tbl)) return "bdat-cutscene";
   if (/^(scene|cutscene|cinematic|movie|demo)_?\d/i.test(tbl)) return "bdat-cutscene";
 
+  // === حوارات ساحة المعركة (Battle Field dialogue) ===
+  // أمثلة: bf01010100_ms, bf03020100_ms — حوارات تظهر أثناء/قبل المعارك
+  if (/^bf\d{2,}/i.test(tbl)) return "bdat-battlefield-dialogue";
+
+  // === حوارات الأحداث (Event dialogue) ===
+  // أمثلة: ev01010100_ms, ev02030100_ms — حوارات الأحداث القصصية والجانبية
+  if (/^ev\d{2,}/i.test(tbl)) return "bdat-event-dialogue";
+
   // === حوارات المهام القصصية (Quest dialogue tables in script_msg) ===
   // أمثلة: qst001301_ms, qst020602_ms — أرقام المهام
   if (/^qst\d{3,}/i.test(tbl)) return "bdat-quest-dialogue";

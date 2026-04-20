@@ -133,6 +133,51 @@ export function countHardBreaks(text: string): number {
 }
 
 /**
+ * Count the EFFECTIVE number of visible lines a string will render to in-game.
+ *
+ * The XC3 engine treats both literal `\n` and the cinematic markers
+ * `[XENO:n ]` / `[System:PageBreak ]` as line terminators. Counting only `\n`
+ * produces false "أسطر زائدة" warnings whenever the original uses `[XENO:n ]`
+ * to break lines (very common in cutscenes). This helper unifies the count so
+ * the diagnostic, line-balancer, and cleanup tools all agree on what "a line"
+ * actually means.
+ *
+ * Examples:
+ *   "A\nB"                       → 2
+ *   "A[XENO:n ]B"                → 2
+ *   "A[XENO:n ]\nB"              → 2 (the \n is the engine-mandated newline that
+ *                                       follows the tag — not an extra break)
+ *   "A[XENO:n ]B[XENO:n ]C"      → 3
+ *   "A[System:PageBreak ]B"      → 2
+ */
+export function countEffectiveLines(text: string): number {
+  if (!text) return 0;
+  // Strip the trailing \n that the engine inserts AFTER each cinematic marker
+  // so we don't double-count it. The HARD_BREAK_RE already greedily consumes
+  // the trailing \n; we leverage tokenize to avoid re-implementing that logic.
+  const tokens = tokenize(text);
+  let lines = 1;
+  let textBuffer = "";
+  for (const t of tokens) {
+    if (t.kind === "hardBreak") {
+      lines++;
+      textBuffer = "";
+    } else if (t.kind === "text") {
+      // Count literal newlines inside the text segments.
+      for (const ch of t.value) {
+        if (ch === "\n") {
+          lines++;
+          textBuffer = "";
+        } else {
+          textBuffer += ch;
+        }
+      }
+    }
+  }
+  return lines;
+}
+
+/**
  * Verify that two strings carry the SAME ordered list of hardBreak markers.
  * Used as a safety assertion before applying any balancer output.
  */

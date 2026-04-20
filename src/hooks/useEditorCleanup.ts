@@ -3,6 +3,7 @@ import { toast } from "@/hooks/use-toast";
 import { fixTagBracketsStrict, hasTechnicalBracketTag } from "@/lib/tag-bracket-fix";
 import { scanAllTextFixes, scanLonelyLamFixes } from "@/lib/arabic-text-fixes";
 import { visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
+import { countEffectiveLines } from "@/lib/text-tokens";
 import { restoreTagsLocally, hasTechnicalTags } from "@/components/editor/types";
 import type { EditorState, ExtractedEntry } from "@/components/editor/types";
 
@@ -164,7 +165,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
       const translation = state.translations[key];
       if (!translation?.trim()) continue;
       if (translation.includes('\n')) continue;
-      const englishLineCount = entry.original.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
       if (englishLineCount <= 1 && visualLength(translation) <= newlineSplitCharLimit) continue;
       const targetLines = englishLineCount > 1 ? englishLineCount : Math.max(2, Math.ceil(visualLength(translation) / newlineSplitCharLimit));
       const after = splitEvenlyByLines(translation, targetLines);
@@ -227,7 +228,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
       const translation = state.translations[key];
       if (!translation?.trim()) continue;
       if (npcMode) {
-        const englishLineCount = entry.original.split('\n').length;
+        const englishLineCount = countEffectiveLines(entry.original);
         const flat = translation.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
         let after: string;
         if (englishLineCount <= 1) after = flat;
@@ -289,8 +290,8 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key];
       if (!translation?.trim()) continue;
-      const englishLineCount = entry.original.split('\n').length;
-      const arabicLineCount = translation.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
+      const arabicLineCount = countEffectiveLines(translation);
       if (englishLineCount !== arabicLineCount) count++;
     }
     return count;
@@ -304,8 +305,8 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key];
       if (!translation?.trim()) continue;
-      const englishLineCount = entry.original.split('\n').length;
-      const arabicLineCount = translation.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
+      const arabicLineCount = countEffectiveLines(translation);
       if (englishLineCount === arabicLineCount) continue;
       const flat = translation.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
       let after: string;
@@ -361,7 +362,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
 
       const isNpcFile = NPC_FILE_RE.test(key);
       const isBubbleFile = BUBBLE_FILE_RE.test(key);
-      const englishLineCount = entry.original.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
       const arabicLines = translation.split('\n');
       const arabicLineCount = arabicLines.length;
 

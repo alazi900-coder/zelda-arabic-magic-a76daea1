@@ -14,6 +14,7 @@
  */
 
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
+import { countEffectiveLines } from "@/lib/text-tokens";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -236,12 +237,16 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       message: `${origPh} عنصر نائب في الأصل، ${transPh} في الترجمة` });
   }
 
-  // 13. Newline mismatch
-  const origNewlines = (entry.original.match(/\n/g) || []).length;
-  const transNewlines = (trimmed.match(/\n/g) || []).length;
+  // 13. Newline mismatch — counts \n AND cinematic markers ([XENO:n ], [System:PageBreak ])
+  // because the engine treats those as line terminators too. Counting only \n
+  // produced false positives for every cutscene line that uses [XENO:n ].
+  const origEffectiveLines = countEffectiveLines(entry.original);
+  const transEffectiveLines = countEffectiveLines(trimmed);
+  const origNewlines = origEffectiveLines - 1; // # of breaks = # of lines - 1
+  const transNewlines = transEffectiveLines - 1;
   if (origNewlines > 0 && Math.abs(transNewlines - origNewlines) >= 2) {
     issues.push({ ...base, severity: "warning", category: "newline_mismatch",
-      message: `${origNewlines} سطر في الأصل مقابل ${transNewlines} في الترجمة (فرق ${Math.abs(transNewlines - origNewlines)})` });
+      message: `${origEffectiveLines} سطر في الأصل مقابل ${transEffectiveLines} في الترجمة (فرق ${Math.abs(transNewlines - origNewlines)})` });
   }
 
   // 14. Byte budget
@@ -253,10 +258,10 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       message: `${transBytes} بايت مقابل ${origBytes} في الأصل (${pct}%) — قد تستنفد ذاكرة المحرك` });
   }
 
-  // 15. Excessive lines
+  // 15. Excessive lines — same effective-line counting as #13
   if (transNewlines >= origNewlines + 3) {
     issues.push({ ...base, severity: "warning", category: "excessive_lines",
-      message: `${transNewlines + 1} سطر مقابل ${origNewlines + 1} في الأصل — زيادة ${transNewlines - origNewlines}` });
+      message: `${transEffectiveLines} سطر مقابل ${origEffectiveLines} في الأصل — زيادة ${transNewlines - origNewlines}` });
   }
 
   // 16. Empty translation

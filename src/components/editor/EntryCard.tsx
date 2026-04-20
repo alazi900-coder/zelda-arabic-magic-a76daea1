@@ -9,6 +9,7 @@ import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTe
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { balanceLines, hasOrphanLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
+import { countEffectiveLines } from "@/lib/text-tokens";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { computeConfidence, detectLiteralTranslation } from "./TranslationProgressDashboard";
@@ -503,7 +504,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
               )}
               {translation?.trim() && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
-                  const englishLineCount = entry.original.split('\n').length;
+                  const englishLineCount = countEffectiveLines(entry.original);
                   const balanced = englishLineCount > 1
                     ? splitEvenlyByLines(translation, englishLineCount)
                     : translation.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();

@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
+import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
 import { detectIssues as detectIssuesPure, type DiagnosticIssue as PureDiagnosticIssue, type Severity as PureSeverity } from "@/lib/diagnostic-detect";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
@@ -302,7 +303,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
-      const englishLineCount = entry.original.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
       const rebalanced = englishLineCount > 1
         ? splitEvenlyByLines(trans, englishLineCount)
         : balanceLines(trans);
@@ -392,7 +393,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
     if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
-      const englishLineCount = entry.original.split('\n').length;
+      const englishLineCount = countEffectiveLines(entry.original);
       const rebalanced = englishLineCount > 1
         ? splitEvenlyByLines(issue.translation, englishLineCount)
         : balanceLines(issue.translation);
@@ -514,7 +515,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           key,
           original: entry.original,
           translation: trans,
-          englishLineCount: entry.original.split('\n').length,
+          englishLineCount: countEffectiveLines(entry.original),
         });
       }
 
@@ -635,7 +636,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           const entry = entryMap.get(issue.key);
           const trans = state.translations[issue.key];
           if (entry && trans) {
-            const englishLineCount = entry.original.split('\n').length;
+            const englishLineCount = countEffectiveLines(entry.original);
             const rebalanced = englishLineCount > 1
               ? splitEvenlyByLines(trans, englishLineCount)
               : balanceLines(trans);

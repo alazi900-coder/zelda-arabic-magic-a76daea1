@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
+import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
 import { detectIssues as detectIssuesPure, type DiagnosticIssue as PureDiagnosticIssue, type Severity as PureSeverity } from "@/lib/diagnostic-detect";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";

@@ -33,7 +33,7 @@ export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();
   const {
-    arabicNumerals, mirrorPunctuation, userGeminiKey, userDeepSeekKey, userGroqKey, aiModel, translationProvider,
+    arabicNumerals, mirrorPunctuation, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, setUserOpenRouterKey, aiModel, translationProvider,
     myMemoryEmail, myMemoryCharsUsed, addMyMemoryChars, aiRequestsToday, aiRequestsMonth,
     addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, setNpcSplitCharLimit,
     newlineSplitCharLimit, setNewlineSplitCharLimit, autoSmartReview, setAutoSmartReview,

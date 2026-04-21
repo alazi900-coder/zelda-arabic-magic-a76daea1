@@ -494,6 +494,14 @@ const Editor = () => {
                     >
                       ⚡ Groq (Llama)
                     </Button>
+                    <Button
+                      size="sm"
+                      variant={editor.translationProvider === 'openrouter' ? 'default' : 'outline'}
+                      onClick={() => editor.setTranslationProvider('openrouter')}
+                      className="text-xs font-display"
+                    >
+                      🆕 GLM 4.6 (مجاني)
+                    </Button>
                   </div>
                 </div>
 
@@ -599,6 +607,38 @@ const Editor = () => {
                       </p>
                       {!editor.userGroqKey && (
                         <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
+                          احصل على مفتاح ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {editor.translationProvider === 'openrouter' && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2 flex-1">
+                      <input
+                        type="password"
+                        placeholder="الصق مفتاح OpenRouter API هنا (sk-or-v1-...)..."
+                        value={editor.userOpenRouterKey}
+                        onChange={(e) => editor.setUserOpenRouterKey(e.target.value)}
+                        className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                        dir="ltr"
+                      />
+                      {editor.userOpenRouterKey && (
+                        <Button variant="ghost" size="sm" onClick={() => editor.setUserOpenRouterKey('')} className="text-xs text-destructive shrink-0">
+                          مسح
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground font-body">
+                        {editor.userOpenRouterKey
+                          ? '✅ مفتاح OpenRouter مفعّل — GLM 4.6 (z-ai/glm-4.6:free) — مجاني بالكامل'
+                          : '🆓 احصل على مفتاح مجاني من openrouter.ai — GLM 4.6 من Z.AI متاح مجاناً'}
+                      </p>
+                      {!editor.userOpenRouterKey && (
+                        <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
                           احصل على مفتاح ↗
                         </a>
                       )}

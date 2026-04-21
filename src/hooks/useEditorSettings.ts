@@ -23,12 +23,21 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch {}
   }, []);
 
-  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq'>(() => {
-    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq') || 'gemini'; } catch { return 'gemini'; }
+  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter'>(() => {
+    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter') || 'gemini'; } catch { return 'gemini'; }
   });
-  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq') => {
+  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter') => {
     _setTranslationProvider(p);
     try { localStorage.setItem('translationProvider', p); } catch {}
+  }, []);
+
+  // OpenRouter (free GLM-4.6 access)
+  const [userOpenRouterKey, _setUserOpenRouterKey] = useState(() => {
+    try { return localStorage.getItem('userOpenRouterKey') || ''; } catch { return ''; }
+  });
+  const setUserOpenRouterKey = useCallback((key: string) => {
+    _setUserOpenRouterKey(key);
+    try { if (key) localStorage.setItem('userOpenRouterKey', key); else localStorage.removeItem('userOpenRouterKey'); } catch {}
   }, []);
 
   const [userDeepSeekKey, _setUserDeepSeekKey] = useState(() => {
@@ -185,6 +194,7 @@ export function useEditorSettings() {
     userGeminiKey, setUserGeminiKey,
     userDeepSeekKey, setUserDeepSeekKey,
     userGroqKey, setUserGroqKey,
+    userOpenRouterKey, setUserOpenRouterKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,
     myMemoryEmail, setMyMemoryEmail,

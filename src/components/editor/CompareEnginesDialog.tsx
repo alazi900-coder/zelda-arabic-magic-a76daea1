@@ -15,6 +15,9 @@ interface CompareEnginesDialogProps {
   onSelect: (key: string, translation: string) => void;
   glossary: string;
   userGeminiKey: string;
+  userDeepSeekKey?: string;
+  userGroqKey?: string;
+  userOpenRouterKey?: string;
   myMemoryEmail: string;
   aiModel?: string;
 }
@@ -26,6 +29,7 @@ interface EngineConfig {
   provider: string;
   model?: string;
   description: string;
+  requiresKey?: 'gemini' | 'deepseek' | 'groq' | 'openrouter';
 }
 
 const ALL_ENGINES: EngineConfig[] = [
@@ -33,6 +37,9 @@ const ALL_ENGINES: EngineConfig[] = [
   { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
   { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
   { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
+  { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
+  { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
+  { id: 'glm', label: 'GLM 4.6 (Z.AI)', emoji: '🆕', provider: 'openrouter', model: 'z-ai/glm-4.6:free', description: 'مجاني عبر OpenRouter', requiresKey: 'openrouter' },
   { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
   { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
 ];
@@ -134,23 +141,50 @@ function renderTranslationWithProtectedTags(text: string) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, myMemoryEmail,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, myMemoryEmail,
 }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, string | null>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingEngines, setLoadingEngines] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+
+  const getProviderKey = (engine: EngineConfig): string | undefined => {
+    if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;
+    if (engine.requiresKey === 'groq') return userGroqKey || undefined;
+    if (engine.requiresKey === 'openrouter') return userOpenRouterKey || undefined;
+    return undefined;
+  };
 
   const handleCompare = async () => {
     if (!entry) return;
     setLoading(true);
     setError("");
     setResults({});
-    setLoadingEngines(new Set(ALL_ENGINES.map(e => e.id)));
+    setErrors({});
+
+    // Filter engines: skip those that require missing keys
+    const enginesToRun = ALL_ENGINES.filter(e => {
+      if (e.requiresKey === 'deepseek') return !!userDeepSeekKey;
+      if (e.requiresKey === 'groq') return !!userGroqKey;
+      if (e.requiresKey === 'openrouter') return !!userOpenRouterKey;
+      return true;
+    });
+
+    // Mark skipped engines with error message
+    const skipped: Record<string, string> = {};
+    for (const e of ALL_ENGINES) {
+      if (!enginesToRun.includes(e)) {
+        skipped[e.id] = `يحتاج مفتاح ${e.requiresKey?.toUpperCase()} — أضفه في إعدادات المحرك`;
+      }
+    }
+    setErrors(skipped);
+    setLoadingEngines(new Set(enginesToRun.map(e => e.id)));
 
     const key = `${entry.msbtFile}:${entry.index}`;
     const fetchEngine = async (engine: EngineConfig) => {
       try {
+        const providerKey = getProviderKey(engine);
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
@@ -159,23 +193,28 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
             glossary,
             provider: engine.provider,
             userApiKey: engine.provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+            providerApiKey: providerKey,
             myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
             aiModel: engine.model || undefined,
           }),
         });
-        if (!response.ok) return { id: engine.id, result: null };
+        if (!response.ok) {
+          let errMsg = `خطأ ${response.status}`;
+          try { const j = await response.json(); if (j.error) errMsg = j.error; } catch {}
+          return { id: engine.id, result: null, error: errMsg };
+        }
         const data = await response.json();
-        return { id: engine.id, result: data.translations?.[key] || null };
-      } catch {
-        return { id: engine.id, result: null };
+        return { id: engine.id, result: data.translations?.[key] || null, error: undefined };
+      } catch (e) {
+        return { id: engine.id, result: null, error: e instanceof Error ? e.message : 'فشل الاتصال' };
       }
     };
 
     try {
-      // Fire all in parallel, update results as each completes
-      const promises = ALL_ENGINES.map(engine =>
-        fetchEngine(engine).then(({ id, result }) => {
+      const promises = enginesToRun.map(engine =>
+        fetchEngine(engine).then(({ id, result, error: engErr }) => {
           setResults(prev => ({ ...prev, [id]: result }));
+          if (engErr) setErrors(prev => ({ ...prev, [id]: engErr }));
           setLoadingEngines(prev => { const next = new Set(prev); next.delete(id); return next; });
         })
       );
@@ -189,7 +228,8 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
 
   React.useEffect(() => {
     if (open && entry) handleCompare();
-    if (!open) { setResults({}); setError(""); }
+    if (!open) { setResults({}); setErrors({}); setError(""); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry?.msbtFile, entry?.index]);
 
   const key = entry ? `${entry.msbtFile}:${entry.index}` : "";
@@ -298,7 +338,9 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                         )}
                       </>
                     ) : !isEngineLoading ? (
-                      <p className="text-xs text-muted-foreground italic">فشل في الترجمة أو لا توجد نتيجة</p>
+                      <p className="text-xs text-muted-foreground italic">
+                        {errors[engine.id] || 'فشل في الترجمة أو لا توجد نتيجة'}
+                      </p>
                     ) : null}
                   </div>
                 );

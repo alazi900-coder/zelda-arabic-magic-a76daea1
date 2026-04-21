@@ -615,7 +615,40 @@ const Editor = () => {
                 )}
 
                 {editor.translationProvider === 'openrouter' && (
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-3">
+                    {/* Free Model Selector */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني:</span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                        {[
+                          { id: 'z-ai/glm-4.6:free', label: 'GLM 4.6', desc: 'Z.AI — متوازن وممتاز للعربية', badge: '🆕' },
+                          { id: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen 2.5 72B', desc: 'Alibaba — قوي في اللغات', badge: '🐉' },
+                          { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B', desc: 'Meta — عام ومستقر', badge: '🦙' },
+                          { id: 'deepseek/deepseek-chat-v3.1:free', label: 'DeepSeek V3.1', desc: 'DeepSeek — جودة عالية للعربية', badge: '🐋' },
+                          { id: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B', desc: 'Google — خفيف وسريع', badge: '✨' },
+                          { id: 'mistralai/mistral-small-3.2-24b-instruct:free', label: 'Mistral Small 3.2', desc: 'Mistral — متعدد اللغات', badge: '💨' },
+                        ].map(m => {
+                          const isSelected = (editor.aiModel === m.id) || (m.id === 'z-ai/glm-4.6:free' && !editor.aiModel?.includes('/'));
+                          return (
+                            <button
+                              key={m.id}
+                              onClick={() => editor.setAiModel(m.id)}
+                              className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${
+                                isSelected
+                                  ? 'border-primary bg-primary/10 text-foreground'
+                                  : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                              }`}
+                            >
+                              <span className="font-display">{m.badge} {m.label}</span>
+                              <span className="text-[10px] opacity-70">{m.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground font-body">جميع الموديلات مجانية تماماً عبر OpenRouter (حد ~20 طلب/دقيقة لكل موديل)</p>
+                    </div>
+
+                    {/* API Key */}
                     <div className="flex gap-2 flex-1">
                       <input
                         type="password"
@@ -634,8 +667,8 @@ const Editor = () => {
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-body">
                         {editor.userOpenRouterKey
-                          ? '✅ مفتاح OpenRouter مفعّل — GLM 4.6 (z-ai/glm-4.6:free) — مجاني بالكامل'
-                          : '🆓 احصل على مفتاح مجاني من openrouter.ai — GLM 4.6 من Z.AI متاح مجاناً'}
+                          ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${editor.aiModel?.includes('/') ? editor.aiModel : 'z-ai/glm-4.6:free'}`
+                          : '🆓 احصل على مفتاح مجاني من openrouter.ai — كل الموديلات أعلاه مجانية بالكامل'}
                       </p>
                       {!editor.userOpenRouterKey && (
                         <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">

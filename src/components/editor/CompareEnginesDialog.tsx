@@ -338,7 +338,9 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                         )}
                       </>
                     ) : !isEngineLoading ? (
-                      <p className="text-xs text-muted-foreground italic">فشل في الترجمة أو لا توجد نتيجة</p>
+                      <p className="text-xs text-muted-foreground italic">
+                        {errors[engine.id] || 'فشل في الترجمة أو لا توجد نتيجة'}
+                      </p>
                     ) : null}
                   </div>
                 );

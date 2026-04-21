@@ -2295,6 +2295,9 @@ const Editor = () => {
           onSelect={(key, translation) => editor.updateTranslation(key, translation)}
           glossary={editor.activeGlossary}
           userGeminiKey={editor.userGeminiKey}
+          userDeepSeekKey={editor.userDeepSeekKey}
+          userGroqKey={editor.userGroqKey}
+          userOpenRouterKey={editor.userOpenRouterKey}
           myMemoryEmail={editor.myMemoryEmail}
           aiModel={editor.aiModel}
         />

@@ -1483,6 +1483,23 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ translations, glossaryStats }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    } else if (provider === 'openrouter') {
+      if (!providerApiKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج OpenRouter مفتاح API — سجّل مجاناً على openrouter.ai' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      // GLM 4.6 free model via OpenRouter — OpenAI-compatible API
+      // Pick model from request (aiModel) or default to free GLM 4.6
+      const orModel = aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) ? aiModel : 'z-ai/glm-4.6:free';
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const { translations, glossaryStats } = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, providerApiKey,
+        'https://openrouter.ai/api/v1', orModel,
+      );
+      return new Response(JSON.stringify({ translations, glossaryStats }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     } else {
       const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
       return new Response(JSON.stringify({ translations, glossaryStats }), {

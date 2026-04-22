@@ -460,6 +460,21 @@ const Editor = () => {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Button
+                  size={isMobile ? "default" : "lg"}
+                  variant="default"
+                  onClick={() => {
+                    // Force-switch to Lovable AI (gemini provider without personal key)
+                    editor.setTranslationProvider('gemini');
+                    // Start full project translation
+                    setTimeout(() => editor.handleTranslateAllPages(false), 50);
+                  }}
+                  disabled={editor.translating}
+                  className="font-display font-bold px-4 md:px-6 bg-gradient-to-r from-primary via-accent to-secondary text-primary-foreground hover:opacity-90 shadow-lg"
+                  title="ترجمة كامل المشروع مجاناً عبر Lovable AI (Gemini) بدون أي مفتاح API"
+                >
+                  <Sparkles className="w-4 h-4" /> ترجمة شاملة مجانية 🆓✨
+                </Button>
               </>
             )}
             <Button size={isMobile ? "default" : "lg"} variant="outline" onClick={() => editor.setShowRetranslateConfirm(true)} disabled={editor.translating} className="font-display font-bold px-4 md:px-6 border-accent/30 text-accent hover:text-accent">

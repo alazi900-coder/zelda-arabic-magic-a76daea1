@@ -1123,7 +1123,7 @@ async function translateWithAI(
   } else if (/MNU_|Menu|LayoutMsg|BTN_|Option|Setting/i.test(sampleKey)) {
     categoryHint = 'هذه نصوص واجهة مستخدم وقوائم وأزرار — اجعلها مختصرة جداً وواضحة ومباشرة. كلمة أو كلمتان كحد أقصى عند الإمكان.';
   } else if (/EventFlow|msg_(ask|cq|fev|nq|sq|tlk|tq)|FLD_Npc|talk/i.test(sampleKey)) {
-    categoryHint = 'هذه حوارات شخصيات ومحادثات NPC في Xenoblade Chronicles 3 — استخدم أسلوباً طبيعياً وحيوياً يعكس شخصية المتحدث. نوح: هادئ وفلسفي. ميو: دافئة وحزينة. يوني: صريحة وساخرة. تايون: تحليلي ورسمي. لانز: صاخب ومباشر. سينا: نشيطة ومتحمسة. الخصوم (ميبيوس): يتحدثون بتعجرف ومن مواقع القوة.';
+    categoryHint = 'هذه حوارات شخصيات ومحادثات NPC في Xenoblade Chronicles — استخدم أسلوباً طبيعياً يعكس شخصية المتحدث. شولك: محدد وطموح. رين: عامي وفكاهي ومباشر. دانبان: نبيل وهادئ. ميليا: رسمية وكريمة. ريكي: يتحدث عن نفسه بضمير الغائب وبطريقة طفولية. شارلا: دافئة وعملية. الأعداء (زانزا/إيجل): يتحدثون بتعجرف وسلطة.';
   } else if (/QST_|Quest|Mission|Challenge/i.test(sampleKey)) {
     categoryHint = 'هذه أسماء مهام وتحديات وأوصافها — استخدم أسلوباً تحفيزياً واضحاً مع الحفاظ على أسماء العلم.';
   } else if (/Location|Map|FLD_.*Name|Area|Region|Landmark/i.test(sampleKey)) {
@@ -1138,15 +1138,14 @@ async function translateWithAI(
 
   const categorySection = categoryHint ? `\n\n${categoryHint}` : '';
 
-  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles 3 (ゼノブレイド3). Translate the following game texts from English to Arabic.
+  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.
 
-XENOBLADE CHRONICLES 3 UNIVERSE — KEY KNOWLEDGE:
-• Setting: Aionios (أيونيوس) — a world where two nations, Keves (كيفيس) and Agnus (أغنوس), are locked in perpetual war. Soldiers have a 10-term lifespan called a "Flame Clock" (ساعة اللهب).
-• Main party — Ouroboros (أوروبوروس): Noah (نوح, Keves off-seer), Mio (ميو, Agnus off-seer), Eunie (يوني, Keves), Taion (تايون, Agnus), Lanz (لانز, Keves), Sena (سينا, Agnus).
-• Supporting cast: Ghondor (غوندور), Juniper (جونيبر), Isurd (إسورد), Fiona (فيونا), Ashera (أشيرا), Monica (مونيكا), Valdi (فالدي), Zeon (زيون).
-• Antagonists: Moebius (ميبيوس) — immortal beings who feed on the endless war. Named members: Z (زد), D (دي), J (جاي), N (إن), M (إم), E (إي), K (كاي), X (إكس), Y (واي), Q (كيو), B (بي).
-• Key terms: Interlink (ترابط), Ouroboros Form (شكل أوروبوروس), Colony (مستعمرة), Off-Seer (مبصر الرحيل), Agnian (أغنوسي), Kevesi (كيفيسي), Iris (قزحية), Ether (إيثر), Origin (الأصل), City (المدينة), Blade (شفرة), Art (فن قتالي), Class (فئة).
-• Tone: Epic JRPG — dialogue is emotionally rich, character-specific. Noah is calm/philosophical. Mio is warm/melancholic. Eunie is blunt/sarcastic. Taion is analytical/formal. Lanz is boisterous/direct. Sena is energetic/enthusiastic.
+XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
+• Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.
+• Main party: Shulk (شولك, determined/analytical, wields the Monado), Reyn (رين, energetic/loyal/blunt), Fiora (فيورا, warm/gentle, Shulk's childhood friend), Dunban (دانبان, honorable/composed elder warrior), Melia (ميليا, dignified/formal High Entia princess), Riki (ريكي, cheerful/childlike Nopon hero), Sharla (شارلا, caring/nurturing medic).
+• Antagonists: Zanza (زانزا) — the god of Bionis. Egil (إيجل) — ruler of Mechonis. Metal Face / Mumkhar (الوجه المعدني / مومخار). Xord (زورد). Lorithia (لوريثيا). Dickson (ديكسون). Alvis (ألفيس).
+• Key terms: Monado (المونادو), Ether (إيثر), Vision (رؤية مستقبلية), Colony 9 (المستعمرة 9), Mechon (ميكون), Faced Mechon (ميكون ذو وجه), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا), Machina (ماشينا), Bionis (بيونيس), Mechonis (ميكونيس), Ether Cylinder (اسطوانة إيثر), Talent Art (فن موهبة), Art (فن قتالي), Gems (جواهر), Affinity (ألفة), Affinity Chart (خريطة الألفة), Break/Topple/Daze (كسر/إسقاط/ذهول).
+• Tone: Epic JRPG — Shulk is hopeful and driven by revenge then justice. Reyn uses casual speech and humor. Dunban is noble and composed. Melia is formal and dignified. Riki speaks in third person and childlike manner. Sharla is warm and practical.
 
 CRITICAL RULES:
 1. Placeholders like ⟪T0⟫, ⟪T1⟫, etc. are LOCKED TERMS — copy them EXACTLY as-is into your translation. Do NOT translate, modify, or remove them.

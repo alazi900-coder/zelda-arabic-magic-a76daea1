@@ -21,6 +21,7 @@ import { useEditorScanResults } from "@/hooks/useEditorScanResults";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { useEditorReview } from "@/hooks/useEditorReview";
 import { useEditorCleanup } from "@/hooks/useEditorCleanup";
+import { useAutoPilot } from "@/hooks/useAutoPilot";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
 import { deepDiagPredicates, matchesDeepDiagFilter, type DeepDiagFilterId } from "@/lib/deep-diagnostic-predicates";
 import {
@@ -1103,6 +1104,14 @@ export function useEditorState() {
     handleScanArabicTextFixes, handleApplyArabicTextFix, handleRejectArabicTextFix, handleApplyAllArabicTextFixes, handleScanLonelyLam,
   } = cleanup;
 
+  // === AutoPilot ===
+  const autoPilot = useAutoPilot({
+    state, setState, activeGlossary, parseGlossaryMap,
+    translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey,
+    myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel,
+    addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
+  });
+
 
 
 
@@ -1466,5 +1475,8 @@ export function useEditorState() {
 
     // Quality helpers
     isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, needsImprovement,
+
+    // AutoPilot
+    autoPilot,
   };
 }

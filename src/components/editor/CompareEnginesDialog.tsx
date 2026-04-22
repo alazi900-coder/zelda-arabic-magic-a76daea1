@@ -40,6 +40,11 @@ const ALL_ENGINES: EngineConfig[] = [
   { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
   { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
   { id: 'glm', label: 'GLM 4.6 (Z.AI)', emoji: '🆕', provider: 'openrouter', model: 'z-ai/glm-4.6:free', description: 'مجاني عبر OpenRouter', requiresKey: 'openrouter' },
+  { id: 'qwen', label: 'Qwen 2.5 72B', emoji: '🐉', provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', description: 'Alibaba — قوي في اللغات', requiresKey: 'openrouter' },
+  { id: 'llama33', label: 'Llama 3.3 70B', emoji: '🦙', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free', description: 'Meta — عام ومستقر', requiresKey: 'openrouter' },
+  { id: 'deepseek-or', label: 'DeepSeek V3.1', emoji: '🆓', provider: 'openrouter', model: 'deepseek/deepseek-chat-v3.1:free', description: 'DeepSeek مجاني عبر OpenRouter', requiresKey: 'openrouter' },
+  { id: 'gemma3', label: 'Gemma 3 27B', emoji: '✨', provider: 'openrouter', model: 'google/gemma-3-27b-it:free', description: 'Google — خفيف وسريع', requiresKey: 'openrouter' },
+  { id: 'mistral', label: 'Mistral Small 3.2', emoji: '💨', provider: 'openrouter', model: 'mistralai/mistral-small-3.2-24b-instruct:free', description: 'Mistral — متعدد اللغات', requiresKey: 'openrouter' },
   { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
   { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
 ];
@@ -240,7 +245,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="font-display">🔍 مقارنة جميع المحركات</DialogTitle>
           <DialogDescription className="text-xs">
-            مقارنة ترجمة نفس النص عبر <span className="font-bold text-primary">{ALL_ENGINES.length}</span> محركات مختلفة — اختر الأفضل
+            مقارنة ترجمة نفس النص عبر <span className="font-bold text-primary">{ALL_ENGINES.length}</span> محركاً (Gemini · DeepSeek · Groq · OpenRouter ×6 · MyMemory · Google) — اختر الأفضل
           </DialogDescription>
         </DialogHeader>
 

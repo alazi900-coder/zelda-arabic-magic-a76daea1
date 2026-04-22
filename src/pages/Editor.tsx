@@ -22,8 +22,9 @@ import {
   Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle,
   Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight,
   BarChart3, Menu, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2,
-  Lock, Unlock, Rows3, Languages, StopCircle,
+  Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi,
 } from "lucide-react";
+import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -109,6 +110,8 @@ const Editor = () => {
   const [showToolHelp, setShowToolHelp] = React.useState<ToolType>(null);
   const [drBuilding, setDrBuilding] = React.useState(false);
   const [sourceGame, setSourceGame] = React.useState<string | null>(null);
+  const [testConnStatus, setTestConnStatus] = React.useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
+  const [testConnMsg, setTestConnMsg] = React.useState<Record<string, string>>({});
 
   // Detect source game on mount
   React.useEffect(() => {
@@ -118,6 +121,44 @@ const Editor = () => {
   }, []);
 
   const isDanganronpa = sourceGame?.startsWith("danganronpa");
+
+  const handleTestConnection = React.useCallback(async (provider: string) => {
+    setTestConnStatus(prev => ({ ...prev, [provider]: 'testing' }));
+    setTestConnMsg(prev => ({ ...prev, [provider]: '' }));
+    try {
+      const providerApiKey =
+        provider === 'deepseek' ? editor.userDeepSeekKey :
+        provider === 'groq' ? editor.userGroqKey :
+        provider === 'openrouter' ? editor.userOpenRouterKey : undefined;
+      const aiModel =
+        provider === 'openrouter'
+          ? (editor.aiModel?.includes('/') ? editor.aiModel : 'z-ai/glm-4.6:free')
+          : editor.aiModel;
+      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+        method: 'POST',
+        headers: getSupabaseHeaders(),
+        body: JSON.stringify({
+          entries: [{ key: 'test:0', original: 'Hello' }],
+          provider,
+          userApiKey: provider === 'gemini' ? (editor.userGeminiKey || undefined) : undefined,
+          providerApiKey: providerApiKey || undefined,
+          aiModel,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
+        setTestConnMsg(prev => ({ ...prev, [provider]: data.error || `خطأ ${response.status}` }));
+      } else {
+        const translation = Object.values(data.translations || {})[0] as string | undefined;
+        setTestConnStatus(prev => ({ ...prev, [provider]: 'ok' }));
+        setTestConnMsg(prev => ({ ...prev, [provider]: translation ? `"${translation}"` : 'المفتاح صحيح' }));
+      }
+    } catch (err) {
+      setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
+      setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
+    }
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userGroqKey, editor.userOpenRouterKey, editor.aiModel]);
 
   const isPokemon = React.useMemo(() => {
     if (isDanganronpa) return false;
@@ -454,54 +495,25 @@ const Editor = () => {
                     <span className="text-sm font-display font-bold">🔧 محرك الترجمة</span>
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    <Button
-                      size="sm"
-                      variant={editor.translationProvider === 'mymemory' ? 'default' : 'outline'}
-                      onClick={() => editor.setTranslationProvider('mymemory')}
-                      className="text-xs font-display"
-                    >
-                      🆓 MyMemory (مجاني)
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={editor.translationProvider === 'google' ? 'default' : 'outline'}
-                      onClick={() => editor.setTranslationProvider('google')}
-                      className="text-xs font-display"
-                    >
-                      🌐 Google Translate (مجاني)
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={editor.translationProvider === 'gemini' ? 'default' : 'outline'}
-                      onClick={() => editor.setTranslationProvider('gemini')}
-                      className="text-xs font-display"
-                    >
-                      🤖 Lovable AI (Gemini)
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={editor.translationProvider === 'deepseek' ? 'default' : 'outline'}
-                      onClick={() => editor.setTranslationProvider('deepseek')}
-                      className="text-xs font-display"
-                    >
-                      🐋 DeepSeek
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={editor.translationProvider === 'groq' ? 'default' : 'outline'}
-                      onClick={() => editor.setTranslationProvider('groq')}
-                      className="text-xs font-display"
-                    >
-                      ⚡ Groq (Llama)
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={editor.translationProvider === 'openrouter' ? 'default' : 'outline'}
-                      onClick={() => editor.setTranslationProvider('openrouter')}
-                      className="text-xs font-display"
-                    >
-                      🆕 GLM 4.6 (مجاني)
-                    </Button>
+                    {[
+                      { id: 'mymemory' as const, label: '🆓 MyMemory', badge: '✅' },
+                      { id: 'google' as const, label: '🌐 Google Translate', badge: '✅' },
+                      { id: 'gemini' as const, label: '🤖 Lovable AI', badge: editor.userGeminiKey ? '✅' : '⚡' },
+                      { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
+                      { id: 'groq' as const, label: '⚡ Groq (Llama)', badge: editor.userGroqKey ? '✅' : '⚠️' },
+                      { id: 'openrouter' as const, label: '🆕 OpenRouter', badge: editor.userOpenRouterKey ? '✅' : '⚠️' },
+                    ].map(({ id, label, badge }) => (
+                      <Button
+                        key={id}
+                        size="sm"
+                        variant={editor.translationProvider === id ? 'default' : 'outline'}
+                        onClick={() => editor.setTranslationProvider(id)}
+                        className="text-xs font-display gap-1"
+                      >
+                        {label}
+                        <span className="text-[10px] opacity-80">{badge}</span>
+                      </Button>
+                    ))}
                   </div>
                 </div>
 
@@ -562,11 +574,30 @@ const Editor = () => {
                         dir="ltr"
                       />
                       {editor.userDeepSeekKey && (
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleTestConnection('deepseek')}
+                          disabled={testConnStatus['deepseek'] === 'testing'}
+                          className="text-xs shrink-0 gap-1"
+                        >
+                          {testConnStatus['deepseek'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                           testConnStatus['deepseek'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                           testConnStatus['deepseek'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                           <Wifi className="w-3 h-3" />}
+                          تجربة
+                        </Button>
+                      )}
+                      {editor.userDeepSeekKey && (
                         <Button variant="ghost" size="sm" onClick={() => editor.setUserDeepSeekKey('')} className="text-xs text-destructive shrink-0">
                           مسح
                         </Button>
                       )}
                     </div>
+                    {testConnMsg['deepseek'] && (
+                      <p className={`text-xs font-body ${testConnStatus['deepseek'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                        {testConnStatus['deepseek'] === 'ok' ? '✅' : '❌'} {testConnMsg['deepseek']}
+                      </p>
+                    )}
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-body">
                         {editor.userDeepSeekKey
@@ -594,11 +625,30 @@ const Editor = () => {
                         dir="ltr"
                       />
                       {editor.userGroqKey && (
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleTestConnection('groq')}
+                          disabled={testConnStatus['groq'] === 'testing'}
+                          className="text-xs shrink-0 gap-1"
+                        >
+                          {testConnStatus['groq'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                           testConnStatus['groq'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                           testConnStatus['groq'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                           <Wifi className="w-3 h-3" />}
+                          تجربة
+                        </Button>
+                      )}
+                      {editor.userGroqKey && (
                         <Button variant="ghost" size="sm" onClick={() => editor.setUserGroqKey('')} className="text-xs text-destructive shrink-0">
                           مسح
                         </Button>
                       )}
                     </div>
+                    {testConnMsg['groq'] && (
+                      <p className={`text-xs font-body ${testConnStatus['groq'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                        {testConnStatus['groq'] === 'ok' ? '✅' : '❌'} {testConnMsg['groq']}
+                      </p>
+                    )}
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-body">
                         {editor.userGroqKey
@@ -659,11 +709,30 @@ const Editor = () => {
                         dir="ltr"
                       />
                       {editor.userOpenRouterKey && (
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => handleTestConnection('openrouter')}
+                          disabled={testConnStatus['openrouter'] === 'testing'}
+                          className="text-xs shrink-0 gap-1"
+                        >
+                          {testConnStatus['openrouter'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                           testConnStatus['openrouter'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                           testConnStatus['openrouter'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                           <Wifi className="w-3 h-3" />}
+                          تجربة
+                        </Button>
+                      )}
+                      {editor.userOpenRouterKey && (
                         <Button variant="ghost" size="sm" onClick={() => editor.setUserOpenRouterKey('')} className="text-xs text-destructive shrink-0">
                           مسح
                         </Button>
                       )}
                     </div>
+                    {testConnMsg['openrouter'] && (
+                      <p className={`text-xs font-body ${testConnStatus['openrouter'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                        {testConnStatus['openrouter'] === 'ok' ? '✅' : '❌'} {testConnMsg['openrouter']}
+                      </p>
+                    )}
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-body">
                         {editor.userOpenRouterKey
@@ -725,6 +794,20 @@ const Editor = () => {
                           dir="ltr"
                         />
                         {editor.userGeminiKey && (
+                          <Button
+                            variant="outline" size="sm"
+                            onClick={() => handleTestConnection('gemini')}
+                            disabled={testConnStatus['gemini'] === 'testing'}
+                            className="text-xs shrink-0 gap-1"
+                          >
+                            {testConnStatus['gemini'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                             testConnStatus['gemini'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                             testConnStatus['gemini'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                             <Wifi className="w-3 h-3" />}
+                            تجربة
+                          </Button>
+                        )}
+                        {editor.userGeminiKey && (
                           <Button variant="ghost" size="sm" onClick={() => editor.setUserGeminiKey('')} className="text-xs text-destructive shrink-0">
                             مسح
                           </Button>
@@ -734,6 +817,11 @@ const Editor = () => {
                         احصل على مفتاح مجاني ↗
                       </a>
                     </div>
+                    {testConnMsg['gemini'] && (
+                      <p className={`text-xs font-body ${testConnStatus['gemini'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                        {testConnStatus['gemini'] === 'ok' ? '✅' : '❌'} {testConnMsg['gemini']}
+                      </p>
+                    )}
                     {editor.userGeminiKey ? (
                       <p className="text-xs text-secondary font-body">✅ سيتم استخدام مفتاحك الشخصي للترجمة بدون حدود</p>
                     ) : (

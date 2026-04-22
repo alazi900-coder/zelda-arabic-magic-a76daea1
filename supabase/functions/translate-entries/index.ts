@@ -1501,9 +1501,8 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      // GLM 4.6 free model via OpenRouter — OpenAI-compatible API
-      // Pick model from request (aiModel) or default to free GLM 4.6
-      const orModel = aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) ? aiModel : 'z-ai/glm-4.6:free';
+      // Pick model from request (aiModel) or default to Qwen 2.5 72B free
+      const orModel = (aiModel && aiModel.includes('/')) ? aiModel : 'qwen/qwen-2.5-72b-instruct:free';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const { translations, glossaryStats } = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,

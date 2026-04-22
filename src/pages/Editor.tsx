@@ -527,7 +527,13 @@ const Editor = () => {
                         key={id}
                         size="sm"
                         variant={editor.translationProvider === id ? 'default' : 'outline'}
-                        onClick={() => editor.setTranslationProvider(id)}
+                        onClick={() => {
+                          editor.setTranslationProvider(id);
+                          // Auto-set default model when switching to OpenRouter
+                          if (id === 'openrouter' && !editor.aiModel?.includes('/')) {
+                            editor.setAiModel('qwen/qwen-2.5-72b-instruct:free');
+                          }
+                        }}
                         className="text-xs font-display gap-1"
                       >
                         {label}

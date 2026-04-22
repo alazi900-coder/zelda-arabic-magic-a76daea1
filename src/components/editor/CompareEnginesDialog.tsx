@@ -39,7 +39,7 @@ const ALL_ENGINES: EngineConfig[] = [
   { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
   { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
   { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
-  { id: 'glm', label: 'GLM 4.6 (Z.AI)', emoji: '🆕', provider: 'openrouter', model: 'z-ai/glm-4.6:free', description: 'مجاني عبر OpenRouter', requiresKey: 'openrouter' },
+  { id: 'glm', label: 'GLM 4.6B (Z.AI)', emoji: '🆕', provider: 'openrouter', model: 'z-ai/glm-4.6b-flash:free', description: 'مجاني عبر OpenRouter', requiresKey: 'openrouter' },
   { id: 'qwen', label: 'Qwen 2.5 72B', emoji: '🐉', provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', description: 'Alibaba — قوي في اللغات', requiresKey: 'openrouter' },
   { id: 'llama33', label: 'Llama 3.3 70B', emoji: '🦙', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free', description: 'Meta — عام ومستقر', requiresKey: 'openrouter' },
   { id: 'deepseek-or', label: 'DeepSeek V3.1', emoji: '🆓', provider: 'openrouter', model: 'deepseek/deepseek-chat-v3.1:free', description: 'DeepSeek مجاني عبر OpenRouter', requiresKey: 'openrouter' },

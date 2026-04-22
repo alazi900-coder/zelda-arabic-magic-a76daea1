@@ -132,7 +132,7 @@ const Editor = () => {
         provider === 'openrouter' ? editor.userOpenRouterKey : undefined;
       const aiModel =
         provider === 'openrouter'
-          ? (editor.aiModel?.includes('/') ? editor.aiModel : 'z-ai/glm-4.6:free')
+          ? (editor.aiModel?.includes('/') ? editor.aiModel : 'qwen/qwen-2.5-72b-instruct:free')
           : editor.aiModel;
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
@@ -691,14 +691,14 @@ const Editor = () => {
                       <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني:</span>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                         {[
-                          { id: 'z-ai/glm-4.6:free', label: 'GLM 4.6', desc: 'Z.AI — متوازن وممتاز للعربية', badge: '🆕' },
                           { id: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen 2.5 72B', desc: 'Alibaba — قوي في اللغات', badge: '🐉' },
+                          { id: 'microsoft/phi-4-reasoning-plus:free', label: 'Phi-4 Reasoning', desc: 'Microsoft — دقيق ومنطقي', badge: '🔬' },
                           { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B', desc: 'Meta — عام ومستقر', badge: '🦙' },
                           { id: 'deepseek/deepseek-chat-v3.1:free', label: 'DeepSeek V3.1', desc: 'DeepSeek — جودة عالية للعربية', badge: '🐋' },
                           { id: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B', desc: 'Google — خفيف وسريع', badge: '✨' },
                           { id: 'mistralai/mistral-small-3.2-24b-instruct:free', label: 'Mistral Small 3.2', desc: 'Mistral — متعدد اللغات', badge: '💨' },
                         ].map(m => {
-                          const isSelected = (editor.aiModel === m.id) || (m.id === 'z-ai/glm-4.6:free' && !editor.aiModel?.includes('/'));
+                          const isSelected = (editor.aiModel === m.id) || (m.id === 'qwen/qwen-2.5-72b-instruct:free' && !editor.aiModel?.includes('/'));
                           return (
                             <button
                               key={m.id}
@@ -756,7 +756,7 @@ const Editor = () => {
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-body">
                         {editor.userOpenRouterKey
-                          ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${editor.aiModel?.includes('/') ? editor.aiModel : 'z-ai/glm-4.6:free'}`
+                          ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${editor.aiModel?.includes('/') ? editor.aiModel : 'qwen/qwen-2.5-72b-instruct:free'}`
                           : '🆓 احصل على مفتاح مجاني من openrouter.ai — كل الموديلات أعلاه مجانية بالكامل'}
                       </p>
                       {!editor.userOpenRouterKey && (
@@ -1753,7 +1753,12 @@ const Editor = () => {
                 <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[min(calc(100vw-1.5rem),360px)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                   <DropdownMenuLabel className="text-xs">📖 تحميل قاموس</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleImportGlossary}><BookOpen className="w-4 h-4" /> قاموس مخصص (.txt)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade المدمج</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 1</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleLoadXC1Glossary}>⚔️ قاموس Xenoblade Chronicles 1 (شولك، رين، دانبان...)</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 3</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade Chronicles 3 المدمج</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadUIMenusGlossary}>📋 قاموس القوائم والواجهة</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadFullGlossary}>📚 القاموس الشامل (شخصيات + مواقع + مصطلحات)</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadCombatGlossary}>⚔️ قاموس القتال والتأثيرات</DropdownMenuItem>
@@ -2000,7 +2005,12 @@ const Editor = () => {
                 <DropdownMenuContent align="start" className="bg-card border-border z-50 min-w-[220px]">
                   <DropdownMenuLabel className="text-xs">📖 تحميل قاموس</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleImportGlossary}><BookOpen className="w-4 h-4" /> تحميل قاموس مخصص (.txt)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade المدمج</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 1</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleLoadXC1Glossary}>⚔️ قاموس Xenoblade Chronicles 1 (شولك، رين، دانبان...)</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 3</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade Chronicles 3 المدمج</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadUIMenusGlossary}>📋 قاموس القوائم والواجهة</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadFullGlossary}>📚 القاموس الشامل (شخصيات + مواقع + مصطلحات)</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadCombatGlossary}>⚔️ قاموس القتال والتأثيرات</DropdownMenuItem>

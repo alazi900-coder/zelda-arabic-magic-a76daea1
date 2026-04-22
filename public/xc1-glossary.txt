@@ -1,0 +1,235 @@
+# ═══════════════════════════════════════════════════
+# قاموس Xenoblade Chronicles 1 - مصطلحات التعريب
+# ═══════════════════════════════════════════════════
+
+# ── الشخصيات الرئيسية ──
+Shulk=شولك
+Reyn=رين
+Fiora=فيورا
+Dunban=دانبان
+Sharla=شارلا
+Melia=ميليا
+Riki=ريكي
+
+# ── الشخصيات المهمة ──
+Dickson=ديكسون
+Alvis=ألفيس
+Otharon=أوثارون
+Vandham=فاندام
+Elma=إلما
+Lin=لين
+Cross=كروس
+Mumkhar=مومخار
+Xord=زورد
+Lorithia=لوريثيا
+Jade Face=الوجه الزمردي
+Metal Face=الوجه المعدني
+Silver Face=الوجه الفضي
+Egil=إيجل
+Zanza=زانزا
+Meyneth=ماينيث
+Kallian=كاليان
+Yumea=يوميا
+Sorean=سوريان
+Juju=جوجو
+Gadolt=غادولت
+Linada=ليندا
+Dobauba=دوباوبا
+Golba=غولبا
+Obart=أوبارت
+Juju=جوجو
+Hekaton=هيكاتون
+Tyrea=تيريا
+
+# ── أسماء الأعداء (ميكون) ──
+Xord=زورد
+Tyrea=تيريا
+Bone=بون
+Mass=ماس
+Medium=ميديوم
+
+# ── الكائنات الإلهية ──
+Bionis=بيونيس
+Mechonis=ميكونيس
+
+# ── الأماكن الرئيسية ──
+Colony 9=المستعمرة 9
+Colony 6=المستعمرة 6
+Colony 5=المستعمرة 5
+Colony 4=المستعمرة 4
+Tephra Cave=كهف تيفرا
+Ether Mine=منجم الإيثر
+Gaur Plain=سهل جور
+Bionis' Leg=ساق بيونيس
+Bionis' Shoulder=كتف بيونيس
+Bionis' Interior=داخل بيونيس
+Makna Forest=غابة ماكنا
+Frontier Village=قرية الحدود
+Eryth Sea=بحر إريث
+High Entia Tomb=ضريح عليا إنتيا
+Valak Mountain=جبل فالاك
+Sword Valley=وادي السيف
+Galahad Fortress=قلعة غالاهاد
+Fallen Arm=الذراع الساقطة
+Mechonis Field=حقول ميكونيس
+Agniratha=أغنيراثا
+Central Factory=المصنع المركزي
+Mechonis Core=قلب ميكونيس
+Alcamoth=ألكاموث
+Prison Island=جزيرة السجن
+Satorl Marsh=أهوار ساتورل
+Windy Cave=الكهف الريحي
+Whitewing Palace=قصر الجناح الأبيض
+
+# ── الأجناس ──
+Homs=هومس
+Nopon=نوبون
+High Entia=عليا إنتيا
+Machina=ماشينا
+Mechon=ميكون
+Faced Mechon=ميكون ذو وجه
+Telethia=تيليثيا
+
+# ── المصطلحات القتالية ──
+Monado=المونادو
+Art=فن قتالي
+Arts=فنون قتالية
+Talent Art=فن الموهبة
+Vision=رؤية مستقبلية
+Break=كسر
+Topple=إسقاط
+Daze=ذهول
+Burst=انفجار
+Spike=شوكة
+Bleed=نزيف
+Poison=تسمم
+Burn=حرق
+Slow=تبطيء
+Sleep=نوم
+Confuse=تشويش
+Bind=تقييد
+Chill=تجميد
+Aura=هالة
+Aggro=استفزاز
+Enchant=تسحر
+Buff=تعزيز
+Debuff=إضعاف
+Buff Aura=هالة تعزيز
+Tension=توتر
+Warmth=دفء
+Chain Attack=هجوم متسلسل
+Party Gauge=مقياس الفريق
+Smash=تحطيم
+Soul Voice=صوت الروح
+Affinity=ألفة
+Party Member=عضو الفريق
+Full Party=الفريق الكامل
+Status Effect=تأثير الحالة
+Vision Buff=مكافأة الرؤية
+
+# ── الجواهر والمعدات ──
+Gem=جوهرة
+Gem Crafting=صناعة الجواهر
+Cylinder=اسطوانة
+Ether Cylinder=اسطوانة إيثر
+Overclock Bangle=سوار التسارع
+Armour=درع
+Armor=درع
+Weapon=سلاح
+Blade=نصل
+Shield=درع
+Ether Weapon=سلاح إيثري
+Unique Weapons=أسلحة فريدة
+
+# ── الموارد والعناصر ──
+Ether=إيثر
+Ether Deposit=رواسب الإيثر
+Ether Crystal=بلورة إيثر
+Tentacle=مخلب
+Sac=كيس
+Thorn=شوكة
+Thread=خيط
+Shell=قوقعة
+Horn=قرن
+Claw=مخلب
+Fang=ناب
+Scale=حرشفة
+Hide=جلد
+Pelt=فراء
+
+# ── المناطق والبيئات ──
+Landmark=معلم
+Location=موقع
+Area=منطقة
+Region=إقليم
+Field=حقل
+Cave=كهف
+Forest=غابة
+Mountain=جبل
+Sea=بحر
+Lake=بحيرة
+Valley=وادي
+Plain=سهل
+Marsh=أهوار
+Path=مسار
+
+# ── نظام الألفة ──
+Affinity Chart=خريطة الألفة
+Affinity Level=مستوى الألفة
+Link=رابط
+Heart-to-Heart=قلب إلى قلب
+Quest=مهمة
+Side Quest=مهمة جانبية
+Collectopaedia=موسوعة المجموعات
+Noponstone=حجر النوبون
+Collection=مجموعة
+
+# ── القصة ──
+Mechonis=ميكونيس
+Homs Soldier=جندي هومس
+Defence Force=قوة الدفاع
+Bionis Defence Force=قوة دفاع بيونيس
+High Entia Guard=حرس عليا إنتيا
+Face=الوجه
+God=الإله
+Soul=الروح
+Ether Flow=تدفق الإيثر
+Titan=عملاق
+Telethia=تيليثيا
+Faced Mechon Pilot=طيار الميكون ذي الوجه
+Life Cycle=دورة الحياة
+
+# ── واجهة المستخدم ──
+HP=نقاط الصحة
+AP=نقاط الفن
+TP=نقاط التوتر
+SP=نقاط المهارة
+CP=نقاط السعة
+EXP=نقاط الخبرة
+Lv=المستوى
+Level=المستوى
+Max=الحد الأقصى
+Attack=هجوم
+Defence=دفاع
+Ether=إيثر
+Agility=رشاقة
+Strength=قوة
+Luck=حظ
+Critical=حرج
+Block=إيقاف
+Tension=توتر
+Physical=جسدي
+Ethereal=إيثري
+
+# ── التجار والمواقع الاجتماعية ──
+Collectopedia=موسوعة المجموعات
+Shops=المحلات
+Trader=تاجر
+Inn=نزل
+Canteen=مقصف
+Colony=مستعمرة
+Central Plaza=الساحة المركزية
+Residential District=الحي السكني
+Commercial District=الحي التجاري
+Barracks=الثكنات
+Lab=المختبر

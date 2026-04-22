@@ -927,7 +927,11 @@ ${textsBlock}
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`${model} error ${response.status}: ${err.slice(0, 200)}`);
+    if (response.status === 401) throw new Error(`مفتاح API غير صالح — تحقق من مفتاح ${baseUrl.includes('deepseek') ? 'DeepSeek' : baseUrl.includes('groq') ? 'Groq' : 'OpenRouter'} في الإعدادات`);
+    if (response.status === 402) throw new Error(`رصيد API غير كافٍ — أضف رصيداً لحساب ${baseUrl.includes('deepseek') ? 'DeepSeek' : baseUrl.includes('groq') ? 'Groq' : 'OpenRouter'}`);
+    if (response.status === 429) throw new Error(`تجاوزت حد الطلبات — انتظر قليلاً ثم حاول مجدداً`);
+    if (response.status === 403) throw new Error(`مفتاح API محظور أو لا يملك صلاحية الوصول`);
+    throw new Error(`${model} error ${response.status}: ${err.slice(0, 300)}`);
   }
 
   const data = await response.json();

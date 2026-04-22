@@ -173,7 +173,7 @@ export function useEditorTranslation({
         headers: getSupabaseHeaders(),
         body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
       });
-      if (!response.ok) throw new Error(`خطأ ${response.status}`);
+      if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
       const data = await response.json();
       addAiRequest(1);
       if (data.charsUsed) addMyMemoryChars(data.charsUsed);
@@ -335,7 +335,7 @@ export function useEditorTranslation({
             },
           };
         }
-        if (!response.ok) throw new Error(`خطأ ${response.status}`);
+        if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         return await response.json();
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw err;
@@ -464,7 +464,7 @@ export function useEditorTranslation({
           signal: abortControllerRef.current.signal,
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
-        if (!response.ok) throw new Error(`خطأ ${response.status}`);
+        if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json();
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
@@ -515,7 +515,7 @@ export function useEditorTranslation({
           signal: abortControllerRef.current.signal,
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
-        if (!response.ok) throw new Error(`خطأ ${response.status}`);
+        if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json();
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
@@ -677,7 +677,7 @@ export function useEditorTranslation({
             aiModel,
           }),
         });
-        if (!response.ok) throw new Error(`خطأ ${response.status}`);
+        if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json();
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
@@ -867,7 +867,7 @@ export function useEditorTranslation({
                 aiModel,
               }),
             });
-            if (!response.ok) throw new Error(`خطأ ${response.status}`);
+            if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
             const data = await response.json();
             addAiRequest(1);
             if (data.charsUsed) addMyMemoryChars(data.charsUsed);

@@ -1123,7 +1123,7 @@ async function translateWithAI(
   } else if (/MNU_|Menu|LayoutMsg|BTN_|Option|Setting/i.test(sampleKey)) {
     categoryHint = 'هذه نصوص واجهة مستخدم وقوائم وأزرار — اجعلها مختصرة جداً وواضحة ومباشرة. كلمة أو كلمتان كحد أقصى عند الإمكان.';
   } else if (/EventFlow|msg_(ask|cq|fev|nq|sq|tlk|tq)|FLD_Npc|talk/i.test(sampleKey)) {
-    categoryHint = 'هذه حوارات شخصيات ومحادثات NPC — استخدم أسلوباً طبيعياً وحيوياً يعكس شخصية المتحدث. حافظ على الحميمية والعاطفة في الحوارات.';
+    categoryHint = 'هذه حوارات شخصيات ومحادثات NPC في Xenoblade Chronicles 3 — استخدم أسلوباً طبيعياً وحيوياً يعكس شخصية المتحدث. نوح: هادئ وفلسفي. ميو: دافئة وحزينة. يوني: صريحة وساخرة. تايون: تحليلي ورسمي. لانز: صاخب ومباشر. سينا: نشيطة ومتحمسة. الخصوم (ميبيوس): يتحدثون بتعجرف ومن مواقع القوة.';
   } else if (/QST_|Quest|Mission|Challenge/i.test(sampleKey)) {
     categoryHint = 'هذه أسماء مهام وتحديات وأوصافها — استخدم أسلوباً تحفيزياً واضحاً مع الحفاظ على أسماء العلم.';
   } else if (/Location|Map|FLD_.*Name|Area|Region|Landmark/i.test(sampleKey)) {
@@ -1140,18 +1140,27 @@ async function translateWithAI(
 
   const prompt = `You are a professional game translator specializing in Xenoblade Chronicles 3 (ゼノブレイド3). Translate the following game texts from English to Arabic.
 
+XENOBLADE CHRONICLES 3 UNIVERSE — KEY KNOWLEDGE:
+• Setting: Aionios (أيونيوس) — a world where two nations, Keves (كيفيس) and Agnus (أغنوس), are locked in perpetual war. Soldiers have a 10-term lifespan called a "Flame Clock" (ساعة اللهب).
+• Main party — Ouroboros (أوروبوروس): Noah (نوح, Keves off-seer), Mio (ميو, Agnus off-seer), Eunie (يوني, Keves), Taion (تايون, Agnus), Lanz (لانز, Keves), Sena (سينا, Agnus).
+• Supporting cast: Ghondor (غوندور), Juniper (جونيبر), Isurd (إسورد), Fiona (فيونا), Ashera (أشيرا), Monica (مونيكا), Valdi (فالدي), Zeon (زيون).
+• Antagonists: Moebius (ميبيوس) — immortal beings who feed on the endless war. Named members: Z (زد), D (دي), J (جاي), N (إن), M (إم), E (إي), K (كاي), X (إكس), Y (واي), Q (كيو), B (بي).
+• Key terms: Interlink (ترابط), Ouroboros Form (شكل أوروبوروس), Colony (مستعمرة), Off-Seer (مبصر الرحيل), Agnian (أغنوسي), Kevesi (كيفيسي), Iris (قزحية), Ether (إيثر), Origin (الأصل), City (المدينة), Blade (شفرة), Art (فن قتالي), Class (فئة).
+• Tone: Epic JRPG — dialogue is emotionally rich, character-specific. Noah is calm/philosophical. Mio is warm/melancholic. Eunie is blunt/sarcastic. Taion is analytical/formal. Lanz is boisterous/direct. Sena is energetic/enthusiastic.
+
 CRITICAL RULES:
 1. Placeholders like ⟪T0⟫, ⟪T1⟫, etc. are LOCKED TERMS — copy them EXACTLY as-is into your translation. Do NOT translate, modify, or remove them.
 2. NEVER remove, modify, merge, or reorder TAG_0, TAG_1, TAG_2 etc. placeholders. They MUST appear in your output EXACTLY as they appear in the input.
 3. Keep the translation length close to the original to fit in-game text boxes.
-4. If a glossary term appears, you MUST use its EXACT Arabic translation — no alternatives, no synonyms, no paraphrasing. This is NON-NEGOTIABLE. Match possessive forms too (e.g., "Hero's" should use the glossary entry for "Hero").
+4. If a glossary term appears, you MUST use its EXACT Arabic translation — no alternatives, no synonyms, no paraphrasing. This is NON-NEGOTIABLE. Match possessive forms too (e.g., "Noah's" should use the glossary entry for "Noah").
 5. CONSISTENCY IS MANDATORY: If a word or phrase was translated a certain way in the "Previously Translated Texts" section, you MUST translate it the same way.
-6. Use terminology consistent with the Arabic gaming community for Xenoblade Chronicles 3.
-7. Preserve proper nouns (Noah, Mio, Eunie, Taion, Lanz, Sena, Aionios) as-is or use their established Arabic equivalents from the glossary.
+6. Use terminology consistent with the Arabic gaming community for Xenoblade Chronicles 3. Avoid overly formal Arabic — use natural gaming Arabic (العربية الحديثة للألعاب).
+7. Preserve proper nouns using the established Arabic forms listed above. For unknown names, transliterate phonetically into Arabic.
 8. Return ONLY a JSON object where each key matches the input key (K0, K1, etc.) and the value is the Arabic translation. Example: {"K0": "ترجمة", "K1": "ترجمة"}
 9. You MUST return EXACTLY ${needsAI.length} entries. Do NOT skip, merge, or add extra entries. Each key MUST have its own separate translation.
 10. Do NOT insert newline characters (\\n) in your translations. Return each translation as a single continuous string. Line breaking is handled separately.
-11. NEVER add Arabic diacritics/tashkeel (tanween: ً ٌ ٍ, fatha: َ, damma: ُ, kasra: ِ, shadda: ّ, sukun: ْ). Write plain Arabic text WITHOUT any vowel marks. The game font cannot render them.${categorySection}${glossarySection}${contextSection}
+11. NEVER add Arabic diacritics/tashkeel (tanween: ً ٌ ٍ, fatha: َ, damma: ُ, kasra: ِ, shadda: ّ, sukun: ْ). Write plain Arabic text WITHOUT any vowel marks. The game font cannot render them.
+12. For NPC dialogue: match the speaker's personality. Use contractions and natural speech for casual characters; formal register for commanders/antagonists.${categorySection}${glossarySection}${contextSection}
 
 Input texts (as JSON object — translate each value and return with the SAME keys):
 {

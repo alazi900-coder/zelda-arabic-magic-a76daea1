@@ -85,6 +85,9 @@ export function useEditorTranslation({
   }>({ directMatches: 0, lockedTerms: 0, contextTerms: 0, batchesCompleted: 0, totalBatches: 0, textsTranslated: 0, freeTranslations: 0 });
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Failed entries tracking: entries sent to AI that got no translation back
+  const [failedEntries, setFailedEntries] = useState<ExtractedEntry[]>([]);
+
   // Page translation compare state
   const [pendingPageTranslations, setPendingPageTranslations] = useState<Record<string, string> | null>(null);
   const [oldPageTranslations, setOldPageTranslations] = useState<Record<string, string>>({});
@@ -402,12 +405,16 @@ export function useEditorTranslation({
       }
       if (!abortControllerRef.current?.signal.aborted) {
         const total = Object.keys(allTranslations).length;
+        // Compute entries that got no translation back (failed silently)
+        const failed = needsAI.filter(e => !allTranslations[`${e.msbtFile}:${e.index}`]);
+        setFailedEntries(failed);
         const glossaryParts: string[] = [];
         if (totalGlossaryStats.directMatches > 0) glossaryParts.push(`📖 ${totalGlossaryStats.directMatches} مطابقة مباشرة`);
         if (totalGlossaryStats.lockedTerms > 0) glossaryParts.push(`🔒 ${totalGlossaryStats.lockedTerms} مصطلح مُقفَل`);
         if (totalGlossaryStats.contextTerms > 0) glossaryParts.push(`📋 ${totalGlossaryStats.contextTerms} مصطلح سياقي`);
         const glossaryInfo = glossaryParts.length > 0 ? ` | القاموس: ${glossaryParts.join(' + ')}` : '';
-        setTranslateProgress(`✅ تم ترجمة ${total} نص بنجاح${tmCount > 0 ? ` + ${tmCount} من الذاكرة` : ''}${glossaryInfo}`);
+        const failedInfo = failed.length > 0 ? ` | ⚠️ ${failed.length} نص فشل (انقر تكرار)` : '';
+        setTranslateProgress(`✅ تم ترجمة ${total} نص بنجاح${tmCount > 0 ? ` + ${tmCount} من الذاكرة` : ''}${glossaryInfo}${failedInfo}`);
         setTimeout(() => setTranslateProgress(""), 8000);
       }
     } catch (err) {
@@ -1084,11 +1091,79 @@ export function useEditorTranslation({
     setPendingGlossaryTranslations({});
   };
 
+  /** Retry translating entries that failed silently in the last auto-translate run */
+  const handleRetryFailed = async () => {
+    if (!state || failedEntries.length === 0) return;
+    const toRetry = [...failedEntries];
+    setFailedEntries([]);
+    setTranslating(true);
+    abortControllerRef.current = new AbortController();
+    let recovered = 0;
+    const stillFailed: ExtractedEntry[] = [];
+    try {
+      // Retry one entry at a time to maximise success rate
+      for (let i = 0; i < toRetry.length; i++) {
+        if (abortControllerRef.current.signal.aborted) break;
+        const entry = toRetry[i];
+        const key = `${entry.msbtFile}:${entry.index}`;
+        setTranslateProgress(`🔄 إعادة محاولة ${i + 1}/${toRetry.length}: ${entry.label || key}...`);
+        try {
+          const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+            method: 'POST',
+            headers: getSupabaseHeaders(),
+            signal: abortControllerRef.current.signal,
+            body: JSON.stringify({
+              entries: [{ key, original: entry.original }],
+              glossary: activeGlossary,
+              userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
+              provider: translationProvider,
+              myMemoryEmail: myMemoryEmail || undefined,
+              rebalanceNewlines: rebalanceNewlines || undefined,
+              npcMaxLines,
+              aiModel,
+            }),
+          });
+          if (!response.ok) { stillFailed.push(entry); continue; }
+          const data = await response.json();
+          addAiRequest(1);
+          if (data.charsUsed) addMyMemoryChars(data.charsUsed);
+          if (data.translations?.[key]) {
+            const fixedTranslations = autoFixTags({ [key]: data.translations[key] });
+            recovered++;
+            setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...fixedTranslations } } : null);
+          } else {
+            stillFailed.push(entry);
+          }
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') throw err;
+          stillFailed.push(entry);
+        }
+      }
+      setFailedEntries(stillFailed);
+      setTranslateProgress(recovered > 0
+        ? `✅ تم استرداد ${recovered} نص${stillFailed.length > 0 ? ` | ⚠️ ${stillFailed.length} فشل مجدداً` : ''}`
+        : `⚠️ لم يتم استرداد أي نص — قد تكون النصوص معقدة جداً`
+      );
+      setTimeout(() => setTranslateProgress(""), 6000);
+    } catch (err) {
+      setFailedEntries(stillFailed.length > 0 ? stillFailed : toRetry);
+      if ((err as Error).name !== 'AbortError') {
+        setTranslateProgress(`❌ فشل إعادة المحاولة: ${err instanceof Error ? err.message : 'خطأ'}`);
+        setTimeout(() => setTranslateProgress(""), 4000);
+      }
+    } finally {
+      setTranslating(false);
+      abortControllerRef.current = null;
+    }
+  };
+
   return {
     translating,
     translatingSingle,
     tmStats,
     glossarySessionStats,
+    failedEntries,
     pendingPageTranslations,
     oldPageTranslations,
     pageTranslationOriginals,
@@ -1106,6 +1181,7 @@ export function useEditorTranslation({
     handleTranslateFromGlossaryOnly,
     handleStopTranslate,
     handleRetranslatePage,
+    handleRetryFailed,
     handleFixDamagedTags,
   };
 }

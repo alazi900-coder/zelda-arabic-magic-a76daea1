@@ -10,7 +10,7 @@ function readFileAsText(file: File): Promise<string> {
   });
 }
 import type { ImportConflict } from "@/components/editor/ImportConflictDialog";
-import { removeArabicPresentationForms } from "@/lib/arabic-processing";
+import { removeArabicPresentationForms, stripBidiMarkers } from "@/lib/arabic-processing";
 import type { EditorState } from "@/components/editor/types";
 import { ExtractedEntry, hasArabicChars, unReverseBidi, isTechnicalText } from "@/components/editor/types";
 import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
@@ -109,7 +109,7 @@ interface UseEditorFileIOProps {
 
 function normalizeArabicPresentationForms(text: string): string {
   if (!text) return text;
-  return removeArabicPresentationForms(text);
+  return stripBidiMarkers(removeArabicPresentationForms(text));
 }
 
 function escapeCSV(text: string): string {

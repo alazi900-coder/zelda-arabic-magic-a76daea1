@@ -434,6 +434,11 @@ const Editor = () => {
                 <Button size={isMobile ? "default" : "lg"} variant="default" onClick={editor.handleAutoTranslate} disabled={editor.translating} className="font-display font-bold px-4 md:px-6">
                   <Sparkles className="w-4 h-4" /> ترجمة تلقائية 🤖
                 </Button>
+                {editor.failedEntries && editor.failedEntries.length > 0 && (
+                  <Button size={isMobile ? "default" : "lg"} variant="outline" onClick={editor.handleRetryFailed} disabled={editor.translating} className="font-display font-bold px-4 md:px-6 border-yellow-500 text-yellow-600 hover:bg-yellow-50">
+                    ⚠️ إعادة محاولة {editor.failedEntries.length} نص فاشل
+                  </Button>
+                )}
                 <Button size={isMobile ? "default" : "lg"} variant="secondary" onClick={editor.handleTranslateFromGlossaryOnly} disabled={editor.translating} className="font-display font-bold px-4 md:px-6">
                   <BookOpen className="w-4 h-4" /> الترجمة من القاموس 📖
                 </Button>

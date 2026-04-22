@@ -809,7 +809,7 @@ export function useEditorState() {
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
     filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel,
   });
-  const { translating, translatingSingle, tmStats, glossarySessionStats, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview } = translation;
+  const { translating, translatingSingle, tmStats, glossarySessionStats, failedEntries, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleRetryFailed, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview } = translation;
 
   const handleSmartReviewRef = useRef<(() => void) | null>(null);
   const triggerAutoSmartReview = useCallback(() => {
@@ -1429,6 +1429,7 @@ export function useEditorState() {
     updateTranslation, updateTranslationsBatch, handleUndoTranslation,
     handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate,
     glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview,
+    failedEntries, handleRetryFailed,
     handleRetranslatePage, handleFixDamagedTags, handleLocalFixDamagedTag, handleLocalFixAllDamagedTags, handleLocalFixSelectedTags, handleRedistributeTags, handleReviewTranslations,
     applyPendingTranslations, discardPendingTranslations,
     handleSuggestShorterTranslations, handleApplyShorterTranslation, handleApplyAllShorterTranslations,

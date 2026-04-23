@@ -22,10 +22,17 @@ import {
   Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle,
   Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight,
   BarChart3, Menu, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2,
-  Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi,
+  Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi, RefreshCw,
 } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
-import { DEFAULT_OPENROUTER_MODEL, OPENROUTER_FREE_MODELS, isOpenRouterModelId } from "@/lib/openrouter-models";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  isOpenRouterModelId,
+  getOpenRouterModels,
+  getOpenRouterFetchedAt,
+  refreshOpenRouterModels,
+  type OpenRouterModelOption,
+} from "@/lib/openrouter-models";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -113,6 +120,39 @@ const Editor = () => {
   const [sourceGame, setSourceGame] = React.useState<string | null>(null);
   const [testConnStatus, setTestConnStatus] = React.useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
   const [testConnMsg, setTestConnMsg] = React.useState<Record<string, string>>({});
+
+  // Dynamic OpenRouter free models list (refreshable)
+  const [orModels, setOrModels] = React.useState<OpenRouterModelOption[]>(() => getOpenRouterModels());
+  const [orModelsFetchedAt, setOrModelsFetchedAt] = React.useState<string | null>(() => getOpenRouterFetchedAt());
+  const [orModelsRefreshing, setOrModelsRefreshing] = React.useState(false);
+
+  const handleRefreshOrModels = React.useCallback(async () => {
+    setOrModelsRefreshing(true);
+    const { toast } = await import('@/hooks/use-toast');
+    try {
+      const fresh = await refreshOpenRouterModels();
+      setOrModels(fresh);
+      setOrModelsFetchedAt(new Date().toISOString());
+      toast({
+        title: '✅ تم تحديث القائمة',
+        description: `تم جلب ${fresh.length} موديلاً مجانياً متاحاً حالياً`,
+      });
+      // If currently selected model is no longer in the list, fall back to default
+      if (editor.aiModel && !fresh.some((m) => m.id === editor.aiModel)) {
+        editor.setAiModel(fresh[0]?.id || DEFAULT_OPENROUTER_MODEL);
+      }
+    } catch (e) {
+      toast({
+        title: '⚠️ فشل تحديث القائمة',
+        description: e instanceof Error ? e.message : 'تحقق من الاتصال بالإنترنت',
+        variant: 'destructive',
+      });
+    } finally {
+      setOrModelsRefreshing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.aiModel]);
+
 
   // Detect source game on mount
   React.useEffect(() => {
@@ -689,9 +729,25 @@ const Editor = () => {
                   <div className="flex flex-col gap-3">
                     {/* Free Model Selector */}
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني:</span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني ({orModels.length}):</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRefreshOrModels}
+                          disabled={orModelsRefreshing}
+                          className="h-7 text-xs gap-1"
+                        >
+                          {orModelsRefreshing ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3" />
+                          )}
+                          {orModelsRefreshing ? 'جاري التحديث...' : 'تحديث القائمة'}
+                        </Button>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                        {OPENROUTER_FREE_MODELS.map(m => {
+                        {orModels.map(m => {
                           const isSelected = (editor.aiModel === m.id) || (m.id === DEFAULT_OPENROUTER_MODEL && !isOpenRouterModelId(editor.aiModel));
                           return (
                             <button
@@ -704,12 +760,17 @@ const Editor = () => {
                               }`}
                             >
                               <span className="font-display">{m.badge} {m.label}</span>
+                              <span className="text-[10px] opacity-70 truncate w-full" dir="ltr">{m.id}</span>
                               <span className="text-[10px] opacity-70">{m.desc}</span>
                             </button>
                           );
                         })}
                       </div>
-                      <p className="text-[10px] text-muted-foreground font-body">هذه الموديلات هي المجانية المتاحة حالياً عبر OpenRouter، وقد تتغير حسب التوفر.</p>
+                      <p className="text-[10px] text-muted-foreground font-body">
+                        {orModelsFetchedAt
+                          ? `آخر تحديث: ${new Date(orModelsFetchedAt).toLocaleString('ar')} — اضغط "تحديث القائمة" لجلب أحدث الموديلات المجانية مباشرة من OpenRouter.`
+                          : 'القائمة الافتراضية — اضغط "تحديث القائمة" لجلب أحدث الموديلات المجانية مباشرة من OpenRouter.'}
+                      </p>
                     </div>
 
                     {/* API Key */}

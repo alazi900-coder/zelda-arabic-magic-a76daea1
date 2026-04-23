@@ -7,7 +7,7 @@ import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
-import { OPENROUTER_FREE_MODELS } from "@/lib/openrouter-models";
+import { getOpenRouterModels } from "@/lib/openrouter-models";
 
 interface CompareEnginesDialogProps {
   open: boolean;
@@ -33,17 +33,20 @@ interface EngineConfig {
   requiresKey?: 'gemini' | 'deepseek' | 'groq' | 'openrouter';
 }
 
-const ALL_ENGINES: EngineConfig[] = [
-  { id: 'gemini-flash', label: 'Gemini 2.5 Flash', emoji: '⚡', provider: 'gemini', model: 'gemini-2.5-flash', description: 'سريع ومتوازن' },
-  { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
-  { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
-  { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
-  { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
-  { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
-  ...OPENROUTER_FREE_MODELS.map((model, index) => ({ id: `openrouter-${index}`, label: model.label, emoji: model.badge, provider: 'openrouter', model: model.id, description: model.desc, requiresKey: 'openrouter' as const })),
-  { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
-  { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
-];
+function buildEngines(): EngineConfig[] {
+  const orModels = getOpenRouterModels();
+  return [
+    { id: 'gemini-flash', label: 'Gemini 2.5 Flash', emoji: '⚡', provider: 'gemini', model: 'gemini-2.5-flash', description: 'سريع ومتوازن' },
+    { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
+    { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
+    { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
+    { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
+    { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
+    ...orModels.map((model, index) => ({ id: `openrouter-${index}`, label: model.label, emoji: model.badge, provider: 'openrouter', model: model.id, description: model.desc, requiresKey: 'openrouter' as const })),
+    { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
+    { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
+  ];
+}
 
 const TECH_TAG_RENDER_REGEX = /([\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\[\s*\/?\s*\w+\s*:[^\]]*?\s*\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\})/g;
 
@@ -149,6 +152,8 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingEngines, setLoadingEngines] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  // Recompute engines whenever the dialog opens, so a refreshed OpenRouter list is reflected.
+  const ALL_ENGINES = React.useMemo(() => buildEngines(), [open]);
 
   const getProviderKey = (engine: EngineConfig): string | undefined => {
     if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;

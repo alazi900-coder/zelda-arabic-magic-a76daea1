@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.enhance-translations]
 verify_jwt = false
+
+[functions.list-openrouter-models]
+verify_jwt = false

@@ -99,6 +99,7 @@ import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
 import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
 import VirtualizedEntryList from "@/components/editor/VirtualizedEntryList";
 import { AutoPilotPanel } from "@/components/editor/AutoPilotPanel";
+import { PanelSettingsMenu } from "@/components/editor/PanelSettingsMenu";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -967,21 +968,29 @@ const Editor = () => {
               </CardContent>
             </Card>
           )}
-          <div className="mb-4">
-            <AutoPilotPanel
-              running={editor.autoPilot.running}
-              phase={editor.autoPilot.phase}
-              phaseIndex={editor.autoPilot.phaseIndex}
-              progress={editor.autoPilot.progress}
-              logs={editor.autoPilot.logs}
-              report={editor.autoPilot.report}
-              mode={editor.autoPilot.mode}
-              setMode={editor.autoPilot.setMode}
-              freeProviderLabel={editor.autoPilot.freeProviderLabel}
-              onRun={editor.autoPilot.run}
-              onStop={editor.autoPilot.stop}
-            />
+          {/* Panel visibility settings */}
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-muted-foreground font-display">الأدوات</span>
+            <PanelSettingsMenu hiddenPanels={editor.hiddenPanels} togglePanel={editor.togglePanel} />
           </div>
+
+          {!editor.hiddenPanels.includes('autopilot') && (
+            <div className="mb-4">
+              <AutoPilotPanel
+                running={editor.autoPilot.running}
+                phase={editor.autoPilot.phase}
+                phaseIndex={editor.autoPilot.phaseIndex}
+                progress={editor.autoPilot.progress}
+                logs={editor.autoPilot.logs}
+                report={editor.autoPilot.report}
+                mode={editor.autoPilot.mode}
+                setMode={editor.autoPilot.setMode}
+                freeProviderLabel={editor.autoPilot.freeProviderLabel}
+                onRun={editor.autoPilot.run}
+                onStop={editor.autoPilot.stop}
+              />
+            </div>
+          )}
 
 
           {editor.translateProgress && (
@@ -1167,35 +1176,43 @@ const Editor = () => {
           </Card>
 
           {/* Translation Progress Dashboard */}
-          <TranslationProgressDashboard
-            state={editor.state}
-            qualityStats={editor.qualityStats}
-            glossarySessionStats={editor.glossarySessionStats}
-            aiRequestsToday={editor.aiRequestsToday}
-            aiRequestsMonth={editor.aiRequestsMonth}
-          />
+          {!editor.hiddenPanels.includes('progress') && (
+            <TranslationProgressDashboard
+              state={editor.state}
+              qualityStats={editor.qualityStats}
+              glossarySessionStats={editor.glossarySessionStats}
+              aiRequestsToday={editor.aiRequestsToday}
+              aiRequestsMonth={editor.aiRequestsMonth}
+            />
+          )}
 
           {/* Cross-file Consistency Check */}
-          <ConsistencyCheckPanel
-            state={editor.state}
-            updateTranslation={editor.updateTranslation}
-          />
+          {!editor.hiddenPanels.includes('consistency') && (
+            <ConsistencyCheckPanel
+              state={editor.state}
+              updateTranslation={editor.updateTranslation}
+            />
+          )}
 
           {/* Translation Tools */}
-          <TranslationToolsPanel
-            state={editor.state}
-            currentEntry={null}
-            currentTranslation=""
-            onApplyTranslation={(key, val) => editor.updateTranslation(key, val)}
-          />
+          {!editor.hiddenPanels.includes('tools') && (
+            <TranslationToolsPanel
+              state={editor.state}
+              currentEntry={null}
+              currentTranslation=""
+              onApplyTranslation={(key, val) => editor.updateTranslation(key, val)}
+            />
+          )}
 
           {/* AI Translation Enhancement */}
-          <TranslationAIEnhancePanel
-            entries={editor.state?.entries || []}
-            translations={editor.state?.translations || {}}
-            onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
-            glossary={editor.activeGlossary}
-          />
+          {!editor.hiddenPanels.includes('ai-enhance') && (
+            <TranslationAIEnhancePanel
+              entries={editor.state?.entries || []}
+              translations={editor.state?.translations || {}}
+              onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
+              glossary={editor.activeGlossary}
+            />
+          )}
 
           {/* Review Results */}
           <ReviewPanel

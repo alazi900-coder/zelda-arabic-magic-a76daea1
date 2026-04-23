@@ -197,6 +197,18 @@ export function useEditorSettings() {
     });
   }, []);
 
+  // === Panel visibility ===
+  const [hiddenPanels, _setHiddenPanels] = useState<string[]>(() => {
+    try { const v = localStorage.getItem('hiddenPanels'); return v ? JSON.parse(v) : []; } catch { return []; }
+  });
+  const togglePanel = useCallback((id: string) => {
+    _setHiddenPanels(prev => {
+      const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
+      try { localStorage.setItem('hiddenPanels', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   return {
     arabicNumerals, setArabicNumerals,
     mirrorPunctuation, setMirrorPunctuation,
@@ -216,5 +228,6 @@ export function useEditorSettings() {
     newlineSplitCharLimit, setNewlineSplitCharLimit,
     autoSmartReview, setAutoSmartReview,
     enhancedMemory, saveToEnhancedMemory,
+    hiddenPanels, togglePanel,
   };
 }

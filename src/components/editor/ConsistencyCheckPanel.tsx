@@ -2,17 +2,16 @@ import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X, Copy } from "lucide-react";
+import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X } from "lucide-react";
 import type { EditorState } from "./types";
 import { detectInconsistencies } from "./TranslationProgressDashboard";
 
 interface Props {
   state: EditorState;
   updateTranslation: (key: string, value: string) => void;
-  onNavigateToEntry?: (key: string) => void;
 }
 
-export default function ConsistencyCheckPanel({ state, updateTranslation, onNavigateToEntry }: Props) {
+export default function ConsistencyCheckPanel({ state, updateTranslation }: Props) {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -21,163 +20,108 @@ export default function ConsistencyCheckPanel({ state, updateTranslation, onNavi
 
   if (inconsistencies.length === 0) {
     return (
-      <Card className="p-4 border-border/50 text-center">
-        <Check className="w-8 h-8 mx-auto text-primary mb-2" />
-        <p className="text-sm font-semibold text-primary">✅ لا توجد تناقضات</p>
-        <p className="text-xs text-muted-foreground mt-1">جميع النصوص المتطابقة مترجمة بنفس الصياغة</p>
+      <Card className="p-3 border-border/50 text-center">
+        <p className="text-sm text-primary flex items-center justify-center gap-1.5">
+          <Check className="w-4 h-4" /> لا توجد تناقضات في الترجمة
+        </p>
       </Card>
     );
   }
 
-  const handleUnify = (english: string, chosenTranslation: string) => {
+  const handleUnify = (english: string, chosen: string) => {
     const group = inconsistencies.find(g => g.english === english);
     if (!group) return;
     for (const entry of group.translations) {
-      if (entry.translation !== chosenTranslation) {
-        updateTranslation(entry.key, chosenTranslation);
-      }
+      if (entry.translation !== chosen) updateTranslation(entry.key, chosen);
     }
     setEditingGroup(null);
   };
 
-  const startEditing = (english: string, currentTranslation: string) => {
-    setEditingGroup(english);
-    setEditValue(currentTranslation);
-  };
-
   const applyCustomEdit = (english: string) => {
-    if (editValue.trim()) {
-      handleUnify(english, editValue.trim());
-    }
+    if (editValue.trim()) handleUnify(english, editValue.trim());
     setEditingGroup(null);
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold flex items-center gap-2">
-          <GitCompareArrows className="w-5 h-5 text-destructive" />
-          تناقضات الترجمة ({inconsistencies.length})
-        </h3>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <GitCompareArrows className="w-4 h-4 text-destructive shrink-0" />
+        <span className="text-sm font-semibold">تناقضات الترجمة</span>
+        <span className="text-xs bg-destructive/15 text-destructive px-1.5 py-0.5 rounded-full font-mono">{inconsistencies.length}</span>
       </div>
-      <p className="text-sm text-muted-foreground">
-        نصوص إنجليزية متطابقة مُترجمة بصياغات مختلفة — اختر الترجمة الأفضل لتوحيدها أو عدّلها يدوياً
-      </p>
 
-      <div className="space-y-2 max-h-[450px] overflow-y-auto">
+      <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
         {inconsistencies.slice(0, 50).map((group) => {
           const isExpanded = expandedGroup === group.english;
           const uniqueTranslations = [...new Set(group.translations.map(t => t.translation))];
           const isEditing = editingGroup === group.english;
-          
+
           return (
-            <Card key={group.english} className="p-3 border-border/50">
+            <Card key={group.english} className="border-border/40 overflow-hidden">
               <button
-                className="w-full flex items-start gap-2 text-right"
+                className="w-full flex items-center gap-2 p-2 text-right hover:bg-muted/30 transition-colors"
                 onClick={() => setExpandedGroup(isExpanded ? null : group.english)}
               >
-                {isExpanded ? <ChevronDown className="w-4 h-4 shrink-0 mt-1" /> : <ChevronRight className="w-4 h-4 shrink-0 mt-1" />}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-mono text-foreground truncate" dir="ltr">{group.english}</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-foreground"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(group.english);
-                        import("@/hooks/use-toast").then(({ toast }) => toast({ title: "تم النسخ ✓", description: group.english }));
-                      }}
-                      title="نسخ النص الإنجليزي"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-destructive flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" /> {uniqueTranslations.length} ترجمات مختلفة
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      ({group.translations.length} موضع)
-                    </span>
-                  </div>
-                </div>
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
+                <span className="flex-1 text-xs font-mono truncate text-foreground" dir="ltr">{group.english}</span>
+                <span className="text-[10px] text-destructive shrink-0 flex items-center gap-0.5">
+                  <AlertTriangle className="w-3 h-3" />{uniqueTranslations.length}
+                </span>
               </button>
 
               {isExpanded && (
-                <div className="mt-3 space-y-2 pr-6">
+                <div className="px-3 pb-2 space-y-1.5 border-t border-border/30">
                   {uniqueTranslations.map((trans, i) => {
                     const count = group.translations.filter(t => t.translation === trans).length;
                     return (
-                      <div key={i} className="flex items-center gap-2 text-sm group bg-muted/20 rounded-md p-2">
-                        <span className="flex-1 text-foreground font-body leading-relaxed" dir="rtl">{trans}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">×{count}</span>
+                      <div key={i} className="flex items-center gap-1.5 text-xs bg-muted/20 rounded px-2 py-1.5 group">
+                        <span className="flex-1 font-body" dir="rtl">{trans}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0">×{count}</span>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs opacity-70 group-hover:opacity-100 transition-opacity text-primary hover:bg-primary/10"
+                          className="h-6 px-2 text-[11px] text-primary opacity-70 group-hover:opacity-100"
                           onClick={() => handleUnify(group.english, trans)}
-                          title="توحيد الكل بهذه الترجمة"
                         >
                           توحيد
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs opacity-70 group-hover:opacity-100 transition-opacity text-muted-foreground hover:bg-muted/30"
-                          onClick={() => startEditing(group.english, trans)}
-                          title="تعديل هذه الترجمة ثم توحيد"
+                          className="h-6 w-6 p-0 opacity-60 group-hover:opacity-100"
+                          onClick={() => { setEditingGroup(group.english); setEditValue(trans); }}
                         >
-                          <Pencil className="w-3.5 h-3.5" />
+                          <Pencil className="w-3 h-3" />
                         </Button>
                       </div>
                     );
                   })}
 
-                  {/* Custom edit field */}
-                  {isEditing && (
-                    <div className="flex items-center gap-2 mt-2 bg-primary/5 rounded-md p-2 border border-primary/20">
+                  {isEditing ? (
+                    <div className="flex items-center gap-1.5 mt-1">
                       <Input
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        className="flex-1 text-sm h-8 font-body"
+                        className="flex-1 h-7 text-xs font-body"
                         dir="rtl"
-                        placeholder="اكتب الترجمة المعدّلة..."
+                        placeholder="الترجمة المعدّلة..."
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') applyCustomEdit(group.english);
                           if (e.key === 'Escape') setEditingGroup(null);
                         }}
                       />
-                      <Button
-                        size="sm"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => applyCustomEdit(group.english)}
-                      >
-                        توحيد
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={() => setEditingGroup(null)}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
+                      <Button size="sm" className="h-7 px-2 text-xs" onClick={() => applyCustomEdit(group.english)}>توحيد</Button>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditingGroup(null)}><X className="w-3 h-3" /></Button>
                     </div>
-                  )}
-
-                  {/* Write custom translation button */}
-                  {!isEditing && (
+                  ) : (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full h-8 text-xs mt-1 border-dashed"
-                      onClick={() => startEditing(group.english, uniqueTranslations[0] || '')}
+                      className="w-full h-6 text-[11px] border-dashed mt-0.5"
+                      onClick={() => { setEditingGroup(group.english); setEditValue(uniqueTranslations[0] || ''); }}
                     >
-                      <Pencil className="w-3.5 h-3.5 ml-1" />
-                      كتابة ترجمة مخصصة وتوحيد الكل
+                      <Pencil className="w-3 h-3 ml-1" /> كتابة ترجمة مخصصة
                     </Button>
                   )}
                 </div>

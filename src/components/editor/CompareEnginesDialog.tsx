@@ -7,6 +7,7 @@ import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { OPENROUTER_FREE_MODELS } from "@/lib/openrouter-models";
 
 interface CompareEnginesDialogProps {
   open: boolean;
@@ -39,12 +40,7 @@ const ALL_ENGINES: EngineConfig[] = [
   { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
   { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
   { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
-  { id: 'glm', label: 'GLM 4.6B (Z.AI)', emoji: '🆕', provider: 'openrouter', model: 'z-ai/glm-4.6b-flash:free', description: 'مجاني عبر OpenRouter', requiresKey: 'openrouter' },
-  { id: 'qwen', label: 'Qwen 2.5 72B', emoji: '🐉', provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', description: 'Alibaba — قوي في اللغات', requiresKey: 'openrouter' },
-  { id: 'llama33', label: 'Llama 3.3 70B', emoji: '🦙', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free', description: 'Meta — عام ومستقر', requiresKey: 'openrouter' },
-  { id: 'deepseek-or', label: 'DeepSeek V3.1', emoji: '🆓', provider: 'openrouter', model: 'deepseek/deepseek-chat-v3.1:free', description: 'DeepSeek مجاني عبر OpenRouter', requiresKey: 'openrouter' },
-  { id: 'gemma3', label: 'Gemma 3 27B', emoji: '✨', provider: 'openrouter', model: 'google/gemma-3-27b-it:free', description: 'Google — خفيف وسريع', requiresKey: 'openrouter' },
-  { id: 'mistral', label: 'Mistral Small 3.2', emoji: '💨', provider: 'openrouter', model: 'mistralai/mistral-small-3.2-24b-instruct:free', description: 'Mistral — متعدد اللغات', requiresKey: 'openrouter' },
+  ...OPENROUTER_FREE_MODELS.map((model, index) => ({ id: `openrouter-${index}`, label: model.label, emoji: model.badge, provider: 'openrouter', model: model.id, description: model.desc, requiresKey: 'openrouter' as const })),
   { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
   { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
 ];

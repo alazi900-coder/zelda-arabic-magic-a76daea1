@@ -25,6 +25,7 @@ import {
   Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi,
 } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { DEFAULT_OPENROUTER_MODEL, OPENROUTER_FREE_MODELS, isOpenRouterModelId } from "@/lib/openrouter-models";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -90,7 +91,6 @@ import TranslationProgressDashboard from "@/components/editor/TranslationProgres
 import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
 import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
 import VirtualizedEntryList from "@/components/editor/VirtualizedEntryList";
-import { AutoPilotPanel } from "@/components/editor/AutoPilotPanel";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -133,7 +133,7 @@ const Editor = () => {
         provider === 'openrouter' ? editor.userOpenRouterKey : undefined;
       const aiModel =
         provider === 'openrouter'
-          ? (editor.aiModel?.includes('/') ? editor.aiModel : 'qwen/qwen-2.5-72b-instruct:free')
+          ? (isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL)
           : editor.aiModel;
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
@@ -528,13 +528,7 @@ const Editor = () => {
                         key={id}
                         size="sm"
                         variant={editor.translationProvider === id ? 'default' : 'outline'}
-                        onClick={() => {
-                          editor.setTranslationProvider(id);
-                          // Auto-set default model when switching to OpenRouter
-                          if (id === 'openrouter' && !editor.aiModel?.includes('/')) {
-                            editor.setAiModel('qwen/qwen-2.5-72b-instruct:free');
-                          }
-                        }}
+                        onClick={() => editor.setTranslationProvider(id)}
                         className="text-xs font-display gap-1"
                       >
                         {label}
@@ -697,15 +691,8 @@ const Editor = () => {
                     <div className="flex flex-col gap-1.5">
                       <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني:</span>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                        {[
-                          { id: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen 2.5 72B', desc: 'Alibaba — قوي في اللغات', badge: '🐉' },
-                          { id: 'microsoft/phi-4-reasoning-plus:free', label: 'Phi-4 Reasoning', desc: 'Microsoft — دقيق ومنطقي', badge: '🔬' },
-                          { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B', desc: 'Meta — عام ومستقر', badge: '🦙' },
-                          { id: 'deepseek/deepseek-chat-v3.1:free', label: 'DeepSeek V3.1', desc: 'DeepSeek — جودة عالية للعربية', badge: '🐋' },
-                          { id: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B', desc: 'Google — خفيف وسريع', badge: '✨' },
-                          { id: 'mistralai/mistral-small-3.2-24b-instruct:free', label: 'Mistral Small 3.2', desc: 'Mistral — متعدد اللغات', badge: '💨' },
-                        ].map(m => {
-                          const isSelected = (editor.aiModel === m.id) || (m.id === 'qwen/qwen-2.5-72b-instruct:free' && !editor.aiModel?.includes('/'));
+                        {OPENROUTER_FREE_MODELS.map(m => {
+                          const isSelected = (editor.aiModel === m.id) || (m.id === DEFAULT_OPENROUTER_MODEL && !isOpenRouterModelId(editor.aiModel));
                           return (
                             <button
                               key={m.id}
@@ -722,7 +709,7 @@ const Editor = () => {
                           );
                         })}
                       </div>
-                      <p className="text-[10px] text-muted-foreground font-body">جميع الموديلات مجانية تماماً عبر OpenRouter (حد ~20 طلب/دقيقة لكل موديل)</p>
+                      <p className="text-[10px] text-muted-foreground font-body">هذه الموديلات هي المجانية المتاحة حالياً عبر OpenRouter، وقد تتغير حسب التوفر.</p>
                     </div>
 
                     {/* API Key */}
@@ -763,8 +750,8 @@ const Editor = () => {
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-body">
                         {editor.userOpenRouterKey
-                          ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${editor.aiModel?.includes('/') ? editor.aiModel : 'qwen/qwen-2.5-72b-instruct:free'}`
-                          : '🆓 احصل على مفتاح مجاني من openrouter.ai — كل الموديلات أعلاه مجانية بالكامل'}
+                          ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL}`
+                          : '🆓 احصل على مفتاح مجاني من openrouter.ai ثم اختر أحد الموديلات المجانية أعلاه'}
                       </p>
                       {!editor.userOpenRouterKey && (
                         <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
@@ -918,18 +905,6 @@ const Editor = () => {
               </CardContent>
             </Card>
           )}
-          <div className="mb-4">
-            <AutoPilotPanel
-              running={editor.autoPilot.running}
-              phase={editor.autoPilot.phase}
-              progress={editor.autoPilot.progress}
-              logs={editor.autoPilot.logs}
-              report={editor.autoPilot.report}
-              onRun={editor.autoPilot.run}
-              onStop={editor.autoPilot.stop}
-            />
-          </div>
-
           {editor.translateProgress && (
             <Card className="mb-4 border-secondary/30 bg-secondary/5">
               <CardContent className="p-4 space-y-2">
@@ -1772,12 +1747,7 @@ const Editor = () => {
                 <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[min(calc(100vw-1.5rem),360px)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                   <DropdownMenuLabel className="text-xs">📖 تحميل قاموس</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleImportGlossary}><BookOpen className="w-4 h-4" /> قاموس مخصص (.txt)</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 1</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={editor.handleLoadXC1Glossary}>⚔️ قاموس Xenoblade Chronicles 1 (شولك، رين، دانبان...)</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 3</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade Chronicles 3 المدمج</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade المدمج</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadUIMenusGlossary}>📋 قاموس القوائم والواجهة</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadFullGlossary}>📚 القاموس الشامل (شخصيات + مواقع + مصطلحات)</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadCombatGlossary}>⚔️ قاموس القتال والتأثيرات</DropdownMenuItem>
@@ -2024,12 +1994,7 @@ const Editor = () => {
                 <DropdownMenuContent align="start" className="bg-card border-border z-50 min-w-[220px]">
                   <DropdownMenuLabel className="text-xs">📖 تحميل قاموس</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleImportGlossary}><BookOpen className="w-4 h-4" /> تحميل قاموس مخصص (.txt)</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 1</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={editor.handleLoadXC1Glossary}>⚔️ قاموس Xenoblade Chronicles 1 (شولك، رين، دانبان...)</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Xenoblade Chronicles 3</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade Chronicles 3 المدمج</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleLoadXC3Glossary}>🎮 قاموس Xenoblade المدمج</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadUIMenusGlossary}>📋 قاموس القوائم والواجهة</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadFullGlossary}>📚 القاموس الشامل (شخصيات + مواقع + مصطلحات)</DropdownMenuItem>
                    <DropdownMenuItem onClick={editor.handleLoadCombatGlossary}>⚔️ قاموس القتال والتأثيرات</DropdownMenuItem>

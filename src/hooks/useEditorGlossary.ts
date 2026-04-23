@@ -248,7 +248,6 @@ export function useEditorGlossary({
     } catch { alert(`خطأ في تحميل ${name}`); }
   }, [setState, setLastSaved, state?.glossary, computeGlossaryDiffs]);
 
-  const handleLoadXC1Glossary = useCallback(() => loadGlossary('/xc1-glossary.txt', 'قاموس Xenoblade Chronicles 1', true), [loadGlossary]);
   const handleLoadXC3Glossary = useCallback(() => loadGlossary('/xc3-glossary.txt', 'قاموس Xenoblade Chronicles 3', true), [loadGlossary]);
   const handleLoadUIMenusGlossary = useCallback(() => loadGlossary('/xc3-ui-menus-glossary.txt', 'قاموس القوائم والواجهة', false), [loadGlossary]);
   const handleLoadFullGlossary = useCallback(() => loadGlossary('/xc3-full-glossary.txt', 'القاموس الشامل', true), [loadGlossary]);
@@ -729,7 +728,7 @@ export function useEditorGlossary({
     glossaryTermCount, activeGlossary,
     parseGlossaryMap,
     pendingMerge, setPendingMerge, applyMergeDiffs,
-    handleImportGlossary, handleLoadXC1Glossary, handleLoadXC3Glossary, handleLoadUIMenusGlossary, handleLoadFullGlossary, handleLoadCombatGlossary,
+    handleImportGlossary, handleLoadXC3Glossary, handleLoadUIMenusGlossary, handleLoadFullGlossary, handleLoadCombatGlossary,
     handleSaveGlossaryToCloud, handleLoadGlossaryFromCloud,
     handleGenerateGlossaryFromTranslations,
     getGlossaryHealth, handleFixGlossaryIssues,

@@ -121,6 +121,39 @@ const Editor = () => {
   const [testConnStatus, setTestConnStatus] = React.useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
   const [testConnMsg, setTestConnMsg] = React.useState<Record<string, string>>({});
 
+  // Dynamic OpenRouter free models list (refreshable)
+  const [orModels, setOrModels] = React.useState<OpenRouterModelOption[]>(() => getOpenRouterModels());
+  const [orModelsFetchedAt, setOrModelsFetchedAt] = React.useState<string | null>(() => getOpenRouterFetchedAt());
+  const [orModelsRefreshing, setOrModelsRefreshing] = React.useState(false);
+
+  const handleRefreshOrModels = React.useCallback(async () => {
+    setOrModelsRefreshing(true);
+    const { toast } = await import('@/hooks/use-toast');
+    try {
+      const fresh = await refreshOpenRouterModels();
+      setOrModels(fresh);
+      setOrModelsFetchedAt(new Date().toISOString());
+      toast({
+        title: '✅ تم تحديث القائمة',
+        description: `تم جلب ${fresh.length} موديلاً مجانياً متاحاً حالياً`,
+      });
+      // If currently selected model is no longer in the list, fall back to default
+      if (editor.aiModel && !fresh.some((m) => m.id === editor.aiModel)) {
+        editor.setAiModel(fresh[0]?.id || DEFAULT_OPENROUTER_MODEL);
+      }
+    } catch (e) {
+      toast({
+        title: '⚠️ فشل تحديث القائمة',
+        description: e instanceof Error ? e.message : 'تحقق من الاتصال بالإنترنت',
+        variant: 'destructive',
+      });
+    } finally {
+      setOrModelsRefreshing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.aiModel]);
+
+
   // Detect source game on mount
   React.useEffect(() => {
     import("@/lib/idb-storage").then(({ idbGet }) => {

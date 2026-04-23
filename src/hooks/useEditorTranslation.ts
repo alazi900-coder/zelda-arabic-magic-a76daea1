@@ -174,7 +174,7 @@ export function useEditorTranslation({
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
+        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel }),
       });
       if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
       const data = await response.json();
@@ -306,7 +306,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel }),
         });
         if (response.status === 429 || response.status === 401) {
           // لا تعيد المحاولة ولا تقسّم — هذا يهدر الحصة دون فائدة
@@ -462,7 +462,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json();
@@ -513,7 +513,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json();

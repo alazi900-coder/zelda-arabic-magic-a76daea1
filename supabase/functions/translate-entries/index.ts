@@ -134,6 +134,7 @@ function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<stri
 
 let _rebalanceNewlines = false;
 let _npcMaxLines: number | undefined = undefined;
+let _npcMode = false;
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -145,7 +146,7 @@ function restoreAndEnforce(original: string, translated: string, tags: Map<strin
   const enforced = enforceTagIntegrity(original, restored);
 
   // NPC dialogue: limit lines (configurable, default 2)
-  const maxLines = entryKey && isNpcDialogue(entryKey) ? (_npcMaxLines ?? 2) : undefined;
+  const maxLines = _npcMode && entryKey && isNpcDialogue(entryKey) ? (_npcMaxLines ?? 2) : undefined;
 
   // Check if original had real newlines (NEWLINE_N tags exist)
   const hasOriginalNewlines = [...tags.keys()].some(k => k.startsWith('NEWLINE_'));
@@ -896,7 +897,9 @@ async function translateWithOpenAICompat(
   }
 
   const textsBlock = needsAI.map((item, i) => `"K${i}": "${escapeForJsonString(item.termLocks.lockedText)}"`).join(',\n');
-  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles 3. Translate the following game texts from English to Arabic.
+  const hasNpcEntries = _npcMode && needsAI.some(item => isNpcDialogue(item.key));
+  const npcRule = hasNpcEntries ? `\n8. NPC DIALOGUE MODE: Some entries are NPC dialogue (short in-game text boxes). Keep these translations VERY concise — max ${_npcMaxLines ?? 2} lines, approximately 37 Arabic characters per line. Prioritize brevity over completeness.` : '';
+  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles 1 (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla). Translate the following game texts from English to Arabic.
 
 CRITICAL RULES:
 1. ⟪T0⟫, ⟪T1⟫ etc. are LOCKED TERMS — copy them EXACTLY as-is.
@@ -905,7 +908,7 @@ CRITICAL RULES:
 4. Return ONLY a JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}
 5. Return EXACTLY ${needsAI.length} entries. Do NOT skip or merge entries.
 6. Do NOT insert \\n newlines — line breaking is handled separately.
-7. Do NOT add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ).
+7. Do NOT add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ).${npcRule}
 
 Input:
 {
@@ -1447,7 +1450,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel } = await req.json() as {
+    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
@@ -1457,11 +1460,13 @@ Deno.serve(async (req) => {
       myMemoryEmail?: string;
       rebalanceNewlines?: boolean;
       npcMaxLines?: number;
+      npcMode?: boolean;
       aiModel?: string;
     };
 
-    // Set the global rebalance flag for this request
+    // Set the global flags for this request
     _rebalanceNewlines = !!rebalanceNewlines;
+    _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
 
     if (!entries || entries.length === 0) {

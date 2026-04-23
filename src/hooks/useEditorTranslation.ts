@@ -308,17 +308,10 @@ export function useEditorTranslation({
           signal,
           body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
         });
-        if (response.status === 429) {
-          // Rate limit: wait and retry once
-          await new Promise(r => setTimeout(r, 3000));
-          const retry = await fetch(getEdgeFunctionUrl("translate-entries"), {
-            method: 'POST',
-            headers: getSupabaseHeaders(),
-            signal,
-            body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, aiModel }),
-          });
-          if (!retry.ok) throw new Error(`خطأ ${retry.status}`);
-          return await retry.json();
+        if (response.status === 429 || response.status === 401) {
+          // لا تعيد المحاولة ولا تقسّم — هذا يهدر الحصة دون فائدة
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || (response.status === 429 ? 'تجاوزت حد الطلبات' : 'مفتاح API غير صالح'));
         }
         if (response.status >= 500 && batchEntries.length > 1 && depth < 3) {
           // Auto-split: divide batch in half and retry each sub-batch

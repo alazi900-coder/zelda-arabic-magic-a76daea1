@@ -1541,9 +1541,13 @@ Deno.serve(async (req) => {
     }
   } catch (error) {
     console.error('Error:', error);
+    const msg = error instanceof Error ? error.message : 'خطأ غير متوقع';
+    const isRateLimit = msg.includes('تجاوزت') || msg.includes('quota') || msg.includes('429') || msg.includes('rate');
+    const isAuthError = msg.includes('غير صالح') || msg.includes('محظور') || msg.includes('401') || msg.includes('403');
+    const status = isRateLimit ? 429 : isAuthError ? 401 : 500;
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'خطأ غير متوقع' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: msg }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

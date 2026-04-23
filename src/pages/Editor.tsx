@@ -25,6 +25,7 @@ import {
   Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi,
 } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { DEFAULT_OPENROUTER_MODEL, OPENROUTER_FREE_MODELS, isOpenRouterModelId } from "@/lib/openrouter-models";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -132,7 +133,7 @@ const Editor = () => {
         provider === 'openrouter' ? editor.userOpenRouterKey : undefined;
       const aiModel =
         provider === 'openrouter'
-          ? (editor.aiModel?.includes('/') ? editor.aiModel : 'z-ai/glm-4.6:free')
+          ? (isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL)
           : editor.aiModel;
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
@@ -690,15 +691,8 @@ const Editor = () => {
                     <div className="flex flex-col gap-1.5">
                       <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني:</span>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                        {[
-                          { id: 'z-ai/glm-4.6:free', label: 'GLM 4.6', desc: 'Z.AI — متوازن وممتاز للعربية', badge: '🆕' },
-                          { id: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen 2.5 72B', desc: 'Alibaba — قوي في اللغات', badge: '🐉' },
-                          { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B', desc: 'Meta — عام ومستقر', badge: '🦙' },
-                          { id: 'deepseek/deepseek-chat-v3.1:free', label: 'DeepSeek V3.1', desc: 'DeepSeek — جودة عالية للعربية', badge: '🐋' },
-                          { id: 'google/gemma-3-27b-it:free', label: 'Gemma 3 27B', desc: 'Google — خفيف وسريع', badge: '✨' },
-                          { id: 'mistralai/mistral-small-3.2-24b-instruct:free', label: 'Mistral Small 3.2', desc: 'Mistral — متعدد اللغات', badge: '💨' },
-                        ].map(m => {
-                          const isSelected = (editor.aiModel === m.id) || (m.id === 'z-ai/glm-4.6:free' && !editor.aiModel?.includes('/'));
+                        {OPENROUTER_FREE_MODELS.map(m => {
+                          const isSelected = (editor.aiModel === m.id) || (m.id === DEFAULT_OPENROUTER_MODEL && !isOpenRouterModelId(editor.aiModel));
                           return (
                             <button
                               key={m.id}
@@ -715,7 +709,7 @@ const Editor = () => {
                           );
                         })}
                       </div>
-                      <p className="text-[10px] text-muted-foreground font-body">جميع الموديلات مجانية تماماً عبر OpenRouter (حد ~20 طلب/دقيقة لكل موديل)</p>
+                      <p className="text-[10px] text-muted-foreground font-body">هذه الموديلات هي المجانية المتاحة حالياً عبر OpenRouter، وقد تتغير حسب التوفر.</p>
                     </div>
 
                     {/* API Key */}
@@ -756,8 +750,8 @@ const Editor = () => {
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground font-body">
                         {editor.userOpenRouterKey
-                          ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${editor.aiModel?.includes('/') ? editor.aiModel : 'z-ai/glm-4.6:free'}`
-                          : '🆓 احصل على مفتاح مجاني من openrouter.ai — كل الموديلات أعلاه مجانية بالكامل'}
+                          ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL}`
+                          : '🆓 احصل على مفتاح مجاني من openrouter.ai ثم اختر أحد الموديلات المجانية أعلاه'}
                       </p>
                       {!editor.userOpenRouterKey && (
                         <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">

@@ -9,14 +9,14 @@ export type OpenRouterModelOption = {
 
 // Built-in fallback list (used if cache empty AND fetch fails)
 export const OPENROUTER_FREE_MODELS_FALLBACK: OpenRouterModelOption[] = [
-  { id: "z-ai/glm-4.5-air:free", label: "GLM 4.5 Air", desc: "Z.AI — قوي ومتوازن", badge: "🆕" },
-  { id: "openai/gpt-oss-120b:free", label: "GPT-OSS 120B", desc: "OpenAI — مفتوح وضخم", badge: "🧠" },
-  { id: "qwen/qwen3-next-80b-a3b-instruct:free", label: "Qwen3 Next 80B", desc: "Qwen — متعدد اللغات ممتاز", badge: "🐉" },
-  { id: "nvidia/nemotron-nano-9b-v2:free", label: "Nemotron Nano 9B", desc: "NVIDIA — سريع", badge: "💚" },
-  { id: "google/gemma-2-9b-it:free", label: "Gemma 2 9B", desc: "Google — متوازن", badge: "✨" },
+  { id: "qwen/qwen-2.5-72b-instruct:free",       label: "Qwen 2.5 72B",      desc: "Qwen — ممتاز للعربية",          badge: "⭐" },
+  { id: "qwen/qwen3-next-80b-a3b-instruct:free",  label: "Qwen3 Next 80B",    desc: "Qwen — متعدد اللغات",           badge: "🐉" },
+  { id: "google/gemma-3-27b-it:free",             label: "Gemma 3 27B",       desc: "Google — جودة عالية",           badge: "✨" },
+  { id: "meta-llama/llama-4-scout:free",          label: "Llama 4 Scout",     desc: "Meta — سريع ومتوازن",          badge: "🦙" },
+  { id: "nvidia/nemotron-nano-9b-v2:free",        label: "Nemotron Nano 9B",  desc: "NVIDIA — خفيف وسريع",          badge: "💚" },
 ];
 
-export const DEFAULT_OPENROUTER_MODEL = "z-ai/glm-4.5-air:free";
+export const DEFAULT_OPENROUTER_MODEL = "qwen/qwen-2.5-72b-instruct:free";
 const STORAGE_KEY = "openrouter_models_cache_v2";
 const STORAGE_TIME_KEY = "openrouter_models_fetched_at_v2";
 

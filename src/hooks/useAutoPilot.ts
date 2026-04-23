@@ -128,6 +128,14 @@ export function useAutoPilot({
     const aiProvider = runMode === 'free' ? freeChoice.provider : translationProvider;
     const aiModelOverride = runMode === 'free' ? freeChoice.model : undefined;
 
+    // سلسلة Fallback: عند انتهاء الحصة يتحول تلقائياً للمزود التالي
+    const fallbackChain: Array<{ provider: string; model?: string; label: string }> = runMode === 'free'
+      ? [
+          ...(aiProvider !== 'groq' && userGroqKey ? [{ provider: 'groq', label: 'Groq Llama 3.3' }] : []),
+          { provider: 'google', label: 'Google Translate' },
+        ]
+      : [];
+
     const log = (msg: string, type: AutoPilotLog['type'] = 'info', ph = '') =>
       setLogs(prev => [...prev, { id: ++logIdRef.current, phase: ph, message: msg, type }]);
 
@@ -206,25 +214,30 @@ export function useAutoPilot({
       if (needsAI.length > 0) {
         setPhase("🤖 ترجمة AI"); setPhaseIndex(3);
         const totalBatches = Math.ceil(needsAI.length / AI_BATCH);
-        log(`إرسال ${needsAI.length} نص عبر ${totalBatches} دفعة (${aiProvider})...`, 'phase', "3");
+        const remaining = [...fallbackChain]; // نسخة قابلة للاستهلاك
+        let curProvider = aiProvider;
+        let curModel: string | undefined = aiModelOverride;
+        log(`إرسال ${needsAI.length} نص عبر ${totalBatches} دفعة (${curProvider})...`, 'phase', "3");
         setProgress({ current: 0, total: needsAI.length });
 
         let done = 0;
         const failedEntries: ExtractedEntry[] = [];
+        const isQuotaErr = (msg: string) => /انتهت الحصة|quota|429|rate.?limit|no credits|insufficient/i.test(msg);
 
-        for (let b = 0; b < totalBatches; b++) {
+        let batchIdx = 0;
+        while (batchIdx < totalBatches) {
           if (signal.aborted) throw new DOMException('abort', 'AbortError');
-          const batch = needsAI.slice(b * AI_BATCH, (b + 1) * AI_BATCH);
+          const batch = needsAI.slice(batchIdx * AI_BATCH, (batchIdx + 1) * AI_BATCH);
           const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
 
           try {
             const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
               method: 'POST', headers: getSupabaseHeaders(), signal,
-              body: buildFetchBody(entries, aiProvider, aiModelOverride),
+              body: buildFetchBody(entries, curProvider, curModel),
             });
             if (!response.ok) {
-              const err = await response.json().catch(() => null);
-              throw new Error(err?.error || `خطأ ${response.status}`);
+              const errData = await response.json().catch(() => null);
+              throw new Error(errData?.error || `خطأ ${response.status}`);
             }
             const data = await response.json();
             addAiRequest(1);
@@ -236,25 +249,40 @@ export function useAutoPilot({
                 if (!data.translations[`${e.msbtFile}:${e.index}`]) failedEntries.push(e);
               }
             }
+            done += batch.length;
+            batchIdx++;
           } catch (err) {
             if ((err as Error).name === 'AbortError') throw err;
-            log(`⚠️ دفعة ${b + 1} فشلت: ${(err as Error).message}`, 'warning', "3");
-            stats.failed += batch.length;
+            const errMsg = (err as Error).message;
+
+            // انتهت الحصة → تحول تلقائي للمزود التالي
+            if (isQuotaErr(errMsg) && remaining.length > 0) {
+              const next = remaining.shift()!;
+              log(`⚠️ انتهت حصة ${curProvider} — تحويل تلقائي لـ ${next.label}`, 'warning', "3");
+              curProvider = next.provider;
+              curModel = next.model;
+              // أعد نفس الدفعة مع المزود الجديد (لا تزيد batchIdx)
+              continue;
+            }
+
+            // فشل دائم — سجّل وانتقل للتالية
+            log(`⚠️ دفعة ${batchIdx + 1} فشلت: ${errMsg}`, 'warning', "3");
             failedEntries.push(...batch);
+            done += batch.length;
+            batchIdx++;
           }
 
-          done += batch.length;
           setProgress({ current: done, total: needsAI.length });
-          if ((b + 1) % 5 === 0) {
+          if (batchIdx % 5 === 0 && batchIdx > 0) {
             log(`✔ تقدم: ${stats.fromAI} تُرجم، ${failedEntries.length} فشل حتى الآن`, 'info', "3");
           }
         }
 
         stats.failed = failedEntries.length;
 
-        // إعادة محاولة الفاشلة فرداً فرداً (حتى 20 نص)
+        // إعادة محاولة الفاشلة فرداً (حتى 20)
         if (failedEntries.length > 0 && failedEntries.length <= 20) {
-          log(`🔄 إعادة محاولة ${failedEntries.length} نص فاشل واحداً بواحد...`, 'info', "3");
+          log(`🔄 إعادة محاولة ${failedEntries.length} نص فاشل...`, 'info', "3");
           let recovered = 0;
           for (const e of failedEntries) {
             if (signal.aborted) break;
@@ -262,7 +290,7 @@ export function useAutoPilot({
             try {
               const resp = await fetch(getEdgeFunctionUrl("translate-entries"), {
                 method: 'POST', headers: getSupabaseHeaders(), signal,
-                body: buildFetchBody([{ key, original: e.original }], aiProvider, aiModelOverride),
+                body: buildFetchBody([{ key, original: e.original }], curProvider, curModel),
               });
               if (resp.ok) {
                 const data = await resp.json();
@@ -275,11 +303,11 @@ export function useAutoPilot({
               }
             } catch { /* تجاهل */ }
           }
-          if (recovered > 0) log(`✅ تعافى ${recovered} نص من الفاشلة`, 'success', "3");
+          if (recovered > 0) log(`✅ تعافى ${recovered} نص`, 'success', "3");
         }
 
         log(
-          `✅ ترجمة AI: ${stats.fromAI} نجح${stats.failed > 0 ? ` | ⚠️ ${stats.failed} فشل نهائياً` : ''}`,
+          `✅ ترجمة AI: ${stats.fromAI} نجح (${curProvider})${stats.failed > 0 ? ` | ⚠️ ${stats.failed} فشل نهائياً` : ''}`,
           stats.failed > 0 ? 'warning' : 'success', "3",
         );
       }

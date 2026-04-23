@@ -15,7 +15,7 @@ export function useEditorSettings() {
     try { if (key) localStorage.setItem('userGeminiKey', key); else localStorage.removeItem('userGeminiKey'); } catch {}
   }, []);
 
-  const DEAD_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free'];
+  const DEAD_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free', 'z-ai/glm-4.5-air:free', 'openai/gpt-oss-120b:free'];
 
   const [aiModel, _setAiModel] = useState<string>(() => {
     try {

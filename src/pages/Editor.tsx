@@ -22,10 +22,17 @@ import {
   Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle,
   Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight,
   BarChart3, Menu, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2,
-  Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi,
+  Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi, RefreshCw,
 } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
-import { DEFAULT_OPENROUTER_MODEL, OPENROUTER_FREE_MODELS, isOpenRouterModelId } from "@/lib/openrouter-models";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  isOpenRouterModelId,
+  getOpenRouterModels,
+  getOpenRouterFetchedAt,
+  refreshOpenRouterModels,
+  type OpenRouterModelOption,
+} from "@/lib/openrouter-models";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";

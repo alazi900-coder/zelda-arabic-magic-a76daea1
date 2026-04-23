@@ -152,6 +152,8 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingEngines, setLoadingEngines] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  // Recompute engines whenever the dialog opens, so a refreshed OpenRouter list is reflected.
+  const ALL_ENGINES = React.useMemo(() => buildEngines(), [open]);
 
   const getProviderKey = (engine: EngineConfig): string | undefined => {
     if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;

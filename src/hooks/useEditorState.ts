@@ -23,6 +23,7 @@ import { useEditorReview } from "@/hooks/useEditorReview";
 import { useEditorCleanup } from "@/hooks/useEditorCleanup";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
 import { deepDiagPredicates, matchesDeepDiagFilter, type DeepDiagFilterId } from "@/lib/deep-diagnostic-predicates";
+import { useAutoPilot } from "@/hooks/useAutoPilot";
 import {
   ExtractedEntry, EditorState, AUTOSAVE_DELAY, AI_BATCH_SIZE, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags,
@@ -811,6 +812,13 @@ export function useEditorState() {
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, failedEntries, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleRetryFailed, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview } = translation;
 
+  const autoPilot = useAutoPilot({
+    state, setState, activeGlossary, parseGlossaryMap,
+    translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey,
+    myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel,
+    addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
+  });
+
   const handleSmartReviewRef = useRef<(() => void) | null>(null);
   const triggerAutoSmartReview = useCallback(() => {
     if (autoSmartReview) {
@@ -1466,5 +1474,8 @@ export function useEditorState() {
 
     // Quality helpers
     isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, needsImprovement,
+
+    // AutoPilot
+    autoPilot,
   };
 }

@@ -98,6 +98,7 @@ import TranslationProgressDashboard from "@/components/editor/TranslationProgres
 import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
 import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
 import VirtualizedEntryList from "@/components/editor/VirtualizedEntryList";
+import { AutoPilotPanel } from "@/components/editor/AutoPilotPanel";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -966,6 +967,23 @@ const Editor = () => {
               </CardContent>
             </Card>
           )}
+          <div className="mb-4">
+            <AutoPilotPanel
+              running={editor.autoPilot.running}
+              phase={editor.autoPilot.phase}
+              phaseIndex={editor.autoPilot.phaseIndex}
+              progress={editor.autoPilot.progress}
+              logs={editor.autoPilot.logs}
+              report={editor.autoPilot.report}
+              mode={editor.autoPilot.mode}
+              setMode={editor.autoPilot.setMode}
+              freeProviderLabel={editor.autoPilot.freeProviderLabel}
+              onRun={editor.autoPilot.run}
+              onStop={editor.autoPilot.stop}
+            />
+          </div>
+
+
           {editor.translateProgress && (
             <Card className="mb-4 border-secondary/30 bg-secondary/5">
               <CardContent className="p-4 space-y-2">

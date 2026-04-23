@@ -15,8 +15,17 @@ export function useEditorSettings() {
     try { if (key) localStorage.setItem('userGeminiKey', key); else localStorage.removeItem('userGeminiKey'); } catch {}
   }, []);
 
+  const DEAD_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free'];
+
   const [aiModel, _setAiModel] = useState<string>(() => {
-    try { return localStorage.getItem('aiModel') || 'gemini-2.5-flash'; } catch { return 'gemini-2.5-flash'; }
+    try {
+      const saved = localStorage.getItem('aiModel') || 'gemini-2.5-flash';
+      if (DEAD_MODELS.includes(saved)) {
+        localStorage.setItem('aiModel', 'qwen/qwen-2.5-72b-instruct:free');
+        return 'qwen/qwen-2.5-72b-instruct:free';
+      }
+      return saved;
+    } catch { return 'gemini-2.5-flash'; }
   });
   const setAiModel = useCallback((m: string) => {
     _setAiModel(m);

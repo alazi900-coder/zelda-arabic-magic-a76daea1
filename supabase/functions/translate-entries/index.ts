@@ -928,7 +928,7 @@ ${textsBlock}
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY valid JSON with keys K0, K1... and Arabic translation values. Never modify ⟪T#⟫ placeholders.' },
+        { role: 'system', content: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). Output ONLY valid JSON with keys K0, K1... and Arabic translation values. Never modify ⟪T#⟫ placeholders.' },
         { role: 'user', content: prompt },
       ],
     }),
@@ -936,10 +936,16 @@ ${textsBlock}
 
   if (!response.ok) {
     const err = await response.text();
-    if (response.status === 401) throw new Error(`مفتاح API غير صالح — تحقق من مفتاح ${providerName} في الإعدادات`);
-    if (response.status === 402) throw new Error(`رصيد API غير كافٍ — أضف رصيداً لحساب ${providerName}`);
-    if (response.status === 429) throw new Error(`تجاوزت حد الطلبات — انتظر قليلاً ثم حاول مجدداً`);
-    if (response.status === 403) throw new Error(`مفتاح API محظور أو لا يملك صلاحية الوصول`);
+    if (response.status === 401) throw new Error(`مفتاح ${providerName} غير صالح — تحقق منه في الإعدادات`);
+    if (response.status === 402) throw new Error(`رصيد ${providerName} غير كافٍ — أضف رصيداً للحساب`);
+    if (response.status === 429) {
+      const isOR = baseUrl.includes('openrouter.ai');
+      throw new Error(isOR
+        ? `انتهت الحصة المجانية للنموذج على OpenRouter — الحصة مرتبطة بالحساب وليس بالمفتاح، لذا تغيير المفتاح لا يجدد الحصة. الحلول: (1) جرّب نموذجاً مجانياً آخر من القائمة، (2) أضف رصيداً لحسابك ($5)، (3) أنشئ حساباً جديداً على openrouter.ai`
+        : `تجاوزت حد الطلبات لـ ${providerName} — انتظر قليلاً ثم حاول مجدداً`
+      );
+    }
+    if (response.status === 403) throw new Error(`مفتاح ${providerName} محظور أو لا يملك الصلاحية`);
     if (response.status === 404 && baseUrl.includes('openrouter.ai')) throw new Error(`الموديل ${model} غير متاح حالياً على OpenRouter — اختر موديلاً مجانياً آخر من القائمة`);
     throw new Error(`${model} error ${response.status}: ${err.slice(0, 300)}`);
   }
@@ -1330,7 +1336,7 @@ ${textsBlock}
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' }] },
+        systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' }] },
         generationConfig: { temperature: 0.3 },
       }),
     });
@@ -1339,11 +1345,16 @@ ${textsBlock}
       const errText = await geminiResponse.text();
       console.error('Gemini API error:', errText);
       if (geminiResponse.status === 429 || geminiResponse.status === 503) {
-        console.log(`Gemini ${geminiResponse.status} error, falling back to Lovable AI...`);
+        if (userApiKey?.trim()) {
+          // المستخدم أدخل مفتاحه الشخصي لكنه تجاوز الحد المجاني
+          throw new Error('تجاوزت الحد المجاني لـ Gemini اليومي — انتظر بضع ساعات أو جرّب نموذجاً آخر (Gemini 2.5 Pro / Flash)');
+        }
+        // مفتاح الخادم تجاوز الحد — نتراجع للـ Lovable AI
+        console.log(`Gemini ${geminiResponse.status} (server key), falling back to Lovable AI...`);
       } else {
-        if (geminiResponse.status === 400) throw new Error('مفتاح API غير صالح — تحقق من المفتاح');
-        if (geminiResponse.status === 403) throw new Error('مفتاح API محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio');
-        throw new Error(`خطأ Gemini: ${geminiResponse.status}`);
+        if (geminiResponse.status === 400) throw new Error('مفتاح Gemini غير صالح — تحقق منه في Google AI Studio (aistudio.google.com)');
+        if (geminiResponse.status === 403) throw new Error('مفتاح Gemini محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio');
+        throw new Error(`خطأ Gemini: ${geminiResponse.status} — ${errText.slice(0, 200)}`);
       }
     } else {
       const geminiData = await geminiResponse.json();
@@ -1370,7 +1381,7 @@ ${textsBlock}
         body: JSON.stringify({
           model: aiModel === 'gpt-5' ? 'openai/gpt-5' : aiModel === 'gemini-2.5-pro' ? 'google/gemini-2.5-pro' : aiModel === 'gemini-3.1-pro-preview' ? 'google/gemini-3.1-pro-preview' : 'google/gemini-2.5-flash',
           messages: [
-            { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' },
+            { role: 'system', content: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' },
             { role: 'user', content: aiPrompt },
           ],
         }),
@@ -1511,7 +1522,9 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const orModel = aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) ? aiModel : 'z-ai/glm-4.5-air:free';
+      const DEAD_OR_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free', 'z-ai/glm-4.5-air:free'];
+      const orModel = (aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) && !DEAD_OR_MODELS.includes(aiModel))
+        ? aiModel : 'qwen/qwen-2.5-72b-instruct:free';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const { translations, glossaryStats } = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,

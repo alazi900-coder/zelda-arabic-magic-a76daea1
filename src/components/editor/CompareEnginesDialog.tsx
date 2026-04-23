@@ -7,7 +7,7 @@ import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
-import { DEFAULT_OPENROUTER_MODEL, OPENROUTER_FREE_MODELS } from "@/lib/openrouter-models";
+import { OPENROUTER_FREE_MODELS } from "@/lib/openrouter-models";
 
 interface CompareEnginesDialogProps {
   open: boolean;

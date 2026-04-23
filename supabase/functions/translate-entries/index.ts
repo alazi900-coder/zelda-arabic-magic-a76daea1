@@ -912,25 +912,35 @@ Input:
 ${textsBlock}
 }`;
 
+  const providerName = baseUrl.includes('deepseek') ? 'DeepSeek' : baseUrl.includes('groq') ? 'Groq' : 'OpenRouter';
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (baseUrl.includes('openrouter.ai')) {
+    headers['HTTP-Referer'] = 'https://zelda-arabic-magic.lovable.app';
+    headers['X-Title'] = 'Zelda Arabic Magic';
+  }
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       model,
       messages: [
         { role: 'system', content: 'You are a Xenoblade Chronicles 3 game text translator. Output ONLY valid JSON with keys K0, K1... and Arabic translation values. Never modify ⟪T#⟫ placeholders.' },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.3,
     }),
   });
 
   if (!response.ok) {
     const err = await response.text();
-    if (response.status === 401) throw new Error(`مفتاح API غير صالح — تحقق من مفتاح ${baseUrl.includes('deepseek') ? 'DeepSeek' : baseUrl.includes('groq') ? 'Groq' : 'OpenRouter'} في الإعدادات`);
-    if (response.status === 402) throw new Error(`رصيد API غير كافٍ — أضف رصيداً لحساب ${baseUrl.includes('deepseek') ? 'DeepSeek' : baseUrl.includes('groq') ? 'Groq' : 'OpenRouter'}`);
+    if (response.status === 401) throw new Error(`مفتاح API غير صالح — تحقق من مفتاح ${providerName} في الإعدادات`);
+    if (response.status === 402) throw new Error(`رصيد API غير كافٍ — أضف رصيداً لحساب ${providerName}`);
     if (response.status === 429) throw new Error(`تجاوزت حد الطلبات — انتظر قليلاً ثم حاول مجدداً`);
     if (response.status === 403) throw new Error(`مفتاح API محظور أو لا يملك صلاحية الوصول`);
+    if (response.status === 404 && baseUrl.includes('openrouter.ai')) throw new Error(`الموديل ${model} غير متاح حالياً على OpenRouter — اختر موديلاً مجانياً آخر من القائمة`);
     throw new Error(`${model} error ${response.status}: ${err.slice(0, 300)}`);
   }
 
@@ -1501,9 +1511,7 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      // GLM 4.6 free model via OpenRouter — OpenAI-compatible API
-      // Pick model from request (aiModel) or default to free GLM 4.6
-      const orModel = aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) ? aiModel : 'z-ai/glm-4.6:free';
+      const orModel = aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) ? aiModel : 'z-ai/glm-4.5-air:free';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const { translations, glossaryStats } = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,

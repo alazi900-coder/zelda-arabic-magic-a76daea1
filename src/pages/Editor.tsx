@@ -729,9 +729,25 @@ const Editor = () => {
                   <div className="flex flex-col gap-3">
                     {/* Free Model Selector */}
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني:</span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني ({orModels.length}):</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleRefreshOrModels}
+                          disabled={orModelsRefreshing}
+                          className="h-7 text-xs gap-1"
+                        >
+                          {orModelsRefreshing ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3" />
+                          )}
+                          {orModelsRefreshing ? 'جاري التحديث...' : 'تحديث القائمة'}
+                        </Button>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                        {OPENROUTER_FREE_MODELS.map(m => {
+                        {orModels.map(m => {
                           const isSelected = (editor.aiModel === m.id) || (m.id === DEFAULT_OPENROUTER_MODEL && !isOpenRouterModelId(editor.aiModel));
                           return (
                             <button
@@ -744,12 +760,17 @@ const Editor = () => {
                               }`}
                             >
                               <span className="font-display">{m.badge} {m.label}</span>
+                              <span className="text-[10px] opacity-70 truncate w-full" dir="ltr">{m.id}</span>
                               <span className="text-[10px] opacity-70">{m.desc}</span>
                             </button>
                           );
                         })}
                       </div>
-                      <p className="text-[10px] text-muted-foreground font-body">هذه الموديلات هي المجانية المتاحة حالياً عبر OpenRouter، وقد تتغير حسب التوفر.</p>
+                      <p className="text-[10px] text-muted-foreground font-body">
+                        {orModelsFetchedAt
+                          ? `آخر تحديث: ${new Date(orModelsFetchedAt).toLocaleString('ar')} — اضغط "تحديث القائمة" لجلب أحدث الموديلات المجانية مباشرة من OpenRouter.`
+                          : 'القائمة الافتراضية — اضغط "تحديث القائمة" لجلب أحدث الموديلات المجانية مباشرة من OpenRouter.'}
+                      </p>
                     </div>
 
                     {/* API Key */}

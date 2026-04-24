@@ -1,8 +1,10 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy } from "lucide-react";
-import { EditorState } from "@/components/editor/types";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Copy, AlertTriangle, Languages, Wrench, ChevronDown, ChevronRight } from "lucide-react";
+import type { EditorState } from "@/components/editor/types";
+import { detectLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
 import { toast } from "@/hooks/use-toast";
 
 interface TranslationToolsPanelProps {
@@ -12,75 +14,51 @@ interface TranslationToolsPanelProps {
   onApplyTranslation: (key: string, value: string) => void;
 }
 
-// Translation history stored in localStorage
-const HISTORY_KEY = "translation-history-v1";
-
-interface HistoryEntry {
-  value: string;
-  timestamp: number;
-}
-
-function loadHistory(): Record<string, HistoryEntry[]> {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function saveHistory(history: Record<string, HistoryEntry[]>) {
-  try {
-    const keys = Object.keys(history);
-    if (keys.length > 1000) {
-      const sorted = keys.sort((a, b) => {
-        const aLast = history[a]?.[0]?.timestamp || 0;
-        const bLast = history[b]?.[0]?.timestamp || 0;
-        return bLast - aLast;
-      });
-      const trimmed: Record<string, HistoryEntry[]> = {};
-      for (const k of sorted.slice(0, 1000)) trimmed[k] = history[k];
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
-      return;
-    }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  } catch { }
-}
-
-export function addToHistory(key: string, value: string) {
-  if (!value?.trim()) return;
-  const history = loadHistory();
-  if (!history[key]) history[key] = [];
-  if (history[key][0]?.value === value) return;
-  history[key].unshift({ value, timestamp: Date.now() });
-  history[key] = history[key].slice(0, 10);
-  saveHistory(history);
-}
-
 export default function TranslationToolsPanel({ state, onApplyTranslation }: TranslationToolsPanelProps) {
+  const [tab, setTab] = useState<"duplicates" | "literal">("duplicates");
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  // ---- Duplicate detection (English text repeated, only some translated) ----
   const duplicates = useMemo(() => {
-    if (!state) return null;
-    const groups: Record<string, { keys: string[]; translated: string | null }> = {};
+    if (!state) return { actionable: [] as Array<{ english: string; keys: string[]; translated: string }>, total: 0 };
+    const groups: Record<string, { english: string; keys: string[]; translated: string | null }> = {};
     for (const entry of state.entries) {
       const norm = entry.original.trim().toLowerCase();
       if (!norm || norm.length < 5) continue;
-      const key = `${entry.msbtFile}:${entry.index}`;
-      if (!groups[norm]) groups[norm] = { keys: [], translated: null };
-      groups[norm].keys.push(key);
-      if (state.translations[key]?.trim()) groups[norm].translated = state.translations[key];
+      const k = `${entry.msbtFile}:${entry.index}`;
+      if (!groups[norm]) groups[norm] = { english: entry.original.trim(), keys: [], translated: null };
+      groups[norm].keys.push(k);
+      if (state.translations[k]?.trim()) groups[norm].translated = state.translations[k];
     }
-    const actionable = Object.values(groups).filter(
-      g => g.keys.length > 1 && g.translated && g.keys.some(k => !state.translations[k]?.trim())
-    );
-    return { total: Object.values(groups).filter(g => g.keys.length > 1).length, actionable };
+    const actionable = Object.values(groups)
+      .filter(g => g.keys.length > 1 && g.translated && g.keys.some(k => !state.translations[k]?.trim()))
+      .map(g => ({ english: g.english, keys: g.keys, translated: g.translated! }));
+    const total = Object.values(groups).filter(g => g.keys.length > 1).length;
+    return { actionable, total };
   }, [state?.entries, state?.translations]);
 
-  const handleApplyDuplicates = useCallback(() => {
-    if (!duplicates || !state) return;
+  // ---- Literal-translation detection ----
+  const literals = useMemo(() => {
+    if (!state) return [] as Array<{ key: string; english: string; arabic: string }>;
+    const out: Array<{ key: string; english: string; arabic: string }> = [];
+    for (const entry of state.entries) {
+      const k = `${entry.msbtFile}:${entry.index}`;
+      const tr = state.translations[k]?.trim();
+      if (!tr) continue;
+      if (detectLiteralTranslation(entry.original, tr)) {
+        out.push({ key: k, english: entry.original, arabic: tr });
+      }
+    }
+    return out;
+  }, [state?.entries, state?.translations]);
+
+  // ---- Apply all duplicates at once ----
+  const handleApplyAllDuplicates = useCallback(() => {
     let applied = 0;
-    for (const group of duplicates.actionable) {
-      if (!group.translated) continue;
-      for (const k of group.keys) {
+    for (const g of duplicates.actionable) {
+      for (const k of g.keys) {
         if (!state.translations[k]?.trim()) {
-          onApplyTranslation(k, group.translated);
+          onApplyTranslation(k, g.translated);
           applied++;
         }
       }
@@ -88,22 +66,135 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
     toast({ title: `✅ تم نسخ ${applied} ترجمة من النصوص المكررة` });
   }, [duplicates, state, onApplyTranslation]);
 
-  if (!duplicates || duplicates.actionable.length === 0) return null;
+  const handleApplySingleDuplicate = useCallback((g: { keys: string[]; translated: string }) => {
+    let applied = 0;
+    for (const k of g.keys) {
+      if (!state.translations[k]?.trim()) {
+        onApplyTranslation(k, g.translated);
+        applied++;
+      }
+    }
+    toast({ title: `✅ تم نسخ ${applied} ترجمة` });
+  }, [state, onApplyTranslation]);
+
+  const handleClearLiteral = useCallback((key: string) => {
+    onApplyTranslation(key, "");
+    toast({ title: "🗑️ تم مسح الترجمة الحرفية — أعد الترجمة" });
+  }, [onApplyTranslation]);
+
+  const totalIssues = duplicates.actionable.length + literals.length;
+  if (totalIssues === 0) return null;
 
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5">
-      <CardContent className="p-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm">
-          <Copy className="w-4 h-4 text-amber-400 shrink-0" />
-          <span className="font-display">
-            {duplicates.actionable.length} نص مكرر يمكن نسخ ترجمته تلقائياً
-          </span>
-          <span className="text-xs text-muted-foreground">({duplicates.total} مجموعة)</span>
+    <Card className="border-border/50">
+      <CardContent className="p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <Wrench className="w-4 h-4 text-primary shrink-0" />
+          <span className="text-sm font-semibold">أدوات الترجمة المتقدمة</span>
+          <span className="text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-mono">{totalIssues}</span>
         </div>
-        <Button size="sm" variant="secondary" className="text-xs h-7 shrink-0" onClick={handleApplyDuplicates}>
-          <Copy className="w-3 h-3 ml-1" /> نسخ الكل
-        </Button>
+
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "duplicates" | "literal")} className="w-full">
+          <TabsList className="grid grid-cols-2 h-8">
+            <TabsTrigger value="duplicates" className="text-[11px] gap-1">
+              <Copy className="w-3 h-3" />
+              مكررة
+              {duplicates.actionable.length > 0 && (
+                <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1 rounded">{duplicates.actionable.length}</span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="literal" className="text-[11px] gap-1">
+              <Languages className="w-3 h-3" />
+              حرفية
+              {literals.length > 0 && (
+                <span className="text-[9px] bg-destructive/20 text-destructive px-1 rounded">{literals.length}</span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* DUPLICATES TAB */}
+          <TabsContent value="duplicates" className="mt-2 space-y-1.5">
+            {duplicates.actionable.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">لا توجد نصوص مكررة قابلة للنسخ</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    {duplicates.actionable.length} مجموعة قابلة للنسخ ({duplicates.total} مكرر إجمالاً)
+                  </span>
+                  <Button size="sm" variant="secondary" className="h-7 text-[11px]" onClick={handleApplyAllDuplicates}>
+                    <Copy className="w-3 h-3 ml-1" /> نسخ الكل
+                  </Button>
+                </div>
+                <div className="space-y-1 max-h-[260px] overflow-y-auto">
+                  {duplicates.actionable.slice(0, 30).map((g) => {
+                    const isExpanded = expandedKey === g.english;
+                    const missing = g.keys.filter(k => !state.translations[k]?.trim()).length;
+                    return (
+                      <div key={g.english} className="border border-border/30 rounded overflow-hidden">
+                        <button
+                          className="w-full flex items-center gap-1.5 p-1.5 text-right hover:bg-muted/30"
+                          onClick={() => setExpandedKey(isExpanded ? null : g.english)}
+                        >
+                          {isExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+                          <span className="flex-1 text-[11px] font-mono truncate" dir="ltr">{g.english}</span>
+                          <span className="text-[9px] text-amber-500 shrink-0">+{missing}</span>
+                        </button>
+                        {isExpanded && (
+                          <div className="px-2 pb-1.5 space-y-1 border-t border-border/30 bg-muted/10">
+                            <div className="text-[11px] font-body py-1" dir="rtl">{g.translated}</div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full h-6 text-[10px]"
+                              onClick={() => handleApplySingleDuplicate(g)}
+                            >
+                              نسخ على {missing} إدخال
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </TabsContent>
+
+          {/* LITERAL TAB */}
+          <TabsContent value="literal" className="mt-2 space-y-1.5">
+            {literals.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">لا توجد ترجمات حرفية مشبوهة</p>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5 text-[11px] text-destructive">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>{literals.length} ترجمة تحتوي كلمات إنجليزية كثيرة (&gt;40%)</span>
+                </div>
+                <div className="space-y-1 max-h-[260px] overflow-y-auto">
+                  {literals.slice(0, 30).map((l) => (
+                    <div key={l.key} className="border border-destructive/20 rounded p-1.5 bg-destructive/5 space-y-1">
+                      <div className="text-[10px] font-mono text-muted-foreground truncate" dir="ltr">{l.english}</div>
+                      <div className="text-[11px] font-body" dir="rtl">{l.arabic}</div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="w-full h-6 text-[10px] text-destructive hover:bg-destructive/10"
+                        onClick={() => handleClearLiteral(l.key)}
+                      >
+                        مسح وإعادة الترجمة
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
 }
+
+// Re-export for backwards compatibility — actual implementation moved to translation-history.ts
+export { addToHistory } from "@/lib/translation-history";

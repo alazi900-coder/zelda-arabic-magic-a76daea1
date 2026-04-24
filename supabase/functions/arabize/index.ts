@@ -722,7 +722,7 @@ function decompressLangFile(langData: Uint8Array, dictData: Uint8Array, langFile
   if (!isZstd) throw new Error('الملف غير معروف: لا يبدو أنه SARC مضغوط أو SARC غير مضغوط');
 
   let dictSarcData: Uint8Array;
-  try { dictSarcData = decompress(dictData); } catch { dictSarcData = dictData; }
+  try { dictSarcData = new Uint8Array(decompress(dictData as unknown as ArrayBuffer) as unknown as ArrayBuffer); } catch { dictSarcData = dictData; }
 
   const dictFiles = parseSARC(dictSarcData);
   console.log(`Found ${dictFiles.length} dictionaries: ${dictFiles.map(f => f.name).join(', ')}`);
@@ -748,7 +748,8 @@ function decompressLangFile(langData: Uint8Array, dictData: Uint8Array, langFile
 
   console.log(`Using dictionary: ${selectedDictName} (${rawDict.length} bytes)`);
   const dctx = createDCtx();
-  const sarcData = decompressUsingDict(dctx, langData, rawDict);
+  const sarcDataRaw = decompressUsingDict(dctx, langData as unknown as ArrayBuffer, rawDict as unknown as ArrayBuffer);
+  const sarcData = new Uint8Array(sarcDataRaw as unknown as ArrayBuffer);
   console.log(`Decompressed: ${langData.length} -> ${sarcData.length} bytes`);
 
   return { sarcData, rawDict };
@@ -1033,11 +1034,11 @@ Deno.serve(async (req) => {
       console.log(`Re-compressing SARC (${repackedData.length} bytes)...`);
       if (rawDict) {
         const cctx = createCCtx();
-        outputData = compressUsingDict(cctx, repackedData, rawDict, 3);
+        outputData = new Uint8Array(compressUsingDict(cctx, repackedData as unknown as ArrayBuffer, rawDict as unknown as ArrayBuffer, 3) as unknown as ArrayBuffer);
         isCompressed = true;
         console.log(`Compressed with dict: ${repackedData.length} -> ${outputData.length} bytes`);
       } else {
-        outputData = compress(repackedData);
+        outputData = new Uint8Array(compress(repackedData as unknown as ArrayBuffer) as unknown as ArrayBuffer);
         isCompressed = true;
         console.log(`Compressed: ${repackedData.length} -> ${outputData.length} bytes`);
       }
@@ -1060,7 +1061,7 @@ Deno.serve(async (req) => {
       }
     } catch { /* ignore */ }
 
-    return new Response(outputData, {
+    return new Response(outputData as BodyInit, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/octet-stream',

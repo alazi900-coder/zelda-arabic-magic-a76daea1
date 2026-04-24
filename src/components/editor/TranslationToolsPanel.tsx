@@ -100,7 +100,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
               <Copy className="w-3 h-3" />
               مكررة
               {duplicates.actionable.length > 0 && (
-                <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1 rounded">{duplicates.actionable.length}</span>
+                <span className="text-[9px] bg-accent/20 text-accent px-1 rounded">{duplicates.actionable.length}</span>
               )}
             </TabsTrigger>
             <TabsTrigger value="literal" className="text-[11px] gap-1">
@@ -138,7 +138,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
                         >
                           {isExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
                           <span className="flex-1 text-[11px] font-mono truncate" dir="ltr">{g.english}</span>
-                          <span className="text-[9px] text-amber-500 shrink-0">+{missing}</span>
+                          <span className="text-[9px] text-accent shrink-0">+{missing}</span>
                         </button>
                         {isExpanded && (
                           <div className="px-2 pb-1.5 space-y-1 border-t border-border/30 bg-muted/10">

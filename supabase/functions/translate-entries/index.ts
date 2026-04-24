@@ -897,7 +897,7 @@ async function translateWithOpenAICompat(
   }
 
   const textsBlock = needsAI.map((item, i) => `"K${i}": "${escapeForJsonString(item.termLocks.lockedText)}"`).join(',\n');
-  const hasNpcEntries = _npcMode && needsAI.some(item => isNpcDialogue(item.key));
+  const hasNpcEntries = _npcMode && needsAI.some(item => isNpcDialogue(item.entry.key));
   const npcRule = hasNpcEntries ? `\n8. NPC DIALOGUE MODE: Some entries are NPC dialogue (short in-game text boxes). Keep these translations VERY concise — max ${_npcMaxLines ?? 2} lines, approximately 37 Arabic characters per line. Prioritize brevity over completeness.` : '';
   const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.
 

@@ -180,6 +180,12 @@ export function useEditorTranslation({
       const data = await response.json();
       addAiRequest(1);
       if (data.charsUsed) addMyMemoryChars(data.charsUsed);
+      if (data.fallbackUsed) {
+        toast({
+          title: "🔄 تم التبديل لموديل بديل",
+          description: `الموديل الأصلي ${data.fallbackUsed.primary} غير متاح — استُخدم ${data.fallbackUsed.actual}`,
+        });
+      }
       if (data.translations && data.translations[key]) {
         let translated = data.translations[key];
         // Post-process: local tag repair + auto-sync lines

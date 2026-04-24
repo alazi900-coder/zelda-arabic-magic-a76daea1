@@ -76,7 +76,7 @@ export function computeConfidence(entry: ExtractedEntry, translation: string, gl
 }
 
 /** Detect likely literal translations */
-export function detectLiteralTranslation(original: string, translation: string): boolean {
+export function detectLiteralTranslation(original: string, translation: string, englishRatioThreshold = 0.4): boolean {
   if (!original?.trim() || !translation?.trim()) return false;
   // Word order preservation heuristic: if Arabic words appear in roughly the same position as English
   const origWords = original.toLowerCase().split(/\s+/).filter(w => w.length > 2);
@@ -89,7 +89,7 @@ export function detectLiteralTranslation(original: string, translation: string):
       englishWords++;
     }
   }
-  if (transWords.length > 3 && englishWords / transWords.length > 0.4) return true;
+  if (transWords.length > 3 && englishWords / transWords.length > englishRatioThreshold) return true;
 
   return false;
 }

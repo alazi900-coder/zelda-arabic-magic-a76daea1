@@ -266,6 +266,7 @@ export function useAutoPilot({
             if (isQuotaErr(errMsg) && remaining.length > 0) {
               const next = remaining.shift()!;
               log(`⚠️ انتهت حصة ${curProvider} — تحويل تلقائي لـ ${next.label}`, 'warning', "3");
+              toast({ title: "⚡ تحويل تلقائي للمحرك", description: `انتهت حصة ${curProvider} — يُستخدم الآن: ${next.label}` });
               curProvider = next.provider;
               curModel = next.model;
               // أعد نفس الدفعة مع المزود الجديد (لا تزيد batchIdx)

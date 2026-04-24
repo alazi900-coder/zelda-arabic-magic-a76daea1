@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X, Wand2 } from "lucide-react";
+import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X, Wand2, RotateCcw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { EditorState } from "./types";
 import { detectInconsistencies } from "./TranslationProgressDashboard";
@@ -16,11 +16,13 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [undoSnapshot, setUndoSnapshot] = useState<Record<string, string> | null>(null);
 
   const inconsistencies = useMemo(() => detectInconsistencies(state), [state.entries, state.translations]);
 
   /** Auto-unify ALL groups by picking the most common translation in each. */
   const handleAutoUnifyAll = useCallback(() => {
+    const snapshot: Record<string, string> = {};
     let totalChanged = 0;
     for (const group of inconsistencies) {
       const counts = new Map<string, number>();
@@ -34,16 +36,27 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
       if (!best) continue;
       for (const entry of group.translations) {
         if (entry.translation !== best) {
+          snapshot[entry.key] = entry.translation;
           updateTranslation(entry.key, best);
           totalChanged++;
         }
       }
     }
+    setUndoSnapshot(Object.keys(snapshot).length > 0 ? snapshot : null);
     toast({
       title: `✅ تم توحيد ${inconsistencies.length} مجموعة`,
       description: `تم تعديل ${totalChanged} ترجمة لتطابق الأكثر تكراراً`,
     });
   }, [inconsistencies, updateTranslation]);
+
+  const handleUndo = useCallback(() => {
+    if (!undoSnapshot) return;
+    for (const [key, val] of Object.entries(undoSnapshot)) {
+      updateTranslation(key, val);
+    }
+    setUndoSnapshot(null);
+    toast({ title: "↩️ تم التراجع عن آخر توحيد" });
+  }, [undoSnapshot, updateTranslation]);
 
   if (inconsistencies.length === 0) {
     return (
@@ -58,9 +71,14 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
   const handleUnify = (english: string, chosen: string) => {
     const group = inconsistencies.find(g => g.english === english);
     if (!group) return;
+    const snapshot: Record<string, string> = {};
     for (const entry of group.translations) {
-      if (entry.translation !== chosen) updateTranslation(entry.key, chosen);
+      if (entry.translation !== chosen) {
+        snapshot[entry.key] = entry.translation;
+        updateTranslation(entry.key, chosen);
+      }
     }
+    if (Object.keys(snapshot).length > 0) setUndoSnapshot(snapshot);
     setEditingGroup(null);
   };
 
@@ -75,15 +93,28 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
         <GitCompareArrows className="w-4 h-4 text-destructive shrink-0" />
         <span className="text-sm font-semibold">تناقضات الترجمة</span>
         <span className="text-xs bg-destructive/15 text-destructive px-1.5 py-0.5 rounded-full font-mono">{inconsistencies.length}</span>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="ms-auto h-7 text-[11px]"
-          onClick={handleAutoUnifyAll}
-          title="يختار الترجمة الأكثر تكراراً في كل مجموعة ويطبقها على الباقي"
-        >
-          <Wand2 className="w-3 h-3 ml-1" /> توحيد تلقائي للكل
-        </Button>
+        <div className="ms-auto flex gap-1">
+          {undoSnapshot && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px] border-amber-500 text-amber-700 dark:text-amber-400"
+              onClick={handleUndo}
+              title="تراجع عن آخر توحيد"
+            >
+              <RotateCcw className="w-3 h-3 ml-1" /> تراجع
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-7 text-[11px]"
+            onClick={handleAutoUnifyAll}
+            title="يختار الترجمة الأكثر تكراراً في كل مجموعة ويطبقها على الباقي"
+          >
+            <Wand2 className="w-3 h-3 ml-1" /> توحيد تلقائي للكل
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-1.5 max-h-[300px] overflow-y-auto">

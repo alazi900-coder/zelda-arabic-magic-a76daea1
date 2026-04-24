@@ -1528,16 +1528,48 @@ Deno.serve(async (req) => {
         });
       }
       const DEAD_OR_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free', 'z-ai/glm-4.5-air:free'];
-      const orModel = (aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) && !DEAD_OR_MODELS.includes(aiModel))
+      const primary = (aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) && !DEAD_OR_MODELS.includes(aiModel))
         ? aiModel : 'qwen/qwen-2.5-72b-instruct:free';
+      // Fallback chain — tried in order if primary fails with 404/429/quota
+      const FALLBACK_CHAIN = [
+        'qwen/qwen-2.5-72b-instruct:free',
+        'google/gemma-3-27b-it:free',
+        'meta-llama/llama-4-scout:free',
+        'qwen/qwen3-next-80b-a3b-instruct:free',
+        'nvidia/nemotron-nano-9b-v2:free',
+      ];
+      const tried: string[] = [];
+      const candidates = [primary, ...FALLBACK_CHAIN.filter(m => m !== primary)];
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
-        entries, protectedEntries, glossaryMap, providerApiKey,
-        'https://openrouter.ai/api/v1', orModel,
-      );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+      let lastError: Error | null = null;
+      for (const model of candidates) {
+        tried.push(model);
+        try {
+          const { translations, glossaryStats } = await translateWithOpenAICompat(
+            entries, protectedEntries, glossaryMap, providerApiKey,
+            'https://openrouter.ai/api/v1', model,
+          );
+          // Success — include fallback metadata if we used a non-primary model
+          const usedFallback = model !== primary;
+          return new Response(JSON.stringify({
+            translations,
+            glossaryStats,
+            ...(usedFallback ? { fallbackUsed: { primary, actual: model, tried } } : {}),
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          const msg = lastError.message.toLowerCase();
+          // Only fall back on model-availability / quota errors. Auth & network errors should fail fast.
+          const recoverable = msg.includes('غير متاح') || msg.includes('انتهت الحصة') || msg.includes('429') || msg.includes('404') || msg.includes('quota') || msg.includes('rate');
+          if (!recoverable) throw lastError;
+          console.warn(`[OpenRouter Fallback] ${model} failed: ${lastError.message} — trying next model`);
+        }
+      }
+      // All models exhausted
+      throw new Error(`فشلت كل موديلات OpenRouter المتاحة (جربنا ${tried.length}: ${tried.join(', ')}). آخر خطأ: ${lastError?.message || 'غير معروف'}`);
     } else {
       const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
       return new Response(JSON.stringify({ translations, glossaryStats }), {

@@ -714,7 +714,7 @@ Deno.serve(async (req) => {
 
     const zipData = buildZip(processedFiles);
 
-    return new Response(zipData, {
+    return new Response(zipData as BodyInit, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/zip',

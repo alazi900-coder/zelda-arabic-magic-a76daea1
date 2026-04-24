@@ -2,8 +2,19 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu } from "lucide-react";
+import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu, Settings } from "lucide-react";
 import type { AutoPilotLog, AutoPilotReport, AutoPilotMode } from "@/hooks/useAutoPilot";
+
+type Provider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter';
+
+const PROVIDERS: { id: Provider; label: string; note: string }[] = [
+  { id: 'gemini',      label: 'Gemini',         note: 'مفتاح Gemini' },
+  { id: 'deepseek',   label: 'DeepSeek',        note: 'مفتاح DeepSeek' },
+  { id: 'groq',       label: 'Groq',            note: 'مفتاح Groq' },
+  { id: 'openrouter', label: 'OpenRouter',      note: 'مفتاح OpenRouter' },
+  { id: 'mymemory',   label: 'MyMemory',        note: 'بريد إلكتروني' },
+  { id: 'google',     label: 'Google Translate', note: 'مجاني بالكامل' },
+];
 
 interface AutoPilotPanelProps {
   running: boolean;
@@ -15,6 +26,8 @@ interface AutoPilotPanelProps {
   mode: AutoPilotMode;
   setMode: (m: AutoPilotMode) => void;
   freeProviderLabel: string;
+  translationProvider: string;
+  setTranslationProvider: (p: Provider) => void;
   onRun: (m: AutoPilotMode) => void;
   onStop: () => void;
 }
@@ -31,9 +44,10 @@ const logColor = (type: AutoPilotLog['type']) => {
 
 export function AutoPilotPanel({
   running, phase, phaseIndex, progress, logs, report,
-  mode, setMode, freeProviderLabel, onRun, onStop,
+  mode, setMode, freeProviderLabel, translationProvider, setTranslationProvider, onRun, onStop,
 }: AutoPilotPanelProps) {
   const [logsOpen, setLogsOpen] = React.useState(true);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const logsRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -74,6 +88,13 @@ export function AutoPilotPanel({
                 >
                   <Cpu className="w-3 h-3" /> ذكي 🤖
                 </Button>
+                <button
+                  onClick={() => setSettingsOpen(v => !v)}
+                  className={`h-7 w-7 flex items-center justify-center rounded border transition-colors ${settingsOpen ? 'bg-muted border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                  title="إعدادات المحرك"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
               </>
             )}
           </div>
@@ -87,6 +108,33 @@ export function AutoPilotPanel({
       </CardHeader>
 
       <CardContent className="px-4 pb-3 space-y-2">
+        {/* Provider settings */}
+        {settingsOpen && !running && (
+          <div className="rounded-md border border-border/60 bg-muted/40 p-2.5 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">محرك الوضع الذكي 🤖</p>
+            <div className="flex flex-wrap gap-1">
+              {PROVIDERS.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setTranslationProvider(p.id)}
+                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                    translationProvider === p.id
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border bg-background hover:border-primary/50 text-foreground'
+                  }`}
+                  title={p.note}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              الحالي: <span className="font-medium text-foreground">{PROVIDERS.find(p => p.id === translationProvider)?.label ?? translationProvider}</span>
+              {' · '}المجاني: <span className="font-medium text-green-600 dark:text-green-400">{freeProviderLabel}</span>
+            </p>
+          </div>
+        )}
+
         {/* Phase step indicator */}
         {(running || phaseIndex > 0) && (
           <div className="flex items-center gap-1 justify-between">

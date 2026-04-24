@@ -815,7 +815,7 @@ export function useEditorState() {
   const autoPilot = useAutoPilot({
     state, setState, activeGlossary, parseGlossaryMap,
     translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey,
-    myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel,
+    myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
     addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
   });
 

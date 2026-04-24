@@ -986,6 +986,8 @@ const Editor = () => {
                 mode={editor.autoPilot.mode}
                 setMode={editor.autoPilot.setMode}
                 freeProviderLabel={editor.autoPilot.freeProviderLabel}
+                translationProvider={editor.translationProvider}
+                setTranslationProvider={editor.setTranslationProvider}
                 onRun={editor.autoPilot.run}
                 onStop={editor.autoPilot.stop}
               />

@@ -40,6 +40,7 @@ interface UseAutoPilotProps {
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
+  npcMode?: boolean;
   aiModel: string;
   addAiRequest: (n?: number) => void;
   addMyMemoryChars: (n: number) => void;
@@ -62,7 +63,7 @@ function pickFreeProvider(
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
   translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey,
-  myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel,
+  myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
 }: UseAutoPilotProps) {
   const [running, setRunning] = useState(false);
@@ -101,10 +102,11 @@ export function useAutoPilot({
       myMemoryEmail: (prov === 'mymemory' ? myMemoryEmail : undefined) || undefined,
       rebalanceNewlines: rebalanceNewlines || undefined,
       npcMaxLines,
+      npcMode: npcMode || undefined,
       aiModel: forceModel || (prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey,
-      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, aiModel]);
+      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {
     if (!state || running) return;
@@ -134,7 +136,12 @@ export function useAutoPilot({
           ...(aiProvider !== 'groq' && userGroqKey ? [{ provider: 'groq', label: 'Groq Llama 3.3' }] : []),
           { provider: 'google', label: 'Google Translate' },
         ]
-      : [];
+      : [
+          // الوضع الذكي: إذا انتهت الحصة تحول للمجاني تلقائياً
+          ...(userOpenRouterKey ? [{ provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen (OpenRouter مجاني)' }] : []),
+          ...(userGroqKey ? [{ provider: 'groq', label: 'Groq Llama 3.3' }] : []),
+          { provider: 'google', label: 'Google Translate' },
+        ];
 
     const log = (msg: string, type: AutoPilotLog['type'] = 'info', ph = '') =>
       setLogs(prev => [...prev, { id: ++logIdRef.current, phase: ph, message: msg, type }]);

@@ -19,30 +19,6 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
 
   const inconsistencies = useMemo(() => detectInconsistencies(state), [state.entries, state.translations]);
 
-  if (inconsistencies.length === 0) {
-    return (
-      <Card className="p-3 border-border/50 text-center">
-        <p className="text-sm text-primary flex items-center justify-center gap-1.5">
-          <Check className="w-4 h-4" /> لا توجد تناقضات في الترجمة
-        </p>
-      </Card>
-    );
-  }
-
-  const handleUnify = (english: string, chosen: string) => {
-    const group = inconsistencies.find(g => g.english === english);
-    if (!group) return;
-    for (const entry of group.translations) {
-      if (entry.translation !== chosen) updateTranslation(entry.key, chosen);
-    }
-    setEditingGroup(null);
-  };
-
-  const applyCustomEdit = (english: string) => {
-    if (editValue.trim()) handleUnify(english, editValue.trim());
-    setEditingGroup(null);
-  };
-
   /** Auto-unify ALL groups by picking the most common translation in each. */
   const handleAutoUnifyAll = useCallback(() => {
     let totalChanged = 0;
@@ -68,6 +44,30 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
       description: `تم تعديل ${totalChanged} ترجمة لتطابق الأكثر تكراراً`,
     });
   }, [inconsistencies, updateTranslation]);
+
+  if (inconsistencies.length === 0) {
+    return (
+      <Card className="p-3 border-border/50 text-center">
+        <p className="text-sm text-primary flex items-center justify-center gap-1.5">
+          <Check className="w-4 h-4" /> لا توجد تناقضات في الترجمة
+        </p>
+      </Card>
+    );
+  }
+
+  const handleUnify = (english: string, chosen: string) => {
+    const group = inconsistencies.find(g => g.english === english);
+    if (!group) return;
+    for (const entry of group.translations) {
+      if (entry.translation !== chosen) updateTranslation(entry.key, chosen);
+    }
+    setEditingGroup(null);
+  };
+
+  const applyCustomEdit = (english: string) => {
+    if (editValue.trim()) handleUnify(english, editValue.trim());
+    setEditingGroup(null);
+  };
 
   return (
     <div className="space-y-2">

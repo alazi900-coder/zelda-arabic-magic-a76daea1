@@ -773,7 +773,7 @@ export function useEditorState() {
 
     // Track translation history for versioning
     if (finalValue.trim()) {
-      import("@/components/editor/TranslationToolsPanel").then(m => m.addToHistory(key, finalValue)).catch(() => {});
+      import("@/lib/translation-history").then(m => m.addToHistory(key, finalValue)).catch(() => {});
     }
   };
 

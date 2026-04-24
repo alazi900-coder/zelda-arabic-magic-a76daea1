@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X, Wand2 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import type { EditorState } from "./types";
 import { detectInconsistencies } from "./TranslationProgressDashboard";
 
@@ -42,12 +43,47 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
     setEditingGroup(null);
   };
 
+  /** Auto-unify ALL groups by picking the most common translation in each. */
+  const handleAutoUnifyAll = useCallback(() => {
+    let totalChanged = 0;
+    for (const group of inconsistencies) {
+      const counts = new Map<string, number>();
+      for (const t of group.translations) {
+        counts.set(t.translation, (counts.get(t.translation) || 0) + 1);
+      }
+      let best = ""; let max = 0;
+      for (const [tr, c] of counts) {
+        if (c > max) { max = c; best = tr; }
+      }
+      if (!best) continue;
+      for (const entry of group.translations) {
+        if (entry.translation !== best) {
+          updateTranslation(entry.key, best);
+          totalChanged++;
+        }
+      }
+    }
+    toast({
+      title: `✅ تم توحيد ${inconsistencies.length} مجموعة`,
+      description: `تم تعديل ${totalChanged} ترجمة لتطابق الأكثر تكراراً`,
+    });
+  }, [inconsistencies, updateTranslation]);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <GitCompareArrows className="w-4 h-4 text-destructive shrink-0" />
         <span className="text-sm font-semibold">تناقضات الترجمة</span>
         <span className="text-xs bg-destructive/15 text-destructive px-1.5 py-0.5 rounded-full font-mono">{inconsistencies.length}</span>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="ms-auto h-7 text-[11px]"
+          onClick={handleAutoUnifyAll}
+          title="يختار الترجمة الأكثر تكراراً في كل مجموعة ويطبقها على الباقي"
+        >
+          <Wand2 className="w-3 h-3 ml-1" /> توحيد تلقائي للكل
+        </Button>
       </div>
 
       <div className="space-y-1.5 max-h-[300px] overflow-y-auto">

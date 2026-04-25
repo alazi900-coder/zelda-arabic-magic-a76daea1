@@ -154,7 +154,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
                   <span className="text-[11px] text-muted-foreground">
                     {duplicates.actionable.length} مجموعة قابلة للنسخ ({duplicates.total} مكرر إجمالاً)
                   </span>
-                  <Button size="sm" variant="secondary" className="h-7 text-[11px]" onClick={handleApplyAllDuplicates}>
+                  <Button size="sm" variant="secondary" className="h-7 text-[11px] shrink-0" onClick={() => setConfirmCopyAll(true)}>
                     <Copy className="w-3 h-3 ml-1" /> نسخ الكل
                   </Button>
                 </div>

@@ -164,7 +164,7 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
             size="sm"
             variant="secondary"
             className="h-7 text-[11px]"
-            onClick={handleAutoUnifyAll}
+            onClick={() => setConfirmAutoAll(true)}
             title="يختار الترجمة الأكثر تكراراً في كل مجموعة ويطبقها على الباقي"
           >
             <Wand2 className="w-3 h-3 ml-1" /> توحيد تلقائي للكل

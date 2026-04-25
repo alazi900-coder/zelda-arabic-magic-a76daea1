@@ -3,9 +3,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Copy, AlertTriangle, Languages, Wrench, ChevronDown, ChevronRight } from "lucide-react";
 import type { EditorState } from "@/components/editor/types";
-import { detectLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
+import { analyzeLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
 import { toast } from "@/hooks/use-toast";
 
 interface TranslationToolsPanelProps {
@@ -18,8 +22,9 @@ interface TranslationToolsPanelProps {
 export default function TranslationToolsPanel({ state, onApplyTranslation }: TranslationToolsPanelProps) {
   const [tab, setTab] = useState<"duplicates" | "literal">("duplicates");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  // Sensitivity slider for literal-translation detection (0.20 - 0.80, default 0.40)
   const [literalThreshold, setLiteralThreshold] = useState<number>(0.4);
+  const [confirmCopyAll, setConfirmCopyAll] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   // ---- Duplicate detection (English text repeated, only some translated) ----
   const duplicates = useMemo(() => {
@@ -40,19 +45,21 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
     return { actionable, total };
   }, [state?.entries, state?.translations]);
 
-  // ---- Literal-translation detection (uses configurable threshold) ----
+  // ---- Literal-translation detection (with stats for transparency) ----
   const literals = useMemo(() => {
-    if (!state) return [] as Array<{ key: string; english: string; arabic: string }>;
-    const out: Array<{ key: string; english: string; arabic: string }> = [];
+    if (!state) return [] as Array<{ key: string; english: string; arabic: string; ratio: number; englishWords: number; totalWords: number }>;
+    const out: Array<{ key: string; english: string; arabic: string; ratio: number; englishWords: number; totalWords: number }> = [];
     for (const entry of state.entries) {
       const k = `${entry.msbtFile}:${entry.index}`;
       const tr = state.translations[k]?.trim();
       if (!tr) continue;
-      if (detectLiteralTranslation(entry.original, tr, literalThreshold)) {
-        out.push({ key: k, english: entry.original, arabic: tr });
+      const stats = analyzeLiteralTranslation(entry.original, tr);
+      if (stats.totalWords > 3 && stats.englishRatio > literalThreshold) {
+        out.push({ key: k, english: entry.original, arabic: tr, ratio: stats.englishRatio, englishWords: stats.englishWords, totalWords: stats.totalWords });
       }
     }
-    return out;
+    // Sort highest ratio first — most suspicious shown first
+    return out.sort((a, b) => b.ratio - a.ratio);
   }, [state?.entries, state?.translations, literalThreshold]);
 
   // ---- Apply all duplicates at once ----
@@ -66,6 +73,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
         }
       }
     }
+    setConfirmCopyAll(false);
     toast({ title: `✅ تم نسخ ${applied} ترجمة من النصوص المكررة` });
   }, [duplicates, state, onApplyTranslation]);
 
@@ -84,6 +92,25 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
     onApplyTranslation(key, "");
     toast({ title: "🗑️ تم مسح الترجمة الحرفية — أعد الترجمة" });
   }, [onApplyTranslation]);
+
+  const handleClearAllLiterals = useCallback(() => {
+    let cleared = 0;
+    for (const l of literals) {
+      onApplyTranslation(l.key, "");
+      cleared++;
+    }
+    setConfirmClearAll(false);
+    toast({ title: `🗑️ تم مسح ${cleared} ترجمة حرفية`, description: "أعد ترجمتها لاحقاً" });
+  }, [literals, onApplyTranslation]);
+
+  // Estimate how many entries will be filled by "Copy All"
+  const estimatedCopyAll = useMemo(() => {
+    let n = 0;
+    for (const g of duplicates.actionable) {
+      for (const k of g.keys) if (!state?.translations[k]?.trim()) n++;
+    }
+    return n;
+  }, [duplicates, state?.translations]);
 
   const totalIssues = duplicates.actionable.length + literals.length;
   // Hide only when there's nothing to show AND no translated entries to scan
@@ -127,7 +154,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
                   <span className="text-[11px] text-muted-foreground">
                     {duplicates.actionable.length} مجموعة قابلة للنسخ ({duplicates.total} مكرر إجمالاً)
                   </span>
-                  <Button size="sm" variant="secondary" className="h-7 text-[11px]" onClick={handleApplyAllDuplicates}>
+                  <Button size="sm" variant="secondary" className="h-7 text-[11px] shrink-0" onClick={() => setConfirmCopyAll(true)}>
                     <Copy className="w-3 h-3 ml-1" /> نسخ الكل
                   </Button>
                 </div>
@@ -187,31 +214,92 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
               <p className="text-xs text-muted-foreground text-center py-3">لا توجد ترجمات حرفية مشبوهة</p>
             ) : (
               <>
-                <div className="flex items-center gap-1.5 text-[11px] text-destructive">
-                  <AlertTriangle className="w-3 h-3" />
-                  <span>{literals.length} ترجمة تحتوي كلمات إنجليزية كثيرة (&gt;{Math.round(literalThreshold * 100)}%)</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-destructive">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{literals.length} ترجمة (&gt;{Math.round(literalThreshold * 100)}% إنجليزي)</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px] ms-auto border-destructive/40 text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmClearAll(true)}
+                  >
+                    مسح الكل
+                  </Button>
                 </div>
                 <div className="space-y-1 max-h-[260px] overflow-y-auto">
-                  {literals.slice(0, 30).map((l) => (
-                    <div key={l.key} className="border border-destructive/20 rounded p-1.5 bg-destructive/5 space-y-1">
-                      <div className="text-[10px] font-mono text-muted-foreground truncate" dir="ltr">{l.english}</div>
-                      <div className="text-[11px] font-body" dir="rtl">{l.arabic}</div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="w-full h-6 text-[10px] text-destructive hover:bg-destructive/10"
-                        onClick={() => handleClearLiteral(l.key)}
-                      >
-                        مسح وإعادة الترجمة
-                      </Button>
-                    </div>
-                  ))}
+                  {literals.slice(0, 30).map((l) => {
+                    const pct = Math.round(l.ratio * 100);
+                    return (
+                      <div key={l.key} className="border border-destructive/20 rounded p-1.5 bg-destructive/5 space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-mono bg-destructive/15 text-destructive px-1.5 py-0.5 rounded shrink-0">
+                            {pct}% • {l.englishWords}/{l.totalWords}
+                          </span>
+                          <span className="text-[10px] font-mono text-muted-foreground truncate flex-1" dir="ltr">{l.english}</span>
+                        </div>
+                        <div className="text-[11px] font-body" dir="rtl">{l.arabic}</div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="w-full h-7 text-[10px] text-destructive hover:bg-destructive/10"
+                          onClick={() => handleClearLiteral(l.key)}
+                        >
+                          مسح وإعادة الترجمة
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}
           </TabsContent>
         </Tabs>
       </CardContent>
+
+      {/* Confirm: copy all duplicates */}
+      <AlertDialog open={confirmCopyAll} onOpenChange={setConfirmCopyAll}>
+        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>نسخ الترجمة لكل النصوص المكررة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              ستُملأ <span className="font-mono text-primary">{estimatedCopyAll}</span> إدخال فارغ من
+              {" "}<span className="font-mono text-primary">{duplicates.actionable.length}</span> مجموعة مكررة.
+              <br />
+              لن يتم استبدال أي ترجمة موجودة. يمكنك التراجع عن كل تعديل من زر التراجع العام.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="mt-0">إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleApplyAllDuplicates}>نعم، انسخ</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm: clear all literal translations */}
+      <AlertDialog open={confirmClearAll} onOpenChange={setConfirmClearAll}>
+        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>مسح كل الترجمات الحرفية؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم تفريغ <span className="font-mono text-destructive">{literals.length}</span> ترجمة فوق عتبة
+              {" "}<span className="font-mono">{Math.round(literalThreshold * 100)}%</span> إنجليزي.
+              <br />
+              ستحتاج لإعادة ترجمتها يدوياً أو عبر الذكاء الاصطناعي. هذا الإجراء لا يمكن التراجع عنه تلقائياً.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="mt-0">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearAllLiterals}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              نعم، امسح الكل
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

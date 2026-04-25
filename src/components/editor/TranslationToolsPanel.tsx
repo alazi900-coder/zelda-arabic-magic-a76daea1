@@ -2,6 +2,7 @@ import { useMemo, useCallback, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
 import { Copy, AlertTriangle, Languages, Wrench, ChevronDown, ChevronRight } from "lucide-react";
 import type { EditorState } from "@/components/editor/types";
 import { detectLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
@@ -17,6 +18,8 @@ interface TranslationToolsPanelProps {
 export default function TranslationToolsPanel({ state, onApplyTranslation }: TranslationToolsPanelProps) {
   const [tab, setTab] = useState<"duplicates" | "literal">("duplicates");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // Sensitivity slider for literal-translation detection (0.20 - 0.80, default 0.40)
+  const [literalThreshold, setLiteralThreshold] = useState<number>(0.4);
 
   // ---- Duplicate detection (English text repeated, only some translated) ----
   const duplicates = useMemo(() => {
@@ -37,7 +40,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
     return { actionable, total };
   }, [state?.entries, state?.translations]);
 
-  // ---- Literal-translation detection ----
+  // ---- Literal-translation detection (uses configurable threshold) ----
   const literals = useMemo(() => {
     if (!state) return [] as Array<{ key: string; english: string; arabic: string }>;
     const out: Array<{ key: string; english: string; arabic: string }> = [];
@@ -45,12 +48,12 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
       const k = `${entry.msbtFile}:${entry.index}`;
       const tr = state.translations[k]?.trim();
       if (!tr) continue;
-      if (detectLiteralTranslation(entry.original, tr)) {
+      if (detectLiteralTranslation(entry.original, tr, literalThreshold)) {
         out.push({ key: k, english: entry.original, arabic: tr });
       }
     }
     return out;
-  }, [state?.entries, state?.translations]);
+  }, [state?.entries, state?.translations, literalThreshold]);
 
   // ---- Apply all duplicates at once ----
   const handleApplyAllDuplicates = useCallback(() => {
@@ -83,7 +86,9 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
   }, [onApplyTranslation]);
 
   const totalIssues = duplicates.actionable.length + literals.length;
-  if (totalIssues === 0) return null;
+  // Hide only when there's nothing to show AND no translated entries to scan
+  const hasAnyTranslation = state && Object.values(state.translations || {}).some(v => v?.trim());
+  if (totalIssues === 0 && !hasAnyTranslation) return null;
 
   return (
     <Card className="border-border/50">
@@ -163,13 +168,28 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
 
           {/* LITERAL TAB */}
           <TabsContent value="literal" className="mt-2 space-y-1.5">
+            {/* Sensitivity slider — controls englishRatioThreshold */}
+            <div className="flex items-center gap-2 px-1 py-1 rounded bg-muted/20">
+              <span className="text-[10px] text-muted-foreground shrink-0">حساسية:</span>
+              <Slider
+                value={[literalThreshold]}
+                onValueChange={(v) => setLiteralThreshold(v[0])}
+                min={0.2}
+                max={0.8}
+                step={0.05}
+                className="flex-1"
+              />
+              <span className="text-[10px] font-mono text-primary shrink-0 w-10 text-center">
+                {Math.round(literalThreshold * 100)}%
+              </span>
+            </div>
             {literals.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-3">لا توجد ترجمات حرفية مشبوهة</p>
             ) : (
               <>
                 <div className="flex items-center gap-1.5 text-[11px] text-destructive">
                   <AlertTriangle className="w-3 h-3" />
-                  <span>{literals.length} ترجمة تحتوي كلمات إنجليزية كثيرة (&gt;40%)</span>
+                  <span>{literals.length} ترجمة تحتوي كلمات إنجليزية كثيرة (&gt;{Math.round(literalThreshold * 100)}%)</span>
                 </div>
                 <div className="space-y-1 max-h-[260px] overflow-y-auto">
                   {literals.slice(0, 30).map((l) => (

@@ -16,7 +16,8 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [undoSnapshot, setUndoSnapshot] = useState<Record<string, string> | null>(null);
+  // Multi-step undo stack — each entry is a snapshot of one unify operation
+  const [undoStack, setUndoStack] = useState<Array<{ label: string; snapshot: Record<string, string> }>>([]);
 
   const inconsistencies = useMemo(() => detectInconsistencies(state), [state.entries, state.translations]);
 
@@ -42,7 +43,9 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
         }
       }
     }
-    setUndoSnapshot(Object.keys(snapshot).length > 0 ? snapshot : null);
+    if (Object.keys(snapshot).length > 0) {
+      setUndoStack(prev => [...prev, { label: `توحيد تلقائي (${totalChanged})`, snapshot }].slice(-20));
+    }
     toast({
       title: `✅ تم توحيد ${inconsistencies.length} مجموعة`,
       description: `تم تعديل ${totalChanged} ترجمة لتطابق الأكثر تكراراً`,
@@ -50,13 +53,16 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
   }, [inconsistencies, updateTranslation]);
 
   const handleUndo = useCallback(() => {
-    if (!undoSnapshot) return;
-    for (const [key, val] of Object.entries(undoSnapshot)) {
-      updateTranslation(key, val);
-    }
-    setUndoSnapshot(null);
-    toast({ title: "↩️ تم التراجع عن آخر توحيد" });
-  }, [undoSnapshot, updateTranslation]);
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      for (const [key, val] of Object.entries(last.snapshot)) {
+        updateTranslation(key, val);
+      }
+      toast({ title: `↩️ تم التراجع: ${last.label}` });
+      return prev.slice(0, -1);
+    });
+  }, [updateTranslation]);
 
   if (inconsistencies.length === 0) {
     return (
@@ -78,7 +84,9 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
         updateTranslation(entry.key, chosen);
       }
     }
-    if (Object.keys(snapshot).length > 0) setUndoSnapshot(snapshot);
+    if (Object.keys(snapshot).length > 0) {
+      setUndoStack(prev => [...prev, { label: `توحيد "${english.slice(0, 20)}…"`, snapshot }].slice(-20));
+    }
     setEditingGroup(null);
   };
 
@@ -94,15 +102,15 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
         <span className="text-sm font-semibold">تناقضات الترجمة</span>
         <span className="text-xs bg-destructive/15 text-destructive px-1.5 py-0.5 rounded-full font-mono">{inconsistencies.length}</span>
         <div className="ms-auto flex gap-1">
-          {undoSnapshot && (
+          {undoStack.length > 0 && (
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-[11px] border-amber-500 text-amber-700 dark:text-amber-400"
+              className="h-7 text-[11px] border-accent text-accent-foreground hover:bg-accent/20"
               onClick={handleUndo}
-              title="تراجع عن آخر توحيد"
+              title={`تراجع عن آخر توحيد (${undoStack.length} خطوة في السجل)`}
             >
-              <RotateCcw className="w-3 h-3 ml-1" /> تراجع
+              <RotateCcw className="w-3 h-3 ml-1" /> تراجع ({undoStack.length})
             </Button>
           )}
           <Button

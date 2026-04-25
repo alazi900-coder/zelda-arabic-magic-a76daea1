@@ -40,7 +40,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
     return { actionable, total };
   }, [state?.entries, state?.translations]);
 
-  // ---- Literal-translation detection ----
+  // ---- Literal-translation detection (uses configurable threshold) ----
   const literals = useMemo(() => {
     if (!state) return [] as Array<{ key: string; english: string; arabic: string }>;
     const out: Array<{ key: string; english: string; arabic: string }> = [];
@@ -48,12 +48,12 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
       const k = `${entry.msbtFile}:${entry.index}`;
       const tr = state.translations[k]?.trim();
       if (!tr) continue;
-      if (detectLiteralTranslation(entry.original, tr)) {
+      if (detectLiteralTranslation(entry.original, tr, literalThreshold)) {
         out.push({ key: k, english: entry.original, arabic: tr });
       }
     }
     return out;
-  }, [state?.entries, state?.translations]);
+  }, [state?.entries, state?.translations, literalThreshold]);
 
   // ---- Apply all duplicates at once ----
   const handleApplyAllDuplicates = useCallback(() => {

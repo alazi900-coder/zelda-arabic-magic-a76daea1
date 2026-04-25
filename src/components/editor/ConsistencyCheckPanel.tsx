@@ -2,7 +2,13 @@ import { useState, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X, Wand2, RotateCcw } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { AlertTriangle, Check, GitCompareArrows, ChevronDown, ChevronRight, Pencil, X, Wand2, RotateCcw, FileText } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { EditorState } from "./types";
 import { detectInconsistencies } from "./TranslationProgressDashboard";
@@ -12,14 +18,26 @@ interface Props {
   updateTranslation: (key: string, value: string) => void;
 }
 
+interface UnifyOp {
+  label: string;
+  snapshot: Record<string, string>;          // key -> previous value
+  applied: Record<string, string>;           // key -> new value (for the report)
+  groupsAffected: number;
+  timestamp: number;
+}
+
 export default function ConsistencyCheckPanel({ state, updateTranslation }: Props) {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   // Multi-step undo stack — each entry is a snapshot of one unify operation
-  const [undoStack, setUndoStack] = useState<Array<{ label: string; snapshot: Record<string, string> }>>([]);
+  const [undoStack, setUndoStack] = useState<UnifyOp[]>([]);
+  const [confirmUndo, setConfirmUndo] = useState(false);
+  const [confirmAutoAll, setConfirmAutoAll] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const inconsistencies = useMemo(() => detectInconsistencies(state), [state.entries, state.translations]);
+  const lastOp = undoStack[undoStack.length - 1] || null;
 
   /** Auto-unify ALL groups by picking the most common translation in each. */
   const handleAutoUnifyAll = useCallback(() => {

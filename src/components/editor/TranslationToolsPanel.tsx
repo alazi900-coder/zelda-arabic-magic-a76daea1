@@ -73,6 +73,7 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
         }
       }
     }
+    setConfirmCopyAll(false);
     toast({ title: `✅ تم نسخ ${applied} ترجمة من النصوص المكررة` });
   }, [duplicates, state, onApplyTranslation]);
 
@@ -91,6 +92,25 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
     onApplyTranslation(key, "");
     toast({ title: "🗑️ تم مسح الترجمة الحرفية — أعد الترجمة" });
   }, [onApplyTranslation]);
+
+  const handleClearAllLiterals = useCallback(() => {
+    let cleared = 0;
+    for (const l of literals) {
+      onApplyTranslation(l.key, "");
+      cleared++;
+    }
+    setConfirmClearAll(false);
+    toast({ title: `🗑️ تم مسح ${cleared} ترجمة حرفية`, description: "أعد ترجمتها لاحقاً" });
+  }, [literals, onApplyTranslation]);
+
+  // Estimate how many entries will be filled by "Copy All"
+  const estimatedCopyAll = useMemo(() => {
+    let n = 0;
+    for (const g of duplicates.actionable) {
+      for (const k of g.keys) if (!state?.translations[k]?.trim()) n++;
+    }
+    return n;
+  }, [duplicates, state?.translations]);
 
   const totalIssues = duplicates.actionable.length + literals.length;
   // Hide only when there's nothing to show AND no translated entries to scan

@@ -42,7 +42,9 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
   /** Auto-unify ALL groups by picking the most common translation in each. */
   const handleAutoUnifyAll = useCallback(() => {
     const snapshot: Record<string, string> = {};
+    const applied: Record<string, string> = {};
     let totalChanged = 0;
+    let groupsAffected = 0;
     for (const group of inconsistencies) {
       const counts = new Map<string, number>();
       for (const t of group.translations) {
@@ -53,24 +55,34 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
         if (c > max) { max = c; best = tr; }
       }
       if (!best) continue;
+      let touchedThisGroup = false;
       for (const entry of group.translations) {
         if (entry.translation !== best) {
           snapshot[entry.key] = entry.translation;
+          applied[entry.key] = best;
           updateTranslation(entry.key, best);
           totalChanged++;
+          touchedThisGroup = true;
         }
       }
+      if (touchedThisGroup) groupsAffected++;
     }
+    setConfirmAutoAll(false);
     if (Object.keys(snapshot).length > 0) {
-      setUndoStack(prev => [...prev, { label: `توحيد تلقائي (${totalChanged})`, snapshot }].slice(-20));
+      setUndoStack(prev => [...prev, {
+        label: `توحيد تلقائي (${totalChanged} ترجمة)`,
+        snapshot, applied, groupsAffected, timestamp: Date.now(),
+      }].slice(-20));
+      // Auto-open report so user immediately sees the before/after summary
+      setReportOpen(true);
     }
     toast({
-      title: `✅ تم توحيد ${inconsistencies.length} مجموعة`,
+      title: `✅ تم توحيد ${groupsAffected} مجموعة`,
       description: `تم تعديل ${totalChanged} ترجمة لتطابق الأكثر تكراراً`,
     });
   }, [inconsistencies, updateTranslation]);
 
-  const handleUndo = useCallback(() => {
+  const performUndo = useCallback(() => {
     setUndoStack(prev => {
       if (prev.length === 0) return prev;
       const last = prev[prev.length - 1];
@@ -80,6 +92,7 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
       toast({ title: `↩️ تم التراجع: ${last.label}` });
       return prev.slice(0, -1);
     });
+    setConfirmUndo(false);
   }, [updateTranslation]);
 
   if (inconsistencies.length === 0) {

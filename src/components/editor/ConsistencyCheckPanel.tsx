@@ -16,7 +16,8 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [undoSnapshot, setUndoSnapshot] = useState<Record<string, string> | null>(null);
+  // Multi-step undo stack — each entry is a snapshot of one unify operation
+  const [undoStack, setUndoStack] = useState<Array<{ label: string; snapshot: Record<string, string> }>>([]);
 
   const inconsistencies = useMemo(() => detectInconsistencies(state), [state.entries, state.translations]);
 

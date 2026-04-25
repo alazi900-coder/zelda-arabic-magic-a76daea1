@@ -2,6 +2,7 @@ import { useMemo, useCallback, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
 import { Copy, AlertTriangle, Languages, Wrench, ChevronDown, ChevronRight } from "lucide-react";
 import type { EditorState } from "@/components/editor/types";
 import { detectLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
@@ -17,6 +18,8 @@ interface TranslationToolsPanelProps {
 export default function TranslationToolsPanel({ state, onApplyTranslation }: TranslationToolsPanelProps) {
   const [tab, setTab] = useState<"duplicates" | "literal">("duplicates");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // Sensitivity slider for literal-translation detection (0.20 - 0.80, default 0.40)
+  const [literalThreshold, setLiteralThreshold] = useState<number>(0.4);
 
   // ---- Duplicate detection (English text repeated, only some translated) ----
   const duplicates = useMemo(() => {

@@ -214,25 +214,43 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
               <p className="text-xs text-muted-foreground text-center py-3">لا توجد ترجمات حرفية مشبوهة</p>
             ) : (
               <>
-                <div className="flex items-center gap-1.5 text-[11px] text-destructive">
-                  <AlertTriangle className="w-3 h-3" />
-                  <span>{literals.length} ترجمة تحتوي كلمات إنجليزية كثيرة (&gt;{Math.round(literalThreshold * 100)}%)</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-destructive">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{literals.length} ترجمة (&gt;{Math.round(literalThreshold * 100)}% إنجليزي)</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px] ms-auto border-destructive/40 text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmClearAll(true)}
+                  >
+                    مسح الكل
+                  </Button>
                 </div>
                 <div className="space-y-1 max-h-[260px] overflow-y-auto">
-                  {literals.slice(0, 30).map((l) => (
-                    <div key={l.key} className="border border-destructive/20 rounded p-1.5 bg-destructive/5 space-y-1">
-                      <div className="text-[10px] font-mono text-muted-foreground truncate" dir="ltr">{l.english}</div>
-                      <div className="text-[11px] font-body" dir="rtl">{l.arabic}</div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="w-full h-6 text-[10px] text-destructive hover:bg-destructive/10"
-                        onClick={() => handleClearLiteral(l.key)}
-                      >
-                        مسح وإعادة الترجمة
-                      </Button>
-                    </div>
-                  ))}
+                  {literals.slice(0, 30).map((l) => {
+                    const pct = Math.round(l.ratio * 100);
+                    return (
+                      <div key={l.key} className="border border-destructive/20 rounded p-1.5 bg-destructive/5 space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-mono bg-destructive/15 text-destructive px-1.5 py-0.5 rounded shrink-0">
+                            {pct}% • {l.englishWords}/{l.totalWords}
+                          </span>
+                          <span className="text-[10px] font-mono text-muted-foreground truncate flex-1" dir="ltr">{l.english}</span>
+                        </div>
+                        <div className="text-[11px] font-body" dir="rtl">{l.arabic}</div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="w-full h-7 text-[10px] text-destructive hover:bg-destructive/10"
+                          onClick={() => handleClearLiteral(l.key)}
+                        >
+                          مسح وإعادة الترجمة
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}

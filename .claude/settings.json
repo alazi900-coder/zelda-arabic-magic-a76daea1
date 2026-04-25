@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"CLAUDE.md REMINDER — قواعد إلزامية: (1) اسأل قبل البرمجة — لا تفترض أي شيء، وضّح الغموض أولاً. (2) أبسط حل ممكن فقط. (3) لا تعدّل إلا ما طُلب. (4) ادفع دائماً إلى main فقط. (5) لا تنشئ Pull Request ما لم يُطلب صراحةً.\"}}'"
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"🛑 CLAUDE.md إلزامي — قبل أي كود يجب: (1) اقرأ الطلب. (2) اكتب خطة: ماذا ستعدّل + في أي ملف + لماذا. (3) انتظر موافقة المستخدم. (4) فقط بعد الموافقة ابدأ التنفيذ. إذا كان الطلب غامضاً اسأل ولا تفترض. لا تكتب كوداً قبل الخطوة 3. القواعد الثابتة: ادفع إلى main فقط — لا Pull Request — لا ميزات إضافية — لا تعدّل غير المطلوب.\"}}'"
           }
         ]
       }

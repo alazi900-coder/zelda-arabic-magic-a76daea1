@@ -10,15 +10,20 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 - **لا تنشئ Pull Request** ما لم يطلب المستخدم صراحةً.
 - المشروع: أداة ترجمة Xenoblade Chronicles 1 إلى العربية (React + TypeScript + Vite + Supabase).
 
-## 1. Think Before Coding
+## 1. STOP — اسأل قبل الكود (غير قابل للتجاوز)
+
+**لا تكتب كوداً واحداً قبل أن تفعل هذا:**
+
+1. اقرأ الطلب
+2. اكتب خطة: ماذا ستعدّل + أي ملف + لماذا
+3. انتظر رد المستخدم
+4. فقط بعد الموافقة — ابدأ التنفيذ
+
+إذا كان الطلب غامضاً: **اسأل ولا تفترض.**
+إذا كانت الخطة طويلة: **اكتب ملخصاً وانتظر.**
+إذا بدا الأمر واضحاً: **لا يهم — انتظر.**
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
 
 ## 2. Simplicity First
 

@@ -988,6 +988,10 @@ const Editor = () => {
                 freeProviderLabel={editor.autoPilot.freeProviderLabel}
                 translationProvider={editor.translationProvider}
                 setTranslationProvider={editor.setTranslationProvider}
+                aiModel={editor.aiModel}
+                setAiModel={editor.setAiModel}
+                previewMode={editor.autoPilot.previewMode}
+                setPreviewMode={editor.autoPilot.setPreviewMode}
                 onRun={editor.autoPilot.run}
                 onStop={editor.autoPilot.stop}
               />
@@ -2641,6 +2645,18 @@ const Editor = () => {
             newTranslations={editor.pendingPageTranslations}
             onApply={(selectedKeys) => editor.applyPendingTranslations(selectedKeys)}
             onDiscard={editor.discardPendingTranslations}
+          />
+        )}
+
+        {/* AutoPilot Preview Compare Dialog */}
+        {editor.autoPilot.pendingTranslations && (
+          <PageTranslationCompare
+            open={true}
+            originals={editor.autoPilot.pendingOriginals}
+            oldTranslations={editor.autoPilot.pendingOldTranslations}
+            newTranslations={editor.autoPilot.pendingTranslations}
+            onApply={(selectedKeys) => editor.autoPilot.applyPending(selectedKeys)}
+            onDiscard={editor.autoPilot.discardPending}
           />
         )}
 

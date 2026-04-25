@@ -73,6 +73,10 @@ export function useAutoPilot({
   const [logs, setLogs] = useState<AutoPilotLog[]>([]);
   const [report, setReport] = useState<AutoPilotReport | null>(null);
   const [mode, setMode] = useState<AutoPilotMode>('smart');
+  const [previewMode, setPreviewMode] = useState(false);
+  const [pendingTranslations, setPendingTranslations] = useState<Record<string, string> | null>(null);
+  const [pendingOriginals, setPendingOriginals] = useState<Record<string, string>>({});
+  const [pendingOldTranslations, setPendingOldTranslations] = useState<Record<string, string>>({});
   const abortRef = useRef<AbortController | null>(null);
   const logIdRef = useRef(0);
 
@@ -103,7 +107,7 @@ export function useAutoPilot({
       rebalanceNewlines: rebalanceNewlines || undefined,
       npcMaxLines,
       npcMode: npcMode || undefined,
-      aiModel: forceModel || (prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
+      aiModel: forceModel || (prov === 'gemini' ? aiModel : prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey,
       userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel]);
@@ -124,6 +128,26 @@ export function useAutoPilot({
       fromGlossary: 0, fromAI: 0, failed: 0,
       tagsFixed: 0, weakFound: 0, weakFixed: 0, duration: 0,
       isFreeRun: runMode === 'free',
+    };
+
+    // وضع المعاينة: تجميع الترجمات بدلاً من تطبيقها مباشرة
+    const pendingAcc: Record<string, string> = {};
+    const isPreview = previewMode;
+    if (isPreview) {
+      const origMap: Record<string, string> = {};
+      const oldMap: Record<string, string> = {};
+      for (const e of state.entries) {
+        const key = `${e.msbtFile}:${e.index}`;
+        origMap[key] = e.original;
+        oldMap[key] = state.translations[key] || '';
+      }
+      setPendingOriginals(origMap);
+      setPendingOldTranslations(oldMap);
+      setPendingTranslations(null);
+    }
+    const addTranslations = (t: Record<string, string>) => {
+      if (isPreview) { Object.assign(pendingAcc, t); }
+      else { setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...t } } : null); }
     };
 
     const freeChoice = pickFreeProvider(userOpenRouterKey, userGroqKey, myMemoryEmail);
@@ -209,7 +233,7 @@ export function useAutoPilot({
       }
 
       if (Object.keys(freeTranslations).length > 0) {
-        setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...freeTranslations } } : null);
+        addTranslations(freeTranslations);
         log(`✅ مجاني: ${stats.fromMemory} من الذاكرة + ${stats.fromGlossary} من القاموس`, 'success', "2");
       } else {
         log("لم تُوجد مطابقات مجانية — كل شيء يحتاج AI", 'info', "2");
@@ -250,7 +274,7 @@ export function useAutoPilot({
             addAiRequest(1);
             if (data.charsUsed) addMyMemoryChars(data.charsUsed);
             if (data.translations) {
-              setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...data.translations } } : null);
+              addTranslations(data.translations);
               stats.fromAI += Object.keys(data.translations).length;
               for (const e of batch) {
                 if (!data.translations[`${e.msbtFile}:${e.index}`]) failedEntries.push(e);
@@ -303,7 +327,7 @@ export function useAutoPilot({
               if (resp.ok) {
                 const data = await resp.json();
                 if (data.translations?.[key]) {
-                  setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: data.translations[key] } } : null);
+                  addTranslations({ [key]: data.translations[key] });
                   recovered++;
                   stats.fromAI++;
                   stats.failed--;
@@ -346,7 +370,7 @@ export function useAutoPilot({
             if (resp.ok) {
               const data = await resp.json();
               if (data.translations) {
-                setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...data.translations } } : null);
+                addTranslations(data.translations);
                 fixed += Object.keys(data.translations).length;
               }
             }
@@ -368,8 +392,9 @@ export function useAutoPilot({
       setPhase("🔍 فحص الجودة"); setPhaseIndex(5);
       log("فحص جودة جميع الترجمات المكتملة...", 'phase', "5");
 
-      const snap: Record<string, string> = {};
-      setState(prev => { if (prev) Object.assign(snap, prev.translations); return prev; });
+      const snap: Record<string, string> = isPreview
+        ? { ...state.translations, ...pendingAcc }
+        : (() => { const s: Record<string, string> = {}; setState(prev => { if (prev) Object.assign(s, prev.translations); return prev; }); return s; })();
 
       const toReview = (filteredEntries.length > 0 ? filteredEntries : state.entries)
         .filter(e => {
@@ -412,7 +437,7 @@ export function useAutoPilot({
           const fixes: Record<string, string> = {};
           for (const w of allWeak) { if (w.suggestion?.trim()) fixes[w.key] = w.suggestion; }
           if (Object.keys(fixes).length > 0) {
-            setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...fixes } } : null);
+            addTranslations(fixes);
             stats.weakFixed = Object.keys(fixes).length;
             log(`✅ أُصلح ${stats.weakFixed} ترجمة ضعيفة تلقائياً`, 'success', "5");
           }
@@ -434,15 +459,24 @@ export function useAutoPilot({
 
       const total = stats.fromMemory + stats.fromGlossary + stats.fromAI;
       log(`🎉 اكتمل الوكيل! ${total} نص تُرجم خلال ${stats.duration}ث`, 'success', "✅ النتيجة");
-      toast({
-        title: "✅ الوكيل التلقائي اكتمل",
-        description: `${stats.fromAI} بالذكاء الاصطناعي + ${stats.fromMemory + stats.fromGlossary} مجاناً${stats.failed > 0 ? ` | ${stats.failed} فشل` : ''}`,
-      });
+      if (isPreview && Object.keys(pendingAcc).length > 0) {
+        setPendingTranslations({ ...pendingAcc });
+        toast({ title: "👁️ معاينة جاهزة", description: `راجع ${Object.keys(pendingAcc).length} ترجمة قبل التطبيق` });
+      } else {
+        toast({
+          title: "✅ الوكيل التلقائي اكتمل",
+          description: `${stats.fromAI} بالذكاء الاصطناعي + ${stats.fromMemory + stats.fromGlossary} مجاناً${stats.failed > 0 ? ` | ${stats.failed} فشل` : ''}`,
+        });
+      }
 
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         setPhase("⏹️ موقوف"); setPhaseIndex(0);
         log("⏹️ أوقفت الوكيل يدوياً", 'warning');
+        if (isPreview && Object.keys(pendingAcc).length > 0) {
+          setPendingTranslations({ ...pendingAcc });
+          toast({ title: "👁️ معاينة جاهزة", description: `تم جمع ${Object.keys(pendingAcc).length} ترجمة — راجعها قبل التطبيق` });
+        }
       } else {
         const msg = err instanceof Error ? err.message : 'خطأ غير معروف';
         setPhase("❌ خطأ"); setPhaseIndex(0);
@@ -456,9 +490,27 @@ export function useAutoPilot({
       setProgress(null);
       abortRef.current = null;
     }
-  }, [state, setState, running, mode, activeGlossary, parseGlossaryMap, translationProvider,
+  }, [state, setState, running, mode, previewMode, activeGlossary, parseGlossaryMap, translationProvider,
       userGeminiKey, userGroqKey, userOpenRouterKey, myMemoryEmail, rebalanceNewlines,
       npcMaxLines, aiModel, addAiRequest, addMyMemoryChars, qualityStats, filteredEntries, buildFetchBody]);
 
-  return { running, phase, phaseIndex, progress, logs, report, mode, setMode, run, stop, freeProviderLabel };
+  const applyPending = useCallback((selectedKeys: Set<string>) => {
+    if (!pendingTranslations) return;
+    const toApply: Record<string, string> = {};
+    for (const key of selectedKeys) {
+      if (pendingTranslations[key] !== undefined) toApply[key] = pendingTranslations[key];
+    }
+    if (Object.keys(toApply).length > 0) {
+      setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...toApply } } : null);
+    }
+    setPendingTranslations(null);
+  }, [pendingTranslations, setState]);
+
+  const discardPending = useCallback(() => { setPendingTranslations(null); }, []);
+
+  return {
+    running, phase, phaseIndex, progress, logs, report, mode, setMode, run, stop, freeProviderLabel,
+    previewMode, setPreviewMode,
+    pendingTranslations, pendingOriginals, pendingOldTranslations, applyPending, discardPending,
+  };
 }

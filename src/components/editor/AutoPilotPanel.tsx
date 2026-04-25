@@ -2,8 +2,13 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu, Settings } from "lucide-react";
+import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu, Settings, Eye } from "lucide-react";
 import type { AutoPilotLog, AutoPilotReport, AutoPilotMode } from "@/hooks/useAutoPilot";
+
+const GEMINI_MODELS = [
+  { id: 'gemini-2.5-flash', label: '2.5 Flash 💚', note: 'مجاني (حصة يومية)' },
+  { id: 'gemini-2.5-pro',   label: '2.5 Pro 💰',   note: 'مدفوع' },
+];
 
 type Provider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter';
 
@@ -28,6 +33,10 @@ interface AutoPilotPanelProps {
   freeProviderLabel: string;
   translationProvider: string;
   setTranslationProvider: (p: Provider) => void;
+  aiModel: string;
+  setAiModel: (m: string) => void;
+  previewMode: boolean;
+  setPreviewMode: (v: boolean) => void;
   onRun: (m: AutoPilotMode) => void;
   onStop: () => void;
 }
@@ -44,7 +53,8 @@ const logColor = (type: AutoPilotLog['type']) => {
 
 export function AutoPilotPanel({
   running, phase, phaseIndex, progress, logs, report,
-  mode, setMode, freeProviderLabel, translationProvider, setTranslationProvider, onRun, onStop,
+  mode, setMode, freeProviderLabel, translationProvider, setTranslationProvider,
+  aiModel, setAiModel, previewMode, setPreviewMode, onRun, onStop,
 }: AutoPilotPanelProps) {
   const [logsOpen, setLogsOpen] = React.useState(true);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
@@ -110,23 +120,62 @@ export function AutoPilotPanel({
       <CardContent className="px-4 pb-3 space-y-2">
         {/* Provider settings */}
         {settingsOpen && !running && (
-          <div className="rounded-md border border-border/60 bg-muted/40 p-2.5 space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground">محرك الوضع الذكي 🤖</p>
-            <div className="flex flex-wrap gap-1">
-              {PROVIDERS.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => setTranslationProvider(p.id)}
-                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
-                    translationProvider === p.id
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border bg-background hover:border-primary/50 text-foreground'
-                  }`}
-                  title={p.note}
-                >
-                  {p.label}
-                </button>
-              ))}
+          <div className="rounded-md border border-border/60 bg-muted/40 p-2.5 space-y-2.5">
+            {/* Provider selector */}
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">محرك الوضع الذكي 🤖</p>
+              <div className="flex flex-wrap gap-1">
+                {PROVIDERS.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setTranslationProvider(p.id)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                      translationProvider === p.id
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border bg-background hover:border-primary/50 text-foreground'
+                    }`}
+                    title={p.note}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Gemini model selector */}
+            {translationProvider === 'gemini' && (
+              <div>
+                <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">نموذج Gemini</p>
+                <div className="flex flex-wrap gap-1">
+                  {GEMINI_MODELS.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => setAiModel(m.id)}
+                      className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                        aiModel === m.id
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border bg-background hover:border-primary/50 text-foreground'
+                      }`}
+                      title={m.note}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Preview mode toggle */}
+            <div className="flex items-center justify-between pt-1 border-t border-border/40">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Eye className="w-3 h-3" /> وضع المعاينة
+              </span>
+              <button
+                onClick={() => setPreviewMode(!previewMode)}
+                className={`relative w-8 h-4 rounded-full transition-colors ${previewMode ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+              >
+                <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${previewMode ? 'right-0.5' : 'left-0.5'}`} />
+              </button>
             </div>
             <p className="text-[10px] text-muted-foreground">
               الحالي: <span className="font-medium text-foreground">{PROVIDERS.find(p => p.id === translationProvider)?.label ?? translationProvider}</span>

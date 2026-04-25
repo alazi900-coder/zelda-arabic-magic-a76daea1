@@ -109,14 +109,19 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
     const group = inconsistencies.find(g => g.english === english);
     if (!group) return;
     const snapshot: Record<string, string> = {};
+    const applied: Record<string, string> = {};
     for (const entry of group.translations) {
       if (entry.translation !== chosen) {
         snapshot[entry.key] = entry.translation;
+        applied[entry.key] = chosen;
         updateTranslation(entry.key, chosen);
       }
     }
     if (Object.keys(snapshot).length > 0) {
-      setUndoStack(prev => [...prev, { label: `توحيد "${english.slice(0, 20)}…"`, snapshot }].slice(-20));
+      setUndoStack(prev => [...prev, {
+        label: `توحيد "${english.slice(0, 20)}${english.length > 20 ? "…" : ""}"`,
+        snapshot, applied, groupsAffected: 1, timestamp: Date.now(),
+      }].slice(-20));
     }
     setEditingGroup(null);
   };

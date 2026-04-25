@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Copy, AlertTriangle, Languages, Wrench, ChevronDown, ChevronRight } from "lucide-react";
 import type { EditorState } from "@/components/editor/types";
-import { detectLiteralTranslation, analyzeLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
+import { analyzeLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
 import { toast } from "@/hooks/use-toast";
 
 interface TranslationToolsPanelProps {

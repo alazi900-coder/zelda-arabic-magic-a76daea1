@@ -3,9 +3,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Copy, AlertTriangle, Languages, Wrench, ChevronDown, ChevronRight } from "lucide-react";
 import type { EditorState } from "@/components/editor/types";
-import { detectLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
+import { detectLiteralTranslation, analyzeLiteralTranslation } from "@/components/editor/TranslationProgressDashboard";
 import { toast } from "@/hooks/use-toast";
 
 interface TranslationToolsPanelProps {

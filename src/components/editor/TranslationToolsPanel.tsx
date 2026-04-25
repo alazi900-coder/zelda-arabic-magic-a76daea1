@@ -257,6 +257,49 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
           </TabsContent>
         </Tabs>
       </CardContent>
+
+      {/* Confirm: copy all duplicates */}
+      <AlertDialog open={confirmCopyAll} onOpenChange={setConfirmCopyAll}>
+        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>نسخ الترجمة لكل النصوص المكررة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              ستُملأ <span className="font-mono text-primary">{estimatedCopyAll}</span> إدخال فارغ من
+              {" "}<span className="font-mono text-primary">{duplicates.actionable.length}</span> مجموعة مكررة.
+              <br />
+              لن يتم استبدال أي ترجمة موجودة. يمكنك التراجع عن كل تعديل من زر التراجع العام.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="mt-0">إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleApplyAllDuplicates}>نعم، انسخ</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm: clear all literal translations */}
+      <AlertDialog open={confirmClearAll} onOpenChange={setConfirmClearAll}>
+        <AlertDialogContent className="max-w-[92vw] sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>مسح كل الترجمات الحرفية؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم تفريغ <span className="font-mono text-destructive">{literals.length}</span> ترجمة فوق عتبة
+              {" "}<span className="font-mono">{Math.round(literalThreshold * 100)}%</span> إنجليزي.
+              <br />
+              ستحتاج لإعادة ترجمتها يدوياً أو عبر الذكاء الاصطناعي. هذا الإجراء لا يمكن التراجع عنه تلقائياً.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="mt-0">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearAllLiterals}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              نعم، امسح الكل
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

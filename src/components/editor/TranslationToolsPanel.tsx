@@ -45,19 +45,21 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
     return { actionable, total };
   }, [state?.entries, state?.translations]);
 
-  // ---- Literal-translation detection (uses configurable threshold) ----
+  // ---- Literal-translation detection (with stats for transparency) ----
   const literals = useMemo(() => {
-    if (!state) return [] as Array<{ key: string; english: string; arabic: string }>;
-    const out: Array<{ key: string; english: string; arabic: string }> = [];
+    if (!state) return [] as Array<{ key: string; english: string; arabic: string; ratio: number; englishWords: number; totalWords: number }>;
+    const out: Array<{ key: string; english: string; arabic: string; ratio: number; englishWords: number; totalWords: number }> = [];
     for (const entry of state.entries) {
       const k = `${entry.msbtFile}:${entry.index}`;
       const tr = state.translations[k]?.trim();
       if (!tr) continue;
-      if (detectLiteralTranslation(entry.original, tr, literalThreshold)) {
-        out.push({ key: k, english: entry.original, arabic: tr });
+      const stats = analyzeLiteralTranslation(entry.original, tr);
+      if (stats.totalWords > 3 && stats.englishRatio > literalThreshold) {
+        out.push({ key: k, english: entry.original, arabic: tr, ratio: stats.englishRatio, englishWords: stats.englishWords, totalWords: stats.totalWords });
       }
     }
-    return out;
+    // Sort highest ratio first — most suspicious shown first
+    return out.sort((a, b) => b.ratio - a.ratio);
   }, [state?.entries, state?.translations, literalThreshold]);
 
   // ---- Apply all duplicates at once ----

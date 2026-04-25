@@ -133,17 +133,28 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <GitCompareArrows className="w-4 h-4 text-destructive shrink-0" />
         <span className="text-sm font-semibold">تناقضات الترجمة</span>
         <span className="text-xs bg-destructive/15 text-destructive px-1.5 py-0.5 rounded-full font-mono">{inconsistencies.length}</span>
-        <div className="ms-auto flex gap-1">
+        <div className="ms-auto flex gap-1 flex-wrap">
+          {lastOp && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px]"
+              onClick={() => setReportOpen(true)}
+              title="عرض تقرير آخر توحيد"
+            >
+              <FileText className="w-3 h-3 ml-1" /> تقرير
+            </Button>
+          )}
           {undoStack.length > 0 && (
             <Button
               size="sm"
               variant="outline"
               className="h-7 text-[11px] border-accent text-accent-foreground hover:bg-accent/20"
-              onClick={handleUndo}
+              onClick={() => setConfirmUndo(true)}
               title={`تراجع عن آخر توحيد (${undoStack.length} خطوة في السجل)`}
             >
               <RotateCcw className="w-3 h-3 ml-1" /> تراجع ({undoStack.length})

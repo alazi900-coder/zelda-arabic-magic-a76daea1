@@ -22,8 +22,9 @@ interface TranslationToolsPanelProps {
 export default function TranslationToolsPanel({ state, onApplyTranslation }: TranslationToolsPanelProps) {
   const [tab, setTab] = useState<"duplicates" | "literal">("duplicates");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  // Sensitivity slider for literal-translation detection (0.20 - 0.80, default 0.40)
   const [literalThreshold, setLiteralThreshold] = useState<number>(0.4);
+  const [confirmCopyAll, setConfirmCopyAll] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   // ---- Duplicate detection (English text repeated, only some translated) ----
   const duplicates = useMemo(() => {

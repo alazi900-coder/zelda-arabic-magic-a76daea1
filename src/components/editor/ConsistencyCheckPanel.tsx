@@ -102,15 +102,15 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
         <span className="text-sm font-semibold">تناقضات الترجمة</span>
         <span className="text-xs bg-destructive/15 text-destructive px-1.5 py-0.5 rounded-full font-mono">{inconsistencies.length}</span>
         <div className="ms-auto flex gap-1">
-          {undoSnapshot && (
+          {undoStack.length > 0 && (
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-[11px] border-amber-500 text-amber-700 dark:text-amber-400"
+              className="h-7 text-[11px] border-warning text-warning hover:bg-warning/10"
               onClick={handleUndo}
-              title="تراجع عن آخر توحيد"
+              title={`تراجع عن آخر توحيد (${undoStack.length} خطوة في السجل)`}
             >
-              <RotateCcw className="w-3 h-3 ml-1" /> تراجع
+              <RotateCcw className="w-3 h-3 ml-1" /> تراجع ({undoStack.length})
             </Button>
           )}
           <Button

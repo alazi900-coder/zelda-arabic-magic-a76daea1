@@ -166,13 +166,28 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
 
           {/* LITERAL TAB */}
           <TabsContent value="literal" className="mt-2 space-y-1.5">
+            {/* Sensitivity slider — controls englishRatioThreshold */}
+            <div className="flex items-center gap-2 px-1 py-1 rounded bg-muted/20">
+              <span className="text-[10px] text-muted-foreground shrink-0">حساسية:</span>
+              <Slider
+                value={[literalThreshold]}
+                onValueChange={(v) => setLiteralThreshold(v[0])}
+                min={0.2}
+                max={0.8}
+                step={0.05}
+                className="flex-1"
+              />
+              <span className="text-[10px] font-mono text-primary shrink-0 w-10 text-center">
+                {Math.round(literalThreshold * 100)}%
+              </span>
+            </div>
             {literals.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-3">لا توجد ترجمات حرفية مشبوهة</p>
             ) : (
               <>
                 <div className="flex items-center gap-1.5 text-[11px] text-destructive">
                   <AlertTriangle className="w-3 h-3" />
-                  <span>{literals.length} ترجمة تحتوي كلمات إنجليزية كثيرة (&gt;40%)</span>
+                  <span>{literals.length} ترجمة تحتوي كلمات إنجليزية كثيرة (&gt;{Math.round(literalThreshold * 100)}%)</span>
                 </div>
                 <div className="space-y-1 max-h-[260px] overflow-y-auto">
                   {literals.slice(0, 30).map((l) => (

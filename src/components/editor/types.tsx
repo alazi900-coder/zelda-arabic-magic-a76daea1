@@ -170,6 +170,9 @@ export const BDAT_CATEGORIES: FileCategory[] = [
   { id: "bdat-tips", label: "النصائح والشروحات", emoji: "💡", icon: "Lightbulb", color: "text-lime-400" },
   { id: "bdat-dlc", label: "المحتوى الإضافي (DLC)", emoji: "🎮", icon: "Gamepad2", color: "text-pink-400" },
   { id: "bdat-system", label: "إعدادات النظام", emoji: "⚙️", icon: "Settings", color: "text-slate-400" },
+  { id: "bdat-npc",       label: "حوارات NPC",   emoji: "🧑‍🤝‍🧑", icon: "Users",      color: "text-blue-400"   },
+  { id: "bdat-event-xc1", label: "حوارات المهام", emoji: "📖", icon: "BookOpen",  color: "text-violet-400" },
+  { id: "bdat-misc-xc1",  label: "متفرقات",       emoji: "📁", icon: "FolderOpen", color: "text-gray-400"   },
   { id: "bdat-dialogue", label: "الحوارات والمشاهد", emoji: "🎬", icon: "Clapperboard", color: "text-purple-400" },
   { id: "bdat-cutscene", label: "المشاهد السينمائية", emoji: "🎞️", icon: "Film", color: "text-purple-500" },
   { id: "bdat-event-dialogue", label: "حوارات الأحداث", emoji: "🎭", icon: "Drama", color: "text-indigo-400" },
@@ -336,6 +339,12 @@ export function categorizeByFilename(filename: string): string | null {
 
 export function categorizeByTableName(tbl: string): string | null {
   const t = tbl.toLowerCase();
+
+  // === XC1 script_msg_ms.bdat — فئات ناقصة ===
+  if (/^\d{4}c\d+(am|pm)_ms$/i.test(t)) return "bdat-npc";       // حوارات NPC: 0101c1am_ms
+  if (/^\d{4}t\d+(am|pm)?_ms$/i.test(t)) return "bdat-npc";      // NPC كبير: 2501t1am_ms
+  if (/^\d{4}e\d+_ms$/i.test(t)) return "bdat-event-xc1";        // حوارات المهام: 0101e1_ms
+  if (/^\d{4}(f|m\d?)_ms$/i.test(t)) return "bdat-misc-xc1";     // متفرقات: 0101f_ms
 
   // === القائمة الرئيسية (title screen & core menus) — must be checked FIRST ===
   if (/^msg_mnu_(common_ms|title|save|load|option|config)/i.test(tbl)) return "bdat-title-menu";

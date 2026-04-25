@@ -84,7 +84,9 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
         updateTranslation(entry.key, chosen);
       }
     }
-    if (Object.keys(snapshot).length > 0) setUndoSnapshot(snapshot);
+    if (Object.keys(snapshot).length > 0) {
+      setUndoStack(prev => [...prev, { label: `توحيد "${english.slice(0, 20)}…"`, snapshot }].slice(-20));
+    }
     setEditingGroup(null);
   };
 

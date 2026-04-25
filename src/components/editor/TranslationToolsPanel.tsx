@@ -86,7 +86,9 @@ export default function TranslationToolsPanel({ state, onApplyTranslation }: Tra
   }, [onApplyTranslation]);
 
   const totalIssues = duplicates.actionable.length + literals.length;
-  if (totalIssues === 0) return null;
+  // Hide only when there's nothing to show AND no translated entries to scan
+  const hasAnyTranslation = state && Object.values(state.translations || {}).some(v => v?.trim());
+  if (totalIssues === 0 && !hasAnyTranslation) return null;
 
   return (
     <Card className="border-border/50">

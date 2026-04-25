@@ -77,21 +77,29 @@ export function computeConfidence(entry: ExtractedEntry, translation: string, gl
 
 /** Detect likely literal translations */
 export function detectLiteralTranslation(original: string, translation: string, englishRatioThreshold = 0.4): boolean {
-  if (!original?.trim() || !translation?.trim()) return false;
-  // Word order preservation heuristic: if Arabic words appear in roughly the same position as English
-  const origWords = original.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  const transWords = translation.split(/\s+/);
-  
-  // Check for untranslated English words in Arabic text (more than 40%)
+  return analyzeLiteralTranslation(original, translation).englishRatio > englishRatioThreshold
+    && analyzeLiteralTranslation(original, translation).totalWords > 3;
+}
+
+/** Returns the actual english-word ratio + counts so the UI can show *why* an entry was flagged. */
+export function analyzeLiteralTranslation(original: string, translation: string): {
+  englishWords: number;
+  totalWords: number;
+  englishRatio: number;
+} {
+  if (!original?.trim() || !translation?.trim()) {
+    return { englishWords: 0, totalWords: 0, englishRatio: 0 };
+  }
+  const transWords = translation.split(/\s+/).filter(Boolean);
   let englishWords = 0;
   for (const w of transWords) {
     if (/^[a-zA-Z]{3,}$/.test(w) && !/^(TAG|NEWLINE|NPC|HP|AP|SP|CP|TP|EXP|ATK|DEF|DPS|AOE|UI|HUD|QTE|DLC|LV|MAX|KO)$/i.test(w)) {
       englishWords++;
     }
   }
-  if (transWords.length > 3 && englishWords / transWords.length > englishRatioThreshold) return true;
-
-  return false;
+  const totalWords = transWords.length;
+  const englishRatio = totalWords > 0 ? englishWords / totalWords : 0;
+  return { englishWords, totalWords, englishRatio };
 }
 
 /** Detect same English text translated differently across entries */

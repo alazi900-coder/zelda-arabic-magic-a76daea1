@@ -106,7 +106,7 @@ export default function ConsistencyCheckPanel({ state, updateTranslation }: Prop
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-[11px] border-warning text-warning hover:bg-warning/10"
+              className="h-7 text-[11px] border-accent text-accent-foreground hover:bg-accent/20"
               onClick={handleUndo}
               title={`تراجع عن آخر توحيد (${undoStack.length} خطوة في السجل)`}
             >

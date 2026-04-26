@@ -41,7 +41,7 @@ type EditorSubset = Pick<
   | "showIntegrityDialog" | "setShowIntegrityDialog" | "integrityResult" | "checkingIntegrity" | "handleCheckIntegrity"
   | "showBuildConfirm" | "setShowBuildConfirm" | "buildPreview" | "handleBuild" | "building" | "handlePreBuild"
   | "updateTranslation" | "activeGlossary"
-  | "userGeminiKey" | "userDeepSeekKey" | "userGroqKey" | "userOpenRouterKey" | "myMemoryEmail" | "aiModel"
+  | "userGeminiKey" | "userDeepSeekKey" | "userGroqKey" | "userCerebrasKey" | "userOpenRouterKey" | "myMemoryEmail" | "aiModel"
   | "handleExportEnglishOnlyJson" | "handleExportEnglishOnly"
   | "importConflicts" | "handleConflictConfirm" | "handleConflictCancel"
   | "translatedCount" | "handleClearTranslations"
@@ -161,6 +161,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
         userGeminiKey={editor.userGeminiKey}
         userDeepSeekKey={editor.userDeepSeekKey}
         userGroqKey={editor.userGroqKey}
+        userCerebrasKey={editor.userCerebrasKey}
         userOpenRouterKey={editor.userOpenRouterKey}
         myMemoryEmail={editor.myMemoryEmail}
         aiModel={editor.aiModel}

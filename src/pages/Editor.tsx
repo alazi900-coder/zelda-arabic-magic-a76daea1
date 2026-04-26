@@ -122,6 +122,7 @@ const Editor = () => {
       const providerApiKey =
         provider === 'deepseek' ? editor.userDeepSeekKey :
         provider === 'groq' ? editor.userGroqKey :
+        provider === 'cerebras' ? editor.userCerebrasKey :
         provider === 'openrouter' ? editor.userOpenRouterKey : undefined;
       const aiModel =
         provider === 'openrouter'
@@ -151,7 +152,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userGroqKey, editor.userOpenRouterKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userGroqKey, editor.userCerebrasKey, editor.userOpenRouterKey, editor.aiModel]);
 
   const isPokemon = React.useMemo(() => {
     if (isDanganronpa) return false;

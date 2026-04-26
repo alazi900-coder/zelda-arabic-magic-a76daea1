@@ -914,7 +914,7 @@ async function translateWithGoogle(
   return { translations: result, charsUsed, glossaryStats: stats };
 }
 
-// --- OpenAI-compatible translation (DeepSeek / Groq) ---
+// --- OpenAI-compatible translation (DeepSeek / Groq / Cerebras / OpenRouter) ---
 async function translateWithOpenAICompat(
   entries: { key: string; original: string }[],
   protectedEntries: { key: string; cleaned: string; tags: Map<string, string> }[],
@@ -986,7 +986,10 @@ Input:
 ${textsBlock}
 }`;
 
-  const providerName = baseUrl.includes('deepseek') ? 'DeepSeek' : baseUrl.includes('groq') ? 'Groq' : 'OpenRouter';
+  const providerName = baseUrl.includes('deepseek') ? 'DeepSeek'
+    : baseUrl.includes('groq') ? 'Groq'
+    : baseUrl.includes('cerebras') ? 'Cerebras'
+    : 'OpenRouter';
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -1566,6 +1569,27 @@ Deno.serve(async (req) => {
       const { translations, glossaryStats } = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,
         'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile',
+      );
+      return new Response(JSON.stringify({ translations, glossaryStats }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } else if (provider === 'cerebras') {
+      if (!providerApiKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج Cerebras مفتاح API — سجّل مجاناً على cloud.cerebras.ai' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const CEREBRAS_MODELS = [
+        'qwen-3-235b-a22b-instruct-2507',
+        'llama-4-scout-17b-16e-instruct',
+        'llama-4-maverick-17b-128e-instruct',
+        'llama-3.3-70b',
+      ];
+      const cerebrasModel = aiModel && CEREBRAS_MODELS.includes(aiModel) ? aiModel : 'qwen-3-235b-a22b-instruct-2507';
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const { translations, glossaryStats } = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, providerApiKey,
+        'https://api.cerebras.ai/v1', cerebrasModel,
       );
       return new Response(JSON.stringify({ translations, glossaryStats }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

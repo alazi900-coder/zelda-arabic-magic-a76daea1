@@ -18,6 +18,7 @@ interface CompareEnginesDialogProps {
   userGeminiKey: string;
   userDeepSeekKey?: string;
   userGroqKey?: string;
+  userCerebrasKey?: string;
   userOpenRouterKey?: string;
   myMemoryEmail: string;
   aiModel?: string;
@@ -30,7 +31,7 @@ interface EngineConfig {
   provider: string;
   model?: string;
   description: string;
-  requiresKey?: 'gemini' | 'deepseek' | 'groq' | 'openrouter';
+  requiresKey?: 'gemini' | 'deepseek' | 'groq' | 'cerebras' | 'openrouter';
 }
 
 function buildEngines(): EngineConfig[] {
@@ -42,6 +43,8 @@ function buildEngines(): EngineConfig[] {
     { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
     { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
     { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
+    { id: 'cerebras-qwen3', label: 'Cerebras Qwen 3 235B', emoji: '🚀', provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', description: 'الأسرع inference + ممتاز للعربية', requiresKey: 'cerebras' },
+    { id: 'cerebras-llama4', label: 'Cerebras Llama 4 Scout', emoji: '🦅', provider: 'cerebras', model: 'llama-4-scout-17b-16e-instruct', description: 'سريع جداً ومجاني', requiresKey: 'cerebras' },
     ...orModels.map((model, index) => ({ id: `openrouter-${index}`, label: model.label, emoji: model.badge, provider: 'openrouter', model: model.id, description: model.desc, requiresKey: 'openrouter' as const })),
     { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
     { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
@@ -145,7 +148,7 @@ function renderTranslationWithProtectedTags(text: string) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, myMemoryEmail,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, myMemoryEmail,
 }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, string | null>>({});
@@ -158,6 +161,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
   const getProviderKey = (engine: EngineConfig): string | undefined => {
     if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;
     if (engine.requiresKey === 'groq') return userGroqKey || undefined;
+    if (engine.requiresKey === 'cerebras') return userCerebrasKey || undefined;
     if (engine.requiresKey === 'openrouter') return userOpenRouterKey || undefined;
     return undefined;
   };
@@ -173,6 +177,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
     const enginesToRun = ALL_ENGINES.filter(e => {
       if (e.requiresKey === 'deepseek') return !!userDeepSeekKey;
       if (e.requiresKey === 'groq') return !!userGroqKey;
+      if (e.requiresKey === 'cerebras') return !!userCerebrasKey;
       if (e.requiresKey === 'openrouter') return !!userOpenRouterKey;
       return true;
     });

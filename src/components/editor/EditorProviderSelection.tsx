@@ -16,6 +16,7 @@ type EditorSubset = Pick<
   | "userGeminiKey" | "setUserGeminiKey"
   | "userDeepSeekKey" | "setUserDeepSeekKey"
   | "userGroqKey" | "setUserGroqKey"
+  | "userCerebrasKey" | "setUserCerebrasKey"
   | "userOpenRouterKey" | "setUserOpenRouterKey"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
@@ -64,6 +65,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'gemini' as const, label: '🤖 Lovable AI', badge: editor.userGeminiKey ? '✅' : '⚡' },
               { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
               { id: 'groq' as const, label: '⚡ Groq (Llama)', badge: editor.userGroqKey ? '✅' : '⚠️' },
+              { id: 'cerebras' as const, label: '🚀 Cerebras (Qwen)', badge: editor.userCerebrasKey ? '✅' : '⚠️' },
               { id: 'openrouter' as const, label: '🆕 OpenRouter', badge: editor.userOpenRouterKey ? '✅' : '⚠️' },
             ].map(({ id, label, badge }) => (
               <Button
@@ -220,6 +222,83 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               </p>
               {!editor.userGroqKey && (
                 <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
+                  احصل على مفتاح ↗
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {editor.translationProvider === 'cerebras' && (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2 flex-1">
+              <input
+                type="password"
+                placeholder="الصق مفتاح Cerebras API هنا..."
+                value={editor.userCerebrasKey}
+                onChange={(e) => editor.setUserCerebrasKey(e.target.value)}
+                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                dir="ltr"
+              />
+              {editor.userCerebrasKey && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => handleTestConnection('cerebras')}
+                  disabled={testConnStatus['cerebras'] === 'testing'}
+                  className="text-xs shrink-0 gap-1"
+                >
+                  {testConnStatus['cerebras'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                   testConnStatus['cerebras'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                   testConnStatus['cerebras'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                   <Wifi className="w-3 h-3" />}
+                  تجربة
+                </Button>
+              )}
+              {editor.userCerebrasKey && (
+                <Button variant="ghost" size="sm" onClick={() => editor.setUserCerebrasKey('')} className="text-xs text-destructive shrink-0">
+                  مسح
+                </Button>
+              )}
+            </div>
+            {testConnMsg['cerebras'] && (
+              <p className={`text-xs font-body ${testConnStatus['cerebras'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                {testConnStatus['cerebras'] === 'ok' ? '✅' : '❌'} {testConnMsg['cerebras']}
+              </p>
+            )}
+            {editor.userCerebrasKey && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                {[
+                  { id: 'qwen-3-235b-a22b-instruct-2507', label: '🌟 Qwen 3 235B', desc: 'الأفضل للعربية' },
+                  { id: 'llama-4-scout-17b-16e-instruct', label: '⚡ Llama 4 Scout', desc: 'سريع جداً' },
+                  { id: 'llama-4-maverick-17b-128e-instruct', label: '🦅 Llama 4 Maverick', desc: 'سياق طويل' },
+                  { id: 'llama-3.3-70b', label: '🦙 Llama 3.3 70B', desc: 'مستقر' },
+                ].map(m => {
+                  const isSelected = editor.aiModel === m.id || (m.id === 'qwen-3-235b-a22b-instruct-2507' && !['llama-4-scout-17b-16e-instruct', 'llama-4-maverick-17b-128e-instruct', 'llama-3.3-70b'].includes(editor.aiModel));
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => editor.setAiModel(m.id)}
+                      className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${
+                        isSelected ? 'border-primary bg-primary/10 text-foreground'
+                                   : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                      }`}
+                    >
+                      <span className="font-display">{m.label}</span>
+                      <span className="text-[10px] opacity-70 truncate w-full" dir="ltr">{m.id}</span>
+                      <span className="text-[10px] opacity-70">{m.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground font-body">
+                {editor.userCerebrasKey
+                  ? '✅ مفتاح Cerebras مفعّل — أسرع inference + 1M tokens/يوم مجاناً'
+                  : '⚠️ يحتاج مفتاح API — سجّل مجاناً على cloud.cerebras.ai'}
+              </p>
+              {!editor.userCerebrasKey && (
+                <a href="https://cloud.cerebras.ai/platform/" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
                   احصل على مفتاح ↗
                 </a>
               )}
@@ -436,7 +515,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
       <div className="flex items-center justify-between border-t border-border/50 pt-3 mt-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-display">⏱️ تنظيم سرعة الإرسال</span>
-          <span className="text-xs text-muted-foreground font-body">(يحترم حدود الموفّر لتفادي 429 — 4س Gemini / 3س OpenRouter / 2س Groq للمجاني)</span>
+          <span className="text-xs text-muted-foreground font-body">(يحترم حدود الموفّر لتفادي 429 — 4س Gemini / 3س OpenRouter / 2س Groq+Cerebras للمجاني)</span>
         </div>
         <Switch
           checked={editor.aiThrottleEnabled}

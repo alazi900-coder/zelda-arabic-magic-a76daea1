@@ -36,6 +36,7 @@ interface UseAutoPilotProps {
   userGeminiKey: string;
   userDeepSeekKey: string;
   userGroqKey: string;
+  userCerebrasKey: string;
   userOpenRouterKey: string;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
@@ -53,8 +54,10 @@ const AI_BATCH = 5;
 function pickFreeProvider(
   userOpenRouterKey: string,
   userGroqKey: string,
+  userCerebrasKey: string,
   myMemoryEmail: string,
 ): { provider: string; model?: string; label: string } {
+  if (userCerebrasKey) return { provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B (Cerebras مجاني)' };
   if (userOpenRouterKey) return { provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen 2.5 72B (OpenRouter مجاني)' };
   if (userGroqKey) return { provider: 'groq', label: 'Groq Llama 3.3 (مجاني)' };
   return { provider: 'google', label: 'Google Translate (مجاني تماماً)' };
@@ -62,7 +65,7 @@ function pickFreeProvider(
 
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
-  translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey,
+  translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
 }: UseAutoPilotProps) {
@@ -81,8 +84,8 @@ export function useAutoPilot({
   const logIdRef = useRef(0);
 
   const freeProviderLabel = useMemo(
-    () => pickFreeProvider(userOpenRouterKey, userGroqKey, myMemoryEmail).label,
-    [userOpenRouterKey, userGroqKey, myMemoryEmail],
+    () => pickFreeProvider(userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail).label,
+    [userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail],
   );
 
   const stop = useCallback(() => { abortRef.current?.abort(); }, []);
@@ -95,6 +98,7 @@ export function useAutoPilot({
     const prov = forceProvider || translationProvider;
     const provKey = prov === 'deepseek' ? userDeepSeekKey
       : prov === 'groq' ? userGroqKey
+      : prov === 'cerebras' ? userCerebrasKey
       : prov === 'openrouter' ? userOpenRouterKey
       : undefined;
     return JSON.stringify({
@@ -109,7 +113,7 @@ export function useAutoPilot({
       npcMode: npcMode || undefined,
       aiModel: forceModel || (prov === 'gemini' ? aiModel : prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
     });
-  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey,
+  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey,
       userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {
@@ -150,18 +154,20 @@ export function useAutoPilot({
       else { setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...t } } : null); }
     };
 
-    const freeChoice = pickFreeProvider(userOpenRouterKey, userGroqKey, myMemoryEmail);
+    const freeChoice = pickFreeProvider(userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail);
     const aiProvider = runMode === 'free' ? freeChoice.provider : translationProvider;
     const aiModelOverride = runMode === 'free' ? freeChoice.model : undefined;
 
     // سلسلة Fallback: عند انتهاء الحصة يتحول تلقائياً للمزود التالي
     const fallbackChain: Array<{ provider: string; model?: string; label: string }> = runMode === 'free'
       ? [
+          ...(aiProvider !== 'cerebras' && userCerebrasKey ? [{ provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B (Cerebras)' }] : []),
           ...(aiProvider !== 'groq' && userGroqKey ? [{ provider: 'groq', label: 'Groq Llama 3.3' }] : []),
           { provider: 'google', label: 'Google Translate' },
         ]
       : [
           // الوضع الذكي: إذا انتهت الحصة تحول للمجاني تلقائياً
+          ...(userCerebrasKey ? [{ provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B (Cerebras)' }] : []),
           ...(userOpenRouterKey ? [{ provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen (OpenRouter مجاني)' }] : []),
           ...(userGroqKey ? [{ provider: 'groq', label: 'Groq Llama 3.3' }] : []),
           { provider: 'google', label: 'Google Translate' },
@@ -495,7 +501,7 @@ export function useAutoPilot({
       abortRef.current = null;
     }
   }, [state, setState, running, mode, previewMode, activeGlossary, parseGlossaryMap, translationProvider,
-      userGeminiKey, userGroqKey, userOpenRouterKey, myMemoryEmail, rebalanceNewlines,
+      userGeminiKey, userGroqKey, userCerebrasKey, userOpenRouterKey, myMemoryEmail, rebalanceNewlines,
       npcMaxLines, aiModel, addAiRequest, addMyMemoryChars, qualityStats, filteredEntries, buildFetchBody]);
 
   const applyPending = useCallback((selectedKeys: Set<string>) => {

@@ -32,10 +32,10 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter'>(() => {
-    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter') || 'gemini'; } catch { return 'gemini'; }
+  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras'>(() => {
+    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras') || 'gemini'; } catch { return 'gemini'; }
   });
-  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter') => {
+  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras') => {
     _setTranslationProvider(p);
     try { localStorage.setItem('translationProvider', p); } catch { /* localStorage unavailable - ignore */ }
   }, []);
@@ -63,6 +63,14 @@ export function useEditorSettings() {
   const setUserGroqKey = useCallback((key: string) => {
     _setUserGroqKey(key);
     try { if (key) localStorage.setItem('userGroqKey', key); else localStorage.removeItem('userGroqKey'); } catch { /* localStorage unavailable - ignore */ }
+  }, []);
+
+  const [userCerebrasKey, _setUserCerebrasKey] = useState(() => {
+    try { return localStorage.getItem('userCerebrasKey') || ''; } catch { return ''; }
+  });
+  const setUserCerebrasKey = useCallback((key: string) => {
+    _setUserCerebrasKey(key);
+    try { if (key) localStorage.setItem('userCerebrasKey', key); else localStorage.removeItem('userCerebrasKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
@@ -241,6 +249,7 @@ export function useEditorSettings() {
     userGeminiKey, setUserGeminiKey,
     userDeepSeekKey, setUserDeepSeekKey,
     userGroqKey, setUserGroqKey,
+    userCerebrasKey, setUserCerebrasKey,
     userOpenRouterKey, setUserOpenRouterKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,

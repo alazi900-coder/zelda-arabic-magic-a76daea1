@@ -51,7 +51,6 @@ import EditorBuildSection from "@/components/editor/EditorBuildSection";
 import EditorProviderSelection from "@/components/editor/EditorProviderSelection";
 import EditorActionsToolbar from "@/components/editor/EditorActionsToolbar";
 import EditorMobileStickyBar from "@/components/editor/EditorMobileStickyBar";
-import EditorMobileTabsHeader from "@/components/editor/EditorMobileTabsHeader";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -70,7 +69,6 @@ const Editor = () => {
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
   const [showToolHelp, setShowToolHelp] = React.useState<ToolType>(null);
-  const [mobileTab, setMobileTab] = React.useState<"entries" | "filters" | "tools">("entries");
   const [drBuilding, setDrBuilding] = React.useState(false);
   const [sourceGame, setSourceGame] = React.useState<string | null>(null);
   const [testConnStatus, setTestConnStatus] = React.useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
@@ -437,10 +435,6 @@ const Editor = () => {
             </Card>
           )}
 
-          {/* Mobile-only tab switcher: groups long content into 3 sections */}
-          <EditorMobileTabsHeader active={mobileTab} onChange={setMobileTab} />
-
-          <div className={isMobile && mobileTab !== "tools" ? "hidden" : ""}>
           <EditorProviderSelection
             editor={editor}
             testConnStatus={testConnStatus}
@@ -504,7 +498,6 @@ const Editor = () => {
           <EditorResultsPanels editor={editor} />
 
           <EditorLegacyPanels editor={editor} showTagRepair={showTagRepair} setShowTagRepair={setShowTagRepair} />
-          </div>
 
           {!editor.user && (
             <Card className="mb-4 border-primary/30 bg-primary/5">
@@ -512,7 +505,6 @@ const Editor = () => {
             </Card>
           )}
 
-          <div className={isMobile && mobileTab !== "filters" ? "hidden" : ""}>
           <EditorFiltersBar
             editor={editor}
             isMobile={isMobile}
@@ -625,9 +617,7 @@ const Editor = () => {
               </div>
             );
           })()}
-          </div>
 
-          <div className={isMobile && mobileTab !== "entries" ? "hidden" : ""}>
           <EditorActionsToolbar
             editor={editor}
             isMobile={isMobile}
@@ -698,7 +688,6 @@ const Editor = () => {
             setCompareEntry={setCompareEntry}
             findSimilar={findSimilar}
           />
-          </div>
         </div>
         </div>
 

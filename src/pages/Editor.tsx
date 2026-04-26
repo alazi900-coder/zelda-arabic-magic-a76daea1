@@ -31,21 +31,14 @@ import BdatBuildReport from "@/components/editor/BdatBuildReport";
 import FileLoadReport from "@/components/editor/FileLoadReport";
 
 
-import MergeToBundledPanel from "@/components/editor/MergeToBundledPanel";
 
 import GlossaryStatsPanel from "@/components/editor/GlossaryStatsPanel";
 import GlossaryCategoryFilter from "@/components/editor/GlossaryCategoryFilter";
 import GlossaryDuplicatesPanel from "@/components/editor/GlossaryDuplicatesPanel";
 import TranslationAIEnhancePanel from "@/components/editor/TranslationAIEnhancePanel";
 import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
-import TagRepairPanel from "@/components/editor/TagRepairPanel";
-import NewlineSplitPanel from "@/components/editor/NewlineSplitPanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 
-import SmartReviewPanel from "@/components/editor/SmartReviewPanel";
-import GlossaryCompliancePanel from "@/components/editor/GlossaryCompliancePanel";
-import TranslationEnhancePanel from "@/components/editor/TranslationEnhancePanel";
-import AdvancedTranslationPanel from "@/components/editor/AdvancedTranslationPanel";
 import { ToolType } from "@/components/editor/ToolHelpDialog";
 import TranslationProgressDashboard from "@/components/editor/TranslationProgressDashboard";
 import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
@@ -61,6 +54,7 @@ import EditorEntryListSection from "@/components/editor/EditorEntryListSection";
 import EditorFiltersBar from "@/components/editor/EditorFiltersBar";
 import EditorGameSafetySection from "@/components/editor/EditorGameSafetySection";
 import EditorResultsPanels from "@/components/editor/EditorResultsPanels";
+import EditorLegacyPanels from "@/components/editor/EditorLegacyPanels";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -1018,141 +1012,7 @@ const Editor = () => {
 
           <EditorResultsPanels editor={editor} />
 
-          {/* Legacy panels kept for individual tool usage */}
-          {editor.newlineSplitResults && editor.newlineSplitResults.length > 0 && (
-            <NewlineSplitPanel
-              results={editor.newlineSplitResults}
-              onAccept={editor.handleApplyNewlineSplit}
-              onReject={editor.handleRejectNewlineSplit}
-              onAcceptAll={editor.handleApplyAllNewlineSplits}
-              onClose={() => editor.setNewlineSplitResults(null)}
-              charLimit={editor.newlineSplitCharLimit}
-              onCharLimitChange={editor.setNewlineSplitCharLimit}
-              onRescan={editor.handleScanNewlineSplit}
-            />
-          )}
-
-          {editor.npcSplitResults && editor.npcSplitResults.length > 0 && (
-            <NewlineSplitPanel
-              results={editor.npcSplitResults}
-              onAccept={editor.handleApplyNpcSplit}
-              onReject={editor.handleRejectNpcSplit}
-              onAcceptAll={editor.handleApplyAllNpcSplits}
-              onClose={() => editor.setNpcSplitResults(null)}
-              charLimit={editor.npcSplitCharLimit}
-              onCharLimitChange={editor.setNpcSplitCharLimit}
-              onRescan={editor.handleScanNpcSplit}
-              title="💬 تقسيم محادثات NPC"
-            />
-          )}
-
-          {editor.lineSyncResults && editor.lineSyncResults.length > 0 && (
-            <NewlineSplitPanel
-              results={editor.lineSyncResults}
-              onAccept={editor.handleApplyLineSync}
-              onReject={editor.handleRejectLineSync}
-              onAcceptAll={editor.handleApplyAllLineSyncs}
-              onClose={() => editor.setLineSyncResults(null)}
-              charLimit={editor.npcSplitCharLimit}
-              onCharLimitChange={editor.setNpcSplitCharLimit}
-              onRescan={editor.handleScanLineSync}
-              title="🔄 مزامنة الأسطر (كل الملفات)"
-            />
-          )}
-
-
-          {/* Smart Review Panel */}
-          {editor.smartReviewFindings && editor.smartReviewFindings.length > 0 && (
-            <SmartReviewPanel
-              findings={editor.smartReviewFindings}
-              onApply={editor.handleApplySmartFix}
-              onApplyAll={editor.handleApplyAllSmartFixes}
-              onDismiss={editor.handleDismissSmartFinding}
-              onClose={() => editor.setSmartReviewFindings(null)}
-            />
-          )}
-
-          {/* Weak Translations Panel */}
-          {editor.weakTranslations && editor.weakTranslations.length > 0 && (
-            <SmartReviewPanel
-              findings={editor.weakTranslations.map(w => ({
-                key: w.key,
-                original: w.original,
-                current: w.current,
-                type: 'naturalness' as const,
-                issue: `درجة ${w.score}/10 — ${w.reason}`,
-                fix: w.suggestion,
-              }))}
-              onApply={(key, fix) => editor.handleApplyWeakFix(key, fix)}
-              onApplyAll={editor.handleApplyAllWeakFixes}
-              onDismiss={() => {}}
-              onClose={() => editor.setWeakTranslations(null)}
-            />
-          )}
-
-          {/* Translation Enhancement Panel */}
-          {editor.enhanceResults && editor.enhanceResults.length > 0 && (
-            <TranslationEnhancePanel
-              results={editor.enhanceResults}
-              onApplySuggestion={editor.handleApplyEnhanceSuggestion}
-              onApplyAll={editor.handleApplyAllEnhanceSuggestions}
-              onClose={editor.handleCloseEnhanceResults}
-              analyzing={editor.enhancingTranslations}
-            />
-          )}
-
-          {/* Glossary Compliance Panel */}
-          {editor.glossaryComplianceResults && editor.glossaryComplianceResults.length > 0 && (
-            <GlossaryCompliancePanel
-              violations={editor.glossaryComplianceResults}
-              onApplyFix={editor.handleApplyGlossaryFix}
-              onApplyAll={editor.handleApplyAllGlossaryFixes}
-              onClose={() => editor.setGlossaryComplianceResults(null)}
-            />
-          )}
-
-          {/* Advanced Translation Analysis Panel */}
-          {(editor.literalResults || editor.styleResults || editor.consistencyCheckResult || editor.alternativeResults || editor.fullAnalysisResults) && (
-            <AdvancedTranslationPanel
-              activeTab={editor.advancedAnalysisTab}
-              literalResults={editor.literalResults}
-              styleResults={editor.styleResults}
-              consistencyResult={editor.consistencyCheckResult}
-              alternativeResults={editor.alternativeResults}
-              fullResults={editor.fullAnalysisResults}
-              analyzing={editor.advancedAnalyzing}
-              onApply={editor.handleApplyAdvancedSuggestion}
-              onApplyAll={editor.handleApplyAllAdvanced}
-              onClose={editor.handleCloseAdvancedPanel}
-              onTabChange={(tab) => editor.setAdvancedAnalysisTab(tab)}
-              onSaveToMemory={editor.saveToEnhancedMemory}
-              onStop={editor.handleStopAdvancedAnalysis}
-            />
-          )}
-
-
-          {showTagRepair && editor.state && (
-            <TagRepairPanel
-              entries={editor.state.entries}
-              translations={editor.state.translations}
-              damagedTagKeys={editor.qualityStats.damagedTagKeys}
-              onApplySelected={(keys) => editor.handleLocalFixSelectedTags(keys)}
-              onClose={() => setShowTagRepair(false)}
-            />
-          )}
-
-          {/* Merge to Bundled Panel */}
-          {editor.mergeToBundledItems && editor.mergeToBundledItems.length > 0 && (
-            <MergeToBundledPanel
-              items={editor.mergeToBundledItems}
-              onAccept={editor.handleMergeToBundledAccept}
-              onReject={editor.handleMergeToBundledReject}
-              onAcceptAll={editor.handleMergeToBundledAcceptAll}
-              onRejectAll={editor.handleMergeToBundledRejectAll}
-              onClose={() => editor.setMergeToBundledItems(null)}
-              onDownload={editor.handleMergeToBundledDownload}
-            />
-          )}
+          <EditorLegacyPanels editor={editor} showTagRepair={showTagRepair} setShowTagRepair={setShowTagRepair} />
 
           {!editor.user && (
             <Card className="mb-4 border-primary/30 bg-primary/5">

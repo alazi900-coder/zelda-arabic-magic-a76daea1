@@ -141,6 +141,65 @@ function isNpcDialogue(key: string): boolean {
   return /\bmsg_(ask|cq|fev|nq|sq|tlk|tq)\b/i.test(key);
 }
 
+/**
+ * Build a category-specific Arabic translation hint from an entry's key/text.
+ * Used by all AI prompt paths so the model receives consistent, content-aware
+ * guidance (character names should not be re-translated, menu buttons stay
+ * imperative-short, dialogue follows speaker voices, etc.). Returns an empty
+ * string if no specific category was detected.
+ */
+function detectCategoryHint(sampleKey: string, sampleText: string): string {
+  const k = sampleKey || '';
+  const t = sampleText || '';
+
+  // 1) Character / entity proper names — keep as proper nouns from glossary
+  if (/CharacterName|SYS_.*Name|ActorName|CHR_|NpcName|EnemyName/i.test(k)) {
+    return 'هذه أسماء شخصيات أو كيانات. قاعدة صارمة: لو الاسم في القاموس استخدم الترجمة المُعتمدة حرفياً. وإلا اكتبه بالعربية بالنطق الشائع (Shulk → شولك، Reyn → رين). لا تترجم المعنى، لا تضف أوصافاً، ولا تضع "ال" التعريف قبل أسماء العلم. اجعل الترجمة قصيرة جداً.';
+  }
+
+  // 2) Items / pouch / collectibles / materials — short noun forms
+  if (/ItemName|PouchContent|CollectibleName|GemName|AccessoryName|CookName|MaterialName|FoodName|EquipName/i.test(k)) {
+    return 'هذه أسماء أدوات وعناصر قابلة للجمع. صيغ اسمية مختصرة فقط (1-3 كلمات)، بلا أفعال وبلا توصيف زائد. أمثلة: "Bronze Sword" → "سيف برونزي" / "Healing Herb" → "عشبة شفاء" / "Travel Pass" → "تصريح سفر".';
+  }
+
+  // 3) Menu / UI / buttons — imperative + brief
+  if (/MNU_|Menu|LayoutMsg|BTN_|Button|Option|Setting|Tab_|UI_|HUD_/i.test(k)) {
+    return 'هذه نصوص واجهة وقوائم وأزرار. اجعلها مختصرة جداً (كلمة كلما أمكن، كلمتان حداً أقصى). للأزرار التفاعلية استخدم صيغة الأمر (احفظ، اخرج، أكّد، رجوع، التالي، إلغاء). للعناوين استخدم الاسم (الإعدادات، الخيارات، الحالة، المخزون). تجنّب الجمل الكاملة، وتجنّب علامات الترقيم الزائدة.';
+  }
+
+  // 4) Dialogue / NPC / conversations — character voice + natural Arabic
+  if (/EventFlow|msg_(ask|cq|fev|nq|sq|tlk|tq)|FLD_Npc|talk|dlg_|story_|cutscene/i.test(k)) {
+    return 'هذه حوارات لعب تفاعلية. استخدم عربية حديثة طبيعية كأنها محادثة حقيقية، ليست فصحى أكاديمية ثقيلة. اعكس شخصية المتحدث: شولك (تحليلي، طموح، مفكّر). رين (عامي، مرح، مباشر، يستخدم كلمات بسيطة). دانبان (هادئ، نبيل، حكيم). فيورا (دافئة، عفوية). ميليا (رسمية، أميرية، مهذّبة جداً، تتجنّب العامية). ريكي (طفولي، يتحدث عن نفسه بضمير الغائب: "ريكي يريد..."، يكرّر الكلمات). شارلا (دافئة، مُلهِمة، أمومية). الأعداء (زانزا، إيجل): متعجرفون، فوقيّون. خاطب اللاعب بضمير المخاطب المفرد (أنت، تعال) ما لم يكن المتحدث ملكياً يستخدم صيغة الجمع.';
+  }
+
+  // 5) Quests / missions / challenges
+  if (/QST_|Quest|Mission|Challenge|Task_/i.test(k)) {
+    return 'هذه نصوص مهام: أسماء أو أوصاف أو أهداف. للأسماء: اجعلها مختصرة وتحفيزية (مثال: "Hero of Colony 9" → "بطل المستعمرة 9"). للأوصاف: واضحة ومباشرة، تشرح ماذا يجب على اللاعب فعله. حافظ على أسماء المواقع والشخصيات كما في القاموس.';
+  }
+
+  // 6) Locations / maps / regions — descriptive vs proper-name handling
+  if (/Location|Map|FLD_.*Name|Area|Region|Landmark|Place_|World_/i.test(k)) {
+    return 'هذه أسماء مواقع ومعالم. القاعدة: لو الاسم وصفي مركّب (مثل "Crystal Valley") ترجمه وصفياً ("وادي الكريستال"). لو علم بحت (مثل "Colony 9") انقله صوتياً ("المستعمرة 9"). تحقّق من القاموس أولاً قبل أي قرار.';
+  }
+
+  // 7) Skills / arts / abilities — combat language
+  if (/Skill|Art|Ability|Class|Talent|Combat|BTL_|Battle/i.test(k)) {
+    return 'هذه أسماء فنون قتالية ومهارات. استخدم تركيبات قوية وموجزة، عادةً اسم + اسم أو اسم + صفة (مثال: "Sword Slash" → "ضربة سيف"، "Light Heal" → "شفاء خفيف"، "Power Smash" → "تحطيم قوي"). تجنّب الجمل الفعلية الكاملة. مفردات الحركة الدقيقة مفضّلة (ضربة، تحطيم، اختراق، انفجار، شفاء، تعزيز، اندفاع، إعصار).';
+  }
+
+  // 8) Tooltips / descriptions / tutorials
+  if (/desc|caption|help|tutorial|tip|guide|info_|explain/i.test(k)) {
+    return 'هذه نصوص شرحية أو تعليمية. اجعلها واضحة، مفصّلة بالقدر المناسب، وسهلة الفهم لأي لاعب. استخدم جملاً كاملة سليمة. اشرح الآلية بدلاً من الترجمة الحرفية إذا كان المعنى تقنياً معقداً. للدروس: نبرة محادثة لطيفة بصيغة المخاطب.';
+  }
+
+  // 9) Short ALL-CAPS or capitalized text fallback (likely UI element)
+  if (t.length > 0 && t.length <= 15 && /^[A-Z]/.test(t)) {
+    return 'هذا نص قصير جداً (على الأرجح اسم عنصر أو عنصر واجهة). ترجمة بنفس الإيجاز — كلمة أو كلمتان كحد أقصى.';
+  }
+
+  return '';
+}
+
 function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>, entryKey?: string): string {
   const restored = restoreTags(translated, tags);
   const enforced = enforceTagIntegrity(original, restored);
@@ -899,6 +958,8 @@ async function translateWithOpenAICompat(
   const textsBlock = needsAI.map((item, i) => `"K${i}": "${escapeForJsonString(item.termLocks.lockedText)}"`).join(',\n');
   const hasNpcEntries = _npcMode && needsAI.some(item => isNpcDialogue(item.entry.key));
   const npcRule = hasNpcEntries ? `\n8. NPC DIALOGUE MODE: Some entries are NPC dialogue (short in-game text boxes). Keep these translations VERY concise — max ${_npcMaxLines ?? 2} lines, approximately 37 Arabic characters per line. Prioritize brevity over completeness.` : '';
+  const categoryHint = detectCategoryHint(needsAI[0]?.entry.key || '', needsAI[0]?.entry.original || '');
+  const categorySection = categoryHint ? `\n\nCONTEXT-SPECIFIC GUIDANCE:\n${categoryHint}\n` : '';
   const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.
 
 XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
@@ -917,7 +978,7 @@ CRITICAL RULES:
 7. Do NOT add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ).
 8. Use natural modern Arabic for gaming (العربية الحديثة للألعاب) — not formal Arabic.
 9. Match the speaker's personality: casual for Reyn/Riki, formal for Melia/Dunban.
-10. If a glossary term appears, use its EXACT Arabic translation — no alternatives.${npcRule}
+10. If a glossary term appears, use its EXACT Arabic translation — no alternatives.${npcRule}${categorySection}
 
 Input:
 {
@@ -1140,30 +1201,7 @@ async function translateWithAI(
     }
   }
 
-  let categoryHint = '';
-  const sampleKey = entries[0]?.key || '';
-  const sampleText = entries[0]?.original || '';
-  // Enhanced content-type detection based on table patterns AND text content
-  if (/CharacterName|SYS_.*Name|ActorName/i.test(sampleKey)) {
-    categoryHint = 'هذه أسماء شخصيات أو كيانات — حافظ على الأسماء العلم كما في القاموس أو اكتبها بالعربية بالطريقة الشائعة. اجعل الترجمة مختصرة جداً.';
-  } else if (/ItemName|PouchContent|CollectibleName|GemName|AccessoryName|CookName/i.test(sampleKey)) {
-    categoryHint = 'هذه أسماء أدوات ومواد وعناصر قابلة للجمع — استخدم صيغة اسمية مختصرة ومباشرة وواضحة.';
-  } else if (/MNU_|Menu|LayoutMsg|BTN_|Option|Setting/i.test(sampleKey)) {
-    categoryHint = 'هذه نصوص واجهة مستخدم وقوائم وأزرار — اجعلها مختصرة جداً وواضحة ومباشرة. كلمة أو كلمتان كحد أقصى عند الإمكان.';
-  } else if (/EventFlow|msg_(ask|cq|fev|nq|sq|tlk|tq)|FLD_Npc|talk/i.test(sampleKey)) {
-    categoryHint = 'هذه حوارات شخصيات ومحادثات NPC في Xenoblade Chronicles — استخدم أسلوباً طبيعياً يعكس شخصية المتحدث. شولك: محدد وطموح. رين: عامي وفكاهي ومباشر. دانبان: نبيل وهادئ. ميليا: رسمية وكريمة. ريكي: يتحدث عن نفسه بضمير الغائب وبطريقة طفولية. شارلا: دافئة وعملية. الأعداء (زانزا/إيجل): يتحدثون بتعجرف وسلطة.';
-  } else if (/QST_|Quest|Mission|Challenge/i.test(sampleKey)) {
-    categoryHint = 'هذه أسماء مهام وتحديات وأوصافها — استخدم أسلوباً تحفيزياً واضحاً مع الحفاظ على أسماء العلم.';
-  } else if (/Location|Map|FLD_.*Name|Area|Region|Landmark/i.test(sampleKey)) {
-    categoryHint = 'هذه أسماء مواقع ومعالم على الخريطة — حافظ على الأسماء العلم أو ترجمها وصفياً إذا كانت وصفية (مثل Crystal Valley = وادي الكريستال).';
-  } else if (/Skill|Art|Ability|Class|Talent/i.test(sampleKey)) {
-    categoryHint = 'هذه أسماء فنون قتالية ومهارات وتخصصات — استخدم مصطلحات قوية ومؤثرة تتناسب مع طبيعة القتال والأكشن.';
-  } else if (/desc|caption|help|tutorial|tip|guide/i.test(sampleKey)) {
-    categoryHint = 'هذه نصوص أوصاف وتعليمات وشروحات — اجعلها واضحة ومفصلة وسهلة الفهم للاعب.';
-  } else if (sampleText.length <= 15 && /^[A-Z]/.test(sampleText)) {
-    categoryHint = 'هذا نص قصير (على الأرجح اسم أو عنصر واجهة) — اجعل الترجمة مختصرة جداً.';
-  }
-
+  const categoryHint = detectCategoryHint(entries[0]?.key || '', entries[0]?.original || '');
   const categorySection = categoryHint ? `\n\n${categoryHint}` : '';
 
   const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.

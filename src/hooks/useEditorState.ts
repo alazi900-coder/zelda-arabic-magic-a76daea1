@@ -1390,7 +1390,7 @@ export function useEditorState() {
 
   return {
     // State
-    state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, setUserOpenRouterKey, translationProvider, myMemoryEmail, myMemoryCharsUsed, aiRequestsToday, aiRequestsMonth, rebalanceNewlines, aiModel,
+    state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace,
     pendingRecovery, handleRecoverSession, handleStartFresh,
     hasStoredOriginals, originalsDetectedAsPreviousBuild,
     building, buildProgress, dismissBuildProgress, translating, translateProgress,
@@ -1401,7 +1401,7 @@ export function useEditorState() {
     quickReviewMode, quickReviewIndex,
     showQualityStats, translatingSingle,
     previousTranslations, currentPage,
-    showRetranslateConfirm, arabicNumerals, mirrorPunctuation,
+    showRetranslateConfirm,
     applyingArabic, improvingTranslations, improveResults,
     fixingMixed, filtersOpen, buildStats, buildPreview, showBuildConfirm, bdatFileStats, safetyRepairs, showSafetyReport, setShowSafetyReport,
     checkingConsistency, consistencyResults,
@@ -1409,7 +1409,7 @@ export function useEditorState() {
     smartReviewing, smartReviewFindings,
     enhanceResults, enhancingTranslations,
     // Advanced Analysis
-    advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing, enhancedMemory,
+    advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing,
     glossaryComplianceResults, checkingGlossaryCompliance,
     isSearchPinned, pinnedKeys,
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,

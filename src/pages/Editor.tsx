@@ -1120,7 +1120,7 @@ const Editor = () => {
                   editor.setFilterStatus('all');
                   editor.setSearch('');
                   setTimeout(() => {
-                    const idx = editor.state.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key);
+                    const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
                     if (idx >= 0) {
                       const page = Math.floor(idx / 50);
                       editor.setCurrentPage(page);
@@ -1147,7 +1147,7 @@ const Editor = () => {
                   editor.setFilterStatus('all');
                   editor.setSearch('');
                   setTimeout(() => {
-                    const idx = editor.state.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key);
+                    const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
                     if (idx >= 0) {
                       const page = Math.floor(idx / 50);
                       editor.setCurrentPage(page);
@@ -2493,7 +2493,7 @@ const Editor = () => {
             editor.setFilterStatus('all');
             editor.setSearch('');
             setTimeout(() => {
-              const idx = editor.state.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key);
+              const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
               if (idx >= 0) {
                 const page = Math.floor(idx / 50);
                 editor.setCurrentPage(page);

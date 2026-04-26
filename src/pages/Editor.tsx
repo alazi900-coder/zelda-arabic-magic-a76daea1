@@ -115,26 +115,64 @@ const Editor = () => {
 
   const isDanganronpa = sourceGame?.startsWith("danganronpa");
 
-  const handleTestConnection = React.useCallback(async (provider: string) => {
-    setTestConnStatus(prev => ({ ...prev, [provider]: 'testing' }));
-    setTestConnMsg(prev => ({ ...prev, [provider]: '' }));
+  /** Test a single specific API key (used by the multi-key UI). */
+  const handleTestSpecificKey = React.useCallback(async (provider: string, key: string) => {
+    const stateKey = `${provider}:${key.slice(-6)}`;
+    setTestConnStatus(prev => ({ ...prev, [stateKey]: 'testing' }));
+    setTestConnMsg(prev => ({ ...prev, [stateKey]: '' }));
     try {
-      const providerApiKey =
-        provider === 'deepseek' ? editor.userDeepSeekKey :
-        provider === 'groq' ? editor.userGroqKey :
-        provider === 'cerebras' ? editor.userCerebrasKey :
-        provider === 'openrouter' ? editor.userOpenRouterKey : undefined;
       const aiModel =
         provider === 'openrouter'
           ? (isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL)
           : editor.aiModel;
+      const isGemini = provider === 'gemini';
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
         body: JSON.stringify({
           entries: [{ key: 'test:0', original: 'Hello' }],
           provider,
-          userApiKey: provider === 'gemini' ? (editor.userGeminiKey || undefined) : undefined,
+          userApiKeys: isGemini ? [key] : [],
+          providerApiKeys: isGemini ? [] : [key],
+          aiModel,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setTestConnStatus(prev => ({ ...prev, [stateKey]: 'error' }));
+        setTestConnMsg(prev => ({ ...prev, [stateKey]: data.error || `خطأ ${response.status}` }));
+      } else {
+        const translation = Object.values(data.translations || {})[0] as string | undefined;
+        setTestConnStatus(prev => ({ ...prev, [stateKey]: 'ok' }));
+        setTestConnMsg(prev => ({ ...prev, [stateKey]: translation ? `"${translation}"` : 'المفتاح صحيح' }));
+      }
+    } catch (err) {
+      setTestConnStatus(prev => ({ ...prev, [stateKey]: 'error' }));
+      setTestConnMsg(prev => ({ ...prev, [stateKey]: err instanceof Error ? err.message : 'فشل الاتصال' }));
+    }
+  }, [editor.aiModel]);
+
+  const handleTestConnection = React.useCallback(async (provider: string) => {
+    setTestConnStatus(prev => ({ ...prev, [provider]: 'testing' }));
+    setTestConnMsg(prev => ({ ...prev, [provider]: '' }));
+    try {
+      const providerApiKey =
+        provider === 'deepseek' ? editor.userDeepSeekKey :
+        provider === 'groq' ? (editor.userGroqKeys[0] || editor.userGroqKey) :
+        provider === 'cerebras' ? (editor.userCerebrasKeys[0] || editor.userCerebrasKey) :
+        provider === 'openrouter' ? editor.userOpenRouterKey : undefined;
+      const aiModel =
+        provider === 'openrouter'
+          ? (isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL)
+          : editor.aiModel;
+      const geminiKey = editor.userGeminiKeys[0] || editor.userGeminiKey;
+      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+        method: 'POST',
+        headers: getSupabaseHeaders(),
+        body: JSON.stringify({
+          entries: [{ key: 'test:0', original: 'Hello' }],
+          provider,
+          userApiKey: provider === 'gemini' ? (geminiKey || undefined) : undefined,
           providerApiKey: providerApiKey || undefined,
           aiModel,
         }),
@@ -152,7 +190,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userGroqKey, editor.userCerebrasKey, editor.userOpenRouterKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userGroqKey, editor.userCerebrasKey, editor.userOpenRouterKey, editor.userGeminiKeys, editor.userGroqKeys, editor.userCerebrasKeys, editor.aiModel]);
 
   const isPokemon = React.useMemo(() => {
     if (isDanganronpa) return false;
@@ -432,6 +470,7 @@ const Editor = () => {
             testConnStatus={testConnStatus}
             testConnMsg={testConnMsg}
             handleTestConnection={handleTestConnection}
+            handleTestSpecificKey={handleTestSpecificKey}
             orModels={orModels}
             orModelsRefreshing={orModelsRefreshing}
             orModelsFetchedAt={orModelsFetchedAt}

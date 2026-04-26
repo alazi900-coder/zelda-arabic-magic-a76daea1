@@ -10,6 +10,7 @@ import {
   type OpenRouterModelOption,
 } from "@/lib/openrouter-models";
 import type { useEditorState } from "@/hooks/useEditorState";
+import MultiKeyManager from "@/components/editor/MultiKeyManager";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -18,6 +19,10 @@ type EditorSubset = Pick<
   | "userGroqKey" | "setUserGroqKey"
   | "userCerebrasKey" | "setUserCerebrasKey"
   | "userOpenRouterKey" | "setUserOpenRouterKey"
+  | "userGeminiKeys" | "setUserGeminiKeys"
+  | "userGroqKeys" | "setUserGroqKeys"
+  | "userCerebrasKeys" | "setUserCerebrasKeys"
+  | "keyBlocks" | "unblockAllKeys"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
   | "myMemoryCharsUsed"
@@ -34,6 +39,8 @@ interface EditorProviderSelectionProps {
   testConnStatus: Record<string, TestConnState>;
   testConnMsg: Record<string, string>;
   handleTestConnection: (provider: string) => void | Promise<void>;
+  /** Test a specific single key (used by multi-key UI). */
+  handleTestSpecificKey: (provider: string, key: string) => void | Promise<void>;
   orModels: OpenRouterModelOption[];
   orModelsRefreshing: boolean;
   orModelsFetchedAt: string | null;
@@ -45,6 +52,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
   testConnStatus,
   testConnMsg,
   handleTestConnection,
+  handleTestSpecificKey,
   orModels,
   orModelsRefreshing,
   orModelsFetchedAt,
@@ -62,10 +70,10 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
             {[
               { id: 'mymemory' as const, label: '🆓 MyMemory', badge: '✅' },
               { id: 'google' as const, label: '🌐 Google Translate', badge: '✅' },
-              { id: 'gemini' as const, label: '🤖 Lovable AI', badge: editor.userGeminiKey ? '✅' : '⚡' },
+              { id: 'gemini' as const, label: '🤖 Lovable AI', badge: editor.userGeminiKeys.length > 0 ? '✅' : '⚡' },
               { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
-              { id: 'groq' as const, label: '⚡ Groq (Llama)', badge: editor.userGroqKey ? '✅' : '⚠️' },
-              { id: 'cerebras' as const, label: '🚀 Cerebras (Qwen)', badge: editor.userCerebrasKey ? '✅' : '⚠️' },
+              { id: 'groq' as const, label: '⚡ Groq (Llama)', badge: editor.userGroqKeys.length > 0 ? '✅' : '⚠️' },
+              { id: 'cerebras' as const, label: '🚀 Cerebras (Qwen)', badge: editor.userCerebrasKeys.length > 0 ? '✅' : '⚠️' },
               { id: 'openrouter' as const, label: '🆕 OpenRouter', badge: editor.userOpenRouterKey ? '✅' : '⚠️' },
             ].map(({ id, label, badge }) => (
               <Button
@@ -180,47 +188,25 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
 
         {editor.translationProvider === 'groq' && (
           <div className="flex flex-col gap-2">
-            <div className="flex gap-2 flex-1">
-              <input
-                type="password"
-                placeholder="الصق مفتاح Groq API هنا..."
-                value={editor.userGroqKey}
-                onChange={(e) => editor.setUserGroqKey(e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
-                dir="ltr"
-              />
-              {editor.userGroqKey && (
-                <Button
-                  variant="outline" size="sm"
-                  onClick={() => handleTestConnection('groq')}
-                  disabled={testConnStatus['groq'] === 'testing'}
-                  className="text-xs shrink-0 gap-1"
-                >
-                  {testConnStatus['groq'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
-                   testConnStatus['groq'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
-                   testConnStatus['groq'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
-                   <Wifi className="w-3 h-3" />}
-                  تجربة
-                </Button>
-              )}
-              {editor.userGroqKey && (
-                <Button variant="ghost" size="sm" onClick={() => editor.setUserGroqKey('')} className="text-xs text-destructive shrink-0">
-                  مسح
-                </Button>
-              )}
-            </div>
-            {testConnMsg['groq'] && (
-              <p className={`text-xs font-body ${testConnStatus['groq'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
-                {testConnStatus['groq'] === 'ok' ? '✅' : '❌'} {testConnMsg['groq']}
-              </p>
-            )}
+            <MultiKeyManager
+              providerId="groq"
+              providerLabel="Groq"
+              keys={editor.userGroqKeys}
+              setKeys={editor.setUserGroqKeys}
+              keyBlocks={editor.keyBlocks}
+              unblockAll={editor.unblockAllKeys}
+              testStatus={testConnStatus}
+              testMsg={testConnMsg}
+              onTest={(key) => handleTestSpecificKey('groq', key)}
+              placeholder="الصق مفتاح Groq API هنا..."
+            />
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground font-body">
-                {editor.userGroqKey
-                  ? '✅ مفتاح Groq مفعّل — Llama 3.3 70B (14,400 طلب/يوم مجاناً)'
+                {editor.userGroqKeys.length > 0
+                  ? `✅ ${editor.userGroqKeys.length} مفتاح Groq — Llama 3.3 70B (14,400 طلب/يوم لكل حساب)`
                   : '⚠️ يحتاج مفتاح API — سجّل مجاناً على console.groq.com'}
               </p>
-              {!editor.userGroqKey && (
+              {editor.userGroqKeys.length === 0 && (
                 <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
                   احصل على مفتاح ↗
                 </a>
@@ -231,41 +217,19 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
 
         {editor.translationProvider === 'cerebras' && (
           <div className="flex flex-col gap-2">
-            <div className="flex gap-2 flex-1">
-              <input
-                type="password"
-                placeholder="الصق مفتاح Cerebras API هنا..."
-                value={editor.userCerebrasKey}
-                onChange={(e) => editor.setUserCerebrasKey(e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
-                dir="ltr"
-              />
-              {editor.userCerebrasKey && (
-                <Button
-                  variant="outline" size="sm"
-                  onClick={() => handleTestConnection('cerebras')}
-                  disabled={testConnStatus['cerebras'] === 'testing'}
-                  className="text-xs shrink-0 gap-1"
-                >
-                  {testConnStatus['cerebras'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
-                   testConnStatus['cerebras'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
-                   testConnStatus['cerebras'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
-                   <Wifi className="w-3 h-3" />}
-                  تجربة
-                </Button>
-              )}
-              {editor.userCerebrasKey && (
-                <Button variant="ghost" size="sm" onClick={() => editor.setUserCerebrasKey('')} className="text-xs text-destructive shrink-0">
-                  مسح
-                </Button>
-              )}
-            </div>
-            {testConnMsg['cerebras'] && (
-              <p className={`text-xs font-body ${testConnStatus['cerebras'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
-                {testConnStatus['cerebras'] === 'ok' ? '✅' : '❌'} {testConnMsg['cerebras']}
-              </p>
-            )}
-            {editor.userCerebrasKey && (
+            <MultiKeyManager
+              providerId="cerebras"
+              providerLabel="Cerebras"
+              keys={editor.userCerebrasKeys}
+              setKeys={editor.setUserCerebrasKeys}
+              keyBlocks={editor.keyBlocks}
+              unblockAll={editor.unblockAllKeys}
+              testStatus={testConnStatus}
+              testMsg={testConnMsg}
+              onTest={(key) => handleTestSpecificKey('cerebras', key)}
+              placeholder="الصق مفتاح Cerebras API هنا..."
+            />
+            {editor.userCerebrasKeys.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                 {[
                   { id: 'qwen-3-235b-a22b-instruct-2507', label: '🌟 Qwen 3 235B', desc: 'الأفضل للعربية' },
@@ -293,11 +257,11 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
             )}
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground font-body">
-                {editor.userCerebrasKey
-                  ? '✅ مفتاح Cerebras مفعّل — أسرع inference + 1M tokens/يوم مجاناً'
+                {editor.userCerebrasKeys.length > 0
+                  ? `✅ ${editor.userCerebrasKeys.length} مفتاح Cerebras — أسرع inference + 1M tokens/يوم لكل حساب`
                   : '⚠️ يحتاج مفتاح API — سجّل مجاناً على cloud.cerebras.ai'}
               </p>
-              {!editor.userCerebrasKey && (
+              {editor.userCerebrasKeys.length === 0 && (
                 <a href="https://cloud.cerebras.ai/platform/" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
                   احصل على مفتاح ↗
                 </a>
@@ -433,56 +397,36 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               {(editor.aiModel === 'gemini-2.5-pro' || editor.aiModel === 'gpt-5') && (
                 <p className="text-[10px] text-amber-500 font-body">⚠️ هذا النموذج أبطأ ويستهلك نقاطاً أكثر — مناسب للنصوص المهمة</p>
               )}
-              {(editor.aiModel === 'gemini-3.1-pro-preview' || editor.aiModel === 'gpt-5') && !editor.userGeminiKey && (
+              {(editor.aiModel === 'gemini-3.1-pro-preview' || editor.aiModel === 'gpt-5') && editor.userGeminiKeys.length === 0 && (
                 <p className="text-[10px] text-muted-foreground font-body">يعمل عبر Lovable AI فقط (لا يدعم المفتاح الشخصي)</p>
               )}
             </div>
 
-            {/* API Key */}
-            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
-              <div className="flex gap-2 flex-1">
-                <input
-                  type="password"
-                  placeholder="الصق مفتاح Gemini API هنا (اختياري)..."
-                  value={editor.userGeminiKey}
-                  onChange={(e) => editor.setUserGeminiKey(e.target.value)}
-                  className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
-                  dir="ltr"
-                />
-                {editor.userGeminiKey && (
-                  <Button
-                    variant="outline" size="sm"
-                    onClick={() => handleTestConnection('gemini')}
-                    disabled={testConnStatus['gemini'] === 'testing'}
-                    className="text-xs shrink-0 gap-1"
-                  >
-                    {testConnStatus['gemini'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
-                     testConnStatus['gemini'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
-                     testConnStatus['gemini'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
-                     <Wifi className="w-3 h-3" />}
-                    تجربة
-                  </Button>
-                )}
-                {editor.userGeminiKey && (
-                  <Button variant="ghost" size="sm" onClick={() => editor.setUserGeminiKey('')} className="text-xs text-destructive shrink-0">
-                    مسح
-                  </Button>
-                )}
-              </div>
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
-                احصل على مفتاح مجاني ↗
-              </a>
-            </div>
-            {testConnMsg['gemini'] && (
-              <p className={`text-xs font-body ${testConnStatus['gemini'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
-                {testConnStatus['gemini'] === 'ok' ? '✅' : '❌'} {testConnMsg['gemini']}
+            {/* API Keys */}
+            <MultiKeyManager
+              providerId="gemini"
+              providerLabel="Gemini"
+              keys={editor.userGeminiKeys}
+              setKeys={editor.setUserGeminiKeys}
+              keyBlocks={editor.keyBlocks}
+              unblockAll={editor.unblockAllKeys}
+              testStatus={testConnStatus}
+              testMsg={testConnMsg}
+              onTest={(key) => handleTestSpecificKey('gemini', key)}
+              placeholder="الصق مفتاح Gemini API هنا (اختياري)..."
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground font-body">
+                {editor.userGeminiKeys.length > 0
+                  ? `✅ ${editor.userGeminiKeys.length} مفتاح Gemini — تنقل تلقائي بينها + تنقل بين الموديلات (2.0/2.5 Flash/Pro) عند 429`
+                  : 'بدون مفتاح: يستخدم نقاط Lovable AI المدمجة'}
               </p>
-            )}
-            {editor.userGeminiKey ? (
-              <p className="text-xs text-secondary font-body">✅ سيتم استخدام مفتاحك الشخصي للترجمة بدون حدود</p>
-            ) : (
-              <p className="text-xs text-muted-foreground font-body">بدون مفتاح: يستخدم نقاط Lovable AI المدمجة</p>
-            )}
+              {editor.userGeminiKeys.length === 0 && (
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
+                  احصل على مفتاح مجاني ↗
+                </a>
+              )}
+            </div>
           </div>
         )}
       </div>

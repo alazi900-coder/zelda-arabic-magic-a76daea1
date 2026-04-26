@@ -1,4 +1,30 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+
+type KeyBlocks = Record<string, number>;
+
+function loadKeyArray(legacyKey: string, arrayKey: string): string[] {
+  try {
+    const raw = localStorage.getItem(arrayKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((k): k is string => typeof k === 'string' && !!k.trim());
+    }
+    const legacy = localStorage.getItem(legacyKey);
+    return legacy ? [legacy] : [];
+  } catch { return []; }
+}
+
+function saveKeyArray(arrayKey: string, legacyKey: string, keys: string[]): void {
+  try {
+    if (keys.length === 0) {
+      localStorage.removeItem(arrayKey);
+      localStorage.removeItem(legacyKey);
+    } else {
+      localStorage.setItem(arrayKey, JSON.stringify(keys));
+      localStorage.setItem(legacyKey, keys[0]);
+    }
+  } catch { /* ignore */ }
+}
 
 /** All localStorage-persisted editor settings, isolated to prevent re-renders in unrelated state */
 export function useEditorSettings() {
@@ -7,13 +33,55 @@ export function useEditorSettings() {
   const [mirrorPunctuation, setMirrorPunctuation] = useState(false);
 
   // === Translation provider settings ===
-  const [userGeminiKey, _setUserGeminiKey] = useState(() => {
-    try { return localStorage.getItem('userGeminiKey') || ''; } catch { return ''; }
-  });
-  const setUserGeminiKey = useCallback((key: string) => {
-    _setUserGeminiKey(key);
-    try { if (key) localStorage.setItem('userGeminiKey', key); else localStorage.removeItem('userGeminiKey'); } catch { /* localStorage unavailable - ignore */ }
+  // === Multi-key state (Gemini, Cerebras, Groq support multiple keys for rotation) ===
+  const [userGeminiKeys, _setUserGeminiKeys] = useState<string[]>(() => loadKeyArray('userGeminiKey', 'userGeminiKeys'));
+  const setUserGeminiKeys = useCallback((keys: string[]) => {
+    const cleaned = keys.map(k => k.trim()).filter(Boolean);
+    _setUserGeminiKeys(cleaned);
+    saveKeyArray('userGeminiKeys', 'userGeminiKey', cleaned);
   }, []);
+
+  // === Per-key cooldown tracking (key string -> unblock-at unix ms) ===
+  const [keyBlocks, _setKeyBlocks] = useState<KeyBlocks>(() => {
+    try {
+      const raw = localStorage.getItem('translationKeyBlocks');
+      if (!raw) return {};
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+      const now = Date.now();
+      const out: KeyBlocks = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'number' && v > now) out[k] = v;
+      }
+      return out;
+    } catch { return {}; }
+  });
+
+  const blockKeys = useCallback((keys: string[], hours = 24) => {
+    if (!keys || keys.length === 0) return;
+    const until = Date.now() + hours * 3600 * 1000;
+    _setKeyBlocks(prev => {
+      const next = { ...prev };
+      for (const k of keys) if (k) next[k] = until;
+      try { localStorage.setItem('translationKeyBlocks', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const unblockAllKeys = useCallback(() => {
+    _setKeyBlocks({});
+    try { localStorage.removeItem('translationKeyBlocks'); } catch { /* ignore */ }
+  }, []);
+
+  // Derived: backward-compat single-key view = first non-blocked key (or first if all blocked)
+  const userGeminiKey = useMemo(() => {
+    const now = Date.now();
+    return userGeminiKeys.find(k => k && (!keyBlocks[k] || keyBlocks[k] < now)) || userGeminiKeys[0] || '';
+  }, [userGeminiKeys, keyBlocks]);
+  const setUserGeminiKey = useCallback((key: string) => {
+    const trimmed = key.trim();
+    setUserGeminiKeys(trimmed ? [trimmed] : []);
+  }, [setUserGeminiKeys]);
 
   const DEAD_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free', 'z-ai/glm-4.5-air:free', 'openai/gpt-oss-120b:free'];
 
@@ -57,21 +125,35 @@ export function useEditorSettings() {
     try { if (key) localStorage.setItem('userDeepSeekKey', key); else localStorage.removeItem('userDeepSeekKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  const [userGroqKey, _setUserGroqKey] = useState(() => {
-    try { return localStorage.getItem('userGroqKey') || ''; } catch { return ''; }
-  });
+  const [userGroqKeys, _setUserGroqKeys] = useState<string[]>(() => loadKeyArray('userGroqKey', 'userGroqKeys'));
+  const setUserGroqKeys = useCallback((keys: string[]) => {
+    const cleaned = keys.map(k => k.trim()).filter(Boolean);
+    _setUserGroqKeys(cleaned);
+    saveKeyArray('userGroqKeys', 'userGroqKey', cleaned);
+  }, []);
+  const userGroqKey = useMemo(() => {
+    const now = Date.now();
+    return userGroqKeys.find(k => k && (!keyBlocks[k] || keyBlocks[k] < now)) || userGroqKeys[0] || '';
+  }, [userGroqKeys, keyBlocks]);
   const setUserGroqKey = useCallback((key: string) => {
-    _setUserGroqKey(key);
-    try { if (key) localStorage.setItem('userGroqKey', key); else localStorage.removeItem('userGroqKey'); } catch { /* localStorage unavailable - ignore */ }
-  }, []);
+    const trimmed = key.trim();
+    setUserGroqKeys(trimmed ? [trimmed] : []);
+  }, [setUserGroqKeys]);
 
-  const [userCerebrasKey, _setUserCerebrasKey] = useState(() => {
-    try { return localStorage.getItem('userCerebrasKey') || ''; } catch { return ''; }
-  });
-  const setUserCerebrasKey = useCallback((key: string) => {
-    _setUserCerebrasKey(key);
-    try { if (key) localStorage.setItem('userCerebrasKey', key); else localStorage.removeItem('userCerebrasKey'); } catch { /* localStorage unavailable - ignore */ }
+  const [userCerebrasKeys, _setUserCerebrasKeys] = useState<string[]>(() => loadKeyArray('userCerebrasKey', 'userCerebrasKeys'));
+  const setUserCerebrasKeys = useCallback((keys: string[]) => {
+    const cleaned = keys.map(k => k.trim()).filter(Boolean);
+    _setUserCerebrasKeys(cleaned);
+    saveKeyArray('userCerebrasKeys', 'userCerebrasKey', cleaned);
   }, []);
+  const userCerebrasKey = useMemo(() => {
+    const now = Date.now();
+    return userCerebrasKeys.find(k => k && (!keyBlocks[k] || keyBlocks[k] < now)) || userCerebrasKeys[0] || '';
+  }, [userCerebrasKeys, keyBlocks]);
+  const setUserCerebrasKey = useCallback((key: string) => {
+    const trimmed = key.trim();
+    setUserCerebrasKeys(trimmed ? [trimmed] : []);
+  }, [setUserCerebrasKeys]);
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
     try { return localStorage.getItem('myMemoryEmail') || ''; } catch { return ''; }
@@ -249,7 +331,11 @@ export function useEditorSettings() {
     userGeminiKey, setUserGeminiKey,
     userDeepSeekKey, setUserDeepSeekKey,
     userGroqKey, setUserGroqKey,
+    userGeminiKeys, setUserGeminiKeys,
+    userGroqKeys, setUserGroqKeys,
     userCerebrasKey, setUserCerebrasKey,
+    userCerebrasKeys, setUserCerebrasKeys,
+    keyBlocks, blockKeys, unblockAllKeys,
     userOpenRouterKey, setUserOpenRouterKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,

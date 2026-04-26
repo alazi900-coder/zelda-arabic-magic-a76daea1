@@ -1118,12 +1118,14 @@ async function translateWithAI(
   protectedEntries: { key: string; cleaned: string; tags: Map<string, string> }[],
   glossary: string | undefined,
   context: { key: string; original: string; translation?: string }[] | undefined,
-  userApiKey: string | undefined,
+  userApiKeys: string[] | undefined,
   aiModel: string | undefined,
-): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
+  blockedKeysOut?: string[],
+): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats; blockedKeys: string[] }> {
   const glossaryMap = glossary ? parseGlossaryToMap(glossary) : new Map<string, string>();
   const tmMap = buildTranslationMemory(context);
   const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
+  const blockedKeys: string[] = blockedKeysOut ?? [];
 
   // --- Step 1: Direct matches (exact full-string from glossary OR translation memory) ---
   const directResult: Record<string, string> = {};
@@ -1163,7 +1165,7 @@ async function translateWithAI(
   }
 
   if (needsAI.length === 0) {
-    return { translations: directResult, glossaryStats: stats };
+    return { translations: directResult, glossaryStats: stats, blockedKeys: [] };
   }
 
   // --- Step 3: Build prompt with KEYED texts (prevents positional misalignment) ---
@@ -1237,7 +1239,8 @@ Input texts (as JSON object — translate each value and return with the SAME ke
 ${textsBlock}
 }`;
 
-  const effectiveKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
+  const sanitizedUserKeys = (userApiKeys || []).map(k => (k || '').trim()).filter(Boolean);
+  const serverGeminiKey = (Deno.env.get('GEMINI_API_KEY') || '').trim();
   
   /** Detect if the AI response was truncated */
   function detectTruncation(text: string): boolean {
@@ -1382,18 +1385,30 @@ ${textsBlock}
     return result;
   };
 
-  if (effectiveKey) {
-    // Map model names for direct Gemini API; only gemini models work with personal key
-    const requestedModel = (aiModel === 'gemini-2.5-pro') ? 'gemini-2.5-pro' : (aiModel === 'gemini-2.5-flash') ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
-    // On free tier each model has its own daily quota (200/250/100 req/day).
-    // When the chosen one is exhausted (429), auto-rotate through the others
-    // before bubbling up so the user gets ~550 req/day combined.
-    const ROTATION = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'] as const;
-    const modelSequence = [requestedModel, ...ROTATION.filter(m => m !== requestedModel)];
+  // Build the list of keys to try: user-supplied keys first (rotated), then
+  // fall back to the server key. On 429 across all models for a given key,
+  // mark it blocked and move to the next.
+  const requestedModel = (aiModel === 'gemini-2.5-pro') ? 'gemini-2.5-pro' : (aiModel === 'gemini-2.5-flash') ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
+  const ROTATION = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+  const modelSequence = [requestedModel, ...ROTATION.filter(m => m !== requestedModel)];
 
-    const callGemini = async (modelName: string) => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${effectiveKey}`;
-      return await fetch(url, {
+  /**
+   * Attempt a single API key across all models in modelSequence.
+   * Returns:
+   *   { kind: 'success', data }  -> got a valid Gemini response
+   *   { kind: 'quota' }          -> all models returned 429/503 for this key
+   *   { kind: 'error', message } -> non-quota error (auth, invalid key, etc.)
+   */
+  const tryKey = async (key: string): Promise<
+    | { kind: 'success'; data: any }
+    | { kind: 'quota' }
+    | { kind: 'error'; message: string }
+  > => {
+    let lastStatus = 0;
+    let lastErrText = '';
+    for (const modelName of modelSequence) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
+      const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1402,55 +1417,63 @@ ${textsBlock}
           generationConfig: { temperature: 0.3 },
         }),
       });
-    };
-
-    let geminiResponse: Response | null = null;
-    let lastErrText = '';
-    let lastStatus = 0;
-    for (const modelName of modelSequence) {
-      const resp = await callGemini(modelName);
       if (resp.ok) {
-        geminiResponse = resp;
-        if (modelName !== requestedModel) {
-          console.log(`Gemini auto-rotated: ${requestedModel} → ${modelName}`);
-        }
-        break;
+        if (modelName !== requestedModel) console.log(`Gemini auto-rotated: ${requestedModel} → ${modelName}`);
+        return { kind: 'success', data: await resp.json() };
       }
       lastStatus = resp.status;
       lastErrText = await resp.text();
-      // Only rotate on rate-limit / overloaded errors when the user supplied
-      // their own key; other errors (auth/invalid key) should fail fast.
       const isQuotaErr = resp.status === 429 || resp.status === 503;
-      if (!isQuotaErr || !userApiKey?.trim()) {
-        geminiResponse = resp;
-        break;
+      if (!isQuotaErr) {
+        if (lastStatus === 400) return { kind: 'error', message: 'مفتاح Gemini غير صالح — تحقق منه في Google AI Studio (aistudio.google.com)' };
+        if (lastStatus === 403) return { kind: 'error', message: 'مفتاح Gemini محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio' };
+        return { kind: 'error', message: `خطأ Gemini: ${lastStatus} — ${lastErrText.slice(0, 200)}` };
       }
       console.log(`Gemini ${modelName} hit ${resp.status} — trying next model...`);
     }
+    return { kind: 'quota' };
+  };
 
-    if (!geminiResponse || !geminiResponse.ok) {
-      console.error('Gemini API error:', lastErrText);
-      if (lastStatus === 429 || lastStatus === 503) {
-        if (userApiKey?.trim()) {
-          throw new Error('تجاوزت الحد المجاني لـ Gemini اليومي على كل الموديلات (2.0 Flash + 2.5 Flash + 2.5 Pro) — انتظر ساعات قليلة أو استخدم موفّراً آخر (Cerebras أو Groq)');
-        }
-        console.log(`Gemini ${lastStatus} (server key), falling back to Lovable AI...`);
-      } else {
-        if (lastStatus === 400) throw new Error('مفتاح Gemini غير صالح — تحقق منه في Google AI Studio (aistudio.google.com)');
-        if (lastStatus === 403) throw new Error('مفتاح Gemini محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio');
-        throw new Error(`خطأ Gemini: ${lastStatus} — ${lastErrText.slice(0, 200)}`);
-      }
+  let geminiData: any = null;
+
+  // Phase 1: rotate through user-supplied keys
+  for (const key of sanitizedUserKeys) {
+    const result = await tryKey(key);
+    if (result.kind === 'success') { geminiData = result.data; break; }
+    if (result.kind === 'error') throw new Error(result.message);
+    // quota: mark blocked, try next key
+    blockedKeys.push(key);
+    console.log(`Gemini key ...${key.slice(-4)} exhausted across all models — trying next key`);
+  }
+
+  // Phase 2: if user keys all failed (or none provided) and we have a server key, try it
+  if (!geminiData && sanitizedUserKeys.length === 0 && serverGeminiKey) {
+    const result = await tryKey(serverGeminiKey);
+    if (result.kind === 'success') {
+      geminiData = result.data;
+    } else if (result.kind === 'error') {
+      throw new Error(result.message);
     } else {
-      const geminiData = await geminiResponse.json();
-      const content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (detectTruncation(content)) {
-        console.warn('Gemini response truncated, results may be incomplete');
-      }
-      const translationsObj = extractJsonObject(content);
-      const aiResult = parseAndUnlock(translationsObj);
-      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      console.log(`Gemini server key exhausted, falling back to Lovable AI...`);
     }
+  }
+
+  // Phase 3: If we got a successful Gemini response, parse and return.
+  if (geminiData) {
+    const content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (detectTruncation(content)) {
+      console.warn('Gemini response truncated, results may be incomplete');
+    }
+    const translationsObj = extractJsonObject(content);
+    const aiResult = parseAndUnlock(translationsObj);
+    console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
+    return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, blockedKeys };
+  }
+
+  // If user supplied keys and they all hit quota, surface a clear error
+  // instead of silently falling back to the server's Lovable AI quota.
+  if (sanitizedUserKeys.length > 0) {
+    throw new Error(`تجاوزت الحد المجاني لـ Gemini على كل المفاتيح (${sanitizedUserKeys.length}) وكل الموديلات — انتظر بضع ساعات أو استخدم موفّراً آخر (Cerebras أو Groq)`);
   }
 
   // Fallback to Lovable AI — with retry on JSON parse failure
@@ -1492,7 +1515,7 @@ ${textsBlock}
       const translationsObj = await callLovableAI(prompt, needsAI.length);
       const aiResult = parseAndUnlock(translationsObj);
       console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, blockedKeys };
     } catch (e) {
       if (needsAI.length <= 1) throw e;
       console.warn(`Full batch failed (${(e as Error).message}), splitting into halves...`);
@@ -1520,7 +1543,7 @@ ${textsBlock}
 
       const aiResult = parseAndUnlock(combined);
       console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (split mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, blockedKeys };
     }
   }
 }
@@ -1530,13 +1553,19 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Tracks keys that hit 429 during this request — surfaced to the client even
+  // when the request ultimately fails (so the client can mark them blocked).
+  let blockedKeysAccum: string[] = [];
+
   try {
-    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel } = await req.json() as {
+    const { entries, glossary, context, userApiKey, userApiKeys, providerApiKey, providerApiKeys, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
       userApiKey?: string;
+      userApiKeys?: string[];
       providerApiKey?: string;
+      providerApiKeys?: string[];
       provider?: string;
       myMemoryEmail?: string;
       rebalanceNewlines?: boolean;
@@ -1544,6 +1573,14 @@ Deno.serve(async (req) => {
       npcMode?: boolean;
       aiModel?: string;
     };
+
+    // Normalize: prefer arrays; fall back to single-key fields for backward compat.
+    const geminiKeyList = (userApiKeys && userApiKeys.length > 0)
+      ? userApiKeys.map(k => (k || '').trim()).filter(Boolean)
+      : (userApiKey?.trim() ? [userApiKey.trim()] : []);
+    const providerKeyList = (providerApiKeys && providerApiKeys.length > 0)
+      ? providerApiKeys.map(k => (k || '').trim()).filter(Boolean)
+      : (providerApiKey?.trim() ? [providerApiKey.trim()] : []);
 
     // Set the global flags for this request
     _rebalanceNewlines = !!rebalanceNewlines;
@@ -1562,6 +1599,38 @@ Deno.serve(async (req) => {
       return { ...e, cleaned, tags };
     });
 
+    /** Try OpenAI-compat translation rotating across multiple keys on 429.
+     *  Returns the first successful result; collects keys that hit 429. */
+    const tryOpenAICompatRotating = async (
+      baseUrl: string,
+      model: string,
+    ): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats; blockedKeys: string[] }> => {
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const blockedKeys: string[] = [];
+      let lastError: Error | null = null;
+      for (const key of providerKeyList) {
+        try {
+          const result = await translateWithOpenAICompat(
+            entries, protectedEntries, glossaryMap, key, baseUrl, model,
+          );
+          return { ...result, blockedKeys };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          const is429 = msg.includes('تجاوزت حد') || msg.includes('429') || msg.includes('انتهت الحصة');
+          if (is429) {
+            blockedKeys.push(key);
+            blockedKeysAccum.push(key);
+            lastError = e instanceof Error ? e : new Error(msg);
+            console.log(`Provider key ...${key.slice(-4)} hit 429 — trying next key`);
+            continue;
+          }
+          throw e;
+        }
+      }
+      // All keys exhausted
+      throw lastError || new Error('فشل كل المفاتيح');
+    };
+
     if (provider === 'mymemory') {
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const { translations, charsUsed, glossaryStats } = await translateWithMyMemory(entries, protectedEntries, glossaryMap, myMemoryEmail);
@@ -1575,35 +1644,31 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else if (provider === 'deepseek') {
-      if (!providerApiKey) {
+      if (providerKeyList.length === 0) {
         return new Response(JSON.stringify({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
-        entries, protectedEntries, glossaryMap, providerApiKey,
+      const { translations, glossaryStats, blockedKeys } = await tryOpenAICompatRotating(
         'https://api.deepseek.com', 'deepseek-chat',
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
+      return new Response(JSON.stringify({ translations, glossaryStats, blockedKeys }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else if (provider === 'groq') {
-      if (!providerApiKey) {
+      if (providerKeyList.length === 0) {
         return new Response(JSON.stringify({ error: 'يحتاج Groq مفتاح API — أضفه في الإعدادات' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
-        entries, protectedEntries, glossaryMap, providerApiKey,
+      const { translations, glossaryStats, blockedKeys } = await tryOpenAICompatRotating(
         'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile',
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
+      return new Response(JSON.stringify({ translations, glossaryStats, blockedKeys }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else if (provider === 'cerebras') {
-      if (!providerApiKey) {
+      if (providerKeyList.length === 0) {
         return new Response(JSON.stringify({ error: 'يحتاج Cerebras مفتاح API — سجّل مجاناً على cloud.cerebras.ai' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -1615,16 +1680,14 @@ Deno.serve(async (req) => {
         'llama-3.3-70b',
       ];
       const cerebrasModel = aiModel && CEREBRAS_MODELS.includes(aiModel) ? aiModel : 'qwen-3-235b-a22b-instruct-2507';
-      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
-        entries, protectedEntries, glossaryMap, providerApiKey,
+      const { translations, glossaryStats, blockedKeys } = await tryOpenAICompatRotating(
         'https://api.cerebras.ai/v1', cerebrasModel,
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
+      return new Response(JSON.stringify({ translations, glossaryStats, blockedKeys }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else if (provider === 'openrouter') {
-      if (!providerApiKey) {
+      if (providerKeyList.length === 0) {
         return new Response(JSON.stringify({ error: 'يحتاج OpenRouter مفتاح API — سجّل مجاناً على openrouter.ai' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -1632,17 +1695,15 @@ Deno.serve(async (req) => {
       const DEAD_OR_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free', 'z-ai/glm-4.5-air:free'];
       const orModel = (aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) && !DEAD_OR_MODELS.includes(aiModel))
         ? aiModel : 'qwen/qwen-2.5-72b-instruct:free';
-      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
-        entries, protectedEntries, glossaryMap, providerApiKey,
+      const { translations, glossaryStats, blockedKeys } = await tryOpenAICompatRotating(
         'https://openrouter.ai/api/v1', orModel,
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
+      return new Response(JSON.stringify({ translations, glossaryStats, blockedKeys }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {
-      const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
+      const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, geminiKeyList, aiModel, blockedKeysAccum);
+      return new Response(JSON.stringify({ translations, glossaryStats, blockedKeys: blockedKeysAccum }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -1653,7 +1714,7 @@ Deno.serve(async (req) => {
     const isAuthError = msg.includes('غير صالح') || msg.includes('محظور') || msg.includes('401') || msg.includes('403');
     const status = isRateLimit ? 429 : isAuthError ? 401 : 500;
     return new Response(
-      JSON.stringify({ error: msg }),
+      JSON.stringify({ error: msg, blockedKeys: blockedKeysAccum }),
       { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

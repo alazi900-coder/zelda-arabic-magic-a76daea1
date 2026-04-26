@@ -38,6 +38,11 @@ interface UseAutoPilotProps {
   userGroqKey: string;
   userCerebrasKey: string;
   userOpenRouterKey: string;
+  userGeminiKeys: string[];
+  userGroqKeys: string[];
+  userCerebrasKeys: string[];
+  keyBlocks: Record<string, number>;
+  blockKeys: (keys: string[], hours?: number) => void;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
@@ -66,6 +71,7 @@ function pickFreeProvider(
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
   translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
+  userGeminiKeys, userGroqKeys, userCerebrasKeys, keyBlocks, blockKeys,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
 }: UseAutoPilotProps) {
@@ -90,6 +96,18 @@ export function useAutoPilot({
 
   const stop = useCallback(() => { abortRef.current?.abort(); }, []);
 
+  /** Build per-provider arrays of currently-non-blocked keys for rotation. */
+  const buildKeyArraysFor = useCallback((prov: string): { userApiKeys: string[]; providerApiKeys: string[] } => {
+    const now = Date.now();
+    const filterUnblocked = (keys: string[]) => keys.filter(k => k && (!keyBlocks[k] || keyBlocks[k] < now));
+    if (prov === 'gemini')   return { userApiKeys: filterUnblocked(userGeminiKeys), providerApiKeys: [] };
+    if (prov === 'groq')     return { userApiKeys: [], providerApiKeys: filterUnblocked(userGroqKeys) };
+    if (prov === 'cerebras') return { userApiKeys: [], providerApiKeys: filterUnblocked(userCerebrasKeys) };
+    if (prov === 'deepseek')   return { userApiKeys: [], providerApiKeys: userDeepSeekKey ? [userDeepSeekKey] : [] };
+    if (prov === 'openrouter') return { userApiKeys: [], providerApiKeys: userOpenRouterKey ? [userOpenRouterKey] : [] };
+    return { userApiKeys: [], providerApiKeys: [] };
+  }, [keyBlocks, userGeminiKeys, userGroqKeys, userCerebrasKeys, userDeepSeekKey, userOpenRouterKey]);
+
   const buildFetchBody = useCallback((
     entries: { key: string; original: string }[],
     forceProvider?: string,
@@ -106,6 +124,7 @@ export function useAutoPilot({
       glossary: activeGlossary,
       userApiKey: prov === 'gemini' ? (userGeminiKey || undefined) : undefined,
       providerApiKey: provKey || undefined,
+      ...buildKeyArraysFor(prov),
       provider: prov,
       myMemoryEmail: (prov === 'mymemory' ? myMemoryEmail : undefined) || undefined,
       rebalanceNewlines: rebalanceNewlines || undefined,
@@ -114,7 +133,22 @@ export function useAutoPilot({
       aiModel: forceModel || (prov === 'gemini' ? aiModel : prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey,
-      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel]);
+      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, buildKeyArraysFor]);
+
+  /** Wrap fetch to also surface `blockedKeys` from the response into local state. */
+  const fetchTranslate = useCallback(async (init: RequestInit): Promise<Response> => {
+    const response = await fetch(getEdgeFunctionUrl("translate-entries"), init);
+    try {
+      const cloned = response.clone();
+      const data = await cloned.json();
+      const blocked: unknown = (data as { blockedKeys?: unknown })?.blockedKeys;
+      if (Array.isArray(blocked) && blocked.length > 0) {
+        const validKeys = blocked.filter((k): k is string => typeof k === 'string' && k.length > 0);
+        if (validKeys.length > 0) blockKeys(validKeys, 24);
+      }
+    } catch { /* not json - ignore */ }
+    return response;
+  }, [blockKeys]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {
     if (!state || running) return;
@@ -268,7 +302,7 @@ export function useAutoPilot({
           const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
 
           try {
-            const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+            const response = await fetchTranslate({
               method: 'POST', headers: getSupabaseHeaders(), signal,
               body: buildFetchBody(entries, curProvider, curModel),
             });
@@ -326,7 +360,7 @@ export function useAutoPilot({
             if (signal.aborted) break;
             const key = `${e.msbtFile}:${e.index}`;
             try {
-              const resp = await fetch(getEdgeFunctionUrl("translate-entries"), {
+              const resp = await fetchTranslate({
                 method: 'POST', headers: getSupabaseHeaders(), signal,
                 body: buildFetchBody([{ key, original: e.original }], curProvider, curModel),
               });
@@ -369,7 +403,7 @@ export function useAutoPilot({
           const batch = toFix.slice(b * AI_BATCH, (b + 1) * AI_BATCH);
           const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
           try {
-            const resp = await fetch(getEdgeFunctionUrl("translate-entries"), {
+            const resp = await fetchTranslate({
               method: 'POST', headers: getSupabaseHeaders(), signal,
               body: buildFetchBody(entries, aiProvider, aiModelOverride),
             });

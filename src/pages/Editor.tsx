@@ -23,15 +23,13 @@ import {
 
 import { useEditorState } from "@/hooks/useEditorState";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
-import { PAGE_SIZE, type FilterStatus, type FilterTechnical } from "@/components/editor/types";
+import { type FilterStatus, type FilterTechnical } from "@/components/editor/types";
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import CategoryProgress from "@/components/editor/CategoryProgress";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
 import ReviewPanel from "@/components/editor/ReviewPanel";
 import QuickReviewMode from "@/components/editor/QuickReviewMode";
-import PaginationControls from "@/components/editor/PaginationControls";
 import FindReplacePanel from "@/components/editor/FindReplacePanel";
-import DiffView from "@/components/editor/DiffView";
 import ConsistencyResultsPanel from "@/components/editor/ConsistencyResultsPanel";
 import BdatBuildReport from "@/components/editor/BdatBuildReport";
 import FileLoadReport from "@/components/editor/FileLoadReport";
@@ -65,7 +63,6 @@ import { ToolType } from "@/components/editor/ToolHelpDialog";
 import TranslationProgressDashboard from "@/components/editor/TranslationProgressDashboard";
 import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
 import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
-import VirtualizedEntryList from "@/components/editor/VirtualizedEntryList";
 import { AutoPilotPanel } from "@/components/editor/AutoPilotPanel";
 import { PanelSettingsMenu } from "@/components/editor/PanelSettingsMenu";
 import EditorDragOverlay from "@/components/editor/EditorDragOverlay";
@@ -73,6 +70,7 @@ import EditorRecoveryScreen from "@/components/editor/EditorRecoveryScreen";
 import EditorEmptyState from "@/components/editor/EditorEmptyState";
 import EditorDialogs from "@/components/editor/EditorDialogs";
 import EditorHeroHeader from "@/components/editor/EditorHeroHeader";
+import EditorEntryListSection from "@/components/editor/EditorEntryListSection";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -2308,59 +2306,14 @@ const Editor = () => {
             />
           )}
 
-          {/* Diff View */}
-          {showDiffView && editor.state && (
-            <DiffView
-              entries={editor.filteredEntries}
-              translations={editor.state.translations}
-              onClose={() => setShowDiffView(false)}
-            />
-          )}
-
-          {/* Entries Count */}
-          {editor.filteredEntries.length > 0 && (
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-muted-foreground">
-                {editor.filteredEntries.length} نص
-              </p>
-              <PaginationControls currentPage={editor.currentPage} totalPages={editor.totalPages} totalItems={editor.filteredEntries.length} pageSize={PAGE_SIZE} setCurrentPage={editor.setCurrentPage} />
-            </div>
-          )}
-
-          {/* Virtualized Entries List */}
-          {editor.filteredEntries.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">لا توجد نصوص مطابقة</p>
-          ) : editor.state ? (
-            <VirtualizedEntryList
-              entries={editor.paginatedEntries}
-              state={editor.state}
-              qualityStats={editor.qualityStats}
-              activeGlossary={editor.activeGlossary}
-              isMobile={isMobile}
-              translatingSingle={editor.translatingSingle}
-              improvingTranslations={editor.improvingTranslations}
-              previousTranslations={editor.previousTranslations}
-              isTranslationTooShort={editor.isTranslationTooShort}
-              isTranslationTooLong={editor.isTranslationTooLong}
-              hasStuckChars={editor.hasStuckChars}
-              isMixedLanguage={editor.isMixedLanguage}
-              updateTranslation={editor.updateTranslation}
-              handleTranslateSingle={editor.handleTranslateSingle}
-              handleImproveSingleTranslation={editor.handleImproveSingleTranslation}
-              handleUndoTranslation={editor.handleUndoTranslation}
-              handleFixReversed={editor.handleFixReversed}
-              handleLocalFixDamagedTag={editor.handleLocalFixDamagedTag}
-              onAcceptFuzzy={editor.handleAcceptFuzzy}
-              onRejectFuzzy={editor.handleRejectFuzzy}
-              onCompare={(entry) => setCompareEntry(entry)}
-              onSplitNewline={editor.handleSplitSingleEntry}
-              findSimilar={findSimilar}
-              height={Math.max(400, window.innerHeight - 300)}
-            />
-          ) : null}
-
-          {/* Pagination Footer */}
-          <PaginationControls currentPage={editor.currentPage} totalPages={editor.totalPages} totalItems={editor.filteredEntries.length} pageSize={PAGE_SIZE} setCurrentPage={editor.setCurrentPage} />
+          <EditorEntryListSection
+            editor={editor}
+            isMobile={isMobile}
+            showDiffView={showDiffView}
+            setShowDiffView={setShowDiffView}
+            setCompareEntry={setCompareEntry}
+            findSimilar={findSimilar}
+          />
         </div>
         </div>
 

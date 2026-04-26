@@ -22,6 +22,7 @@ type EditorSubset = Pick<
   | "myMemoryCharsUsed"
   | "aiModel" | "setAiModel"
   | "rebalanceNewlines" | "setRebalanceNewlines"
+  | "tmAutoReuse" | "setTmAutoReuse"
 >;
 
 type TestConnState = 'idle' | 'testing' | 'ok' | 'error';
@@ -415,6 +416,18 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         <Switch
           checked={editor.rebalanceNewlines}
           onCheckedChange={editor.setRebalanceNewlines}
+        />
+      </div>
+
+      {/* Translation Memory auto-reuse */}
+      <div className="flex items-center justify-between border-t border-border/50 pt-3 mt-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-display">⚡ إعادة استخدام ذاكرة الترجمة</span>
+          <span className="text-xs text-muted-foreground font-body">(يطبق ترجمة سابقة لنفس النص بدون استدعاء AI — يوفّر طلبات)</span>
+        </div>
+        <Switch
+          checked={editor.tmAutoReuse}
+          onCheckedChange={editor.setTmAutoReuse}
         />
       </div>
     </CardContent>

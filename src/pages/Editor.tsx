@@ -25,27 +25,20 @@ import { useEditorState } from "@/hooks/useEditorState";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import CategoryProgress from "@/components/editor/CategoryProgress";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
-import ReviewPanel from "@/components/editor/ReviewPanel";
 import QuickReviewMode from "@/components/editor/QuickReviewMode";
 import FindReplacePanel from "@/components/editor/FindReplacePanel";
-import ConsistencyResultsPanel from "@/components/editor/ConsistencyResultsPanel";
 import BdatBuildReport from "@/components/editor/BdatBuildReport";
 import FileLoadReport from "@/components/editor/FileLoadReport";
 
-import NewlineCleanPanel from "@/components/editor/NewlineCleanPanel";
-import DiacriticsCleanPanel from "@/components/editor/DiacriticsCleanPanel";
 
-import MirrorCharsCleanPanel from "@/components/editor/MirrorCharsCleanPanel";
 import MergeToBundledPanel from "@/components/editor/MergeToBundledPanel";
 
-import ArabicTextFixPanel from "@/components/editor/ArabicTextFixPanel";
 import GlossaryStatsPanel from "@/components/editor/GlossaryStatsPanel";
 import GlossaryCategoryFilter from "@/components/editor/GlossaryCategoryFilter";
 import GlossaryDuplicatesPanel from "@/components/editor/GlossaryDuplicatesPanel";
 import TranslationAIEnhancePanel from "@/components/editor/TranslationAIEnhancePanel";
 import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
 import TagRepairPanel from "@/components/editor/TagRepairPanel";
-import TagBracketFixPanel from "@/components/editor/TagBracketFixPanel";
 import NewlineSplitPanel from "@/components/editor/NewlineSplitPanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 
@@ -67,6 +60,7 @@ import EditorHeroHeader from "@/components/editor/EditorHeroHeader";
 import EditorEntryListSection from "@/components/editor/EditorEntryListSection";
 import EditorFiltersBar from "@/components/editor/EditorFiltersBar";
 import EditorGameSafetySection from "@/components/editor/EditorGameSafetySection";
+import EditorResultsPanels from "@/components/editor/EditorResultsPanels";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -1022,107 +1016,7 @@ const Editor = () => {
             />
           )}
 
-          {/* Review Results */}
-          <ReviewPanel
-            reviewResults={editor.reviewResults}
-            shortSuggestions={editor.shortSuggestions}
-            improveResults={editor.improveResults}
-            suggestingShort={editor.suggestingShort}
-            filterCategory={editor.filterCategory}
-            filterFile={editor.filterFile}
-            filterStatus={editor.filterStatus}
-            search={editor.search}
-            handleSuggestShorterTranslations={editor.handleSuggestShorterTranslations}
-            handleApplyShorterTranslation={editor.handleApplyShorterTranslation}
-            handleApplyAllShorterTranslations={editor.handleApplyAllShorterTranslations}
-            handleApplyImprovement={editor.handleApplyImprovement}
-            handleApplyAllImprovements={editor.handleApplyAllImprovements}
-            setReviewResults={editor.setReviewResults}
-            setShortSuggestions={editor.setShortSuggestions}
-            setImproveResults={editor.setImproveResults}
-          />
-
-          {/* Consistency Results */}
-          {editor.consistencyResults && editor.consistencyResults.groups.length > 0 && (
-            <ConsistencyResultsPanel
-              results={editor.consistencyResults}
-              onApplyFix={editor.handleApplyConsistencyFix}
-              onApplyAll={editor.handleApplyAllConsistencyFixes}
-              onClose={() => editor.setConsistencyResults(null)}
-            />
-          )}
-
-
-          {/* Newline Clean Results */}
-          {editor.newlineCleanResults && editor.newlineCleanResults.length > 0 && (
-            <NewlineCleanPanel
-              results={editor.newlineCleanResults}
-              onAccept={editor.handleApplyNewlineClean}
-              onReject={editor.handleRejectNewlineClean}
-              onAcceptAll={editor.handleApplyAllNewlineCleans}
-              onClose={() => editor.setNewlineCleanResults(null)}
-            />
-          )}
-
-          {/* Diacritics Clean Results */}
-          {editor.diacriticsCleanResults && editor.diacriticsCleanResults.length > 0 && (
-            <DiacriticsCleanPanel
-              results={editor.diacriticsCleanResults}
-              onAccept={editor.handleApplyDiacriticsClean}
-              onReject={editor.handleRejectDiacriticsClean}
-              onAcceptAll={editor.handleApplyAllDiacriticsCleans}
-              onClose={() => editor.setDiacriticsCleanResults(null)}
-            />
-          )}
-
-
-          {/* Arabic Text Fix Results */}
-          {editor.arabicTextFixResults && editor.arabicTextFixResults.length > 0 && (
-            <ArabicTextFixPanel
-              results={editor.arabicTextFixResults}
-              onAccept={editor.handleApplyArabicTextFix}
-              onReject={editor.handleRejectArabicTextFix}
-              onAcceptAll={editor.handleApplyAllArabicTextFixes}
-              onClose={() => editor.setArabicTextFixResults(null)}
-            />
-          )}
-
-          {/* Mirror Chars Clean Results */}
-          {editor.mirrorCharsResults && editor.mirrorCharsResults.length > 0 && (
-            <MirrorCharsCleanPanel
-              results={editor.mirrorCharsResults}
-              onAccept={editor.handleApplyMirrorCharsClean}
-              onReject={editor.handleRejectMirrorCharsClean}
-              onAcceptAll={editor.handleApplyAllMirrorCharsCleans}
-              onClose={() => editor.setMirrorCharsResults(null)}
-            />
-          )}
-
-          {/* Tag Bracket Fix Results */}
-          {editor.tagBracketFixResults && editor.tagBracketFixResults.length > 0 && (
-            <TagBracketFixPanel
-              results={editor.tagBracketFixResults}
-              onAccept={editor.handleApplyTagBracketFix}
-              onReject={editor.handleRejectTagBracketFix}
-              onAcceptAll={editor.handleApplyAllTagBracketFixes}
-              onClose={() => editor.setTagBracketFixResults(null)}
-            />
-          )}
-
-          {/* Unified Split Results */}
-          {editor.unifiedSplitResults && editor.unifiedSplitResults.length > 0 && (
-            <NewlineSplitPanel
-              results={editor.unifiedSplitResults}
-              onAccept={editor.handleApplyUnifiedSplit}
-              onReject={editor.handleRejectUnifiedSplit}
-              onAcceptAll={editor.handleApplyAllUnifiedSplits}
-              onClose={() => editor.setUnifiedSplitResults(null)}
-              charLimit={editor.newlineSplitCharLimit}
-              onCharLimitChange={editor.setNewlineSplitCharLimit}
-              onRescan={editor.handleScanAllSplits}
-              title="✂️ تقسيم ومزامنة الأسطر (كل الملفات)"
-            />
-          )}
+          <EditorResultsPanels editor={editor} />
 
           {/* Legacy panels kept for individual tool usage */}
           {editor.newlineSplitResults && editor.newlineSplitResults.length > 0 && (

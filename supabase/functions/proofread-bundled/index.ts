@@ -30,6 +30,8 @@ Deno.serve(async (req) => {
     // Process in chunks of 40
     const CHUNK_SIZE = 40;
     const allResults: { key: string; original: string; corrected: string }[] = [];
+    let skippedChunks = 0;
+    let skippedEntries = 0;
 
     for (let c = 0; c < entries.length; c += CHUNK_SIZE) {
       const chunk = entries.slice(c, c + CHUNK_SIZE);
@@ -90,7 +92,9 @@ ${chunk.map((e, i) => `[${i}] "${e.arabic}"`).join('\n')}
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (!jsonMatch) {
         console.error('Failed to parse AI response:', content.substring(0, 200));
-        continue; // Skip this chunk
+        skippedChunks++;
+        skippedEntries += chunk.length;
+        continue;
       }
 
       try {
@@ -110,10 +114,17 @@ ${chunk.map((e, i) => `[${i}] "${e.arabic}"`).join('\n')}
         }
       } catch (parseErr) {
         console.error('JSON parse error for chunk:', parseErr);
+        skippedChunks++;
+        skippedEntries += chunk.length;
       }
     }
 
-    return new Response(JSON.stringify({ results: allResults, total: entries.length }), {
+    return new Response(JSON.stringify({
+      results: allResults,
+      total: entries.length,
+      skippedChunks,
+      skippedEntries,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {

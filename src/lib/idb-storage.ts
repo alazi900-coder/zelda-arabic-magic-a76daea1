@@ -23,15 +23,34 @@ interface SchemaMeta {
   updatedAt: string;
 }
 
+// Cached DB handle — opening IndexedDB on every read/write piles up connections
+// (especially noticeable during autosave). Keep one handle for the session.
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       req.result.createObjectStore(STORE_NAME);
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      // If the DB is closed (e.g. another tab bumped the version), drop the
+      // cache so the next call opens a fresh handle.
+      db.onclose = () => { if (dbPromise) dbPromise = null; };
+      db.onversionchange = () => {
+        db.close();
+        if (dbPromise) dbPromise = null;
+      };
+      resolve(db);
+    };
+    req.onerror = () => {
+      dbPromise = null;
+      reject(req.error);
+    };
   });
+  return dbPromise;
 }
 
 export async function idbSet(key: string, value: unknown): Promise<void> {

@@ -1,11 +1,10 @@
 import React from "react";
 import { Switch } from "@/components/ui/switch";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowRight, Download, FileText, Loader2, Filter, Sparkles, Save, Tag, Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle, Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, BarChart3, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2, Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi, RefreshCw } from "lucide-react";
+import { Download, FileText, Loader2, Filter, Sparkles, Save, Tag, Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle, Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, BarChart3, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2, Rows3, Languages, StopCircle, XCircle, Wifi, RefreshCw } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import {
   DEFAULT_OPENROUTER_MODEL,
@@ -15,7 +14,6 @@ import {
   refreshOpenRouterModels,
   type OpenRouterModelOption,
 } from "@/lib/openrouter-models";
-import heroBg from "@/assets/xc3-hero-bg.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -74,6 +72,7 @@ import EditorDragOverlay from "@/components/editor/EditorDragOverlay";
 import EditorRecoveryScreen from "@/components/editor/EditorRecoveryScreen";
 import EditorEmptyState from "@/components/editor/EditorEmptyState";
 import EditorDialogs from "@/components/editor/EditorDialogs";
+import EditorHeroHeader from "@/components/editor/EditorHeroHeader";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -302,38 +301,11 @@ const Editor = () => {
         <EditorDragOverlay visible={isDragging} />
 
         {/* Hero header */}
-        <header className="relative flex flex-col items-center justify-center py-8 md:py-12 px-4 text-center overflow-hidden">
-          <div className="absolute inset-0">
-            <img src={heroBg} alt="" className="w-full h-full object-cover" fetchPriority="high" />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/70 to-background" />
-          </div>
-          <div className="relative z-10 w-full max-w-6xl mx-auto">
-            <div className="flex items-center justify-between w-full mb-3">
-              {pageLocked ? (
-                <span className="inline-flex items-center gap-2 text-muted-foreground/50 font-body text-sm cursor-not-allowed">
-                  <ArrowRight className="w-4 h-4" /> العودة للمعالجة
-                </span>
-              ) : (
-                <Link to={processPath} className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground font-body text-sm">
-                  <ArrowRight className="w-4 h-4" /> العودة للمعالجة
-                </Link>
-              )}
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={pageLocked ? "destructive" : "outline"}
-                  size="sm"
-                  onClick={() => setPageLocked(!pageLocked)}
-                  className="gap-1.5 text-xs"
-                >
-                  {pageLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-                  {pageLocked ? "الصفحة مقفلة" : "قفل الصفحة"}
-                </Button>
-              </div>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-display font-black mb-1 drop-shadow-lg">محرر الترجمة ✍️</h1>
-            <p className="text-sm text-muted-foreground font-body">عدّل النصوص العربية يدوياً أو استخدم الترجمة التلقائية</p>
-          </div>
-        </header>
+        <EditorHeroHeader
+          processPath={processPath}
+          pageLocked={pageLocked}
+          setPageLocked={setPageLocked}
+        />
 
         <div className="flex-1 py-4 md:py-6 px-3 md:px-4">
         <div className="max-w-6xl mx-auto">

@@ -50,6 +50,7 @@ import EditorProgressStatus from "@/components/editor/EditorProgressStatus";
 import EditorBuildSection from "@/components/editor/EditorBuildSection";
 import EditorProviderSelection from "@/components/editor/EditorProviderSelection";
 import EditorActionsToolbar from "@/components/editor/EditorActionsToolbar";
+import EditorMobileStickyBar from "@/components/editor/EditorMobileStickyBar";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -286,6 +287,14 @@ const Editor = () => {
 
         <div className="flex-1 py-4 md:py-6 px-3 md:px-4">
         <div className="max-w-6xl mx-auto">
+
+          {/* Mobile sticky bar — quick access while scrolling */}
+          <EditorMobileStickyBar
+            editor={editor}
+            processPath={processPath}
+            pageLocked={pageLocked}
+            setShowBuildSection={setShowBuildSection}
+          />
 
           {/* Stats Cards */}
           <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-6">

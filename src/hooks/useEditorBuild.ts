@@ -1231,7 +1231,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       console.log('[BUILD] Response headers - Modified:', response.headers.get('X-Modified-Count'), 'Expanded:', response.headers.get('X-Expanded-Count'));
       
       let buildStatsData: BuildStats | null = null;
-      try { buildStatsData = JSON.parse(decodeURIComponent(response.headers.get('X-Build-Stats') || '{}')); } catch {}
+      try { buildStatsData = JSON.parse(decodeURIComponent(response.headers.get('X-Build-Stats') || '{}')); } catch { /* ignore */ }
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = `arabized_${langFileName}`;

@@ -96,7 +96,7 @@ export function useEditorState() {
 
 
 
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const forceSaveRef = useRef<() => Promise<void>>(async () => {});
   const { user } = useAuth();
   const [pendingRecovery, setPendingRecovery] = useState<{ translationCount: number; entryCount: number; lastDate?: string } | null>(null);

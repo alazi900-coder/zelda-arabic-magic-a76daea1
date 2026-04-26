@@ -331,7 +331,7 @@ export default function WilayViewer() {
       try {
         const result = await decodeWilayTextureAsync(newData, t);
         if (result) newDecoded.set(texKey(ct.fileIndex, t.index), { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
-      } catch {}
+      } catch { /* ignore */ }
     }
     setDecoded(newDecoded);
   }, [replacePreview, files, decoded]);

@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { parseLegacyTable } from "@/lib/bdat-legacy-parser";
 
+const FIXTURE = "/tmp/bdat_common_ms-2.bdat";
+
 describe("inspect bdat_common_ms-2", () => {
-  it("dumps MNU_style_standard_ms fully", () => {
-    const data = new Uint8Array(readFileSync("/tmp/bdat_common_ms-2.bdat"));
+  it.skipIf(!existsSync(FIXTURE))("dumps MNU_style_standard_ms fully", () => {
+    const data = new Uint8Array(readFileSync(FIXTURE));
     const dv = new DataView(data.buffer);
     const tableCount = dv.getUint32(0, true);
     const offsets: number[] = [];

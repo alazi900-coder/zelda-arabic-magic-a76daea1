@@ -399,7 +399,7 @@ export function analyzeWilay(data: ArrayBuffer): WilayInfo {
               }
             }
           }
-        } catch {}
+        } catch { /* ignore */ }
       }
       if (textures.length > 0) break;
     }

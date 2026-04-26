@@ -206,7 +206,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
         });
         if (!response.ok) {
           let errMsg = `خطأ ${response.status}`;
-          try { const j = await response.json(); if (j.error) errMsg = j.error; } catch {}
+          try { const j = await response.json(); if (j.error) errMsg = j.error; } catch { /* ignore */ }
           return { id: engine.id, result: null, error: errMsg };
         }
         const data = await response.json();

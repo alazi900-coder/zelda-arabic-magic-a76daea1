@@ -64,10 +64,12 @@ Deno.serve(async (req) => {
        });
      }
 
+     // Every AI action below relies on the gateway key — fetch it once.
+     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
      // --- Handle "suggest short translations" action ---
      if (action === 'suggest-short') {
-       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-       if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
        const tooLongEntries = entries.filter(e => {
          const bytes = getUtf16ByteLength(e.translation);
@@ -145,9 +147,6 @@ ${tooLongEntries.map((e, i) => {
 
       // --- Handle "smart-review" action (AI deep analysis) ---
       if (action === 'smart-review') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const translatedEntries = entries.filter(e => e.translation?.trim());
         if (translatedEntries.length === 0) {
           return new Response(JSON.stringify({ findings: [] }), {
@@ -248,9 +247,6 @@ AR: "${e.translation}"`).join('\n\n')}
 
       // --- Handle "grammar-check" action (dedicated grammar analysis) ---
       if (action === 'grammar-check') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const translatedEntries = entries.filter(e => e.translation?.trim());
         if (translatedEntries.length === 0) {
           return new Response(JSON.stringify({ findings: [] }), {
@@ -350,9 +346,6 @@ AR: "${e.translation}"`).join('\n\n')}
 
       // --- Handle "context-review" action (context-aware translation improvement) ---
       if (action === 'context-review') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const translatedEntries = entries.filter(e => e.translation?.trim());
         if (translatedEntries.length === 0) {
           return new Response(JSON.stringify({ findings: [] }), {
@@ -449,9 +442,6 @@ AR: "${e.translation}"`).join('\n\n')}
 
       // --- Handle "quick-alternatives" action (3 alternatives for a single entry) ---
       if (action === 'quick-alternatives') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const entry = entries[0];
         if (!entry?.translation?.trim()) {
           return new Response(JSON.stringify({ alternatives: [] }), {
@@ -520,9 +510,6 @@ ${contextBlock}
 
       // --- Handle "auto-correct" action (bulk spelling/grammar auto-fix) ---
       if (action === 'auto-correct') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const translatedEntries = entries.filter(e => e.translation?.trim());
         if (translatedEntries.length === 0) {
           return new Response(JSON.stringify({ corrections: [] }), {
@@ -607,9 +594,6 @@ ${chunk.map((e, i) => `[${i}] "${e.translation}"`).join('\n')}
 
       // --- Handle "detect-weak" action (detect weak/poor translations) ---
       if (action === 'detect-weak') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const translatedEntries = entries.filter(e => e.translation?.trim());
         if (translatedEntries.length === 0) {
           return new Response(JSON.stringify({ weakEntries: [] }), {
@@ -699,9 +683,6 @@ AR: "${e.translation}"`).join('\n\n')}
 
       // --- Handle "context-retranslate" action ---
       if (action === 'context-retranslate') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const translatedEntries = entries.filter(e => e.translation?.trim());
         if (translatedEntries.length === 0) {
           return new Response(JSON.stringify({ retranslations: [] }), {
@@ -796,9 +777,6 @@ ${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`).join('\n\n')}
 
       // --- Handle "improve translations" action ---
       if (action === 'improve') {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-
         const translatedEntries = entries.filter(e => e.translation?.trim());
 
         if (translatedEntries.length === 0) {

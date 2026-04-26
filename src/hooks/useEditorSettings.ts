@@ -12,7 +12,7 @@ export function useEditorSettings() {
   });
   const setUserGeminiKey = useCallback((key: string) => {
     _setUserGeminiKey(key);
-    try { if (key) localStorage.setItem('userGeminiKey', key); else localStorage.removeItem('userGeminiKey'); } catch {}
+    try { if (key) localStorage.setItem('userGeminiKey', key); else localStorage.removeItem('userGeminiKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const DEAD_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free', 'z-ai/glm-4.5-air:free', 'openai/gpt-oss-120b:free'];
@@ -29,7 +29,7 @@ export function useEditorSettings() {
   });
   const setAiModel = useCallback((m: string) => {
     _setAiModel(m);
-    try { localStorage.setItem('aiModel', m); } catch {}
+    try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter'>(() => {
@@ -37,7 +37,7 @@ export function useEditorSettings() {
   });
   const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter') => {
     _setTranslationProvider(p);
-    try { localStorage.setItem('translationProvider', p); } catch {}
+    try { localStorage.setItem('translationProvider', p); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   // OpenRouter (free GLM-4.6 access)
@@ -46,7 +46,7 @@ export function useEditorSettings() {
   });
   const setUserOpenRouterKey = useCallback((key: string) => {
     _setUserOpenRouterKey(key);
-    try { if (key) localStorage.setItem('userOpenRouterKey', key); else localStorage.removeItem('userOpenRouterKey'); } catch {}
+    try { if (key) localStorage.setItem('userOpenRouterKey', key); else localStorage.removeItem('userOpenRouterKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [userDeepSeekKey, _setUserDeepSeekKey] = useState(() => {
@@ -54,7 +54,7 @@ export function useEditorSettings() {
   });
   const setUserDeepSeekKey = useCallback((key: string) => {
     _setUserDeepSeekKey(key);
-    try { if (key) localStorage.setItem('userDeepSeekKey', key); else localStorage.removeItem('userDeepSeekKey'); } catch {}
+    try { if (key) localStorage.setItem('userDeepSeekKey', key); else localStorage.removeItem('userDeepSeekKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [userGroqKey, _setUserGroqKey] = useState(() => {
@@ -62,7 +62,7 @@ export function useEditorSettings() {
   });
   const setUserGroqKey = useCallback((key: string) => {
     _setUserGroqKey(key);
-    try { if (key) localStorage.setItem('userGroqKey', key); else localStorage.removeItem('userGroqKey'); } catch {}
+    try { if (key) localStorage.setItem('userGroqKey', key); else localStorage.removeItem('userGroqKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
@@ -70,7 +70,7 @@ export function useEditorSettings() {
   });
   const setMyMemoryEmail = useCallback((email: string) => {
     _setMyMemoryEmail(email);
-    try { if (email) localStorage.setItem('myMemoryEmail', email); else localStorage.removeItem('myMemoryEmail'); } catch {}
+    try { if (email) localStorage.setItem('myMemoryEmail', email); else localStorage.removeItem('myMemoryEmail'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   // === API usage counters ===
@@ -89,7 +89,7 @@ export function useEditorSettings() {
       try {
         localStorage.setItem('myMemoryCharsUsed', String(newVal));
         localStorage.setItem('myMemoryCharsDate', new Date().toDateString());
-      } catch {}
+      } catch { /* localStorage unavailable - ignore */ }
       return newVal;
     });
   }, []);
@@ -120,7 +120,7 @@ export function useEditorSettings() {
       try {
         localStorage.setItem('aiRequestsToday', String(newVal));
         localStorage.setItem('aiRequestsDate', today);
-      } catch {}
+      } catch { /* localStorage unavailable - ignore */ }
       return newVal;
     });
     setAiRequestsMonth(prev => {
@@ -128,7 +128,7 @@ export function useEditorSettings() {
       try {
         localStorage.setItem('aiRequestsMonth', String(newVal));
         localStorage.setItem('aiRequestsMonthKey', currentMonth);
-      } catch {}
+      } catch { /* localStorage unavailable - ignore */ }
       return newVal;
     });
   }, []);
@@ -139,7 +139,7 @@ export function useEditorSettings() {
   });
   const setRebalanceNewlines = useCallback((v: boolean) => {
     _setRebalanceNewlines(v);
-    try { localStorage.setItem('rebalanceNewlines', String(v)); } catch {}
+    try { localStorage.setItem('rebalanceNewlines', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [npcMaxLines, _setNpcMaxLines] = useState(() => {
@@ -148,7 +148,7 @@ export function useEditorSettings() {
   const setNpcMaxLines = useCallback((v: number) => {
     const clamped = Math.max(1, Math.min(3, v));
     _setNpcMaxLines(clamped);
-    try { localStorage.setItem('npcMaxLines', String(clamped)); } catch {}
+    try { localStorage.setItem('npcMaxLines', String(clamped)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [npcMode, _setNpcMode] = useState(() => {
@@ -156,7 +156,7 @@ export function useEditorSettings() {
   });
   const setNpcMode = useCallback((v: boolean) => {
     _setNpcMode(v);
-    try { localStorage.setItem('npcMode', String(v)); } catch {}
+    try { localStorage.setItem('npcMode', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [npcSplitCharLimit, setNpcSplitCharLimit] = useState(() => {
@@ -181,7 +181,7 @@ export function useEditorSettings() {
   });
   const setAutoSmartReview = useCallback((v: boolean) => {
     _setAutoSmartReview(v);
-    try { localStorage.setItem('autoSmartReview', String(v)); } catch {}
+    try { localStorage.setItem('autoSmartReview', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   // === Translation Memory for improvements ===
@@ -192,7 +192,7 @@ export function useEditorSettings() {
   const saveToEnhancedMemory = useCallback((key: string, original: string, translation: string) => {
     setEnhancedMemory(prev => {
       const next = { ...prev, [original.toLowerCase().trim()]: { original, translation } };
-      try { localStorage.setItem('enhancedMemory', JSON.stringify(next)); } catch {}
+      try { localStorage.setItem('enhancedMemory', JSON.stringify(next)); } catch { /* localStorage unavailable - ignore */ }
       return next;
     });
   }, []);
@@ -204,7 +204,7 @@ export function useEditorSettings() {
   const togglePanel = useCallback((id: string) => {
     _setHiddenPanels(prev => {
       const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
-      try { localStorage.setItem('hiddenPanels', JSON.stringify(next)); } catch {}
+      try { localStorage.setItem('hiddenPanels', JSON.stringify(next)); } catch { /* localStorage unavailable - ignore */ }
       return next;
     });
   }, []);

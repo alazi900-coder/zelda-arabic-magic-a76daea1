@@ -105,33 +105,32 @@ const ALEF_MAQSURA_WORDS = new Set([
 export function fixYaaAlefMaqsura(text: string): { fixed: string; changes: number } {
   const { shielded, tags } = shieldTags(text);
   let changes = 0;
-  
-  // Match whole Arabic words — avoids catastrophic backtracking that (AR*)(ي|ى) causes
-  // when the engine tries all possible splits of a long Arabic sequence.
-  const wordRe = new RegExp(`(^|[^\\u0600-\\u06FF])(${AR}+)($|[^\\u0600-\\u06FF])`, 'g');
-  const fixed = shielded.replace(wordRe, (match, before, word, after) => {
+
+  // Use lookaround so the non-Arabic separator chars are NOT consumed —
+  // otherwise `g` would swallow the trailing space, leaving the next word
+  // with no preceding non-Arabic anchor and never being matched.
+  const wordRe = new RegExp(`(?<![\\u0600-\\u06FF])(${AR}+)(?![\\u0600-\\u06FF])`, 'g');
+  const fixed = shielded.replace(wordRe, (word) => {
     const lastChar = word[word.length - 1];
-    if (lastChar !== 'ي' && lastChar !== 'ى') return match;
+    if (lastChar !== 'ي' && lastChar !== 'ى') return word;
 
     const stem = word.slice(0, -1);
 
     // ي that should be ى
     if (lastChar === 'ي' && ALEF_MAQSURA_WORDS.has(stem + 'ى')) {
       changes++;
-      return before + stem + 'ى' + after;
+      return stem + 'ى';
     }
 
     // ى that should be ي — common mistakes
-    if (lastChar === 'ى') {
-      if (word === 'فى' || word === 'الذى' || word === 'التى') {
-        changes++;
-        return before + stem + 'ي' + after;
-      }
+    if (lastChar === 'ى' && (word === 'فى' || word === 'الذى' || word === 'التى')) {
+      changes++;
+      return stem + 'ي';
     }
 
-    return match;
+    return word;
   });
-  
+
   return { fixed: unshieldTags(fixed, tags), changes };
 }
 

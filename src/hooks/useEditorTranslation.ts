@@ -42,11 +42,29 @@ interface UseEditorTranslationProps {
   npcSplitCharLimit: number;
   aiModel: string;
   tmAutoReuse: boolean;
+  aiThrottleEnabled: boolean;
 }
+
+/**
+ * Minimum spacing between consecutive AI batches, per provider.
+ * Two profiles: free tier (no personal API key) vs. with personal key.
+ * Free tier values are tuned to stay just under typical RPM limits, so
+ * 100-text translations no longer trip 429 mid-run. With a personal key,
+ * the limits are much higher and we use a small delay only to avoid
+ * bursting on flaky networks.
+ */
+const PROVIDER_BATCH_DELAY_MS = {
+  gemini:     { free: 4000, paid: 500 },  // ~15 RPM free tier
+  openrouter: { free: 3000, paid: 1000 }, // ~20 RPM typical free model
+  groq:       { free: 2000, paid: 500 },  // ~30 RPM free
+  deepseek:   { free: 0,    paid: 0 },    // generous; no proactive throttle
+  mymemory:   { free: 0,    paid: 0 },    // not AI; own char-budget logic
+  google:     { free: 0,    paid: 0 },    // not AI
+} as const;
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled,
 }: UseEditorTranslationProps) {
 
   /** Auto-sync Arabic line count to match English \n count (universal — all files) */
@@ -412,12 +430,37 @@ export function useEditorTranslation({
       }
     };
 
+    // Resolve per-provider batch delay (throttle). Skipped when user disables it.
+    const providerKey = (translationProvider in PROVIDER_BATCH_DELAY_MS)
+      ? translationProvider as keyof typeof PROVIDER_BATCH_DELAY_MS
+      : null;
+    const hasPersonalKey =
+      (translationProvider === 'gemini'     && !!userGeminiKey)     ||
+      (translationProvider === 'openrouter' && !!userOpenRouterKey) ||
+      (translationProvider === 'groq'       && !!userGroqKey)       ||
+      (translationProvider === 'deepseek'   && !!userDeepSeekKey);
+    const batchDelayMs = aiThrottleEnabled && providerKey
+      ? PROVIDER_BATCH_DELAY_MS[providerKey][hasPersonalKey ? 'paid' : 'free']
+      : 0;
+    let lastBatchEndAt = 0;
+
     try {
       for (let b = 0; b < totalBatches; b++) {
         if (abortControllerRef.current.signal.aborted) {
           setTranslateProgress("⏹️ تم إيقاف الترجمة");
           setTimeout(() => setTranslateProgress(""), 3000);
           break;
+        }
+        // Proactive throttle: keep at least batchDelayMs between successive
+        // requests so we don't trip provider RPM limits mid-run.
+        if (batchDelayMs > 0 && lastBatchEndAt > 0) {
+          const elapsed = Date.now() - lastBatchEndAt;
+          const wait = batchDelayMs - elapsed;
+          if (wait > 0) {
+            setTranslateProgress(`⏳ تنظيم سرعة الإرسال — انتظار ${(wait / 1000).toFixed(1)} ثانية...`);
+            try { await sleepWithAbort(wait, abortControllerRef.current.signal); }
+            catch { break; } // aborted during throttle wait
+          }
         }
         const batch = needsAI.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
         setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
@@ -428,6 +471,7 @@ export function useEditorTranslation({
         }));
         
         const data = await fetchBatchWithRetry(entries, abortControllerRef.current.signal);
+        lastBatchEndAt = Date.now();
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
         // Accumulate glossary stats

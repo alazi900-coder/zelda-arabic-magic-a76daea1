@@ -197,6 +197,19 @@ export function useEditorSettings() {
     try { localStorage.setItem('tmAutoReuse', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
+  // === Adaptive throttle between AI batches (avoids hitting per-minute rate limits) ===
+  // Default ON. Per-provider delay: see PROVIDER_BATCH_DELAY_MS in useEditorTranslation.
+  const [aiThrottleEnabled, _setAiThrottleEnabled] = useState(() => {
+    try {
+      const v = localStorage.getItem('aiThrottleEnabled');
+      return v === null ? true : v === 'true';
+    } catch { return true; }
+  });
+  const setAiThrottleEnabled = useCallback((v: boolean) => {
+    _setAiThrottleEnabled(v);
+    try { localStorage.setItem('aiThrottleEnabled', String(v)); } catch { /* localStorage unavailable - ignore */ }
+  }, []);
+
   // === Translation Memory for improvements ===
   const [enhancedMemory, setEnhancedMemory] = useState<Record<string, { original: string; translation: string }>>(() => {
     try { const v = localStorage.getItem('enhancedMemory'); return v ? JSON.parse(v) : {}; } catch { return {}; }
@@ -241,6 +254,7 @@ export function useEditorSettings() {
     newlineSplitCharLimit, setNewlineSplitCharLimit,
     autoSmartReview, setAutoSmartReview,
     tmAutoReuse, setTmAutoReuse,
+    aiThrottleEnabled, setAiThrottleEnabled,
     enhancedMemory, saveToEnhancedMemory,
     hiddenPanels, togglePanel,
   };

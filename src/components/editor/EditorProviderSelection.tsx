@@ -23,6 +23,7 @@ type EditorSubset = Pick<
   | "aiModel" | "setAiModel"
   | "rebalanceNewlines" | "setRebalanceNewlines"
   | "tmAutoReuse" | "setTmAutoReuse"
+  | "aiThrottleEnabled" | "setAiThrottleEnabled"
 >;
 
 type TestConnState = 'idle' | 'testing' | 'ok' | 'error';
@@ -428,6 +429,18 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         <Switch
           checked={editor.tmAutoReuse}
           onCheckedChange={editor.setTmAutoReuse}
+        />
+      </div>
+
+      {/* AI batch throttle */}
+      <div className="flex items-center justify-between border-t border-border/50 pt-3 mt-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-display">⏱️ تنظيم سرعة الإرسال</span>
+          <span className="text-xs text-muted-foreground font-body">(يحترم حدود الموفّر لتفادي 429 — 4س Gemini / 3س OpenRouter / 2س Groq للمجاني)</span>
+        </div>
+        <Switch
+          checked={editor.aiThrottleEnabled}
+          onCheckedChange={editor.setAiThrottleEnabled}
         />
       </div>
     </CardContent>

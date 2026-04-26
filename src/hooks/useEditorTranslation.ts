@@ -67,6 +67,23 @@ export function useEditorTranslation({
   filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled,
 }: UseEditorTranslationProps) {
 
+  /**
+   * Detect a translation that came back un-translated. Catches the two failure
+   * modes the backend currently doesn't notice:
+   *   1) the model echoed the English source verbatim
+   *   2) the model returned a plain English string with no Arabic at all
+   * Tag-only / number-only originals are intentionally excluded so things like
+   * "100" → "100" or "TAG_0" → "TAG_0" are still treated as success.
+   */
+  const looksUntranslated = (original: string, translated: string): boolean => {
+    const t = (translated || '').trim();
+    if (!t) return false;
+    if (/[\u0600-\u06FF]/.test(t)) return false;
+    if (/[a-zA-Z]{3,}/.test(t)) return true;
+    if (t === (original || '').trim()) return true;
+    return false;
+  };
+
   /** Auto-sync Arabic line count to match English \n count (universal — all files) */
   const autoSyncLines = (key: string, translated: string, originalEntry?: ExtractedEntry): string => {
     if (!originalEntry) return translated;
@@ -220,17 +237,26 @@ export function useEditorTranslation({
         });
       }
       if (data.translations && data.translations[key]) {
-        let translated = data.translations[key];
+        const translated = data.translations[key];
+        if (looksUntranslated(entry.original, translated)) {
+          toast({
+            title: "⚠️ الترجمة بقيت إنجليزية",
+            description: "حاول مرة أخرى أو بدّل الموديل لموديل أقوى",
+            variant: "destructive",
+          });
+          return;
+        }
+        let processed = translated;
         // Post-process: local tag repair + auto-sync lines
         if (hasTechnicalTags(entry.original)) {
-          translated = restoreTagsLocally(entry.original, translated);
-          translated = autoFixTagBrackets(entry.original, translated);
+          processed = restoreTagsLocally(entry.original, processed);
+          processed = autoFixTagBrackets(entry.original, processed);
         }
         // Auto-sync line count to match English source
-        translated = autoSyncLines(key, translated, entry);
+        processed = autoSyncLines(key, processed, entry);
         // Fix BiDi alignment for mixed Arabic/English
-        translated = fixMixedBidi(translated);
-        updateTranslation(key, translated);
+        processed = fixMixedBidi(processed);
+        updateTranslation(key, processed);
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'خطأ في الترجمة';
@@ -492,8 +518,16 @@ export function useEditorTranslation({
         }));
         if (data.translations) {
           const fixedTranslations = autoFixTags(data.translations);
-          allTranslations = { ...allTranslations, ...fixedTranslations };
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...fixedTranslations } } : null);
+          // Drop silently-failed entries (model echoed English) — they fall
+          // through to the failed list and the user can retry them in bulk.
+          const accepted: Record<string, string> = {};
+          for (const [k, v] of Object.entries(fixedTranslations)) {
+            const ent = needsAI.find(e => `${e.msbtFile}:${e.index}` === k);
+            if (ent && looksUntranslated(ent.original, v)) continue;
+            accepted[k] = v;
+          }
+          allTranslations = { ...allTranslations, ...accepted };
+          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...accepted } } : null);
         }
       }
       if (!abortControllerRef.current?.signal.aborted) {
@@ -570,7 +604,14 @@ export function useEditorTranslation({
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
         if (data.translations) {
           const fixedTranslations = autoFixTags(data.translations);
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...fixedTranslations } } : null);
+          // Drop silently-failed entries so the user notices and can retry.
+          const accepted: Record<string, string> = {};
+          for (const [k, v] of Object.entries(fixedTranslations)) {
+            const ent = entriesToRetranslate.find(e => `${e.msbtFile}:${e.index}` === k);
+            if (ent && looksUntranslated(ent.original, v)) continue;
+            accepted[k] = v;
+          }
+          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...accepted } } : null);
         }
       }
       setTranslateProgress(`✅ تم إعادة ترجمة ${entriesToRetranslate.length} نص في هذه الصفحة`);

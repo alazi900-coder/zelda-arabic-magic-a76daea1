@@ -978,7 +978,8 @@ CRITICAL RULES:
 7. Do NOT add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ).
 8. Use natural modern Arabic for gaming (العربية الحديثة للألعاب) — not formal Arabic.
 9. Match the speaker's personality: casual for Reyn/Riki, formal for Melia/Dunban.
-10. If a glossary term appears, use its EXACT Arabic translation — no alternatives.${npcRule}${categorySection}
+10. If a glossary term appears, use its EXACT Arabic translation — no alternatives.
+11. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure.${npcRule}${categorySection}
 
 Input:
 {
@@ -1225,7 +1226,8 @@ CRITICAL RULES:
 9. You MUST return EXACTLY ${needsAI.length} entries. Do NOT skip, merge, or add extra entries. Each key MUST have its own separate translation.
 10. Do NOT insert newline characters (\\n) in your translations. Return each translation as a single continuous string. Line breaking is handled separately.
 11. NEVER add Arabic diacritics/tashkeel (tanween: ً ٌ ٍ, fatha: َ, damma: ُ, kasra: ِ, shadda: ّ, sukun: ْ). Write plain Arabic text WITHOUT any vowel marks. The game font cannot render them.
-12. For NPC dialogue: match the speaker's personality. Use contractions and natural speech for casual characters; formal register for commanders/antagonists.${categorySection}${glossarySection}${contextSection}
+12. For NPC dialogue: match the speaker's personality. Use contractions and natural speech for casual characters; formal register for commanders/antagonists.
+13. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure that will be rejected by validation.${categorySection}${glossarySection}${contextSection}
 
 Input texts (as JSON object — translate each value and return with the SAME keys):
 {

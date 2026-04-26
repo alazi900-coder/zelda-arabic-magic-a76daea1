@@ -301,11 +301,21 @@ export function useEditorTranslation({
     setGlossarySessionStats({ directMatches: 0, lockedTerms: 0, contextTerms: 0, batchesCompleted: 0, totalBatches, textsTranslated: 0, freeTranslations: freeCount });
     abortControllerRef.current = new AbortController();
 
+    // Helper: sleep that aborts if the signal fires (used for transient-error backoff)
+    const sleepWithAbort = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+      if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+      const t = setTimeout(resolve, ms);
+      const onAbort = () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); };
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+
     // Helper: fetch a batch with auto-split retry on 500 errors
+    // retriesLeft: budget for transient-error retries (429 / network), separate from auto-split depth
     const fetchBatchWithRetry = async (
       batchEntries: { key: string; original: string }[],
       signal: AbortSignal,
       depth = 0,
+      retriesLeft = 2,
     ): Promise<{ translations: Record<string, string>; charsUsed?: number; glossaryStats?: { directMatches?: number; lockedTerms?: number; contextTerms?: number } }> => {
       try {
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
@@ -314,10 +324,21 @@ export function useEditorTranslation({
           signal,
           body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel }),
         });
-        if (response.status === 429 || response.status === 401) {
-          // لا تعيد المحاولة ولا تقسّم — هذا يهدر الحصة دون فائدة
+        if (response.status === 429) {
+          // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
+          if (retriesLeft > 0) {
+            console.warn(`[rate-limit] 429 received — waiting 8s before retry (left: ${retriesLeft})`);
+            setTranslateProgress(`⏳ تجاوزت حد الطلبات — انتظار 8 ثوانٍ قبل إعادة المحاولة...`);
+            await sleepWithAbort(8000, signal);
+            return fetchBatchWithRetry(batchEntries, signal, depth, retriesLeft - 1);
+          }
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || (response.status === 429 ? 'تجاوزت حد الطلبات' : 'مفتاح API غير صالح'));
+          throw new Error(errData.error || 'تجاوزت حد الطلبات');
+        }
+        if (response.status === 401) {
+          // Auth: never retry
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'مفتاح API غير صالح');
         }
         if (response.status >= 500 && batchEntries.length > 1 && depth < 3) {
           // Auto-split: divide batch in half and retry each sub-batch
@@ -341,9 +362,18 @@ export function useEditorTranslation({
         return await response.json();
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw err;
+        // Network-level errors (TypeError) are usually transient — wait + retry before splitting
+        const isNetworkError = err instanceof TypeError;
+        if (isNetworkError && retriesLeft > 0) {
+          const waitMs = retriesLeft === 2 ? 1000 : 3000;
+          console.warn(`[network] Transient fetch error — waiting ${waitMs}ms before retry (left: ${retriesLeft}):`, (err as Error).message);
+          setTranslateProgress(`⏳ خطأ شبكة — إعادة محاولة بعد ${Math.round(waitMs / 1000)} ثانية...`);
+          await sleepWithAbort(waitMs, signal);
+          return fetchBatchWithRetry(batchEntries, signal, depth, retriesLeft - 1);
+        }
         // Single-entry batch can't be split further
         if (batchEntries.length <= 1 || depth >= 3) throw err;
-        // Try splitting on any error
+        // Try splitting on any other error
         console.warn(`[auto-split] Batch error, splitting (depth ${depth + 1}):`, (err as Error).message);
         const mid = Math.ceil(batchEntries.length / 2);
         const [r1, r2] = await Promise.all([

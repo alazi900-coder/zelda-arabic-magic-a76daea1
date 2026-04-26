@@ -72,11 +72,13 @@ export default function ModPackager() {
 
   // Initialize zstd-wasm once
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
     initZstd().then(() => setZstdReady(true)).catch((e) => {
       console.error("فشل تحميل مكتبة الضغط zstd:", e);
       setStatus("⚠️ فشل تحميل مكتبة الضغط — عمليات فك الضغط لن تعمل، يرجى تحديث الصفحة");
-      setTimeout(() => setStatus(""), 8000);
+      timer = setTimeout(() => setStatus(""), 8000);
     });
+    return () => { if (timer) clearTimeout(timer); };
   }, []);
 
   const atlasCanvasRef = useRef<HTMLCanvasElement | null>(null);

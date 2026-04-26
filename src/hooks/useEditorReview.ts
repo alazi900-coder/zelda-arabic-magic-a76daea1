@@ -1,9 +1,50 @@
 import { useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
-import type { EditorState, ExtractedEntry } from "@/components/editor/types";
+import type {
+  EditorState, ExtractedEntry,
+  ReviewResults, ShortSuggestion, ImproveResult,
+} from "@/components/editor/types";
+import type {
+  AnalysisAction, LiteralResult, StyleResult,
+  ConsistencyResult, ConsistencyItem, AlternativeResult, FullAnalysisResult,
+} from "@/components/editor/AdvancedTranslationPanel";
+import type { SmartReviewFinding } from "@/components/editor/SmartReviewPanel";
+import type { EnhanceResult } from "@/components/editor/TranslationEnhancePanel";
 
-import type { AnalysisAction } from "@/components/editor/AdvancedTranslationPanel";
+// ============================================================
+// Types local to this hook (not already defined elsewhere)
+// ============================================================
+
+/** Shape used by handleApplyConsistencyFix — note variants here include `file`. */
+export interface ConsistencyPanelGroup {
+  term: string;
+  variants: { key: string; translation: string; file?: string }[];
+}
+
+export interface ConsistencyPanelResults {
+  groups: ConsistencyPanelGroup[];
+  aiSuggestions: { best: string; reason: string }[];
+}
+
+export interface WeakTranslation {
+  key: string;
+  suggestion?: string;
+  score?: number;
+  reason?: string;
+}
+
+export interface AutoCorrectResult {
+  key: string;
+  original: string;
+  current: string;
+  corrected: string;
+}
+
+export interface Progress {
+  current: number;
+  total: number;
+}
 
 interface UseEditorReviewParams {
   state: EditorState | null;
@@ -16,47 +57,47 @@ interface UseEditorReviewParams {
   aiModel: string;
   // Scan result setters from useEditorScanResults
   setReviewing: (v: boolean) => void;
-  setReviewResults: (v: any) => void;
+  setReviewResults: React.Dispatch<React.SetStateAction<ReviewResults | null>>;
   setSuggestingShort: (v: boolean) => void;
-  setShortSuggestions: (v: any) => void;
+  setShortSuggestions: React.Dispatch<React.SetStateAction<ShortSuggestion[] | null>>;
   setImprovingTranslations: (v: boolean) => void;
-  setImproveResults: (v: any) => void;
+  setImproveResults: React.Dispatch<React.SetStateAction<ImproveResult[] | null>>;
   setFixingMixed: (v: boolean) => void;
   setCheckingConsistency: (v: boolean) => void;
-  setConsistencyResults: (v: any) => void;
+  setConsistencyResults: React.Dispatch<React.SetStateAction<ConsistencyPanelResults | null>>;
   setSmartReviewing: (v: boolean) => void;
-  setSmartReviewFindings: (v: any) => void;
+  setSmartReviewFindings: React.Dispatch<React.SetStateAction<SmartReviewFinding[] | null>>;
   setEnhancingTranslations: (v: boolean) => void;
-  setEnhanceResults: (v: any) => void;
+  setEnhanceResults: React.Dispatch<React.SetStateAction<EnhanceResult[] | null>>;
   setAdvancedAnalyzing: (v: boolean) => void;
-  setAdvancedAnalysisTab: (v: any) => void;
-  setLiteralResults: (v: any) => void;
-  setStyleResults: (v: any) => void;
-  setConsistencyCheckResult: (v: any) => void;
-  setAlternativeResults: (v: any) => void;
-  setFullAnalysisResults: (v: any) => void;
+  setAdvancedAnalysisTab: React.Dispatch<React.SetStateAction<AnalysisAction>>;
+  setLiteralResults: React.Dispatch<React.SetStateAction<LiteralResult[] | null>>;
+  setStyleResults: React.Dispatch<React.SetStateAction<StyleResult[] | null>>;
+  setConsistencyCheckResult: (v: ConsistencyResult | null) => void;
+  setAlternativeResults: React.Dispatch<React.SetStateAction<AlternativeResult[] | null>>;
+  setFullAnalysisResults: React.Dispatch<React.SetStateAction<FullAnalysisResult[] | null>>;
   advancedAnalysisCancelRef: React.MutableRefObject<boolean>;
-  setAutoCorrectResults: (v: any) => void;
-  setAutoCorrectApplied: (v: any) => void;
-  setAutoCorrectProgress: (v: any) => void;
+  setAutoCorrectResults: (v: AutoCorrectResult[] | null) => void;
+  setAutoCorrectApplied: React.Dispatch<React.SetStateAction<boolean>>;
+  setAutoCorrectProgress: (v: Progress | null) => void;
   autoCorrectAbortRef: React.MutableRefObject<AbortController | null>;
-  setWeakTranslations: (v: any) => void;
+  setWeakTranslations: React.Dispatch<React.SetStateAction<WeakTranslation[] | null>>;
   setDetectingWeak: (v: boolean) => void;
-  setDetectWeakProgress: (v: any) => void;
+  setDetectWeakProgress: (v: Progress | null) => void;
   detectWeakAbortRef: React.MutableRefObject<AbortController | null>;
   reviewedKeysRef: React.MutableRefObject<Set<string>>;
   addReviewedKeys: (keys: string[]) => void;
-  reviewResults: any;
-  shortSuggestions: any;
-  improveResults: any;
-  consistencyResults: any;
-  smartReviewFindings: any;
-  enhanceResults: any;
-  literalResults: any;
-  styleResults: any;
-  alternativeResults: any;
-  fullAnalysisResults: any;
-  weakTranslations: any;
+  reviewResults: ReviewResults | null;
+  shortSuggestions: ShortSuggestion[] | null;
+  improveResults: ImproveResult[] | null;
+  consistencyResults: ConsistencyPanelResults | null;
+  smartReviewFindings: SmartReviewFinding[] | null;
+  enhanceResults: EnhanceResult[] | null;
+  literalResults: LiteralResult[] | null;
+  styleResults: StyleResult[] | null;
+  alternativeResults: AlternativeResult[] | null;
+  fullAnalysisResults: FullAnalysisResult[] | null;
+  weakTranslations: WeakTranslation[] | null;
   isMixedLanguage: (text: string) => boolean;
 }
 
@@ -132,7 +173,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
   const handleApplyAllShorterTranslations = () => {
     if (!state || !shortSuggestions) return;
     const updates: Record<string, string> = {};
-    shortSuggestions.forEach((s: any) => { updates[s.key] = s.suggested; });
+    shortSuggestions.forEach((s) => { updates[s.key] = s.suggested; });
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
     setShortSuggestions(null);
     setLastSaved(`✅ تم تطبيق ${Object.keys(updates).length} اقتراح قصير`);
@@ -231,7 +272,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
 
   const handleApplySmartFix = (key: string, fix: string) => {
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: fix } } : null);
-    setSmartReviewFindings((prev: any) => prev ? prev.filter((f: any) => f.key !== key) : null);
+    setSmartReviewFindings((prev) => prev ? prev.filter((f) => f.key !== key) : null);
     addReviewedKeys([key]);
   };
 
@@ -416,7 +457,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
 
   const handleApplyWeakFix = (key: string, suggestion: string) => {
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: suggestion } } : null);
-    setWeakTranslations((prev: any) => prev ? prev.filter((w: any) => w.key !== key) : null);
+    setWeakTranslations((prev) => prev ? prev.filter((w) => w.key !== key) : null);
   };
 
   const handleApplyAllWeakFixes = () => {
@@ -455,9 +496,14 @@ export function useEditorReview(params: UseEditorReviewParams) {
         setTranslateProgress("✅ لم يتم العثور على تحسينات سياقية");
         setTimeout(() => setTranslateProgress(""), 4000);
       } else {
-        const findings = retranslations.map((r: any) => ({
-          key: r.key, original: r.original, current: r.current, type: 'improvement' as const,
-          issue: r.changes || 'تحسين سياقي', fix: r.retranslated,
+        const findings: SmartReviewFinding[] = retranslations.map((r: {
+          key: string; original: string; current: string;
+          changes?: string; retranslated?: string;
+        }) => ({
+          key: r.key, original: r.original, current: r.current,
+          type: 'naturalness',
+          issue: r.changes || 'تحسين سياقي',
+          fix: r.retranslated || '',
         }));
         setSmartReviewFindings(findings);
         setTranslateProgress(`🎯 تم العثور على ${retranslations.length} تحسين سياقي`);
@@ -495,7 +541,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.error || `خطأ ${response.status}`); }
       const data = await response.json();
       if (data.results && data.results.length > 0) {
-        const withIssues = data.results.filter((r: any) => r.issues?.length > 0 || r.suggestions?.length > 0);
+        const withIssues = (data.results as EnhanceResult[]).filter((r) => (r.issues?.length ?? 0) > 0 || (r.suggestions?.length ?? 0) > 0);
         setEnhanceResults(data.results);
         setTranslateProgress(`✅ تم تحليل ${data.results.length} ترجمة — ${withIssues.length} تحتاج تحسين`);
       } else {
@@ -511,7 +557,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
 
   const handleApplyEnhanceSuggestion = (key: string, newTranslation: string) => {
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: newTranslation } } : null);
-    setEnhanceResults((prev: any) => prev ? prev.filter((r: any) => r.key !== key) : null);
+    setEnhanceResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
     toast({ title: "✅ تم تطبيق الاقتراح" });
   };
 
@@ -564,11 +610,11 @@ export function useEditorReview(params: UseEditorReviewParams) {
       setTranslateProgress(`${actionLabels[action]} — ${totalEntries} نص (${totalBatches} دفعات)`);
       const glossarySlice = activeGlossary?.split('\n').slice(0, 150).join('\n');
 
-      let allLiteralResults: any[] = [];
-      let allStyleResults: any[] = [];
-      let allAlternativeResults: any[] = [];
-      let allFullResults: any[] = [];
-      let allInconsistencies: any[] = [];
+      let allLiteralResults: LiteralResult[] = [];
+      let allStyleResults: StyleResult[] = [];
+      let allAlternativeResults: AlternativeResult[] = [];
+      let allFullResults: FullAnalysisResult[] = [];
+      let allInconsistencies: ConsistencyItem[] = [];
       let totalScore = 0;
       let summaries: string[] = [];
 
@@ -578,7 +624,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
         else if (action === 'alternatives' && allAlternativeResults.length > 0) setAlternativeResults([...allAlternativeResults]);
         else if (action === 'full-analysis' && allFullResults.length > 0) setFullAnalysisResults([...allFullResults]);
         else if (action === 'consistency-check' && allInconsistencies.length > 0) {
-          const unique = allInconsistencies.reduce((acc: any[], item) => { if (!acc.find(i => i.term === item.term)) acc.push(item); return acc; }, []);
+          const unique = allInconsistencies.reduce<typeof allInconsistencies>((acc, item) => { if (!acc.find(i => i.term === item.term)) acc.push(item); return acc; }, []);
           setConsistencyCheckResult({ inconsistencies: unique, score: totalBatches > 0 ? Math.round(totalScore / (batchIdx || 1)) : 0, summary: summaries.join(' | ') });
         }
       };
@@ -611,18 +657,28 @@ export function useEditorReview(params: UseEditorReviewParams) {
             continue;
           }
           const data = await response.json();
+          type RawAnalysisResult = { index?: number } & Record<string, unknown>;
+          // Each action returns its own shape; we trust the server and cast after
+          // enriching with key/original/translation from the batch context.
+          const mapWithContext = <T>(results: RawAnalysisResult[]): T[] =>
+            results.map((r, i) => ({
+              key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`,
+              original: batchEntries[r.index ?? i]?.original || '',
+              translation: batchEntries[r.index ?? i]?.translation || '',
+              ...r,
+            })) as unknown as T[];
           if (action === 'literal-detect' && data.results) {
-            allLiteralResults.push(...data.results.map((r: any, i: number) => ({ key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`, original: batchEntries[r.index ?? i]?.original || '', translation: batchEntries[r.index ?? i]?.translation || '', ...r })));
+            allLiteralResults.push(...mapWithContext<LiteralResult>(data.results));
           } else if (action === 'style-unify' && data.results) {
-            allStyleResults.push(...data.results.map((r: any, i: number) => ({ key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`, original: batchEntries[r.index ?? i]?.original || '', translation: batchEntries[r.index ?? i]?.translation || '', ...r })));
+            allStyleResults.push(...mapWithContext<StyleResult>(data.results));
           } else if (action === 'consistency-check') {
             if (data.inconsistencies) allInconsistencies.push(...data.inconsistencies);
             if (data.score) totalScore += data.score;
             if (data.summary) summaries.push(data.summary);
           } else if (action === 'alternatives' && data.results) {
-            allAlternativeResults.push(...data.results.map((r: any, i: number) => ({ key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`, original: batchEntries[r.index ?? i]?.original || '', translation: batchEntries[r.index ?? i]?.translation || '', ...r })));
+            allAlternativeResults.push(...mapWithContext<AlternativeResult>(data.results));
           } else if (action === 'full-analysis' && data.results) {
-            allFullResults.push(...data.results.map((r: any, i: number) => ({ key: batchEntries[r.index ?? i]?.key || `unknown:${start + i}`, original: batchEntries[r.index ?? i]?.original || '', translation: batchEntries[r.index ?? i]?.translation || '', ...r })));
+            allFullResults.push(...mapWithContext<FullAnalysisResult>(data.results));
           }
           if ((batchIdx + 1) % 2 === 0 || batchIdx === totalBatches - 1) commitPartialResults(action);
           if (batchIdx < totalBatches - 1) await new Promise(resolve => setTimeout(resolve, 200));
@@ -637,7 +693,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
         setStyleResults(allStyleResults);
         setTranslateProgress(`✅ تم تحليل ${allStyleResults.length} نص — ${allStyleResults.filter(r => r.styleIssues?.length > 0 || r.unifiedVersion).length} يحتاج توحيد`);
       } else if (action === 'consistency-check') {
-        const uniqueInconsistencies = allInconsistencies.reduce((acc: any[], item) => { if (!acc.find(i => i.term === item.term)) acc.push(item); return acc; }, []);
+        const uniqueInconsistencies = allInconsistencies.reduce<typeof allInconsistencies>((acc, item) => { if (!acc.find(i => i.term === item.term)) acc.push(item); return acc; }, []);
         setConsistencyCheckResult({ inconsistencies: uniqueInconsistencies, score: totalBatches > 0 ? Math.round(totalScore / totalBatches) : 0, summary: summaries.join(' | ') });
         setTranslateProgress(`✅ درجة الاتساق: ${Math.round(totalScore / totalBatches)}/100 — ${uniqueInconsistencies.length} تناقض`);
       } else if (action === 'alternatives') {
@@ -657,10 +713,10 @@ export function useEditorReview(params: UseEditorReviewParams) {
 
   const handleApplyAdvancedSuggestion = (key: string, newTranslation: string) => {
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: newTranslation } } : null);
-    setLiteralResults((prev: any) => prev ? prev.filter((r: any) => r.key !== key) : null);
-    setStyleResults((prev: any) => prev ? prev.filter((r: any) => r.key !== key) : null);
-    setAlternativeResults((prev: any) => prev ? prev.filter((r: any) => r.key !== key) : null);
-    setFullAnalysisResults((prev: any) => prev ? prev.filter((r: any) => r.key !== key) : null);
+    setLiteralResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
+    setStyleResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
+    setAlternativeResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
+    setFullAnalysisResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
     toast({ title: "✅ تم تطبيق التحسين" });
   };
 
@@ -669,7 +725,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
     const updates: Record<string, string> = {};
     if (action === 'literal-detect' && literalResults) { for (const r of literalResults) { if (r.isLiteral && r.naturalVersion) updates[r.key] = r.naturalVersion; } setLiteralResults([]); }
     else if (action === 'style-unify' && styleResults) { for (const r of styleResults) { if (r.unifiedVersion) updates[r.key] = r.unifiedVersion; } setStyleResults([]); }
-    else if (action === 'alternatives' && alternativeResults) { for (const r of alternativeResults) { const best = r.alternatives.find((a: any) => a.style === r.recommended) || r.alternatives[0]; if (best) updates[r.key] = best.text; } setAlternativeResults([]); }
+    else if (action === 'alternatives' && alternativeResults) { for (const r of alternativeResults) { const best = r.alternatives?.find((a) => a.style === r.recommended) || r.alternatives?.[0]; if (best) updates[r.key] = best.text; } setAlternativeResults([]); }
     else if (action === 'full-analysis' && fullAnalysisResults) { for (const r of fullAnalysisResults) { if (r.recommended) updates[r.key] = r.recommended; else if (r.alternatives?.[0]?.text) updates[r.key] = r.alternatives[0].text; } setFullAnalysisResults([]); }
     if (Object.keys(updates).length === 0) { toast({ title: "⚠️ لا توجد اقتراحات للتطبيق" }); return; }
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
@@ -715,7 +771,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
   const handleApplyAllImprovements = () => {
     if (!state || !improveResults) return;
     const updates: Record<string, string> = {};
-    improveResults.forEach((item: any) => { if (item.improvedBytes <= item.maxBytes || item.maxBytes === 0) updates[item.key] = item.improved; });
+    improveResults.forEach((item) => { if (item.improvedBytes <= item.maxBytes || item.maxBytes === 0) updates[item.key] = item.improved; });
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
     setImproveResults(null);
     setLastSaved(`✅ تم تطبيق ${Object.keys(updates).length} تحسين`);
@@ -776,8 +832,8 @@ export function useEditorReview(params: UseEditorReviewParams) {
     const updates: Record<string, string> = {};
     for (const v of group.variants) { updates[v.key] = bestTranslation; }
     setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
-    const newGroups = consistencyResults.groups.filter((_: any, i: number) => i !== groupIndex);
-    const newSuggestions = consistencyResults.aiSuggestions.filter((_: any, i: number) => i !== groupIndex);
+    const newGroups = consistencyResults.groups.filter((_, i) => i !== groupIndex);
+    const newSuggestions = consistencyResults.aiSuggestions.filter((_, i) => i !== groupIndex);
     setConsistencyResults({ groups: newGroups, aiSuggestions: newSuggestions });
     setLastSaved(`✅ تم توحيد ترجمة "${group.term}" في ${group.variants.length} موضع`);
     setTimeout(() => setLastSaved(""), 3000);
@@ -787,7 +843,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
     if (!consistencyResults || !state) return;
     const updates: Record<string, string> = {};
     let count = 0;
-    consistencyResults.groups.forEach((group: any, i: number) => {
+    consistencyResults.groups.forEach((group, i) => {
       const best = consistencyResults.aiSuggestions[i]?.best;
       if (best) { for (const v of group.variants) { updates[v.key] = best; } count++; }
     });

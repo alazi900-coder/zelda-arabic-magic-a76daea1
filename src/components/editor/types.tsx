@@ -25,8 +25,10 @@ export interface EditorState {
 
 export interface ReviewIssue {
   key: string;
-  type: 'error' | 'warning' | 'info';
+  severity: 'error' | 'warning' | 'info';
   message: string;
+  category?: string;
+  suggestion?: string;
   original?: string;
   translation?: string;
 }
@@ -57,6 +59,7 @@ export interface ImproveResult {
   key: string;
   original: string;
   current: string;
+  currentBytes: number;
   improved: string;
   reason: string;
   improvedBytes: number;

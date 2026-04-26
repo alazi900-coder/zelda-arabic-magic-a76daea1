@@ -2,12 +2,12 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Sparkles, Loader2 } from "lucide-react";
-import { FILE_CATEGORIES } from "./types";
+import { FILE_CATEGORIES, type ReviewResults, type ShortSuggestion, type ImproveResult } from "./types";
 
 interface ReviewPanelProps {
-  reviewResults: { issues: any[]; summary: any } | null;
-  shortSuggestions: any[] | null;
-  improveResults: any[] | null;
+  reviewResults: ReviewResults | null;
+  shortSuggestions: ShortSuggestion[] | null;
+  improveResults: ImproveResult[] | null;
   suggestingShort: boolean;
   filterCategory: string[];
   filterFile: string;
@@ -18,9 +18,9 @@ interface ReviewPanelProps {
   handleApplyAllShorterTranslations: () => void;
   handleApplyImprovement: (key: string, improved: string) => void;
   handleApplyAllImprovements: () => void;
-  setReviewResults: (r: any) => void;
-  setShortSuggestions: (s: any) => void;
-  setImproveResults: (r: any) => void;
+  setReviewResults: React.Dispatch<React.SetStateAction<ReviewResults | null>>;
+  setShortSuggestions: React.Dispatch<React.SetStateAction<ShortSuggestion[] | null>>;
+  setImproveResults: React.Dispatch<React.SetStateAction<ImproveResult[] | null>>;
 }
 
 const ReviewPanel: React.FC<ReviewPanelProps> = ({
@@ -73,7 +73,7 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
               <p className="text-sm text-muted-foreground">🎉 لا توجد مشاكل! الترجمات تبدو سليمة.</p>
             ) : (
               <div className="max-h-60 overflow-y-auto space-y-2">
-                {reviewResults.issues.slice(0, 50).map((issue: any, i: number) => (
+                {reviewResults.issues.slice(0, 50).map((issue, i) => (
                   <div key={i} className={`p-2 rounded text-xs border ${issue.severity === 'error' ? 'border-destructive/30 bg-destructive/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
                     <p className="font-mono text-muted-foreground mb-1">{issue.key}</p>
                     <p>{issue.message}</p>
@@ -104,7 +104,7 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
               بدائل أقصر مقترحة
             </h3>
             <div className="max-h-64 overflow-y-auto space-y-3">
-              {shortSuggestions.map((suggestion: any, i: number) => (
+              {shortSuggestions.map((suggestion, i) => (
                 <div key={i} className="p-3 rounded border border-border/50 bg-background/50">
                   <p className="text-xs text-muted-foreground mb-2">{suggestion.key}</p>
                   <p className="text-xs mb-2"><strong>الأصلي:</strong> {suggestion.original}</p>
@@ -118,7 +118,7 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
                       <p className="p-2 bg-primary/5 rounded border border-primary/30">{suggestion.suggested}</p>
                     </div>
                   </div>
-                  <Button size="sm" onClick={() => { handleApplyShorterTranslation(suggestion.key, suggestion.suggested); setShortSuggestions(shortSuggestions.filter((_: any, idx: number) => idx !== i)); }} className="text-xs h-7">
+                  <Button size="sm" onClick={() => { handleApplyShorterTranslation(suggestion.key, suggestion.suggested); setShortSuggestions(shortSuggestions.filter((_, idx) => idx !== i)); }} className="text-xs h-7">
                     ✓ تطبيق المقترح
                   </Button>
                 </div>
@@ -140,7 +140,7 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
               تحسينات مقترحة ({improveResults.length})
             </h3>
             <div className="max-h-80 overflow-y-auto space-y-3">
-              {improveResults.map((item: any, i: number) => (
+              {improveResults.map((item, i) => (
                 <div key={i} className="p-3 rounded border border-border/50 bg-background/50">
                   <p className="text-xs text-muted-foreground mb-2 font-mono">{item.key}</p>
                   <p className="text-xs mb-2"><strong>الأصلي:</strong> {item.original}</p>
@@ -154,7 +154,7 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
                       <p className="p-2 bg-secondary/5 rounded border border-secondary/30" dir="rtl">{item.improved}</p>
                     </div>
                   </div>
-                  <Button size="sm" onClick={() => { handleApplyImprovement(item.key, item.improved); setImproveResults(improveResults.filter((_: any, idx: number) => idx !== i)); }} disabled={item.maxBytes > 0 && item.improvedBytes > item.maxBytes} className="text-xs h-7">
+                  <Button size="sm" onClick={() => { handleApplyImprovement(item.key, item.improved); setImproveResults(improveResults.filter((_, idx) => idx !== i)); }} disabled={item.maxBytes > 0 && item.improvedBytes > item.maxBytes} className="text-xs h-7">
                     ✓ تطبيق التحسين
                   </Button>
                 </div>

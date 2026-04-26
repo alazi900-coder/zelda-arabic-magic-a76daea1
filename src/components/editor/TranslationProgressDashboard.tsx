@@ -5,9 +5,21 @@ import { CheckCircle2, Clock, AlertTriangle, BookOpen, BarChart3, TrendingUp, Za
 import type { EditorState, ExtractedEntry } from "./types";
 import { hasTechnicalTags, isTechnicalText, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "./types";
 
+export interface QualityStats {
+  tooLong: number;
+  nearLimit: number;
+  missingTags: number;
+  placeholderMismatch: number;
+  total: number;
+  problemKeys: Set<string>;
+  damagedTags: number;
+  damagedTagKeys: Set<string>;
+  missingTagKeys: Set<string>;
+}
+
 interface Props {
   state: EditorState;
-  qualityStats: { total: number; [key: string]: any } | null;
+  qualityStats: QualityStats | null;
   glossarySessionStats: { directMatches: number; lockedTerms: number; contextTerms: number; batchesCompleted: number; totalBatches: number; textsTranslated: number; freeTranslations: number };
   aiRequestsToday: number;
   aiRequestsMonth: number;
@@ -189,7 +201,7 @@ export default function TranslationProgressDashboard({ state, qualityStats, glos
           </div>
           <div className="p-2 rounded bg-destructive/10 border border-destructive/20">
             <AlertTriangle className="w-4 h-4 mx-auto mb-1 text-destructive" />
-            <div className="font-bold text-destructive">{qualityStats?.problems || 0}</div>
+            <div className="font-bold text-destructive">{qualityStats?.problemKeys.size || 0}</div>
             <div className="text-muted-foreground">مشاكل</div>
           </div>
         </div>

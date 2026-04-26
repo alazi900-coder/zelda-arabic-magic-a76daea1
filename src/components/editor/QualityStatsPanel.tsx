@@ -3,12 +3,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { BarChart3, Filter, Wrench } from "lucide-react";
+import type { FilterStatus } from "./types";
 
 interface QualityStatsPanelProps {
   qualityStats: { tooLong: number; nearLimit: number; missingTags: number; placeholderMismatch: number; total: number; problemKeys: Set<string>; damagedTags: number; damagedTagKeys: Set<string>; missingTagKeys: Set<string> };
   needsImproveCount: { total: number; tooShort: number; tooLong: number; stuck: number; mixed: number };
   translatedCount: number;
-  setFilterStatus: (status: any) => void;
+  setFilterStatus: (status: FilterStatus) => void;
   setShowQualityStats: (show: boolean) => void;
   onFixDamagedTags?: () => void;
   onFilterMissingTags?: () => void;

@@ -67,7 +67,8 @@ export async function refreshOpenRouterModels(): Promise<OpenRouterModelOption[]
     throw new Error(msg);
   }
   const data = await resp.json();
-  const models: OpenRouterModelOption[] = (data?.models || []).map((m: any) => ({
+  type RawModel = { id: string; label: string; desc: string; badge?: string };
+  const models: OpenRouterModelOption[] = ((data?.models || []) as RawModel[]).map((m) => ({
     id: m.id,
     label: m.label,
     desc: m.desc,

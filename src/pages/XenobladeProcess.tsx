@@ -597,7 +597,7 @@ const XenobladeProcess = () => {
       });
       await idbSet("editorGame", "xenoblade");
       // Verify save worked
-      const verifyState = await idbGet<{ entries?: any[]; translations?: Record<string, string> }>("editorState");
+      const verifyState = await idbGet<{ entries?: unknown[]; translations?: Record<string, string> }>("editorState");
       if (!verifyState?.entries || verifyState.entries.length !== allEntries.length) {
         addLog(`⚠️ تحذير: تم حفظ ${verifyState?.entries?.length || 0} من ${allEntries.length} نص - قد تكون مساحة التخزين محدودة`);
       } else {

@@ -1539,7 +1539,7 @@ const Editor = () => {
             )}
 
             {/* Quick-fix bar for deep diagnostic filters */}
-            {(['xeno-n-missing', 'excessive-lines', 'newline-diff', 'identical-original'] as const).includes(editor.filterStatus as any) && editor.filteredEntries.length > 0 && (
+            {(['xeno-n-missing', 'excessive-lines', 'newline-diff', 'identical-original'] as readonly string[]).includes(editor.filterStatus) && editor.filteredEntries.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-2 p-2 rounded bg-primary/5 border border-primary/20">
                 <span className="text-xs font-display text-primary">
                   🔧 {editor.filteredEntries.length} نص مطابق للفلتر

@@ -255,8 +255,10 @@ export function useEditorState() {
     const protectedSet = new Set<string>(
       Array.isArray(stored.protectedEntries) ? (stored.protectedEntries as string[]) : []
     );
+    // technicalBypass is declared as Set<string> on EditorState but serialized as string[]
+    const storedBypass = (stored as unknown as { technicalBypass?: unknown }).technicalBypass;
     const bypassSet = new Set<string>(
-      Array.isArray((stored as any).technicalBypass) ? ((stored as any).technicalBypass as string[]) : []
+      Array.isArray(storedBypass) ? (storedBypass as string[]) : []
     );
     const arabicRegex = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF\u0750-\u077F\u08A0-\u08FF]/;
     for (const entry of stored.entries) {
@@ -371,7 +373,7 @@ export function useEditorState() {
 
       const stored = await idbGet<EditorState>("editorState");
       if (stored && stored.entries && stored.entries.length > 0) {
-        const isFreshExtraction = !!(stored as any).freshExtraction;
+        const isFreshExtraction = !!(stored as { freshExtraction?: unknown }).freshExtraction;
         
         if (isFreshExtraction) {
           // Freshly extracted data — load directly, no recovery dialog

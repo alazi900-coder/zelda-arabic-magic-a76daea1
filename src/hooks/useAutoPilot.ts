@@ -424,7 +424,11 @@ export function useAutoPilot({
             });
             if (resp.ok) {
               const data = await resp.json();
-              if (data.weakEntries) allWeak.push(...data.weakEntries.map((w: any) => ({ key: w.key, suggestion: w.suggestion })));
+              if (data.weakEntries) {
+                for (const w of data.weakEntries as { key: string; suggestion?: string }[]) {
+                  if (w.suggestion) allWeak.push({ key: w.key, suggestion: w.suggestion });
+                }
+              }
             }
           } catch (err) { if ((err as Error).name === 'AbortError') throw err; }
           reviewed += batch.length;

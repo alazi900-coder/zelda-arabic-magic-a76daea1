@@ -19,7 +19,7 @@ import type { EnhanceResult } from "@/components/editor/TranslationEnhancePanel"
 /** Shape used by handleApplyConsistencyFix — note variants here include `file`. */
 export interface ConsistencyPanelGroup {
   term: string;
-  variants: { key: string; translation: string; file?: string }[];
+  variants: { key: string; translation: string; file: string }[];
 }
 
 export interface ConsistencyPanelResults {

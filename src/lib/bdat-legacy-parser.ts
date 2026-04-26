@@ -55,30 +55,32 @@ export function unscrambleSection(buf: Uint8Array, startIdx: number, endIdx: num
   }
 }
 
-interface LegacyTableHeader {
-  valid: boolean;
-  flags: number;
-  nameTableOffset: number;
-  rowLength: number;
-  hashTableOffset: number;
-  hashSlotCount: number;
-  rowDataOffset: number;
-  rowCount: number;
-  baseId: number;
-  scrambleKey: number;
-  stringTableOffset: number;
-  stringTableLength: number;
-  colNodeOffset: number;
-  colNodeCount: number;
-  headerSize: number; // 64 for XCDE, 32 for Wii/3DS
-}
+type LegacyTableHeader =
+  | { valid: false }
+  | {
+      valid: true;
+      flags: number;
+      nameTableOffset: number;
+      rowLength: number;
+      hashTableOffset: number;
+      hashSlotCount: number;
+      rowDataOffset: number;
+      rowCount: number;
+      baseId: number;
+      scrambleKey: number;
+      stringTableOffset: number;
+      stringTableLength: number;
+      colNodeOffset: number;
+      colNodeCount: number;
+      headerSize: number; // 64 for XCDE, 32 for Wii/3DS
+    };
 
 function parseLegacyTableHeader(data: Uint8Array, tableOffset: number): LegacyTableHeader {
   const view = new DataView(data.buffer, data.byteOffset + tableOffset);
   
   const magic = String.fromCharCode(data[tableOffset], data[tableOffset + 1], data[tableOffset + 2], data[tableOffset + 3]);
   if (magic !== 'BDAT') {
-    return { valid: false } as any;
+    return { valid: false };
   }
 
   const flags = data[tableOffset + 4];

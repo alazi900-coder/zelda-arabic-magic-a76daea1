@@ -22,7 +22,7 @@ const Install = () => {
 
     // Detect iOS
     const ua = navigator.userAgent;
-    setIsIOS(/iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream);
+    setIsIOS(/iPad|iPhone|iPod/.test(ua) && !(window as Window & { MSStream?: unknown }).MSStream);
 
     const handler = (e: Event) => {
       e.preventDefault();

@@ -14,7 +14,7 @@ export function useEditorScanResults() {
 
   // === Consistency ===
   const [checkingConsistency, setCheckingConsistency] = useState(false);
-  const [consistencyResults, setConsistencyResults] = useState<{ groups: any[]; aiSuggestions: { best: string; reason: string }[] } | null>(null);
+  const [consistencyResults, setConsistencyResults] = useState<import("@/hooks/useEditorReview").ConsistencyPanelResults | null>(null);
 
   // === Text cleanup scan results ===
   const [scanningSentences, setScanningSentences] = useState(false);

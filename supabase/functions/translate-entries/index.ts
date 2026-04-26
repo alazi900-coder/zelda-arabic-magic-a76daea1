@@ -1384,32 +1384,61 @@ ${textsBlock}
 
   if (effectiveKey) {
     // Map model names for direct Gemini API; only gemini models work with personal key
-    const geminiModelName = (aiModel === 'gemini-2.5-pro') ? 'gemini-2.5-pro' : (aiModel === 'gemini-2.5-flash') ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModelName}:generateContent?key=${effectiveKey}`;
-    const geminiResponse = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' }] },
-        generationConfig: { temperature: 0.3 },
-      }),
-    });
+    const requestedModel = (aiModel === 'gemini-2.5-pro') ? 'gemini-2.5-pro' : (aiModel === 'gemini-2.5-flash') ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
+    // On free tier each model has its own daily quota (200/250/100 req/day).
+    // When the chosen one is exhausted (429), auto-rotate through the others
+    // before bubbling up so the user gets ~550 req/day combined.
+    const ROTATION = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+    const modelSequence = [requestedModel, ...ROTATION.filter(m => m !== requestedModel)];
 
-    if (!geminiResponse.ok) {
-      const errText = await geminiResponse.text();
-      console.error('Gemini API error:', errText);
-      if (geminiResponse.status === 429 || geminiResponse.status === 503) {
-        if (userApiKey?.trim()) {
-          // المستخدم أدخل مفتاحه الشخصي لكنه تجاوز الحد المجاني
-          throw new Error('تجاوزت الحد المجاني لـ Gemini اليومي — انتظر بضع ساعات أو جرّب نموذجاً آخر (Gemini 2.5 Pro / Flash)');
+    const callGemini = async (modelName: string) => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${effectiveKey}`;
+      return await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          systemInstruction: { parts: [{ text: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' }] },
+          generationConfig: { temperature: 0.3 },
+        }),
+      });
+    };
+
+    let geminiResponse: Response | null = null;
+    let lastErrText = '';
+    let lastStatus = 0;
+    for (const modelName of modelSequence) {
+      const resp = await callGemini(modelName);
+      if (resp.ok) {
+        geminiResponse = resp;
+        if (modelName !== requestedModel) {
+          console.log(`Gemini auto-rotated: ${requestedModel} → ${modelName}`);
         }
-        // مفتاح الخادم تجاوز الحد — نتراجع للـ Lovable AI
-        console.log(`Gemini ${geminiResponse.status} (server key), falling back to Lovable AI...`);
+        break;
+      }
+      lastStatus = resp.status;
+      lastErrText = await resp.text();
+      // Only rotate on rate-limit / overloaded errors when the user supplied
+      // their own key; other errors (auth/invalid key) should fail fast.
+      const isQuotaErr = resp.status === 429 || resp.status === 503;
+      if (!isQuotaErr || !userApiKey?.trim()) {
+        geminiResponse = resp;
+        break;
+      }
+      console.log(`Gemini ${modelName} hit ${resp.status} — trying next model...`);
+    }
+
+    if (!geminiResponse || !geminiResponse.ok) {
+      console.error('Gemini API error:', lastErrText);
+      if (lastStatus === 429 || lastStatus === 503) {
+        if (userApiKey?.trim()) {
+          throw new Error('تجاوزت الحد المجاني لـ Gemini اليومي على كل الموديلات (2.0 Flash + 2.5 Flash + 2.5 Pro) — انتظر ساعات قليلة أو استخدم موفّراً آخر (Cerebras أو Groq)');
+        }
+        console.log(`Gemini ${lastStatus} (server key), falling back to Lovable AI...`);
       } else {
-        if (geminiResponse.status === 400) throw new Error('مفتاح Gemini غير صالح — تحقق منه في Google AI Studio (aistudio.google.com)');
-        if (geminiResponse.status === 403) throw new Error('مفتاح Gemini محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio');
-        throw new Error(`خطأ Gemini: ${geminiResponse.status} — ${errText.slice(0, 200)}`);
+        if (lastStatus === 400) throw new Error('مفتاح Gemini غير صالح — تحقق منه في Google AI Studio (aistudio.google.com)');
+        if (lastStatus === 403) throw new Error('مفتاح Gemini محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio');
+        throw new Error(`خطأ Gemini: ${lastStatus} — ${lastErrText.slice(0, 200)}`);
       }
     } else {
       const geminiData = await geminiResponse.json();

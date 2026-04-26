@@ -100,6 +100,9 @@ import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
 import VirtualizedEntryList from "@/components/editor/VirtualizedEntryList";
 import { AutoPilotPanel } from "@/components/editor/AutoPilotPanel";
 import { PanelSettingsMenu } from "@/components/editor/PanelSettingsMenu";
+import EditorDragOverlay from "@/components/editor/EditorDragOverlay";
+import EditorRecoveryScreen from "@/components/editor/EditorRecoveryScreen";
+import EditorEmptyState from "@/components/editor/EditorEmptyState";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -303,54 +306,17 @@ const Editor = () => {
   // Show recovery dialog if saved session exists
   if (editor.pendingRecovery) {
     return (
-      <div className="min-h-screen flex flex-col">
-        <div className="relative flex flex-col items-center justify-center py-20 px-4 text-center overflow-hidden">
-          <div className="absolute inset-0">
-            <img src={heroBg} alt="" className="w-full h-full object-cover" fetchPriority="high" />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/60 to-background" />
-          </div>
-          <div className="relative z-10 space-y-6">
-            <h2 className="text-2xl md:text-3xl font-display font-black drop-shadow-lg">🔄 جلسة سابقة موجودة</h2>
-            <p className="text-muted-foreground font-body bg-background/40 backdrop-blur-sm rounded-lg px-4 py-2 inline-block">
-              لديك <span className="font-bold text-primary">{editor.pendingRecovery.translationCount}</span> ترجمة محفوظة
-              لـ <span className="font-bold text-primary">{editor.pendingRecovery.entryCount}</span> نص
-            </p>
-            <div className="flex flex-wrap items-center gap-4 justify-center">
-              <Button size="lg" className="font-display font-bold px-8" onClick={editor.handleRecoverSession}>
-                <Save className="w-5 h-5" /> استمر مع الترجمات السابقة ✅
-              </Button>
-              <Button size="lg" variant="destructive" className="font-display font-bold px-8" onClick={editor.handleStartFresh}>
-                <RotateCcw className="w-5 h-5" /> ابدأ من جديد 🆕
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground font-body">اختيار "ابدأ من جديد" سيحذف جميع الترجمات المحفوظة نهائياً</p>
-          </div>
-        </div>
-      </div>
+      <EditorRecoveryScreen
+        translationCount={editor.pendingRecovery.translationCount}
+        entryCount={editor.pendingRecovery.entryCount}
+        onRecover={editor.handleRecoverSession}
+        onStartFresh={editor.handleStartFresh}
+      />
     );
   }
 
   if (!editor.state) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <div className="relative flex flex-col items-center justify-center py-20 px-4 text-center overflow-hidden">
-          <div className="absolute inset-0">
-            <img src={heroBg} alt="" className="w-full h-full object-cover" fetchPriority="high" />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/60 to-background" />
-          </div>
-          <div className="relative z-10">
-            <p className="text-muted-foreground mb-4 bg-background/40 backdrop-blur-sm rounded-lg px-4 py-2 inline-block">لا توجد بيانات للتحرير. يرجى استخراج النصوص أولاً.</p>
-            <br />
-            <div className="flex flex-wrap items-center gap-3 mt-4 justify-center">
-              <Link to={processPath}><Button className="font-display">اذهب لصفحة المعالجة</Button></Link>
-              <Button variant="outline" className="font-display" onClick={editor.loadDemoBdatData}>
-                تحميل بيانات BDAT تجريبية
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <EditorEmptyState processPath={processPath} onLoadDemo={editor.loadDemoBdatData} />;
   }
 
   return (
@@ -362,15 +328,7 @@ const Editor = () => {
         onDrop={handleDrop}
       >
         {/* Drop overlay */}
-        {isDragging && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-4 border-dashed border-primary/50 pointer-events-none">
-            <div className="text-center space-y-3">
-              <Upload className="w-16 h-16 text-primary mx-auto animate-bounce" />
-              <p className="text-2xl font-display font-bold text-primary">أفلت ملف JSON هنا</p>
-              <p className="text-sm text-muted-foreground font-body">سيتم استيراد الترجمات تلقائياً</p>
-            </div>
-          </div>
-        )}
+        <EditorDragOverlay visible={isDragging} />
 
         {/* Hero header */}
         <header className="relative flex flex-col items-center justify-center py-8 md:py-12 px-4 text-center overflow-hidden">

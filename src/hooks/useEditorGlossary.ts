@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { EditorState } from "@/components/editor/types";
 import type { GlossaryMergeDiff } from "@/components/editor/GlossaryMergePreviewDialog";
@@ -216,7 +217,7 @@ export function useEditorGlossary({
           setLastSaved(`📖 تم دمج ${count} مصطلح`);
           setTimeout(() => setLastSaved(""), 4000);
         }
-      } catch { alert('خطأ في قراءة الملف'); }
+      } catch { toast({ title: "خطأ في قراءة الملف", variant: "destructive" }); }
     };
     input.click();
   };
@@ -245,7 +246,7 @@ export function useEditorGlossary({
         setLastSaved(`📖 تم ${replace ? 'تحميل' : 'دمج'} ${name} (${newCount} مصطلح)`);
         setTimeout(() => setLastSaved(""), 3000);
       }
-    } catch { alert(`خطأ في تحميل ${name}`); }
+    } catch { toast({ title: "خطأ في التحميل", description: `خطأ في تحميل ${name}`, variant: "destructive" }); }
   }, [setState, setLastSaved, state?.glossary, computeGlossaryDiffs]);
 
   const handleLoadXC3Glossary = useCallback(() => loadGlossary('/xc3-glossary.txt', 'قاموس Xenoblade Chronicles 3', true), [loadGlossary]);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "@/hooks/use-toast";
 
 /** Read a File as text using FileReader (better Android/WebView compatibility than file.text()) */
 function readFileAsText(file: File): Promise<string> {
@@ -469,7 +470,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     const totalInFile = Object.keys(imported).length;
 
     if (totalInFile === 0) {
-      alert('⚠️ الملف فارغ أو لا يحتوي على ترجمات صالحة.');
+      toast({ title: "⚠️ الملف فارغ", description: "لا يحتوي على ترجمات صالحة.", variant: "destructive" });
       return;
     }
 
@@ -643,11 +644,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     // ── Show warning if no entries are loaded or keys don't match ──
     if (noEntriesLoaded) {
-      alert(
-        `⚠️ لا يوجد ملف BDAT مرفوع في الجلسة الحالية!\n\n` +
-        `الملف يحتوي على ${totalInFile} ترجمة لكن لن تظهر في المحرر لأنه لا توجد مدخلات محملة.\n\n` +
-        `الحل: اذهب إلى صفحة المعالجة وارفع ملفات BDAT أولاً، ثم عد وأعد الاستيراد.`
-      );
+      toast({
+        title: "⚠️ لا يوجد ملف BDAT مرفوع",
+        description: `الملف يحتوي على ${totalInFile} ترجمة لكن لن تظهر في المحرر. ارفع ملفات BDAT أولاً من صفحة المعالجة.`,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -806,7 +807,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   const applyImport = useCallback((cleanedImported: Record<string, string>, msg: string, repaired: { wasTruncated?: boolean; skippedCount?: number }) => {
     setState(prev => { if (!prev) return null; return { ...prev, translations: { ...prev.translations, ...cleanedImported } }; });
 
-    alert(msg);
+    toast({ title: "✅ تم الاستيراد", description: msg });
     setLastSaved(msg);
 
     // Apply BiDi fix to entries that have Arabic in the ORIGINAL and no imported translation
@@ -872,7 +873,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     if (Object.keys(filtered).length > 0) {
       applyImport(filtered, msg + ` (${importConflicts.length} ترجمة حالية لم تُستبدل)`, repaired);
     } else {
-      alert('تم إلغاء الاستيراد — لم يتم تغيير أي ترجمة.');
+      toast({ title: "تم إلغاء الاستيراد", description: "لم يتم تغيير أي ترجمة." });
     }
   }, [pendingImport, importConflicts, applyImport]);
 
@@ -886,7 +887,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         await processJsonImport(rawText, file.name);
       } catch (err) {
         console.error('Drop import error:', err);
-        alert(`ملف JSON غير صالح\n\nالخطأ: ${err instanceof Error ? err.message : err}`);
+        toast({ title: "ملف JSON غير صالح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
       return;
     }
@@ -897,7 +898,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         await processJsonImport(text, 'لصق من الحافظة');
       } catch (err) {
         console.error('Paste import error:', err);
-        alert(`نص JSON غير صالح\n\nالخطأ: ${err instanceof Error ? err.message : err}`);
+        toast({ title: "نص JSON غير صالح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
     }
   }, [processJsonImport]);
@@ -914,7 +915,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         await processJsonImport(rawText, file.name);
       } catch (err) {
         console.error('JSON import error:', err);
-        alert(`ملف JSON غير صالح\n\nالخطأ: ${err instanceof Error ? err.message : err}`);
+        toast({ title: "ملف JSON غير صالح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
     };
     input.click();
@@ -962,7 +963,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       try {
         const text = await readFileAsText(file);
         const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) { alert('ملف CSV فارغ أو غير صالح'); return; }
+        if (lines.length < 2) { toast({ title: "ملف CSV فارغ أو غير صالح", variant: "destructive" }); return; }
 
         const header = lines[0].toLowerCase();
         const hasHeader = header.includes('file') || header.includes('translation') || header.includes('original');
@@ -988,14 +989,14 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           imported++;
         }
 
-        if (imported === 0) { alert('لم يتم العثور على ترجمات في الملف'); return; }
+        if (imported === 0) { toast({ title: "لم يتم العثور على ترجمات في الملف", variant: "destructive" }); return; }
         setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
         const msg = isFilterActive
           ? `✅ تم استيراد ${imported} ترجمة من CSV (${filterLabel})`
           : `✅ تم استيراد ${imported} ترجمة من CSV`;
         setLastSaved(msg);
         setTimeout(() => setLastSaved(""), 4000);
-      } catch { alert('خطأ في قراءة ملف CSV'); }
+      } catch { toast({ title: "خطأ في قراءة ملف CSV", variant: "destructive" }); }
     };
     input.click();
   };
@@ -1057,7 +1058,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         await processJsonImport(rawText, file.name);
       } catch (err) {
         console.error('External JSON import error:', err);
-        alert(`ملف JSON غير صالح\n\nالخطأ: ${err instanceof Error ? err.message : err}`);
+        toast({ title: "ملف JSON غير صالح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
     };
     input.click();
@@ -1162,7 +1163,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, 'text/xml');
         const parseError = doc.querySelector('parsererror');
-        if (parseError) { alert('ملف XLIFF غير صالح'); return; }
+        if (parseError) { toast({ title: "ملف XLIFF غير صالح", variant: "destructive" }); return; }
 
         const units = doc.querySelectorAll('trans-unit');
         const updates: Record<string, string> = {};
@@ -1178,13 +1179,13 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           updates[id] = normalizeArabicPresentationForms(target.textContent.trim());
         });
 
-        if (Object.keys(updates).length === 0) { alert('لم يتم العثور على ترجمات في ملف XLIFF'); return; }
+        if (Object.keys(updates).length === 0) { toast({ title: "لم يتم العثور على ترجمات في ملف XLIFF", variant: "destructive" }); return; }
         setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
         setLastSaved(`✅ تم استيراد ${Object.keys(updates).length} ترجمة من XLIFF — ${file.name}`);
         setTimeout(() => setLastSaved(""), 4000);
       } catch (err) {
         console.error('XLIFF import error:', err);
-        alert(`خطأ في قراءة ملف XLIFF\n\n${err instanceof Error ? err.message : err}`);
+        toast({ title: "خطأ في قراءة ملف XLIFF", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
     };
     input.click();
@@ -1229,7 +1230,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, 'text/xml');
         const parseError = doc.querySelector('parsererror');
-        if (parseError) { alert('ملف TMX غير صالح'); return; }
+        if (parseError) { toast({ title: "ملف TMX غير صالح", variant: "destructive" }); return; }
 
         const sourceToArabic = new Map<string, string>();
         const tuidToArabic = new Map<string, string>();
@@ -1254,7 +1255,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         });
 
         if (tuidToArabic.size === 0 && sourceToArabic.size === 0) {
-          alert('لم يتم العثور على ترجمات عربية في ملف TMX');
+          toast({ title: "لم يتم العثور على ترجمات عربية في ملف TMX", variant: "destructive" });
           return;
         }
 
@@ -1308,7 +1309,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         }
 
         if (Object.keys(updates).length === 0) {
-          alert(`لم يتم مطابقة أي ترجمة.\n\nالملف يحتوي ${tuidToArabic.size + sourceToArabic.size} زوج ترجمة لكن لم يتطابق أي منها مع النصوص الحالية.`);
+          toast({ title: "لم يتم مطابقة أي ترجمة", description: `الملف يحتوي ${tuidToArabic.size + sourceToArabic.size} زوج ترجمة لكن لم يتطابق أي منها مع النصوص الحالية.`, variant: "destructive" });
           return;
         }
 
@@ -1331,7 +1332,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         }
 
         if (Object.keys(updates).length === 0) {
-          alert('لم يتم تطبيق أي ترجمة بعد إلغاء المطابقات الجزئية.');
+          toast({ title: "لم يتم تطبيق أي ترجمة", description: "بعد إلغاء المطابقات الجزئية." });
           return;
         }
 
@@ -1346,7 +1347,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         setTimeout(() => setLastSaved(""), 5000);
       } catch (err) {
         console.error('TMX import error:', err);
-        alert(`خطأ في قراءة ملف TMX\n\n${err instanceof Error ? err.message : err}`);
+        toast({ title: "خطأ في قراءة ملف TMX", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
     };
     input.click();
@@ -1395,7 +1396,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   /** Import old-format JSON with legacy sequential keys */
   const handleImportLegacyJson = () => {
     if (!state || state.entries.length === 0) {
-      alert('⚠️ لا توجد مدخلات محملة! ارفع ملفات BDAT أولاً من صفحة المعالجة.');
+      toast({ title: "⚠️ لا توجد مدخلات محملة", description: "ارفع ملفات BDAT أولاً من صفحة المعالجة.", variant: "destructive" });
       return;
     }
     const input = document.createElement('input');
@@ -1410,14 +1411,14 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         const imported = repaired.parsed;
         const totalInFile = Object.keys(imported).length;
         if (totalInFile === 0) {
-          alert('⚠️ الملف فارغ أو لا يحتوي على ترجمات صالحة.');
+          toast({ title: "⚠️ الملف فارغ", description: "لا يحتوي على ترجمات صالحة.", variant: "destructive" });
           return;
         }
 
         const { converted, convertedCount, skippedCount } = convertLegacyKeys(imported, state.entries);
 
         if (convertedCount === 0) {
-          alert(`⚠️ لم يتم تحويل أي مفتاح قديم!\n\nتأكد أن الملف يستخدم التنسيق القديم مثل:\n"bdat-bin:filename.bdat:0": "ترجمة"\n\nوأن ملفات BDAT المرفوعة تطابق الملف المستورد.`);
+          toast({ title: "⚠️ لم يتم تحويل أي مفتاح قديم", description: "تأكد أن الملف يستخدم التنسيق القديم مثل \"bdat-bin:filename.bdat:0\" وأن ملفات BDAT المرفوعة تطابق الملف المستورد.", variant: "destructive" });
           return;
         }
 
@@ -1439,7 +1440,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         setTimeout(() => setLastSaved(""), 5000);
       } catch (err) {
         console.error('Legacy JSON import error:', err);
-        alert(`ملف JSON غير صالح\n\nالخطأ: ${err instanceof Error ? err.message : err}`);
+        toast({ title: "ملف JSON غير صالح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
     };
     input.click();
@@ -1462,7 +1463,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const rawText = JSON.stringify(bundled);
       await processJsonImport(rawText, 'الترجمات المدمجة 📦');
     } catch (err) {
-      alert(`❌ فشل تحميل الترجمات المدمجة: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل تحميل الترجمات المدمجة", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setLoadingBundled(false);
     }
@@ -1473,7 +1474,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   const handleSaveBundledTranslations = useCallback(async () => {
     setSavingBundled(true);
     try {
-      let bundled: Record<string, any> = {};
+      let bundled: Record<string, string> = {};
       try {
         bundled = await fetchBundledTranslations();
       } catch { /* start fresh */ }
@@ -1501,13 +1502,13 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.click();
       URL.revokeObjectURL(url);
       setBundledCount(Object.keys(bundled).length);
-      alert(`✅ تم حفظ ${Object.keys(bundled).length} ترجمة${uploadResult.success ? ' ورفعها للسحابة ☁️' : ' (محلياً فقط)'}`);
+      toast({ title: "✅ تم حفظ الترجمات", description: `${Object.keys(bundled).length} ترجمة${uploadResult.success ? ' ورفعها للسحابة ☁️' : ' (محلياً فقط)'}` });
       // Auto-merge to bundled if enabled
       if (autoMergeToBundledRef.current) {
         setTimeout(() => handleMergeToBundledRef.current?.(), 500);
       }
     } catch (err) {
-      alert(`❌ فشل حفظ الترجمات: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل حفظ الترجمات", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setSavingBundled(false);
     }
@@ -1525,7 +1526,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(`❌ فشل التحميل: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل التحميل", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
   }, []);
 
@@ -1561,7 +1562,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       }
 
       if (cleaned === 0) {
-        alert('✅ الترجمات نظيفة بالفعل — لا تغييرات مطلوبة');
+        toast({ title: "✅ الترجمات نظيفة بالفعل", description: "لا تغييرات مطلوبة" });
         return;
       }
 
@@ -1575,9 +1576,9 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.download = 'bundled-translations-cleaned.json';
       a.click();
       URL.revokeObjectURL(url);
-      alert(`✅ تم تنظيف ${cleaned} ترجمة من أصل ${Object.keys(bundled).length}${uploadResult.success ? ' ☁️ تم الرفع للسحابة' : ''}\n\n• توحيد الألف والهمزات\n• إزالة المسافات الزائدة\n• إزالة الألف المكررة\n• تنظيف رموز الهروب`);
+      toast({ title: "✅ تم التنظيف", description: `${cleaned} ترجمة من أصل ${Object.keys(bundled).length}${uploadResult.success ? ' ☁️ تم الرفع للسحابة' : ''}` });
     } catch (err) {
-      alert(`❌ فشل التنظيف: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل التنظيف", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setCleaningBundled(false);
     }
@@ -1635,7 +1636,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         formatSection('تجاوز حد البايت (> 255)', byteLimitExceeded);
 
       if (issues === 0) {
-        alert(`✅ فحص ${report.total} ترجمة — لم يتم العثور على مشاكل!`);
+        toast({ title: "✅ لم يتم العثور على مشاكل", description: `فحص ${report.total} ترجمة` });
       } else {
         // Auto-download the report
         const blob = new Blob([textReport], { type: 'text/plain;charset=utf-8' });
@@ -1646,17 +1647,13 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         a.click();
         URL.revokeObjectURL(url);
 
-        alert(
-          `📊 نتائج فحص الجودة (${report.total} ترجمة):\n\n` +
-          `• نصوص فارغة: ${emptyValues.length}\n` +
-          `• نصوص قصيرة جداً: ${shortTexts.length}\n` +
-          `• لغة مختلطة: ${mixedLanguage.length}\n` +
-          `• تجاوز حد البايت: ${byteLimitExceeded.length}\n\n` +
-          `📄 تم تحميل التقرير التفصيلي تلقائياً`
-        );
+        toast({
+          title: `📊 نتائج فحص الجودة (${report.total} ترجمة)`,
+          description: `فارغة: ${emptyValues.length} • قصيرة: ${shortTexts.length} • مختلطة: ${mixedLanguage.length} • تجاوز بايت: ${byteLimitExceeded.length} — 📄 تم تحميل التقرير`,
+        });
       }
     } catch (err) {
-      alert(`❌ فشل الفحص: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل الفحص", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setCheckingBundledQuality(false);
     }
@@ -1670,7 +1667,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   const handleDetectBundledConflicts = useCallback(async () => {
     if (!state?.entries?.length) {
-      alert('⚠️ يجب رفع ملف BDAT أولاً لمعرفة النصوص الإنجليزية الأصلية');
+      toast({ title: "⚠️ يجب رفع ملف BDAT أولاً", description: "لمعرفة النصوص الإنجليزية الأصلية", variant: "destructive" });
       return;
     }
     setConflictDetectionRunning(true);
@@ -1702,7 +1699,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       setBundledConflicts(conflicts);
 
       if (conflicts.length === 0) {
-        alert(`✅ لا توجد ترجمات متضاربة — كل نص إنجليزي له ترجمة واحدة موحدة`);
+        toast({ title: "✅ لا توجد ترجمات متضاربة", description: "كل نص إنجليزي له ترجمة واحدة موحدة" });
       } else {
         // Generate and download report
         let report = `📊 تقرير الترجمات المتضاربة\nالتاريخ: ${new Date().toLocaleString('ar-SA')}\nعدد التضاربات: ${conflicts.length}\n\n`;
@@ -1732,14 +1729,14 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         a.click();
         URL.revokeObjectURL(url);
 
-        alert(
-          `⚠️ تم العثور على ${conflicts.length} تضارب في الترجمات!\n\n` +
-          `📄 تم تحميل التقرير التفصيلي\n\n` +
-          `يمكنك الضغط على "توحيد الترجمات" لاختيار الترجمة الأكثر شيوعاً تلقائياً`
-        );
+        toast({
+          title: `⚠️ تم العثور على ${conflicts.length} تضارب`,
+          description: `تم تحميل التقرير التفصيلي. استخدم "توحيد الترجمات" لاختيار الأكثر شيوعاً تلقائياً.`,
+          variant: "destructive",
+        });
       }
     } catch (err) {
-      alert(`❌ فشل الفحص: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل الفحص", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setConflictDetectionRunning(false);
     }
@@ -1785,9 +1782,9 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       a.click();
       URL.revokeObjectURL(url);
       setBundledConflicts(null);
-      alert(`✅ تم توحيد ${unified} ترجمة متضاربة${uploadResult.success ? ' ☁️ تم الرفع للسحابة' : ''}`);
+      toast({ title: "✅ تم التوحيد", description: `${unified} ترجمة متضاربة${uploadResult.success ? ' ☁️ تم الرفع للسحابة' : ''}` });
     } catch (err) {
-      alert(`❌ فشل التوحيد: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل التوحيد", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setUnifyingConflicts(false);
     }
@@ -1828,7 +1825,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         setMergeToBundledItems(diffs);
       }
     } catch (err) {
-      alert(`❌ فشل المقارنة: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل المقارنة", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setMergingToBundled(false);
     }
@@ -1876,7 +1873,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       setLastSaved(`✅ تم دمج ${accepted.length} تعديل${uploadResult.success ? ' ☁️ ورفعها للسحابة' : ''}`);
       setTimeout(() => setLastSaved(""), 4000);
     } catch (err) {
-      alert(`❌ فشل التحميل: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل التحميل", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
   }, [mergeToBundledItems, setLastSaved]);
 
@@ -1896,7 +1893,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         .map(([key, arabic]) => ({ key, arabic }));
 
       if (candidates.length === 0) {
-        alert('✅ لا توجد ترجمات قصيرة تحتاج تدقيق');
+        toast({ title: "✅ لا توجد ترجمات قصيرة تحتاج تدقيق" });
         return;
       }
       const fnResp = await fetch(getEdgeFunctionUrl("proofread-bundled"), {
@@ -1916,7 +1913,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const { results, total } = await fnResp.json();
 
       if (!results || results.length === 0) {
-        alert(`✅ تم فحص ${total} ترجمة — لم يتم العثور على أخطاء إملائية`);
+        toast({ title: "✅ لم يتم العثور على أخطاء إملائية", description: `تم فحص ${total} ترجمة` });
         return;
       }
 
@@ -1960,14 +1957,12 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       URL.revokeObjectURL(corrUrl);
 
       setBundledCount(Object.keys(corrected).length);
-      alert(
-        `📝 تم التصحيح الإملائي:\n\n` +
-        `• الترجمات المفحوصة: ${total}\n` +
-        `• التصحيحات: ${results.length}\n\n` +
-        `📄 تم تحميل التقرير والملف المصحح${uploadResult.success ? ' ☁️ ورفعها للسحابة' : ''}`
-      );
+      toast({
+        title: "📝 تم التصحيح الإملائي",
+        description: `المفحوصة: ${total} • التصحيحات: ${results.length} — 📄 تم تحميل التقرير${uploadResult.success ? ' ☁️ ورفعها للسحابة' : ''}`,
+      });
     } catch (err) {
-      alert(`❌ فشل التصحيح: ${err instanceof Error ? err.message : err}`);
+      toast({ title: "❌ فشل التصحيح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setProofreadingBundled(false);
     }

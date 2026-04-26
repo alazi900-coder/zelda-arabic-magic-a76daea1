@@ -10,11 +10,14 @@ import UpdateBanner from "@/components/UpdateBanner";
 import { lazy, Suspense, forwardRef, type ComponentType } from "react";
 import { Loader2 } from "lucide-react";
 
-const lazyWithIgnoredRef = (importer: () => Promise<{ default: ComponentType<any> }>) =>
+type LazyProps = Record<string, unknown>;
+const lazyWithIgnoredRef = (
+  importer: () => Promise<{ default: ComponentType<LazyProps> }>,
+) =>
   lazy(async () => {
     const mod = await importer();
-    const Component = mod.default as ComponentType<any>;
-    const Wrapped = forwardRef<unknown, any>((props, _ref) => <Component {...props} />);
+    const Component = mod.default;
+    const Wrapped = forwardRef<unknown, LazyProps>((props, _ref) => <Component {...props} />);
     Wrapped.displayName = `LazyWithIgnoredRef(${Component.displayName || Component.name || "Component"})`;
     return { default: Wrapped };
   });

@@ -38,7 +38,6 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   drBuilding,
   setDrBuilding,
 }) => (
-  <div id="editor-build-section">
   <Collapsible open={showBuildSection} onOpenChange={setShowBuildSection}>
     <div className="flex items-center justify-between mb-3">
       <CollapsibleTrigger asChild>
@@ -176,7 +175,6 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       </div>
     </CollapsibleContent>
   </Collapsible>
-  </div>
 );
 
 export default EditorBuildSection;

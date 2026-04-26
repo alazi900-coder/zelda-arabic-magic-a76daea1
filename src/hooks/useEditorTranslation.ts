@@ -306,7 +306,7 @@ export function useEditorTranslation({
       batchEntries: { key: string; original: string }[],
       signal: AbortSignal,
       depth = 0,
-    ): Promise<{ translations: Record<string, string>; charsUsed?: number; glossaryStats?: any }> => {
+    ): Promise<{ translations: Record<string, string>; charsUsed?: number; glossaryStats?: { directMatches?: number; lockedTerms?: number; contextTerms?: number } }> => {
       try {
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',

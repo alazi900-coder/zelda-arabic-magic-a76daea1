@@ -1,6 +1,6 @@
-import { useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { hasArabicPresentationForms, removeArabicPresentationForms } from "@/lib/arabic-processing";
 import type {
   EditorState, ExtractedEntry,
   ReviewResults, ShortSuggestion, ImproveResult,
@@ -183,7 +183,6 @@ export function useEditorReview(params: UseEditorReviewParams) {
   // === Fix stuck characters ===
   const handleFixAllStuckCharacters = () => {
     if (!state) return;
-    const { hasArabicPresentationForms, removeArabicPresentationForms } = require("@/lib/arabic-processing");
     let fixedCount = 0;
     const updates: Record<string, string> = {};
     for (const [key, translation] of Object.entries(state.translations)) {
@@ -610,13 +609,13 @@ export function useEditorReview(params: UseEditorReviewParams) {
       setTranslateProgress(`${actionLabels[action]} — ${totalEntries} نص (${totalBatches} دفعات)`);
       const glossarySlice = activeGlossary?.split('\n').slice(0, 150).join('\n');
 
-      let allLiteralResults: LiteralResult[] = [];
-      let allStyleResults: StyleResult[] = [];
-      let allAlternativeResults: AlternativeResult[] = [];
-      let allFullResults: FullAnalysisResult[] = [];
-      let allInconsistencies: ConsistencyItem[] = [];
+      const allLiteralResults: LiteralResult[] = [];
+      const allStyleResults: StyleResult[] = [];
+      const allAlternativeResults: AlternativeResult[] = [];
+      const allFullResults: FullAnalysisResult[] = [];
+      const allInconsistencies: ConsistencyItem[] = [];
       let totalScore = 0;
-      let summaries: string[] = [];
+      const summaries: string[] = [];
 
       const commitPartialResults = (action: string) => {
         if (action === 'literal-detect' && allLiteralResults.length > 0) setLiteralResults([...allLiteralResults]);

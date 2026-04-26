@@ -117,7 +117,7 @@ const XenobladeProcess = () => {
 
     try {
       // Process binary BDAT files locally in the browser
-      let bdatBinaryEntries: { msbtFile: string; index: number; label: string; original: string; maxBytes: number; type: string; columnName?: string }[] = [];
+      const bdatBinaryEntries: { msbtFile: string; index: number; label: string; original: string; maxBytes: number; type: string; columnName?: string }[] = [];
       const bdatBinaryBuffers: Record<string, ArrayBuffer> = {};
       
       if (bdatBinaryFiles.length > 0) {
@@ -404,7 +404,7 @@ const XenobladeProcess = () => {
         }
       }
 
-      let finalTranslations: Record<string, string> = { ...autoTranslations };
+      const finalTranslations: Record<string, string> = { ...autoTranslations };
 
       if (mergeMode === "merge") {
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
@@ -498,7 +498,7 @@ const XenobladeProcess = () => {
           const normMatch = normalizedMap.get(nfp);
           if (normMatch) return normMatch;
           // 1-4. Multi-level fallbacks
-          let nk = exactMap.get(`${filename}:${tableHash}:${rowIndex}:${colHash}`);
+          const nk = exactMap.get(`${filename}:${tableHash}:${rowIndex}:${colHash}`);
           if (nk) return nk;
           const ntC = noTableMap.get(`${filename}:*:${rowIndex}:${colHash}`);
           if (ntC && ntC.length === 1) return ntC[0];
@@ -716,7 +716,7 @@ const XenobladeProcess = () => {
                 type="file"
                 multiple
                 className="hidden"
-                // @ts-ignore - webkitdirectory is non-standard but widely supported
+                // @ts-expect-error - webkitdirectory is non-standard but widely supported
                 webkitdirectory=""
                 directory=""
                 onChange={e => { handleFileSelect(e.target.files); e.target.value = ''; }}

@@ -72,7 +72,7 @@ export function parseLin0Container(buffer: ArrayBuffer): PakEntry[] | null {
 
       // Read null-terminated UTF-8 name
       const nameBytes = bytes.slice(pos, pos + nameLen);
-      let name = new TextDecoder("utf-8", { fatal: false }).decode(nameBytes).replace(/\0+$/, "");
+      const name = new TextDecoder("utf-8", { fatal: false }).decode(nameBytes).replace(/\0+$/, "");
       pos += nameLen;
 
       if (pos + 4 > bytes.length) return null;

@@ -42,7 +42,7 @@ function fixQuotes(text: string): string {
   // Don't touch quotes inside tags
   let result = '';
   let inTag = false;
-  let quoteStack: string[] = [];
+  const quoteStack: string[] = [];
   
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];

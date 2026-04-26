@@ -216,7 +216,7 @@ function parseColumns(tableData: Uint8Array, raw: BdatTable['_raw'], unhashFn: (
   }
 
   // Calculate offsets using rowLength to determine layout
-  let simpleTotal = colDefs.reduce((sum, c) => sum + c.size, 0);
+  const simpleTotal = colDefs.reduce((sum, c) => sum + c.size, 0);
   
   // If simple cumulative sizes don't match rowLength, the format uses
   // padded storage where small types (1-byte) are stored in wider slots.

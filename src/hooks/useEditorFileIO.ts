@@ -579,7 +579,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       // 1-4. Multi-level fallback
       const fp = bdatKeyFingerprint(oldKey);
       if (!fp) return undefined;
-      let newKey = maps.exactMap.get(fp.exact);
+      const newKey = maps.exactMap.get(fp.exact);
       if (newKey) return newKey;
       const ntCandidates = maps.noTableMap.get(fp.noTable);
       if (ntCandidates && ntCandidates.length === 1) return ntCandidates[0];
@@ -617,8 +617,8 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       }
     }
 
-    let matchedCount = Object.keys(cleanedImported).filter(k => entryKeySet.has(k)).length;
-    let unmatchedCount = Object.keys(cleanedImported).length - matchedCount;
+    const matchedCount = Object.keys(cleanedImported).filter(k => entryKeySet.has(k)).length;
+    const unmatchedCount = Object.keys(cleanedImported).length - matchedCount;
     const noEntriesLoaded = (state?.entries || []).length === 0;
 
     // Backward compat: convert legacy FFF9-FFFC markers in imported translations to PUA markers

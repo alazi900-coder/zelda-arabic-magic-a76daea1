@@ -231,7 +231,7 @@ function decodeMiblToRGBA(miblData: Uint8Array): { rgba: Uint8Array; width: numb
       rgba = new Uint8Array(w * h * 4);
       rgba.set(linear.subarray(0, rgba.length));
       break;
-    case 109: // BGRA8 → RGBA8
+    case 109: { // BGRA8 → RGBA8
       rgba = new Uint8Array(w * h * 4);
       const src = linear;
       for (let i = 0; i < w * h; i++) {
@@ -239,6 +239,7 @@ function decodeMiblToRGBA(miblData: Uint8Array): { rgba: Uint8Array; width: numb
         rgba[i * 4 + 2] = src[i * 4]; rgba[i * 4 + 3] = src[i * 4 + 3];
       }
       break;
+    }
     default:
       // Unsupported format – show as gray
       rgba = new Uint8Array(w * h * 4);

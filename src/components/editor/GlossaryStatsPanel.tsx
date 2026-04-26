@@ -20,7 +20,7 @@ function analyzeGlossary(text: string) {
   const lines = text.split('\n');
   let totalTerms = 0;
   let comments = 0;
-  let sections: string[] = [];
+  const sections: string[] = [];
   const categoryMap: Record<string, number> = {};
   let currentSection = "عام";
 

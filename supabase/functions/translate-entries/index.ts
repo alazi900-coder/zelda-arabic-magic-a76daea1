@@ -1206,7 +1206,7 @@ ${textsBlock}
 
   /** Extract JSON object from AI response, handling markdown and malformed output */
   function extractJsonObject(raw: string): Record<string, string> {
-    let cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     
     // Find the outermost JSON object by matching balanced braces,
     // properly skipping content inside quoted strings

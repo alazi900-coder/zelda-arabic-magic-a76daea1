@@ -29,4 +29,20 @@ export default tseslint.config(
       }],
     },
   },
+  {
+    // Control chars (\x00 etc.) are intentional placeholders in codec/parser/text-processing regexes
+    files: [
+      "src/lib/**/*.{ts,tsx}",
+      "src/hooks/useEditorBuild.ts",
+      "src/hooks/useEditorCleanup.ts",
+      "src/components/editor/types.tsx",
+      "src/components/editor/MirrorCharsCleanPanel.tsx",
+      "src/pages/XenobladeProcess.tsx",
+      "src/test/mirror-chars.test.ts",
+      "supabase/functions/**/*.ts",
+    ],
+    rules: {
+      "no-control-regex": "off",
+    },
+  },
 );

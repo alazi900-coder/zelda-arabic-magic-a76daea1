@@ -232,7 +232,7 @@ function normalizeWhitespaceAfterReorder(text: string, original: string): string
 
 export function repairTranslationTagsForBuild(original: string, translation: string): BuildTagRepairResult {
   // Step 1: Fix corrupted $N variables first
-  let working = repairDollarVars(original, translation);
+  const working = repairDollarVars(original, translation);
 
   // Step 2: Restore technical tags
   let repairedText = extractTechnicalTags(original).length > 0

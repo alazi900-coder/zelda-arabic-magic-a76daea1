@@ -161,7 +161,7 @@ export default function WilayViewer() {
 
     const existingFileCount = files.length;
     const newDecoded = new Map(decoded);
-    let totalNew = newFiles.reduce((s, f) => s + f.info.textures.length, 0);
+    const totalNew = newFiles.reduce((s, f) => s + f.info.textures.length, 0);
     let doneNew = 0;
     setDecodeProgress({ current: 0, total: totalNew });
 

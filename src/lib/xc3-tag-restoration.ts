@@ -251,10 +251,10 @@ export function restoreTagsLocally(original: string, translation: string): strin
   working = normalizeCorruptedEmbeddedTags(working, origTags);
   
   // Step 4: Check if tags are now all present after normalization
-  let transTags = extractTags(working);
+  const transTags = extractTags(working);
   const origCount = new Map<string, number>();
   for (const t of origTags) origCount.set(t, (origCount.get(t) || 0) + 1);
-  let transCount = new Map<string, number>();
+  const transCount = new Map<string, number>();
   for (const t of transTags) transCount.set(t, (transCount.get(t) || 0) + 1);
 
   let allPresent = true;

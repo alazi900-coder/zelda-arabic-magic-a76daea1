@@ -840,7 +840,7 @@ Deno.serve(async (req) => {
     let diagSampleLogged = 0;
 
     let modifiedCount = 0;
-    let skippedOversize = 0;
+    const skippedOversize = 0;
     let skippedAlreadyArabized = 0;
     let expandedCount = 0;
     let totalByteRatio = 0;

@@ -236,7 +236,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       }
 
       // Process binary BDAT files locally
-      let localBdatResults: { name: string; data: Uint8Array }[] = [];
+      const localBdatResults: { name: string; data: Uint8Array }[] = [];
       let localModifiedCount = 0;
       const newBdatFileStats: BdatFileStat[] = [];
       const allOverflowErrors: { fileName: string; key: string; originalBytes: number; translationBytes: number; reason?: string; newOffset?: number }[] = [];
@@ -323,7 +323,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const openCount = (trans.match(/\[(?:XENO|System|ML):/g) || []).length;
         const closedCount = (trans.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
         if (openCount > closedCount) {
-          let fixed = trans.replace(/(\[(?:XENO|System|ML):[^\]\[]{0,200})(?=\[|$)/g, '$1]');
+          const fixed = trans.replace(/(\[(?:XENO|System|ML):[^\]\[]{0,200})(?=\[|$)/g, '$1]');
           const fixedOpen = (fixed.match(/\[(?:XENO|System|ML):/g) || []).length;
           const fixedClosed = (fixed.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
           if (fixedOpen === fixedClosed) {

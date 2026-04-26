@@ -412,7 +412,7 @@ function readLines(
 
     let text = '';
     let rawCodes = new Uint16Array(0);
-    let userParam = 0;
+    const userParam = 0;
 
     if (dataLength > 0 && dataOffset + dataLength <= bytes.length) {
       let lineBytes = new Uint8Array(Array.from(bytes.slice(dataOffset, dataOffset + dataLength))) as Uint8Array<ArrayBuffer>;
@@ -770,7 +770,7 @@ function buildV2Section(
 
   // We only modify section 0 (language 0), copy other sections as-is
   const paramTableSize = lineCount * 8; // offset(u32) + length(u16) + userParam(u16)
-  let strDataStart = 4 + paramTableSize; // 4 = block size u32
+  const strDataStart = 4 + paramTableSize; // 4 = block size u32
 
   // Calculate string data size
   let strDataSize = 0;

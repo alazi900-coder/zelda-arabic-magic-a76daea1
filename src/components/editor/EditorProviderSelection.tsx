@@ -30,6 +30,7 @@ type EditorSubset = Pick<
   | "rebalanceNewlines" | "setRebalanceNewlines"
   | "tmAutoReuse" | "setTmAutoReuse"
   | "aiThrottleEnabled" | "setAiThrottleEnabled"
+  | "customPromptInstructions" | "setCustomPromptInstructions"
 >;
 
 type TestConnState = 'idle' | 'testing' | 'ok' | 'error';
@@ -465,6 +466,36 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
           checked={editor.aiThrottleEnabled}
           onCheckedChange={editor.setAiThrottleEnabled}
         />
+      </div>
+
+      {/* Custom prompt instructions */}
+      <div className="flex flex-col gap-2 border-t border-border/50 pt-3 mt-1">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex flex-col">
+            <span className="text-sm font-display">📝 تعليمات إضافية للمترجم</span>
+            <span className="text-xs text-muted-foreground font-body">
+              نص حرّ يُلحَق بكل برومت AI (لكل الفئات). مثال: "استخدم العامية الخليجية" أو "تجنّب كلمة ‹إله› في الترجمات".
+            </span>
+          </div>
+          {editor.customPromptInstructions && (
+            <Button variant="ghost" size="sm" onClick={() => editor.setCustomPromptInstructions('')} className="text-xs text-destructive shrink-0 h-7">
+              مسح
+            </Button>
+          )}
+        </div>
+        <textarea
+          value={editor.customPromptInstructions}
+          onChange={(e) => editor.setCustomPromptInstructions(e.target.value.slice(0, 4000))}
+          placeholder="اكتب أي قواعد إضافية تريد أن يلتزم بها المترجم..."
+          rows={3}
+          className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm resize-y"
+          dir="rtl"
+        />
+        {editor.customPromptInstructions && (
+          <p className="text-[10px] text-muted-foreground font-body text-left" dir="ltr">
+            {editor.customPromptInstructions.length} / 4000
+          </p>
+        )}
       </div>
     </CardContent>
   </Card>

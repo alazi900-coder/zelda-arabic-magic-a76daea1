@@ -48,6 +48,7 @@ interface UseAutoPilotProps {
   npcMaxLines: number;
   npcMode?: boolean;
   aiModel: string;
+  customPromptInstructions: string;
   addAiRequest: (n?: number) => void;
   addMyMemoryChars: (n: number) => void;
   qualityStats: { damagedTagKeys: Set<string> };
@@ -72,7 +73,7 @@ export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
   translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
   userGeminiKeys, userGroqKeys, userCerebrasKeys, keyBlocks, blockKeys,
-  myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
+  myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
 }: UseAutoPilotProps) {
   const [running, setRunning] = useState(false);
@@ -131,9 +132,10 @@ export function useAutoPilot({
       npcMaxLines,
       npcMode: npcMode || undefined,
       aiModel: forceModel || (prov === 'gemini' ? aiModel : prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
+      extraInstructions: customPromptInstructions || undefined,
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey,
-      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, buildKeyArraysFor]);
+      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, buildKeyArraysFor]);
 
   /** Wrap fetch to also surface `blockedKeys` from the response into local state. */
   const fetchTranslate = useCallback(async (init: RequestInit): Promise<Response> => {

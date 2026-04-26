@@ -135,6 +135,7 @@ function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<stri
 let _rebalanceNewlines = false;
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
+let _extraInstructions = '';
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -960,6 +961,7 @@ async function translateWithOpenAICompat(
   const npcRule = hasNpcEntries ? `\n8. NPC DIALOGUE MODE: Some entries are NPC dialogue (short in-game text boxes). Keep these translations VERY concise — max ${_npcMaxLines ?? 2} lines, approximately 37 Arabic characters per line. Prioritize brevity over completeness.` : '';
   const categoryHint = detectCategoryHint(needsAI[0]?.entry.key || '', needsAI[0]?.entry.original || '');
   const categorySection = categoryHint ? `\n\nCONTEXT-SPECIFIC GUIDANCE:\n${categoryHint}\n` : '';
+  const userInstructionsSection = _extraInstructions ? `\n\nADDITIONAL USER INSTRUCTIONS (high priority — override defaults if conflicting):\n${_extraInstructions}\n` : '';
   const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.
 
 XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
@@ -979,7 +981,7 @@ CRITICAL RULES:
 8. Use natural modern Arabic for gaming (العربية الحديثة للألعاب) — not formal Arabic.
 9. Match the speaker's personality: casual for Reyn/Riki, formal for Melia/Dunban.
 10. If a glossary term appears, use its EXACT Arabic translation — no alternatives.
-11. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure.${npcRule}${categorySection}
+11. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure.${npcRule}${categorySection}${userInstructionsSection}
 
 Input:
 {
@@ -1209,6 +1211,7 @@ async function translateWithAI(
 
   const categoryHint = detectCategoryHint(entries[0]?.key || '', entries[0]?.original || '');
   const categorySection = categoryHint ? `\n\n${categoryHint}` : '';
+  const userInstructionsSection = _extraInstructions ? `\n\nADDITIONAL USER INSTRUCTIONS (high priority — override defaults if conflicting):\n${_extraInstructions}` : '';
 
   const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.
 
@@ -1232,7 +1235,7 @@ CRITICAL RULES:
 10. Do NOT insert newline characters (\\n) in your translations. Return each translation as a single continuous string. Line breaking is handled separately.
 11. NEVER add Arabic diacritics/tashkeel (tanween: ً ٌ ٍ, fatha: َ, damma: ُ, kasra: ِ, shadda: ّ, sukun: ْ). Write plain Arabic text WITHOUT any vowel marks. The game font cannot render them.
 12. For NPC dialogue: match the speaker's personality. Use contractions and natural speech for casual characters; formal register for commanders/antagonists.
-13. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure that will be rejected by validation.${categorySection}${glossarySection}${contextSection}
+13. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure that will be rejected by validation.${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
 
 Input texts (as JSON object — translate each value and return with the SAME keys):
 {
@@ -1558,7 +1561,7 @@ Deno.serve(async (req) => {
   let blockedKeysAccum: string[] = [];
 
   try {
-    const { entries, glossary, context, userApiKey, userApiKeys, providerApiKey, providerApiKeys, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel } = await req.json() as {
+    const { entries, glossary, context, userApiKey, userApiKeys, providerApiKey, providerApiKeys, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, extraInstructions } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
@@ -1572,6 +1575,7 @@ Deno.serve(async (req) => {
       npcMaxLines?: number;
       npcMode?: boolean;
       aiModel?: string;
+      extraInstructions?: string;
     };
 
     // Normalize: prefer arrays; fall back to single-key fields for backward compat.
@@ -1586,6 +1590,7 @@ Deno.serve(async (req) => {
     _rebalanceNewlines = !!rebalanceNewlines;
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
+    _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

@@ -41,16 +41,18 @@ const MultiKeyManager: React.FC<MultiKeyManagerProps> = ({
   providerId, providerLabel, keys, setKeys, keyBlocks, unblockAll, testStatus, testMsg, onTest, placeholder,
 }) => {
   const [draft, setDraft] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
 
   const now = Date.now();
   const anyBlocked = keys.some(k => keyBlocks[k] && keyBlocks[k] > now);
 
   const handleAdd = () => {
     const t = draft.trim();
-    if (!t) return;
-    if (keys.includes(t)) { setDraft(''); return; }
+    if (!t) { setAddError('الصق المفتاح أولاً'); return; }
+    if (keys.includes(t)) { setAddError('هذا المفتاح مضاف بالفعل في القائمة'); return; }
     setKeys([...keys, t]);
     setDraft('');
+    setAddError(null);
   };
 
   const handleDelete = (idx: number) => {
@@ -118,7 +120,7 @@ const MultiKeyManager: React.FC<MultiKeyManagerProps> = ({
           type="password"
           placeholder={placeholder}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => { setDraft(e.target.value); if (addError) setAddError(null); }}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
           className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
           dir="ltr"
@@ -133,6 +135,10 @@ const MultiKeyManager: React.FC<MultiKeyManagerProps> = ({
           إضافة
         </Button>
       </div>
+
+      {addError && (
+        <p className="text-[11px] text-red-500 font-body">⚠️ {addError}</p>
+      )}
 
       {anyBlocked && (
         <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">

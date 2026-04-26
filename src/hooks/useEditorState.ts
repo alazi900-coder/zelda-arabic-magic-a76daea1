@@ -32,6 +32,7 @@ export function useEditorState() {
     newlineSplitCharLimit, setNewlineSplitCharLimit, autoSmartReview, setAutoSmartReview,
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
+    customPromptInstructions, setCustomPromptInstructions,
     enhancedMemory, saveToEnhancedMemory,
   } = settings;
 
@@ -807,6 +808,7 @@ export function useEditorState() {
     filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
     userGeminiKeys, userGroqKeys, userCerebrasKeys, keyBlocks, blockKeys,
     translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled,
+    customPromptInstructions,
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, failedEntries, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleRetryFailed, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview } = translation;
 
@@ -816,6 +818,7 @@ export function useEditorState() {
     userGeminiKeys, userGroqKeys, userCerebrasKeys, keyBlocks, blockKeys,
     myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
     addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
+    customPromptInstructions,
   });
 
   const handleSmartReviewRef = useRef<(() => void) | null>(null);
@@ -1431,6 +1434,7 @@ export function useEditorState() {
     autoSmartReview, setAutoSmartReview,
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
+    customPromptInstructions, setCustomPromptInstructions,
 
     // Handlers
     toggleProtection, toggleTechnicalBypass,

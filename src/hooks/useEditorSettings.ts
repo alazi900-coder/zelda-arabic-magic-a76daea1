@@ -287,6 +287,18 @@ export function useEditorSettings() {
     try { localStorage.setItem('tmAutoReuse', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
+  // === Custom prompt instructions (appended to every AI prompt, all categories) ===
+  const [customPromptInstructions, _setCustomPromptInstructions] = useState<string>(() => {
+    try { return localStorage.getItem('customPromptInstructions') || ''; } catch { return ''; }
+  });
+  const setCustomPromptInstructions = useCallback((v: string) => {
+    _setCustomPromptInstructions(v);
+    try {
+      if (v.trim()) localStorage.setItem('customPromptInstructions', v);
+      else localStorage.removeItem('customPromptInstructions');
+    } catch { /* ignore */ }
+  }, []);
+
   // === Adaptive throttle between AI batches (avoids hitting per-minute rate limits) ===
   // Default ON. Per-provider delay: see PROVIDER_BATCH_DELAY_MS in useEditorTranslation.
   const [aiThrottleEnabled, _setAiThrottleEnabled] = useState(() => {
@@ -350,6 +362,7 @@ export function useEditorSettings() {
     autoSmartReview, setAutoSmartReview,
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
+    customPromptInstructions, setCustomPromptInstructions,
     enhancedMemory, saveToEnhancedMemory,
     hiddenPanels, togglePanel,
   };

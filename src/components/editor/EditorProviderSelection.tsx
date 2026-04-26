@@ -11,6 +11,8 @@ import {
 } from "@/lib/openrouter-models";
 import type { useEditorState } from "@/hooks/useEditorState";
 import MultiKeyManager from "@/components/editor/MultiKeyManager";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PROMPT_PRESETS } from "@/components/editor/promptPresets";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -474,7 +476,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
           <div className="flex flex-col">
             <span className="text-sm font-display">📝 تعليمات إضافية للمترجم</span>
             <span className="text-xs text-muted-foreground font-body">
-              نص حرّ يُلحَق بكل برومت AI (لكل الفئات). مثال: "استخدم العامية الخليجية" أو "تجنّب كلمة ‹إله› في الترجمات".
+              نص حرّ يُلحَق بكل برومت AI (لكل الفئات). اختر قالباً جاهزاً أو اكتب نصّك.
             </span>
           </div>
           {editor.customPromptInstructions && (
@@ -483,6 +485,26 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
             </Button>
           )}
         </div>
+
+        <Select
+          value=""
+          onValueChange={(id) => {
+            const preset = PROMPT_PRESETS.find(p => p.id === id);
+            if (preset) editor.setCustomPromptInstructions(preset.text);
+          }}
+        >
+          <SelectTrigger className="w-full text-sm font-body" dir="rtl">
+            <SelectValue placeholder="اختر قالباً جاهزاً..." />
+          </SelectTrigger>
+          <SelectContent>
+            {PROMPT_PRESETS.map(p => (
+              <SelectItem key={p.id} value={p.id} className="font-body">
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <textarea
           value={editor.customPromptInstructions}
           onChange={(e) => editor.setCustomPromptInstructions(e.target.value.slice(0, 4000))}

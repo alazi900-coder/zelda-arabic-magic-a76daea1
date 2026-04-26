@@ -1,21 +1,9 @@
 import React from "react";
 import { Switch } from "@/components/ui/switch";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ArrowRight, Download, FileText, Loader2, Filter, Sparkles, Save, Tag, Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle, Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, BarChart3, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2, Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi, RefreshCw } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
@@ -37,7 +25,7 @@ import {
 
 import { useEditorState } from "@/hooks/useEditorState";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
-import { PAGE_SIZE, isTechnicalText, type FilterStatus, type FilterTechnical } from "@/components/editor/types";
+import { PAGE_SIZE, type FilterStatus, type FilterTechnical } from "@/components/editor/types";
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import CategoryProgress from "@/components/editor/CategoryProgress";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
@@ -46,15 +34,9 @@ import QuickReviewMode from "@/components/editor/QuickReviewMode";
 import PaginationControls from "@/components/editor/PaginationControls";
 import FindReplacePanel from "@/components/editor/FindReplacePanel";
 import DiffView from "@/components/editor/DiffView";
-import BuildStatsDialog from "@/components/editor/BuildStatsDialog";
-import BuildConfirmDialog from "@/components/editor/BuildConfirmDialog";
 import ConsistencyResultsPanel from "@/components/editor/ConsistencyResultsPanel";
 import BdatBuildReport from "@/components/editor/BdatBuildReport";
 import FileLoadReport from "@/components/editor/FileLoadReport";
-import IntegrityCheckDialog from "@/components/editor/IntegrityCheckDialog";
-import PreBuildDiagnostic from "@/components/editor/PreBuildDiagnostic";
-import CompareEnginesDialog from "@/components/editor/CompareEnginesDialog";
-import SafetyRepairReport from "@/components/editor/SafetyRepairReport";
 
 import NewlineCleanPanel from "@/components/editor/NewlineCleanPanel";
 import DiacriticsCleanPanel from "@/components/editor/DiacriticsCleanPanel";
@@ -63,30 +45,25 @@ import MirrorCharsCleanPanel from "@/components/editor/MirrorCharsCleanPanel";
 import MergeToBundledPanel from "@/components/editor/MergeToBundledPanel";
 
 import ArabicTextFixPanel from "@/components/editor/ArabicTextFixPanel";
-import ExportEnglishDialog from "@/components/editor/ExportEnglishDialog";
 import GlossaryStatsPanel from "@/components/editor/GlossaryStatsPanel";
 import GlossaryCategoryFilter from "@/components/editor/GlossaryCategoryFilter";
 import GlossaryDuplicatesPanel from "@/components/editor/GlossaryDuplicatesPanel";
 import TranslationAIEnhancePanel from "@/components/editor/TranslationAIEnhancePanel";
 import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
-import ImportConflictDialog from "@/components/editor/ImportConflictDialog";
 import TagRepairPanel from "@/components/editor/TagRepairPanel";
 import TagBracketFixPanel from "@/components/editor/TagBracketFixPanel";
 import NewlineSplitPanel from "@/components/editor/NewlineSplitPanel";
-import PageTranslationCompare from "@/components/editor/PageTranslationCompare";
 import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
 import DeepDiagnosticPanel from "@/components/editor/DeepDiagnosticPanel";
 import CleanupToolsPanel from "@/components/editor/CleanupToolsPanel";
 import LineBalancePanel from "@/components/editor/LineBalancePanel";
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 
-import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
 import SmartReviewPanel from "@/components/editor/SmartReviewPanel";
 import GlossaryCompliancePanel from "@/components/editor/GlossaryCompliancePanel";
-import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationPreview";
 import TranslationEnhancePanel from "@/components/editor/TranslationEnhancePanel";
 import AdvancedTranslationPanel from "@/components/editor/AdvancedTranslationPanel";
-import ToolHelpDialog, { ToolType } from "@/components/editor/ToolHelpDialog";
+import { ToolType } from "@/components/editor/ToolHelpDialog";
 import TranslationProgressDashboard from "@/components/editor/TranslationProgressDashboard";
 import ConsistencyCheckPanel from "@/components/editor/ConsistencyCheckPanel";
 import { useEditorKeyboard } from "@/hooks/useEditorKeyboard";
@@ -96,6 +73,7 @@ import { PanelSettingsMenu } from "@/components/editor/PanelSettingsMenu";
 import EditorDragOverlay from "@/components/editor/EditorDragOverlay";
 import EditorRecoveryScreen from "@/components/editor/EditorRecoveryScreen";
 import EditorEmptyState from "@/components/editor/EditorEmptyState";
+import EditorDialogs from "@/components/editor/EditorDialogs";
 
 const Editor = () => {
   const editor = useEditorState();
@@ -2414,233 +2392,25 @@ const Editor = () => {
         </div>
         </div>
 
-        <AlertDialog open={editor.showRetranslateConfirm} onOpenChange={editor.setShowRetranslateConfirm}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>إعادة ترجمة الصفحة؟</AlertDialogTitle>
-              <AlertDialogDescription>
-                {(() => {
-                  const count = editor.paginatedEntries.filter(e => {
-                    const key = `${e.msbtFile}:${e.index}`;
-                    return editor.state?.translations[key]?.trim() && !isTechnicalText(e.original);
-                  }).length;
-                  return `سيتم استبدال ${count} ترجمة موجودة في هذه الصفحة بترجمات جديدة. يمكنك التراجع عن هذا الإجراء لاحقاً.`;
-                })()}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>إلغاء</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { editor.setShowRetranslateConfirm(false); editor.handleRetranslatePage(); }}>إعادة الترجمة</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
-        <SafetyRepairReport
-          open={editor.showSafetyReport}
-          onOpenChange={editor.setShowSafetyReport}
-          repairs={editor.safetyRepairs}
-          onNavigateToEntry={(key) => {
-            editor.setFilterStatus('all');
-            editor.setSearch('');
-            setTimeout(() => {
-              const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
-              if (idx >= 0) {
-                const page = Math.floor(idx / 50);
-                editor.setCurrentPage(page);
-                setTimeout(() => {
-                  const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 100);
-              }
-            }, 50);
-          }}
-        />
-        <IntegrityCheckDialog
-          open={editor.showIntegrityDialog}
-          onOpenChange={editor.setShowIntegrityDialog}
-          result={editor.integrityResult}
-          checking={editor.checkingIntegrity}
-          onRecheck={editor.handleCheckIntegrity}
-        />
-        <BuildConfirmDialog
-          open={editor.showBuildConfirm}
-          onOpenChange={editor.setShowBuildConfirm}
-          preview={editor.buildPreview}
-          onConfirm={editor.handleBuild}
-          building={editor.building}
-        />
-        <PreBuildDiagnostic
-          open={showDiagnostic}
-          onOpenChange={setShowDiagnostic}
-          state={editor.state}
-          onProceedToBuild={() => { setShowDiagnostic(false); editor.handlePreBuild(); }}
-        />
-        <CompareEnginesDialog
-          open={!!compareEntry}
-          onOpenChange={(open) => { if (!open) setCompareEntry(null); }}
-          entry={compareEntry}
-          onSelect={(key, translation) => editor.updateTranslation(key, translation)}
-          glossary={editor.activeGlossary}
-          userGeminiKey={editor.userGeminiKey}
-          userDeepSeekKey={editor.userDeepSeekKey}
-          userGroqKey={editor.userGroqKey}
-          userOpenRouterKey={editor.userOpenRouterKey}
-          myMemoryEmail={editor.myMemoryEmail}
-          aiModel={editor.aiModel}
-        />
-        <ExportEnglishDialog
-          open={showExportEnglishDialog}
-          onOpenChange={setShowExportEnglishDialog}
-          totalCount={untranslatedCount}
-          onExport={(chunkSize, format) => format === "json" ? editor.handleExportEnglishOnlyJson(chunkSize) : editor.handleExportEnglishOnly(chunkSize)}
-        />
-        <ImportConflictDialog
-          open={editor.importConflicts.length > 0}
-          conflicts={editor.importConflicts}
-          onConfirm={editor.handleConflictConfirm}
-          onCancel={editor.handleConflictCancel}
-        />
-
-        {/* Clear Translations Confirmation */}
-        <AlertDialog open={!!showClearConfirm} onOpenChange={(v) => { if (!v) setShowClearConfirm(null); }}>
-          <AlertDialogContent dir="rtl">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2 font-display">
-                <Trash2 className="w-5 h-5 text-destructive" />
-                ⚠️ تأكيد مسح الترجمات
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-right">
-                {showClearConfirm === 'all'
-                  ? `سيتم حذف جميع الترجمات (${editor.translatedCount} ترجمة) نهائياً. هل أنت متأكد؟`
-                  : `سيتم حذف ترجمات القسم المحدد فقط. هل أنت متأكد؟`
-                }
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex-row gap-2 justify-end">
-              <AlertDialogCancel>إلغاء</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => {
-                  if (showClearConfirm) editor.handleClearTranslations(showClearConfirm);
-                  setShowClearConfirm(null);
-                }}
-              >
-                🗑️ نعم، امسح الترجمات
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Arabic Processing Confirmation */}
-        <AlertDialog open={showArabicProcessConfirm} onOpenChange={setShowArabicProcessConfirm}>
-          <AlertDialogContent dir="rtl">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="font-display">✨ تطبيق المعالجة العربية</AlertDialogTitle>
-              <AlertDialogDescription className="font-body text-right">
-                سيتم تحويل جميع النصوص العربية إلى أشكال العرض (Presentation Forms) وعكس الاتجاه للعمل داخل محرك اللعبة.
-                <br /><br />
-                ⚠️ هذه العملية تغيّر شكل النصوص بالكامل. إذا ضغطت بالغلط، يمكنك استخدام زر "التراجع عن المعالجة" لإعادتها.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex-row-reverse gap-2">
-              <AlertDialogCancel className="font-display">إلغاء</AlertDialogCancel>
-              <AlertDialogAction
-                className="font-display"
-                onClick={() => {
-                  setShowArabicProcessConfirm(false);
-                  editor.handleApplyArabicProcessing();
-                }}
-              >
-                ✨ تطبيق المعالجة
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Font Test Dialog */}
-        <Dialog open={showFontTest} onOpenChange={setShowFontTest}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="font-display">🔤 تجربة الخط</DialogTitle>
-              <DialogDescription>اكتب كلمة أو عبارة لملء جميع الترجمات بها لاختبار الخط</DialogDescription>
-            </DialogHeader>
-            <Input
-              value={fontTestWord}
-              onChange={e => setFontTestWord(e.target.value)}
-              placeholder="مثال: اختبار"
-              className="text-right font-display"
-              dir="rtl"
-              onKeyDown={e => {
-                if (e.key === 'Enter' && fontTestWord.trim()) {
-                  editor.handleFontTest(fontTestWord);
-                  setShowFontTest(false);
-                }
-              }}
-            />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowFontTest(false)}>إلغاء</Button>
-              <Button onClick={() => { editor.handleFontTest(fontTestWord); setShowFontTest(false); }} disabled={!fontTestWord.trim()}>
-                ✨ ملء الكل
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Page Translation Compare Dialog */}
-        {editor.showPageCompare && editor.pendingPageTranslations && (
-          <PageTranslationCompare
-            open={editor.showPageCompare}
-            originals={editor.pageTranslationOriginals}
-            oldTranslations={editor.oldPageTranslations}
-            newTranslations={editor.pendingPageTranslations}
-            onApply={(selectedKeys) => editor.applyPendingTranslations(selectedKeys)}
-            onDiscard={editor.discardPendingTranslations}
-          />
-        )}
-
-        {/* AutoPilot Preview Compare Dialog */}
-        {editor.autoPilot.pendingTranslations && (
-          <PageTranslationCompare
-            open={true}
-            originals={editor.autoPilot.pendingOriginals}
-            oldTranslations={editor.autoPilot.pendingOldTranslations}
-            newTranslations={editor.autoPilot.pendingTranslations}
-            onApply={(selectedKeys) => editor.autoPilot.applyPending(selectedKeys)}
-            onDiscard={editor.autoPilot.discardPending}
-          />
-        )}
-
-        {/* Glossary Translation Preview Dialog */}
-        {editor.showGlossaryPreview && editor.glossaryPreviewEntries.length > 0 && (
-          <GlossaryTranslationPreview
-            open={editor.showGlossaryPreview}
-            entries={editor.glossaryPreviewEntries}
-            onApply={(selectedKeys) => editor.applyGlossaryPreview(selectedKeys)}
-            onDiscard={editor.discardGlossaryPreview}
-          />
-        )}
-
-        {editor.pendingMerge && (
-          <GlossaryMergePreviewDialog
-            open={!!editor.pendingMerge}
-            onClose={() => editor.setPendingMerge(null)}
-            onConfirm={(accepted) => editor.applyMergeDiffs(accepted, editor.pendingMerge!.replace)}
-            glossaryName={editor.pendingMerge.name}
-            diffs={editor.pendingMerge.diffs}
-          />
-        )}
-
-        {/* Tool Help Dialog */}
-        <ToolHelpDialog
-          tool={showToolHelp}
-          onClose={() => {
-            const toolToRun = showToolHelp;
-            setShowToolHelp(null);
-            if (toolToRun && ['literal-detect', 'style-unify', 'consistency-check', 'alternatives', 'full-analysis'].includes(toolToRun)) {
-              editor.handleAdvancedAnalysis(toolToRun as import("@/components/editor/AdvancedTranslationPanel").AnalysisAction);
-            }
-          }}
+        <EditorDialogs
+          editor={editor}
+          showDiagnostic={showDiagnostic}
+          setShowDiagnostic={setShowDiagnostic}
+          compareEntry={compareEntry}
+          setCompareEntry={setCompareEntry}
+          showExportEnglishDialog={showExportEnglishDialog}
+          setShowExportEnglishDialog={setShowExportEnglishDialog}
+          showClearConfirm={showClearConfirm}
+          setShowClearConfirm={setShowClearConfirm}
+          showArabicProcessConfirm={showArabicProcessConfirm}
+          setShowArabicProcessConfirm={setShowArabicProcessConfirm}
+          showFontTest={showFontTest}
+          setShowFontTest={setShowFontTest}
+          fontTestWord={fontTestWord}
+          setFontTestWord={setFontTestWord}
+          showToolHelp={showToolHelp}
+          setShowToolHelp={setShowToolHelp}
+          untranslatedCount={untranslatedCount}
         />
       </div>
     </TooltipProvider>

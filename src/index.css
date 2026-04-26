@@ -73,21 +73,3 @@
     padding-right: env(safe-area-inset-right);
   }
 }
-
-/* Touch target enlargement on mobile and coarse-pointer devices.
-   Bumps shadcn Buttons that explicitly opt into compact heights (h-6/h-7)
-   up to a more touch-friendly minimum. Layout-preserving (uses min-height
-   so text/icons stay aligned). Does not affect desktop or fine-pointer. */
-@media (max-width: 767px), (pointer: coarse) {
-  button.h-6,
-  [role="button"].h-6,
-  a.h-6 {
-    min-height: 36px;
-  }
-  button.h-7,
-  [role="button"].h-7,
-  a.h-7 {
-    min-height: 40px;
-  }
-  /* Default shadcn Button height (h-9 = 36px) stays — already touch-friendly */
-}

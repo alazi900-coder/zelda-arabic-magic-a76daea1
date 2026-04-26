@@ -17,13 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import {
-  ArrowRight, Download, FileText, Loader2, Filter, Sparkles, Save, Tag,
-  Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle,
-  Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight,
-  BarChart3, Menu, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2,
-  Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi, RefreshCw,
-} from "lucide-react";
+import { ArrowRight, Download, FileText, Loader2, Filter, Sparkles, Save, Tag, Upload, FileDown, Cloud, CloudUpload, LogIn, BookOpen, AlertTriangle, Eye, EyeOff, RotateCcw, CheckCircle2, ShieldCheck, BarChart3, MoreVertical, Replace, Columns, Key, Type, Trash2, Package, Wand2, Lock, Unlock, Rows3, Languages, StopCircle, XCircle, Wifi, RefreshCw } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import {
   DEFAULT_OPENROUTER_MODEL,
@@ -47,7 +41,6 @@ import { PAGE_SIZE, isTechnicalText, type FilterStatus, type FilterTechnical } f
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import CategoryProgress from "@/components/editor/CategoryProgress";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
-import EntryCard from "@/components/editor/EntryCard";
 import ReviewPanel from "@/components/editor/ReviewPanel";
 import QuickReviewMode from "@/components/editor/QuickReviewMode";
 import PaginationControls from "@/components/editor/PaginationControls";

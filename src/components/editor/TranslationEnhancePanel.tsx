@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X, Sparkles, ChevronDown, ChevronUp, Check, User, MessageSquare, Swords, Heart, Settings, HelpCircle, AlertTriangle, Lightbulb, Copy } from "lucide-react";
+import { X, Sparkles, ChevronDown, ChevronUp, Check, User, MessageSquare, Swords, Heart, Settings, HelpCircle, AlertTriangle, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface EnhanceResult {

@@ -33,7 +33,7 @@
  * - Optional string table alignment padding
  */
 
-import { BdatFile, BdatTable, BdatValueType } from './bdat-parser';
+import { BdatFile, BdatValueType } from './bdat-parser';
 
 // ============= Public types =============
 

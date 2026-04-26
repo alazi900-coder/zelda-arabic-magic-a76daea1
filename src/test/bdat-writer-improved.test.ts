@@ -6,7 +6,7 @@
  * - overflow error reasons
  */
 import { describe, it, expect } from "vitest";
-import { patchBdatFile, type PatchResult } from "@/lib/bdat-writer";
+import { patchBdatFile } from "@/lib/bdat-writer";
 import { BdatFile, BdatTable, BdatValueType } from "@/lib/bdat-parser";
 
 const encoder = new TextEncoder();

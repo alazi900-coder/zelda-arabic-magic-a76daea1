@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { categorizeBdatTable, categorizeByFilename, isMainMenuText } from "@/components/editor/types";
+import { categorizeBdatTable, isMainMenuText } from "@/components/editor/types";
 
 describe("categorizeBdatTable - table name prefixes", () => {
   it("classifies MNU_ShopList as shop menu", () => {

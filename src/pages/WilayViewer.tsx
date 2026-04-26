@@ -14,7 +14,6 @@ import {
 } from "@/lib/wilay-parser";
 import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
 
-import { toast } from "@/components/ui/sonner";
 import JSZip from "jszip";
 
 type ChannelMode = 'rgba' | 'red' | 'green' | 'blue' | 'alpha';

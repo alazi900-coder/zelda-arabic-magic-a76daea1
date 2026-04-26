@@ -8,7 +8,7 @@
  * list of cinematic markers; if anything drifts, we fall back to the input
  * untouched (better visual imbalance than a broken cinematic).
  */
-import { tokenize, splitOnHardBreaks, detokenize, hardBreaksEqual } from "./text-tokens";
+import { hardBreaksEqual } from "./text-tokens";
 
 const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}|[\uFFF9-\uFFFC]+/g;
 

@@ -2,14 +2,11 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
 import { idbSet, idbGet, checkAndMigrateSchema } from "@/lib/idb-storage";
 import { APP_VERSION } from "@/lib/version";
-import { processArabicText, hasArabicChars as hasArabicCharsProcessing, hasArabicPresentationForms, removeArabicPresentationForms } from "@/lib/arabic-processing";
+import { hasArabicPresentationForms } from "@/lib/arabic-processing";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { fixTagBracketsStrict, hasTechnicalBracketTag } from "@/lib/tag-bracket-fix";
 
-import { balanceLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
-import { scanAllTextFixes } from "@/lib/arabic-text-fixes";
 
 import { useEditorGlossary } from "@/hooks/useEditorGlossary";
 import { useEditorFileIO } from "@/hooks/useEditorFileIO";
@@ -18,18 +15,12 @@ import { useEditorBuild } from "@/hooks/useEditorBuild";
 import { useEditorTranslation } from "@/hooks/useEditorTranslation";
 import { useEditorSettings } from "@/hooks/useEditorSettings";
 import { useEditorScanResults } from "@/hooks/useEditorScanResults";
-import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { useEditorReview } from "@/hooks/useEditorReview";
 import { useEditorCleanup } from "@/hooks/useEditorCleanup";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
-import { deepDiagPredicates, matchesDeepDiagFilter, type DeepDiagFilterId } from "@/lib/deep-diagnostic-predicates";
+import { deepDiagPredicates, matchesDeepDiagFilter } from "@/lib/deep-diagnostic-predicates";
 import { useAutoPilot } from "@/hooks/useAutoPilot";
-import {
-  ExtractedEntry, EditorState, AUTOSAVE_DELAY, AI_BATCH_SIZE, PAGE_SIZE,
-  categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags,
-  ReviewIssue, ReviewSummary, ReviewResults, ShortSuggestion, ImproveResult,
-  restoreTagsLocally, FilterStatus, FilterTechnical,
-} from "@/components/editor/types";
+import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
 export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();

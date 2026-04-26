@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -577,7 +577,7 @@ const XenobladeProcess = () => {
         try {
           await idbSet("originalTexts", originalTextsMap);
           addLog(`📝 تم حفظ ${Object.keys(originalTextsMap).length} نص أصلي للاستعادة المستقبلية`);
-        } catch (err) {
+        } catch (_err) {
           addLog("⚠️ لم يتم حفظ النصوص الأصلية — مساحة التخزين محدودة");
         }
       }

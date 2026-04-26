@@ -424,7 +424,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
       if (data?.result) {
         setAiSuggestions(prev => ({ ...prev, [issue.key]: data.result }));
       }
-    } catch (e) {
+    } catch (_e) {
       toast({ title: "خطأ", description: "فشل في الحصول على اقتراح AI", variant: "destructive" });
     } finally {
       setAiFixing(prev => ({ ...prev, [issue.key]: false }));
@@ -456,7 +456,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
           toast({ title: "تحذير", description: "تعذر تحليل نتائج الفحص السياقي", variant: "destructive" });
         }
       }
-    } catch (e) {
+    } catch (_e) {
       toast({ title: "خطأ", description: "فشل الفحص السياقي", variant: "destructive" });
     } finally {
       setContextChecking(false);
@@ -494,7 +494,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
           toast({ title: "تحذير", description: "تعذر تحليل نتائج التحسين", variant: "destructive" });
         }
       }
-    } catch (e) {
+    } catch (_e) {
       toast({ title: "خطأ", description: "فشل تحسين الصياغة", variant: "destructive" });
     } finally {
       setBatchImproving(false);

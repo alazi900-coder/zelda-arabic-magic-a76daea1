@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from "react";
-import type { EditorState, ExtractedEntry } from "@/components/editor/types";
+import type { EditorState } from "@/components/editor/types";
 
 export interface TMSuggestion {
   key: string;

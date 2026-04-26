@@ -8,7 +8,7 @@ import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
-import { balanceLines, hasOrphanLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
+import { hasOrphanLines, visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
 import { fixMixedBidi } from "@/lib/arabic-processing";
@@ -237,7 +237,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
       });
       if (error) throw error;
       setBackTranslation(data?.result || 'لم يتم الحصول على نتيجة');
-    } catch (e) {
+    } catch (_e) {
       toast({ title: "خطأ", description: "فشل في الترجمة العكسية", variant: "destructive" });
     } finally {
       setBackTranslating(false);
@@ -261,7 +261,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();
       setAlternatives(data.alternatives || []);
-    } catch (e) {
+    } catch (_e) {
       toast({ title: "خطأ", description: "فشل في جلب البدائل", variant: "destructive" });
     } finally {
       setFetchingAlternatives(false);

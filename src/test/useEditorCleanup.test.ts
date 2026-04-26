@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useEditorCleanup } from '@/hooks/useEditorCleanup';
 import type { EditorState, ExtractedEntry } from '@/components/editor/types';

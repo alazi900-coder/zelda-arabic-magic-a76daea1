@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil, Wand2 } from "lucide-react";
 import { EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
-import { balanceLines, hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, type RebalanceItem } from "@/lib/diagnostic-runner";
 import { toast } from "sonner";

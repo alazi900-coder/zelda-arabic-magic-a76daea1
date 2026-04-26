@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, Eye, FolderOpen, Package } from "lucide-react";
 import { parseLin } from "@/lib/danganronpa-lin-parser";
-import { parsePak, parseLin0Container, type PakEntry } from "@/lib/danganronpa-pak-parser";
+import { parsePak, parseLin0Container } from "@/lib/danganronpa-pak-parser";
 import { parsePo } from "@/lib/danganronpa-po-parser";
 import { idbSet } from "@/lib/idb-storage";
 import { type ArchiveNode, rebuildArchive, nodeHasTranslations } from "@/lib/danganronpa-rebuild";

@@ -5,11 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2,
-  CheckCircle2, Square, RotateCcw, Type, Search, Zap, Eye, Copy,
-  ArrowRight, Filter
-} from "lucide-react";
+import { Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square, RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import type { ExtractedEntry } from "./types";

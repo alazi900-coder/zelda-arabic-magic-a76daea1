@@ -2,7 +2,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, X, XCircle, Type, AlertTriangle } from "lucide-react";
+import { CheckCircle2, X, XCircle, Type } from "lucide-react";
 
 export interface DiacriticsCleanResult {
   key: string;

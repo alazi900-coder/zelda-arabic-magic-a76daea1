@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, ArrowRight, Download, Loader2, ArrowLeft, BookOpen, Eye, Archive } from "lucide-react";
-import { parseStx, buildStx } from "@/lib/danganronpa-stx-parser";
+import { parseStx } from "@/lib/danganronpa-stx-parser";
 import { parseSpc, type SpcEntry } from "@/lib/danganronpa-spc-parser";
 import { idbSet } from "@/lib/idb-storage";
 

@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import { FileText, ChevronDown, ChevronUp, Package, CheckCircle2, AlertTriangle } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import type { ExtractedEntry } from "./types";
 
 interface FileLoadReportProps {

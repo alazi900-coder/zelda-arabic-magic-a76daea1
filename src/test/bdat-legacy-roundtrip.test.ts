@@ -2,7 +2,7 @@
  * اختبار تكاملي: بناء ملف Legacy BDAT والتحقق من المؤشرات المطلقة
  */
 import { describe, it, expect } from "vitest";
-import { parseBdatFile, BdatValueType } from "@/lib/bdat-parser";
+import { parseBdatFile } from "@/lib/bdat-parser";
 import { patchBdatFile } from "@/lib/bdat-writer";
 
 /** Build a minimal Legacy BDAT binary (XCDE 64-byte header) with one table */

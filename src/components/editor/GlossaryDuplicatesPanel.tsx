@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X, AlertTriangle, Check, ChevronDown, ChevronUp, Trash2, Copy, RefreshCw } from "lucide-react";
+import { X, AlertTriangle, Check, ChevronDown, ChevronUp, Copy, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface GlossaryDuplicate {

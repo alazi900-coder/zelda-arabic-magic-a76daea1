@@ -962,7 +962,7 @@ async function translateWithOpenAICompat(
   const categoryHint = detectCategoryHint(needsAI[0]?.entry.key || '', needsAI[0]?.entry.original || '');
   const categorySection = categoryHint ? `\n\nCONTEXT-SPECIFIC GUIDANCE:\n${categoryHint}\n` : '';
   const userInstructionsSection = _extraInstructions ? `\n\nADDITIONAL USER INSTRUCTIONS (high priority — override defaults if conflicting):\n${_extraInstructions}\n` : '';
-  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.
+  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles. Translate the following game texts from English to Arabic.
 
 XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.
@@ -1006,8 +1006,10 @@ ${textsBlock}
     headers,
     body: JSON.stringify({
       model,
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). Output ONLY valid JSON with keys K0, K1... and Arabic translation values. Never modify ⟪T#⟫ placeholders.' },
+        { role: 'system', content: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). OUTPUT LANGUAGE: ARABIC ONLY. NEVER output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a word, transliterate it phonetically into Arabic letters. Output ONLY valid JSON with keys K0, K1... and Arabic translation values. Never modify ⟪T#⟫ placeholders.' },
         { role: 'user', content: prompt },
       ],
     }),
@@ -1211,7 +1213,7 @@ async function translateWithAI(
   const categorySection = categoryHint ? `\n\n${categoryHint}` : '';
   const userInstructionsSection = _extraInstructions ? `\n\nADDITIONAL USER INSTRUCTIONS (high priority — override defaults if conflicting):\n${_extraInstructions}` : '';
 
-  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles (ゼノブレイド). Translate the following game texts from English to Arabic.
+  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles. Translate the following game texts from English to Arabic.
 
 XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.

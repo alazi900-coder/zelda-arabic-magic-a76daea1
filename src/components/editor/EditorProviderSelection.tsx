@@ -414,6 +414,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               <span className="text-xs font-display text-muted-foreground">🧠 نموذج الذكاء الاصطناعي:</span>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
+                  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', desc: 'الأعلى حصة (1500/يوم)', badge: '🚀' },
                   { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'سريع ومتوازن', badge: '⚡' },
                   { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'الأدق للمصطلحات', badge: '🎯' },
                   { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', desc: 'أحدث نموذج Google', badge: '🆕' },

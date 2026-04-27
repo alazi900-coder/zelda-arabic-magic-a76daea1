@@ -1506,7 +1506,7 @@ ${textsBlock}
       if (!response.ok) {
         const err = await response.text();
         console.error('AI gateway error:', err);
-        if (response.status === 402) throw new Error('انتهت نقاط الذكاء الاصطناعي — استخدم مفتاح Gemini الشخصي');
+        if (response.status === 402) throw new Error('انتهت حصة الذكاء الاصطناعي المجانية للخادم — أضف مفتاح API شخصي (Cerebras مجاني، Groq مجاني، Gemini، أو OpenRouter) في الإعدادات');
         if (response.status === 429) throw new Error('تم تجاوز حد الطلبات، حاول لاحقاً');
         throw new Error(`AI error: ${response.status}`);
       }
@@ -1591,6 +1591,8 @@ Deno.serve(async (req) => {
     const providerKeyList = (providerApiKeys && providerApiKeys.length > 0)
       ? providerApiKeys.map(k => (k || '').trim()).filter(Boolean)
       : (providerApiKey?.trim() ? [providerApiKey.trim()] : []);
+
+    console.log(`[translate-entries] provider=${JSON.stringify(provider)} aiModel=${JSON.stringify(aiModel)} geminiKeys=${geminiKeyList.length} providerKeys=${providerKeyList.length} entries=${entries?.length ?? 0}`);
 
     // Set the global flags for this request
     _rebalanceNewlines = !!rebalanceNewlines;
@@ -1713,6 +1715,9 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {
+      if (provider && provider !== 'gemini') {
+        console.warn(`[translate-entries] Unhandled provider value "${provider}" — falling back to Lovable AI/Gemini path`);
+      }
       const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, geminiKeyList, aiModel, blockedKeysAccum);
       return new Response(JSON.stringify({ translations, glossaryStats, blockedKeys: blockedKeysAccum }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

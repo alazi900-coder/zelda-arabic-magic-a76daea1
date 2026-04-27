@@ -33,11 +33,6 @@ interface UseEditorTranslationProps {
   userGroqKey: string;
   userCerebrasKey: string;
   userOpenRouterKey: string;
-  userGeminiKeys: string[];
-  userGroqKeys: string[];
-  userCerebrasKeys: string[];
-  keyBlocks: Record<string, number>;
-  blockKeys: (keys: string[], hours?: number) => void;
   translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras';
   myMemoryEmail: string;
   addMyMemoryChars: (chars: number) => void;
@@ -72,52 +67,8 @@ const PROVIDER_BATCH_DELAY_MS = {
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, userGeminiKeys, userGroqKeys, userCerebrasKeys, keyBlocks, blockKeys, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions,
 }: UseEditorTranslationProps) {
-
-  /** Build the list of currently-non-blocked keys for the active provider.
-   *  Used to send `userApiKeys` / `providerApiKeys` arrays to the edge function
-   *  so it can rotate them on 429 rate-limits. Object keys match the request
-   *  body fields so callers can `...spread` the result directly. */
-  const buildActiveKeys = (): { userApiKeys: string[]; providerApiKeys: string[] } => {
-    const now = Date.now();
-    const filterUnblocked = (keys: string[]) => keys.filter(k => k && (!keyBlocks[k] || keyBlocks[k] < now));
-    if (translationProvider === 'gemini') {
-      return { userApiKeys: filterUnblocked(userGeminiKeys), providerApiKeys: [] };
-    }
-    if (translationProvider === 'groq') {
-      return { userApiKeys: [], providerApiKeys: filterUnblocked(userGroqKeys) };
-    }
-    if (translationProvider === 'cerebras') {
-      return { userApiKeys: [], providerApiKeys: filterUnblocked(userCerebrasKeys) };
-    }
-    // deepseek / openrouter: single-key only (no array support yet)
-    if (translationProvider === 'deepseek')   return { userApiKeys: [], providerApiKeys: userDeepSeekKey ? [userDeepSeekKey] : [] };
-    if (translationProvider === 'openrouter') return { userApiKeys: [], providerApiKeys: userOpenRouterKey ? [userOpenRouterKey] : [] };
-    return { userApiKeys: [], providerApiKeys: [] };
-  };
-
-  /** Parse `blockedKeys` from a successful or failed response and update local
-   *  cooldown state so subsequent calls skip them. */
-  const handleBlockedKeysFromResponse = async (response: Response): Promise<void> => {
-    try {
-      const cloned = response.clone();
-      const data = await cloned.json();
-      const blocked: unknown = (data as { blockedKeys?: unknown })?.blockedKeys;
-      if (Array.isArray(blocked) && blocked.length > 0) {
-        const validKeys = blocked.filter((k): k is string => typeof k === 'string' && k.length > 0);
-        if (validKeys.length > 0) blockKeys(validKeys, 24);
-      }
-    } catch { /* response wasn't json or couldn't be cloned - ignore */ }
-  };
-
-  /** Wrapper around `fetch(translate-entries, ...)` that also reads
-   *  `blockedKeys` from the response (works for both success & error JSON). */
-  const fetchTranslate = async (init: RequestInit): Promise<Response> => {
-    const response = await fetch(getEdgeFunctionUrl("translate-entries"), init);
-    await handleBlockedKeysFromResponse(response);
-    return response;
-  };
 
   /**
    * Detect a translation that came back un-translated. Catches the two failure
@@ -273,10 +224,10 @@ export function useEditorTranslation({
         return;
       }
       // Send original text directly — server handles tag protection (avoid double-protection)
-      const response = await fetchTranslate({
+      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, ...buildActiveKeys(), provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
+        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
       });
       if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
       const data = await response.json();
@@ -434,11 +385,11 @@ export function useEditorTranslation({
       retriesLeft = 2,
     ): Promise<{ translations: Record<string, string>; charsUsed?: number; glossaryStats?: { directMatches?: number; lockedTerms?: number; contextTerms?: number } }> => {
       try {
-        const response = await fetchTranslate({
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, ...buildActiveKeys(), provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
         });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
@@ -645,11 +596,11 @@ export function useEditorTranslation({
         const batch = entriesToRetranslate.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
         setTranslateProgress(`🔄 إعادة ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const response = await fetchTranslate({
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, ...buildActiveKeys(), provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json();
@@ -703,11 +654,11 @@ export function useEditorTranslation({
         const batch = entriesToFix.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
         setTranslateProgress(`🔧 إصلاح الرموز التالفة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const response = await fetchTranslate({
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, ...buildActiveKeys(), provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json();
@@ -856,7 +807,7 @@ export function useEditorTranslation({
         setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const response = await fetchTranslate({
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
@@ -864,7 +815,7 @@ export function useEditorTranslation({
             entries,
             glossary: activeGlossary,
             userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-            providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, ...buildActiveKeys(),
+            providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
             provider: translationProvider,
             myMemoryEmail: myMemoryEmail || undefined,
             npcMaxLines,
@@ -1047,7 +998,7 @@ export function useEditorTranslation({
             setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — دفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
             const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-            const response = await fetchTranslate({
+            const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
               method: 'POST',
               headers: getSupabaseHeaders(),
               signal: abortControllerRef.current.signal,
@@ -1055,7 +1006,7 @@ export function useEditorTranslation({
                 entries,
                 glossary: activeGlossary,
                 userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-                providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, ...buildActiveKeys(),
+                providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
                 provider: translationProvider,
                 myMemoryEmail: myMemoryEmail || undefined,
                 npcMaxLines,
@@ -1297,7 +1248,7 @@ export function useEditorTranslation({
         const key = `${entry.msbtFile}:${entry.index}`;
         setTranslateProgress(`🔄 إعادة محاولة ${i + 1}/${toRetry.length}: ${entry.label || key}...`);
         try {
-          const response = await fetchTranslate({
+          const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
             method: 'POST',
             headers: getSupabaseHeaders(),
             signal: abortControllerRef.current.signal,
@@ -1305,7 +1256,7 @@ export function useEditorTranslation({
               entries: [{ key, original: entry.original }],
               glossary: activeGlossary,
               userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, ...buildActiveKeys(),
+              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
               provider: translationProvider,
               myMemoryEmail: myMemoryEmail || undefined,
               rebalanceNewlines: rebalanceNewlines || undefined,

@@ -7,7 +7,6 @@ import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
-import { getOpenRouterModels } from "@/lib/openrouter-models";
 
 interface CompareEnginesDialogProps {
   open: boolean;
@@ -35,17 +34,12 @@ interface EngineConfig {
 }
 
 function buildEngines(): EngineConfig[] {
-  const orModels = getOpenRouterModels();
   return [
     { id: 'gemini-flash', label: 'Gemini 2.5 Flash', emoji: '⚡', provider: 'gemini', model: 'gemini-2.5-flash', description: 'سريع ومتوازن' },
     { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
     { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
     { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
-    { id: 'deepseek', label: 'DeepSeek Chat', emoji: '🐋', provider: 'deepseek', description: 'ممتاز للعربية', requiresKey: 'deepseek' },
-    { id: 'groq', label: 'Groq Llama 3.3', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
-    { id: 'cerebras-qwen3', label: 'Cerebras Qwen 3 235B', emoji: '🚀', provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', description: 'الأسرع inference + ممتاز للعربية', requiresKey: 'cerebras' },
-    { id: 'cerebras-llama4', label: 'Cerebras Llama 4 Scout', emoji: '🦅', provider: 'cerebras', model: 'llama-4-scout-17b-16e-instruct', description: 'سريع جداً ومجاني', requiresKey: 'cerebras' },
-    ...orModels.map((model, index) => ({ id: `openrouter-${index}`, label: model.label, emoji: model.badge, provider: 'openrouter', model: model.id, description: model.desc, requiresKey: 'openrouter' as const })),
+    { id: 'groq', label: 'Groq', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
     { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
     { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
   ];

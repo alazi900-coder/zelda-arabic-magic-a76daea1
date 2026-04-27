@@ -1477,7 +1477,7 @@ ${textsBlock}
       if (!response.ok) {
         const err = await response.text();
         console.error('AI gateway error:', err);
-        if (response.status === 402) throw new Error('انتهت نقاط الذكاء الاصطناعي — استخدم مفتاح Gemini الشخصي');
+        if (response.status === 402) throw new Error('انتهت حصة الذكاء الاصطناعي المجانية للخادم — أضف مفتاح API شخصي (Cerebras مجاني، Groq مجاني، Gemini، أو OpenRouter) في الإعدادات');
         if (response.status === 429) throw new Error('تم تجاوز حد الطلبات، حاول لاحقاً');
         throw new Error(`AI error: ${response.status}`);
       }
@@ -1648,6 +1648,9 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {
+      if (provider && provider !== 'gemini') {
+        console.warn(`[translate-entries] Unhandled provider value "${provider}" — falling back to Lovable AI/Gemini path`);
+      }
       const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
       return new Response(JSON.stringify({ translations, glossaryStats }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

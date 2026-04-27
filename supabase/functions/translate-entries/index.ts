@@ -1404,7 +1404,7 @@ ${textsBlock}
    */
   const tryKey = async (key: string): Promise<
     | { kind: 'success'; data: any }
-    | { kind: 'quota' }
+    | { kind: 'quota'; status: number; errText: string }
     | { kind: 'error'; message: string }
   > => {
     let lastStatus = 0;
@@ -1432,10 +1432,13 @@ ${textsBlock}
         if (lastStatus === 403) return { kind: 'error', message: 'مفتاح Gemini محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio' };
         return { kind: 'error', message: `خطأ Gemini: ${lastStatus} — ${lastErrText.slice(0, 200)}` };
       }
-      console.log(`Gemini ${modelName} hit ${resp.status} — trying next model...`);
+      console.log(`Gemini ${modelName} hit ${resp.status}: ${lastErrText.slice(0, 300)}`);
     }
-    return { kind: 'quota' };
+    return { kind: 'quota', status: lastStatus, errText: lastErrText };
   };
+
+  // Track the last quota error to surface to the user if all keys fail
+  let lastQuotaErr = '';
 
   let geminiData: any = null;
 
@@ -1446,6 +1449,7 @@ ${textsBlock}
     if (result.kind === 'error') throw new Error(result.message);
     // quota: mark blocked, try next key
     blockedKeys.push(key);
+    lastQuotaErr = result.errText || lastQuotaErr;
     console.log(`Gemini key ...${key.slice(-4)} exhausted across all models — trying next key`);
   }
 
@@ -1475,8 +1479,10 @@ ${textsBlock}
 
   // If user supplied keys and they all hit quota, surface a clear error
   // instead of silently falling back to the server's Lovable AI quota.
+  // Include Google's raw response so the user can diagnose (per-minute vs per-day vs token limits).
   if (sanitizedUserKeys.length > 0) {
-    throw new Error(`تجاوزت الحد المجاني لـ Gemini على كل المفاتيح (${sanitizedUserKeys.length}) وكل الموديلات — انتظر بضع ساعات أو استخدم موفّراً آخر (Cerebras أو Groq)`);
+    const googleSnippet = lastQuotaErr ? ` | رسالة Google: ${lastQuotaErr.slice(0, 400)}` : '';
+    throw new Error(`تجاوزت الحد المجاني لـ Gemini على كل المفاتيح (${sanitizedUserKeys.length}) وكل الموديلات — انتظر بضع ساعات أو استخدم موفّراً آخر (Cerebras أو Groq)${googleSnippet}`);
   }
 
   // Fallback to Lovable AI — with retry on JSON parse failure

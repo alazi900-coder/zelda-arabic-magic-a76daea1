@@ -1045,16 +1045,29 @@ ${textsBlock}
     }
   }
 
+  // Reject any translation containing CJK / Cyrillic / Hebrew / Thai / Greek
+  // characters — providers occasionally drift to those scripts even with a
+  // strict prompt. Leaving the entry untranslated is far better than saving
+  // a wrong-language string.
+  const FORBIDDEN_SCRIPT = /[\u0370-\u03ff\u0400-\u04ff\u0590-\u05ff\u0e00-\u0e7f\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
+  let droppedForeign = 0;
   for (let i = 0; i < needsAI.length; i++) {
     const item = needsAI[i];
     let translated = translationsObj[`K${i}`]?.trim();
     if (!translated) continue;
+    if (FORBIDDEN_SCRIPT.test(translated)) {
+      droppedForeign++;
+      continue;
+    }
     translated = normalizeTagPlaceholders(translated);
     translated = normalizeLockedTermPlaceholders(translated);
     translated = unlockTerms(translated, item.termLocks.locks);
     translated = stripUnexpectedPlaceholders(translated, new Set(item.pe.tags.keys()));
     if (glossaryMap) translated = applyGlossaryPost(translated, glossaryMap);
     result[item.entry.key] = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
+  }
+  if (droppedForeign > 0) {
+    console.warn(`[${providerName}] dropped ${droppedForeign}/${needsAI.length} translations containing non-Arabic scripts (CJK/Cyrillic/etc.)`);
   }
 
   return { translations: result, glossaryStats: stats };
@@ -1606,7 +1619,7 @@ Deno.serve(async (req) => {
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const { translations, glossaryStats } = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,
-        'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile',
+        'https://api.groq.com/openai/v1', 'openai/gpt-oss-120b',
       );
       return new Response(JSON.stringify({ translations, glossaryStats }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

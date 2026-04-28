@@ -28,6 +28,8 @@ type EditorSubset = Pick<
   | "tmAutoReuse" | "setTmAutoReuse"
   | "aiThrottleEnabled" | "setAiThrottleEnabled"
   | "customPromptInstructions" | "setCustomPromptInstructions"
+  | "aiBatchSize" | "setAiBatchSize"
+  | "translationCacheEnabled" | "setTranslationCacheEnabled"
 >;
 
 type TestConnState = 'idle' | 'testing' | 'ok' | 'error';

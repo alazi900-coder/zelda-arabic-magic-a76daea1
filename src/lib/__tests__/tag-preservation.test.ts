@@ -160,4 +160,69 @@ describe("placeholder integrity through post-processing", () => {
       expect(errors[0].sample).toBe("استخدم TAG_7 الآن");
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // ⟪T#⟫ resilience to whitespace / punctuation noise around placeholders
+  // ─────────────────────────────────────────────────────────────────────
+  describe("⟪T#⟫ survives surrounding whitespace and punctuation", () => {
+    it("preserves ⟪T0⟫ when AI added extra spaces around it", () => {
+      const requested = [{ key: "K0", original: "Hello ⟪T0⟫" }];
+      const aiOutput  = "أهلاً    ⟪T0⟫   "; // extra spaces before/after
+      const cleaned   = stripNewlines(aiOutput);
+      expect(cleaned).toBe("أهلاً ⟪T0⟫"); // collapsed by stripNewlines
+      const { placeholdersOk, errors } = checkBatch(requested, { K0: cleaned });
+      expect(placeholdersOk).toBe(1);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("preserves ⟪T0⟫ when AI inserted newlines around it", () => {
+      const requested = [{ key: "K1", original: "Welcome ⟪T0⟫ home" }];
+      const aiOutput  = "أهلاً\n⟪T0⟫\nفي المنزل"; // newlines hugging placeholder
+      const cleaned   = stripNewlines(aiOutput);
+      expect(cleaned).toBe("أهلاً ⟪T0⟫ في المنزل");
+      expect(checkBatch(requested, { K1: cleaned }).placeholdersOk).toBe(1);
+    });
+
+    it("preserves ⟪T0⟫ adjacent to Arabic punctuation (، . ؟ !)", () => {
+      const requested = [{ key: "K2", original: "Hi ⟪T0⟫" }];
+      // AI wraps placeholder in Arabic punctuation — must still match
+      const variants = [
+        "مرحباً، ⟪T0⟫.",
+        "مرحباً ⟪T0⟫؟",
+        "مرحباً ⟪T0⟫!",
+        "«⟪T0⟫»",
+        "(⟪T0⟫)",
+      ];
+      for (const v of variants) {
+        const cleaned = stripNewlines(v);
+        const { placeholdersOk, errors } = checkBatch(requested, { K2: cleaned });
+        expect(placeholdersOk, `failed for: ${v}`).toBe(1);
+        expect(errors).toHaveLength(0);
+      }
+    });
+
+    it("preserves multiple ⟪T#⟫ when AI clustered them with mixed punctuation", () => {
+      const requested = [{ key: "K3", original: "Use ⟪T0⟫ then ⟪T1⟫" }];
+      const aiOutput  = "استخدم  ⟪T0⟫،  ثم  ⟪T1⟫ ."; // extra spaces + commas/dot
+      const cleaned   = stripNewlines(aiOutput);
+      expect(checkBatch(requested, { K3: cleaned }).placeholdersOk).toBe(1);
+    });
+
+    it("preserves ⟪T#⟫ even when directly glued to Arabic letters (no space)", () => {
+      // Edge case: AI omitted spacing — placeholder still detectable by regex
+      const requested = [{ key: "K4", original: "⟪T0⟫ greetings ⟪T1⟫" }];
+      const cleaned   = stripNewlines("⟪T0⟫تحياتي⟪T1⟫"); // no spaces
+      expect(checkBatch(requested, { K4: cleaned }).placeholdersOk).toBe(1);
+    });
+
+    it("flags only when ⟪T#⟫ is genuinely lost (not when just spaced differently)", () => {
+      const requested = [{ key: "K5", original: "A ⟪T0⟫ B ⟪T1⟫" }];
+      const aiOutput  = "أ   ⟪T0⟫    ب"; // ⟪T1⟫ truly missing
+      const cleaned   = stripNewlines(aiOutput);
+      const { placeholdersOk, errors } = checkBatch(requested, { K5: cleaned });
+      expect(placeholdersOk).toBe(0);
+      expect(errors[0].reason).toContain("expected=⟪T0⟫|⟪T1⟫");
+      expect(errors[0].reason).toContain("got=⟪T0⟫");
+    });
+  });
 });

@@ -246,6 +246,21 @@ export function useEditorSettings() {
     } catch { /* ignore */ }
   }, []);
 
+  // === AI Routing Mode: free / paid / auto ===
+  // free  = Gemini server key only (fails on 429)
+  // paid  = Lovable AI Gateway only (skip Gemini entirely)
+  // auto  = Try Gemini first, fallback to Lovable on 429 (default — current behavior)
+  const [aiRoutingMode, _setAiRoutingMode] = useState<'free' | 'paid' | 'auto'>(() => {
+    try {
+      const v = localStorage.getItem('aiRoutingMode');
+      return (v === 'free' || v === 'paid' || v === 'auto') ? v : 'auto';
+    } catch { return 'auto'; }
+  });
+  const setAiRoutingMode = useCallback((v: 'free' | 'paid' | 'auto') => {
+    _setAiRoutingMode(v);
+    try { localStorage.setItem('aiRoutingMode', v); } catch { /* ignore */ }
+  }, []);
+
   // === Adaptive throttle between AI batches (avoids hitting per-minute rate limits) ===
   // Default ON. Per-provider delay: see PROVIDER_BATCH_DELAY_MS in useEditorTranslation.
   const [aiThrottleEnabled, _setAiThrottleEnabled] = useState(() => {
@@ -306,6 +321,7 @@ export function useEditorSettings() {
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
+    aiRoutingMode, setAiRoutingMode,
     enhancedMemory, saveToEnhancedMemory,
     hiddenPanels, togglePanel,
   };

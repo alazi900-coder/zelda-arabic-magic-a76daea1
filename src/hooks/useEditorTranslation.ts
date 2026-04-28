@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
   ExtractedEntry, EditorState, AI_BATCH_SIZE, PAGE_SIZE,
@@ -12,6 +12,7 @@ import { countEffectiveLines } from "@/lib/text-tokens";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
+import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 

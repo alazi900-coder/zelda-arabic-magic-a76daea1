@@ -1523,7 +1523,7 @@ async function translateWithAI(
         body: JSON.stringify({
           model: aiModel === 'gpt-5' ? 'openai/gpt-5' : aiModel === 'gemini-2.5-pro' ? 'google/gemini-2.5-pro' : aiModel === 'gemini-3.1-pro-preview' ? 'google/gemini-3.1-pro-preview' : 'google/gemini-2.5-flash',
           messages: [
-            { role: 'system', content: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). Output ONLY a valid JSON object with keys like K0, K1, K2... and Arabic translation values. Never modify ⟪T#⟫ placeholders. ALWAYS use glossary terms exactly. ALWAYS maintain consistency with previously translated texts — same English word = same Arabic translation. CRITICAL: Never use unescaped double quotes inside translation values. Use single quotes or escaped quotes (\\\") instead. Ensure the JSON is complete and valid.' },
+            { role: 'system', content: XC1_SYSTEM_PROMPT },
             { role: 'user', content: aiPrompt },
           ],
         }),

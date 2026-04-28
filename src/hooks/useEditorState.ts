@@ -1440,6 +1440,8 @@ export function useEditorState() {
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
     aiRoutingMode, setAiRoutingMode,
+    aiBatchSize, setAiBatchSize,
+    translationCacheEnabled, setTranslationCacheEnabled,
     lastBatchQuality, cumulativeQuality, resetBatchQuality,
 
     // Handlers

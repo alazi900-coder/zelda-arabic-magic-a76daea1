@@ -6,6 +6,103 @@ const corsHeaders = {
 };
 
 // ============================================================================
+// POST-PROCESSING & QUALITY METRICS
+// ============================================================================
+// Centralised here so EVERY provider goes through the same hygiene pass.
+
+/** Strip newlines (\n, \r) and replace with a single space. UI handles wrapping. */
+function stripNewlinesInValues(translations: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(translations)) {
+    if (typeof v !== 'string') { out[k] = v as unknown as string; continue; }
+    out[k] = v.replace(/\r\n|\r|\n/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
+  }
+  return out;
+}
+
+export interface BatchQualityStats {
+  total: number;
+  returned: number;
+  validJson: boolean;
+  withArabic: number;
+  placeholdersOk: number;
+  newlineStripped: number;
+  errors: { key: string; reason: string; sample?: string }[];
+}
+
+const ARABIC_RE = /[\u0600-\u06FF]/;
+const TAG_RE = /(TAG_\d+|⟪T\d+⟫)/g;
+
+/** Compute quality stats by comparing AI output vs requested entries. */
+function computeQualityStats(
+  requested: { key: string; original: string }[],
+  rawTranslations: Record<string, string>,
+  cleanedTranslations: Record<string, string>,
+): BatchQualityStats {
+  const errors: BatchQualityStats['errors'] = [];
+  let withArabic = 0;
+  let placeholdersOk = 0;
+  let newlineStripped = 0;
+
+  for (const entry of requested) {
+    const raw = rawTranslations[entry.key];
+    const cleaned = cleanedTranslations[entry.key];
+    if (cleaned === undefined || cleaned === null || cleaned === '') {
+      errors.push({ key: entry.key, reason: 'missing', sample: entry.original.slice(0, 80) });
+      continue;
+    }
+    if (ARABIC_RE.test(cleaned)) withArabic++;
+    else errors.push({ key: entry.key, reason: 'no-arabic', sample: cleaned.slice(0, 80) });
+
+    // placeholder integrity: every TAG_n/⟪Tn⟫ in original must appear (same set) in output
+    const expected = (entry.original.match(TAG_RE) || []).sort().join('|');
+    const actual = (cleaned.match(TAG_RE) || []).sort().join('|');
+    if (expected === actual) placeholdersOk++;
+    else errors.push({
+      key: entry.key,
+      reason: `placeholder-mismatch (expected=${expected || '∅'} got=${actual || '∅'})`,
+      sample: cleaned.slice(0, 80),
+    });
+
+    if (typeof raw === 'string' && /\r|\n/.test(raw)) newlineStripped++;
+  }
+
+  return {
+    total: requested.length,
+    returned: Object.keys(cleanedTranslations).length,
+    validJson: true, // if we got here, JSON parsed
+    withArabic,
+    placeholdersOk,
+    newlineStripped,
+    errors: errors.slice(0, 20),
+  };
+}
+
+interface SuccessPayload {
+  translations: Record<string, string>;
+  charsUsed?: number;
+  glossaryStats?: unknown;
+}
+
+/** Wrap a provider result: clean newlines, attach qualityStats, JSON response. */
+function buildSuccessResponse(
+  requested: { key: string; original: string }[],
+  raw: SuccessPayload,
+): Response {
+  const cleaned = stripNewlinesInValues(raw.translations || {});
+  const qualityStats = computeQualityStats(requested, raw.translations || {}, cleaned);
+  const body: Record<string, unknown> = {
+    translations: cleaned,
+    glossaryStats: raw.glossaryStats,
+    qualityStats,
+  };
+  if (typeof raw.charsUsed === 'number') body.charsUsed = raw.charsUsed;
+  return new Response(JSON.stringify(body), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+// ============================================================================
 // XC1 TRANSLATION PROMPTS — single source of truth
 // ============================================================================
 // Used by ALL providers (OpenAI-compat, Gemini direct, Lovable AI gateway).

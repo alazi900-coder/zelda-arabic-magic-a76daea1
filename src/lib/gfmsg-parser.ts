@@ -257,11 +257,8 @@ export function buildDatFile(file: GfmsgFile, translations: Record<string, strin
         const translated = translations[key] || translations[altKey];
         langCodes.push(textToCodes(translated));
       } else {
-        // Re-encode original codes with null terminator
-        const original = new Uint16Array(entry.codes.length + 1);
-        original.set(entry.codes);
-        original[entry.codes.length] = 0;
-        langCodes.push(original);
+        // entry.codes already contains the EOM null (parseDatFile reads strLength which includes EOM)
+        langCodes.push(entry.codes);
       }
     }
     allCodes.push(langCodes);

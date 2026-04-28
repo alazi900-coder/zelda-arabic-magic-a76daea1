@@ -276,7 +276,14 @@ function normalizeTagPlaceholders(text: string): string {
     .replace(/[\[{(<]\s*TAG\s*[_\s-:]?(\d+)\s*[\]})>]/gi, 'TAG_$1') // [TAG_0] -> TAG_0
     .replace(/NEWLINE\s*[-:_]?\s*_?(\d+)/gi, 'NEWLINE_$1')  // Normalize NEWLINE variants
     .replace(/newline_(\d+)/g, 'NEWLINE_$1')                // lowercase -> uppercase
-    .replace(/\bNEW\s*[-_]?\s*LINE\s*[-_]?\s*(\d+)/gi, 'NEWLINE_$1'); // NEW-LINE_0, NEW LINE 0
+    .replace(/\bNEW\s*[-_]?\s*LINE\s*[-_]?\s*(\d+)/gi, 'NEWLINE_$1') // NEW-LINE_0, NEW LINE 0
+    // Detach punctuation glued to NEWLINE_N on either side: "NEWLINE_0؟" → "NEWLINE_0 ؟"
+    // Covers Arabic/Latin punctuation: ؟ ! ، ؛ . , : ; ? — and reorders if punctuation came BEFORE
+    .replace(/([?!.,;:؟،؛])\s*(NEWLINE_\d+)/g, '$1 $2')
+    .replace(/(NEWLINE_\d+)\s*([?!.,;:؟،؛])/g, '$1 $2')
+    // Detach Arabic/Latin letters glued to NEWLINE_N (rare but possible): "نصNEWLINE_0" → "نص NEWLINE_0"
+    .replace(/([^\s_\d])(NEWLINE_\d+)/g, '$1 $2')
+    .replace(/(NEWLINE_\d+)([^\s_\d?!.,;:؟،؛])/g, '$1 $2');
 }
 
 /** Normalize locked term placeholders (⟪T0⟫) without converting them to TAG_N */

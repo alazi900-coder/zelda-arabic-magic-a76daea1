@@ -609,7 +609,12 @@ export function useEditorTranslation({
 
       // إذا كل النصوص في الكاش — لا نستدعي AI أصلاً.
       if (toSend.length === 0) {
-        return { translations: cacheHits, charsUsed: 0, glossaryStats: {}, __skipQualityRecord: true };
+        return {
+          translations: cacheHits,
+          charsUsed: 0,
+          glossaryStats: { directMatches: 0, lockedTerms: 0, contextTerms: 0 },
+          __skipQualityRecord: true as const,
+        };
       }
 
       const result = await fetchBatchWithRetry(toSend, signal);

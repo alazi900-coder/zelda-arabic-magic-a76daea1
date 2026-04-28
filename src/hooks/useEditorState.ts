@@ -33,6 +33,8 @@ export function useEditorState() {
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
     aiRoutingMode, setAiRoutingMode,
+    aiBatchSize, setAiBatchSize,
+    translationCacheEnabled, setTranslationCacheEnabled,
     enhancedMemory, saveToEnhancedMemory,
   } = settings;
 

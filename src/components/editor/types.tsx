@@ -75,7 +75,10 @@ export interface FileCategory {
 }
 
 export const AUTOSAVE_DELAY = 1500;
-export const AI_BATCH_SIZE = 5;
+// زيادة حجم الدفعة لتقليل عدد الطلبات وتقليل استهلاك حصة Gemini المجانية.
+// كل دفعة = طلب AI واحد. 20 نصاً = استهلاك 4x أقل مقارنة بـ 5.
+// Gemini Flash يدعم بسهولة 20 نصاً قصيراً-متوسطاً في طلب واحد (output ~8K tokens).
+export const AI_BATCH_SIZE = 20;
 export const PAGE_SIZE = 50;
 export const INPUT_DEBOUNCE = 300;
 

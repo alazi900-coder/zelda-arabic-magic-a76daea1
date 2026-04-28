@@ -101,49 +101,116 @@ function pad3(n: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Inner LAGP payload → ordered chunks
+// Splitter registry — extensible
 // ---------------------------------------------------------------------------
 
 /**
- * Split the decompressed LAGP payload into named chunks.
+ * A splitter inspects the decompressed LAGP payload and produces an ordered
+ * list of chunks. The contract is strict:
  *
- * Strategy (v1 — conservative, byte-exact):
- *  - chunk 000: the 32-byte LAGP header (magic + early fields). This is the
- *    portion most users will want as a stable reference when editing.
- *  - chunk 001+: the remaining payload as one big "raw" chunk.
+ *   1. Chunks must cover EVERY byte of the payload — no gaps, no overlaps.
+ *   2. Chunks must be in ascending offset order, and `index` must match
+ *      array position.
+ *   3. The concat of all chunk slices MUST byte-equal the input payload.
  *
- * This guarantees round-trip safety. Future versions can subdivide the
- * "raw" chunk into widget tables, string pools, etc., as the LAGP format
- * is reverse-engineered further. The manifest format is forward-compatible:
- * any number of chunks is allowed as long as their concat reproduces the
- * payload.
+ * Any region the splitter cannot identify must be emitted as a `filler`
+ * chunk so round-trip stays byte-exact.
+ *
+ * To add a new splitter (e.g. one that recognises widget tables / string
+ * pools), implement this interface and register it via `registerLagpSplitter`.
+ * The active splitter is selected by name when calling `unpackLagp`.
  */
-function splitLagpPayload(payload: Uint8Array): LagpChunk[] {
-  const chunks: LagpChunk[] = [];
-  if (payload.length === 0) return chunks;
-
-  const HEADER_SIZE = Math.min(32, payload.length);
-
-  chunks.push({
-    index: 0,
-    name: `chunks/${pad3(0)}_header.bin`,
-    offset: 0,
-    length: HEADER_SIZE,
-    kind: "header",
-  });
-
-  if (payload.length > HEADER_SIZE) {
-    chunks.push({
-      index: 1,
-      name: `chunks/${pad3(1)}_body.bin`,
-      offset: HEADER_SIZE,
-      length: payload.length - HEADER_SIZE,
-      kind: "raw",
-    });
-  }
-
-  return chunks;
+export interface LagpSplitter {
+  /** Stable identifier stored in the manifest (e.g. "v1-header-body"). */
+  name: string;
+  /** Short human description, shown in UI/devtools. */
+  description: string;
+  /** Produce chunks. MUST satisfy the coverage contract above. */
+  split(payload: Uint8Array): LagpChunk[];
 }
+
+const splitterRegistry = new Map<string, LagpSplitter>();
+
+export function registerLagpSplitter(splitter: LagpSplitter): void {
+  splitterRegistry.set(splitter.name, splitter);
+}
+
+export function getLagpSplitter(name: string): LagpSplitter | undefined {
+  return splitterRegistry.get(name);
+}
+
+export function listLagpSplitters(): LagpSplitter[] {
+  return [...splitterRegistry.values()];
+}
+
+/**
+ * Validate the coverage contract. Throws on violation. Used both by
+ * `unpackLagp` (to catch buggy splitters early) and by tests.
+ */
+export function validateChunkCoverage(
+  chunks: LagpChunk[],
+  payloadSize: number,
+): void {
+  let expectedOffset = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    if (c.index !== i) {
+      throw new Error(`Splitter bug: chunk[${i}].index = ${c.index}`);
+    }
+    if (c.offset !== expectedOffset) {
+      throw new Error(
+        `Splitter bug: chunk[${i}] offset ${c.offset} != expected ${expectedOffset}`,
+      );
+    }
+    if (c.length < 0) {
+      throw new Error(`Splitter bug: chunk[${i}] negative length ${c.length}`);
+    }
+    expectedOffset += c.length;
+  }
+  if (expectedOffset !== payloadSize) {
+    throw new Error(
+      `Splitter bug: chunks cover ${expectedOffset} bytes, payload is ${payloadSize}`,
+    );
+  }
+}
+
+// ---- Built-in splitters --------------------------------------------------
+
+/**
+ * v1 splitter (default, conservative): exposes a 32-byte header chunk and
+ * dumps the rest as a single body chunk. Always produces a valid round-trip.
+ */
+const splitterV1HeaderBody: LagpSplitter = {
+  name: "v1-header-body",
+  description: "32-byte header + single body chunk (conservative, always safe)",
+  split(payload: Uint8Array): LagpChunk[] {
+    const chunks: LagpChunk[] = [];
+    if (payload.length === 0) return chunks;
+
+    const HEADER_SIZE = Math.min(32, payload.length);
+    chunks.push({
+      index: 0,
+      name: `chunks/${pad3(0)}_header.bin`,
+      offset: 0,
+      length: HEADER_SIZE,
+      kind: "header",
+    });
+    if (payload.length > HEADER_SIZE) {
+      chunks.push({
+        index: 1,
+        name: `chunks/${pad3(1)}_body.bin`,
+        offset: HEADER_SIZE,
+        length: payload.length - HEADER_SIZE,
+        kind: "raw",
+      });
+    }
+    return chunks;
+  },
+};
+
+registerLagpSplitter(splitterV1HeaderBody);
+
+export const DEFAULT_SPLITTER_NAME = splitterV1HeaderBody.name;
 
 // ---------------------------------------------------------------------------
 // Public API

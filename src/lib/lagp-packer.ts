@@ -40,8 +40,11 @@ export interface LagpChunk {
   offset: number;
   /** Byte length. */
   length: number;
-  /** Human-readable kind ("header", "filler", "raw"). */
-  kind: "header" | "filler" | "raw";
+  /**
+   * Human-readable kind. "header"/"filler"/"raw" are reserved; future
+   * splitters may emit additional kinds (e.g. "widgets", "strings").
+   */
+  kind: string;
 }
 
 export interface LagpManifest {
@@ -56,6 +59,8 @@ export interface LagpManifest {
   xbc1HeaderBase64: string | null;
   /** Total inner payload size in bytes. */
   innerSize: number;
+  /** Name of the splitter that produced these chunks. Informational. */
+  splitter: string;
   /** Ordered list of chunks. Concatenating their bytes reproduces the inner payload. */
   chunks: LagpChunk[];
 }
@@ -64,6 +69,11 @@ export interface UnpackResult {
   /** ZIP file as ArrayBuffer, ready to download. */
   zip: ArrayBuffer;
   manifest: LagpManifest;
+}
+
+export interface UnpackOptions {
+  /** Splitter name. Defaults to DEFAULT_SPLITTER_NAME. */
+  splitter?: string;
 }
 
 // ---------------------------------------------------------------------------

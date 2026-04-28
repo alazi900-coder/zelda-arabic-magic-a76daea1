@@ -9,8 +9,12 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Package, PackageOpen, Loader2 } from "lucide-react";
-import { unpackLagp, repackLagp } from "@/lib/lagp-packer";
+import { Package, PackageOpen, FileJson, Loader2 } from "lucide-react";
+import {
+  unpackLagp,
+  repackLagp,
+  repackLagpWithExternalManifest,
+} from "@/lib/lagp-packer";
 import { toast } from "sonner";
 
 function downloadBlob(data: ArrayBuffer, filename: string, mime: string) {

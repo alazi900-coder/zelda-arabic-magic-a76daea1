@@ -679,9 +679,9 @@ export function useEditorTranslation({
         }));
         
         const data = await fetchBatchWithCache(entries, abortControllerRef.current.signal);
-        // recordBatchQuality يُستدعى داخلياً في fetchBatchWithRetry عند الاستدعاء الفعلي للـ AI.
         lastBatchEndAt = Date.now();
-        addAiRequest(1);
+        // إذا full cache hit — لا نحسبه طلب AI.
+        if (!data.__skipQualityRecord) addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
         // Accumulate glossary stats
         if (data.glossaryStats) {

@@ -174,13 +174,12 @@ export function useEditorTranslation({
 
   // ============= Single-Translate Request Coalescer =============
   // يجمع طلبات handleTranslateSingle المتتابعة خلال نافذة 200ms في طلب AI واحد
-  // (حتى 20 نصاً)، لتقليل عدد الطلبات إلى edge function وتقليل استهلاك حصة Gemini.
-  // يُستفاد منه عندما يضغط المستخدم زر "ترجم" على عدة بطاقات بتتابع سريع.
+  // (حتى aiBatchSize نصاً)، ويستخدم الـ persistent cache لتجاوز AI تماماً عند الإمكان.
   const coalescerRef = useRef<ReturnType<typeof createTranslationCoalescer> | null>(null);
   const coalescer = useMemo(() => {
     const inst = createTranslationCoalescer({
       windowMs: 200,
-      maxBatch: AI_BATCH_SIZE,
+      maxBatch: aiBatchSize,
       buildPayload: (entries: CoalescerEntry[]) => ({
         entries,
         glossary: activeGlossary,
@@ -200,23 +199,64 @@ export function useEditorTranslation({
         routingMode: aiRoutingMode,
       }),
       fetcher: async (payload) => {
+        // === Cache lookup قبل الإرسال ===
+        // نفلتر الـ entries: ما هو موجود في الكاش يُعاد فوراً، وما تبقّى يُرسل لـ AI.
+        const allEntries = (payload.entries as CoalescerEntry[]) || [];
+        let translations: Record<string, string> = {};
+        let entriesToSend = allEntries;
+        let cacheHits = 0;
+
+        if (translationCacheEnabled && allEntries.length > 0) {
+          const { hits, misses } = await cacheLookupMany(allEntries, translationProvider, aiModel);
+          translations = { ...hits };
+          cacheHits = Object.keys(hits).length;
+          entriesToSend = misses;
+        }
+
+        // إذا كل النصوص في الكاش → لا داعي لاستدعاء AI أبداً.
+        if (entriesToSend.length === 0) {
+          if (cacheHits > 0) console.log(`[cache] ${cacheHits} ترجمة من الذاكرة الدائمة (بدون AI)`);
+          return { translations, providerUsed: 'cache', __cacheHitsOnly: true };
+        }
+
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, entries: entriesToSend }),
         });
         if (!response.ok) {
           const errData = await response.json().catch(() => null);
           throw new Error(errData?.error || `خطأ ${response.status}`);
         }
-        return response.json();
+        const data = await response.json();
+
+        // دمج الـ AI translations مع الـ cache hits.
+        const aiTranslations: Record<string, string> = data?.translations || {};
+        translations = { ...translations, ...aiTranslations };
+
+        // === Cache store بعد الاستلام ===
+        if (translationCacheEnabled) {
+          const toStore: { original: string; translation: string }[] = [];
+          for (const e of entriesToSend) {
+            const tr = aiTranslations[e.key];
+            if (tr?.trim()) toStore.push({ original: e.original, translation: tr });
+          }
+          if (toStore.length > 0) {
+            cacheStoreMany(toStore, translationProvider, aiModel).catch(() => {});
+          }
+        }
+
+        return { ...data, translations, __cacheHits: cacheHits };
       },
       onBatchComplete: (data, batchSize) => {
+        // إذا كل النتائج من الكاش، لا نعدّ ذلك طلب AI.
+        if (data?.__cacheHitsOnly) return;
         recordBatchQuality(data);
         addAiRequest(1);
         if (data?.charsUsed) addMyMemoryChars(data.charsUsed);
-        if (batchSize > 1) {
-          console.log(`[coalescer] جمع ${batchSize} طلب ترجمة في طلب AI واحد`);
+        const cacheHits = data?.__cacheHits || 0;
+        if (batchSize > 1 || cacheHits > 0) {
+          console.log(`[coalescer] طلب AI واحد: ${batchSize - cacheHits} نص جديد + ${cacheHits} من الكاش`);
         }
         if (data?.fallbackUsed) {
           toast({
@@ -233,7 +273,7 @@ export function useEditorTranslation({
   }, [
     activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey,
     userCerebrasKey, userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines,
-    npcMode, aiModel, customPromptInstructions, aiRoutingMode,
+    npcMode, aiModel, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled,
   ]);
 
   // عند unmount: نُفرغ ما تجمّع لتجنّب طلبات معلقة.

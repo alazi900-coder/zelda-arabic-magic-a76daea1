@@ -1397,7 +1397,14 @@ async function translateWithAI(
     detailed: true,
   });
 
-  const effectiveKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
+  // Routing mode determines which provider to use:
+  //   free  = Gemini only (server key or user key); fail with clear error on 429
+  //   paid  = Skip Gemini entirely, use Lovable Gateway only
+  //   auto  = Try Gemini first, fallback to Lovable on 429 (existing behavior)
+  const _rawKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
+  const effectiveKey = routingMode === 'paid' ? '' : _rawKey;
+  const allowLovableFallback = routingMode !== 'free';
+  console.log(`[translateWithAI] routingMode=${routingMode} hasGeminiKey=${!!effectiveKey} allowLovableFallback=${allowLovableFallback}`);
   
   /** Detect if the AI response was truncated */
   function detectTruncation(text: string): boolean {

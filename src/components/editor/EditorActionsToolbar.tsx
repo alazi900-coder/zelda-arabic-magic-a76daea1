@@ -269,7 +269,10 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* NPC Mode toggle + Max lines selector */}
+              {/* AI Routing Mode toggle */}
+              <AIRoutingToggle mode={editor.aiRoutingMode} onChange={editor.setAiRoutingMode} />
+
+              {/* NPC Mode toggle */}
               <Button
                 variant={editor.npcMode ? "default" : "outline"}
                 size="sm"

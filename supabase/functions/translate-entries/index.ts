@@ -1707,7 +1707,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, extraInstructions } = await req.json() as {
+    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, extraInstructions, routingMode } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
@@ -1720,7 +1720,10 @@ Deno.serve(async (req) => {
       npcMode?: boolean;
       aiModel?: string;
       extraInstructions?: string;
+      routingMode?: 'free' | 'paid' | 'auto';
     };
+    const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
+      routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
 
     console.log(`[translate-entries] provider=${JSON.stringify(provider)} aiModel=${JSON.stringify(aiModel)} hasGeminiKey=${!!userApiKey} hasProviderKey=${!!providerApiKey} entries=${entries?.length ?? 0}`);
 

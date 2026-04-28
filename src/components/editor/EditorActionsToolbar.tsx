@@ -516,6 +516,9 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* AI Routing Mode toggle */}
+              <AIRoutingToggle mode={editor.aiRoutingMode} onChange={editor.setAiRoutingMode} />
+
               {/* NPC Mode toggle + Max lines selector */}
               <Button
                 variant={editor.npcMode ? "default" : "outline"}

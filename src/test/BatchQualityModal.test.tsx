@@ -84,8 +84,10 @@ describe("BatchQualityModal", () => {
     render(<BatchQualityModal lastBatch={sampleBatch} cumulative={cumulative} onReset={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /جودة الدفعات/ }));
     fireEvent.click(screen.getByRole("tab", { name: /تراكمي/ }));
-    expect(screen.getByText("5")).toBeInTheDocument();
-    expect(screen.getByText("50")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument(); // newlineStripped
+    // After switching tabs, cumulative content is rendered
+    const tabPanel = await screen.findByRole("tabpanel");
+    expect(tabPanel.textContent).toContain("5");   // batches
+    expect(tabPanel.textContent).toContain("50");  // total
+    expect(tabPanel.textContent).toContain("12");  // newlineStripped
   });
 });

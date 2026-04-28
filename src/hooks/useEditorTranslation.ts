@@ -48,6 +48,8 @@ interface UseEditorTranslationProps {
   aiThrottleEnabled: boolean;
   customPromptInstructions: string;
   aiRoutingMode: 'free' | 'paid' | 'auto';
+  aiBatchSize: number;
+  translationCacheEnabled: boolean;
 }
 
 /**

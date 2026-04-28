@@ -1430,6 +1430,7 @@ export function useEditorState() {
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
+    lastBatchQuality, cumulativeQuality, resetBatchQuality,
 
     // Handlers
     toggleProtection, toggleTechnicalBypass,

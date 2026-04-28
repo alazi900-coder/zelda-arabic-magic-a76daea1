@@ -529,6 +529,36 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         />
       </div>
 
+      {/* AI Batch Size */}
+      <div className="flex items-center justify-between border-t border-border/50 pt-3 mt-1 gap-3">
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className="text-sm font-display">📦 حجم الدفعة (نصوص لكل طلب AI)</span>
+          <span className="text-xs text-muted-foreground font-body">أكبر = طلبات أقل = توفير حصة. الموصى به: 20.</span>
+        </div>
+        <input
+          type="number"
+          min={5}
+          max={50}
+          step={1}
+          value={editor.aiBatchSize}
+          onChange={(e) => editor.setAiBatchSize(parseInt(e.target.value, 10) || 20)}
+          className="w-20 px-2 py-1 rounded bg-background border border-border font-body text-sm text-center"
+          dir="ltr"
+        />
+      </div>
+
+      {/* Persistent Translation Cache */}
+      <div className="flex items-center justify-between border-t border-border/50 pt-3 mt-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-display">💾 ذاكرة ترجمة دائمة</span>
+          <span className="text-xs text-muted-foreground font-body">(يحفظ ترجمات AI ويعيد استخدامها لاحقاً عبر كل المشاريع)</span>
+        </div>
+        <Switch
+          checked={editor.translationCacheEnabled}
+          onCheckedChange={editor.setTranslationCacheEnabled}
+        />
+      </div>
+
       {/* Custom prompt instructions */}
       <div className="flex flex-col gap-2 border-t border-border/50 pt-3 mt-1">
         <div className="flex items-center justify-between gap-2 flex-wrap">

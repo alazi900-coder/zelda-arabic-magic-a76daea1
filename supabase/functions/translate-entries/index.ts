@@ -1297,7 +1297,8 @@ async function translateWithAI(
   context: { key: string; original: string; translation?: string }[] | undefined,
   userApiKey: string | undefined,
   aiModel: string | undefined,
-): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
+  routingMode: 'free' | 'paid' | 'auto' = 'auto',
+): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats; providerUsed?: string }> {
   const glossaryMap = glossary ? parseGlossaryToMap(glossary) : new Map<string, string>();
   const tmMap = buildTranslationMemory(context);
   const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };

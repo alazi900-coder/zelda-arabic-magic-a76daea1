@@ -90,4 +90,81 @@ describe("lagp-packer", () => {
     // First body byte differs by exactly 1
     expect(repackedBytes[32]).toBe((originalBytes[32] + 1) & 0xff);
   });
+
+  it("default splitter is registered and produces valid coverage", async () => {
+    const splitters = listLagpSplitters();
+    expect(splitters.some((s) => s.name === "v1-header-body")).toBe(true);
+
+    const original = makeFakeLagp();
+    const { manifest } = await unpackLagp(original, "fake.wilay");
+    expect(manifest.splitter).toBe("v1-header-body");
+    validateChunkCoverage(manifest.chunks, manifest.innerSize);
+  });
+
+  it("custom splitter can subdivide payload and still round-trip", async () => {
+    const quad: LagpSplitter = {
+      name: "test-quad",
+      description: "Splits payload into 4 equal parts (test-only)",
+      split(payload) {
+        const q = Math.floor(payload.length / 4);
+        return [
+          { index: 0, name: "chunks/000_a.bin", offset: 0,     length: q,                      kind: "raw" },
+          { index: 1, name: "chunks/001_b.bin", offset: q,     length: q,                      kind: "raw" },
+          { index: 2, name: "chunks/002_c.bin", offset: 2 * q, length: q,                      kind: "raw" },
+          { index: 3, name: "chunks/003_d.bin", offset: 3 * q, length: payload.length - 3 * q, kind: "raw" },
+        ];
+      },
+    };
+    registerLagpSplitter(quad);
+
+    const original = makeFakeLagp();
+    const { zip, manifest } = await unpackLagp(original, "fake.wilay", {
+      splitter: "test-quad",
+    });
+    expect(manifest.splitter).toBe("test-quad");
+    expect(manifest.chunks.length).toBe(4);
+
+    const repacked = await repackLagp(zip);
+    expect(new Uint8Array(repacked)).toEqual(new Uint8Array(original));
+  });
+
+  it("validateChunkCoverage rejects gaps and short coverage", () => {
+    expect(() =>
+      validateChunkCoverage(
+        [
+          { index: 0, name: "a", offset: 0,  length: 10, kind: "raw" },
+          { index: 1, name: "b", offset: 20, length: 10, kind: "raw" },
+        ],
+        30,
+      ),
+    ).toThrow(/expected 10/);
+
+    expect(() =>
+      validateChunkCoverage(
+        [{ index: 0, name: "a", offset: 0, length: 10, kind: "raw" }],
+        20,
+      ),
+    ).toThrow(/cover 10 bytes, payload is 20/);
+  });
+
+  it("repackLagpWithExternalManifest works with a chunk-only ZIP", async () => {
+    const original = makeFakeLagp();
+    const { zip } = await unpackLagp(original, "fake.wilay");
+    const z = await JSZip.loadAsync(zip);
+
+    const manifestText = await z.file("manifest.json")!.async("string");
+    z.remove("manifest.json");
+    const chunksOnlyZip = await z.generateAsync({ type: "arraybuffer" });
+
+    const repacked = await repackLagpWithExternalManifest(chunksOnlyZip, manifestText);
+    expect(new Uint8Array(repacked)).toEqual(new Uint8Array(original));
+  });
+
+  it("repackLagpWithExternalManifest rejects invalid JSON", async () => {
+    const original = makeFakeLagp();
+    const { zip } = await unpackLagp(original, "fake.wilay");
+    await expect(
+      repackLagpWithExternalManifest(zip, "{ not valid json"),
+    ).rejects.toThrow(/Invalid manifest\.json/);
+  });
 });

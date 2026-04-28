@@ -82,12 +82,14 @@ interface SuccessPayload {
   translations: Record<string, string>;
   charsUsed?: number;
   glossaryStats?: unknown;
+  providerUsed?: string;
 }
 
 /** Wrap a provider result: clean newlines, attach qualityStats, JSON response. */
 function buildSuccessResponse(
   requested: { key: string; original: string }[],
   raw: SuccessPayload,
+  providerUsed?: string,
 ): Response {
   const cleaned = stripNewlinesInValues(raw.translations || {});
   const qualityStats = computeQualityStats(requested, raw.translations || {}, cleaned);
@@ -97,6 +99,8 @@ function buildSuccessResponse(
     qualityStats,
   };
   if (typeof raw.charsUsed === 'number') body.charsUsed = raw.charsUsed;
+  if (providerUsed) body.providerUsed = providerUsed;
+  if (raw.providerUsed) body.providerUsed = raw.providerUsed;
   return new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
@@ -1293,7 +1297,8 @@ async function translateWithAI(
   context: { key: string; original: string; translation?: string }[] | undefined,
   userApiKey: string | undefined,
   aiModel: string | undefined,
-): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
+  routingMode: 'free' | 'paid' | 'auto' = 'auto',
+): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats; providerUsed?: string }> {
   const glossaryMap = glossary ? parseGlossaryToMap(glossary) : new Map<string, string>();
   const tmMap = buildTranslationMemory(context);
   const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
@@ -1392,7 +1397,14 @@ async function translateWithAI(
     detailed: true,
   });
 
-  const effectiveKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
+  // Routing mode determines which provider to use:
+  //   free  = Gemini only (server key or user key); fail with clear error on 429
+  //   paid  = Skip Gemini entirely, use Lovable Gateway only
+  //   auto  = Try Gemini first, fallback to Lovable on 429 (existing behavior)
+  const _rawKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
+  const effectiveKey = routingMode === 'paid' ? '' : _rawKey;
+  const allowLovableFallback = routingMode !== 'free';
+  console.log(`[translateWithAI] routingMode=${routingMode} hasGeminiKey=${!!effectiveKey} allowLovableFallback=${allowLovableFallback}`);
   
   /** Detect if the AI response was truncated */
   function detectTruncation(text: string): boolean {
@@ -1586,6 +1598,10 @@ async function translateWithAI(
     if (!geminiResponse || !geminiResponse.ok) {
       console.error('Gemini API error:', lastErrText);
       if (lastStatus === 429 || lastStatus === 503) {
+        // Free routing mode: never fallback to paid Lovable Gateway
+        if (!allowLovableFallback) {
+          throw new Error('🆓 وضع "مجاني فقط": تجاوزت الحد اليومي لـ Gemini Free — انتظر ساعات قليلة أو بدّل الوضع إلى "تلقائي" أو "مدفوع"');
+        }
         if (userApiKey?.trim()) {
           throw new Error('تجاوزت الحد المجاني لـ Gemini اليومي على كل الموديلات (2.0 Flash + 2.5 Flash + 2.5 Pro) — انتظر ساعات قليلة أو استخدم موفّراً آخر (Cerebras أو Groq)');
         }
@@ -1603,9 +1619,14 @@ async function translateWithAI(
       }
       const translationsObj = extractJsonObject(content);
       const aiResult = parseAndUnlock(translationsObj);
-      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries via Gemini (keyed mode)`);
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'gemini' };
     }
+  }
+
+  // ─── Free mode without Gemini key reaches here? Hard error. ───
+  if (!allowLovableFallback) {
+    throw new Error('🆓 وضع "مجاني فقط": لم يتم تكوين مفتاح Gemini على السيرفر — اتصل بالمسؤول أو بدّل الوضع');
   }
 
   // Fallback to Lovable AI — with retry on JSON parse failure
@@ -1647,7 +1668,7 @@ async function translateWithAI(
       const translationsObj = await callLovableAI(prompt, needsAI.length);
       const aiResult = parseAndUnlock(translationsObj);
       console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'lovable' };
     } catch (e) {
       if (needsAI.length <= 1) throw e;
       console.warn(`Full batch failed (${(e as Error).message}), splitting into halves...`);
@@ -1675,7 +1696,7 @@ async function translateWithAI(
 
       const aiResult = parseAndUnlock(combined);
       console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (split mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'lovable' };
     }
   }
 }
@@ -1686,7 +1707,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, extraInstructions } = await req.json() as {
+    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, extraInstructions, routingMode } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
@@ -1699,7 +1720,10 @@ Deno.serve(async (req) => {
       npcMode?: boolean;
       aiModel?: string;
       extraInstructions?: string;
+      routingMode?: 'free' | 'paid' | 'auto';
     };
+    const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
+      routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
 
     console.log(`[translate-entries] provider=${JSON.stringify(provider)} aiModel=${JSON.stringify(aiModel)} hasGeminiKey=${!!userApiKey} hasProviderKey=${!!providerApiKey} entries=${entries?.length ?? 0}`);
 
@@ -1791,7 +1815,7 @@ Deno.serve(async (req) => {
       if (provider && provider !== 'gemini') {
         console.warn(`[translate-entries] Unhandled provider value "${provider}" — falling back to Lovable AI/Gemini path`);
       }
-      const result = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
+      const result = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel, effectiveRoutingMode);
       return buildSuccessResponse(entries, result);
     }
   } catch (error) {

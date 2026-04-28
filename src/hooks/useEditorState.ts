@@ -32,6 +32,7 @@ export function useEditorState() {
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
+    aiRoutingMode, setAiRoutingMode,
     enhancedMemory, saveToEnhancedMemory,
   } = settings;
 
@@ -804,7 +805,7 @@ export function useEditorState() {
 
   const translation = useEditorTranslation({
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions,
+    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode,
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, failedEntries, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleRetryFailed, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview, lastBatchQuality, cumulativeQuality, resetBatchQuality } = translation;
 
@@ -1430,6 +1431,7 @@ export function useEditorState() {
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
+    aiRoutingMode, setAiRoutingMode,
     lastBatchQuality, cumulativeQuality, resetBatchQuality,
 
     // Handlers

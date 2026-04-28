@@ -29,10 +29,13 @@ function downloadBlob(data: ArrayBuffer, filename: string, mime: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+type BusyKind = "unpack" | "repack" | "repack-ext" | null;
+
 export function LagpPackerButtons() {
   const unpackRef = useRef<HTMLInputElement>(null);
   const repackRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<"unpack" | "repack" | null>(null);
+  const repackExtRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<BusyKind>(null);
 
   const handleUnpack = async (file: File) => {
     setBusy("unpack");
@@ -68,6 +71,35 @@ export function LagpPackerButtons() {
     }
   };
 
+  const handleRepackExternal = async (files: FileList) => {
+    setBusy("repack-ext");
+    try {
+      const arr = Array.from(files);
+      const manifestFile = arr.find((f) => /manifest\.json$/i.test(f.name));
+      const zipFile = arr.find((f) => /\.zip$/i.test(f.name));
+
+      if (!manifestFile || !zipFile) {
+        throw new Error("اختر ملفين: ZIP يحتوي على chunks + manifest.json منفصل");
+      }
+
+      const [zipBuf, manifestText] = await Promise.all([
+        zipFile.arrayBuffer(),
+        manifestFile.text(),
+      ]);
+
+      const wilay = await repackLagpWithExternalManifest(zipBuf, manifestText);
+      const outName = zipFile.name.replace(/\.lagp\.zip$/i, "").replace(/\.zip$/i, "") + ".wilay";
+      downloadBlob(wilay, outName, "application/octet-stream");
+      toast.success("تم التجميع", { description: `${outName} جاهز (manifest خارجي)` });
+    } catch (err) {
+      toast.error("فشل التجميع", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <>
       <input
@@ -92,6 +124,18 @@ export function LagpPackerButtons() {
           e.currentTarget.value = "";
         }}
       />
+      <input
+        ref={repackExtRef}
+        type="file"
+        accept="*/*"
+        multiple
+        className="sr-only"
+        onChange={(e) => {
+          const fl = e.target.files;
+          if (fl && fl.length > 0) void handleRepackExternal(fl);
+          e.currentTarget.value = "";
+        }}
+      />
       <Button
         variant="ghost"
         size="sm"
@@ -113,7 +157,7 @@ export function LagpPackerButtons() {
         className="h-8 text-xs"
         onClick={() => repackRef.current?.click()}
         disabled={busy !== null}
-        title="إعادة تجميع ZIP معدّل إلى ملف .wilay بنفس التشفير"
+        title="إعادة تجميع ZIP (يحتوي manifest.json بداخله) إلى ملف .wilay"
       >
         {busy === "repack" ? (
           <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" />
@@ -121,6 +165,21 @@ export function LagpPackerButtons() {
           <Package className="w-3.5 h-3.5 ml-1" />
         )}
         تجميع LAGP
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 text-xs"
+        onClick={() => repackExtRef.current?.click()}
+        disabled={busy !== null}
+        title="اختر ZIP + manifest.json منفصل (مفيد إذا فقدت manifest الأصلي وأنشأت واحداً يدوياً)"
+      >
+        {busy === "repack-ext" ? (
+          <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" />
+        ) : (
+          <FileJson className="w-3.5 h-3.5 ml-1" />
+        )}
+        تجميع + manifest
       </Button>
     </>
   );

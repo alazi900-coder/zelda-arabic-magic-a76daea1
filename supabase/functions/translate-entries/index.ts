@@ -1723,16 +1723,12 @@ Deno.serve(async (req) => {
 
     if (provider === 'mymemory') {
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, charsUsed, glossaryStats } = await translateWithMyMemory(entries, protectedEntries, glossaryMap, myMemoryEmail);
-      return new Response(JSON.stringify({ translations, charsUsed, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const result = await translateWithMyMemory(entries, protectedEntries, glossaryMap, myMemoryEmail);
+      return buildSuccessResponse(entries, result);
     } else if (provider === 'google') {
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, charsUsed, glossaryStats } = await translateWithGoogle(entries, protectedEntries, glossaryMap);
-      return new Response(JSON.stringify({ translations, charsUsed, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const result = await translateWithGoogle(entries, protectedEntries, glossaryMap);
+      return buildSuccessResponse(entries, result);
     } else if (provider === 'deepseek') {
       if (!providerApiKey) {
         return new Response(JSON.stringify({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات' }), {
@@ -1740,13 +1736,11 @@ Deno.serve(async (req) => {
         });
       }
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
+      const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,
         'https://api.deepseek.com', 'deepseek-chat',
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return buildSuccessResponse(entries, result);
     } else if (provider === 'groq') {
       if (!providerApiKey) {
         return new Response(JSON.stringify({ error: 'يحتاج Groq مفتاح API — أضفه في الإعدادات' }), {
@@ -1754,13 +1748,11 @@ Deno.serve(async (req) => {
         });
       }
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
+      const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,
         'https://api.groq.com/openai/v1', 'openai/gpt-oss-120b',
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return buildSuccessResponse(entries, result);
     } else if (provider === 'cerebras') {
       if (!providerApiKey) {
         return new Response(JSON.stringify({ error: 'يحتاج Cerebras مفتاح API — سجّل مجاناً على cloud.cerebras.ai' }), {
@@ -1775,13 +1767,11 @@ Deno.serve(async (req) => {
       ];
       const cerebrasModel = aiModel && CEREBRAS_MODELS.includes(aiModel) ? aiModel : 'qwen-3-235b-a22b-instruct-2507';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
+      const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,
         'https://api.cerebras.ai/v1', cerebrasModel,
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return buildSuccessResponse(entries, result);
     } else if (provider === 'openrouter') {
       if (!providerApiKey) {
         return new Response(JSON.stringify({ error: 'يحتاج OpenRouter مفتاح API — سجّل مجاناً على openrouter.ai' }), {
@@ -1792,21 +1782,17 @@ Deno.serve(async (req) => {
       const orModel = (aiModel && /^[\w\-]+\/[\w\-:.]+$/.test(aiModel) && !DEAD_OR_MODELS.includes(aiModel))
         ? aiModel : 'qwen/qwen-2.5-72b-instruct:free';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const { translations, glossaryStats } = await translateWithOpenAICompat(
+      const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,
         'https://openrouter.ai/api/v1', orModel,
       );
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return buildSuccessResponse(entries, result);
     } else {
       if (provider && provider !== 'gemini') {
         console.warn(`[translate-entries] Unhandled provider value "${provider}" — falling back to Lovable AI/Gemini path`);
       }
-      const { translations, glossaryStats } = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
-      return new Response(JSON.stringify({ translations, glossaryStats }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const result = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
+      return buildSuccessResponse(entries, result);
     }
   } catch (error) {
     console.error('Error:', error);

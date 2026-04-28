@@ -1068,7 +1068,7 @@ async function translateWithOpenAICompat(
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: 'You are a Xenoblade Chronicles 1 game text translator (Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — Bionis vs Mechonis). OUTPUT LANGUAGE: ARABIC ONLY. NEVER output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a word, transliterate it phonetically into Arabic letters. Output ONLY valid JSON with keys K0, K1... and Arabic translation values. Never modify ⟪T#⟫ placeholders.' },
+        { role: 'system', content: XC1_SYSTEM_PROMPT },
         { role: 'user', content: prompt },
       ],
     }),

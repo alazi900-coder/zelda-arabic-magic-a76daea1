@@ -26,6 +26,7 @@ const Home = lazyWithIgnoredRef(() => import("./pages/Home"));
 const Xenoblade = lazyWithIgnoredRef(() => import("./pages/Xenoblade"));
 const XenobladeProcess = lazyWithIgnoredRef(() => import("./pages/XenobladeProcess"));
 const WilayViewer = lazyWithIgnoredRef(() => import("./pages/WilayViewer"));
+const LagpPacker = lazyWithIgnoredRef(() => import("./pages/LagpPacker"));
 const Pokemon = lazyWithIgnoredRef(() => import("./pages/Pokemon"));
 const PokemonProcess = lazyWithIgnoredRef(() => import("./pages/PokemonProcess"));
 const Editor = lazyWithIgnoredRef(() => import("./pages/Editor"));
@@ -72,6 +73,7 @@ const App = () => (
                 <Route path="/danganronpa/v3" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa V3"><DanganronpaProcess /></ErrorBoundary>} />
                 <Route path="/danganronpa/classic" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa"><DanganronpaClassicProcess /></ErrorBoundary>} />
                 <Route path="/wilay" element={<WilayViewer />} />
+                <Route path="/lagp-packer" element={<ErrorBoundary fallbackTitle="خطأ في أداة LAGP"><LagpPacker /></ErrorBoundary>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

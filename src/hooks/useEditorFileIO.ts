@@ -811,6 +811,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     setLastSaved(msg);
 
     // Apply BiDi fix to entries that have Arabic in the ORIGINAL and no imported translation
+    let capturedRepairCount = 0;
     setState(prevState => {
       if (!prevState) return null;
       const newTranslations = { ...prevState.translations };
@@ -834,9 +835,10 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           }
         }
       }
-      if (count > 0) setLastSaved(prev => prev + ` + تصحيح ${count} نص معكوس`);
+      capturedRepairCount = count;
       return { ...prevState, translations: newTranslations, protectedEntries: newProtected };
     });
+    if (capturedRepairCount > 0) setLastSaved(prev => prev + ` + تصحيح ${capturedRepairCount} نص معكوس`);
   }, [setState, setLastSaved]);
 
   /** Handle conflict dialog confirmation */

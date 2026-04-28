@@ -1140,6 +1140,13 @@ export function useEditorState() {
           .filter(([eng]) => eng.length >= 2)
           .sort((a, b) => b[0].length - a[0].length);
 
+        // Pre-compile term regexes once instead of N×M times inside the entry loop
+        const sortedTermsWithRe = sortedTerms.map(([engLower, arabic]) => ({
+          engLower,
+          arabic,
+          termRe: new RegExp(`\\b${engLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:'s)?\\b`, 'i'),
+        }));
+
         const violations: import("@/components/editor/GlossaryCompliancePanel").GlossaryViolation[] = [];
 
         for (const entry of state.entries) {
@@ -1150,9 +1157,8 @@ export function useEditorState() {
           const originalLower = entry.original.toLowerCase();
           const entryViolations: { englishTerm: string; expectedArabic: string; foundFragment: string }[] = [];
 
-          for (const [engLower, arabic] of sortedTerms) {
+          for (const { engLower, arabic, termRe } of sortedTermsWithRe) {
             // Check if the English term exists in the original
-            const termRe = new RegExp(`\\b${engLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:'s)?\\b`, 'i');
             if (!termRe.test(originalLower)) continue;
 
             // Check if the expected Arabic translation exists in the translation

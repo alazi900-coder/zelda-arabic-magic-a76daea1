@@ -5,6 +5,82 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============================================================================
+// XC1 TRANSLATION PROMPTS — single source of truth
+// ============================================================================
+// Used by ALL providers (OpenAI-compat, Gemini direct, Lovable AI gateway).
+// Update here once → applies everywhere.
+
+/** System prompt — sets role, output language, JSON contract, tag safety. */
+const XC1_SYSTEM_PROMPT = `You are a professional Xenoblade Chronicles 1 (Definitive Edition) game text translator.
+Cast: Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — set in the world of Bionis vs Mechonis.
+
+OUTPUT CONTRACT (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
+3. NEVER modify, remove, merge, or reorder TAG_0, TAG_1, ⟪T0⟫, ⟪T1⟫ placeholders. Copy them EXACTLY as-is.
+4. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
+
+/**
+ * Build the user-facing prompt with full universe knowledge, ordered rules,
+ * glossary, context, and the input block.
+ */
+function buildXC1UserPrompt(opts: {
+  textsBlock: string;
+  expectedCount: number;
+  npcRule?: string;
+  categorySection?: string;
+  userInstructionsSection?: string;
+  glossarySection?: string;
+  contextSection?: string;
+  /** When true, includes the deeper personality/lore section (used in batch path). */
+  detailed?: boolean;
+}): string {
+  const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false } = opts;
+
+  const universeBlock = detailed
+    ? `XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
+• Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.
+• Main party: Shulk (شولك, determined/analytical, wields the Monado), Reyn (رين, energetic/loyal/blunt), Fiora (فيورا, warm/gentle, Shulk's childhood friend), Dunban (دانبان, honorable/composed elder warrior), Melia (ميليا, dignified/formal High Entia princess), Riki (ريكي, cheerful/childlike Nopon hero), Sharla (شارلا, caring/nurturing medic).
+• Antagonists: Zanza (زانزا) — the god of Bionis. Egil (إيجل) — ruler of Mechonis. Metal Face / Mumkhar (الوجه المعدني / مومخار). Xord (زورد). Lorithia (لوريثيا). Dickson (ديكسون). Alvis (ألفيس).
+• Key terms: Monado (المونادو), Ether (إيثر), Vision (رؤية مستقبلية), Colony 9 (المستعمرة 9), Mechon (ميكون), Faced Mechon (ميكون ذو وجه), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا), Machina (ماشينا), Ether Cylinder (اسطوانة إيثر), Talent Art (فن موهبة), Art (فن قتالي), Gems (جواهر), Affinity (ألفة), Affinity Chart (خريطة الألفة), Break/Topple/Daze (كسر/إسقاط/ذهول).
+• Tone: Epic JRPG — Shulk hopeful and driven by justice. Reyn casual with humor. Dunban noble and composed. Melia formal and dignified. Riki speaks in third person, childlike. Sharla warm and practical.`
+    : `XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
+• Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.
+• Main party: Shulk (شولك), Reyn (رين), Fiora (فيورا), Dunban (دانبان), Melia (ميليا), Riki (ريكي), Sharla (شارلا).
+• Antagonists: Zanza (زانزا), Egil (إيجل), Metal Face (الوجه المعدني).
+• Key terms: Monado (المونادو), Ether (إيثر), Colony 9 (المستعمرة 9), Mechon (ميكون), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا).`;
+
+  return `Translate the following Xenoblade Chronicles 1 game texts from English to Arabic.
+
+${universeBlock}
+
+RULES — ordered by priority (top = most critical):
+
+[A] STRUCTURE (MUST NEVER BREAK):
+1. Return ONLY a JSON object — keys must match input keys exactly (K0, K1, ...). Example: {"K0": "ترجمة", "K1": "ترجمة"}.
+2. Return EXACTLY ${expectedCount} entries. Do NOT skip, merge, split, or add extra entries. Each key gets its own translation.
+3. Placeholders ⟪T0⟫, ⟪T1⟫, TAG_0, TAG_1, etc. are LOCKED — copy them EXACTLY as-is. Never translate, modify, remove, reorder, or merge them.
+4. Every translation value MUST contain Arabic characters. NEVER return English source as the "translation". Unknown names → transliterate to Arabic phonetically. Returning English unchanged is a hard failure rejected by validation.
+
+[B] FORMATTING:
+5. Do NOT insert literal newline characters (\\n) in your translations. Use a single space instead — line wrapping is handled by a post-processing step that re-balances lines to fit in-game text boxes. If the source has multiple lines (cutscene), still return one continuous string; the splitter will rebuild the lines.
+6. NEVER add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ). The game font cannot render them.
+7. Keep translation length close to the original to fit in-game text boxes.
+
+[C] TERMINOLOGY & STYLE:
+8. Glossary terms — if a term appears in the glossary section, you MUST use its EXACT Arabic translation. No alternatives, no synonyms, no paraphrasing. Match possessive forms too (e.g. "Noah's" uses the glossary entry for "Noah"). NON-NEGOTIABLE.
+9. Consistency — if a word/phrase was translated a certain way in "Previously Translated Texts", you MUST translate it the same way.
+10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب) consistent with the Arabic Xenoblade Chronicles 1 community — not overly formal classical Arabic.
+11. Preserve proper nouns using the Arabic forms listed above. Unknown names → transliterate phonetically.
+12. NPC dialogue — match the speaker's personality: casual/blunt for Reyn and Riki, formal/dignified for Melia and Dunban, warm for Sharla and Fiora.${npcRule}${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
+
+Input texts (JSON object — translate each value, return with the SAME keys):
+{
+${textsBlock}
+}`;
+}
+
 // --- Tag Protection: replace technical tags + abbreviations with TAG_N placeholders ---
 const PROTECTED_ABBREVIATIONS = [
   'EXP', 'PST', 'CP', 'SP', 'HP', 'AP', 'TP', 'WP', 'DP',

@@ -589,6 +589,49 @@ export function useEditorTranslation({
       }
     };
 
+    // Wrapper: يفلتر النصوص الموجودة في الـ persistent cache قبل الإرسال،
+    // ويحفظ الترجمات الجديدة في الـ cache بعد النجاح. شفّاف للـ caller.
+    const fetchBatchWithCache = async (
+      batchEntries: { key: string; original: string }[],
+      signal: AbortSignal,
+    ) => {
+      let cacheHits: Record<string, string> = {};
+      let toSend = batchEntries;
+
+      if (translationCacheEnabled && batchEntries.length > 0) {
+        const { hits, misses } = await cacheLookupMany(batchEntries, translationProvider, aiModel);
+        cacheHits = hits;
+        toSend = misses;
+        if (Object.keys(hits).length > 0) {
+          console.log(`[cache] ${Object.keys(hits).length}/${batchEntries.length} ترجمة من الذاكرة الدائمة (بدون AI)`);
+        }
+      }
+
+      // إذا كل النصوص في الكاش — لا نستدعي AI أصلاً.
+      if (toSend.length === 0) {
+        return { translations: cacheHits, charsUsed: 0, glossaryStats: {}, __skipQualityRecord: true };
+      }
+
+      const result = await fetchBatchWithRetry(toSend, signal);
+
+      // احفظ الترجمات الجديدة في الكاش.
+      if (translationCacheEnabled && result?.translations) {
+        const toStore: { original: string; translation: string }[] = [];
+        for (const e of toSend) {
+          const tr = result.translations[e.key];
+          if (tr?.trim()) toStore.push({ original: e.original, translation: tr });
+        }
+        if (toStore.length > 0) {
+          cacheStoreMany(toStore, translationProvider, aiModel).catch(() => {});
+        }
+      }
+
+      return {
+        ...result,
+        translations: { ...cacheHits, ...(result?.translations || {}) },
+      };
+    };
+
     // Resolve per-provider batch delay (throttle). Skipped when user disables it.
     const providerKey = (translationProvider in PROVIDER_BATCH_DELAY_MS)
       ? translationProvider as keyof typeof PROVIDER_BATCH_DELAY_MS

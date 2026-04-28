@@ -77,7 +77,7 @@ describe("BatchQualityModal", () => {
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
-  it("shows cumulative tab with batches and total counts", () => {
+  it("shows cumulative tab with batches and total counts", async () => {
     const cumulative = {
       batches: 5, total: 50, withArabic: 48, placeholdersOk: 45, newlineStripped: 12, errors: [],
     };

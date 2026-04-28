@@ -13,6 +13,7 @@ import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
+import { cacheLookupMany, cacheStoreMany } from "@/lib/translation-cache";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 

@@ -119,7 +119,11 @@ Cast: Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — set in the world of Bi
 OUTPUT CONTRACT (highest priority — violations are hard failures):
 1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
 2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
-3. NEVER modify, remove, merge, or reorder TAG_0, TAG_1, ⟪T0⟫, ⟪T1⟫ placeholders. Copy them EXACTLY as-is.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, TAG_2, ... (technical tags)
+   - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
+   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
 4. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
 
 /**

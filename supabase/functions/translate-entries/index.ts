@@ -1452,12 +1452,10 @@ async function translateWithAI(
 
   // Routing mode determines which provider to use:
   //   free  = Gemini only (server key or user key); fail with clear error on 429
-  //   paid  = Use Gemini key first (avoids gateway 429), Lovable Gateway as paid safety net
+  //   paid  = Skip Gemini entirely, use Lovable Gateway only
   //   auto  = Try Gemini first, fallback to Lovable on 429 (existing behavior)
-  // NOTE: Previously paid mode cleared the Gemini key entirely → all traffic hit the shared
-  // Lovable Gateway and got rate-limited even for Pro users. We now keep the Gemini key in all modes.
   const _rawKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
-  const effectiveKey = _rawKey;
+  const effectiveKey = routingMode === 'paid' ? '' : _rawKey;
   const allowLovableFallback = routingMode !== 'free';
   console.log(`[translateWithAI] routingMode=${routingMode} hasGeminiKey=${!!effectiveKey} allowLovableFallback=${allowLovableFallback}`);
   

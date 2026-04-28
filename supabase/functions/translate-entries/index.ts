@@ -275,7 +275,8 @@ function normalizeTagPlaceholders(text: string): string {
     .replace(/tag_(\d+)/g, 'TAG_$1')                    // tag_0 -> TAG_0
     .replace(/[\[{(<]\s*TAG\s*[_\s-:]?(\d+)\s*[\]})>]/gi, 'TAG_$1') // [TAG_0] -> TAG_0
     .replace(/NEWLINE\s*[-:_]?\s*_?(\d+)/gi, 'NEWLINE_$1')  // Normalize NEWLINE variants
-    .replace(/newline_(\d+)/g, 'NEWLINE_$1');                // lowercase -> uppercase
+    .replace(/newline_(\d+)/g, 'NEWLINE_$1')                // lowercase -> uppercase
+    .replace(/\bNEW\s*[-_]?\s*LINE\s*[-_]?\s*(\d+)/gi, 'NEWLINE_$1'); // NEW-LINE_0, NEW LINE 0
 }
 
 /** Normalize locked term placeholders (⟪T0⟫) without converting them to TAG_N */

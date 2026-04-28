@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { unpackLagp, repackLagp } from "@/lib/lagp-packer";
+import {
+  unpackLagp,
+  repackLagp,
+  repackLagpWithExternalManifest,
+  registerLagpSplitter,
+  listLagpSplitters,
+  validateChunkCoverage,
+  type LagpSplitter,
+} from "@/lib/lagp-packer";
+import JSZip from "jszip";
 
 /**
  * Build a synthetic LAGP file (no outer compression) with a recognisable

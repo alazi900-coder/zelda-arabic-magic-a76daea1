@@ -82,6 +82,7 @@ interface SuccessPayload {
   translations: Record<string, string>;
   charsUsed?: number;
   glossaryStats?: unknown;
+  providerUsed?: string;
 }
 
 /** Wrap a provider result: clean newlines, attach qualityStats, JSON response. */

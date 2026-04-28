@@ -1815,7 +1815,7 @@ Deno.serve(async (req) => {
       if (provider && provider !== 'gemini') {
         console.warn(`[translate-entries] Unhandled provider value "${provider}" — falling back to Lovable AI/Gemini path`);
       }
-      const result = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel);
+      const result = await translateWithAI(entries, protectedEntries, glossary, context, userApiKey, aiModel, effectiveRoutingMode);
       return buildSuccessResponse(entries, result);
     }
   } catch (error) {

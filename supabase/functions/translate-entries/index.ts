@@ -309,8 +309,10 @@ function restoreTags(text: string, tags: Map<string, string>): string {
 function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<string>): string {
   return text
     .replace(/\b(?:TAG|NEWLINE)_\d+\b/g, (match) => (allowedPlaceholders.has(match) ? match : ''))
+    // Salvage any leftover NEWLINE remnants (e.g. "NEWLINE_?", "NEWLINE", "NEWLINE_X") as real newlines
+    .replace(/\bNEW\s*[-_]?\s*LINE(?:\s*[-_:]?\s*\S*)?/gi, '\n')
     .replace(/[⟪《〈«]\s*T\s*[-:_]?\s*\d+\s*[⟫》〉»]/gi, '')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 

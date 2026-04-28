@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
-  ExtractedEntry, EditorState, AI_BATCH_SIZE, PAGE_SIZE,
+  ExtractedEntry, EditorState, aiBatchSize, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, isTechnicalText, hasTechnicalTags,
 } from "@/components/editor/types";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
@@ -491,7 +491,7 @@ export function useEditorTranslation({
     }
 
     setTranslating(true);
-    const totalBatches = Math.ceil(needsAI.length / AI_BATCH_SIZE);
+    const totalBatches = Math.ceil(needsAI.length / aiBatchSize);
     let allTranslations: Record<string, string> = {};
     const totalGlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
     const freeCount = Object.keys(freeTranslations).length;
@@ -622,7 +622,7 @@ export function useEditorTranslation({
             catch { break; } // aborted during throttle wait
           }
         }
-        const batch = needsAI.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
+        const batch = needsAI.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
         setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
         const entries = batch.map(e => ({
@@ -716,14 +716,14 @@ export function useEditorTranslation({
     setTranslating(true);
     abortControllerRef.current = new AbortController();
     try {
-      const totalBatches = Math.ceil(entriesToRetranslate.length / AI_BATCH_SIZE);
+      const totalBatches = Math.ceil(entriesToRetranslate.length / aiBatchSize);
       for (let b = 0; b < totalBatches; b++) {
         if (abortControllerRef.current.signal.aborted) {
           setTranslateProgress("⏹️ تم إيقاف إعادة الترجمة");
           setTimeout(() => setTranslateProgress(""), 3000);
           break;
         }
-        const batch = entriesToRetranslate.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
+        const batch = entriesToRetranslate.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
         setTranslateProgress(`🔄 إعادة ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
@@ -778,10 +778,10 @@ export function useEditorTranslation({
     abortControllerRef.current = new AbortController();
     let fixedCount = 0;
     try {
-      const totalBatches = Math.ceil(entriesToFix.length / AI_BATCH_SIZE);
+      const totalBatches = Math.ceil(entriesToFix.length / aiBatchSize);
       for (let b = 0; b < totalBatches; b++) {
         if (abortControllerRef.current.signal.aborted) break;
-        const batch = entriesToFix.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
+        const batch = entriesToFix.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
         setTranslateProgress(`🔧 إصلاح الرموز التالفة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {

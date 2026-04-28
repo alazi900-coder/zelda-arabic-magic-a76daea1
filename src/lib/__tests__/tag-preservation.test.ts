@@ -50,17 +50,20 @@ describe("placeholder integrity through post-processing", () => {
     expect(tagSet(reordered)).toBe(tagSet(original));
   });
 
-  it("protectTags + restoreTags roundtrip never drops a tag", () => {
-    const original = "Hello TAG_0, brave TAG_1 warrior";
+  it("protectTags + restoreTags roundtrip preserves real engine tags like [ML]", () => {
+    // protectTags handles ENGINE tags (e.g. [ML], <br>, {var}). TAG_n / ⟪Tn⟫
+    // are placeholders left visible to the AI by design — they are validated
+    // by the edge function's quality check, not by protectTags.
+    const original = "Hello [ML] brave [Passive] warrior";
     const { cleanText, tags } = protectTags(original);
     expect(tags.length).toBeGreaterThanOrEqual(2);
-    // Simulate translator swapping the visible English with Arabic
     const translated = cleanText
       .replace("Hello", "مرحباً")
       .replace("brave", "أيها")
       .replace("warrior", "المحارب الشجاع");
     const restored = restoreTags(translated, tags);
-    expect(tagSet(restored)).toBe("TAG_0|TAG_1");
+    expect(restored).toContain("[ML]");
+    expect(restored).toContain("[Passive]");
   });
 
   it("mixed TAG_n and ⟪Tn⟫ in the same string both survive", () => {

@@ -105,6 +105,13 @@ const Xenoblade = forwardRef<HTMLDivElement>((_, ref) => {
                 🖼️ افتح أداة WILAY
               </Button>
             </Link>
+            <div className="mt-4">
+              <Link to="/lagp-packer">
+                <Button variant="outline" size="sm" className="text-xs">
+                  📦 أداة فك/تجميع LAGP (متقدمة)
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </section>

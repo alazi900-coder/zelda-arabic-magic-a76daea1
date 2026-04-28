@@ -1598,6 +1598,10 @@ async function translateWithAI(
     if (!geminiResponse || !geminiResponse.ok) {
       console.error('Gemini API error:', lastErrText);
       if (lastStatus === 429 || lastStatus === 503) {
+        // Free routing mode: never fallback to paid Lovable Gateway
+        if (!allowLovableFallback) {
+          throw new Error('🆓 وضع "مجاني فقط": تجاوزت الحد اليومي لـ Gemini Free — انتظر ساعات قليلة أو بدّل الوضع إلى "تلقائي" أو "مدفوع"');
+        }
         if (userApiKey?.trim()) {
           throw new Error('تجاوزت الحد المجاني لـ Gemini اليومي على كل الموديلات (2.0 Flash + 2.5 Flash + 2.5 Pro) — انتظر ساعات قليلة أو استخدم موفّراً آخر (Cerebras أو Groq)');
         }
@@ -1615,9 +1619,14 @@ async function translateWithAI(
       }
       const translationsObj = extractJsonObject(content);
       const aiResult = parseAndUnlock(translationsObj);
-      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries via Gemini (keyed mode)`);
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'gemini' };
     }
+  }
+
+  // ─── Free mode without Gemini key reaches here? Hard error. ───
+  if (!allowLovableFallback) {
+    throw new Error('🆓 وضع "مجاني فقط": لم يتم تكوين مفتاح Gemini على السيرفر — اتصل بالمسؤول أو بدّل الوضع');
   }
 
   // Fallback to Lovable AI — with retry on JSON parse failure

@@ -1668,7 +1668,7 @@ async function translateWithAI(
       const translationsObj = await callLovableAI(prompt, needsAI.length);
       const aiResult = parseAndUnlock(translationsObj);
       console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'lovable' };
     } catch (e) {
       if (needsAI.length <= 1) throw e;
       console.warn(`Full batch failed (${(e as Error).message}), splitting into halves...`);
@@ -1696,7 +1696,7 @@ async function translateWithAI(
 
       const aiResult = parseAndUnlock(combined);
       console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (split mode)`);
-      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats };
+      return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'lovable' };
     }
   }
 }

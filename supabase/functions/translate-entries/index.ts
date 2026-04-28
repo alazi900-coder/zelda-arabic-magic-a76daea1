@@ -1285,34 +1285,15 @@ async function translateWithAI(
   const categorySection = categoryHint ? `\n\n${categoryHint}` : '';
   const userInstructionsSection = _extraInstructions ? `\n\nADDITIONAL USER INSTRUCTIONS (high priority — override defaults if conflicting):\n${_extraInstructions}` : '';
 
-  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles. Translate the following game texts from English to Arabic.
-
-XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
-• Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.
-• Main party: Shulk (شولك, determined/analytical, wields the Monado), Reyn (رين, energetic/loyal/blunt), Fiora (فيورا, warm/gentle, Shulk's childhood friend), Dunban (دانبان, honorable/composed elder warrior), Melia (ميليا, dignified/formal High Entia princess), Riki (ريكي, cheerful/childlike Nopon hero), Sharla (شارلا, caring/nurturing medic).
-• Antagonists: Zanza (زانزا) — the god of Bionis. Egil (إيجل) — ruler of Mechonis. Metal Face / Mumkhar (الوجه المعدني / مومخار). Xord (زورد). Lorithia (لوريثيا). Dickson (ديكسون). Alvis (ألفيس).
-• Key terms: Monado (المونادو), Ether (إيثر), Vision (رؤية مستقبلية), Colony 9 (المستعمرة 9), Mechon (ميكون), Faced Mechon (ميكون ذو وجه), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا), Machina (ماشينا), Bionis (بيونيس), Mechonis (ميكونيس), Ether Cylinder (اسطوانة إيثر), Talent Art (فن موهبة), Art (فن قتالي), Gems (جواهر), Affinity (ألفة), Affinity Chart (خريطة الألفة), Break/Topple/Daze (كسر/إسقاط/ذهول).
-• Tone: Epic JRPG — Shulk is hopeful and driven by revenge then justice. Reyn uses casual speech and humor. Dunban is noble and composed. Melia is formal and dignified. Riki speaks in third person and childlike manner. Sharla is warm and practical.
-
-CRITICAL RULES:
-1. Placeholders like ⟪T0⟫, ⟪T1⟫, etc. are LOCKED TERMS — copy them EXACTLY as-is into your translation. Do NOT translate, modify, or remove them.
-2. NEVER remove, modify, merge, or reorder TAG_0, TAG_1, TAG_2 etc. placeholders. They MUST appear in your output EXACTLY as they appear in the input.
-3. Keep the translation length close to the original to fit in-game text boxes.
-4. If a glossary term appears, you MUST use its EXACT Arabic translation — no alternatives, no synonyms, no paraphrasing. This is NON-NEGOTIABLE. Match possessive forms too (e.g., "Noah's" should use the glossary entry for "Noah").
-5. CONSISTENCY IS MANDATORY: If a word or phrase was translated a certain way in the "Previously Translated Texts" section, you MUST translate it the same way.
-6. Use terminology consistent with the Arabic gaming community for Xenoblade Chronicles 3. Avoid overly formal Arabic — use natural gaming Arabic (العربية الحديثة للألعاب).
-7. Preserve proper nouns using the established Arabic forms listed above. For unknown names, transliterate phonetically into Arabic.
-8. Return ONLY a JSON object where each key matches the input key (K0, K1, etc.) and the value is the Arabic translation. Example: {"K0": "ترجمة", "K1": "ترجمة"}
-9. You MUST return EXACTLY ${needsAI.length} entries. Do NOT skip, merge, or add extra entries. Each key MUST have its own separate translation.
-10. Do NOT insert newline characters (\\n) in your translations. Return each translation as a single continuous string. Line breaking is handled separately.
-11. NEVER add Arabic diacritics/tashkeel (tanween: ً ٌ ٍ, fatha: َ, damma: ُ, kasra: ِ, shadda: ّ, sukun: ْ). Write plain Arabic text WITHOUT any vowel marks. The game font cannot render them.
-12. For NPC dialogue: match the speaker's personality. Use contractions and natural speech for casual characters; formal register for commanders/antagonists.
-13. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure that will be rejected by validation.${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
-
-Input texts (as JSON object — translate each value and return with the SAME keys):
-{
-${textsBlock}
-}`;
+  const prompt = buildXC1UserPrompt({
+    textsBlock,
+    expectedCount: needsAI.length,
+    categorySection,
+    userInstructionsSection,
+    glossarySection,
+    contextSection,
+    detailed: true,
+  });
 
   const effectiveKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
   

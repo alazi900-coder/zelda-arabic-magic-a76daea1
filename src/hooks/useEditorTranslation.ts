@@ -11,6 +11,7 @@ import { splitEvenlyByLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 

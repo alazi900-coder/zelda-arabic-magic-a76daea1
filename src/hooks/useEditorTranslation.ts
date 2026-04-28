@@ -169,6 +169,73 @@ export function useEditorTranslation({
     setCumulativeQuality({ batches: 0, total: 0, withArabic: 0, placeholdersOk: 0, newlineStripped: 0, errors: [] });
   };
 
+  // ============= Single-Translate Request Coalescer =============
+  // يجمع طلبات handleTranslateSingle المتتابعة خلال نافذة 200ms في طلب AI واحد
+  // (حتى 20 نصاً)، لتقليل عدد الطلبات إلى edge function وتقليل استهلاك حصة Gemini.
+  // يُستفاد منه عندما يضغط المستخدم زر "ترجم" على عدة بطاقات بتتابع سريع.
+  const coalescerRef = useRef<ReturnType<typeof createTranslationCoalescer> | null>(null);
+  const coalescer = useMemo(() => {
+    const inst = createTranslationCoalescer({
+      windowMs: 200,
+      maxBatch: AI_BATCH_SIZE,
+      buildPayload: (entries: CoalescerEntry[]) => ({
+        entries,
+        glossary: activeGlossary,
+        userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+        providerApiKey:
+          (translationProvider === 'deepseek' ? userDeepSeekKey :
+           translationProvider === 'groq' ? userGroqKey :
+           translationProvider === 'cerebras' ? userCerebrasKey :
+           translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
+        provider: translationProvider,
+        myMemoryEmail: myMemoryEmail || undefined,
+        rebalanceNewlines: rebalanceNewlines || undefined,
+        npcMaxLines,
+        npcMode: npcMode || undefined,
+        aiModel,
+        extraInstructions: customPromptInstructions || undefined,
+        routingMode: aiRoutingMode,
+      }),
+      fetcher: async (payload) => {
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+          method: 'POST',
+          headers: getSupabaseHeaders(),
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.error || `خطأ ${response.status}`);
+        }
+        return response.json();
+      },
+      onBatchComplete: (data, batchSize) => {
+        recordBatchQuality(data);
+        addAiRequest(1);
+        if (data?.charsUsed) addMyMemoryChars(data.charsUsed);
+        if (batchSize > 1) {
+          console.log(`[coalescer] جمع ${batchSize} طلب ترجمة في طلب AI واحد`);
+        }
+        if (data?.fallbackUsed) {
+          toast({
+            title: "🔄 تم التبديل لموديل بديل",
+            description: `الموديل الأصلي ${data.fallbackUsed.primary} غير متاح — استُخدم ${data.fallbackUsed.actual}`,
+          });
+        }
+      },
+    });
+    coalescerRef.current = inst;
+    return inst;
+    // إعادة الإنشاء عند تغيّر إعدادات المزوّد/الموديل/القاموس حتى تُلتقط القيم الحديثة في buildPayload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey,
+    userCerebrasKey, userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines,
+    npcMode, aiModel, customPromptInstructions, aiRoutingMode,
+  ]);
+
+  // عند unmount: نُفرغ ما تجمّع لتجنّب طلبات معلقة.
+  useEffect(() => () => { coalescerRef.current?.flush(); }, []);
+
   const applyPendingTranslations = (selectedKeys?: Set<string>) => {
     if (!state || !pendingPageTranslations) return;
     const toApply: Record<string, string> = {};

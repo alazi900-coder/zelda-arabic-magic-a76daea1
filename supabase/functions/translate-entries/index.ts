@@ -1038,31 +1038,14 @@ async function translateWithOpenAICompat(
   const categoryHint = detectCategoryHint(needsAI[0]?.entry.key || '', needsAI[0]?.entry.original || '');
   const categorySection = categoryHint ? `\n\nCONTEXT-SPECIFIC GUIDANCE:\n${categoryHint}\n` : '';
   const userInstructionsSection = _extraInstructions ? `\n\nADDITIONAL USER INSTRUCTIONS (high priority — override defaults if conflicting):\n${_extraInstructions}\n` : '';
-  const prompt = `You are a professional game translator specializing in Xenoblade Chronicles. Translate the following game texts from English to Arabic.
-
-XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
-• Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.
-• Main party: Shulk (شولك), Reyn (رين), Fiora (فيورا), Dunban (دانبان), Melia (ميليا), Riki (ريكي), Sharla (شارلا).
-• Antagonists: Zanza (زانزا), Egil (إيجل), Metal Face (الوجه المعدني).
-• Key terms: Monado (المونادو), Ether (إيثر), Colony 9 (المستعمرة 9), Mechon (ميكون), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا).
-
-CRITICAL RULES:
-1. ⟪T0⟫, ⟪T1⟫ etc. are LOCKED TERMS — copy them EXACTLY as-is.
-2. NEVER remove or modify TAG_0, TAG_1 etc. placeholders.
-3. Keep translation length close to original to fit in-game text boxes.
-4. Return ONLY a JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}
-5. Return EXACTLY ${needsAI.length} entries. Do NOT skip or merge entries.
-6. Do NOT insert \\n newlines — line breaking is handled separately.
-7. Do NOT add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ).
-8. Use natural modern Arabic for gaming (العربية الحديثة للألعاب) — not formal Arabic.
-9. Match the speaker's personality: casual for Reyn/Riki, formal for Melia/Dunban.
-10. If a glossary term appears, use its EXACT Arabic translation — no alternatives.
-11. EVERY translation value MUST contain Arabic characters. NEVER return the English source text as the "translation". If you don't recognize a name, transliterate it to Arabic phonetically — do NOT leave it in English. Returning English unchanged is a hard failure.${npcRule}${categorySection}${userInstructionsSection}
-
-Input:
-{
-${textsBlock}
-}`;
+  const prompt = buildXC1UserPrompt({
+    textsBlock,
+    expectedCount: needsAI.length,
+    npcRule,
+    categorySection,
+    userInstructionsSection,
+    detailed: false,
+  });
 
   const providerName = baseUrl.includes('deepseek') ? 'DeepSeek'
     : baseUrl.includes('groq') ? 'Groq'

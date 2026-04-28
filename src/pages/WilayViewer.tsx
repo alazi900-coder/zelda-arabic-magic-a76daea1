@@ -13,6 +13,7 @@ import {
   replaceWilayTexture, type WilayInfo, type WilayTextureInfo
 } from "@/lib/wilay-parser";
 import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
+import { LagpPackerButtons } from "@/components/wilay/LagpPackerButtons";
 
 import JSZip from "jszip";
 
@@ -619,6 +620,8 @@ export default function WilayViewer() {
             <Download className="w-3.5 h-3.5 ml-1" /> حفظ المعدلة ({modifiedFiles.size})
           </Button>
         )}
+        <div className="w-px h-5 bg-border mx-1" />
+        <LagpPackerButtons />
         </div>
       </header>
 

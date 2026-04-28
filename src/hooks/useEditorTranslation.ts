@@ -257,7 +257,7 @@ export function useEditorTranslation({
         body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
       });
       if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
-      const data = await response.json();
+      const data = await response.json(); recordBatchQuality(data);
       addAiRequest(1);
       if (data.charsUsed) addMyMemoryChars(data.charsUsed);
       if (data.fallbackUsed) {
@@ -453,7 +453,7 @@ export function useEditorTranslation({
           };
         }
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
-        return await response.json();
+        { const _d = await response.json(); recordBatchQuality(_d); return _d; }
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw err;
         // Network-level errors (TypeError) are usually transient — wait + retry before splitting
@@ -630,7 +630,7 @@ export function useEditorTranslation({
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
-        const data = await response.json();
+        const data = await response.json(); recordBatchQuality(data);
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
         if (data.translations) {
@@ -688,7 +688,7 @@ export function useEditorTranslation({
            body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
-        const data = await response.json();
+        const data = await response.json(); recordBatchQuality(data);
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
         if (data.translations) {
@@ -851,7 +851,7 @@ export function useEditorTranslation({
           }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
-        const data = await response.json();
+        const data = await response.json(); recordBatchQuality(data);
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
         if (data.translations) {
@@ -1042,7 +1042,7 @@ export function useEditorTranslation({
               }),
             });
             if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
-            const data = await response.json();
+            const data = await response.json(); recordBatchQuality(data);
             addAiRequest(1);
             if (data.charsUsed) addMyMemoryChars(data.charsUsed);
             if (data.translations) {
@@ -1293,7 +1293,7 @@ export function useEditorTranslation({
             }),
           });
           if (!response.ok) { stillFailed.push(entry); continue; }
-          const data = await response.json();
+          const data = await response.json(); recordBatchQuality(data);
           addAiRequest(1);
           if (data.charsUsed) addMyMemoryChars(data.charsUsed);
           if (data.translations?.[key]) {

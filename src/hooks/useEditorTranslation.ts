@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
-  ExtractedEntry, EditorState, AI_BATCH_SIZE, PAGE_SIZE,
+  ExtractedEntry, EditorState, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, isTechnicalText, hasTechnicalTags,
 } from "@/components/editor/types";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
@@ -13,6 +13,7 @@ import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
+import { cacheLookupMany, cacheStoreMany } from "@/lib/translation-cache";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
@@ -48,6 +49,8 @@ interface UseEditorTranslationProps {
   aiThrottleEnabled: boolean;
   customPromptInstructions: string;
   aiRoutingMode: 'free' | 'paid' | 'auto';
+  aiBatchSize: number;
+  translationCacheEnabled: boolean;
 }
 
 /**
@@ -70,7 +73,7 @@ const PROVIDER_BATCH_DELAY_MS = {
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled,
 }: UseEditorTranslationProps) {
 
   /**
@@ -171,13 +174,12 @@ export function useEditorTranslation({
 
   // ============= Single-Translate Request Coalescer =============
   // يجمع طلبات handleTranslateSingle المتتابعة خلال نافذة 200ms في طلب AI واحد
-  // (حتى 20 نصاً)، لتقليل عدد الطلبات إلى edge function وتقليل استهلاك حصة Gemini.
-  // يُستفاد منه عندما يضغط المستخدم زر "ترجم" على عدة بطاقات بتتابع سريع.
+  // (حتى aiBatchSize نصاً)، ويستخدم الـ persistent cache لتجاوز AI تماماً عند الإمكان.
   const coalescerRef = useRef<ReturnType<typeof createTranslationCoalescer> | null>(null);
   const coalescer = useMemo(() => {
     const inst = createTranslationCoalescer({
       windowMs: 200,
-      maxBatch: AI_BATCH_SIZE,
+      maxBatch: aiBatchSize,
       buildPayload: (entries: CoalescerEntry[]) => ({
         entries,
         glossary: activeGlossary,
@@ -197,23 +199,64 @@ export function useEditorTranslation({
         routingMode: aiRoutingMode,
       }),
       fetcher: async (payload) => {
+        // === Cache lookup قبل الإرسال ===
+        // نفلتر الـ entries: ما هو موجود في الكاش يُعاد فوراً، وما تبقّى يُرسل لـ AI.
+        const allEntries = (payload.entries as CoalescerEntry[]) || [];
+        let translations: Record<string, string> = {};
+        let entriesToSend = allEntries;
+        let cacheHits = 0;
+
+        if (translationCacheEnabled && allEntries.length > 0) {
+          const { hits, misses } = await cacheLookupMany(allEntries, translationProvider, aiModel);
+          translations = { ...hits };
+          cacheHits = Object.keys(hits).length;
+          entriesToSend = misses;
+        }
+
+        // إذا كل النصوص في الكاش → لا داعي لاستدعاء AI أبداً.
+        if (entriesToSend.length === 0) {
+          if (cacheHits > 0) console.log(`[cache] ${cacheHits} ترجمة من الذاكرة الدائمة (بدون AI)`);
+          return { translations, providerUsed: 'cache', __cacheHitsOnly: true };
+        }
+
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, entries: entriesToSend }),
         });
         if (!response.ok) {
           const errData = await response.json().catch(() => null);
           throw new Error(errData?.error || `خطأ ${response.status}`);
         }
-        return response.json();
+        const data = await response.json();
+
+        // دمج الـ AI translations مع الـ cache hits.
+        const aiTranslations: Record<string, string> = data?.translations || {};
+        translations = { ...translations, ...aiTranslations };
+
+        // === Cache store بعد الاستلام ===
+        if (translationCacheEnabled) {
+          const toStore: { original: string; translation: string }[] = [];
+          for (const e of entriesToSend) {
+            const tr = aiTranslations[e.key];
+            if (tr?.trim()) toStore.push({ original: e.original, translation: tr });
+          }
+          if (toStore.length > 0) {
+            cacheStoreMany(toStore, translationProvider, aiModel).catch(() => {});
+          }
+        }
+
+        return { ...data, translations, __cacheHits: cacheHits };
       },
       onBatchComplete: (data, batchSize) => {
+        // إذا كل النتائج من الكاش، لا نعدّ ذلك طلب AI.
+        if (data?.__cacheHitsOnly) return;
         recordBatchQuality(data);
         addAiRequest(1);
         if (data?.charsUsed) addMyMemoryChars(data.charsUsed);
-        if (batchSize > 1) {
-          console.log(`[coalescer] جمع ${batchSize} طلب ترجمة في طلب AI واحد`);
+        const cacheHits = data?.__cacheHits || 0;
+        if (batchSize > 1 || cacheHits > 0) {
+          console.log(`[coalescer] طلب AI واحد: ${batchSize - cacheHits} نص جديد + ${cacheHits} من الكاش`);
         }
         if (data?.fallbackUsed) {
           toast({
@@ -230,7 +273,7 @@ export function useEditorTranslation({
   }, [
     activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey,
     userCerebrasKey, userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines,
-    npcMode, aiModel, customPromptInstructions, aiRoutingMode,
+    npcMode, aiModel, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled,
   ]);
 
   // عند unmount: نُفرغ ما تجمّع لتجنّب طلبات معلقة.
@@ -448,7 +491,7 @@ export function useEditorTranslation({
     }
 
     setTranslating(true);
-    const totalBatches = Math.ceil(needsAI.length / AI_BATCH_SIZE);
+    const totalBatches = Math.ceil(needsAI.length / aiBatchSize);
     let allTranslations: Record<string, string> = {};
     const totalGlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
     const freeCount = Object.keys(freeTranslations).length;
@@ -546,6 +589,54 @@ export function useEditorTranslation({
       }
     };
 
+    // Wrapper: يفلتر النصوص الموجودة في الـ persistent cache قبل الإرسال،
+    // ويحفظ الترجمات الجديدة في الـ cache بعد النجاح. شفّاف للـ caller.
+    const fetchBatchWithCache = async (
+      batchEntries: { key: string; original: string }[],
+      signal: AbortSignal,
+    ) => {
+      let cacheHits: Record<string, string> = {};
+      let toSend = batchEntries;
+
+      if (translationCacheEnabled && batchEntries.length > 0) {
+        const { hits, misses } = await cacheLookupMany(batchEntries, translationProvider, aiModel);
+        cacheHits = hits;
+        toSend = misses;
+        if (Object.keys(hits).length > 0) {
+          console.log(`[cache] ${Object.keys(hits).length}/${batchEntries.length} ترجمة من الذاكرة الدائمة (بدون AI)`);
+        }
+      }
+
+      // إذا كل النصوص في الكاش — لا نستدعي AI أصلاً.
+      if (toSend.length === 0) {
+        return {
+          translations: cacheHits,
+          charsUsed: 0,
+          glossaryStats: { directMatches: 0, lockedTerms: 0, contextTerms: 0 },
+          __skipQualityRecord: true as const,
+        };
+      }
+
+      const result = await fetchBatchWithRetry(toSend, signal);
+
+      // احفظ الترجمات الجديدة في الكاش.
+      if (translationCacheEnabled && result?.translations) {
+        const toStore: { original: string; translation: string }[] = [];
+        for (const e of toSend) {
+          const tr = result.translations[e.key];
+          if (tr?.trim()) toStore.push({ original: e.original, translation: tr });
+        }
+        if (toStore.length > 0) {
+          cacheStoreMany(toStore, translationProvider, aiModel).catch(() => {});
+        }
+      }
+
+      return {
+        ...result,
+        translations: { ...cacheHits, ...(result?.translations || {}) },
+      };
+    };
+
     // Resolve per-provider batch delay (throttle). Skipped when user disables it.
     const providerKey = (translationProvider in PROVIDER_BATCH_DELAY_MS)
       ? translationProvider as keyof typeof PROVIDER_BATCH_DELAY_MS
@@ -579,7 +670,7 @@ export function useEditorTranslation({
             catch { break; } // aborted during throttle wait
           }
         }
-        const batch = needsAI.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
+        const batch = needsAI.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
         setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
         const entries = batch.map(e => ({
@@ -587,9 +678,10 @@ export function useEditorTranslation({
           original: e.original,
         }));
         
-        const data = await fetchBatchWithRetry(entries, abortControllerRef.current.signal);
+        const data = await fetchBatchWithCache(entries, abortControllerRef.current.signal);
         lastBatchEndAt = Date.now();
-        addAiRequest(1);
+        // إذا full cache hit — لا نحسبه طلب AI.
+        if (!data.__skipQualityRecord) addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);
         // Accumulate glossary stats
         if (data.glossaryStats) {
@@ -673,14 +765,14 @@ export function useEditorTranslation({
     setTranslating(true);
     abortControllerRef.current = new AbortController();
     try {
-      const totalBatches = Math.ceil(entriesToRetranslate.length / AI_BATCH_SIZE);
+      const totalBatches = Math.ceil(entriesToRetranslate.length / aiBatchSize);
       for (let b = 0; b < totalBatches; b++) {
         if (abortControllerRef.current.signal.aborted) {
           setTranslateProgress("⏹️ تم إيقاف إعادة الترجمة");
           setTimeout(() => setTranslateProgress(""), 3000);
           break;
         }
-        const batch = entriesToRetranslate.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
+        const batch = entriesToRetranslate.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
         setTranslateProgress(`🔄 إعادة ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
@@ -735,10 +827,10 @@ export function useEditorTranslation({
     abortControllerRef.current = new AbortController();
     let fixedCount = 0;
     try {
-      const totalBatches = Math.ceil(entriesToFix.length / AI_BATCH_SIZE);
+      const totalBatches = Math.ceil(entriesToFix.length / aiBatchSize);
       for (let b = 0; b < totalBatches; b++) {
         if (abortControllerRef.current.signal.aborted) break;
-        const batch = entriesToFix.slice(b * AI_BATCH_SIZE, (b + 1) * AI_BATCH_SIZE);
+        const batch = entriesToFix.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
         setTranslateProgress(`🔧 إصلاح الرموز التالفة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
         const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {

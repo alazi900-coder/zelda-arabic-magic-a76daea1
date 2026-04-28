@@ -104,4 +104,60 @@ describe("placeholder integrity through post-processing", () => {
     // intentional: the regex tolerates spacing. Real damage = losing one.
     expect(tagSet(merged)).toBe(tagSet(original));
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Hallucinated TAG detection — model invents a TAG that wasn't in source
+  // ─────────────────────────────────────────────────────────────────────
+  describe("hallucinated TAG detection (quality report)", () => {
+    it("flags TAG_2 swapped in place of TAG_1 as placeholder-mismatch", () => {
+      const requested = [{ key: "K0", original: "Press TAG_0 and TAG_1 to continue" }];
+      const translations = { K0: "اضغط TAG_0 و TAG_2 للمتابعة" }; // hallucinated TAG_2
+      const { placeholdersOk, errors } = checkBatch(requested, translations);
+      expect(placeholdersOk).toBe(0);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].key).toBe("K0");
+      expect(errors[0].reason).toContain("placeholder-mismatch");
+      expect(errors[0].reason).toContain("expected=TAG_0|TAG_1");
+      expect(errors[0].reason).toContain("got=TAG_0|TAG_2");
+    });
+
+    it("flags an extra invented TAG_5 added on top of correct tags", () => {
+      const requested = [{ key: "K1", original: "Hello TAG_0" }];
+      const translations = { K1: "أهلاً TAG_0 TAG_5" }; // extra TAG_5
+      const { placeholdersOk, errors } = checkBatch(requested, translations);
+      expect(placeholdersOk).toBe(0);
+      expect(errors[0].reason).toContain("got=TAG_0|TAG_5");
+    });
+
+    it("flags a hallucinated ⟪T9⟫ glossary placeholder that wasn't requested", () => {
+      const requested = [{ key: "K2", original: "Welcome ⟪T0⟫" }];
+      const translations = { K2: "أهلاً ⟪T0⟫ ⟪T9⟫" };
+      const { errors } = checkBatch(requested, translations);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].reason).toContain("⟪T0⟫|⟪T9⟫");
+    });
+
+    it("counts multiple errors across a batch — only clean rows pass", () => {
+      const requested = [
+        { key: "OK",   original: "Hi TAG_0" },
+        { key: "BAD1", original: "Hi TAG_0 TAG_1" }, // TAG_1 → TAG_2
+        { key: "BAD2", original: "Hi TAG_0" },        // adds TAG_3
+      ];
+      const translations = {
+        OK:   "أهلاً TAG_0",
+        BAD1: "أهلاً TAG_0 TAG_2",
+        BAD2: "أهلاً TAG_0 TAG_3",
+      };
+      const { placeholdersOk, errors } = checkBatch(requested, translations);
+      expect(placeholdersOk).toBe(1);
+      expect(errors.map(e => e.key).sort()).toEqual(["BAD1", "BAD2"]);
+    });
+
+    it("error sample contains the offending Arabic text for UI display", () => {
+      const requested = [{ key: "K3", original: "Use TAG_0" }];
+      const translations = { K3: "استخدم TAG_7 الآن" };
+      const { errors } = checkBatch(requested, translations);
+      expect(errors[0].sample).toBe("استخدم TAG_7 الآن");
+    });
+  });
 });

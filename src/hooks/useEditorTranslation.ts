@@ -327,8 +327,7 @@ export function useEditorTranslation({
         setLastSaved(`✅ ترجمة عبر ${label}`);
         setTimeout(() => setLastSaved(""), 3000);
       }
-      if (data.translations && data.translations[key]) {
-        const translated = data.translations[key];
+      if (translated) {
         if (looksUntranslated(entry.original, translated)) {
           toast({
             title: "⚠️ الترجمة بقيت إنجليزية",

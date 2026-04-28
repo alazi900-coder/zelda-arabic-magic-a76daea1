@@ -15,6 +15,29 @@ function stripNewlines(s: string): string {
 const TAG_RE = /(TAG_\d+|⟪T\d+⟫)/g;
 const tagSet = (s: string) => (s.match(TAG_RE) || []).slice().sort().join("|");
 
+// Mirror of edge-function `computeQualityStats` placeholder check — kept inline
+// so the test pins the invariant ("expected vs actual tag set") independently.
+interface QualityError { key: string; reason: string; sample?: string }
+function checkBatch(
+  requested: { key: string; original: string }[],
+  translations: Record<string, string>,
+): { placeholdersOk: number; errors: QualityError[] } {
+  const errors: QualityError[] = [];
+  let placeholdersOk = 0;
+  for (const e of requested) {
+    const t = translations[e.key] ?? "";
+    const expected = tagSet(e.original);
+    const actual = tagSet(t);
+    if (expected === actual) placeholdersOk++;
+    else errors.push({
+      key: e.key,
+      reason: `placeholder-mismatch (expected=${expected || "∅"} got=${actual || "∅"})`,
+      sample: t,
+    });
+  }
+  return { placeholdersOk, errors };
+}
+
 describe("placeholder integrity through post-processing", () => {
   it("preserves TAG_0 and TAG_1 when newlines are stripped", () => {
     const aiOutput = "مرحباً TAG_0\nكيف حالك TAG_1";

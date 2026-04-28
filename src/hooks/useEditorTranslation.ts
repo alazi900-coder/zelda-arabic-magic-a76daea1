@@ -140,6 +140,32 @@ export function useEditorTranslation({
   const [pendingGlossaryTranslations, setPendingGlossaryTranslations] = useState<Record<string, string>>({});
   const [showGlossaryPreview, setShowGlossaryPreview] = useState(false);
 
+  // ============= Batch Quality Tracking =============
+  // Captures qualityStats returned by the edge function for every batch.
+  const [lastBatchQuality, setLastBatchQuality] = useState<BatchQualityStats | null>(null);
+  const [cumulativeQuality, setCumulativeQuality] = useState<CumulativeQuality>({
+    batches: 0, total: 0, withArabic: 0, placeholdersOk: 0, newlineStripped: 0, errors: [],
+  });
+
+  const recordBatchQuality = (data: { qualityStats?: BatchQualityStats } | null | undefined) => {
+    const q = data?.qualityStats;
+    if (!q || typeof q !== 'object') return;
+    setLastBatchQuality(q);
+    setCumulativeQuality(prev => ({
+      batches: prev.batches + 1,
+      total: prev.total + (q.total || 0),
+      withArabic: prev.withArabic + (q.withArabic || 0),
+      placeholdersOk: prev.placeholdersOk + (q.placeholdersOk || 0),
+      newlineStripped: prev.newlineStripped + (q.newlineStripped || 0),
+      errors: [...(q.errors || []), ...prev.errors].slice(0, 50),
+    }));
+  };
+
+  const resetBatchQuality = () => {
+    setLastBatchQuality(null);
+    setCumulativeQuality({ batches: 0, total: 0, withArabic: 0, placeholdersOk: 0, newlineStripped: 0, errors: [] });
+  };
+
   const applyPendingTranslations = (selectedKeys?: Set<string>) => {
     if (!state || !pendingPageTranslations) return;
     const toApply: Record<string, string> = {};

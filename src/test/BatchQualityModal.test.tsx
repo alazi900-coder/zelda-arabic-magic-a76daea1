@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { BatchQualityModal } from "@/components/editor/BatchQualityModal";
 import { emptyCumulative, type BatchQualityStats } from "@/lib/batch-quality";
 
@@ -81,13 +82,12 @@ describe("BatchQualityModal", () => {
     const cumulative = {
       batches: 5, total: 50, withArabic: 48, placeholdersOk: 45, newlineStripped: 12, errors: [],
     };
-    const { container } = render(<BatchQualityModal lastBatch={sampleBatch} cumulative={cumulative} onReset={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /جودة الدفعات/ }));
-    fireEvent.click(screen.getByRole("tab", { name: /تراكمي/ }));
-    // Cumulative numbers must appear somewhere in the rendered modal
+    const user = userEvent.setup();
+    render(<BatchQualityModal lastBatch={sampleBatch} cumulative={cumulative} onReset={() => {}} />);
+    await user.click(screen.getByRole("button", { name: /جودة الدفعات/ }));
+    await user.click(screen.getByRole("tab", { name: /تراكمي/ }));
     const text = document.body.textContent || "";
     expect(text).toContain("50"); // total
     expect(text).toContain("12"); // newlineStripped
-    void container;
   });
 });

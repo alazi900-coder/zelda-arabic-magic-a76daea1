@@ -673,7 +673,9 @@ export function useEditorTranslation({
           original: e.original,
         }));
         
-        const data = await fetchBatchWithRetry(entries, abortControllerRef.current.signal);
+        const data = await fetchBatchWithCache(entries, abortControllerRef.current.signal);
+        // إذا كل النتائج من الكاش، لا نعدّ ذلك طلب AI ولا نُسجّل qualityStats.
+        if (data.__skipQualityRecord) { /* full cache hit - no AI call */ } else { recordBatchQuality(data); }
         lastBatchEndAt = Date.now();
         addAiRequest(1);
         if (data.charsUsed) addMyMemoryChars(data.charsUsed);

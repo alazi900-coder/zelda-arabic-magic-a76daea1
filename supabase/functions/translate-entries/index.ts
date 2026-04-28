@@ -88,6 +88,7 @@ interface SuccessPayload {
 function buildSuccessResponse(
   requested: { key: string; original: string }[],
   raw: SuccessPayload,
+  providerUsed?: string,
 ): Response {
   const cleaned = stripNewlinesInValues(raw.translations || {});
   const qualityStats = computeQualityStats(requested, raw.translations || {}, cleaned);
@@ -97,6 +98,8 @@ function buildSuccessResponse(
     qualityStats,
   };
   if (typeof raw.charsUsed === 'number') body.charsUsed = raw.charsUsed;
+  if (providerUsed) body.providerUsed = providerUsed;
+  if (raw.providerUsed) body.providerUsed = raw.providerUsed;
   return new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });

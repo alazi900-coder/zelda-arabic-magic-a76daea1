@@ -236,6 +236,7 @@ export const DEFAULT_SPLITTER_NAME = splitterV1HeaderBody.name;
 export async function unpackLagp(
   buffer: ArrayBuffer,
   sourceName = "input.wilay",
+  options: UnpackOptions = {},
 ): Promise<UnpackResult> {
   const unwrapped = await unwrapWilaySource(buffer);
 
@@ -245,8 +246,15 @@ export async function unpackLagp(
     );
   }
 
+  const splitterName = options.splitter ?? DEFAULT_SPLITTER_NAME;
+  const splitter = getLagpSplitter(splitterName);
+  if (!splitter) {
+    throw new Error(`Unknown LAGP splitter: ${splitterName}`);
+  }
+
   const payload = new Uint8Array(unwrapped.data);
-  const chunks = splitLagpPayload(payload);
+  const chunks = splitter.split(payload);
+  validateChunkCoverage(chunks, payload.length);
 
   const manifest: LagpManifest = {
     format: "lagp-packer/v1",
@@ -257,6 +265,7 @@ export async function unpackLagp(
       ? uint8ToBase64(unwrapped.xbc1Header)
       : null,
     innerSize: payload.length,
+    splitter: splitter.name,
     chunks,
   };
 
@@ -272,35 +281,23 @@ export async function unpackLagp(
 }
 
 /**
- * Repack a ZIP produced by `unpackLagp` (optionally edited) back into a
- * `.wilay` file using the same compression chain as the original.
+ * Core repack: assemble inner payload from a manifest + a chunk lookup,
+ * then re-wrap with the original compression chain.
  */
-export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
-  const zip = await JSZip.loadAsync(zipBuffer);
-
-  const manifestFile = zip.file("manifest.json");
-  if (!manifestFile) {
-    throw new Error("ZIP is missing manifest.json — cannot repack.");
-  }
-
-  const manifestText = await manifestFile.async("string");
-  const manifest = JSON.parse(manifestText) as LagpManifest;
-
+async function repackFromManifest(
+  manifest: LagpManifest,
+  loadChunk: (name: string) => Promise<Uint8Array>,
+): Promise<ArrayBuffer> {
   if (manifest.format !== "lagp-packer/v1") {
     throw new Error(`Unsupported manifest format: ${manifest.format}`);
   }
 
-  // Read chunks in the manifest's declared order and concatenate.
   const ordered = [...manifest.chunks].sort((a, b) => a.index - b.index);
   const parts: Uint8Array[] = [];
   let totalLen = 0;
 
   for (const chunk of ordered) {
-    const file = zip.file(chunk.name);
-    if (!file) {
-      throw new Error(`Missing chunk in ZIP: ${chunk.name}`);
-    }
-    const data = await file.async("uint8array");
+    const data = await loadChunk(chunk.name);
     parts.push(data);
     totalLen += data.length;
   }
@@ -312,7 +309,6 @@ export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
     off += part.length;
   }
 
-  // Sanity check the magic survived edits.
   if (getMagic(inner) !== LAGP_MAGIC) {
     throw new Error(
       `Repacked payload does not start with LAGP magic — refusing to write.`,
@@ -328,11 +324,50 @@ export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
     inner.byteOffset + inner.byteLength,
   ) as ArrayBuffer;
 
-  const wrapped = await rewrapWilayData(
-    innerBuf,
-    manifest.compressionSteps,
-    xbc1Header,
-  );
+  return rewrapWilayData(innerBuf, manifest.compressionSteps, xbc1Header);
+}
 
-  return wrapped;
+/**
+ * Repack a ZIP produced by `unpackLagp` (optionally edited) back into a
+ * `.wilay` file. Reads manifest.json from inside the ZIP.
+ */
+export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
+  const zip = await JSZip.loadAsync(zipBuffer);
+  const manifestFile = zip.file("manifest.json");
+  if (!manifestFile) {
+    throw new Error("ZIP is missing manifest.json — cannot repack.");
+  }
+  const manifest = JSON.parse(await manifestFile.async("string")) as LagpManifest;
+
+  return repackFromManifest(manifest, async (name) => {
+    const f = zip.file(name);
+    if (!f) throw new Error(`Missing chunk in ZIP: ${name}`);
+    return f.async("uint8array");
+  });
+}
+
+/**
+ * Repack using a chunks ZIP plus an externally-provided manifest.json.
+ * If the ZIP also contains a manifest.json, the external one wins.
+ */
+export async function repackLagpWithExternalManifest(
+  zipBuffer: ArrayBuffer,
+  manifestJsonText: string,
+): Promise<ArrayBuffer> {
+  let manifest: LagpManifest;
+  try {
+    manifest = JSON.parse(manifestJsonText) as LagpManifest;
+  } catch (err) {
+    throw new Error(
+      `Invalid manifest.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const zip = await JSZip.loadAsync(zipBuffer);
+
+  return repackFromManifest(manifest, async (name) => {
+    const f = zip.file(name);
+    if (!f) throw new Error(`Missing chunk in ZIP: ${name}`);
+    return f.async("uint8array");
+  });
 }

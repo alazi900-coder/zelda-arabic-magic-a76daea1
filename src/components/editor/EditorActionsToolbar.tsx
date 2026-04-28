@@ -7,6 +7,7 @@ import {
 import { Download, FileText, Loader2, Save, Upload, FileDown, Cloud, CloudUpload, BookOpen, AlertTriangle, Eye, RotateCcw, CheckCircle2, ShieldCheck, MoreVertical, Replace, Type, Trash2, Package, Wand2, Rows3, Languages, Sparkles, Filter } from "lucide-react";
 import type { ToolType } from "@/components/editor/ToolHelpDialog";
 import type { useEditorState } from "@/hooks/useEditorState";
+import AIRoutingToggle from "@/components/editor/AIRoutingToggle";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -110,6 +111,8 @@ type EditorSubset = Pick<
   | "translatedCount"
   | "unifyingConflicts"
   | "user"
+  | "aiRoutingMode"
+  | "setAiRoutingMode"
 >;
 
 interface EditorActionsToolbarProps {

@@ -267,23 +267,59 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   return { cleaned, tags };
 }
 
+/**
+ * Comprehensive punctuation set for detaching glue around NEWLINE_N.
+ * Includes: ASCII (.,;:!?'"`), Arabic (؟،؛٪٫٬…ـ), CJK (。、！？「」『』《》（）),
+ * General punctuation (—–·•«»“”‘’), and quotes/brackets ([](){}<>).
+ * Excludes: _ (used in placeholder), digits, letters, whitespace.
+ */
+const NEWLINE_GLUE_PUNCT = String.raw`.,;:!?'"`+ '`' + String.raw`؟،؛٪٫٬…ـ。、！？「」『』《》（）—–·•«»“”‘’\[\]\(\)\{\}<>«»`;
+
+/** Log a sample of malformed placeholder remnants for quick debugging. */
+function logMalformedPlaceholders(stage: string, text: string, key?: string): void {
+  // Match remnants like NEWLINE_? , NEWLINE_X , NEW-LINE , NEWLINE (no digit), NEW LINE_5
+  const pattern = /\bNEW\s*[-_]?\s*LINE(?!_\d+\b)\S{0,8}/gi;
+  const hits = text.match(pattern);
+  if (hits && hits.length > 0) {
+    const sample = hits.slice(0, 3).join(' | ');
+    console.warn(`[malformed-newline] stage=${stage}${key ? ` key=${key}` : ''} count=${hits.length} sample="${sample}"`);
+  }
+  // Also log corrupted TAG remnants (TAG without digit, or with letters)
+  const tagPattern = /\bTAG(?!_\d+\b)[_-]?[A-Za-z?]{1,4}\b/g;
+  const tagHits = text.match(tagPattern);
+  if (tagHits && tagHits.length > 0) {
+    const sample = tagHits.slice(0, 3).join(' | ');
+    console.warn(`[malformed-tag] stage=${stage}${key ? ` key=${key}` : ''} count=${tagHits.length} sample="${sample}"`);
+  }
+}
+
 /** Normalize malformed TAG_N variants that AI engines may produce */
 function normalizeTagPlaceholders(text: string): string {
+  // Build punctuation char-class once
+  const PUNCT = NEWLINE_GLUE_PUNCT;
+  // Things considered "letters/words" that may glue to a placeholder (excludes _ and digits)
+  const WORD_CHAR = String.raw`A-Za-z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF`;
+
   return text
-    .replace(/TAG\s*[-:_]?\s*_?(\d+)/gi, 'TAG_$1')    // TAG-0, TAG:0, TAG 0, TAG _0
-    .replace(/(?<!\w)TAG(\d+)(?!\w)/gi, 'TAG_$1')      // TAG0 -> TAG_0
-    .replace(/tag_(\d+)/g, 'TAG_$1')                    // tag_0 -> TAG_0
-    .replace(/[\[{(<]\s*TAG\s*[_\s-:]?(\d+)\s*[\]})>]/gi, 'TAG_$1') // [TAG_0] -> TAG_0
-    .replace(/NEWLINE\s*[-:_]?\s*_?(\d+)/gi, 'NEWLINE_$1')  // Normalize NEWLINE variants
-    .replace(/newline_(\d+)/g, 'NEWLINE_$1')                // lowercase -> uppercase
-    .replace(/\bNEW\s*[-_]?\s*LINE\s*[-_]?\s*(\d+)/gi, 'NEWLINE_$1') // NEW-LINE_0, NEW LINE 0
-    // Detach punctuation glued to NEWLINE_N on either side: "NEWLINE_0؟" → "NEWLINE_0 ؟"
-    // Covers Arabic/Latin punctuation: ؟ ! ، ؛ . , : ; ? — and reorders if punctuation came BEFORE
-    .replace(/([?!.,;:؟،؛])\s*(NEWLINE_\d+)/g, '$1 $2')
-    .replace(/(NEWLINE_\d+)\s*([?!.,;:؟،؛])/g, '$1 $2')
-    // Detach Arabic/Latin letters glued to NEWLINE_N (rare but possible): "نصNEWLINE_0" → "نص NEWLINE_0"
-    .replace(/([^\s_\d])(NEWLINE_\d+)/g, '$1 $2')
-    .replace(/(NEWLINE_\d+)([^\s_\d?!.,;:؟،؛])/g, '$1 $2');
+    .replace(/TAG\s*[-:_]?\s*_?(\d+)/gi, 'TAG_$1')
+    .replace(/(?<!\w)TAG(\d+)(?!\w)/gi, 'TAG_$1')
+    .replace(/tag_(\d+)/g, 'TAG_$1')
+    .replace(/[\[{(<]\s*TAG\s*[_\s-:]?(\d+)\s*[\]})>]/gi, 'TAG_$1')
+    .replace(/NEWLINE\s*[-:_]?\s*_?(\d+)/gi, 'NEWLINE_$1')
+    .replace(/newline_(\d+)/g, 'NEWLINE_$1')
+    .replace(/\bNEW\s*[-_]?\s*LINE\s*[-_]?\s*(\d+)/gi, 'NEWLINE_$1')
+    // --- Detach glue around NEWLINE_N (both sides) ---
+    // Punctuation BEFORE: "؟NEWLINE_0" → "؟ NEWLINE_0"
+    .replace(new RegExp(`([${PUNCT}])\\s*(NEWLINE_\\d+)`, 'g'), '$1 $2')
+    // Punctuation AFTER: "NEWLINE_0؟" → "NEWLINE_0 ؟"
+    .replace(new RegExp(`(NEWLINE_\\d+)\\s*([${PUNCT}])`, 'g'), '$1 $2')
+    // Letters BEFORE (Arabic/Latin/etc.): "نصNEWLINE_0" → "نص NEWLINE_0"
+    .replace(new RegExp(`([${WORD_CHAR}])(NEWLINE_\\d+)`, 'g'), '$1 $2')
+    // Letters AFTER: "NEWLINE_0نص" → "NEWLINE_0 نص"
+    .replace(new RegExp(`(NEWLINE_\\d+)([${WORD_CHAR}])`, 'g'), '$1 $2')
+    // Trailing digits glued (not the placeholder's own): "NEWLINE_0123" must NOT match (greedy \d+ already absorbs).
+    // RTL marks accidentally inserted between NEWLINE_ and digits: "NEWLINE_\u200F0" → "NEWLINE_0"
+    .replace(/NEWLINE_[\u200E\u200F\u202A-\u202E\u2066-\u2069]+(\d+)/g, 'NEWLINE_$1');
 }
 
 /** Normalize locked term placeholders (⟪T0⟫) without converting them to TAG_N */
@@ -314,6 +350,8 @@ function restoreTags(text: string, tags: Map<string, string>): string {
 }
 
 function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<string>): string {
+  // Log any malformed remnants right before we strip/salvage them
+  logMalformedPlaceholders('strip', text);
   return text
     .replace(/\b(?:TAG|NEWLINE)_\d+\b/g, (match) => (allowedPlaceholders.has(match) ? match : ''))
     // Salvage any leftover NEWLINE remnants (e.g. "NEWLINE_?", "NEWLINE", "NEWLINE_X") as real newlines
@@ -322,6 +360,7 @@ function stripUnexpectedPlaceholders(text: string, allowedPlaceholders: Set<stri
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
+
 
 let _rebalanceNewlines = false;
 let _extraInstructions = '';

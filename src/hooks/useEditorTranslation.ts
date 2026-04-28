@@ -267,6 +267,11 @@ export function useEditorTranslation({
           description: `الموديل الأصلي ${data.fallbackUsed.primary} غير متاح — استُخدم ${data.fallbackUsed.actual}`,
         });
       }
+      if (data.providerUsed) {
+        const label = data.providerUsed === 'gemini' ? '🆓 Gemini Free' : data.providerUsed === 'lovable' ? '💰 Lovable Gateway' : data.providerUsed;
+        setLastSaved(`✅ ترجمة عبر ${label}`);
+        setTimeout(() => setLastSaved(""), 3000);
+      }
       if (data.translations && data.translations[key]) {
         const translated = data.translations[key];
         if (looksUntranslated(entry.original, translated)) {

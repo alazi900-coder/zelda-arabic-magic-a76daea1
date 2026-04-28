@@ -849,6 +849,7 @@ export function useEditorTranslation({
             npcMaxLines,
             aiModel,
             extraInstructions: customPromptInstructions || undefined,
+              routingMode: aiRoutingMode,
           }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
@@ -1040,6 +1041,7 @@ export function useEditorTranslation({
                 npcMaxLines,
                 aiModel,
                 extraInstructions: customPromptInstructions || undefined,
+              routingMode: aiRoutingMode,
               }),
             });
             if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
@@ -1291,6 +1293,7 @@ export function useEditorTranslation({
               npcMaxLines,
               aiModel,
               extraInstructions: customPromptInstructions || undefined,
+              routingMode: aiRoutingMode,
             }),
           });
           if (!response.ok) { stillFailed.push(entry); continue; }

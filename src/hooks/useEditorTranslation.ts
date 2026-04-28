@@ -1351,5 +1351,8 @@ export function useEditorTranslation({
     handleRetranslatePage,
     handleRetryFailed,
     handleFixDamagedTags,
+    lastBatchQuality,
+    cumulativeQuality,
+    resetBatchQuality,
   };
 }

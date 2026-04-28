@@ -319,23 +319,10 @@ export function useEditorTranslation({
         setTimeout(() => setLastSaved(""), 3000);
         return;
       }
-      // Send original text directly — server handles tag protection (avoid double-protection)
-      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
-        method: 'POST',
-        headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: [{ key, original: entry.original }], glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
-      });
-      if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
-      const data = await response.json(); recordBatchQuality(data);
-      addAiRequest(1);
-      if (data.charsUsed) addMyMemoryChars(data.charsUsed);
-      if (data.fallbackUsed) {
-        toast({
-          title: "🔄 تم التبديل لموديل بديل",
-          description: `الموديل الأصلي ${data.fallbackUsed.primary} غير متاح — استُخدم ${data.fallbackUsed.actual}`,
-        });
-      }
-      if (data.providerUsed) {
+      // الإرسال عبر الـ coalescer: يُجمَّع مع طلبات أخرى خلال 200ms في طلب AI واحد.
+      // server يتعامل مع tag protection — لا حاجة لحماية مزدوجة هنا.
+      const { translation: translated, raw: data } = await coalescer.enqueue({ key, original: entry.original });
+      if (data?.providerUsed) {
         const label = data.providerUsed === 'gemini' ? '🆓 Gemini Free' : data.providerUsed === 'lovable' ? '💰 Lovable Gateway' : data.providerUsed;
         setLastSaved(`✅ ترجمة عبر ${label}`);
         setTimeout(() => setLastSaved(""), 3000);

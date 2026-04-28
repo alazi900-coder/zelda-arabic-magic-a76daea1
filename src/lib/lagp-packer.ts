@@ -40,8 +40,11 @@ export interface LagpChunk {
   offset: number;
   /** Byte length. */
   length: number;
-  /** Human-readable kind ("header", "filler", "raw"). */
-  kind: "header" | "filler" | "raw";
+  /**
+   * Human-readable kind. "header"/"filler"/"raw" are reserved; future
+   * splitters may emit additional kinds (e.g. "widgets", "strings").
+   */
+  kind: string;
 }
 
 export interface LagpManifest {
@@ -56,6 +59,8 @@ export interface LagpManifest {
   xbc1HeaderBase64: string | null;
   /** Total inner payload size in bytes. */
   innerSize: number;
+  /** Name of the splitter that produced these chunks. Informational. */
+  splitter: string;
   /** Ordered list of chunks. Concatenating their bytes reproduces the inner payload. */
   chunks: LagpChunk[];
 }
@@ -64,6 +69,11 @@ export interface UnpackResult {
   /** ZIP file as ArrayBuffer, ready to download. */
   zip: ArrayBuffer;
   manifest: LagpManifest;
+}
+
+export interface UnpackOptions {
+  /** Splitter name. Defaults to DEFAULT_SPLITTER_NAME. */
+  splitter?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,49 +111,116 @@ function pad3(n: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Inner LAGP payload → ordered chunks
+// Splitter registry — extensible
 // ---------------------------------------------------------------------------
 
 /**
- * Split the decompressed LAGP payload into named chunks.
+ * A splitter inspects the decompressed LAGP payload and produces an ordered
+ * list of chunks. The contract is strict:
  *
- * Strategy (v1 — conservative, byte-exact):
- *  - chunk 000: the 32-byte LAGP header (magic + early fields). This is the
- *    portion most users will want as a stable reference when editing.
- *  - chunk 001+: the remaining payload as one big "raw" chunk.
+ *   1. Chunks must cover EVERY byte of the payload — no gaps, no overlaps.
+ *   2. Chunks must be in ascending offset order, and `index` must match
+ *      array position.
+ *   3. The concat of all chunk slices MUST byte-equal the input payload.
  *
- * This guarantees round-trip safety. Future versions can subdivide the
- * "raw" chunk into widget tables, string pools, etc., as the LAGP format
- * is reverse-engineered further. The manifest format is forward-compatible:
- * any number of chunks is allowed as long as their concat reproduces the
- * payload.
+ * Any region the splitter cannot identify must be emitted as a `filler`
+ * chunk so round-trip stays byte-exact.
+ *
+ * To add a new splitter (e.g. one that recognises widget tables / string
+ * pools), implement this interface and register it via `registerLagpSplitter`.
+ * The active splitter is selected by name when calling `unpackLagp`.
  */
-function splitLagpPayload(payload: Uint8Array): LagpChunk[] {
-  const chunks: LagpChunk[] = [];
-  if (payload.length === 0) return chunks;
-
-  const HEADER_SIZE = Math.min(32, payload.length);
-
-  chunks.push({
-    index: 0,
-    name: `chunks/${pad3(0)}_header.bin`,
-    offset: 0,
-    length: HEADER_SIZE,
-    kind: "header",
-  });
-
-  if (payload.length > HEADER_SIZE) {
-    chunks.push({
-      index: 1,
-      name: `chunks/${pad3(1)}_body.bin`,
-      offset: HEADER_SIZE,
-      length: payload.length - HEADER_SIZE,
-      kind: "raw",
-    });
-  }
-
-  return chunks;
+export interface LagpSplitter {
+  /** Stable identifier stored in the manifest (e.g. "v1-header-body"). */
+  name: string;
+  /** Short human description, shown in UI/devtools. */
+  description: string;
+  /** Produce chunks. MUST satisfy the coverage contract above. */
+  split(payload: Uint8Array): LagpChunk[];
 }
+
+const splitterRegistry = new Map<string, LagpSplitter>();
+
+export function registerLagpSplitter(splitter: LagpSplitter): void {
+  splitterRegistry.set(splitter.name, splitter);
+}
+
+export function getLagpSplitter(name: string): LagpSplitter | undefined {
+  return splitterRegistry.get(name);
+}
+
+export function listLagpSplitters(): LagpSplitter[] {
+  return [...splitterRegistry.values()];
+}
+
+/**
+ * Validate the coverage contract. Throws on violation. Used both by
+ * `unpackLagp` (to catch buggy splitters early) and by tests.
+ */
+export function validateChunkCoverage(
+  chunks: LagpChunk[],
+  payloadSize: number,
+): void {
+  let expectedOffset = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    if (c.index !== i) {
+      throw new Error(`Splitter bug: chunk[${i}].index = ${c.index}`);
+    }
+    if (c.offset !== expectedOffset) {
+      throw new Error(
+        `Splitter bug: chunk[${i}] offset ${c.offset} != expected ${expectedOffset}`,
+      );
+    }
+    if (c.length < 0) {
+      throw new Error(`Splitter bug: chunk[${i}] negative length ${c.length}`);
+    }
+    expectedOffset += c.length;
+  }
+  if (expectedOffset !== payloadSize) {
+    throw new Error(
+      `Splitter bug: chunks cover ${expectedOffset} bytes, payload is ${payloadSize}`,
+    );
+  }
+}
+
+// ---- Built-in splitters --------------------------------------------------
+
+/**
+ * v1 splitter (default, conservative): exposes a 32-byte header chunk and
+ * dumps the rest as a single body chunk. Always produces a valid round-trip.
+ */
+const splitterV1HeaderBody: LagpSplitter = {
+  name: "v1-header-body",
+  description: "32-byte header + single body chunk (conservative, always safe)",
+  split(payload: Uint8Array): LagpChunk[] {
+    const chunks: LagpChunk[] = [];
+    if (payload.length === 0) return chunks;
+
+    const HEADER_SIZE = Math.min(32, payload.length);
+    chunks.push({
+      index: 0,
+      name: `chunks/${pad3(0)}_header.bin`,
+      offset: 0,
+      length: HEADER_SIZE,
+      kind: "header",
+    });
+    if (payload.length > HEADER_SIZE) {
+      chunks.push({
+        index: 1,
+        name: `chunks/${pad3(1)}_body.bin`,
+        offset: HEADER_SIZE,
+        length: payload.length - HEADER_SIZE,
+        kind: "raw",
+      });
+    }
+    return chunks;
+  },
+};
+
+registerLagpSplitter(splitterV1HeaderBody);
+
+export const DEFAULT_SPLITTER_NAME = splitterV1HeaderBody.name;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -159,6 +236,7 @@ function splitLagpPayload(payload: Uint8Array): LagpChunk[] {
 export async function unpackLagp(
   buffer: ArrayBuffer,
   sourceName = "input.wilay",
+  options: UnpackOptions = {},
 ): Promise<UnpackResult> {
   const unwrapped = await unwrapWilaySource(buffer);
 
@@ -168,8 +246,15 @@ export async function unpackLagp(
     );
   }
 
+  const splitterName = options.splitter ?? DEFAULT_SPLITTER_NAME;
+  const splitter = getLagpSplitter(splitterName);
+  if (!splitter) {
+    throw new Error(`Unknown LAGP splitter: ${splitterName}`);
+  }
+
   const payload = new Uint8Array(unwrapped.data);
-  const chunks = splitLagpPayload(payload);
+  const chunks = splitter.split(payload);
+  validateChunkCoverage(chunks, payload.length);
 
   const manifest: LagpManifest = {
     format: "lagp-packer/v1",
@@ -180,6 +265,7 @@ export async function unpackLagp(
       ? uint8ToBase64(unwrapped.xbc1Header)
       : null,
     innerSize: payload.length,
+    splitter: splitter.name,
     chunks,
   };
 
@@ -195,35 +281,23 @@ export async function unpackLagp(
 }
 
 /**
- * Repack a ZIP produced by `unpackLagp` (optionally edited) back into a
- * `.wilay` file using the same compression chain as the original.
+ * Core repack: assemble inner payload from a manifest + a chunk lookup,
+ * then re-wrap with the original compression chain.
  */
-export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
-  const zip = await JSZip.loadAsync(zipBuffer);
-
-  const manifestFile = zip.file("manifest.json");
-  if (!manifestFile) {
-    throw new Error("ZIP is missing manifest.json — cannot repack.");
-  }
-
-  const manifestText = await manifestFile.async("string");
-  const manifest = JSON.parse(manifestText) as LagpManifest;
-
+async function repackFromManifest(
+  manifest: LagpManifest,
+  loadChunk: (name: string) => Promise<Uint8Array>,
+): Promise<ArrayBuffer> {
   if (manifest.format !== "lagp-packer/v1") {
     throw new Error(`Unsupported manifest format: ${manifest.format}`);
   }
 
-  // Read chunks in the manifest's declared order and concatenate.
   const ordered = [...manifest.chunks].sort((a, b) => a.index - b.index);
   const parts: Uint8Array[] = [];
   let totalLen = 0;
 
   for (const chunk of ordered) {
-    const file = zip.file(chunk.name);
-    if (!file) {
-      throw new Error(`Missing chunk in ZIP: ${chunk.name}`);
-    }
-    const data = await file.async("uint8array");
+    const data = await loadChunk(chunk.name);
     parts.push(data);
     totalLen += data.length;
   }
@@ -235,7 +309,6 @@ export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
     off += part.length;
   }
 
-  // Sanity check the magic survived edits.
   if (getMagic(inner) !== LAGP_MAGIC) {
     throw new Error(
       `Repacked payload does not start with LAGP magic — refusing to write.`,
@@ -251,11 +324,50 @@ export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
     inner.byteOffset + inner.byteLength,
   ) as ArrayBuffer;
 
-  const wrapped = await rewrapWilayData(
-    innerBuf,
-    manifest.compressionSteps,
-    xbc1Header,
-  );
+  return rewrapWilayData(innerBuf, manifest.compressionSteps, xbc1Header);
+}
 
-  return wrapped;
+/**
+ * Repack a ZIP produced by `unpackLagp` (optionally edited) back into a
+ * `.wilay` file. Reads manifest.json from inside the ZIP.
+ */
+export async function repackLagp(zipBuffer: ArrayBuffer): Promise<ArrayBuffer> {
+  const zip = await JSZip.loadAsync(zipBuffer);
+  const manifestFile = zip.file("manifest.json");
+  if (!manifestFile) {
+    throw new Error("ZIP is missing manifest.json — cannot repack.");
+  }
+  const manifest = JSON.parse(await manifestFile.async("string")) as LagpManifest;
+
+  return repackFromManifest(manifest, async (name) => {
+    const f = zip.file(name);
+    if (!f) throw new Error(`Missing chunk in ZIP: ${name}`);
+    return f.async("uint8array");
+  });
+}
+
+/**
+ * Repack using a chunks ZIP plus an externally-provided manifest.json.
+ * If the ZIP also contains a manifest.json, the external one wins.
+ */
+export async function repackLagpWithExternalManifest(
+  zipBuffer: ArrayBuffer,
+  manifestJsonText: string,
+): Promise<ArrayBuffer> {
+  let manifest: LagpManifest;
+  try {
+    manifest = JSON.parse(manifestJsonText) as LagpManifest;
+  } catch (err) {
+    throw new Error(
+      `Invalid manifest.json: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const zip = await JSZip.loadAsync(zipBuffer);
+
+  return repackFromManifest(manifest, async (name) => {
+    const f = zip.file(name);
+    if (!f) throw new Error(`Missing chunk in ZIP: ${name}`);
+    return f.async("uint8array");
+  });
 }

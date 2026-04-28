@@ -274,7 +274,36 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiThrottleEnabled', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  // === Translation Memory for improvements ===
+  // === AI Batch Size: عدد النصوص في كل طلب AI واحد ===
+  // أكبر = طلبات أقل = توفير أكبر للحصة، لكن خطر تجاوز output tokens.
+  // النطاق المسموح: 5..50. الافتراضي: 20.
+  const [aiBatchSize, _setAiBatchSize] = useState<number>(() => {
+    try {
+      const v = parseInt(localStorage.getItem('aiBatchSize') || '20', 10);
+      if (isNaN(v) || v < 5) return 20;
+      return Math.min(50, v);
+    } catch { return 20; }
+  });
+  const setAiBatchSize = useCallback((v: number) => {
+    const clamped = Math.max(5, Math.min(50, Math.round(v) || 20));
+    _setAiBatchSize(clamped);
+    try { localStorage.setItem('aiBatchSize', String(clamped)); } catch { /* ignore */ }
+  }, []);
+
+  // === Persistent Translation Cache (IndexedDB) ===
+  // عند التشغيل: نفلتر النصوص الموجودة في الذاكرة قبل إرسالها لـ AI.
+  // افتراضي: مفعّل.
+  const [translationCacheEnabled, _setTranslationCacheEnabled] = useState(() => {
+    try {
+      const v = localStorage.getItem('translationCacheEnabled');
+      return v === null ? true : v === 'true';
+    } catch { return true; }
+  });
+  const setTranslationCacheEnabled = useCallback((v: boolean) => {
+    _setTranslationCacheEnabled(v);
+    try { localStorage.setItem('translationCacheEnabled', String(v)); } catch { /* ignore */ }
+  }, []);
+
   const [enhancedMemory, setEnhancedMemory] = useState<Record<string, { original: string; translation: string }>>(() => {
     try { const v = localStorage.getItem('enhancedMemory'); return v ? JSON.parse(v) : {}; } catch { return {}; }
   });

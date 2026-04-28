@@ -351,6 +351,8 @@ export function useEditorSettings() {
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
     aiRoutingMode, setAiRoutingMode,
+    aiBatchSize, setAiBatchSize,
+    translationCacheEnabled, setTranslationCacheEnabled,
     enhancedMemory, saveToEnhancedMemory,
     hiddenPanels, togglePanel,
   };

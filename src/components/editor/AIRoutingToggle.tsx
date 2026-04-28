@@ -24,7 +24,7 @@ const MODE_META: Record<AIRoutingMode, { label: string; emoji: string; color: st
     label: "مدفوع",
     emoji: "💰",
     color: "border-amber-500/50 text-amber-500 hover:text-amber-400 bg-amber-500/5",
-    desc: "Lovable Gateway فقط — يستهلك رصيد الاشتراك",
+    desc: "Gemini أولاً (سريع)، يلجأ لرصيد Lovable عند نفاد حصة Gemini فقط",
   },
   auto: {
     label: "تلقائي",

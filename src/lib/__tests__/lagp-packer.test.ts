@@ -23,7 +23,8 @@ function makeFakeLagp(): ArrayBuffer {
 }
 
 function sha256(bytes: Uint8Array): Promise<string> {
-  return crypto.subtle.digest("SHA-256", bytes).then((digest) => {
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  return crypto.subtle.digest("SHA-256", ab).then((digest) => {
     const arr = Array.from(new Uint8Array(digest));
     return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
   });

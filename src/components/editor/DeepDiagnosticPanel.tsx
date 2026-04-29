@@ -409,6 +409,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' });
       return;
     }
+
+    if (RLM_ISOLATION_CATEGORIES.has(issue.category) && onApplyFix) {
+      const fixed = applyRlmIsolation(issue.translation);
+      if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
+      toast({ title: '🧭 عزل اتجاهي', description: 'تم إحاطة الوسوم التقنية بـ RLM لمنع خلط الكلمات في اللعبة' });
+      return;
+    }
     if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
       const englishLineCount = countEffectiveLines(entry.original);
       const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;

@@ -652,7 +652,7 @@ export function useEditorTranslation({
     const batchDelayMs = !aiThrottleEnabled
       ? 0
       : aiRoutingMode === 'paid'
-        ? 1500 // Lovable AI Gateway — تأخير ثابت متوازن بين السرعة وحدود الـ workspace
+        ? 3000 // Lovable AI Gateway — تأخير أكبر لتقليل احتمال 429 / توقف الطلبات
         : (providerKey ? PROVIDER_BATCH_DELAY_MS[providerKey][hasPersonalKey ? 'paid' : 'free'] : 0);
     let lastBatchEndAt = 0;
 

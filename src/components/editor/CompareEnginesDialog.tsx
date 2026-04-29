@@ -368,11 +368,18 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
               })}
             </div>
 
-            {!loading && (
-              <Button variant="outline" size="sm" onClick={handleCompare} className="w-full font-display">
-                <Sparkles className="w-4 h-4" /> إعادة المقارنة
+            <div className="flex gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRunAll}
+                disabled={loading}
+                className="flex-1 font-display"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                {loading ? 'جاري تشغيل الكل...' : 'تشغيل الكل دفعة واحدة'}
               </Button>
-            )}
+            </div>
           </div>
         )}
       </DialogContent>

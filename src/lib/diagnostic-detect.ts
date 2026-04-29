@@ -212,11 +212,12 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   }
 
   // 10. Invisible characters — but ignore U+200F (RLM) when it sits adjacent
-  // to a technical tag, because that's our intentional BiDi-isolation wrapping
-  // (see wrapTechTagsWithRLM in xc3-build-tag-guard.ts). Stripping those would
-  // re-introduce the word-reorder bug in-game.
-  const trimmedForInvisible = trimmed.replace(/\u200F(?=\[XENO:(?:n|wait)|\[System:PageBreak)/g, '')
-                                     .replace(/(\[XENO:(?:n|wait)[^\]]*\]|\[System:PageBreak\s*\])\u200F/g, '$1');
+  // to ANY technical token (bracket/brace tag, $N variable). That's our
+  // intentional BiDi-isolation wrapping; stripping it would re-introduce the
+  // word-reorder bug in-game.
+  const RLM_NEAR_TAG_BEFORE = /\u200F(?=\d*\s*\\?\[\s*\/?\s*\w+[^\]]*\]|\{\s*\w+[^}]*\}|\$\d+)/g;
+  const RLM_NEAR_TAG_AFTER = /(\d*\s*\\?\[\s*\/?\s*\w+[^\]]*\]\s*\d*|\{\s*\w+[^}]*\}|\$\d+)\u200F/g;
+  const trimmedForInvisible = trimmed.replace(RLM_NEAR_TAG_BEFORE, '').replace(RLM_NEAR_TAG_AFTER, '$1');
   const invisibleMatches = getMatches(trimmedForInvisible, RE_INVISIBLE);
   if (invisibleMatches.length > 0) {
     const codepoints = invisibleMatches.slice(0, 5).map(c => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`);

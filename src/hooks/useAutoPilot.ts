@@ -579,15 +579,28 @@ export function useAutoPilot({
       if ((err as Error).name === 'AbortError') {
         setPhase("⏹️ موقوف"); setPhaseIndex(0);
         log("⏹️ أوقفت الوكيل يدوياً", 'warning');
+        addDiag({
+          phase: phase || 'غير محدد', batchIndex: 0, totalBatches: 0,
+          attempt: 0, provider: translationProvider, model: aiModel,
+          kind: 'abort', message: 'أوقف المستخدم الوكيل يدوياً', willRetry: false,
+        });
         if (isPreview && Object.keys(pendingAcc).length > 0) {
           setPendingTranslations({ ...pendingAcc });
-          toast({ title: "👁️ معاينة جاهزة", description: `تم جمع ${Object.keys(pendingAcc).length} ترجمة — راجعها قبل التطبيق` });
+          toast({ title: "👁️ معاينة جاهزة", description: `تم جمع ${Object.keys(pendingAcc).length} ترجمة — راجعها قبل التطبيق`, duration: Infinity });
         }
       } else {
         const msg = err instanceof Error ? err.message : 'خطأ غير معروف';
+        const { status, detail } = parseHttpErr(msg);
         setPhase("❌ خطأ"); setPhaseIndex(0);
         log(`❌ خطأ: ${msg}`, 'error');
-        toast({ title: "❌ خطأ في الوكيل", description: msg, variant: "destructive" });
+        addDiag({
+          phase: phase || 'غير محدد', batchIndex: 0, totalBatches: 0,
+          attempt: 0, provider: translationProvider, model: aiModel,
+          httpStatus: status, kind: 'fatal',
+          message: 'توقف نهائي للوكيل',
+          bodySnippet: detail.slice(0, 400), willRetry: false,
+        });
+        toast({ title: "❌ خطأ في الوكيل", description: msg, variant: "destructive", duration: Infinity });
       }
       stats.duration = Math.round((Date.now() - startTime) / 1000);
       setReport(stats);

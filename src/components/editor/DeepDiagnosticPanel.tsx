@@ -1093,94 +1093,262 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
     {/* Fix Report Dialog */}
     <Dialog open={fixReport !== null} onOpenChange={(open) => { if (!open) setFixReport(null); }}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden" dir="rtl">
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="font-display text-base">📋 تقرير الإصلاح الشامل</DialogTitle>
         </DialogHeader>
         {fixReport && (
           <div className="space-y-3">
-            {/* Summary stats */}
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="p-2 rounded-lg bg-secondary/20 border border-secondary/30">
-                <p className="text-lg font-bold text-secondary">{fixReport.totalFixed}</p>
-                <p className="text-[10px] text-muted-foreground">✅ تم إصلاحه</p>
+            {/* Summary stats — 4 columns now (RLM added) */}
+            <div className="grid grid-cols-4 gap-1.5 text-center">
+              <div className="p-1.5 rounded-lg bg-secondary/20 border border-secondary/30">
+                <p className="text-base font-bold text-secondary">{fixReport.totalFixed}</p>
+                <p className="text-[9px] text-muted-foreground leading-tight">✅ مُصلح</p>
               </div>
-              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                <p className="text-lg font-bold text-amber-400">{fixReport.totalUnchanged}</p>
-                <p className="text-[10px] text-muted-foreground">⚠️ لم يتغير</p>
+              <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <p className="text-base font-bold text-amber-400">{fixReport.totalUnchanged}</p>
+                <p className="text-[9px] text-muted-foreground leading-tight">⚠️ بدون تغيير</p>
               </div>
-              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
-                <p className="text-lg font-bold text-blue-400">{fixReport.totalRestored}</p>
-                <p className="text-[10px] text-muted-foreground">↩️ استعادة أصل</p>
+              <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <p className="text-base font-bold text-blue-400">{fixReport.totalRestored}</p>
+                <p className="text-[9px] text-muted-foreground leading-tight">↩️ استعادة</p>
+              </div>
+              <div className="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                <p className="text-base font-bold text-purple-400">{fixReport.rlmFixed}</p>
+                <p className="text-[9px] text-muted-foreground leading-tight">🧭 عُزلت RLM</p>
               </div>
             </div>
 
-            {/* Unchanged entries - most important */}
+            {/* RTL residual section — translations that STILL need RLM isolation */}
+            {fixReport.residualRtl.length > 0 && (
+              <ResidualRtlSection
+                residual={fixReport.residualRtl}
+                onApplyAll={(updates) => {
+                  const count = applyBatchUpdates(updates);
+                  toast({ title: '🧭 تطبيق RLM', description: `تم عزل وسوم ${count} نص متبقّي` });
+                  // Remove applied items from the residual list shown
+                  setFixReport((prev) => prev ? ({
+                    ...prev,
+                    residualRtl: prev.residualRtl.filter(r => !(r.key in updates)),
+                    rlmFixed: prev.rlmFixed + count,
+                  }) : prev);
+                }}
+                onApplyOne={(key, text) => {
+                  applyBatchUpdates({ [key]: text });
+                  setFixReport((prev) => prev ? ({
+                    ...prev,
+                    residualRtl: prev.residualRtl.filter(r => r.key !== key),
+                    rlmFixed: prev.rlmFixed + 1,
+                  }) : prev);
+                }}
+                onNavigate={(key) => { setFixReport(null); onNavigateToEntry?.(key); }}
+              />
+            )}
+
+            {/* Unchanged entries */}
             {fixReport.entries.filter(e => e.action === 'unchanged').length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-bold text-amber-400">⚠️ نصوص لم تتغير ({fixReport.entries.filter(e => e.action === 'unchanged').length}):</p>
-                <ScrollArea className="max-h-40">
-                  <div className="space-y-1">
-                    {fixReport.entries.filter(e => e.action === 'unchanged').map((entry, i) => (
-                      <div key={i} className="p-2 rounded text-xs bg-amber-500/5 border border-amber-500/20 cursor-pointer hover:ring-1 hover:ring-primary/40"
-                        onClick={() => { setFixReport(null); onNavigateToEntry?.(entry.key); }}>
-                        <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
-                        <p className="text-[10px] mt-0.5">{entry.reason}</p>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
+              <ReportSection
+                title={`⚠️ نصوص لم تتغير (${fixReport.entries.filter(e => e.action === 'unchanged').length})`}
+                titleClass="text-amber-400"
+                tone="warning"
+                entries={fixReport.entries.filter(e => e.action === 'unchanged')}
+                onNavigate={(key) => { setFixReport(null); onNavigateToEntry?.(key); }}
+                defaultOpen={true}
+              />
             )}
 
             {/* Restored entries */}
             {fixReport.entries.filter(e => e.action === 'restored').length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-bold text-blue-400">↩️ نصوص أُعيدت للأصل الإنجليزي ({fixReport.entries.filter(e => e.action === 'restored').length}):</p>
-                <ScrollArea className="max-h-32">
-                  <div className="space-y-1">
-                    {fixReport.entries.filter(e => e.action === 'restored').map((entry, i) => (
-                      <div key={i} className="p-2 rounded text-xs bg-blue-500/5 border border-blue-500/20 cursor-pointer hover:ring-1 hover:ring-primary/40"
-                        onClick={() => { setFixReport(null); onNavigateToEntry?.(entry.key); }}>
-                        <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
-                        <p className="text-[10px] mt-0.5">{entry.reason}</p>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
+              <ReportSection
+                title={`↩️ نصوص أُعيدت للأصل الإنجليزي (${fixReport.entries.filter(e => e.action === 'restored').length})`}
+                titleClass="text-blue-400"
+                tone="info"
+                entries={fixReport.entries.filter(e => e.action === 'restored')}
+                onNavigate={(key) => { setFixReport(null); onNavigateToEntry?.(key); }}
+                defaultOpen={false}
+              />
             )}
 
             {/* Fixed entries (collapsed by default) */}
             {fixReport.entries.filter(e => e.action === 'fixed').length > 0 && (
-              <InnerCollapsible>
-                <InnerCollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="w-full text-xs text-secondary">
-                    ✅ نصوص تم إصلاحها ({fixReport.entries.filter(e => e.action === 'fixed').length}) — اضغط للتفاصيل
-                  </Button>
-                </InnerCollapsibleTrigger>
-                <InnerCollapsibleContent>
-                  <ScrollArea className="max-h-32 mt-1">
-                    <div className="space-y-1">
-                      {fixReport.entries.filter(e => e.action === 'fixed').map((entry, i) => (
-                        <div key={i} className="p-1.5 rounded text-xs bg-secondary/5 border border-secondary/20">
-                          <p className="font-mono text-[10px] text-muted-foreground truncate">{entry.label}</p>
-                          <p className="text-[10px] mt-0.5">{entry.reason}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </InnerCollapsibleContent>
-              </InnerCollapsible>
+              <ReportSection
+                title={`✅ نصوص تم إصلاحها (${fixReport.entries.filter(e => e.action === 'fixed').length})`}
+                titleClass="text-secondary"
+                tone="success"
+                entries={fixReport.entries.filter(e => e.action === 'fixed')}
+                onNavigate={(key) => { setFixReport(null); onNavigateToEntry?.(key); }}
+                defaultOpen={false}
+              />
             )}
 
             <p className="text-[10px] text-muted-foreground text-center">
-              💡 النصوص التي لم تتغير تحتاج إصلاحاً يدوياً — اضغط عليها للانتقال إليها في المحرر
+              💡 اضغط أيّ صف لتوسيعه ورؤية معاينة قبل/بعد، أو لزر «انتقال» للعرض في المحرر
             </p>
           </div>
         )}
       </DialogContent>
     </Dialog>
     </>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Helper sub-components for the report dialog (kept inside this file to avoid
+// prop-drilling; moved out only if reused elsewhere).
+// ───────────────────────────────────────────────────────────────────────────
+
+function ResidualRtlSection({
+  residual,
+  onApplyAll,
+  onApplyOne,
+  onNavigate,
+}: {
+  residual: ResidualRtlEntry[];
+  onApplyAll: (updates: Record<string, string>) => void;
+  onApplyOne: (key: string, text: string) => void;
+  onNavigate: (key: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const totalUnisolated = residual.reduce((s, r) => s + r.unisolatedCount, 0);
+
+  return (
+    <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-2 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold text-purple-300">🧭 ترجمات لا تزال تعاني من خلط RTL ({residual.length})</p>
+          <p className="text-[9px] text-muted-foreground">{totalUnisolated} وسم تقني بدون عزل اتجاهي</p>
+        </div>
+        <Button
+          size="sm"
+          variant="default"
+          className="text-[10px] h-7 bg-purple-500 hover:bg-purple-600"
+          onClick={() => {
+            const updates: Record<string, string> = {};
+            for (const r of residual) updates[r.key] = r.proposed;
+            onApplyAll(updates);
+          }}
+        >
+          ⚡ عزل الكل
+        </Button>
+      </div>
+
+      <ScrollArea className="max-h-64">
+        <div className="space-y-1.5">
+          {residual.slice(0, 200).map((r) => {
+            const isOpen = expanded === r.key;
+            return (
+              <div key={r.key} className="rounded border border-purple-500/20 bg-background/40">
+                <button
+                  type="button"
+                  className="w-full p-1.5 text-right hover:bg-purple-500/10 transition-colors"
+                  onClick={() => setExpanded(isOpen ? null : r.key)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-mono text-[10px] text-muted-foreground truncate flex-1">{r.label}</p>
+                    <Badge variant="outline" className="text-[9px] h-4 border-purple-500/40 text-purple-300">
+                      {r.unisolatedCount} وسم
+                    </Badge>
+                    <span className="text-[9px] text-muted-foreground">{isOpen ? '▼' : '◀'}</span>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="p-2 border-t border-purple-500/20 space-y-2">
+                    <RtlPreviewDiff before={r.current} after={r.proposed} />
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="default" className="flex-1 text-[10px] h-6 bg-purple-500 hover:bg-purple-600"
+                        onClick={(e) => { e.stopPropagation(); onApplyOne(r.key, r.proposed); }}>
+                        ✓ تطبيق العزل
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-[10px] h-6"
+                        onClick={(e) => { e.stopPropagation(); onNavigate(r.key); }}>
+                        ↗ المحرر
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {residual.length > 200 && (
+            <p className="text-[9px] text-center text-muted-foreground py-1">
+              … و{residual.length - 200} نص آخر (سيُعالَج جميعاً عند الضغط على «عزل الكل»)
+            </p>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+function ReportSection({
+  title,
+  titleClass,
+  tone,
+  entries,
+  onNavigate,
+  defaultOpen,
+}: {
+  title: string;
+  titleClass: string;
+  tone: 'success' | 'warning' | 'info';
+  entries: FixReportEntry[];
+  onNavigate: (key: string) => void;
+  defaultOpen: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const bgClass = tone === 'success' ? 'bg-secondary/5 border-secondary/20'
+                 : tone === 'warning' ? 'bg-amber-500/5 border-amber-500/20'
+                 : 'bg-blue-500/5 border-blue-500/20';
+
+  return (
+    <InnerCollapsible open={open} onOpenChange={setOpen}>
+      <InnerCollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className={`w-full text-xs justify-between font-bold ${titleClass}`}>
+          <span>{title}</span>
+          <span className="text-[10px]">{open ? '▼' : '◀'}</span>
+        </Button>
+      </InnerCollapsibleTrigger>
+      <InnerCollapsibleContent>
+        <ScrollArea className="max-h-48 mt-1">
+          <div className="space-y-1">
+            {entries.slice(0, 200).map((entry) => {
+              const isOpen = expandedKey === entry.key;
+              const hasDiff = entry.before !== undefined && entry.after !== undefined && entry.before !== entry.after;
+              return (
+                <div key={entry.key} className={`rounded border ${bgClass}`}>
+                  <button
+                    type="button"
+                    className="w-full p-1.5 text-right hover:bg-foreground/5 transition-colors"
+                    onClick={() => setExpandedKey(isOpen ? null : entry.key)}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="font-mono text-[10px] text-muted-foreground truncate flex-1">{entry.label}</p>
+                      <span className="text-[9px] text-muted-foreground shrink-0">{isOpen ? '▼' : '◀'}</span>
+                    </div>
+                    <p className="text-[10px] mt-0.5 text-right">{entry.reason}</p>
+                  </button>
+                  {isOpen && (
+                    <div className="p-2 border-t border-border/40 space-y-2">
+                      {hasDiff && <RtlPreviewDiff before={entry.before!} after={entry.after!} />}
+                      {!hasDiff && <p className="text-[10px] text-muted-foreground text-center">— لا يوجد فرق نصي لعرضه —</p>}
+                      <Button size="sm" variant="outline" className="w-full text-[10px] h-6"
+                        onClick={(e) => { e.stopPropagation(); onNavigate(entry.key); }}>
+                        ↗ افتح في المحرر
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {entries.length > 200 && (
+              <p className="text-[9px] text-center text-muted-foreground py-1">
+                … و{entries.length - 200} نص آخر (مخفي لأداء أفضل)
+              </p>
+            )}
+          </div>
+        </ScrollArea>
+      </InnerCollapsibleContent>
+    </InnerCollapsible>
   );
 }

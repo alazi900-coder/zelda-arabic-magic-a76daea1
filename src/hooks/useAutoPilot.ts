@@ -64,6 +64,7 @@ interface UseAutoPilotProps {
   qualityStats: { damagedTagKeys: Set<string> };
   filteredEntries: ExtractedEntry[];
   customPromptInstructions: string;
+  aiRoutingMode?: 'free' | 'paid' | 'auto';
 }
 
 const AI_BATCH = 10;
@@ -89,7 +90,7 @@ export function useAutoPilot({
   translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
-  customPromptInstructions,
+  customPromptInstructions, aiRoutingMode = 'paid',
 }: UseAutoPilotProps) {
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState("");
@@ -139,9 +140,10 @@ export function useAutoPilot({
       npcMode: npcMode || undefined,
       aiModel: forceModel || (prov === 'gemini' ? aiModel : prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
+      routingMode: aiRoutingMode,
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey,
-      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions]);
+      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {
     if (!state || running) return;

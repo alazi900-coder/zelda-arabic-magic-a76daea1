@@ -1687,12 +1687,21 @@ async function translateWithAI(
     const apiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!apiKey) throw new Error('Missing LOVABLE_API_KEY');
 
-    const callLovableAI = async (aiPrompt: string, count: number): Promise<Record<string, string>> => {
+    const lovableModel =
+      aiModel === 'gpt-5'                  ? 'openai/gpt-5'                       :
+      aiModel === 'gemini-2.5-pro'         ? 'google/gemini-2.5-pro'              :
+      aiModel === 'gemini-3.1-pro-preview' ? 'google/gemini-3.1-pro-preview'      :
+      aiModel === 'gemini-2.5-flash'       ? 'google/gemini-2.5-flash'            :
+                                              'google/gemini-3-flash-preview';
+
+    console.log(`[lovable-ai] routingMode=${routingMode} model=${lovableModel} entries=${needsAI.length}`);
+
+    const callLovableAI = async (aiPrompt: string, _count: number): Promise<Record<string, string>> => {
       const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: aiModel === 'gpt-5' ? 'openai/gpt-5' : aiModel === 'gemini-2.5-pro' ? 'google/gemini-2.5-pro' : aiModel === 'gemini-3.1-pro-preview' ? 'google/gemini-3.1-pro-preview' : 'google/gemini-2.5-flash',
+          model: lovableModel,
           messages: [
             { role: 'system', content: XC1_SYSTEM_PROMPT },
             { role: 'user', content: aiPrompt },
@@ -1702,10 +1711,14 @@ async function translateWithAI(
 
       if (!response.ok) {
         const err = await response.text();
-        console.error('AI gateway error:', err);
-        if (response.status === 402) throw new Error('انتهت حصة الذكاء الاصطناعي المجانية للخادم — أضف مفتاح API شخصي (Cerebras مجاني، Groq مجاني، Gemini، أو OpenRouter) في الإعدادات');
-        if (response.status === 429) throw new Error('تم تجاوز حد الطلبات، حاول لاحقاً');
-        throw new Error(`AI error: ${response.status}`);
+        console.error(`[lovable-ai] error ${response.status}: ${err.slice(0, 300)}`);
+        if (response.status === 402) {
+          throw new Error('💳 رصيد Lovable AI غير كافٍ — اشحن الرصيد من Settings → Workspace → Usage');
+        }
+        if (response.status === 429) {
+          throw new Error('⏳ تم تجاوز حد الطلبات في Lovable AI Gateway لهذا الـ workspace — انتظر دقيقة قبل المحاولة');
+        }
+        throw new Error(`Lovable AI error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -1716,18 +1729,21 @@ async function translateWithAI(
       return extractJsonObject(content);
     };
 
-    // Try full batch first, on JSON failure split into halves
+    // Try full batch first, on JSON failure split into halves SEQUENTIALLY
+    // (لا نرسل النصفين بالتوازي حتى لا نضاعف الطلبات على الـ Gateway).
     try {
       const translationsObj = await callLovableAI(prompt, needsAI.length);
       const aiResult = parseAndUnlock(translationsObj);
-      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (keyed mode)`);
+      console.log(`[lovable-ai] translated ${Object.keys(aiResult).length}/${needsAI.length} entries (full batch, model=${lovableModel})`);
       return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'lovable' };
     } catch (e) {
-      if (needsAI.length <= 1) throw e;
-      console.warn(`Full batch failed (${(e as Error).message}), splitting into halves...`);
+      const msg = (e as Error).message;
+      // 429/402 ليست مشكلة حجم دفعة — نُعيد الخطأ كما هو بدون تقسيم.
+      if (needsAI.length <= 1 || msg.includes('💳') || msg.includes('⏳')) throw e;
+      console.warn(`[lovable-ai] full batch failed (${msg}), splitting sequentially...`);
 
       const mid = Math.ceil(needsAI.length / 2);
-      const buildHalfPrompt = (items: typeof needsAI, offset: number) => {
+      const buildHalfPrompt = (items: typeof needsAI, _offset: number) => {
         const halfTexts = items.map((item, i) => `"K${i}": "${escapeForJsonString(item.termLocks.lockedText)}"`).join(',\n');
         return prompt.replace(textsBlock, halfTexts).replace(`EXACTLY ${needsAI.length} entries`, `EXACTLY ${items.length} entries`);
       };
@@ -1735,10 +1751,9 @@ async function translateWithAI(
       const firstHalf = needsAI.slice(0, mid);
       const secondHalf = needsAI.slice(mid);
 
-      const [obj1, obj2] = await Promise.all([
-        callLovableAI(buildHalfPrompt(firstHalf, 0), firstHalf.length),
-        callLovableAI(buildHalfPrompt(secondHalf, mid), secondHalf.length),
-      ]);
+      // تسلسل: نصف ثم نصف، وليس Promise.all.
+      const obj1 = await callLovableAI(buildHalfPrompt(firstHalf, 0), firstHalf.length);
+      const obj2 = await callLovableAI(buildHalfPrompt(secondHalf, mid), secondHalf.length);
 
       // Remap second half keys back to original indices
       const combined: Record<string, string> = { ...obj1 };
@@ -1748,7 +1763,7 @@ async function translateWithAI(
       }
 
       const aiResult = parseAndUnlock(combined);
-      console.log(`AI translated ${Object.keys(aiResult).length}/${needsAI.length} entries (split mode)`);
+      console.log(`[lovable-ai] translated ${Object.keys(aiResult).length}/${needsAI.length} entries (split sequential, model=${lovableModel})`);
       return { translations: { ...directResult, ...aiResult }, glossaryStats: stats, providerUsed: 'lovable' };
     }
   }

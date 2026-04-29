@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
+import { Loader2, Check, Sparkles, AlertTriangle, Wrench, Play, PlayCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";

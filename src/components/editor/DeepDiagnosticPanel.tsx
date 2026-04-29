@@ -7,7 +7,7 @@ import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Fil
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
@@ -107,10 +107,12 @@ const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]
 const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
+// Categories fixable by wrapping tech tags with U+200F (RLM)
+const RLM_ISOLATION_CATEGORIES = new Set(["missing_rlm_isolation"]);
 // Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
 const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);

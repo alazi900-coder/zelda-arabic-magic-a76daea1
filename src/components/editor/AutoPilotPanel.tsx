@@ -41,7 +41,7 @@ interface AutoPilotPanelProps {
   onStop: () => void;
 }
 
-const PHASES = ["تحليل", "ذاكرة", "AI", "رموز", "جودة"];
+const PHASES = ["تحليل", "ذاكرة", "AI", "رموز"];
 
 const logColor = (type: AutoPilotLog['type']) => {
   if (type === 'success') return 'text-green-600 dark:text-green-400';

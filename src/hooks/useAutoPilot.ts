@@ -50,7 +50,11 @@ interface UseAutoPilotProps {
   customPromptInstructions: string;
 }
 
-const AI_BATCH = 5;
+const AI_BATCH = 10;
+const BATCH_DELAY_MS = 2000;        // breathing room between AI batches
+const RATE_LIMIT_WAIT_MS = 60_000;  // wait 60s on client-side 429 before retrying SAME batch
+// 429 retries are INFINITE — the agent keeps going (even while user sleeps)
+// until the request succeeds or the user clicks Stop.
 
 function pickFreeProvider(
   userOpenRouterKey: string,

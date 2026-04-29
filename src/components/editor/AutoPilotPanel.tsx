@@ -57,8 +57,10 @@ export function AutoPilotPanel({
   running, phase, phaseIndex, progress, logs, report,
   mode, setMode, freeProviderLabel, translationProvider, setTranslationProvider,
   aiModel, setAiModel, previewMode, setPreviewMode, onRun, onStop,
+  diagnostics, clearDiagnostics,
 }: AutoPilotPanelProps) {
   const [logsOpen, setLogsOpen] = React.useState(true);
+  const [diagOpen, setDiagOpen] = React.useState(true);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const logsRef = React.useRef<HTMLDivElement>(null);
 

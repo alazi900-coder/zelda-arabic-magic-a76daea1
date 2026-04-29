@@ -2,8 +2,8 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu, Settings, Eye } from "lucide-react";
-import type { AutoPilotLog, AutoPilotReport, AutoPilotMode } from "@/hooks/useAutoPilot";
+import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu, Settings, Eye, AlertTriangle, X } from "lucide-react";
+import type { AutoPilotLog, AutoPilotReport, AutoPilotMode, AutoPilotDiagnostic } from "@/hooks/useAutoPilot";
 
 const GEMINI_MODELS = [
   { id: 'gemini-2.5-flash', label: '2.5 Flash 💚', note: 'مجاني (حصة يومية)' },

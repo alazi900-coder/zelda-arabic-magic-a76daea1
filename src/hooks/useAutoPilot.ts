@@ -374,12 +374,21 @@ export function useAutoPilot({
           } catch (err) {
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
+            const { status, detail } = parseHttpErr(errMsg);
+            const kind = classify(errMsg);
 
             // ⚡ TRUE BILLING EXHAUSTED → switch provider (one-shot); waitable quotas keep retrying.
             if (isBillingExhausted(errMsg) && remaining.length > 0) {
               const next = remaining.shift()!;
+              addDiag({
+                phase: 'AI', batchIndex: batchIdx + 1, totalBatches,
+                attempt: rateLimitAttempts + 1, provider: curProvider, model: curModel,
+                httpStatus: status, kind: 'billing',
+                message: `انتهت حصة ${curProvider} — تحويل إلى ${next.label}`,
+                bodySnippet: detail.slice(0, 400), willRetry: true,
+              });
               log(`💳 انتهت حصة ${curProvider} نهائياً — تحويل لـ ${next.label}`, 'warning', "3");
-              toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}` });
+              toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}`, duration: Infinity });
               curProvider = next.provider;
               curModel = next.model;
               rateLimitAttempts = 0;
@@ -390,6 +399,13 @@ export function useAutoPilot({
             if (isRetryableTransient(errMsg)) {
               rateLimitAttempts++;
               const waitSec = Math.round(RATE_LIMIT_WAIT_MS / 1000);
+              addDiag({
+                phase: 'AI', batchIndex: batchIdx + 1, totalBatches,
+                attempt: rateLimitAttempts, provider: curProvider, model: curModel,
+                httpStatus: status, kind,
+                message: `توقف مؤقت — انتظار ${waitSec}ث ثم إعادة المحاولة`,
+                bodySnippet: detail.slice(0, 400), willRetry: true,
+              });
               if (rateLimitAttempts === 1 || rateLimitAttempts % 5 === 0) {
                 log(`⏳ تعذّر الاتصال مؤقتاً/تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
               }
@@ -398,7 +414,20 @@ export function useAutoPilot({
             }
 
             // Other permanent failure — log and skip
+            addDiag({
+              phase: 'AI', batchIndex: batchIdx + 1, totalBatches,
+              attempt: rateLimitAttempts + 1, provider: curProvider, model: curModel,
+              httpStatus: status, kind: 'permanent',
+              message: `فشل دائم — تم تخطي الدفعة`,
+              bodySnippet: detail.slice(0, 400), willRetry: false,
+            });
             log(`⚠️ دفعة ${batchIdx + 1} فشلت: ${errMsg}`, 'warning', "3");
+            toast({
+              title: `❌ فشل دفعة ${batchIdx + 1}/${totalBatches}`,
+              description: errMsg.slice(0, 200),
+              variant: "destructive",
+              duration: Infinity,
+            });
             failedEntries.push(...batch);
             done += batch.length;
             batchIdx++;

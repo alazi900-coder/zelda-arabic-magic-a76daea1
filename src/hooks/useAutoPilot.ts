@@ -148,6 +148,7 @@ export function useAutoPilot({
     const startTime = Date.now();
     setRunning(true);
     setLogs([]);
+    setDiagnostics([]);  // clear at start of new run
     setReport(null);
     setProgress(null);
     setPhaseIndex(0);

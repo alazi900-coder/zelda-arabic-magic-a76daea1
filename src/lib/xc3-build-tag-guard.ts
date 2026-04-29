@@ -308,6 +308,10 @@ export function repairTranslationTagsForBuild(original: string, translation: str
   // Step 5: Final whitespace cleanup — never produce more blank lines than original had
   repairedText = normalizeWhitespaceAfterReorder(repairedText, original);
 
+  // Step 6: RLM-isolate technical tags so Xenoblade's word-wrap doesn't reorder
+  // Arabic words across LTR-shaped tag boundaries.
+  repairedText = wrapTechTagsWithRLM(repairedText);
+
   const diff = diffTechnicalTags(original, repairedText);
 
   return {

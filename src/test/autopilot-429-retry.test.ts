@@ -222,6 +222,16 @@ describe("AutoPilot 429 retry loop", () => {
       rateLimitWaitMs: 5_000,
       batchDelayMs: 0,
     });
+    // Attach catch immediately to silence unhandled-rejection warning
+    const settled = promise.catch((e) => e);
+
+    // Let one fetch+wait tick begin, then abort mid-wait.
+    await vi.advanceTimersByTimeAsync(200);
+    ac.abort();
+    await vi.advanceTimersByTimeAsync(200);
+
+    const err = await settled;
+    expect(err).toMatchObject({ name: "AbortError" });
 
     // Let one fetch+wait tick begin, then abort mid-wait.
     await vi.advanceTimersByTimeAsync(200);

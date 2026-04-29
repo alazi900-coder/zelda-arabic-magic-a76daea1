@@ -90,7 +90,7 @@ export function useAutoPilot({
   translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
-  customPromptInstructions,
+  customPromptInstructions, aiRoutingMode = 'paid',
 }: UseAutoPilotProps) {
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState("");

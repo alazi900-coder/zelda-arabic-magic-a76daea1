@@ -221,6 +221,100 @@ describe("useAutoPilot — 429 integration (hook + UI state)", () => {
     expect(result.current.report!.failed).toBe(0);
   }, 90_000);
 
+  it("retries an incomplete successful batch instead of freezing or marking entries failed", async () => {
+    const callLog: string[][] = [];
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string);
+      const entries = body.entries as { key: string; original: string }[];
+      callLog.push(entries.map((e) => e.key));
+
+      const translations: Record<string, string> = {};
+      const limit = fetchMock.mock.calls.length === 1 ? entries.length - 1 : entries.length;
+      for (const e of entries.slice(0, limit)) translations[e.key] = `ترجمة ${e.original}`;
+
+      return new Response(JSON.stringify({ translations, providerUsed: "lovable" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+
+    let editorState: EditorState | null = makeState(4);
+    const setState: React.Dispatch<React.SetStateAction<EditorState | null>> = (updater) => {
+      editorState = typeof updater === "function" ? (updater as (p: EditorState | null) => EditorState | null)(editorState) : updater;
+    };
+
+    const { result } = renderHook(() =>
+      useAutoPilot({ ...baseProps, state: editorState, setState }),
+    );
+
+    let runPromise: Promise<void>;
+    act(() => { runPromise = result.current.run("smart"); });
+    await waitFor(() => expect(result.current.running).toBe(true), { timeout: 2000 });
+
+    for (let i = 0; i < 80; i++) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      if (!result.current.running) break;
+    }
+    await act(async () => { await runPromise!; });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(callLog[1].join(",")).toBe(callLog[0].join(","));
+    expect(result.current.report!.fromAI).toBe(4);
+    expect(result.current.report!.failed).toBe(0);
+    expect(Object.keys(editorState!.translations)).toHaveLength(4);
+  }, 60_000);
+
+  it("keeps retrying during damaged-tag repair when the edge function returns 429", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string);
+      const entries = body.entries as { key: string; original: string }[];
+      const translations = Object.fromEntries(entries.map((e) => [e.key, `ترجمة ${e.original}`]));
+
+      if (fetchMock.mock.calls.length === 2) {
+        return new Response(JSON.stringify({ error: "429 too many requests" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ translations, providerUsed: "lovable" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+
+    let editorState: EditorState | null = makeState(2);
+    const setState: React.Dispatch<React.SetStateAction<EditorState | null>> = (updater) => {
+      editorState = typeof updater === "function" ? (updater as (p: EditorState | null) => EditorState | null)(editorState) : updater;
+    };
+
+    const { result } = renderHook(() =>
+      useAutoPilot({
+        ...baseProps,
+        qualityStats: { damagedTagKeys: new Set(["test.msbt:0"]) },
+        state: editorState,
+        setState,
+      }),
+    );
+
+    let runPromise: Promise<void>;
+    act(() => { runPromise = result.current.run("smart"); });
+    await waitFor(() => expect(result.current.running).toBe(true), { timeout: 2000 });
+
+    for (let i = 0; i < 90; i++) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      if (!result.current.running) break;
+    }
+    await act(async () => { await runPromise!; });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result.current.running).toBe(false);
+    expect(result.current.report!.tagsFixed).toBe(1);
+    expect(result.current.logs.some((l) => /إصلاح الرموز توقف مؤقتاً/.test(l.message))).toBe(true);
+  }, 60_000);
+
   it("user-initiated stop during 429 wait halts the run cleanly", async () => {
     // Always return 429 — user must stop manually
     const fetchMock = vi.fn(async () =>

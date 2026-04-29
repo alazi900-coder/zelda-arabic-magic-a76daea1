@@ -1697,36 +1697,52 @@ async function translateWithAI(
     console.log(`[lovable-ai] routingMode=${routingMode} model=${lovableModel} entries=${needsAI.length}`);
 
     const callLovableAI = async (aiPrompt: string, _count: number): Promise<Record<string, string>> => {
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: lovableModel,
-          messages: [
-            { role: 'system', content: XC1_SYSTEM_PROMPT },
-            { role: 'user', content: aiPrompt },
-          ],
-        }),
-      });
+      // Auto-retry on 429 with exponential backoff: 5s, 15s, 30s
+      const retryDelays = [5000, 15000, 30000];
+      let lastError: Error | null = null;
 
-      if (!response.ok) {
+      for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: lovableModel,
+            messages: [
+              { role: 'system', content: XC1_SYSTEM_PROMPT },
+              { role: 'user', content: aiPrompt },
+            ],
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          if (detectTruncation(content)) {
+            console.warn('Lovable AI response truncated, results may be incomplete');
+          }
+          return extractJsonObject(content);
+        }
+
         const err = await response.text();
-        console.error(`[lovable-ai] error ${response.status}: ${err.slice(0, 300)}`);
+        console.error(`[lovable-ai] error ${response.status} (attempt ${attempt + 1}/${retryDelays.length + 1}): ${err.slice(0, 300)}`);
+
         if (response.status === 402) {
           throw new Error('💳 رصيد Lovable AI غير كافٍ — اشحن الرصيد من Settings → Workspace → Usage');
         }
+        if (response.status === 429 && attempt < retryDelays.length) {
+          const waitMs = retryDelays[attempt];
+          console.warn(`[lovable-ai] 429 rate-limited — waiting ${waitMs / 1000}s before retry...`);
+          await new Promise(r => setTimeout(r, waitMs));
+          lastError = new Error(`⏳ Rate limited after ${attempt + 1} attempts`);
+          continue;
+        }
         if (response.status === 429) {
-          throw new Error('⏳ تم تجاوز حد الطلبات في Lovable AI Gateway لهذا الـ workspace — انتظر دقيقة قبل المحاولة');
+          throw new Error('⏳ تم تجاوز حد الطلبات في Lovable AI Gateway — انتظر دقيقة واضغط استئناف');
         }
         throw new Error(`Lovable AI error: ${response.status}`);
       }
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || '';
-      if (detectTruncation(content)) {
-        console.warn('Lovable AI response truncated, results may be incomplete');
-      }
-      return extractJsonObject(content);
+      throw lastError ?? new Error('Lovable AI: exhausted retries');
     };
 
     // Try full batch first, on JSON failure split into halves SEQUENTIALLY

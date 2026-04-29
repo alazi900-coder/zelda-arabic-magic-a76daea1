@@ -335,7 +335,26 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     }
   }
 
-  // 21. Identical to original
+  // 21. Missing RLM-isolation around technical tags (Arabic + LTR-tag interaction)
+  // Detects translations whose [XENO:n], [XENO:wait], [System:PageBreak] tags are
+  // NOT wrapped with U+200F on both sides — the cause of the in-game word-reorder
+  // bug visible when Arabic words flow around these LTR-shaped tags.
+  if (RE_ARABIC_STANDARD.test(trimmed)) {
+    const tagRe = /\[XENO:n\s*\]|\[XENO:wait[^\]]*\]|\[System:PageBreak\s*\]/g;
+    let unisolated = 0;
+    let m: RegExpExecArray | null;
+    while ((m = tagRe.exec(trimmed)) !== null) {
+      const before = trimmed[m.index - 1];
+      const after = trimmed[m.index + m[0].length];
+      if (before !== '\u200F' || after !== '\u200F') unisolated++;
+    }
+    if (unisolated > 0) {
+      issues.push({ ...base, severity: "warning", category: "missing_rlm_isolation",
+        message: `${unisolated} وسم تقني بدون عزل اتجاهي (RLM) — يسبب خلط ترتيب الكلمات داخل اللعبة` });
+    }
+  }
+
+  // 22. Identical to original
   if (trimmed === entry.original.trim() && trimmed.length > 6) {
     issues.push({ ...base, severity: "info", category: "identical_to_original",
       message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });

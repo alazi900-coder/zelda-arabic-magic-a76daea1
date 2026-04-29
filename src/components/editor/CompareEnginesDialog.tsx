@@ -286,20 +286,41 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                             <Check className="w-3 h-3" /> سليم
                           </span>
                         )}
-                        {result && (
+                        {!result && !isEngineLoading && (
                           <Button
                             size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => { onSelect(key, result); onOpenChange(false); }}
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => fetchEngine(engine)}
                           >
-                            <Check className="w-3 h-3 ml-1" /> اختيار
+                            <Play className="w-3 h-3 ml-1" /> ترجمة
                           </Button>
+                        )}
+                        {result && !isEngineLoading && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => fetchEngine(engine)}
+                              title="إعادة الترجمة"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs text-primary"
+                              onClick={() => { onSelect(key, result); onOpenChange(false); }}
+                            >
+                              <Check className="w-3 h-3 ml-1" /> اختيار
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
 
-                    {isEngineLoading && !result ? (
+                    {isEngineLoading ? (
                       <div className="flex items-center gap-2 py-2">
                         <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                         <span className="text-xs text-muted-foreground">جاري الترجمة...</span>
@@ -333,11 +354,15 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                           </Alert>
                         )}
                       </>
-                    ) : !isEngineLoading ? (
-                      <p className="text-xs text-muted-foreground italic">
-                        {errors[engine.id] || 'فشل في الترجمة أو لا توجد نتيجة'}
+                    ) : errors[engine.id] ? (
+                      <p className="text-xs text-destructive/80 italic" dir="auto">
+                        {errors[engine.id]}
                       </p>
-                    ) : null}
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        اضغط "ترجمة" لتشغيل هذا المحرك فقط (لا يستهلك نقاط المحركات الأخرى)
+                      </p>
+                    )}
                   </div>
                 );
               })}

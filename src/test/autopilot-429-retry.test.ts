@@ -232,13 +232,6 @@ describe("AutoPilot 429 retry loop", () => {
 
     const err = await settled;
     expect(err).toMatchObject({ name: "AbortError" });
-
-    // Let one fetch+wait tick begin, then abort mid-wait.
-    await vi.advanceTimersByTimeAsync(200);
-    ac.abort();
-    await vi.advanceTimersByTimeAsync(200);
-
-    await expect(promise).rejects.toMatchObject({ name: "AbortError" });
   });
 
   it("delays BATCH_DELAY_MS between successful batches (rate-friendliness)", async () => {

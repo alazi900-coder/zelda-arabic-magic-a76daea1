@@ -266,9 +266,13 @@ export function useAutoPilot({
 
         let done = 0;
         const failedEntries: ExtractedEntry[] = [];
-        const isQuotaErr = (msg: string) => /انتهت الحصة|quota|429|rate.?limit|no credits|insufficient/i.test(msg);
+        // 429 = TEMPORARY rate limit — wait & retry same batch (infinite loop)
+        // Only switch providers on TRUE quota exhaustion (no credits / insufficient / billing)
+        const isRateLimit429 = (msg: string) => /429|rate.?limit|RATE_LIMIT_RETRYABLE|تجاوز(ت)? حد|too many requests/i.test(msg);
+        const isQuotaExhausted = (msg: string) => /no credits|insufficient|💳|exhausted|quota exceeded|انتهت الحصة|billing/i.test(msg);
 
         let batchIdx = 0;
+        let rateLimitAttempts = 0; // tracked per-batch, reset on success
         while (batchIdx < totalBatches) {
           if (signal.aborted) throw new DOMException('abort', 'AbortError');
           const batch = needsAI.slice(batchIdx * AI_BATCH, (batchIdx + 1) * AI_BATCH);
@@ -295,26 +299,49 @@ export function useAutoPilot({
             }
             done += batch.length;
             batchIdx++;
+            rateLimitAttempts = 0; // reset on success
+
+            // Breathing room between batches to ease pressure on the AI gateway
+            if (batchIdx < totalBatches) {
+              await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+            }
           } catch (err) {
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
 
-            // انتهت الحصة → تحول تلقائي للمزود التالي
-            if (isQuotaErr(errMsg) && remaining.length > 0) {
+            // ⚡ TRUE QUOTA EXHAUSTED → switch provider (one-shot)
+            if (isQuotaExhausted(errMsg) && remaining.length > 0) {
               const next = remaining.shift()!;
-              log(`⚠️ انتهت حصة ${curProvider} — تحويل تلقائي لـ ${next.label}`, 'warning', "3");
-              toast({ title: "⚡ تحويل تلقائي للمحرك", description: `انتهت حصة ${curProvider} — يُستخدم الآن: ${next.label}` });
+              log(`💳 انتهت حصة ${curProvider} نهائياً — تحويل لـ ${next.label}`, 'warning', "3");
+              toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}` });
               curProvider = next.provider;
               curModel = next.model;
-              // أعد نفس الدفعة مع المزود الجديد (لا تزيد batchIdx)
-              continue;
+              rateLimitAttempts = 0;
+              continue; // retry same batch with new provider
             }
 
-            // فشل دائم — سجّل وانتقل للتالية
+            // ⏳ TEMPORARY 429 → wait & retry same batch FOREVER (until success or user stops)
+            if (isRateLimit429(errMsg)) {
+              rateLimitAttempts++;
+              const waitSec = Math.round(RATE_LIMIT_WAIT_MS / 1000);
+              if (rateLimitAttempts === 1 || rateLimitAttempts % 5 === 0) {
+                log(`⏳ تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
+              }
+              // Abortable wait — checks signal every 2s so user can stop
+              const waitStart = Date.now();
+              while (Date.now() - waitStart < RATE_LIMIT_WAIT_MS) {
+                if (signal.aborted) throw new DOMException('abort', 'AbortError');
+                await new Promise(r => setTimeout(r, 2000));
+              }
+              continue; // retry same batch — do NOT advance batchIdx
+            }
+
+            // Other permanent failure — log and skip
             log(`⚠️ دفعة ${batchIdx + 1} فشلت: ${errMsg}`, 'warning', "3");
             failedEntries.push(...batch);
             done += batch.length;
             batchIdx++;
+            rateLimitAttempts = 0;
           }
 
           setProgress({ current: done, total: needsAI.length });

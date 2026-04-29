@@ -816,7 +816,7 @@ export function useEditorState() {
     translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
     addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
-    customPromptInstructions,
+    customPromptInstructions, aiRoutingMode,
   });
 
   const handleSmartReviewRef = useRef<(() => void) | null>(null);

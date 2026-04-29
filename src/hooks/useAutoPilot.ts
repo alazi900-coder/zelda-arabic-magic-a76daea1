@@ -197,7 +197,7 @@ export function useAutoPilot({
     const isWaitableQuota = (msg: string) => /quota exceeded|daily quota|exhausted|انتهت الحصة|الحصة المجانية|free tier/i.test(msg) && !isBillingExhausted(msg);
     const isRetryableTransient = (msg: string) =>
       isRateLimit429(msg) || isWaitableQuota(msg) ||
-      /HTTP_(408|425|500|502|503|504)|خطأ (408|425|500|502|503|504)|upstream|timeout|timed out|failed to fetch|load failed|networkerror|functionshttperror|functionsrelayerror|edge function/i.test(msg);
+      /PARTIAL_TRANSLATION_RETRYABLE|missing translations|incomplete|HTTP_(408|425|500|502|503|504)|خطأ (408|425|500|502|503|504)|upstream|timeout|timed out|failed to fetch|load failed|networkerror|functionshttperror|functionsrelayerror|edge function/i.test(msg);
 
     try {
       // ══════════════════════════════════════════════════════
@@ -282,6 +282,7 @@ export function useAutoPilot({
 
         let done = 0;
         const failedEntries: ExtractedEntry[] = [];
+        const aiTranslatedKeys = new Set<string>();
 
         let batchIdx = 0;
         let rateLimitAttempts = 0; // tracked per-batch, reset on success
@@ -303,15 +304,24 @@ export function useAutoPilot({
               throw new Error(`HTTP_${response.status}: ${detail || 'request failed'}`);
             }
             const data = await response.json();
+            if (data?.error) throw new Error(String(data.error || data.message || 'edge function error'));
             addAiRequest(1);
             if (data.charsUsed) addMyMemoryChars(data.charsUsed);
             if (data.translations) {
               addTranslations(data.translations);
-              stats.fromAI += Object.keys(data.translations).length;
-              for (const e of batch) {
-                if (!data.translations[`${e.msbtFile}:${e.index}`]) failedEntries.push(e);
+              for (const key of Object.keys(data.translations)) {
+                if (!aiTranslatedKeys.has(key)) {
+                  aiTranslatedKeys.add(key);
+                  stats.fromAI++;
+                }
               }
             }
+
+            const missing = batch.filter(e => !data.translations?.[`${e.msbtFile}:${e.index}`]);
+            if (missing.length > 0) {
+              throw new Error(`PARTIAL_TRANSLATION_RETRYABLE: missing translations ${missing.length}/${batch.length}`);
+            }
+
             done += batch.length;
             batchIdx++;
             rateLimitAttempts = 0; // reset on success

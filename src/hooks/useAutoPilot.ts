@@ -96,6 +96,7 @@ export function useAutoPilot({
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [logs, setLogs] = useState<AutoPilotLog[]>([]);
+  const [diagnostics, setDiagnostics] = useState<AutoPilotDiagnostic[]>([]);
   const [report, setReport] = useState<AutoPilotReport | null>(null);
   const [mode, setMode] = useState<AutoPilotMode>('smart');
   const [previewMode, setPreviewMode] = useState(false);
@@ -104,6 +105,9 @@ export function useAutoPilot({
   const [pendingOldTranslations, setPendingOldTranslations] = useState<Record<string, string>>({});
   const abortRef = useRef<AbortController | null>(null);
   const logIdRef = useRef(0);
+  const diagIdRef = useRef(0);
+
+  const clearDiagnostics = useCallback(() => setDiagnostics([]), []);
 
   const freeProviderLabel = useMemo(
     () => pickFreeProvider(userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail).label,

@@ -515,12 +515,34 @@ export function useAutoPilot({
           } catch (err) {
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
+            const { status, detail } = parseHttpErr(errMsg);
+            const kind = classify(errMsg);
             if (isRetryableTransient(errMsg)) {
+              addDiag({
+                phase: 'إصلاح الرموز', batchIndex: b + 1, totalBatches: fixTotalBatches,
+                attempt: 1, provider: aiProvider, model: aiModelOverride,
+                httpStatus: status, kind,
+                message: `توقف مؤقت في إصلاح الرموز — انتظار ${Math.round(RATE_LIMIT_WAIT_MS / 1000)}ث`,
+                bodySnippet: detail.slice(0, 400), willRetry: true,
+              });
               log(`⏳ إصلاح الرموز توقف مؤقتاً — انتظار ${Math.round(RATE_LIMIT_WAIT_MS / 1000)}ث ثم إعادة نفس الدفعة ${b + 1}/${fixTotalBatches}...`, 'warning', "4");
               await waitOrAbort(RATE_LIMIT_WAIT_MS);
               continue;
             }
+            addDiag({
+              phase: 'إصلاح الرموز', batchIndex: b + 1, totalBatches: fixTotalBatches,
+              attempt: 1, provider: aiProvider, model: aiModelOverride,
+              httpStatus: status, kind: 'permanent',
+              message: `فشل إصلاح الدفعة — تم التخطي`,
+              bodySnippet: detail.slice(0, 400), willRetry: false,
+            });
             log(`⚠️ تعذر إصلاح دفعة رموز ${b + 1}: ${errMsg}`, 'warning', "4");
+            toast({
+              title: `❌ فشل إصلاح رموز ${b + 1}/${fixTotalBatches}`,
+              description: errMsg.slice(0, 200),
+              variant: "destructive",
+              duration: Infinity,
+            });
             b++;
             setProgress({ current: Math.min(b * AI_BATCH, toFix.length), total: toFix.length });
           }

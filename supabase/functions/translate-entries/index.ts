@@ -1450,12 +1450,14 @@ async function translateWithAI(
     detailed: true,
   });
 
-  // Routing mode determines which provider to use:
-  //   free  = Gemini only (server key or user key); fail with clear error on 429
-  //   paid  = Skip Gemini entirely, use Lovable Gateway only
-  //   auto  = Try Gemini first, fallback to Lovable on 429 (existing behavior)
+  // Routing mode determines fallback behavior:
+  //   free  = Gemini only (direct key); fail with clear error on 429
+  //   paid  = Try direct Gemini key FIRST (user's paid quota), fallback to Lovable Gateway on failure
+  //   auto  = Try Gemini first, fallback to Lovable on 429
+  // ALWAYS prioritize the direct GEMINI_API_KEY when available — it uses the user's own quota
+  // and avoids the shared Lovable Gateway rate limits.
   const _rawKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
-  const effectiveKey = routingMode === 'paid' ? '' : _rawKey;
+  const effectiveKey = _rawKey; // Always use direct key if available, regardless of routing mode
   const allowLovableFallback = routingMode !== 'free';
   console.log(`[translateWithAI] routingMode=${routingMode} hasGeminiKey=${!!effectiveKey} allowLovableFallback=${allowLovableFallback}`);
   

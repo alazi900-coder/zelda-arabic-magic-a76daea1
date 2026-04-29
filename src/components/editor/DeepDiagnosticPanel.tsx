@@ -14,6 +14,7 @@ import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem 
 import { detectIssues as detectIssuesPure, type DiagnosticIssue as PureDiagnosticIssue, type Severity as PureSeverity } from "@/lib/diagnostic-detect";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RtlPreviewDiff } from "@/components/editor/RtlPreviewDiff";
 
 interface FixReportEntry {
   key: string;

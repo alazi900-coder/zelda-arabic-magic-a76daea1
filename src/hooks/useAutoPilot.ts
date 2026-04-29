@@ -408,7 +408,8 @@ export function useAutoPilot({
         const toFix = state.entries.filter(e => damagedKeys.has(`${e.msbtFile}:${e.index}`));
         let fixed = 0;
 
-        for (let b = 0; b < Math.ceil(toFix.length / AI_BATCH); b++) {
+        const fixTotalBatches = Math.ceil(toFix.length / AI_BATCH);
+        for (let b = 0; b < fixTotalBatches;) {
           if (signal.aborted) throw new DOMException('abort', 'AbortError');
           const batch = toFix.slice(b * AI_BATCH, (b + 1) * AI_BATCH);
           const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
@@ -417,15 +418,32 @@ export function useAutoPilot({
               method: 'POST', headers: getSupabaseHeaders(), signal,
               body: buildFetchBody(entries, aiProvider, aiModelOverride),
             });
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.translations) {
-                addTranslations(data.translations);
-                fixed += Object.keys(data.translations).length;
-              }
+            if (!resp.ok) {
+              const rawErr = await resp.text().catch(() => '');
+              let parsedErr: { error?: string; message?: string } | null = null;
+              try { parsedErr = rawErr ? JSON.parse(rawErr) : null; } catch { parsedErr = null; }
+              const detail = parsedErr?.error || parsedErr?.message || rawErr || resp.statusText;
+              throw new Error(`HTTP_${resp.status}: ${detail || 'request failed'}`);
             }
-          } catch (err) { if ((err as Error).name === 'AbortError') throw err; }
-          setProgress({ current: Math.min((b + 1) * AI_BATCH, toFix.length), total: toFix.length });
+            const data = await resp.json();
+            if (data.translations) {
+              addTranslations(data.translations);
+              fixed += Object.keys(data.translations).length;
+            }
+            b++;
+            setProgress({ current: Math.min(b * AI_BATCH, toFix.length), total: toFix.length });
+          } catch (err) {
+            if ((err as Error).name === 'AbortError') throw err;
+            const errMsg = (err as Error).message;
+            if (isRetryableTransient(errMsg)) {
+              log(`⏳ إصلاح الرموز توقف مؤقتاً — انتظار ${Math.round(RATE_LIMIT_WAIT_MS / 1000)}ث ثم إعادة نفس الدفعة ${b + 1}/${fixTotalBatches}...`, 'warning', "4");
+              await waitOrAbort(RATE_LIMIT_WAIT_MS);
+              continue;
+            }
+            log(`⚠️ تعذر إصلاح دفعة رموز ${b + 1}: ${errMsg}`, 'warning', "4");
+            b++;
+            setProgress({ current: Math.min(b * AI_BATCH, toFix.length), total: toFix.length });
+          }
         }
 
         stats.tagsFixed = fixed;

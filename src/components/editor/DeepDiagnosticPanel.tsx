@@ -7,7 +7,7 @@ import { ChevronDown, ChevronUp, ShieldAlert, CheckCircle2, Search, Loader2, Fil
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
@@ -69,6 +69,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
+  { id: "missing_rlm_isolation", label: "وسوم بدون عزل اتجاهي", icon: "🧭", severity: "warning", description: "وسوم [XENO:n]/[System:PageBreak] غير محاطة بعلامة RLM — يخلط محرك اللعبة ترتيب الكلمات حولها" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
 ];
 
@@ -106,10 +107,12 @@ const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]
 const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
+// Categories fixable by wrapping tech tags with U+200F (RLM)
+const RLM_ISOLATION_CATEGORIES = new Set(["missing_rlm_isolation"]);
 // Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
 const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -304,6 +307,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
     }
 
+    if (RLM_ISOLATION_CATEGORIES.has(issue.category)) {
+      const fixed = applyRlmIsolation(trans);
+      return {
+        fixResult: fixed,
+        reason: fixed !== trans
+          ? '🧭 سيتم إحاطة [XENO:n]/[XENO:wait]/[System:PageBreak] بعلامة RLM (U+200F) لمنع خلط ترتيب الكلمات في اللعبة'
+          : '⚠️ النص لا يحتوي وسوماً تحتاج عزل، أو هي معزولة بالفعل'
+      };
+    }
+
     if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
       const englishLineCount = countEffectiveLines(entry.original);
       const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;
@@ -394,6 +407,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       if (fixed !== issue.translation) fixed = balanceLines(fixed);
       if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
       toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' });
+      return;
+    }
+
+    if (RLM_ISOLATION_CATEGORIES.has(issue.category) && onApplyFix) {
+      const fixed = applyRlmIsolation(issue.translation);
+      if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
+      toast({ title: '🧭 عزل اتجاهي', description: 'تم إحاطة الوسوم التقنية بـ RLM لمنع خلط الكلمات في اللعبة' });
       return;
     }
     if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
@@ -505,6 +525,21 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       };
 
       requestAnimationFrame(processChunk);
+      return;
+    }
+
+    if (RLM_ISOLATION_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
+      let count = 0;
+      for (const key of uniqueKeys) {
+        const trans = state.translations[key];
+        if (!trans) continue;
+        const fixed = applyRlmIsolation(trans);
+        if (fixed !== trans) { updates[key] = fixed; count++; }
+      }
+      applyBatchUpdates(updates);
+      toast({ title: '🧭 عزل اتجاهي جماعي', description: `تم عزل وسوم التحكم في ${count} نص` });
+      setTimeout(() => runScan(true), 250);
       return;
     }
 
@@ -631,6 +666,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \\n بعد [XENO:n ]' });
             } else {
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على وسم بدون سطر جديد فعلياً' });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
+
+        if (RLM_ISOLATION_CATEGORIES.has(issue.category)) {
+          const trans = state.translations[issue.key];
+          if (trans) {
+            const fixed = applyRlmIsolation(trans);
+            if (fixed !== trans) {
+              updates[issue.key] = fixed;
+              counters.xenoN++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧭 تم عزل الوسوم التقنية بـ RLM' });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ الوسوم معزولة بالفعل' });
             }
           }
           processedKeys.add(issue.key);

@@ -183,6 +183,22 @@ export function useAutoPilot({
     const log = (msg: string, type: AutoPilotLog['type'] = 'info', ph = '') =>
       setLogs(prev => [...prev, { id: ++logIdRef.current, phase: ph, message: msg, type }]);
 
+    const waitOrAbort = async (ms: number, stepMs = 2000) => {
+      const waitStart = Date.now();
+      while (Date.now() - waitStart < ms) {
+        if (signal.aborted) throw new DOMException('abort', 'AbortError');
+        await new Promise(r => setTimeout(r, Math.min(stepMs, ms - (Date.now() - waitStart))));
+      }
+    };
+
+    // Temporary limits/errors must never end the run; only real billing/auth errors may stop/switch.
+    const isRateLimit429 = (msg: string) => /429|rate.?limit|RATE_LIMIT_RETRYABLE|تجاوز(ت)? حد|too many requests/i.test(msg);
+    const isBillingExhausted = (msg: string) => /no credits|insufficient|💳|billing|رصيد .*غير كاف|أضف رصيد/i.test(msg);
+    const isWaitableQuota = (msg: string) => /quota exceeded|daily quota|exhausted|انتهت الحصة|الحصة المجانية|free tier/i.test(msg) && !isBillingExhausted(msg);
+    const isRetryableTransient = (msg: string) =>
+      isRateLimit429(msg) || isWaitableQuota(msg) ||
+      /PARTIAL_TRANSLATION_RETRYABLE|missing translations|incomplete|HTTP_(408|425|500|502|503|504)|خطأ (408|425|500|502|503|504)|upstream|timeout|timed out|failed to fetch|load failed|networkerror|functionshttperror|functionsrelayerror|edge function/i.test(msg);
+
     try {
       // ══════════════════════════════════════════════════════
       // المرحلة 1 — تحليل الوضع
@@ -266,13 +282,7 @@ export function useAutoPilot({
 
         let done = 0;
         const failedEntries: ExtractedEntry[] = [];
-        // 429 = TEMPORARY rate limit — wait & retry same batch (infinite loop)
-        // Only switch providers on TRUE quota exhaustion (no credits / insufficient / billing)
-        const isRateLimit429 = (msg: string) => /429|rate.?limit|RATE_LIMIT_RETRYABLE|تجاوز(ت)? حد|too many requests/i.test(msg);
-        const isRetryableTransient = (msg: string) =>
-          isRateLimit429(msg) ||
-          /HTTP_(408|425|500|502|503|504)|خطأ (408|425|500|502|503|504)|upstream|timeout|timed out|failed to fetch|load failed|networkerror|functionshttperror|functionsrelayerror|edge function/i.test(msg);
-        const isQuotaExhausted = (msg: string) => /no credits|insufficient|💳|exhausted|quota exceeded|انتهت الحصة|billing/i.test(msg);
+        const aiTranslatedKeys = new Set<string>();
 
         let batchIdx = 0;
         let rateLimitAttempts = 0; // tracked per-batch, reset on success
@@ -294,15 +304,24 @@ export function useAutoPilot({
               throw new Error(`HTTP_${response.status}: ${detail || 'request failed'}`);
             }
             const data = await response.json();
+            if (data?.error) throw new Error(String(data.error || data.message || 'edge function error'));
             addAiRequest(1);
             if (data.charsUsed) addMyMemoryChars(data.charsUsed);
             if (data.translations) {
               addTranslations(data.translations);
-              stats.fromAI += Object.keys(data.translations).length;
-              for (const e of batch) {
-                if (!data.translations[`${e.msbtFile}:${e.index}`]) failedEntries.push(e);
+              for (const key of Object.keys(data.translations)) {
+                if (!aiTranslatedKeys.has(key)) {
+                  aiTranslatedKeys.add(key);
+                  stats.fromAI++;
+                }
               }
             }
+
+            const missing = batch.filter(e => !data.translations?.[`${e.msbtFile}:${e.index}`]);
+            if (missing.length > 0) {
+              throw new Error(`PARTIAL_TRANSLATION_RETRYABLE: missing translations ${missing.length}/${batch.length}`);
+            }
+
             done += batch.length;
             batchIdx++;
             rateLimitAttempts = 0; // reset on success
@@ -315,8 +334,8 @@ export function useAutoPilot({
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
 
-            // ⚡ TRUE QUOTA EXHAUSTED → switch provider (one-shot)
-            if (isQuotaExhausted(errMsg) && remaining.length > 0) {
+            // ⚡ TRUE BILLING EXHAUSTED → switch provider (one-shot); waitable quotas keep retrying.
+            if (isBillingExhausted(errMsg) && remaining.length > 0) {
               const next = remaining.shift()!;
               log(`💳 انتهت حصة ${curProvider} نهائياً — تحويل لـ ${next.label}`, 'warning', "3");
               toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}` });
@@ -333,12 +352,7 @@ export function useAutoPilot({
               if (rateLimitAttempts === 1 || rateLimitAttempts % 5 === 0) {
                 log(`⏳ تعذّر الاتصال مؤقتاً/تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
               }
-              // Abortable wait — checks signal every 2s so user can stop
-              const waitStart = Date.now();
-              while (Date.now() - waitStart < RATE_LIMIT_WAIT_MS) {
-                if (signal.aborted) throw new DOMException('abort', 'AbortError');
-                await new Promise(r => setTimeout(r, 2000));
-              }
+              await waitOrAbort(RATE_LIMIT_WAIT_MS);
               continue; // retry same batch — do NOT advance batchIdx
             }
 
@@ -404,7 +418,8 @@ export function useAutoPilot({
         const toFix = state.entries.filter(e => damagedKeys.has(`${e.msbtFile}:${e.index}`));
         let fixed = 0;
 
-        for (let b = 0; b < Math.ceil(toFix.length / AI_BATCH); b++) {
+        const fixTotalBatches = Math.ceil(toFix.length / AI_BATCH);
+        for (let b = 0; b < fixTotalBatches;) {
           if (signal.aborted) throw new DOMException('abort', 'AbortError');
           const batch = toFix.slice(b * AI_BATCH, (b + 1) * AI_BATCH);
           const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
@@ -413,15 +428,32 @@ export function useAutoPilot({
               method: 'POST', headers: getSupabaseHeaders(), signal,
               body: buildFetchBody(entries, aiProvider, aiModelOverride),
             });
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.translations) {
-                addTranslations(data.translations);
-                fixed += Object.keys(data.translations).length;
-              }
+            if (!resp.ok) {
+              const rawErr = await resp.text().catch(() => '');
+              let parsedErr: { error?: string; message?: string } | null = null;
+              try { parsedErr = rawErr ? JSON.parse(rawErr) : null; } catch { parsedErr = null; }
+              const detail = parsedErr?.error || parsedErr?.message || rawErr || resp.statusText;
+              throw new Error(`HTTP_${resp.status}: ${detail || 'request failed'}`);
             }
-          } catch (err) { if ((err as Error).name === 'AbortError') throw err; }
-          setProgress({ current: Math.min((b + 1) * AI_BATCH, toFix.length), total: toFix.length });
+            const data = await resp.json();
+            if (data.translations) {
+              addTranslations(data.translations);
+              fixed += Object.keys(data.translations).length;
+            }
+            b++;
+            setProgress({ current: Math.min(b * AI_BATCH, toFix.length), total: toFix.length });
+          } catch (err) {
+            if ((err as Error).name === 'AbortError') throw err;
+            const errMsg = (err as Error).message;
+            if (isRetryableTransient(errMsg)) {
+              log(`⏳ إصلاح الرموز توقف مؤقتاً — انتظار ${Math.round(RATE_LIMIT_WAIT_MS / 1000)}ث ثم إعادة نفس الدفعة ${b + 1}/${fixTotalBatches}...`, 'warning', "4");
+              await waitOrAbort(RATE_LIMIT_WAIT_MS);
+              continue;
+            }
+            log(`⚠️ تعذر إصلاح دفعة رموز ${b + 1}: ${errMsg}`, 'warning', "4");
+            b++;
+            setProgress({ current: Math.min(b * AI_BATCH, toFix.length), total: toFix.length });
+          }
         }
 
         stats.tagsFixed = fixed;

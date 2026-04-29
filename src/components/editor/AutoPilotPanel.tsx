@@ -268,7 +268,7 @@ export function AutoPilotPanel({
         {/* Description when idle */}
         {!running && logs.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-1">
-            يقوم الوكيل تلقائياً بـ: ترجمة ذاكرة + قاموس → ذكاء اصطناعي → إصلاح رموز → فحص جودة
+            يقوم الوكيل تلقائياً بـ: ترجمة ذاكرة + قاموس → ذكاء اصطناعي → إصلاح رموز
           </p>
         )}
       </CardContent>

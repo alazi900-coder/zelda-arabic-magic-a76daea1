@@ -631,5 +631,6 @@ export function useAutoPilot({
     running, phase, phaseIndex, progress, logs, report, mode, setMode, run, stop, freeProviderLabel,
     previewMode, setPreviewMode,
     pendingTranslations, pendingOriginals, pendingOldTranslations, applyPending, discardPending,
+    diagnostics, clearDiagnostics,
   };
 }

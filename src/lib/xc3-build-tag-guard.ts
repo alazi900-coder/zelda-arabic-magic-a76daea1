@@ -231,24 +231,32 @@ function normalizeWhitespaceAfterReorder(text: string, original: string): string
 }
 
 /**
- * RLM-Isolation: Wrap each technical tag with U+200F (Right-to-Left Mark) so
- * Unicode BiDi treats the tag as a neutral island inside the surrounding RTL
+ * RLM-Isolation: Wrap each technical token with U+200F (Right-to-Left Mark) so
+ * Unicode BiDi treats the token as a neutral island inside the surrounding RTL
  * paragraph. Without this, Xenoblade's word-wrap (which runs on the rendered
- * BiDi-resolved string) reorders Arabic words around LTR-shaped tags like
- * [XENO:n], [XENO:wait ...], [System:PageBreak] — exactly the bug seen in
- * the user's screenshots where line 2 contained a fragment that belongs at
- * the end of the sentence.
+ * BiDi-resolved string) reorders Arabic words around LTR-shaped tokens —
+ * exactly the bug seen in the user's screenshots where line 2 contained a
+ * fragment that belongs at the end of the sentence.
+ *
+ * Coverage (broadened): every LTR technical token that can appear in XC text:
+ *  - Bracket tags: [XENO:n], [XENO:wait wait=key], [System:PageBreak],
+ *    [System:Ruby ...], [/System:Ruby], [ML:icon icon=copyright],
+ *    [Event:...], generic [Word:Value], and number-prefixed/suffixed forms
+ *    like 1[XENO:n] or [XENO:wait]2.
+ *  - Brace tags: {var}, {Word:value}.
+ *  - $N variable placeholders ($1, $2, ...).
  *
  * Strategy:
- *  - Only wrap if surrounding context contains Arabic letters (otherwise
- *    pure-LTR strings stay untouched, e.g. menu IDs).
+ *  - Only wrap if surrounding context contains Arabic letters.
  *  - Idempotent: never adds a second RLM if one is already adjacent.
- *  - Applied at build-time only — the editor / dictionaries / memory all
- *    keep their clean text. RLM is invisible (zero-width) so it does not
- *    affect glyph rendering or character budgets in a meaningful way.
+ *  - Applied at build-time only — editor / dictionaries / memory keep clean text.
+ *  - RLM is zero-width invisible — does not affect glyph shaping or visible width.
  */
 const RLM = '\u200F';
-const TAG_FOR_RLM_REGEX = /\[XENO:n\s*\]|\[XENO:wait[^\]]*\]|\[System:PageBreak\s*\]/g;
+// Broad technical-token pattern. Order matters: longer / number-affixed
+// variants come before bare bracket tags so the regex engine consumes them
+// as single units (preventing partial wrapping).
+const TAG_FOR_RLM_REGEX = /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\{\s*\w+\s*:[^}]*\}|\{\s*\w+\s*\}|\$\d+/g;
 const ARABIC_LETTER_RANGE = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
 function wrapTechTagsWithRLM(text: string): string {
@@ -264,19 +272,20 @@ function wrapTechTagsWithRLM(text: string): string {
   });
 }
 
-/** Detect whether a translated string already has RLM isolation applied. */
+/** Detect whether a translated string already has RLM isolation applied
+ *  on every technical token it contains. */
 export function hasRlmIsolation(text: string): boolean {
   if (!ARABIC_LETTER_RANGE.test(text)) return true; // N/A
-  let needsAtLeastOne = false;
+  let foundAny = false;
   const re = new RegExp(TAG_FOR_RLM_REGEX.source, TAG_FOR_RLM_REGEX.flags);
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    needsAtLeastOne = true;
+    foundAny = true;
     const before = text[m.index - 1];
     const after = text[m.index + m[0].length];
     if (before !== RLM || after !== RLM) return false;
   }
-  return needsAtLeastOne ? true : true;
+  return foundAny ? true : true;
 }
 
 /** Public helper for the Deep Diagnostic auto-fixer. */

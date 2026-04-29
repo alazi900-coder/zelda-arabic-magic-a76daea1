@@ -2,8 +2,8 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu, Settings, Eye } from "lucide-react";
-import type { AutoPilotLog, AutoPilotReport, AutoPilotMode } from "@/hooks/useAutoPilot";
+import { Bot, StopCircle, ChevronDown, ChevronUp, Zap, Cpu, Settings, Eye, AlertTriangle, X } from "lucide-react";
+import type { AutoPilotLog, AutoPilotReport, AutoPilotMode, AutoPilotDiagnostic } from "@/hooks/useAutoPilot";
 
 const GEMINI_MODELS = [
   { id: 'gemini-2.5-flash', label: '2.5 Flash 💚', note: 'مجاني (حصة يومية)' },
@@ -39,6 +39,8 @@ interface AutoPilotPanelProps {
   setPreviewMode: (v: boolean) => void;
   onRun: (m: AutoPilotMode) => void;
   onStop: () => void;
+  diagnostics: AutoPilotDiagnostic[];
+  clearDiagnostics: () => void;
 }
 
 const PHASES = ["تحليل", "ذاكرة", "AI", "رموز"];
@@ -55,8 +57,10 @@ export function AutoPilotPanel({
   running, phase, phaseIndex, progress, logs, report,
   mode, setMode, freeProviderLabel, translationProvider, setTranslationProvider,
   aiModel, setAiModel, previewMode, setPreviewMode, onRun, onStop,
+  diagnostics, clearDiagnostics,
 }: AutoPilotPanelProps) {
   const [logsOpen, setLogsOpen] = React.useState(true);
+  const [diagOpen, setDiagOpen] = React.useState(true);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const logsRef = React.useRef<HTMLDivElement>(null);
 
@@ -239,6 +243,60 @@ export function AutoPilotPanel({
         )}
 
         {/* Logs */}
+        {/* Diagnostics — persistent until manually cleared */}
+        {diagnostics.length > 0 && (
+          <div className="border border-destructive/40 rounded bg-destructive/5">
+            <div className="flex items-center justify-between px-2 py-1.5 border-b border-destructive/20">
+              <button
+                onClick={() => setDiagOpen(v => !v)}
+                className="flex items-center gap-1 text-xs font-semibold text-destructive hover:opacity-80"
+              >
+                {diagOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                <AlertTriangle className="w-3 h-3" />
+                سجل التشخيص ({diagnostics.length})
+              </button>
+              <button
+                onClick={clearDiagnostics}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                title="مسح سجل التشخيص"
+              >
+                <X className="w-3 h-3" /> مسح
+              </button>
+            </div>
+            {diagOpen && (
+              <div className="max-h-60 overflow-y-auto p-2 space-y-1.5 font-mono text-[11px]" dir="rtl">
+                {diagnostics.map(d => {
+                  const time = new Date(d.timestamp).toLocaleTimeString('ar-EG', { hour12: false });
+                  const kindColor =
+                    d.kind === 'fatal' || d.kind === 'permanent' ? 'text-destructive'
+                    : d.kind === 'billing' ? 'text-orange-500'
+                    : d.kind === 'rate_limit' || d.kind === 'transient' || d.kind === 'partial' ? 'text-yellow-600 dark:text-yellow-400'
+                    : 'text-muted-foreground';
+                  return (
+                    <div key={d.id} className="rounded border border-border/50 bg-background/60 p-1.5">
+                      <div className={`flex items-center justify-between gap-2 ${kindColor}`}>
+                        <span className="font-semibold">[{d.kind}] {d.message}</span>
+                        <span className="opacity-60 text-[10px]">{time}</span>
+                      </div>
+                      <div className="text-muted-foreground text-[10px] mt-0.5 leading-tight">
+                        المرحلة: {d.phase} • دفعة {d.batchIndex}/{d.totalBatches} • محاولة #{d.attempt}
+                        {' '}• مزود: {d.provider}{d.model ? `/${d.model}` : ''}
+                        {d.httpStatus ? ` • HTTP ${d.httpStatus}` : ''}
+                        {' '}• {d.willRetry ? 'سيُعاد المحاولة ⏳' : 'لن يُعاد ⛔'}
+                      </div>
+                      {d.bodySnippet && (
+                        <div className="mt-1 text-[10px] text-foreground/70 break-all whitespace-pre-wrap bg-muted/40 rounded p-1">
+                          {d.bodySnippet}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {logs.length > 0 && (
           <div>
             <button

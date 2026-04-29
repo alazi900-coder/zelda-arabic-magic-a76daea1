@@ -11,6 +11,22 @@ export interface AutoPilotLog {
   type: 'info' | 'success' | 'warning' | 'error' | 'phase';
 }
 
+export interface AutoPilotDiagnostic {
+  id: number;
+  timestamp: number;        // Date.now()
+  phase: string;            // e.g. "AI", "إصلاح الرموز"
+  batchIndex: number;       // 1-based; 0 if N/A
+  totalBatches: number;     // 0 if N/A
+  attempt: number;          // retry attempt count for this batch
+  provider: string;
+  model?: string;
+  httpStatus?: number;      // if known
+  kind: 'rate_limit' | 'transient' | 'billing' | 'partial' | 'permanent' | 'abort' | 'fatal';
+  message: string;
+  bodySnippet?: string;     // first ~400 chars of upstream body
+  willRetry: boolean;
+}
+
 export interface AutoPilotReport {
   totalEntries: number;
   alreadyTranslated: number;
@@ -80,6 +96,7 @@ export function useAutoPilot({
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [logs, setLogs] = useState<AutoPilotLog[]>([]);
+  const [diagnostics, setDiagnostics] = useState<AutoPilotDiagnostic[]>([]);
   const [report, setReport] = useState<AutoPilotReport | null>(null);
   const [mode, setMode] = useState<AutoPilotMode>('smart');
   const [previewMode, setPreviewMode] = useState(false);
@@ -88,6 +105,9 @@ export function useAutoPilot({
   const [pendingOldTranslations, setPendingOldTranslations] = useState<Record<string, string>>({});
   const abortRef = useRef<AbortController | null>(null);
   const logIdRef = useRef(0);
+  const diagIdRef = useRef(0);
+
+  const clearDiagnostics = useCallback(() => setDiagnostics([]), []);
 
   const freeProviderLabel = useMemo(
     () => pickFreeProvider(userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail).label,
@@ -128,6 +148,7 @@ export function useAutoPilot({
     const startTime = Date.now();
     setRunning(true);
     setLogs([]);
+    setDiagnostics([]);  // clear at start of new run
     setReport(null);
     setProgress(null);
     setPhaseIndex(0);
@@ -182,6 +203,26 @@ export function useAutoPilot({
 
     const log = (msg: string, type: AutoPilotLog['type'] = 'info', ph = '') =>
       setLogs(prev => [...prev, { id: ++logIdRef.current, phase: ph, message: msg, type }]);
+
+    const addDiag = (d: Omit<AutoPilotDiagnostic, 'id' | 'timestamp'>) =>
+      setDiagnostics(prev => [
+        ...prev,
+        { ...d, id: ++diagIdRef.current, timestamp: Date.now() },
+      ]);
+
+    // Parse "HTTP_<status>: <detail>" → { status, detail }
+    const parseHttpErr = (msg: string): { status?: number; detail: string } => {
+      const m = msg.match(/^HTTP_(\d{3}):\s*([\s\S]*)$/);
+      if (m) return { status: Number(m[1]), detail: m[2] };
+      return { detail: msg };
+    };
+    const classify = (msg: string): AutoPilotDiagnostic['kind'] => {
+      if (isBillingExhausted(msg)) return 'billing';
+      if (isRateLimit429(msg)) return 'rate_limit';
+      if (/PARTIAL_TRANSLATION_RETRYABLE|missing translations|incomplete/i.test(msg)) return 'partial';
+      if (isRetryableTransient(msg)) return 'transient';
+      return 'permanent';
+    };
 
     const waitOrAbort = async (ms: number, stepMs = 2000) => {
       const waitStart = Date.now();
@@ -333,12 +374,21 @@ export function useAutoPilot({
           } catch (err) {
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
+            const { status, detail } = parseHttpErr(errMsg);
+            const kind = classify(errMsg);
 
             // ⚡ TRUE BILLING EXHAUSTED → switch provider (one-shot); waitable quotas keep retrying.
             if (isBillingExhausted(errMsg) && remaining.length > 0) {
               const next = remaining.shift()!;
+              addDiag({
+                phase: 'AI', batchIndex: batchIdx + 1, totalBatches,
+                attempt: rateLimitAttempts + 1, provider: curProvider, model: curModel,
+                httpStatus: status, kind: 'billing',
+                message: `انتهت حصة ${curProvider} — تحويل إلى ${next.label}`,
+                bodySnippet: detail.slice(0, 400), willRetry: true,
+              });
               log(`💳 انتهت حصة ${curProvider} نهائياً — تحويل لـ ${next.label}`, 'warning', "3");
-              toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}` });
+              toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}`, duration: Infinity });
               curProvider = next.provider;
               curModel = next.model;
               rateLimitAttempts = 0;
@@ -349,6 +399,13 @@ export function useAutoPilot({
             if (isRetryableTransient(errMsg)) {
               rateLimitAttempts++;
               const waitSec = Math.round(RATE_LIMIT_WAIT_MS / 1000);
+              addDiag({
+                phase: 'AI', batchIndex: batchIdx + 1, totalBatches,
+                attempt: rateLimitAttempts, provider: curProvider, model: curModel,
+                httpStatus: status, kind,
+                message: `توقف مؤقت — انتظار ${waitSec}ث ثم إعادة المحاولة`,
+                bodySnippet: detail.slice(0, 400), willRetry: true,
+              });
               if (rateLimitAttempts === 1 || rateLimitAttempts % 5 === 0) {
                 log(`⏳ تعذّر الاتصال مؤقتاً/تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
               }
@@ -357,7 +414,20 @@ export function useAutoPilot({
             }
 
             // Other permanent failure — log and skip
+            addDiag({
+              phase: 'AI', batchIndex: batchIdx + 1, totalBatches,
+              attempt: rateLimitAttempts + 1, provider: curProvider, model: curModel,
+              httpStatus: status, kind: 'permanent',
+              message: `فشل دائم — تم تخطي الدفعة`,
+              bodySnippet: detail.slice(0, 400), willRetry: false,
+            });
             log(`⚠️ دفعة ${batchIdx + 1} فشلت: ${errMsg}`, 'warning', "3");
+            toast({
+              title: `❌ فشل دفعة ${batchIdx + 1}/${totalBatches}`,
+              description: errMsg.slice(0, 200),
+              variant: "destructive",
+              duration: Infinity,
+            });
             failedEntries.push(...batch);
             done += batch.length;
             batchIdx++;
@@ -445,12 +515,34 @@ export function useAutoPilot({
           } catch (err) {
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
+            const { status, detail } = parseHttpErr(errMsg);
+            const kind = classify(errMsg);
             if (isRetryableTransient(errMsg)) {
+              addDiag({
+                phase: 'إصلاح الرموز', batchIndex: b + 1, totalBatches: fixTotalBatches,
+                attempt: 1, provider: aiProvider, model: aiModelOverride,
+                httpStatus: status, kind,
+                message: `توقف مؤقت في إصلاح الرموز — انتظار ${Math.round(RATE_LIMIT_WAIT_MS / 1000)}ث`,
+                bodySnippet: detail.slice(0, 400), willRetry: true,
+              });
               log(`⏳ إصلاح الرموز توقف مؤقتاً — انتظار ${Math.round(RATE_LIMIT_WAIT_MS / 1000)}ث ثم إعادة نفس الدفعة ${b + 1}/${fixTotalBatches}...`, 'warning', "4");
               await waitOrAbort(RATE_LIMIT_WAIT_MS);
               continue;
             }
+            addDiag({
+              phase: 'إصلاح الرموز', batchIndex: b + 1, totalBatches: fixTotalBatches,
+              attempt: 1, provider: aiProvider, model: aiModelOverride,
+              httpStatus: status, kind: 'permanent',
+              message: `فشل إصلاح الدفعة — تم التخطي`,
+              bodySnippet: detail.slice(0, 400), willRetry: false,
+            });
             log(`⚠️ تعذر إصلاح دفعة رموز ${b + 1}: ${errMsg}`, 'warning', "4");
+            toast({
+              title: `❌ فشل إصلاح رموز ${b + 1}/${fixTotalBatches}`,
+              description: errMsg.slice(0, 200),
+              variant: "destructive",
+              duration: Infinity,
+            });
             b++;
             setProgress({ current: Math.min(b * AI_BATCH, toFix.length), total: toFix.length });
           }
@@ -487,15 +579,28 @@ export function useAutoPilot({
       if ((err as Error).name === 'AbortError') {
         setPhase("⏹️ موقوف"); setPhaseIndex(0);
         log("⏹️ أوقفت الوكيل يدوياً", 'warning');
+        addDiag({
+          phase: phase || 'غير محدد', batchIndex: 0, totalBatches: 0,
+          attempt: 0, provider: translationProvider, model: aiModel,
+          kind: 'abort', message: 'أوقف المستخدم الوكيل يدوياً', willRetry: false,
+        });
         if (isPreview && Object.keys(pendingAcc).length > 0) {
           setPendingTranslations({ ...pendingAcc });
-          toast({ title: "👁️ معاينة جاهزة", description: `تم جمع ${Object.keys(pendingAcc).length} ترجمة — راجعها قبل التطبيق` });
+          toast({ title: "👁️ معاينة جاهزة", description: `تم جمع ${Object.keys(pendingAcc).length} ترجمة — راجعها قبل التطبيق`, duration: Infinity });
         }
       } else {
         const msg = err instanceof Error ? err.message : 'خطأ غير معروف';
+        const { status, detail } = parseHttpErr(msg);
         setPhase("❌ خطأ"); setPhaseIndex(0);
         log(`❌ خطأ: ${msg}`, 'error');
-        toast({ title: "❌ خطأ في الوكيل", description: msg, variant: "destructive" });
+        addDiag({
+          phase: phase || 'غير محدد', batchIndex: 0, totalBatches: 0,
+          attempt: 0, provider: translationProvider, model: aiModel,
+          httpStatus: status, kind: 'fatal',
+          message: 'توقف نهائي للوكيل',
+          bodySnippet: detail.slice(0, 400), willRetry: false,
+        });
+        toast({ title: "❌ خطأ في الوكيل", description: msg, variant: "destructive", duration: Infinity });
       }
       stats.duration = Math.round((Date.now() - startTime) / 1000);
       setReport(stats);
@@ -526,5 +631,6 @@ export function useAutoPilot({
     running, phase, phaseIndex, progress, logs, report, mode, setMode, run, stop, freeProviderLabel,
     previewMode, setPreviewMode,
     pendingTranslations, pendingOriginals, pendingOldTranslations, applyPending, discardPending,
+    diagnostics, clearDiagnostics,
   };
 }

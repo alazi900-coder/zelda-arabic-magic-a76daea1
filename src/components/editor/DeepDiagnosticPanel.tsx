@@ -307,6 +307,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
     }
 
+    if (RLM_ISOLATION_CATEGORIES.has(issue.category)) {
+      const fixed = applyRlmIsolation(trans);
+      return {
+        fixResult: fixed,
+        reason: fixed !== trans
+          ? '🧭 سيتم إحاطة [XENO:n]/[XENO:wait]/[System:PageBreak] بعلامة RLM (U+200F) لمنع خلط ترتيب الكلمات في اللعبة'
+          : '⚠️ النص لا يحتوي وسوماً تحتاج عزل، أو هي معزولة بالفعل'
+      };
+    }
+
     if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
       const englishLineCount = countEffectiveLines(entry.original);
       const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;

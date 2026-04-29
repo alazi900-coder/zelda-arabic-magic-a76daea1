@@ -269,6 +269,9 @@ export function useAutoPilot({
         // 429 = TEMPORARY rate limit — wait & retry same batch (infinite loop)
         // Only switch providers on TRUE quota exhaustion (no credits / insufficient / billing)
         const isRateLimit429 = (msg: string) => /429|rate.?limit|RATE_LIMIT_RETRYABLE|تجاوز(ت)? حد|too many requests/i.test(msg);
+        const isRetryableTransient = (msg: string) =>
+          isRateLimit429(msg) ||
+          /HTTP_(408|425|500|502|503|504)|خطأ (408|425|500|502|503|504)|upstream|timeout|timed out|failed to fetch|load failed|networkerror|functionshttperror|functionsrelayerror|edge function/i.test(msg);
         const isQuotaExhausted = (msg: string) => /no credits|insufficient|💳|exhausted|quota exceeded|انتهت الحصة|billing/i.test(msg);
 
         let batchIdx = 0;
@@ -284,8 +287,11 @@ export function useAutoPilot({
               body: buildFetchBody(entries, curProvider, curModel),
             });
             if (!response.ok) {
-              const errData = await response.json().catch(() => null);
-              throw new Error(errData?.error || `خطأ ${response.status}`);
+              const rawErr = await response.text().catch(() => '');
+              let parsedErr: { error?: string; message?: string } | null = null;
+              try { parsedErr = rawErr ? JSON.parse(rawErr) : null; } catch { parsedErr = null; }
+              const detail = parsedErr?.error || parsedErr?.message || rawErr || response.statusText;
+              throw new Error(`HTTP_${response.status}: ${detail || 'request failed'}`);
             }
             const data = await response.json();
             addAiRequest(1);
@@ -321,11 +327,11 @@ export function useAutoPilot({
             }
 
             // ⏳ TEMPORARY 429 → wait & retry same batch FOREVER (until success or user stops)
-            if (isRateLimit429(errMsg)) {
+            if (isRetryableTransient(errMsg)) {
               rateLimitAttempts++;
               const waitSec = Math.round(RATE_LIMIT_WAIT_MS / 1000);
               if (rateLimitAttempts === 1 || rateLimitAttempts % 5 === 0) {
-                log(`⏳ تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
+                log(`⏳ تعذّر الاتصال مؤقتاً/تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
               }
               // Abortable wait — checks signal every 2s so user can stop
               const waitStart = Date.now();

@@ -528,6 +528,21 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (RLM_ISOLATION_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
+      let count = 0;
+      for (const key of uniqueKeys) {
+        const trans = state.translations[key];
+        if (!trans) continue;
+        const fixed = applyRlmIsolation(trans);
+        if (fixed !== trans) { updates[key] = fixed; count++; }
+      }
+      applyBatchUpdates(updates);
+      toast({ title: '🧭 عزل اتجاهي جماعي', description: `تم عزل وسوم التحكم في ${count} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
     if (LINE_REBALANCE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
       // Phase 3 — offload to Web Worker (with main-thread fallback) so the UI
       // stays responsive even on mobile when rebalancing thousands of entries.

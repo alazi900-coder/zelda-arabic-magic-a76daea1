@@ -39,6 +39,8 @@ interface AutoPilotPanelProps {
   setPreviewMode: (v: boolean) => void;
   onRun: (m: AutoPilotMode) => void;
   onStop: () => void;
+  diagnostics: AutoPilotDiagnostic[];
+  clearDiagnostics: () => void;
 }
 
 const PHASES = ["تحليل", "ذاكرة", "AI", "رموز"];

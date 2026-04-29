@@ -336,12 +336,12 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     }
   }
 
-  // 21. Missing RLM-isolation around technical tags (Arabic + LTR-tag interaction)
-  // Detects translations whose [XENO:n], [XENO:wait], [System:PageBreak] tags are
-  // NOT wrapped with U+200F on both sides — the cause of the in-game word-reorder
-  // bug visible when Arabic words flow around these LTR-shaped tags.
+  // 21. Missing RLM-isolation around technical tokens (Arabic + LTR-tag interaction)
+  // Broadened: [Word:Value] tags (XENO/System/ML/Event/...), closing tags
+  // [/Word:...], number-affixed forms (1[XENO:n], [XENO:wait]2), brace tags
+  // {var}/{Word:value}, and $N variables.
   if (RE_ARABIC_STANDARD.test(trimmed)) {
-    const tagRe = /\[XENO:n\s*\]|\[XENO:wait[^\]]*\]|\[System:PageBreak\s*\]/g;
+    const tagRe = /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\{\s*\w+\s*:[^}]*\}|\{\s*\w+\s*\}|\$\d+/g;
     let unisolated = 0;
     let m: RegExpExecArray | null;
     while ((m = tagRe.exec(trimmed)) !== null) {
@@ -351,7 +351,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     }
     if (unisolated > 0) {
       issues.push({ ...base, severity: "warning", category: "missing_rlm_isolation",
-        message: `${unisolated} وسم تقني بدون عزل اتجاهي (RLM) — يسبب خلط ترتيب الكلمات داخل اللعبة` });
+        message: `${unisolated} وسم/متغيّر تقني بدون عزل اتجاهي (RLM) — يسبب خلط ترتيب الكلمات داخل اللعبة` });
     }
   }
 

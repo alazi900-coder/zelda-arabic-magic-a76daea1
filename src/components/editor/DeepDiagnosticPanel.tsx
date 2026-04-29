@@ -21,6 +21,23 @@ interface FixReportEntry {
   category: string;
   action: 'fixed' | 'unchanged' | 'restored';
   reason: string;
+  /** Snapshot of the translation BEFORE this fix was applied (raw, includes RLM if any). */
+  before?: string;
+  /** Snapshot of the translation AFTER this fix was applied. */
+  after?: string;
+}
+
+interface ResidualRtlEntry {
+  key: string;
+  label: string;
+  /** Current translation text (post-fix). */
+  current: string;
+  /** What it would look like with RLM isolation applied. */
+  proposed: string;
+  /** Number of technical tokens still missing RLM isolation. */
+  unisolatedCount: number;
+  /** Why isolation could not be auto-applied (e.g. "no Arabic", "tokens already isolated"). */
+  reason: string;
 }
 
 interface FixReport {
@@ -29,6 +46,10 @@ interface FixReport {
   totalUnchanged: number;
   totalRestored: number;
   entries: FixReportEntry[];
+  /** Translations that STILL have unisolated technical tokens after the bulk fix. */
+  residualRtl: ResidualRtlEntry[];
+  /** Count of entries that received RLM isolation in this run. */
+  rlmFixed: number;
 }
 
 // ═══════════════════════════════════════════════════

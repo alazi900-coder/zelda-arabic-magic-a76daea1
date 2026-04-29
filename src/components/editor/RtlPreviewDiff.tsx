@@ -6,12 +6,17 @@
  * - "rtl" tab renders both strings inside `dir="rtl"` boxes so the user can
  *   visually compare how Arabic words flow around LTR-shaped technical tags
  *   (this matches how Xenoblade's BiDi-resolved layout works in-game).
+ *   Technical tags are highlighted so the reorder effect of RLM is obvious,
+ *   and a toggle lets the user disable RLM in the "after" box to demo what
+ *   happens in-game without isolation (with an explicit warning).
  *
  * Pure presentational — no data mutations. Used inside FixReport and the
  * residual-RTL list.
  */
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface RtlPreviewDiffProps {
   before: string;
@@ -22,18 +27,59 @@ interface RtlPreviewDiffProps {
 const RLM = "\u200F";
 const RLM_MARKER = "🔸";
 
+/** Same broad token regex used by xc3-build-tag-guard for highlighting. */
+const TAG_HIGHLIGHT_REGEX = /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\{\s*\w+\s*:[^}]*\}|\{\s*\w+\s*\}|\$\d+/g;
+
 /** Replace every U+200F with a visible marker so users can see where RLM sits. */
 function visualizeRlm(text: string): string {
   return text.replace(/\u200F/g, RLM_MARKER);
 }
 
-/** Strip RLM (used in the RTL render so the marker doesn't pollute layout). */
-function stripRlmForRender(text: string): string {
+/** Strip RLM (used in the demo-without-RLM render). */
+function stripRlm(text: string): string {
   return text.replace(/\u200F/g, "");
+}
+
+/**
+ * Split text into tag / non-tag fragments and render tags as colored chips.
+ * RLM characters are stripped before splitting so the regex matches cleanly;
+ * the chip rendering itself is what makes the reorder effect visible — the
+ * surrounding `dir="rtl"` flow positions each chip according to BiDi rules.
+ */
+function renderWithTagHighlights(text: string, keepRlm: boolean): React.ReactNode {
+  const source = keepRlm ? text : stripRlm(text);
+  if (!source) return <em className="text-muted-foreground">— فارغ —</em>;
+
+  const parts: React.ReactNode[] = [];
+  const re = new RegExp(TAG_HIGHLIGHT_REGEX.source, TAG_HIGHLIGHT_REGEX.flags);
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  while ((m = re.exec(source)) !== null) {
+    if (m.index > cursor) {
+      parts.push(<span key={key++}>{source.slice(cursor, m.index)}</span>);
+    }
+    parts.push(
+      <span
+        key={key++}
+        className="inline-block px-1 mx-0.5 rounded bg-primary/20 text-primary border border-primary/40 font-mono text-[10px] align-baseline"
+        dir="ltr"
+      >
+        {m[0].replace(/\u200F/g, "")}
+      </span>
+    );
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < source.length) {
+    parts.push(<span key={key++}>{source.slice(cursor)}</span>);
+  }
+  return <>{parts}</>;
 }
 
 export function RtlPreviewDiff({ before, after, className }: RtlPreviewDiffProps) {
   const [tab, setTab] = useState<"raw" | "rtl">("raw");
+  /** When false, the "after" RTL preview strips RLM to demo in-game word reorder. */
+  const [rlmEnabled, setRlmEnabled] = useState(true);
 
   const beforeRlm = (before.match(/\u200F/g) || []).length;
   const afterRlm = (after.match(/\u200F/g) || []).length;
@@ -66,18 +112,51 @@ export function RtlPreviewDiff({ before, after, className }: RtlPreviewDiffProps
         </TabsContent>
 
         <TabsContent value="rtl" className="mt-1.5 space-y-1.5">
-          <PreviewBox label="قبل (بدون عزل)" tone="warning">
-            <span className="text-[12px] leading-6 whitespace-pre-wrap" dir="rtl" lang="ar">
-              {stripRlmForRender(before) || <em className="text-muted-foreground">— فارغ —</em>}
+          {/* RLM toggle for demo */}
+          <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2 py-1.5">
+            <div className="flex-1">
+              <Label htmlFor="rlm-toggle" className="text-[10px] font-bold cursor-pointer">
+                تفعيل عزل RLM في المعاينة
+              </Label>
+              <p className="text-[9px] text-muted-foreground">
+                {rlmEnabled
+                  ? "الوسوم معزولة — الترتيب يطابق ما تقصده."
+                  : "⚠️ بدون RLM — هكذا تخلط اللعبة ترتيب الكلمات حول الوسوم."}
+              </p>
+            </div>
+            <Switch
+              id="rlm-toggle"
+              checked={rlmEnabled}
+              onCheckedChange={setRlmEnabled}
+            />
+          </div>
+
+          {!rlmEnabled && (
+            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-1.5">
+              <p className="text-[10px] text-amber-300 leading-tight">
+                ⚠️ <b>تحذير:</b> إيقاف RLM للعرض التجريبي فقط. داخل Xenoblade سيُعيد المحرك
+                ترتيب الكلمات حول الوسوم التقنية ([XENO]/[System]/{`{var}`}/$N) — كلمة قد تنتقل
+                لسطر آخر أو يقفز جزء الجملة لمكان غير متوقع. لا توقف RLM في الترجمة الفعلية.
+              </p>
+            </div>
+          )}
+
+          <PreviewBox label="قبل (بدون عزل — كما تظهر باللعبة)" tone="warning">
+            <span className="text-[12px] leading-7 whitespace-pre-wrap" dir="rtl" lang="ar">
+              {renderWithTagHighlights(before, false)}
             </span>
           </PreviewBox>
-          <PreviewBox label="بعد (مع RLM)" tone="success">
-            <span className="text-[12px] leading-6 whitespace-pre-wrap" dir="rtl" lang="ar">
-              {after || <em className="text-muted-foreground">— فارغ —</em>}
+          <PreviewBox
+            label={rlmEnabled ? "بعد (مع RLM — ترتيب صحيح)" : "بعد (RLM موقوف — مكسور)"}
+            tone={rlmEnabled ? "success" : "warning"}
+          >
+            <span className="text-[12px] leading-7 whitespace-pre-wrap" dir="rtl" lang="ar">
+              {renderWithTagHighlights(after, rlmEnabled)}
             </span>
           </PreviewBox>
           <p className="text-[9px] text-muted-foreground">
-            لاحظ كيف يثبّت RLM موضع الوسوم التقنية ضمن سياق RTL مشابه لما يعرضه محرك اللعبة.
+            الوسوم التقنية مظللة بالأزرق. لاحظ كيف يتغير موضعها بين «قبل» و«بعد» —
+            هذا الفرق هو بالضبط ما يراه اللاعب داخل اللعبة.
           </p>
         </TabsContent>
       </Tabs>

@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, Sparkles, AlertTriangle, Wrench } from "lucide-react";
+import { Loader2, Check, Sparkles, AlertTriangle, Wrench, Play, PlayCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
@@ -160,80 +160,71 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
     return undefined;
   };
 
-  const handleCompare = async () => {
+  const fetchEngine = async (engine: EngineConfig) => {
+    if (!entry) return;
+    const providerKey = getProviderKey(engine);
+    // Check key availability
+    if (engine.requiresKey && !providerKey) {
+      setErrors(prev => ({ ...prev, [engine.id]: `يحتاج مفتاح ${engine.requiresKey?.toUpperCase()} — أضفه في إعدادات المحرك` }));
+      return;
+    }
+
+    const key = `${entry.msbtFile}:${entry.index}`;
+    setLoadingEngines(prev => { const next = new Set(prev); next.add(engine.id); return next; });
+    setErrors(prev => { const next = { ...prev }; delete next[engine.id]; return next; });
+
+    try {
+      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+        method: 'POST',
+        headers: getSupabaseHeaders(),
+        body: JSON.stringify({
+          entries: [{ key, original: entry.original }],
+          glossary,
+          provider: engine.provider,
+          userApiKey: engine.provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+          providerApiKey: providerKey,
+          myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
+          aiModel: engine.model || undefined,
+        }),
+      });
+      if (!response.ok) {
+        let errMsg = `خطأ ${response.status}`;
+        try { const j = await response.json(); if (j.error) errMsg = j.error; } catch { /* ignore */ }
+        setErrors(prev => ({ ...prev, [engine.id]: errMsg }));
+      } else {
+        const data = await response.json();
+        const translation = data.translations?.[key] || null;
+        if (translation) {
+          setResults(prev => ({ ...prev, [engine.id]: translation }));
+        } else {
+          setErrors(prev => ({ ...prev, [engine.id]: 'لا توجد ترجمة في الاستجابة' }));
+        }
+      }
+    } catch (e) {
+      setErrors(prev => ({ ...prev, [engine.id]: e instanceof Error ? e.message : 'فشل الاتصال' }));
+    } finally {
+      setLoadingEngines(prev => { const next = new Set(prev); next.delete(engine.id); return next; });
+    }
+  };
+
+  const handleRunAll = async () => {
     if (!entry) return;
     setLoading(true);
     setError("");
-    setResults({});
-    setErrors({});
-
-    // Filter engines: skip those that require missing keys
-    const enginesToRun = ALL_ENGINES.filter(e => {
-      if (e.requiresKey === 'deepseek') return !!userDeepSeekKey;
-      if (e.requiresKey === 'groq') return !!userGroqKey;
-      if (e.requiresKey === 'cerebras') return !!userCerebrasKey;
-      if (e.requiresKey === 'openrouter') return !!userOpenRouterKey;
-      return true;
-    });
-
-    // Mark skipped engines with error message
-    const skipped: Record<string, string> = {};
-    for (const e of ALL_ENGINES) {
-      if (!enginesToRun.includes(e)) {
-        skipped[e.id] = `يحتاج مفتاح ${e.requiresKey?.toUpperCase()} — أضفه في إعدادات المحرك`;
-      }
-    }
-    setErrors(skipped);
-    setLoadingEngines(new Set(enginesToRun.map(e => e.id)));
-
-    const key = `${entry.msbtFile}:${entry.index}`;
-    const fetchEngine = async (engine: EngineConfig) => {
-      try {
-        const providerKey = getProviderKey(engine);
-        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
-          method: 'POST',
-          headers: getSupabaseHeaders(),
-          body: JSON.stringify({
-            entries: [{ key, original: entry.original }],
-            glossary,
-            provider: engine.provider,
-            userApiKey: engine.provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-            providerApiKey: providerKey,
-            myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
-            aiModel: engine.model || undefined,
-          }),
-        });
-        if (!response.ok) {
-          let errMsg = `خطأ ${response.status}`;
-          try { const j = await response.json(); if (j.error) errMsg = j.error; } catch { /* ignore */ }
-          return { id: engine.id, result: null, error: errMsg };
-        }
-        const data = await response.json();
-        return { id: engine.id, result: data.translations?.[key] || null, error: undefined };
-      } catch (e) {
-        return { id: engine.id, result: null, error: e instanceof Error ? e.message : 'فشل الاتصال' };
-      }
-    };
-
     try {
-      const promises = enginesToRun.map(engine =>
-        fetchEngine(engine).then(({ id, result, error: engErr }) => {
-          setResults(prev => ({ ...prev, [id]: result }));
-          if (engErr) setErrors(prev => ({ ...prev, [id]: engErr }));
-          setLoadingEngines(prev => { const next = new Set(prev); next.delete(id); return next; });
-        })
-      );
-      await Promise.all(promises);
-    } catch {
-      setError("حدث خطأ أثناء المقارنة");
+      await Promise.all(ALL_ENGINES.map(e => fetchEngine(e)));
     } finally {
       setLoading(false);
     }
   };
 
   React.useEffect(() => {
-    if (open && entry) handleCompare();
-    if (!open) { setResults({}); setErrors({}); setError(""); }
+    if (!open) {
+      setResults({});
+      setErrors({});
+      setError("");
+      setLoadingEngines(new Set());
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry?.msbtFile, entry?.index]);
 
@@ -295,20 +286,41 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                             <Check className="w-3 h-3" /> سليم
                           </span>
                         )}
-                        {result && (
+                        {!result && !isEngineLoading && (
                           <Button
                             size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => { onSelect(key, result); onOpenChange(false); }}
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => fetchEngine(engine)}
                           >
-                            <Check className="w-3 h-3 ml-1" /> اختيار
+                            <Play className="w-3 h-3 ml-1" /> ترجمة
                           </Button>
+                        )}
+                        {result && !isEngineLoading && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => fetchEngine(engine)}
+                              title="إعادة الترجمة"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs text-primary"
+                              onClick={() => { onSelect(key, result); onOpenChange(false); }}
+                            >
+                              <Check className="w-3 h-3 ml-1" /> اختيار
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
 
-                    {isEngineLoading && !result ? (
+                    {isEngineLoading ? (
                       <div className="flex items-center gap-2 py-2">
                         <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                         <span className="text-xs text-muted-foreground">جاري الترجمة...</span>
@@ -342,21 +354,32 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                           </Alert>
                         )}
                       </>
-                    ) : !isEngineLoading ? (
-                      <p className="text-xs text-muted-foreground italic">
-                        {errors[engine.id] || 'فشل في الترجمة أو لا توجد نتيجة'}
+                    ) : errors[engine.id] ? (
+                      <p className="text-xs text-destructive/80 italic" dir="auto">
+                        {errors[engine.id]}
                       </p>
-                    ) : null}
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        اضغط "ترجمة" لتشغيل هذا المحرك فقط (لا يستهلك نقاط المحركات الأخرى)
+                      </p>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {!loading && (
-              <Button variant="outline" size="sm" onClick={handleCompare} className="w-full font-display">
-                <Sparkles className="w-4 h-4" /> إعادة المقارنة
+            <div className="flex gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRunAll}
+                disabled={loading}
+                className="flex-1 font-display"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                {loading ? 'جاري تشغيل الكل...' : 'تشغيل الكل دفعة واحدة'}
               </Button>
-            )}
+            </div>
           </div>
         )}
       </DialogContent>

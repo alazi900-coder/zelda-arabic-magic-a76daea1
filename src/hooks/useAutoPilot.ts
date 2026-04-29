@@ -209,7 +209,7 @@ export function useAutoPilot({
         log("✅ كل شيء مترجم ونظيف — لا يوجد عمل!", 'success', "1");
         stats.duration = Math.round((Date.now() - startTime) / 1000);
         setReport(stats);
-        setPhase("✅ مكتمل"); setPhaseIndex(6);
+        setPhase("✅ مكتمل"); setPhaseIndex(5);
         setRunning(false);
         return;
       }

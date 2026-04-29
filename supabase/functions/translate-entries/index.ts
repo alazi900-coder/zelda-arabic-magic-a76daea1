@@ -1697,11 +1697,18 @@ async function translateWithAI(
     console.log(`[lovable-ai] routingMode=${routingMode} model=${lovableModel} entries=${needsAI.length}`);
 
     const callLovableAI = async (aiPrompt: string, _count: number): Promise<Record<string, string>> => {
-      // Auto-retry on 429 with exponential backoff: 5s, 15s, 30s
-      const retryDelays = [5000, 15000, 30000];
-      let lastError: Error | null = null;
+      // ⚡ INFINITE 429 RETRY: keep trying forever until success or non-429 error.
+      // Edge functions have ~150s wall-clock limit, so we cap each request at ~140s
+      // by limiting individual waits and the total elapsed time. The CLIENT is
+      // responsible for re-invoking the function on its own retry loop for true
+      // "translate while sleeping" behaviour.
+      const WAIT_429_MS = 60_000;       // wait 60s between 429 retries
+      const MAX_ELAPSED_MS = 140_000;   // edge-function safety cap
+      const startedAt = Date.now();
+      let attempt = 0;
 
-      for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+      while (true) {
+        attempt++;
         const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -1724,25 +1731,31 @@ async function translateWithAI(
         }
 
         const err = await response.text();
-        console.error(`[lovable-ai] error ${response.status} (attempt ${attempt + 1}/${retryDelays.length + 1}): ${err.slice(0, 300)}`);
+        console.error(`[lovable-ai] error ${response.status} (attempt ${attempt}): ${err.slice(0, 300)}`);
 
         if (response.status === 402) {
           throw new Error('💳 رصيد Lovable AI غير كافٍ — اشحن الرصيد من Settings → Workspace → Usage');
         }
-        if (response.status === 429 && attempt < retryDelays.length) {
-          const waitMs = retryDelays[attempt];
-          console.warn(`[lovable-ai] 429 rate-limited — waiting ${waitMs / 1000}s before retry...`);
-          await new Promise(r => setTimeout(r, waitMs));
-          lastError = new Error(`⏳ Rate limited after ${attempt + 1} attempts`);
+
+        if (response.status === 429) {
+          const elapsed = Date.now() - startedAt;
+          // If we don't have time for another full wait+request, bail with a
+          // RETRYABLE error so the client loop will re-invoke the function.
+          if (elapsed + WAIT_429_MS + 5_000 > MAX_ELAPSED_MS) {
+            throw new Error('⏳ RATE_LIMIT_RETRYABLE: rate limited — client should retry');
+          }
+          console.warn(`[lovable-ai] 429 (attempt ${attempt}) — waiting ${WAIT_429_MS / 1000}s, elapsed=${Math.round(elapsed / 1000)}s`);
+          await new Promise(r => setTimeout(r, WAIT_429_MS));
           continue;
         }
-        if (response.status === 429) {
-          throw new Error('⏳ تم تجاوز حد الطلبات في Lovable AI Gateway — انتظر دقيقة واضغط استئناف');
+
+        // 5xx → also surface as retryable so client loop can recover
+        if (response.status >= 500 && response.status < 600) {
+          throw new Error(`⏳ RATE_LIMIT_RETRYABLE: upstream ${response.status}`);
         }
+
         throw new Error(`Lovable AI error: ${response.status}`);
       }
-
-      throw lastError ?? new Error('Lovable AI: exhausted retries');
     };
 
     // Try full batch first, on JSON failure split into halves SEQUENTIALLY

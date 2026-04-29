@@ -50,7 +50,11 @@ interface UseAutoPilotProps {
   customPromptInstructions: string;
 }
 
-const AI_BATCH = 5;
+const AI_BATCH = 10;
+const BATCH_DELAY_MS = 2000;        // breathing room between AI batches
+const RATE_LIMIT_WAIT_MS = 60_000;  // wait 60s on client-side 429 before retrying SAME batch
+// 429 retries are INFINITE — the agent keeps going (even while user sleeps)
+// until the request succeeds or the user clicks Stop.
 
 function pickFreeProvider(
   userOpenRouterKey: string,
@@ -205,7 +209,7 @@ export function useAutoPilot({
         log("✅ كل شيء مترجم ونظيف — لا يوجد عمل!", 'success', "1");
         stats.duration = Math.round((Date.now() - startTime) / 1000);
         setReport(stats);
-        setPhase("✅ مكتمل"); setPhaseIndex(6);
+        setPhase("✅ مكتمل"); setPhaseIndex(5);
         setRunning(false);
         return;
       }
@@ -262,9 +266,13 @@ export function useAutoPilot({
 
         let done = 0;
         const failedEntries: ExtractedEntry[] = [];
-        const isQuotaErr = (msg: string) => /انتهت الحصة|quota|429|rate.?limit|no credits|insufficient/i.test(msg);
+        // 429 = TEMPORARY rate limit — wait & retry same batch (infinite loop)
+        // Only switch providers on TRUE quota exhaustion (no credits / insufficient / billing)
+        const isRateLimit429 = (msg: string) => /429|rate.?limit|RATE_LIMIT_RETRYABLE|تجاوز(ت)? حد|too many requests/i.test(msg);
+        const isQuotaExhausted = (msg: string) => /no credits|insufficient|💳|exhausted|quota exceeded|انتهت الحصة|billing/i.test(msg);
 
         let batchIdx = 0;
+        let rateLimitAttempts = 0; // tracked per-batch, reset on success
         while (batchIdx < totalBatches) {
           if (signal.aborted) throw new DOMException('abort', 'AbortError');
           const batch = needsAI.slice(batchIdx * AI_BATCH, (batchIdx + 1) * AI_BATCH);
@@ -291,26 +299,49 @@ export function useAutoPilot({
             }
             done += batch.length;
             batchIdx++;
+            rateLimitAttempts = 0; // reset on success
+
+            // Breathing room between batches to ease pressure on the AI gateway
+            if (batchIdx < totalBatches) {
+              await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+            }
           } catch (err) {
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
 
-            // انتهت الحصة → تحول تلقائي للمزود التالي
-            if (isQuotaErr(errMsg) && remaining.length > 0) {
+            // ⚡ TRUE QUOTA EXHAUSTED → switch provider (one-shot)
+            if (isQuotaExhausted(errMsg) && remaining.length > 0) {
               const next = remaining.shift()!;
-              log(`⚠️ انتهت حصة ${curProvider} — تحويل تلقائي لـ ${next.label}`, 'warning', "3");
-              toast({ title: "⚡ تحويل تلقائي للمحرك", description: `انتهت حصة ${curProvider} — يُستخدم الآن: ${next.label}` });
+              log(`💳 انتهت حصة ${curProvider} نهائياً — تحويل لـ ${next.label}`, 'warning', "3");
+              toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}` });
               curProvider = next.provider;
               curModel = next.model;
-              // أعد نفس الدفعة مع المزود الجديد (لا تزيد batchIdx)
-              continue;
+              rateLimitAttempts = 0;
+              continue; // retry same batch with new provider
             }
 
-            // فشل دائم — سجّل وانتقل للتالية
+            // ⏳ TEMPORARY 429 → wait & retry same batch FOREVER (until success or user stops)
+            if (isRateLimit429(errMsg)) {
+              rateLimitAttempts++;
+              const waitSec = Math.round(RATE_LIMIT_WAIT_MS / 1000);
+              if (rateLimitAttempts === 1 || rateLimitAttempts % 5 === 0) {
+                log(`⏳ تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
+              }
+              // Abortable wait — checks signal every 2s so user can stop
+              const waitStart = Date.now();
+              while (Date.now() - waitStart < RATE_LIMIT_WAIT_MS) {
+                if (signal.aborted) throw new DOMException('abort', 'AbortError');
+                await new Promise(r => setTimeout(r, 2000));
+              }
+              continue; // retry same batch — do NOT advance batchIdx
+            }
+
+            // Other permanent failure — log and skip
             log(`⚠️ دفعة ${batchIdx + 1} فشلت: ${errMsg}`, 'warning', "3");
             failedEntries.push(...batch);
             done += batch.length;
             batchIdx++;
+            rateLimitAttempts = 0;
           }
 
           setProgress({ current: done, total: needsAI.length });
@@ -396,79 +427,11 @@ export function useAutoPilot({
       setProgress(null);
 
       // ══════════════════════════════════════════════════════
-      // المرحلة 5 — فحص الجودة وإصلاح الضعيف
-      // ══════════════════════════════════════════════════════
-      setPhase("🔍 فحص الجودة"); setPhaseIndex(5);
-      log("فحص جودة جميع الترجمات المكتملة...", 'phase', "5");
-
-      const snap: Record<string, string> = isPreview
-        ? { ...state.translations, ...pendingAcc }
-        : (() => { const s: Record<string, string> = {}; setState(prev => { if (prev) Object.assign(s, prev.translations); return prev; }); return s; })();
-
-      const toReview = (filteredEntries.length > 0 ? filteredEntries : state.entries)
-        .filter(e => {
-          const k = `${e.msbtFile}:${e.index}`;
-          return snap[k]?.trim() && !isTechnicalText(e.original);
-        })
-        .map(e => ({
-          key: `${e.msbtFile}:${e.index}`,
-          original: e.original,
-          translation: snap[`${e.msbtFile}:${e.index}`],
-          maxBytes: e.maxBytes || 0,
-        }));
-
-      if (toReview.length > 0) {
-        const RBATCH = 30;
-        setProgress({ current: 0, total: toReview.length });
-        const allWeak: { key: string; suggestion: string }[] = [];
-        let reviewed = 0;
-
-        for (let b = 0; b < Math.ceil(toReview.length / RBATCH); b++) {
-          if (signal.aborted) throw new DOMException('abort', 'AbortError');
-          const batch = toReview.slice(b * RBATCH, (b + 1) * RBATCH);
-          try {
-            const resp = await fetch(getEdgeFunctionUrl("review-translations"), {
-              method: 'POST', headers: getSupabaseHeaders(), signal,
-              body: JSON.stringify({ entries: batch, glossary: activeGlossary, action: 'detect-weak', aiModel }),
-            });
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.weakEntries) {
-                for (const w of data.weakEntries as { key: string; suggestion?: string }[]) {
-                  if (w.suggestion) allWeak.push({ key: w.key, suggestion: w.suggestion });
-                }
-              }
-            }
-          } catch (err) { if ((err as Error).name === 'AbortError') throw err; }
-          reviewed += batch.length;
-          setProgress({ current: reviewed, total: toReview.length });
-        }
-
-        stats.weakFound = allWeak.length;
-
-        if (allWeak.length > 0) {
-          const fixes: Record<string, string> = {};
-          for (const w of allWeak) { if (w.suggestion?.trim()) fixes[w.key] = w.suggestion; }
-          if (Object.keys(fixes).length > 0) {
-            addTranslations(fixes);
-            stats.weakFixed = Object.keys(fixes).length;
-            log(`✅ أُصلح ${stats.weakFixed} ترجمة ضعيفة تلقائياً`, 'success', "5");
-          }
-        } else {
-          log("✅ جميع الترجمات بجودة ممتازة", 'success', "5");
-        }
-      } else {
-        log("لا توجد ترجمات كافية للفحص", 'info', "5");
-      }
-
-      setProgress(null);
-
-      // ══════════════════════════════════════════════════════
-      // التقرير النهائي
+      // التقرير النهائي (تم حذف مرحلة فحص الجودة لتوفير الرصيد والوقت)
       // ══════════════════════════════════════════════════════
       stats.duration = Math.round((Date.now() - startTime) / 1000);
       setReport(stats);
-      setPhase("✅ مكتمل"); setPhaseIndex(6);
+      setPhase("✅ مكتمل"); setPhaseIndex(5);
 
       const total = stats.fromMemory + stats.fromGlossary + stats.fromAI;
       log(`🎉 اكتمل الوكيل! ${total} نص تُرجم خلال ${stats.duration}ث`, 'success', "✅ النتيجة");

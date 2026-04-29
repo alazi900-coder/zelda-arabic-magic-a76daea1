@@ -183,6 +183,22 @@ export function useAutoPilot({
     const log = (msg: string, type: AutoPilotLog['type'] = 'info', ph = '') =>
       setLogs(prev => [...prev, { id: ++logIdRef.current, phase: ph, message: msg, type }]);
 
+    const waitOrAbort = async (ms: number, stepMs = 2000) => {
+      const waitStart = Date.now();
+      while (Date.now() - waitStart < ms) {
+        if (signal.aborted) throw new DOMException('abort', 'AbortError');
+        await new Promise(r => setTimeout(r, Math.min(stepMs, ms - (Date.now() - waitStart))));
+      }
+    };
+
+    // Temporary limits/errors must never end the run; only real billing/auth errors may stop/switch.
+    const isRateLimit429 = (msg: string) => /429|rate.?limit|RATE_LIMIT_RETRYABLE|تجاوز(ت)? حد|too many requests/i.test(msg);
+    const isBillingExhausted = (msg: string) => /no credits|insufficient|💳|billing|رصيد .*غير كاف|أضف رصيد/i.test(msg);
+    const isWaitableQuota = (msg: string) => /quota exceeded|daily quota|exhausted|انتهت الحصة|الحصة المجانية|free tier/i.test(msg) && !isBillingExhausted(msg);
+    const isRetryableTransient = (msg: string) =>
+      isRateLimit429(msg) || isWaitableQuota(msg) ||
+      /HTTP_(408|425|500|502|503|504)|خطأ (408|425|500|502|503|504)|upstream|timeout|timed out|failed to fetch|load failed|networkerror|functionshttperror|functionsrelayerror|edge function/i.test(msg);
+
     try {
       // ══════════════════════════════════════════════════════
       // المرحلة 1 — تحليل الوضع
@@ -266,13 +282,6 @@ export function useAutoPilot({
 
         let done = 0;
         const failedEntries: ExtractedEntry[] = [];
-        // 429 = TEMPORARY rate limit — wait & retry same batch (infinite loop)
-        // Only switch providers on TRUE quota exhaustion (no credits / insufficient / billing)
-        const isRateLimit429 = (msg: string) => /429|rate.?limit|RATE_LIMIT_RETRYABLE|تجاوز(ت)? حد|too many requests/i.test(msg);
-        const isRetryableTransient = (msg: string) =>
-          isRateLimit429(msg) ||
-          /HTTP_(408|425|500|502|503|504)|خطأ (408|425|500|502|503|504)|upstream|timeout|timed out|failed to fetch|load failed|networkerror|functionshttperror|functionsrelayerror|edge function/i.test(msg);
-        const isQuotaExhausted = (msg: string) => /no credits|insufficient|💳|exhausted|quota exceeded|انتهت الحصة|billing/i.test(msg);
 
         let batchIdx = 0;
         let rateLimitAttempts = 0; // tracked per-batch, reset on success
@@ -315,8 +324,8 @@ export function useAutoPilot({
             if ((err as Error).name === 'AbortError') throw err;
             const errMsg = (err as Error).message;
 
-            // ⚡ TRUE QUOTA EXHAUSTED → switch provider (one-shot)
-            if (isQuotaExhausted(errMsg) && remaining.length > 0) {
+            // ⚡ TRUE BILLING EXHAUSTED → switch provider (one-shot); waitable quotas keep retrying.
+            if (isBillingExhausted(errMsg) && remaining.length > 0) {
               const next = remaining.shift()!;
               log(`💳 انتهت حصة ${curProvider} نهائياً — تحويل لـ ${next.label}`, 'warning', "3");
               toast({ title: "⚡ تحويل المحرك", description: `${curProvider} → ${next.label}` });
@@ -333,12 +342,7 @@ export function useAutoPilot({
               if (rateLimitAttempts === 1 || rateLimitAttempts % 5 === 0) {
                 log(`⏳ تعذّر الاتصال مؤقتاً/تجاوز حد الطلبات (محاولة ${rateLimitAttempts}) — انتظار ${waitSec}ث ثم متابعة دفعة ${batchIdx + 1}/${totalBatches}...`, 'warning', "3");
               }
-              // Abortable wait — checks signal every 2s so user can stop
-              const waitStart = Date.now();
-              while (Date.now() - waitStart < RATE_LIMIT_WAIT_MS) {
-                if (signal.aborted) throw new DOMException('abort', 'AbortError');
-                await new Promise(r => setTimeout(r, 2000));
-              }
+              await waitOrAbort(RATE_LIMIT_WAIT_MS);
               continue; // retry same batch — do NOT advance batchIdx
             }
 

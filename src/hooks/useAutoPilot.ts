@@ -204,6 +204,26 @@ export function useAutoPilot({
     const log = (msg: string, type: AutoPilotLog['type'] = 'info', ph = '') =>
       setLogs(prev => [...prev, { id: ++logIdRef.current, phase: ph, message: msg, type }]);
 
+    const addDiag = (d: Omit<AutoPilotDiagnostic, 'id' | 'timestamp'>) =>
+      setDiagnostics(prev => [
+        ...prev,
+        { ...d, id: ++diagIdRef.current, timestamp: Date.now() },
+      ]);
+
+    // Parse "HTTP_<status>: <detail>" → { status, detail }
+    const parseHttpErr = (msg: string): { status?: number; detail: string } => {
+      const m = msg.match(/^HTTP_(\d{3}):\s*([\s\S]*)$/);
+      if (m) return { status: Number(m[1]), detail: m[2] };
+      return { detail: msg };
+    };
+    const classify = (msg: string): AutoPilotDiagnostic['kind'] => {
+      if (isBillingExhausted(msg)) return 'billing';
+      if (isRateLimit429(msg)) return 'rate_limit';
+      if (/PARTIAL_TRANSLATION_RETRYABLE|missing translations|incomplete/i.test(msg)) return 'partial';
+      if (isRetryableTransient(msg)) return 'transient';
+      return 'permanent';
+    };
+
     const waitOrAbort = async (ms: number, stepMs = 2000) => {
       const waitStart = Date.now();
       while (Date.now() - waitStart < ms) {

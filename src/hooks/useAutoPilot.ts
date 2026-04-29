@@ -11,6 +11,22 @@ export interface AutoPilotLog {
   type: 'info' | 'success' | 'warning' | 'error' | 'phase';
 }
 
+export interface AutoPilotDiagnostic {
+  id: number;
+  timestamp: number;        // Date.now()
+  phase: string;            // e.g. "AI", "إصلاح الرموز"
+  batchIndex: number;       // 1-based; 0 if N/A
+  totalBatches: number;     // 0 if N/A
+  attempt: number;          // retry attempt count for this batch
+  provider: string;
+  model?: string;
+  httpStatus?: number;      // if known
+  kind: 'rate_limit' | 'transient' | 'billing' | 'partial' | 'permanent' | 'abort' | 'fatal';
+  message: string;
+  bodySnippet?: string;     // first ~400 chars of upstream body
+  willRetry: boolean;
+}
+
 export interface AutoPilotReport {
   totalEntries: number;
   alreadyTranslated: number;

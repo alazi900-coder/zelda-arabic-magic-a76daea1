@@ -672,6 +672,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           continue;
         }
 
+        if (RLM_ISOLATION_CATEGORIES.has(issue.category)) {
+          const trans = state.translations[issue.key];
+          if (trans) {
+            const fixed = applyRlmIsolation(trans);
+            if (fixed !== trans) {
+              updates[issue.key] = fixed;
+              counters.xenoN++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧭 تم عزل الوسوم التقنية بـ RLM' });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ الوسوم معزولة بالفعل' });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
+
         if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
           const entry = entryMap.get(issue.key);
           const trans = state.translations[issue.key];

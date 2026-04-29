@@ -607,7 +607,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const processedKeys = new Set<string>();
     const tagFixKeys: string[] = [];
     const reportEntries: FixReportEntry[] = [];
-    const counters = { restore: 0, strip: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0 };
+    const counters = { restore: 0, strip: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0, rlm: 0 };
 
     const totalToProcess = allFixableIssues.length;
     toast({
@@ -781,7 +781,40 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         if (tagIdx < tagFixKeys.length) {
           requestAnimationFrame(processTagChunk);
         } else {
-          const totalFixed = counters.tagFixed + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN;
+          // Final pass: scan ALL translations (not just touched keys) to find any
+          // residual unisolated technical tokens. Uses the live (post-update)
+          // translations from latestStateRef so we don't miss freshly-applied edits.
+          const liveTranslations = latestStateRef.current.translations;
+          const residualRtl: ResidualRtlEntry[] = [];
+          const RESIDUAL_LIMIT = 500; // safety cap so the dialog stays responsive
+          for (const entry of latestStateRef.current.entries) {
+            if (residualRtl.length >= RESIDUAL_LIMIT) break;
+            const rkey = `${entry.msbtFile}:${entry.index}`;
+            const cur = liveTranslations[rkey];
+            if (!cur) continue;
+            const proposed = applyRlmIsolation(cur);
+            if (proposed === cur) continue; // already isolated or no Arabic
+            // Count how many tokens are still missing wrapping
+            const reBoth = /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\{\s*\w+\s*:[^}]*\}|\{\s*\w+\s*\}|\$\d+/g;
+            let unisolated = 0;
+            let mm: RegExpExecArray | null;
+            while ((mm = reBoth.exec(cur)) !== null) {
+              const b = cur[mm.index - 1];
+              const a = cur[mm.index + mm[0].length];
+              if (b !== '\u200F' || a !== '\u200F') unisolated++;
+            }
+            if (unisolated === 0) continue;
+            residualRtl.push({
+              key: rkey,
+              label: entry.label,
+              current: cur,
+              proposed,
+              unisolatedCount: unisolated,
+              reason: 'يحتوي عربية + وسوماً تقنية بدون عزل RLM — تطبيق العزل آمن وموصى به.'
+            });
+          }
+
+          const totalFixed = counters.tagFixed + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN + counters.rlm;
           const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
           const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
           const report: FixReport = {
@@ -790,11 +823,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             totalUnchanged,
             totalRestored,
             entries: reportEntries,
+            residualRtl,
+            rlmFixed: counters.rlm,
           };
           setFixReport(report);
           toast({
             title: totalFixed > 0 ? '⚡ إصلاح شامل مكتمل' : '⚠️ لم يتم تعديل أي نص',
-            description: `تم تعديل ${totalFixed} نص — اضغط 📋 لعرض التقرير التفصيلي`,
+            description: `تم تعديل ${totalFixed} نص${residualRtl.length > 0 ? ` — ${residualRtl.length} نص ما زال يحتاج عزل RLM` : ''} — اضغط 📋 لعرض التقرير`,
           });
           setTimeout(() => runScan(false), 500);
         }

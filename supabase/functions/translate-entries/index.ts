@@ -1450,17 +1450,15 @@ async function translateWithAI(
     detailed: true,
   });
 
-  // Routing mode determines fallback behavior:
-  //   free  = Gemini only (direct key); fail with clear error on 429
-  //   paid  = Try direct Gemini key FIRST (user's paid quota), fallback to Lovable Gateway on failure
-  //   auto  = Try Gemini first, fallback to Lovable on 429
-  // ALWAYS prioritize the direct GEMINI_API_KEY when available — it uses the user's own quota
-  // and avoids the shared Lovable Gateway rate limits.
+  // Routing mode determines which provider to use:
+  //   free  = Gemini only (server key or user key); fail with clear error on 429
+  //   paid  = Skip Gemini entirely, use Lovable Gateway only (uses user's paid Lovable credit)
+  //   auto  = Try Gemini first, fallback to Lovable on 429 (existing behavior)
   const _rawKey = userApiKey?.trim() || Deno.env.get('GEMINI_API_KEY') || '';
-  const effectiveKey = _rawKey; // Always use direct key if available, regardless of routing mode
+  const effectiveKey = routingMode === 'paid' ? '' : _rawKey;
   const allowLovableFallback = routingMode !== 'free';
   console.log(`[translateWithAI] routingMode=${routingMode} hasGeminiKey=${!!effectiveKey} allowLovableFallback=${allowLovableFallback}`);
-  
+
   /** Detect if the AI response was truncated */
   function detectTruncation(text: string): boolean {
     const openBraces = (text.match(/{/g) || []).length;
@@ -1699,36 +1697,52 @@ async function translateWithAI(
     console.log(`[lovable-ai] routingMode=${routingMode} model=${lovableModel} entries=${needsAI.length}`);
 
     const callLovableAI = async (aiPrompt: string, _count: number): Promise<Record<string, string>> => {
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: lovableModel,
-          messages: [
-            { role: 'system', content: XC1_SYSTEM_PROMPT },
-            { role: 'user', content: aiPrompt },
-          ],
-        }),
-      });
+      // Auto-retry on 429 with exponential backoff: 5s, 15s, 30s
+      const retryDelays = [5000, 15000, 30000];
+      let lastError: Error | null = null;
 
-      if (!response.ok) {
+      for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: lovableModel,
+            messages: [
+              { role: 'system', content: XC1_SYSTEM_PROMPT },
+              { role: 'user', content: aiPrompt },
+            ],
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          if (detectTruncation(content)) {
+            console.warn('Lovable AI response truncated, results may be incomplete');
+          }
+          return extractJsonObject(content);
+        }
+
         const err = await response.text();
-        console.error(`[lovable-ai] error ${response.status}: ${err.slice(0, 300)}`);
+        console.error(`[lovable-ai] error ${response.status} (attempt ${attempt + 1}/${retryDelays.length + 1}): ${err.slice(0, 300)}`);
+
         if (response.status === 402) {
           throw new Error('💳 رصيد Lovable AI غير كافٍ — اشحن الرصيد من Settings → Workspace → Usage');
         }
+        if (response.status === 429 && attempt < retryDelays.length) {
+          const waitMs = retryDelays[attempt];
+          console.warn(`[lovable-ai] 429 rate-limited — waiting ${waitMs / 1000}s before retry...`);
+          await new Promise(r => setTimeout(r, waitMs));
+          lastError = new Error(`⏳ Rate limited after ${attempt + 1} attempts`);
+          continue;
+        }
         if (response.status === 429) {
-          throw new Error('⏳ تم تجاوز حد الطلبات في Lovable AI Gateway لهذا الـ workspace — انتظر دقيقة قبل المحاولة');
+          throw new Error('⏳ تم تجاوز حد الطلبات في Lovable AI Gateway — انتظر دقيقة واضغط استئناف');
         }
         throw new Error(`Lovable AI error: ${response.status}`);
       }
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || '';
-      if (detectTruncation(content)) {
-        console.warn('Lovable AI response truncated, results may be incomplete');
-      }
-      return extractJsonObject(content);
+      throw lastError ?? new Error('Lovable AI: exhausted retries');
     };
 
     // Try full batch first, on JSON failure split into halves SEQUENTIALLY

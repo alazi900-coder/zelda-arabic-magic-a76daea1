@@ -638,6 +638,8 @@ export function useEditorTranslation({
     };
 
     // Resolve per-provider batch delay (throttle). Skipped when user disables it.
+    // في وضع "المدفوع" (Lovable AI Gateway) نستخدم تأخيراً ثابتاً صغيراً
+    // مستقلاً عن مزود الترجمة المختار، لأن الطلبات فعلياً تذهب إلى Lovable AI.
     const providerKey = (translationProvider in PROVIDER_BATCH_DELAY_MS)
       ? translationProvider as keyof typeof PROVIDER_BATCH_DELAY_MS
       : null;
@@ -647,9 +649,11 @@ export function useEditorTranslation({
       (translationProvider === 'groq'       && !!userGroqKey)       ||
       (translationProvider === 'cerebras'   && !!userCerebrasKey)   ||
       (translationProvider === 'deepseek'   && !!userDeepSeekKey);
-    const batchDelayMs = aiThrottleEnabled && providerKey
-      ? PROVIDER_BATCH_DELAY_MS[providerKey][hasPersonalKey ? 'paid' : 'free']
-      : 0;
+    const batchDelayMs = !aiThrottleEnabled
+      ? 0
+      : aiRoutingMode === 'paid'
+        ? 1500 // Lovable AI Gateway — تأخير ثابت متوازن بين السرعة وحدود الـ workspace
+        : (providerKey ? PROVIDER_BATCH_DELAY_MS[providerKey][hasPersonalKey ? 'paid' : 'free'] : 0);
     let lastBatchEndAt = 0;
 
     try {

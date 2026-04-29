@@ -230,6 +230,60 @@ function normalizeWhitespaceAfterReorder(text: string, original: string): string
   return result;
 }
 
+/**
+ * RLM-Isolation: Wrap each technical tag with U+200F (Right-to-Left Mark) so
+ * Unicode BiDi treats the tag as a neutral island inside the surrounding RTL
+ * paragraph. Without this, Xenoblade's word-wrap (which runs on the rendered
+ * BiDi-resolved string) reorders Arabic words around LTR-shaped tags like
+ * [XENO:n], [XENO:wait ...], [System:PageBreak] — exactly the bug seen in
+ * the user's screenshots where line 2 contained a fragment that belongs at
+ * the end of the sentence.
+ *
+ * Strategy:
+ *  - Only wrap if surrounding context contains Arabic letters (otherwise
+ *    pure-LTR strings stay untouched, e.g. menu IDs).
+ *  - Idempotent: never adds a second RLM if one is already adjacent.
+ *  - Applied at build-time only — the editor / dictionaries / memory all
+ *    keep their clean text. RLM is invisible (zero-width) so it does not
+ *    affect glyph rendering or character budgets in a meaningful way.
+ */
+const RLM = '\u200F';
+const TAG_FOR_RLM_REGEX = /\[XENO:n\s*\]|\[XENO:wait[^\]]*\]|\[System:PageBreak\s*\]/g;
+const ARABIC_LETTER_RANGE = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+function wrapTechTagsWithRLM(text: string): string {
+  // Quick reject: if no Arabic anywhere, no BiDi conflict can occur.
+  if (!ARABIC_LETTER_RANGE.test(text)) return text;
+
+  return text.replace(TAG_FOR_RLM_REGEX, (match, offset: number, full: string) => {
+    const charBefore = full[offset - 1];
+    const charAfter = full[offset + match.length];
+    const needsBefore = charBefore !== RLM;
+    const needsAfter = charAfter !== RLM;
+    return `${needsBefore ? RLM : ''}${match}${needsAfter ? RLM : ''}`;
+  });
+}
+
+/** Detect whether a translated string already has RLM isolation applied. */
+export function hasRlmIsolation(text: string): boolean {
+  if (!ARABIC_LETTER_RANGE.test(text)) return true; // N/A
+  let needsAtLeastOne = false;
+  const re = new RegExp(TAG_FOR_RLM_REGEX.source, TAG_FOR_RLM_REGEX.flags);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    needsAtLeastOne = true;
+    const before = text[m.index - 1];
+    const after = text[m.index + m[0].length];
+    if (before !== RLM || after !== RLM) return false;
+  }
+  return needsAtLeastOne ? true : true;
+}
+
+/** Public helper for the Deep Diagnostic auto-fixer. */
+export function applyRlmIsolation(text: string): string {
+  return wrapTechTagsWithRLM(text);
+}
+
 export function repairTranslationTagsForBuild(original: string, translation: string): BuildTagRepairResult {
   // Step 1: Fix corrupted $N variables first
   const working = repairDollarVars(original, translation);

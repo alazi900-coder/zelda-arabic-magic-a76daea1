@@ -427,79 +427,11 @@ export function useAutoPilot({
       setProgress(null);
 
       // ══════════════════════════════════════════════════════
-      // المرحلة 5 — فحص الجودة وإصلاح الضعيف
-      // ══════════════════════════════════════════════════════
-      setPhase("🔍 فحص الجودة"); setPhaseIndex(5);
-      log("فحص جودة جميع الترجمات المكتملة...", 'phase', "5");
-
-      const snap: Record<string, string> = isPreview
-        ? { ...state.translations, ...pendingAcc }
-        : (() => { const s: Record<string, string> = {}; setState(prev => { if (prev) Object.assign(s, prev.translations); return prev; }); return s; })();
-
-      const toReview = (filteredEntries.length > 0 ? filteredEntries : state.entries)
-        .filter(e => {
-          const k = `${e.msbtFile}:${e.index}`;
-          return snap[k]?.trim() && !isTechnicalText(e.original);
-        })
-        .map(e => ({
-          key: `${e.msbtFile}:${e.index}`,
-          original: e.original,
-          translation: snap[`${e.msbtFile}:${e.index}`],
-          maxBytes: e.maxBytes || 0,
-        }));
-
-      if (toReview.length > 0) {
-        const RBATCH = 30;
-        setProgress({ current: 0, total: toReview.length });
-        const allWeak: { key: string; suggestion: string }[] = [];
-        let reviewed = 0;
-
-        for (let b = 0; b < Math.ceil(toReview.length / RBATCH); b++) {
-          if (signal.aborted) throw new DOMException('abort', 'AbortError');
-          const batch = toReview.slice(b * RBATCH, (b + 1) * RBATCH);
-          try {
-            const resp = await fetch(getEdgeFunctionUrl("review-translations"), {
-              method: 'POST', headers: getSupabaseHeaders(), signal,
-              body: JSON.stringify({ entries: batch, glossary: activeGlossary, action: 'detect-weak', aiModel }),
-            });
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.weakEntries) {
-                for (const w of data.weakEntries as { key: string; suggestion?: string }[]) {
-                  if (w.suggestion) allWeak.push({ key: w.key, suggestion: w.suggestion });
-                }
-              }
-            }
-          } catch (err) { if ((err as Error).name === 'AbortError') throw err; }
-          reviewed += batch.length;
-          setProgress({ current: reviewed, total: toReview.length });
-        }
-
-        stats.weakFound = allWeak.length;
-
-        if (allWeak.length > 0) {
-          const fixes: Record<string, string> = {};
-          for (const w of allWeak) { if (w.suggestion?.trim()) fixes[w.key] = w.suggestion; }
-          if (Object.keys(fixes).length > 0) {
-            addTranslations(fixes);
-            stats.weakFixed = Object.keys(fixes).length;
-            log(`✅ أُصلح ${stats.weakFixed} ترجمة ضعيفة تلقائياً`, 'success', "5");
-          }
-        } else {
-          log("✅ جميع الترجمات بجودة ممتازة", 'success', "5");
-        }
-      } else {
-        log("لا توجد ترجمات كافية للفحص", 'info', "5");
-      }
-
-      setProgress(null);
-
-      // ══════════════════════════════════════════════════════
-      // التقرير النهائي
+      // التقرير النهائي (تم حذف مرحلة فحص الجودة لتوفير الرصيد والوقت)
       // ══════════════════════════════════════════════════════
       stats.duration = Math.round((Date.now() - startTime) / 1000);
       setReport(stats);
-      setPhase("✅ مكتمل"); setPhaseIndex(6);
+      setPhase("✅ مكتمل"); setPhaseIndex(5);
 
       const total = stats.fromMemory + stats.fromGlossary + stats.fromAI;
       log(`🎉 اكتمل الوكيل! ${total} نص تُرجم خلال ${stats.duration}ث`, 'success', "✅ النتيجة");

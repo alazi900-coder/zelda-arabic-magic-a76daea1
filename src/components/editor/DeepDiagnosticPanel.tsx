@@ -641,9 +641,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             if (repaired.text !== trans) {
               updates[issue.key] = repaired.text;
               counters.dollar++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '💲 تم إصلاح متغيرات $N' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '💲 تم إصلاح متغيرات $N', before: trans, after: repaired.text });
             } else {
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ محرك الإصلاح لم يجد تعديلاً فعلياً للمتغيرات' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ محرك الإصلاح لم يجد تعديلاً فعلياً للمتغيرات', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);
@@ -653,9 +653,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
           const entry = entryMap.get(issue.key);
           if (entry) {
+            const trans = state.translations[issue.key] || '';
             updates[issue.key] = entry.original;
             counters.restore++;
-            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'restored', reason: '↩️ تمت استعادة النص الأصلي الإنجليزي (المشكلة غير قابلة للإصلاح مع الحفاظ على الترجمة)' });
+            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'restored', reason: '↩️ تمت استعادة النص الأصلي الإنجليزي (المشكلة غير قابلة للإصلاح مع الحفاظ على الترجمة)', before: trans, after: entry.original });
           }
           processedKeys.add(issue.key);
           continue;
@@ -668,9 +669,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             if (cleaned !== trans) {
               updates[issue.key] = cleaned;
               counters.strip++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧹 تم إزالة الأحرف غير المرئية' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧹 تم إزالة الأحرف غير المرئية', before: trans, after: cleaned });
             } else {
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على أحرف غير مرئية فعلية' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على أحرف غير مرئية فعلية', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);
@@ -684,9 +685,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             if (fixed !== trans) {
               updates[issue.key] = fixed;
               counters.xenoN++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \\n بعد [XENO:n ]' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \\n بعد [XENO:n ]', before: trans, after: fixed });
             } else {
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على وسم بدون سطر جديد فعلياً' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على وسم بدون سطر جديد فعلياً', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);
@@ -699,10 +700,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             const fixed = applyRlmIsolation(trans);
             if (fixed !== trans) {
               updates[issue.key] = fixed;
-              counters.xenoN++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧭 تم عزل الوسوم التقنية بـ RLM' });
+              counters.rlm++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧭 تم عزل الوسوم التقنية بـ RLM', before: trans, after: fixed });
             } else {
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ الوسوم معزولة بالفعل' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ الوسوم معزولة بالفعل أو لا تحتوي عربية', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);
@@ -719,10 +720,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               : balanceLines(trans);
             if (rebalanced !== trans) {
               updates[issue.key] = rebalanced;
-              counters.xenoN++; // reuse counter (closest semantic)
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '⚖️ أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]' });
+              counters.xenoN++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '⚖️ أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]', before: trans, after: rebalanced });
             } else {
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ النص متوازن بالفعل' });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ النص متوازن بالفعل', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);
@@ -730,9 +731,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         }
 
         if (issue.category === 'empty_translation') {
+          const trans = state.translations[issue.key] || '';
           updates[issue.key] = '';
           counters.clear++;
-          reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة' });
+          reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🗑️ تم مسح الترجمة الفارغة', before: trans, after: '' });
           processedKeys.add(issue.key);
         }
       }

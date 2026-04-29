@@ -125,6 +125,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
             setPreviewMode={editor.autoPilot.setPreviewMode}
             onRun={editor.autoPilot.run}
             onStop={editor.autoPilot.stop}
+            diagnostics={editor.autoPilot.diagnostics}
+            clearDiagnostics={editor.autoPilot.clearDiagnostics}
           />
         </div>
       )}

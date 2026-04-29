@@ -64,6 +64,7 @@ interface UseAutoPilotProps {
   qualityStats: { damagedTagKeys: Set<string> };
   filteredEntries: ExtractedEntry[];
   customPromptInstructions: string;
+  aiRoutingMode?: 'free' | 'paid' | 'auto';
 }
 
 const AI_BATCH = 10;

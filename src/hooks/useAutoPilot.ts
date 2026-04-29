@@ -140,9 +140,10 @@ export function useAutoPilot({
       npcMode: npcMode || undefined,
       aiModel: forceModel || (prov === 'gemini' ? aiModel : prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
+      routingMode: aiRoutingMode,
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey,
-      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions]);
+      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {
     if (!state || running) return;

@@ -399,10 +399,10 @@ const Editor = () => {
                   size={isMobile ? "default" : "lg"}
                   variant="default"
                   onClick={() => {
-                    // Force-switch to Lovable AI (gemini provider without personal key)
+                    // نُحدّث الـ UI ليعكس Gemini، ثم نبدأ الترجمة بتمرير الـ provider صراحةً
+                    // (لا نعتمد على state-update timing — كان setTimeout(50) يفشل أحياناً)
                     editor.setTranslationProvider('gemini');
-                    // Start full project translation
-                    setTimeout(() => editor.handleTranslateAllPages(false), 50);
+                    editor.handleTranslateAllPages(false, false, 'gemini');
                   }}
                   disabled={editor.translating}
                   className="font-display font-bold px-4 md:px-6 bg-gradient-to-r from-primary via-accent to-secondary text-primary-foreground hover:opacity-90 shadow-lg"

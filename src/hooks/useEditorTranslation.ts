@@ -1070,8 +1070,14 @@ export function useEditorTranslation({
     }
   };
 
-  const handleTranslateAllPages = async (memoryOnly = false, forceRetranslate = false) => {
+  const handleTranslateAllPages = async (
+    memoryOnly = false,
+    forceRetranslate = false,
+    providerOverride?: typeof translationProvider,
+  ) => {
     if (!state) return;
+    // \u0639\u0646\u062F \u062A\u0645\u0631\u064A\u0631 provider \u0635\u0631\u0627\u062D\u0629\u064B \u0646\u062A\u062C\u0627\u0648\u0632 state-closure \u062A\u062C\u0646\u0651\u0628\u0627\u064B \u0644\u0640 race condition
+    const effectiveProvider = providerOverride ?? translationProvider;
     const arabicRegex = /[\u0600-\u06FF]/;
     const allPages = totalPages;
 
@@ -1096,7 +1102,7 @@ export function useEditorTranslation({
         `✅ جميع الصفحات مترجمة بالكامل (${totalSkippedTranslated} نص مترجم).\n\nهل تريد إعادة ترجمتها؟`
       );
       if (confirmed) {
-        return handleTranslateAllPages(memoryOnly, true);
+        return handleTranslateAllPages(memoryOnly, true, providerOverride);
       }
       return;
     }
@@ -1189,9 +1195,9 @@ export function useEditorTranslation({
               body: JSON.stringify({
                 entries,
                 glossary: activeGlossary,
-                userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-                providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
-                provider: translationProvider,
+                userApiKey: effectiveProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+                providerApiKey: (effectiveProvider === 'deepseek' ? userDeepSeekKey : effectiveProvider === 'groq' ? userGroqKey : effectiveProvider === 'cerebras' ? userCerebrasKey : effectiveProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
+                provider: effectiveProvider,
                 myMemoryEmail: myMemoryEmail || undefined,
                 npcMaxLines,
                 aiModel,

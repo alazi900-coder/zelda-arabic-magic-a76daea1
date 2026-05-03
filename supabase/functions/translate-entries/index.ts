@@ -1286,6 +1286,168 @@ async function translateWithOpenAICompat(
   return { translations: result, glossaryStats: stats };
 }
 
+// ============================================================================
+// AWS SIGNATURE V4 + AMAZON BEDROCK
+// ============================================================================
+
+function toHexStr(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sha256Hex(data: string): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+  return toHexStr(hash);
+}
+
+async function hmacSha256(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  return crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data));
+}
+
+async function buildAwsHeaders(
+  method: string,
+  host: string,
+  canonicalUri: string,
+  body: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+  service: string,
+): Promise<Record<string, string>> {
+  const now = new Date();
+  const iso = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; // yyyymmddTHHMMSSZ
+  const datestamp = iso.slice(0, 8);
+
+  const payloadHash = await sha256Hex(body);
+  const canonicalHeaders = `content-type:application/json\nhost:${host}\nx-amz-date:${iso}\n`;
+  const signedHeaders = 'content-type;host;x-amz-date';
+
+  const canonicalRequest = [method, canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+
+  const credentialScope = `${datestamp}/${region}/${service}/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', iso, credentialScope, await sha256Hex(canonicalRequest)].join('\n');
+
+  const enc = new TextEncoder();
+  const kDate    = await hmacSha256(enc.encode('AWS4' + secretAccessKey), datestamp);
+  const kRegion  = await hmacSha256(kDate, region);
+  const kService = await hmacSha256(kRegion, service);
+  const kSigning = await hmacSha256(kService, 'aws4_request');
+  const signature = toHexStr(await hmacSha256(kSigning, stringToSign));
+
+  return {
+    'Authorization': `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    'Content-Type': 'application/json',
+    'x-amz-date': iso,
+  };
+}
+
+async function translateWithBedrock(
+  entries: { key: string; original: string }[],
+  protectedEntries: { key: string; cleaned: string; tags: Map<string, string> }[],
+  glossaryMap: Map<string, string> | undefined,
+  accessKeyId: string,
+  secretAccessKey: string,
+  region: string,
+  model: string,
+): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
+  const result: Record<string, string> = {};
+  const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
+
+  const needsAI: { entry: typeof entries[0]; pe: typeof protectedEntries[0]; termLocks: TermLockResult }[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const pe = protectedEntries[i];
+    const norm = pe.cleaned.trim().toLowerCase();
+    if (isTagOnlyOrSymbolic(pe.cleaned)) {
+      result[entry.key] = restoreAndEnforce(entry.original, pe.cleaned, pe.tags, entry.key);
+      continue;
+    }
+    if (glossaryMap) {
+      const hit = glossaryMap.get(norm);
+      if (hit) {
+        result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
+        stats.directMatches++;
+        continue;
+      }
+    }
+    const termLocks = glossaryMap ? lockTermsInText(pe.cleaned, glossaryMap) : { lockedText: pe.cleaned, locks: [] };
+    stats.lockedTerms += termLocks.locks.length;
+    needsAI.push({ entry, pe, termLocks });
+  }
+
+  if (needsAI.length === 0) return { translations: result, glossaryStats: stats };
+
+  function escapeJson(s: string): string {
+    return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t').replace(/[\x00-\x1F\x7F]/g, '');
+  }
+
+  const textsBlock = needsAI.map((item, i) => `"K${i}": "${escapeJson(item.termLocks.lockedText)}"`).join(',\n');
+  const hasNpcEntries = _npcMode && needsAI.some(item => isNpcDialogue(item.entry.key));
+  const npcRule = hasNpcEntries ? `\n8. NPC DIALOGUE MODE: Keep translations VERY concise — max ${_npcMaxLines ?? 2} lines, ~37 Arabic chars per line.` : '';
+  const categorySection = (() => { const h = detectCategoryHint(needsAI[0]?.entry.key || '', needsAI[0]?.entry.original || ''); return h ? `\n\nCONTEXT-SPECIFIC GUIDANCE:\n${h}\n` : ''; })();
+  const userInstructionsSection = _extraInstructions ? `\n\nADDITIONAL USER INSTRUCTIONS:\n${_extraInstructions}\n` : '';
+  const prompt = buildXC1UserPrompt({ textsBlock, expectedCount: needsAI.length, npcRule, categorySection, userInstructionsSection, detailed: false });
+
+  // Model ID needs %3A encoding for `:` in the URL path
+  const modelEncoded = model.replace(/:/g, '%3A');
+  const host = `bedrock-runtime.${region}.amazonaws.com`;
+  const canonicalUri = `/model/${modelEncoded}/converse`;
+  const url = `https://${host}${canonicalUri}`;
+
+  const requestBody = JSON.stringify({
+    system: [{ text: XC1_SYSTEM_PROMPT }],
+    messages: [{ role: 'user', content: [{ text: prompt }] }],
+    inferenceConfig: { maxTokens: 4096, temperature: 0.3 },
+  });
+
+  const headers = await buildAwsHeaders('POST', host, canonicalUri, requestBody, accessKeyId, secretAccessKey, region, 'bedrock');
+
+  const response = await fetch(url, { method: 'POST', headers, body: requestBody });
+
+  if (!response.ok) {
+    const err = await response.text();
+    if (response.status === 401 || response.status === 403) throw new Error('مفتاح AWS غير صالح أو لا يملك صلاحية Bedrock — تحقق من الـ Access Key والـ Secret Key');
+    if (response.status === 429) throw new Error('تجاوزت حد الطلبات على Amazon Bedrock — انتظر قليلاً ثم حاول مجدداً');
+    if (response.status === 400 && (err.includes('ModelNotReadyException') || err.includes('ResourceNotFoundException') || err.includes('ValidationException'))) {
+      throw new Error(`نموذج Bedrock "${model}" غير متاح — تأكد من تفعيله في AWS Bedrock Console في المنطقة ${region}`);
+    }
+    throw new Error(`Bedrock error ${response.status}: ${err.slice(0, 300)}`);
+  }
+
+  const data = await response.json();
+  const content: string = data.output?.message?.content?.[0]?.text || '';
+
+  let translationsObj: Record<string, string> = {};
+  const cleaned2 = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  const start = cleaned2.indexOf('{');
+  const end = cleaned2.lastIndexOf('}');
+  if (start !== -1 && end !== -1) {
+    try { translationsObj = JSON.parse(cleaned2.substring(start, end + 1)); } catch {
+      try { translationsObj = JSON.parse(cleaned2.substring(start, end + 1).replace(/,\s*}/g, '}')); } catch {}
+    }
+  }
+
+  const FORBIDDEN_SCRIPT = /[Ͱ-ϿЀ-ӿ֐-׿฀-๿　-〿぀-ゟ゠-ヿ㐀-䶿一-鿿가-힯]/;
+  let droppedForeign = 0;
+  for (let i = 0; i < needsAI.length; i++) {
+    const item = needsAI[i];
+    let translated = translationsObj[`K${i}`]?.trim();
+    if (!translated) continue;
+    if (FORBIDDEN_SCRIPT.test(translated)) { droppedForeign++; continue; }
+    translated = normalizeTagPlaceholders(translated);
+    translated = normalizeLockedTermPlaceholders(translated);
+    translated = unlockTerms(translated, item.termLocks.locks);
+    translated = stripUnexpectedPlaceholders(translated, new Set(item.pe.tags.keys()));
+    if (glossaryMap) translated = applyGlossaryPost(translated, glossaryMap);
+    result[item.entry.key] = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
+  }
+  if (droppedForeign > 0) console.warn(`[Bedrock] dropped ${droppedForeign}/${needsAI.length} non-Arabic translations`);
+
+  return { translations: result, glossaryStats: stats };
+}
+
 // --- Parse glossary text into a map ---
 function parseGlossaryToMap(glossary: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -1906,6 +2068,37 @@ Deno.serve(async (req) => {
       const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, providerApiKey,
         'https://openrouter.ai/api/v1', orModel,
+      );
+      return buildSuccessResponse(entries, result);
+    } else if (provider === 'bedrock') {
+      if (!providerApiKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج Amazon Bedrock بيانات AWS — أدخل: accessKeyId::secretKey::region' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const parts = providerApiKey.split('::');
+      const [accessKeyId, secretAccessKey, awsRegion = 'us-east-1'] = parts;
+      if (!accessKeyId?.trim() || !secretAccessKey?.trim()) {
+        return new Response(JSON.stringify({ error: 'صيغة بيانات Bedrock خاطئة — يجب: accessKeyId::secretKey::region' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const BEDROCK_MODELS = [
+        'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        'anthropic.claude-3-haiku-20240307-v1:0',
+        'us.anthropic.claude-sonnet-4-5-20251101-v1:0',
+        'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+        'meta.llama3-3-70b-instruct-v1:0',
+        'amazon.nova-pro-v1:0',
+        'amazon.nova-lite-v1:0',
+        'amazon.nova-micro-v1:0',
+        'us.deepseek.r1-v1:0',
+      ];
+      const bedrockModel = (aiModel && BEDROCK_MODELS.includes(aiModel)) ? aiModel : 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const result = await translateWithBedrock(
+        entries, protectedEntries, glossaryMap,
+        accessKeyId.trim(), secretAccessKey.trim(), awsRegion.trim(), bedrockModel,
       );
       return buildSuccessResponse(entries, result);
     } else {

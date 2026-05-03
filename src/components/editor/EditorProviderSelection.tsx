@@ -20,6 +20,7 @@ type EditorSubset = Pick<
   | "userGroqKey" | "setUserGroqKey"
   | "userCerebrasKey" | "setUserCerebrasKey"
   | "userOpenRouterKey" | "setUserOpenRouterKey"
+  | "userBedrockKey" | "setUserBedrockKey"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
   | "myMemoryCharsUsed"
@@ -72,6 +73,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'groq' as const, label: '⚡ Groq (Llama)', badge: editor.userGroqKey ? '✅' : '⚠️' },
               { id: 'cerebras' as const, label: '🚀 Cerebras (Qwen)', badge: editor.userCerebrasKey ? '✅' : '⚠️' },
               { id: 'openrouter' as const, label: '🆕 OpenRouter', badge: editor.userOpenRouterKey ? '✅' : '⚠️' },
+              { id: 'bedrock' as const, label: '☁️ Amazon Bedrock', badge: editor.userBedrockKey ? '✅' : '⚠️' },
             ].map(({ id, label, badge }) => (
               <Button
                 key={id}
@@ -405,6 +407,79 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                   احصل على مفتاح ↗
                 </a>
               )}
+            </div>
+          </div>
+        )}
+
+        {editor.translationProvider === 'bedrock' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-display text-muted-foreground">🧠 نموذج Amazon Bedrock:</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                {[
+                  { id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', label: '🎯 Claude 3.5 Sonnet v2', desc: 'الأفضل للعربية' },
+                  { id: 'anthropic.claude-3-haiku-20240307-v1:0',    label: '⚡ Claude 3 Haiku',       desc: 'سريع وخفيف' },
+                  { id: 'us.anthropic.claude-sonnet-4-5-20251101-v1:0', label: '🌟 Claude Sonnet 4.5',  desc: 'أحدث Claude' },
+                  { id: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',  label: '🚀 Claude Haiku 4.5',   desc: 'أسرع Claude' },
+                  { id: 'meta.llama3-3-70b-instruct-v1:0',           label: '🦙 Llama 3.3 70B',        desc: 'Meta — متعدد اللغات' },
+                  { id: 'amazon.nova-pro-v1:0',                      label: '☁️ Nova Pro',             desc: 'Amazon — أرخص' },
+                  { id: 'amazon.nova-lite-v1:0',                     label: '💨 Nova Lite',            desc: 'Amazon — سريع جداً' },
+                  { id: 'amazon.nova-micro-v1:0',                    label: '🔬 Nova Micro',           desc: 'Amazon — الأخف' },
+                  { id: 'us.deepseek.r1-v1:0',                       label: '🐋 DeepSeek R1',          desc: 'استدلال عميق' },
+                ].map(m => {
+                  const isSelected = editor.aiModel === m.id || (!['anthropic.claude-3-5-sonnet-20241022-v2:0','anthropic.claude-3-haiku-20240307-v1:0','us.anthropic.claude-sonnet-4-5-20251101-v1:0','us.anthropic.claude-haiku-4-5-20251001-v1:0','meta.llama3-3-70b-instruct-v1:0','amazon.nova-pro-v1:0','amazon.nova-lite-v1:0','amazon.nova-micro-v1:0','us.deepseek.r1-v1:0'].includes(editor.aiModel) && m.id === 'anthropic.claude-3-5-sonnet-20241022-v2:0');
+                  return (
+                    <button key={m.id} onClick={() => editor.setAiModel(m.id)}
+                      className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${isSelected ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50'}`}
+                    >
+                      <span className="font-display">{m.label}</span>
+                      <span className="text-[10px] opacity-70 truncate w-full" dir="ltr">{m.id}</span>
+                      <span className="text-[10px] opacity-70">{m.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-display text-muted-foreground">🔑 بيانات AWS (accessKeyId::secretKey::region):</span>
+              <div className="flex gap-2 flex-1">
+                <input
+                  type="password"
+                  placeholder="AKIAIOSFODNN7EXAMPLE::wJalrXUtnFEMI/K7MDENG::us-east-1"
+                  value={editor.userBedrockKey}
+                  onChange={(e) => editor.setUserBedrockKey(e.target.value)}
+                  className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                  dir="ltr"
+                />
+                {editor.userBedrockKey && (
+                  <Button variant="outline" size="sm"
+                    onClick={() => handleTestConnection('bedrock')}
+                    disabled={testConnStatus['bedrock'] === 'testing'}
+                    className="text-xs shrink-0 gap-1"
+                  >
+                    {testConnStatus['bedrock'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                     testConnStatus['bedrock'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                     testConnStatus['bedrock'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                     <Wifi className="w-3 h-3" />}
+                    تجربة
+                  </Button>
+                )}
+                {editor.userBedrockKey && (
+                  <Button variant="ghost" size="sm" onClick={() => editor.setUserBedrockKey('')} className="text-xs text-destructive shrink-0">
+                    مسح
+                  </Button>
+                )}
+              </div>
+              {testConnMsg['bedrock'] && (
+                <p className={`text-xs font-body ${testConnStatus['bedrock'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                  {testConnStatus['bedrock'] === 'ok' ? '✅' : '❌'} {testConnMsg['bedrock']}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground font-body">
+                {editor.userBedrockKey
+                  ? '✅ بيانات AWS مُدخَلة — تأكد من تفعيل النماذج في AWS Bedrock Console'
+                  : '⚠️ يحتاج بيانات AWS IAM — accessKeyId::secretKey::region (مثال: us-east-1)'}
+              </p>
             </div>
           </div>
         )}

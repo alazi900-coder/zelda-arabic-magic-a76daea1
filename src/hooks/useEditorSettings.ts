@@ -61,10 +61,10 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras'>(() => {
-    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras') || 'gemini'; } catch { return 'gemini'; }
+  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras' | 'bedrock'>(() => {
+    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras' | 'bedrock') || 'gemini'; } catch { return 'gemini'; }
   });
-  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras') => {
+  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras' | 'bedrock') => {
     _setTranslationProvider(p);
     try { localStorage.setItem('translationProvider', p); } catch { /* localStorage unavailable - ignore */ }
   }, []);
@@ -76,6 +76,14 @@ export function useEditorSettings() {
   const setUserOpenRouterKey = useCallback((key: string) => {
     _setUserOpenRouterKey(key);
     try { if (key) localStorage.setItem('userOpenRouterKey', key); else localStorage.removeItem('userOpenRouterKey'); } catch { /* localStorage unavailable - ignore */ }
+  }, []);
+
+  const [userBedrockKey, _setUserBedrockKey] = useState(() => {
+    try { return localStorage.getItem('userBedrockKey') || ''; } catch { return ''; }
+  });
+  const setUserBedrockKey = useCallback((key: string) => {
+    _setUserBedrockKey(key);
+    try { if (key) localStorage.setItem('userBedrockKey', key); else localStorage.removeItem('userBedrockKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [userDeepSeekKey, _setUserDeepSeekKey] = useState(() => {
@@ -332,6 +340,7 @@ export function useEditorSettings() {
     userGroqKey, setUserGroqKey,
     userCerebrasKey, setUserCerebrasKey,
     userOpenRouterKey, setUserOpenRouterKey,
+    userBedrockKey, setUserBedrockKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,
     myMemoryEmail, setMyMemoryEmail,

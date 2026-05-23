@@ -11,6 +11,7 @@ import type { useEditorState } from "@/hooks/useEditorState";
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
   | "state"
+  | "legacyCommaSplitEnabled"
   // Newline split legacy
   | "newlineSplitResults" | "handleApplyNewlineSplit" | "handleRejectNewlineSplit"
   | "handleApplyAllNewlineSplits" | "setNewlineSplitResults"
@@ -59,7 +60,8 @@ const EditorLegacyPanels: React.FC<EditorLegacyPanelsProps> = ({
 }) => (
   <>
     {/* Legacy panels kept for individual tool usage */}
-    {editor.newlineSplitResults && editor.newlineSplitResults.length > 0 && (
+    {/* لوحات تقسيم الفواصل القديمة مخفيّة خلف legacyCommaSplitEnabled */}
+    {editor.legacyCommaSplitEnabled && editor.newlineSplitResults && editor.newlineSplitResults.length > 0 && (
       <NewlineSplitPanel
         results={editor.newlineSplitResults}
         onAccept={editor.handleApplyNewlineSplit}
@@ -72,7 +74,7 @@ const EditorLegacyPanels: React.FC<EditorLegacyPanelsProps> = ({
       />
     )}
 
-    {editor.npcSplitResults && editor.npcSplitResults.length > 0 && (
+    {editor.legacyCommaSplitEnabled && editor.npcSplitResults && editor.npcSplitResults.length > 0 && (
       <NewlineSplitPanel
         results={editor.npcSplitResults}
         onAccept={editor.handleApplyNpcSplit}
@@ -86,7 +88,7 @@ const EditorLegacyPanels: React.FC<EditorLegacyPanelsProps> = ({
       />
     )}
 
-    {editor.lineSyncResults && editor.lineSyncResults.length > 0 && (
+    {editor.legacyCommaSplitEnabled && editor.lineSyncResults && editor.lineSyncResults.length > 0 && (
       <NewlineSplitPanel
         results={editor.lineSyncResults}
         onAccept={editor.handleApplyLineSync}

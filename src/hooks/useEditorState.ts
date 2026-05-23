@@ -36,6 +36,7 @@ export function useEditorState() {
     aiBatchSize, setAiBatchSize,
     translationCacheEnabled, setTranslationCacheEnabled,
     enhancedMemory, saveToEnhancedMemory,
+    legacyCommaSplitEnabled,
   } = settings;
 
   const scanResults = useEditorScanResults();
@@ -807,7 +808,7 @@ export function useEditorState() {
 
   const translation = useEditorTranslation({
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, userBedrockKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled,
+    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, userBedrockKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled,
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, failedEntries, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleRetryFailed, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview, lastBatchQuality, cumulativeQuality, resetBatchQuality } = translation;
 

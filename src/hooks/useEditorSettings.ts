@@ -320,6 +320,18 @@ export function useEditorSettings() {
     });
   }, []);
 
+  // === Legacy comma-splitter feature flag ===
+  // عند إيقافها (الافتراضي): تختفي أدوات التقسيم القديمة عند الفواصل
+  // (NewlineSplit / NPC mode / LineSync / UnifiedSplit / LineBalance / NewlineClean).
+  // الميزات لا تُحذف، فقط تُخفى من الواجهة ويمكن إعادتها بقلب هذا الـ flag.
+  const [legacyCommaSplitEnabled, _setLegacyCommaSplitEnabled] = useState(() => {
+    try { return localStorage.getItem('legacyCommaSplitEnabled') === 'true'; } catch { return false; }
+  });
+  const setLegacyCommaSplitEnabled = useCallback((v: boolean) => {
+    _setLegacyCommaSplitEnabled(v);
+    try { localStorage.setItem('legacyCommaSplitEnabled', String(v)); } catch { /* ignore */ }
+  }, []);
+
   // === Panel visibility ===
   const [hiddenPanels, _setHiddenPanels] = useState<string[]>(() => {
     try { const v = localStorage.getItem('hiddenPanels'); return v ? JSON.parse(v) : []; } catch { return []; }
@@ -359,6 +371,7 @@ export function useEditorSettings() {
     aiBatchSize, setAiBatchSize,
     translationCacheEnabled, setTranslationCacheEnabled,
     enhancedMemory, saveToEnhancedMemory,
+    legacyCommaSplitEnabled, setLegacyCommaSplitEnabled,
     hiddenPanels, togglePanel,
   };
 }

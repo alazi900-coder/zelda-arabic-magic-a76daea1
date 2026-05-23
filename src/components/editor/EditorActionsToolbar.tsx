@@ -92,6 +92,7 @@ type EditorSubset = Pick<
   | "handleUnifyBundledConflicts"
   | "improvingTranslations"
   | "isFilterActive"
+  | "legacyCommaSplitEnabled"
   | "lineSyncAffectedCount"
   | "loadingBundled"
   | "mergingToBundled"
@@ -267,6 +268,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
               </DropdownMenu>
 
               {/* NPC Mode toggle */}
+              {editor.legacyCommaSplitEnabled && <>
               <Button
                 variant={editor.npcMode ? "default" : "outline"}
                 size="sm"
@@ -289,6 +291,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
               >
                 ✂️ تقسيم ومزامنة الكل {(editor.npcAffectedCount + editor.lineSyncAffectedCount) > 0 && <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">{editor.npcAffectedCount + editor.lineSyncAffectedCount}</span>}
               </Button>
+              </>}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -511,6 +514,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
               </DropdownMenu>
 
               {/* NPC Mode toggle + Max lines selector */}
+              {editor.legacyCommaSplitEnabled && <>
               <Button
                 variant={editor.npcMode ? "default" : "outline"}
                 className={`font-body gap-1.5 text-base px-6 py-3 transition-all ${
@@ -531,6 +535,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
               >
                 ✂️ تقسيم ومزامنة الكل {(editor.npcAffectedCount + editor.lineSyncAffectedCount) > 0 && <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">{editor.npcAffectedCount + editor.lineSyncAffectedCount}</span>}
               </Button>
+              </>}
 
               {/* ── Cloud Save/Load ── */}
               <Button variant="outline" onClick={editor.handleCloudSave} disabled={!editor.user || editor.cloudSyncing} className="font-body border-secondary/30 text-secondary hover:text-secondary">

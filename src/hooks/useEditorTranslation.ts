@@ -52,6 +52,7 @@ interface UseEditorTranslationProps {
   aiRoutingMode: 'free' | 'paid' | 'auto';
   aiBatchSize: number;
   translationCacheEnabled: boolean;
+  legacyCommaSplitEnabled: boolean;
 }
 
 /**
@@ -75,7 +76,7 @@ const PROVIDER_BATCH_DELAY_MS = {
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, userBedrockKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, userBedrockKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled,
 }: UseEditorTranslationProps) {
 
   /**
@@ -95,9 +96,15 @@ export function useEditorTranslation({
     return false;
   };
 
-  /** Auto-sync Arabic line count to match English \n count (universal — all files) */
+  /**
+   * Auto-sync Arabic line count to match English \n count (universal — all files).
+   *
+   * تحت legacyCommaSplitEnabled=false (الافتراضي): يرجّع الترجمة كما هي دون تقسيم تلقائي.
+   * الأداة الجديدة «الرموز وفواصل الأسطر» تتولّى هذه المهمة يدويّاً.
+   */
   const autoSyncLines = (key: string, translated: string, originalEntry?: ExtractedEntry): string => {
     if (!originalEntry) return translated;
+    if (!legacyCommaSplitEnabled) return translated;
     const englishLineCount = countEffectiveLines(originalEntry.original);
 
     // Protect tags before any text manipulation

@@ -38,6 +38,7 @@ type EditorSubset = Pick<
   | "unifiedSplitResults" | "handleApplyUnifiedSplit" | "handleRejectUnifiedSplit"
   | "handleApplyAllUnifiedSplits" | "setUnifiedSplitResults"
   | "newlineSplitCharLimit" | "setNewlineSplitCharLimit" | "handleScanAllSplits"
+  | "legacyCommaSplitEnabled"
 >;
 
 interface EditorResultsPanelsProps {
@@ -131,8 +132,8 @@ const EditorResultsPanels: React.FC<EditorResultsPanelsProps> = ({ editor }) => 
       />
     )}
 
-    {/* Unified Split Results */}
-    {editor.unifiedSplitResults && editor.unifiedSplitResults.length > 0 && (
+    {/* Unified Split Results — مخفيّة خلف legacyCommaSplitEnabled */}
+    {editor.legacyCommaSplitEnabled && editor.unifiedSplitResults && editor.unifiedSplitResults.length > 0 && (
       <NewlineSplitPanel
         results={editor.unifiedSplitResults}
         onAccept={editor.handleApplyUnifiedSplit}

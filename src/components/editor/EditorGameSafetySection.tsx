@@ -16,6 +16,7 @@ type EditorSubset = Pick<
   | "setSearch"
   | "setCurrentPage"
   | "activeGlossary"
+  | "legacyCommaSplitEnabled"
 >;
 
 interface EditorGameSafetySectionProps {
@@ -107,14 +108,16 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
         }}
       />
 
-      {/* Line Balance Tool */}
-      <LineBalancePanel
-        state={state}
-        onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
-        onApplyAll={(fixes) => {
-          for (const f of fixes) editor.updateTranslation(f.key, f.value);
-        }}
-      />
+      {/* Line Balance Tool — مخفيّة خلف legacyCommaSplitEnabled (أداة موازنة الأسطر القديمة) */}
+      {editor.legacyCommaSplitEnabled && (
+        <LineBalancePanel
+          state={state}
+          onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
+          onApplyAll={(fixes) => {
+            for (const f of fixes) editor.updateTranslation(f.key, f.value);
+          }}
+        />
+      )}
     </CardContent>
   </Card>
   );

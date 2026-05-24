@@ -1,3 +1,8 @@
+// =============================================================================
+// enhance-translations — مراجعة ترجمات Xenoblade Chronicles 1 العربيّة عبر Lovable AI Gateway.
+// منقولة من Zelda مع تكييف الـ system prompt والـ glossary للأسماء الأعلام
+// والمصطلحات الخاصّة بـ Xenoblade Chronicles 1 (Shulk, Reyn, Fiora, Monado، إلخ).
+// =============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
@@ -12,6 +17,21 @@ interface EnhanceEntry {
   fileName?: string;
   tableName?: string;
 }
+
+// قائمة الأسماء الأعلام والمصطلحات الخاصّة بـ Xenoblade Chronicles 1 — لا يجب على الـ AI
+// أن يقترح ترجمتها أو تغييرها لأنّ القاموس المعتمد يلتزم بنقل صوتي ثابت.
+const XC1_PROPER_NOUNS = [
+  // Characters
+  'Shulk', 'Reyn', 'Fiora', 'Sharla', 'Dunban', 'Riki', 'Melia',
+  'Dickson', 'Mumkhar', 'Alvis', 'Egil', 'Zanza', 'Meyneth',
+  // Locations & Factions
+  'Bionis', 'Mechonis', 'Mechon', 'Homs', 'Nopon', 'High Entia',
+  'Colony 9', 'Colony 6', 'Tephra Cave', 'Mag Mell', 'Frontier Village',
+  'Galahad Fortress', 'Prison Island', 'Valak Mountain', 'Eryth Sea',
+  // Key items / concepts
+  'Monado', 'Ether', 'Aura', 'Arts', 'Talent Art', 'Skill Tree', 'Affinity',
+  'Gem', 'Crystal', 'Telethia', 'Faced Mechon',
+].join(', ');
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -29,13 +49,31 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
+    // خريطة موحَّدة لكلّ النماذج المعروضة في TranslationAIEnhancePanel.
+    // ملاحظة: أضفنا gpt-5/gpt-5-mini/gpt-5-nano لتفادي السقوط الصامت إلى gemini-2.5-flash.
     const gatewayModelMap: Record<string, string> = {
-      'gemini-2.5-flash': 'google/gemini-2.5-flash',
-      'gemini-2.5-pro': 'google/gemini-2.5-pro',
       'gemini-3-flash-preview': 'google/gemini-3-flash-preview',
+      'gemini-3-pro-preview': 'google/gemini-3-pro-preview',
+      'gemini-2.5-flash': 'google/gemini-2.5-flash',
+      'gemini-2.5-flash-lite': 'google/gemini-2.5-flash-lite',
+      'gemini-2.5-pro': 'google/gemini-2.5-pro',
       'gpt-5': 'openai/gpt-5',
+      'gpt-5-mini': 'openai/gpt-5-mini',
+      'gpt-5-nano': 'openai/gpt-5-nano',
     };
-    const resolvedModel = (aiModel && gatewayModelMap[aiModel]) || 'google/gemini-3-flash-preview';
+    const resolvedModel = (aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash';
+
+    // مساعد لاستدعاء بوّابة Lovable AI.
+    const callAI = async (messages: Array<{ role: string; content: string }>) => {
+      return await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: resolvedModel, messages }),
+      });
+    };
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [] }), {
@@ -43,29 +81,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Grammar check mode
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Grammar check mode — فحص قواعديّ صارم بدون تعديلات أسلوبيّة.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'grammar') {
-      const grammarPrompt = `أنت مراجع ترجمات ألعاب فيديو.
+      const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ Xenoblade Chronicles 1. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط**:
 
-افحص كل ترجمة بدقة وابحث عن:
-1. **أخطاء نحوية**: رفع/نصب/جر، مطابقة المذكر/المؤنث، جمع/مفرد
-2. **حروف ناقصة أو زائدة**: كلمات بها حرف محذوف أو مكرر خطأً (لا يشمل الهمزات أو التنوين)
-3. **علامات ترقيم**: فواصل ونقاط في غير موضعها
-4. **مسافات**: مسافات مزدوجة أو ناقصة بين الكلمات
-5. **أرقام ورموز**: تنسيق غير صحيح
+📛 **wrong** — ترجمة خاطئة فعلاً (المعنى مختلف عن الأصل، أو حرف ناقص يكسر الكلمة، أو كلمات ملتصقة، أو لم تُترجم أصلاً)
+🔀 **reorder** — الترجمة صحيحة لغوياً وكلماتها سليمة، لكن **ترتيب الكلمات/الجُمل** غير سليم ويجعلها تُقرأ بشكل عكسي أو مربك
+✍️ **weak** — الترجمة مفهومة لكنّها **ركيكة** (حرفيّة جداً، أسلوب ضعيف، تحتاج إعادة صياغة لتصبح طبيعيّة)
 
-⚠️ **لا تفحص ولا تقترح أي تصحيح للأخطاء الإملائية**:
-- لا همزات (إ/أ/ا/ء/ؤ/ئ)
-- لا تاء مربوطة/مفتوحة (ة/ت)
-- لا ألف مقصورة/ممدودة (ى/ا)
-- لا تنوين (ـً ـٌ ـٍ)
-- لا حركات/تشكيل
-هذه الفروق مقبولة حتى لو بدت خاطئة لغوياً.
+🚫 **لا تُبلّغ عن**:
+- اختلافات همزات (إ/أ/ا) إلا لو كسرت المعنى
+- التنوين والحركات
+- الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) سواء بقيت إنجليزيّة أو نُقلت صوتياً
+- تفضيلات أسلوبيّة بحتة لو الجملة سليمة
 
-لكل خطأ، حدد مستوى الخطورة:
-- high: خطأ يغير المعنى أو يجعل النص غير مفهوم
-- medium: خطأ نحوي أو حرف ناقص واضح
-- low: تحسين بسيط في الترقيم أو التنسيق
+⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC. لا تَحذف أو تُضِف أيّ رمز من هذه النطاقات.
+
+مستوى الخطورة:
+- high: خطأ يغيّر المعنى أو يجعل النصّ غير مفهوم (عادةً wrong)
+- medium: خطأ واضح يحتاج إصلاح (reorder غالباً)
+- low: تحسين بسيط (weak خفيف)
 
 النصوص:
 ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
@@ -73,32 +110,30 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 أجب بـ JSON فقط:
 {
   "issues": [
-    {"index": 0, "issue": "وصف الخطأ بدقة", "suggestion": "النص المصحح كاملاً", "severity": "high|medium|low"}
+    {
+      "index": 0,
+      "category": "wrong|reorder|weak",
+      "issue": "وصف مختصر جداً للمشكلة (3-7 كلمات)",
+      "detail": "اشرح بدقّة: ما المشكلة؟ ولماذا هي مشكلة؟ (سطر أو سطرَين)",
+      "fix_explanation": "اشرح الحلّ الذي طبّقته على النصّ ولماذا يحلّ المشكلة (سطر واحد)",
+      "suggestion": "النصّ المصحَّح كاملاً",
+      "severity": "high|medium|low"
+    }
   ]
 }
 
-أعِد فقط النصوص التي بها أخطاء فعلية. لا تقترح تحسينات أسلوبية أو إملائية هنا.`;
+كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.`;
 
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: resolvedModel,
-          messages: [
-            { role: 'system', content: 'أنت مراجع ترجمات ألعاب. أجب بـ JSON صالح فقط. لا تقترح تعديلات إملائية أو همزات أو تنوين — فقط نحو ومسافات وترقيم وحروف ناقصة/زائدة.' },
-            { role: 'user', content: grammarPrompt }
-          ],
-        }),
-      });
+      const response = await callAI([
+        { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة.' },
+        { role: 'user', content: grammarPrompt },
+      ]);
 
       if (!response.ok) {
         const errText = await response.text();
         console.error('Grammar check error:', response.status, errText);
         if (response.status === 429) {
-          return new Response(JSON.stringify({ error: 'تم تجاوز حد الطلبات' }), {
+          return new Response(JSON.stringify({ error: 'تم تجاوز حدّ الطلبات' }), {
             status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
@@ -112,11 +147,11 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
       const aiResult = await response.json();
       const content = aiResult.choices?.[0]?.message?.content || '';
-      let parsed: { issues: any[] } = { issues: [] };
+      type GrammarIssueRaw = { index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string };
+      let parsed: { issues: GrammarIssueRaw[] } = { issues: [] };
       try {
         const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
         const raw = (jsonMatch[1] || content).trim();
-        // Try to extract JSON object from the response
         const objMatch = raw.match(/\{[\s\S]*\}/);
         if (objMatch) {
           parsed = JSON.parse(objMatch[0]);
@@ -127,31 +162,44 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         console.error('JSON parse error:', e, 'Content:', content.slice(0, 500));
       }
 
-      const mappedIssues = (parsed.issues || []).map((i: any) => ({
-        key: entries[i.index]?.key || '',
-        original: entries[i.index]?.original || '',
-        translation: entries[i.index]?.translation || '',
+      const mappedIssues = (parsed.issues || []).map((i) => ({
+        key: entries[i.index ?? -1]?.key || '',
+        original: entries[i.index ?? -1]?.original || '',
+        translation: entries[i.index ?? -1]?.translation || '',
+        category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
         issue: i.issue,
+        detail: i.detail || '',
+        fixExplanation: i.fix_explanation || i.fixExplanation || '',
         suggestion: i.suggestion,
         severity: i.severity || 'medium',
-      })).filter((i: any) => i.key && i.suggestion);
+      })).filter((i) => i.key && i.suggestion);
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Enhanced style/quality check mode
-    const enhancePrompt = `أنت مترجم ألعاب فيديو محترف ومراجع لغوي. راجع الترجمات التالية واقترح تحسينات.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Enhance mode — تحسين صياغة + اقتراح بدائل (مع التزام صارم بالقاموس).
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ Xenoblade Chronicles 1. ركّز على الأخطاء الجوهريّة فقط واقترح إصلاحاً.
 
-**أنواع المشاكل التي يجب البحث عنها:**
-1. **missing_char** — حرف ناقص أو زائد في كلمة (مثل "المعركه" بدل "المعركة")
-2. **grammar** — خطأ نحوي واضح (مذكر/مؤنث، رفع/نصب)
-3. **terminology** — مصطلح مترجم بشكل خاطئ أو غير متسق مع القاموس
-4. **accuracy** — ترجمة غير دقيقة تحرف المعنى الأصلي
-5. **style** — صياغة ركيكة أو حرفية جداً يمكن تحسينها
-6. **consistency** — نفس المصطلح مترجم بطرق مختلفة
-7. **punctuation** — علامات ترقيم خاطئة أو ناقصة
+**أنواع المشاكل المسموح بها فقط:**
+1. **missing_char** — حرف ناقص أو زائد ("المعركه"↔"المعركة")
+2. **accuracy** — ترجمة حرفيّة تحرف المعنى أو تجعله ركيكاً
+3. **style** — جملة بترتيب كلمات سيّئ أو غير مفهومة بحاجة إعادة صياغة
+4. **consistency** — نفس المصطلح مترجم بشكلَين مختلفَين بين الجُمل
+5. **terminology** — مصطلح من القاموس مترجم بشكل خاطئ
+
+🚫 **لا تقترح أبداً**:
+- تصحيح همزات (إ/أ/ا) إلا لو غيّرت المعنى
+- إضافة تنوين/حركات
+- تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) إلى الإنجليزيّة أو العكس — اتركها كما هي
+- تعديلات تفضيليّة في الأسلوب لو الجملة مفهومة
+
+⚠️ **قواعد صارمة:**
+- لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.
+- لا تُعِد النصّ نفسه بدون تغيير.
 
 ${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
 
@@ -161,36 +209,34 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 أجب بـ JSON فقط:
 {
   "suggestions": [
-    {"index": 0, "suggested": "النص المحسن كاملاً", "reason": "شرح مختصر للمشكلة", "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation"}
+    {
+      "index": 0,
+      "suggested": "النصّ المحسَّن كاملاً (الخيار الأفضل)",
+      "alternatives": ["بديل ثانٍ", "بديل ثالث"],
+      "reason": "وصف مختصر للمشكلة (3-7 كلمات)",
+      "detail": "شرح أطول يوضّح لماذا هذه مشكلة وأيّ قاعدة خالفتها الترجمة الحالية",
+      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation"
+    }
   ]
 }
 
 **مهم:**
-- أعِد فقط الترجمات التي بها مشاكل حقيقية
-- لا تقترح تعديلات تفضيلية بحتة
-- ركز على الأخطاء الموضوعية والحروف الناقصة أولاً
-- إذا كان النص صحيحاً لا تُعِده`;
+- أعِد فقط الترجمات التي بها مشاكل حقيقيّة
+- لا تقترح تعديلات تفضيليّة بحتة
+- ركّز على الأخطاء الموضوعيّة والحروف الناقصة أولاً
+- إذا كان النصّ صحيحاً لا تُعِده
+- حقل detail إلزاميّ يشرح لماذا هذه مشكلة (سطر أو سطرَين)`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: resolvedModel,
-        messages: [
-          { role: 'system', content: 'أنت مترجم ومراجع محترف. أجب بـ JSON صالح فقط. ركز على الأخطاء الحقيقية لا الأسلوبية.' },
-          { role: 'user', content: enhancePrompt }
-        ],
-      }),
-    });
+    const response = await callAI([
+      { role: 'system', content: 'أنت مترجم ومراجع محترف لـ Xenoblade Chronicles 1 (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. ركّز على الأخطاء الحقيقيّة لا الأسلوبيّة.' },
+      { role: 'user', content: enhancePrompt },
+    ]);
 
     if (!response.ok) {
       const errText = await response.text();
       console.error('Enhance error:', response.status, errText);
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: 'تم تجاوز حد الطلبات' }), {
+        return new Response(JSON.stringify({ error: 'تم تجاوز حدّ الطلبات' }), {
           status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -204,28 +250,31 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
     const aiResult = await response.json();
     const content = aiResult.choices?.[0]?.message?.content || '';
-    let parsed: { suggestions: any[] } = { suggestions: [] };
-      try {
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        const raw = (jsonMatch[1] || content).trim();
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          parsed = JSON.parse(objMatch[0]);
-        } else {
-          console.error('No JSON object found in enhance response:', content.slice(0, 500));
-        }
-      } catch (e) {
-        console.error('JSON parse error (enhance):', e, 'Content:', content.slice(0, 500));
+    type EnhanceSuggestionRaw = { index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string };
+    let parsed: { suggestions: EnhanceSuggestionRaw[] } = { suggestions: [] };
+    try {
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+      const raw = (jsonMatch[1] || content).trim();
+      const objMatch = raw.match(/\{[\s\S]*\}/);
+      if (objMatch) {
+        parsed = JSON.parse(objMatch[0]);
+      } else {
+        console.error('No JSON object found in enhance response:', content.slice(0, 500));
       }
+    } catch (e) {
+      console.error('JSON parse error (enhance):', e, 'Content:', content.slice(0, 500));
+    }
 
-    const mappedSuggestions = (parsed.suggestions || []).map((s: any) => ({
-      key: entries[s.index]?.key || '',
-      original: entries[s.index]?.original || '',
-      current: entries[s.index]?.translation || '',
+    const mappedSuggestions = (parsed.suggestions || []).map((s) => ({
+      key: entries[s.index ?? -1]?.key || '',
+      original: entries[s.index ?? -1]?.original || '',
+      current: entries[s.index ?? -1]?.translation || '',
       suggested: s.suggested,
+      alternatives: Array.isArray(s.alternatives) ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim()) : [],
       reason: s.reason,
+      detail: s.detail || '',
       type: s.type || 'style',
-    })).filter((s: any) => s.key && s.suggested);
+    })).filter((s) => s.key && s.suggested);
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -233,8 +282,8 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
   } catch (error) {
     console.error('Enhancement error:', error);
-    return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'خطأ غير متوقع',
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : 'خطأ غير متوقَّع',
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -25,6 +25,7 @@ import PageTranslationCompare from "@/components/editor/PageTranslationCompare";
 import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationPreview";
 import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
 import ToolHelpDialog, { ToolType } from "@/components/editor/ToolHelpDialog";
+import FixTagsLineBreaksDialog from "@/components/editor/FixTagsLineBreaksDialog";
 import type { useEditorState } from "@/hooks/useEditorState";
 import type { ExtractedEntry } from "@/components/editor/types";
 import { isTechnicalText } from "@/components/editor/types";
@@ -53,6 +54,7 @@ type EditorSubset = Pick<
   | "showGlossaryPreview" | "glossaryPreviewEntries" | "applyGlossaryPreview" | "discardGlossaryPreview"
   | "pendingMerge" | "setPendingMerge" | "applyMergeDiffs"
   | "handleAdvancedAnalysis"
+  | "restoreReport" | "handleScanTagsAndLineBreaks" | "handleApplyTagsAndLineBreaksFix" | "handleApplySmartTagReorder" | "dismissRestoreReport"
 >;
 
 interface EditorDialogsProps {
@@ -110,6 +112,38 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <FixTagsLineBreaksDialog
+        open={!!editor.restoreReport}
+        report={editor.restoreReport}
+        onClose={editor.dismissRestoreReport}
+        onApply={editor.handleApplyTagsAndLineBreaksFix}
+        onUpdateTranslation={editor.updateTranslation}
+        onRescan={editor.handleScanTagsAndLineBreaks}
+        onApplySmartReorder={editor.handleApplySmartTagReorder}
+        splitEntries={editor.state?.entries.map(e => ({
+          msbtFile: e.msbtFile,
+          index: e.index,
+          label: e.label,
+          original: e.original,
+        }))}
+        splitTranslations={editor.state?.translations}
+        onJumpToEntry={(key) => {
+          editor.setFilterStatus('all');
+          editor.setSearch('');
+          setTimeout(() => {
+            const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
+            if (idx >= 0) {
+              const page = Math.floor(idx / 50);
+              editor.setCurrentPage(page);
+              setTimeout(() => {
+                const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 100);
+            }
+          }, 50);
+        }}
+      />
 
       <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
       <SafetyRepairReport

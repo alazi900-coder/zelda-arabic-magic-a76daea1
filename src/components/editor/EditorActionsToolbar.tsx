@@ -79,6 +79,7 @@ type EditorSubset = Pick<
   | "handleSaveBundledTranslations"
   | "handleSaveGlossaryToCloud"
   | "handleScanAllSplits"
+  | "handleScanTagsAndLineBreaks"
   | "handleScanArabicTextFixes"
   | "handleScanDiacritics"
   | "handleScanGlossaryDuplicates"
@@ -292,6 +293,17 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                 ✂️ تقسيم ومزامنة الكل {(editor.npcAffectedCount + editor.lineSyncAffectedCount) > 0 && <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">{editor.npcAffectedCount + editor.lineSyncAffectedCount}</span>}
               </Button>
               </>}
+
+              {/* الرموز وفواصل الأسطر (الأداة الجديدة المنقولة من Zelda) */}
+              <Button
+                variant="default"
+                size="sm"
+                className="font-body text-xs gap-1.5 min-h-[44px] bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white shadow-lg"
+                onClick={editor.handleScanTagsAndLineBreaks}
+                disabled={editor.translatedCount === 0}
+              >
+                🛠️ الرموز وفواصل الأسطر
+              </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -536,6 +548,16 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                 ✂️ تقسيم ومزامنة الكل {(editor.npcAffectedCount + editor.lineSyncAffectedCount) > 0 && <span className="bg-white/20 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">{editor.npcAffectedCount + editor.lineSyncAffectedCount}</span>}
               </Button>
               </>}
+
+              {/* الرموز وفواصل الأسطر (الأداة الجديدة المنقولة من Zelda) */}
+              <Button
+                variant="default"
+                className="font-body gap-1.5 text-base px-6 py-3 min-h-[44px] bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white shadow-lg"
+                onClick={editor.handleScanTagsAndLineBreaks}
+                disabled={editor.translatedCount === 0}
+              >
+                🛠️ الرموز وفواصل الأسطر
+              </Button>
 
               {/* ── Cloud Save/Load ── */}
               <Button variant="outline" onClick={editor.handleCloudSave} disabled={!editor.user || editor.cloudSyncing} className="font-body border-secondary/30 text-secondary hover:text-secondary">

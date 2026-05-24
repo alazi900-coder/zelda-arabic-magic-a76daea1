@@ -21,6 +21,12 @@ import { hasActiveEditorScope } from "@/lib/editor-scope";
 import { deepDiagPredicates, matchesDeepDiagFilter } from "@/lib/deep-diagnostic-predicates";
 import { useAutoPilot } from "@/hooks/useAutoPilot";
 import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
+import {
+  scanTranslationsForRestore,
+  buildRestoreUpdates,
+  buildSmartReorderUpdates,
+  type RestoreReport,
+} from "@/lib/tag-restore";
 export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();
@@ -907,6 +913,93 @@ export function useEditorState() {
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, setState, setPreviousTranslations, setLastSaved]);
 
+  // === أداة موحَّدة: إصلاح الرموز التقنية + فواصل الأسطر (محلي، بدون AI) ===
+  // منقولة من مشروع Zelda — تستخدم محرّك tag-restore + line-split-quality.
+  // 1) فحص أولاً → تقرير قابل للعرض في FixTagsLineBreaksDialog.
+  // 2) تطبيق → يحدِّث الترجمات ويسجّل قيم سابقة للتراجع.
+  const [restoreReport, setRestoreReport] = useState<RestoreReport | null>(null);
+
+  const handleScanTagsAndLineBreaks = useCallback(() => {
+    if (!state) {
+      toast({ title: "⚠️ لا توجد بيانات", description: "حمّل ملفاً أولاً", variant: "destructive" });
+      return;
+    }
+    const entriesForScan = state.entries.map(e => ({
+      msbtFile: e.msbtFile,
+      index: e.index,
+      label: e.label,
+      original: e.original,
+    }));
+    const report = scanTranslationsForRestore(entriesForScan, state.translations);
+    setRestoreReport(report);
+    if (report.autoFixable === 0 && report.needsReview === 0) {
+      toast({
+        title: "✅ كلّ الترجمات سليمة",
+        description: `تمّ فحص ${report.scanned} ترجمة — لا توجد رموز مفقودة ولا فواصل أسطر ناقصة.`,
+      });
+    }
+  }, [state]);
+
+  const handleApplyTagsAndLineBreaksFix = useCallback(() => {
+    if (!state || !restoreReport) return;
+    const entriesForFix = state.entries.map(e => ({
+      msbtFile: e.msbtFile,
+      index: e.index,
+      original: e.original,
+    }));
+    const { updates, previous } = buildRestoreUpdates(entriesForFix, state.translations);
+    const count = Object.keys(updates).length;
+    if (count === 0) {
+      setRestoreReport(null);
+      toast({ title: "✅ لا تغييرات", description: "لا توجد ترجمات بحاجة إلى إصلاح." });
+      return;
+    }
+    setPreviousTranslations(old => ({ ...old, ...previous }));
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setRestoreReport(null);
+    toast({
+      title: "✅ تمّ الإصلاح",
+      description: `استُعيدت الرموز/فواصل الأسطر في ${count} ترجمة.`,
+    });
+    setLastSaved(`✅ تمّ إصلاح ${count} ترجمة`);
+    setTimeout(() => setLastSaved(""), 4000);
+  }, [state, restoreReport, setState, setPreviousTranslations, setLastSaved]);
+
+  const handleApplySmartTagReorder = useCallback(() => {
+    if (!state || !restoreReport) return;
+    const entriesForFix = state.entries.map(e => ({
+      msbtFile: e.msbtFile,
+      index: e.index,
+      original: e.original,
+    }));
+    const { updates, previous } = buildSmartReorderUpdates(entriesForFix, state.translations);
+    const count = Object.keys(updates).length;
+    if (count === 0) {
+      toast({ title: "ℹ️ لا تغييرات", description: "لا توجد ترجمات قابلة لإعادة ترتيب الرموز تلقائياً." });
+      return;
+    }
+    setPreviousTranslations(old => ({ ...old, ...previous }));
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    // أعد الفحص ليتحدّث التقرير ويختفي ما تم إصلاحه من «للمراجعة».
+    const entriesForScan = state.entries.map(e => ({
+      msbtFile: e.msbtFile,
+      index: e.index,
+      label: e.label,
+      original: e.original,
+    }));
+    const updatedTranslations = { ...state.translations, ...updates };
+    const newReport = scanTranslationsForRestore(entriesForScan, updatedTranslations);
+    setRestoreReport(newReport);
+    toast({
+      title: "✅ تمّ الإصلاح الذكيّ",
+      description: `أُعيد ترتيب الرموز في ${count} ترجمة.`,
+    });
+    setLastSaved(`✅ تمّ الإصلاح الذكيّ لـ ${count} ترجمة`);
+    setTimeout(() => setLastSaved(""), 4000);
+  }, [state, restoreReport, setState, setPreviousTranslations, setLastSaved]);
+
+  const dismissRestoreReport = useCallback(() => setRestoreReport(null), []);
+
   // === Accept/Reject fuzzy match handlers ===
   const handleAcceptFuzzy = useCallback((key: string) => {
     if (!state?.fuzzyScores?.[key]) return;
@@ -1453,6 +1546,8 @@ export function useEditorState() {
     glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview,
     failedEntries, handleRetryFailed,
     handleRetranslatePage, handleFixDamagedTags, handleLocalFixDamagedTag, handleLocalFixAllDamagedTags, handleLocalFixSelectedTags, handleRedistributeTags, handleReviewTranslations,
+    // أداة موحَّدة: إصلاح الرموز التقنية + فواصل الأسطر (منقولة من Zelda)
+    restoreReport, handleScanTagsAndLineBreaks, handleApplyTagsAndLineBreaksFix, handleApplySmartTagReorder, dismissRestoreReport,
     applyPendingTranslations, discardPendingTranslations,
     handleSuggestShorterTranslations, handleApplyShorterTranslation, handleApplyAllShorterTranslations,
     handleFixAllStuckCharacters, handleFixMixedLanguage,

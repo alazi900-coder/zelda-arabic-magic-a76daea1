@@ -703,13 +703,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             )}
           </div>
           <div className="flex gap-1 shrink-0">
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:bg-primary/10" onClick={() => startEdit(g.key, g.suggestion)} title="تعديل">
+            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-primary/10" onClick={() => startEdit(g.key, g.suggestion)} title="تعديل">
               <Pencil className="w-3.5 h-3.5" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-green-500 hover:bg-green-500/10" onClick={() => applySuggestion(g)} title="تطبيق">
+            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-green-500 hover:bg-green-500/10" onClick={() => applySuggestion(g)} title="تطبيق">
               <Check className="w-4 h-4" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(g.key)} title="تجاهل">
+            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(g.key)} title="تجاهل">
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -783,13 +783,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             {config?.icon}{config?.label || s.type}
           </Badge>
           <div className="flex gap-1 shrink-0">
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:bg-primary/10" onClick={() => startEdit(s.key, s.suggested)} title="تعديل قبل التطبيق">
+            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-primary/10" onClick={() => startEdit(s.key, s.suggested)} title="تعديل قبل التطبيق">
               <Pencil className="w-3.5 h-3.5" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-green-500 hover:bg-green-500/10" onClick={() => applySuggestion(s)} title="تطبيق">
+            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-green-500 hover:bg-green-500/10" onClick={() => applySuggestion(s)} title="تطبيق">
               <Check className="w-4 h-4" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(s.key)} title="تجاهل">
+            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(s.key)} title="تجاهل">
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -1104,7 +1104,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full h-9">
+          <TabsList className="w-full h-11 sm:h-9">
             <TabsTrigger value="enhance" className="flex-1 text-xs gap-1">
               <Wand2 className="w-3 h-3" /> تحسينات
               {suggestions.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1">{suggestions.length}</Badge>}

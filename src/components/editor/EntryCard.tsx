@@ -157,6 +157,7 @@ interface EntryCardProps {
   onCompare?: (entry: ExtractedEntry) => void;
   onSplitNewline?: (key: string) => void;
   tmSuggestions?: TMSuggestion[];
+  legacyCommaSplitEnabled?: boolean;
 }
 
 function findGlossaryMatches(original: string, glossary?: string): { term: string; translation: string }[] {
@@ -189,6 +190,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
   handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag,
   onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, tmSuggestions,
+  legacyCommaSplitEnabled,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
   const isTech = isTechnicalText(entry.original);
@@ -497,12 +499,12 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <Type className="w-4 h-4 text-muted-foreground" />
                 </Button>
               )}
-              {onSplitNewline && translation?.trim() && !translation.includes('\n') && translation.length > 42 && (
+              {legacyCommaSplitEnabled && onSplitNewline && translation?.trim() && !translation.includes('\n') && translation.length > 42 && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => onSplitNewline(key)} title="تقسيم النص إلى أسطر">
                   <SplitSquareHorizontal className="w-4 h-4 text-primary" />
                 </Button>
               )}
-              {translation?.trim() && (
+              {legacyCommaSplitEnabled && translation?.trim() && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
                   const englishLineCount = countEffectiveLines(entry.original);
                   const balanced = englishLineCount > 1

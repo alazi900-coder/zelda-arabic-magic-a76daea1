@@ -33,6 +33,7 @@ type EditorSubset = Pick<
   | "handleAcceptFuzzy"
   | "handleRejectFuzzy"
   | "handleSplitSingleEntry"
+  | "legacyCommaSplitEnabled"
 >;
 
 interface EditorEntryListSectionProps {
@@ -101,6 +102,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
         onSplitNewline={editor.handleSplitSingleEntry}
         findSimilar={findSimilar}
         height={Math.max(400, window.innerHeight - 300)}
+        legacyCommaSplitEnabled={editor.legacyCommaSplitEnabled}
       />
     ) : null}
 

@@ -42,6 +42,7 @@ type EditorSubset = Pick<
   | "setShowFindReplace"
   | "filteredEntries"
   | "updateTranslationsBatch"
+  | "legacyCommaSplitEnabled"
 >;
 
 interface EditorFiltersBarProps {
@@ -172,8 +173,10 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
       </div>
     )}
 
-    {/* Quick-fix bar for deep diagnostic filters */}
-    {(['xeno-n-missing', 'excessive-lines', 'newline-diff', 'identical-original'] as readonly string[]).includes(editor.filterStatus) && editor.filteredEntries.length > 0 && (
+    {/* Quick-fix bar for deep diagnostic filters
+        تُخفى خيارات تقسيم الأسطر بالفاصلة (excessive-lines / newline-diff) خلف legacyCommaSplitEnabled */}
+    {((['xeno-n-missing', 'identical-original'] as readonly string[]).includes(editor.filterStatus) ||
+      (editor.legacyCommaSplitEnabled && (['excessive-lines', 'newline-diff'] as readonly string[]).includes(editor.filterStatus))) && editor.filteredEntries.length > 0 && (
       <div className="mt-3 flex flex-wrap items-center gap-2 p-2 rounded bg-primary/5 border border-primary/20">
         <span className="text-xs font-display text-primary">
           🔧 {editor.filteredEntries.length} نص مطابق للفلتر
@@ -195,7 +198,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
               } else if (editor.filterStatus === 'identical-original') {
                 updates[key] = '';
                 removed++;
-              } else if (editor.filterStatus === 'excessive-lines' || editor.filterStatus === 'newline-diff') {
+              } else if (editor.legacyCommaSplitEnabled && (editor.filterStatus === 'excessive-lines' || editor.filterStatus === 'newline-diff')) {
                 try {
                   const { splitEvenlyByLines } = await import('@/lib/balance-lines');
                   const origLines = (e.original.match(/\n/g) || []).length + 1;

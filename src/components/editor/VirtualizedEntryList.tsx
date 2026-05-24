@@ -36,6 +36,7 @@ interface VirtualizedEntryListProps {
   onSplitNewline: (key: string) => void;
   findSimilar: (key: string, original: string) => TMSuggestion[];
   height?: number;
+  legacyCommaSplitEnabled?: boolean;
 }
 
 const ESTIMATED_ITEM_SIZE = 280;
@@ -65,6 +66,7 @@ const VirtualizedEntryList = React.memo(({
   onSplitNewline,
   findSimilar,
   height = 600,
+  legacyCommaSplitEnabled,
 }: VirtualizedEntryListProps) => {
   const listRef = useRef<VList>(null);
   const rowHeights = useRef<Record<number, number>>({});
@@ -119,11 +121,12 @@ const VirtualizedEntryList = React.memo(({
             onCompare={onCompare}
             onSplitNewline={onSplitNewline}
             tmSuggestions={findSimilar(key, entry.original)}
+            legacyCommaSplitEnabled={legacyCommaSplitEnabled}
           />
         </RowMeasurer>
       </div>
     );
-  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, findSimilar, setRowHeight]);
+  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, findSimilar, setRowHeight, legacyCommaSplitEnabled]);
 
   return (
     <VList

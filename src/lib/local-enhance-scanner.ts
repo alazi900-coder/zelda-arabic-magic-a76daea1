@@ -43,7 +43,6 @@ export interface LocalScanContext {
 const AR_RANGE = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF\u0750-\u077F\u08A0-\u08FF]/;
 const TAG_RE = /\[[A-Z][^\]]*\]/g;
 const PUA_RE = /[\uE000-\uF8FF\uFFF9-\uFFFC]/g;
-const DIACRITICS_RE = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/;
 
 /** Common gameplay/UI English words that should normally be translated. */
 const COMMON_UNTRANSLATED = new Set<string>([
@@ -246,35 +245,6 @@ function ruleByteLimit(t: string, maxBytes: number): { bytes: number; over: bool
   if (!maxBytes || maxBytes <= 0) return { bytes: 0, over: false, near: false };
   const bytes = utf8ByteLength(t);
   return { bytes, over: bytes > maxBytes, near: bytes <= maxBytes && bytes / maxBytes > 0.85 };
-}
-
-// ============================================================================
-// Diacritics / Hamza rules
-// ============================================================================
-
-function ruleDiacritics(t: string): { fix: string; matched: boolean } {
-  const fixed = t.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, "");
-  return { fix: fixed, matched: DIACRITICS_RE.test(t) };
-}
-
-function ruleHamzaPattern(t: string): { issue: string; fix: string } | null {
-  // Common Arabic hamza/spacing mistakes
-  const patterns: Array<{ re: RegExp; replace: string; issue: string }> = [
-    { re: /إنشالله/g, replace: "إن شاء الله", issue: 'كتابة «إنشالله» تُكتب «إن شاء الله»' },
-    { re: /ماشالله/g, replace: "ما شاء الله", issue: 'كتابة «ماشالله» تُكتب «ما شاء الله»' },
-    { re: /لاكن/g, replace: "لكن", issue: 'كتابة «لاكن» تُكتب «لكن»' },
-    { re: /هاذا/g, replace: "هذا", issue: 'كتابة «هاذا» تُكتب «هذا»' },
-    { re: /هاذي/g, replace: "هذه", issue: 'كتابة «هاذي» تُكتب «هذه»' },
-    { re: /هاذه/g, replace: "هذه", issue: 'كتابة «هاذه» تُكتب «هذه»' },
-    { re: /هاكذا/g, replace: "هكذا", issue: 'كتابة «هاكذا» تُكتب «هكذا»' },
-    { re: /لاكني/g, replace: "لكنّي", issue: 'كتابة «لاكني» تُكتب «لكنّي»' },
-  ];
-  for (const p of patterns) {
-    if (p.re.test(t)) {
-      return { issue: p.issue, fix: t.replace(p.re, p.replace) };
-    }
-  }
-  return null;
 }
 
 // ============================================================================
@@ -550,29 +520,7 @@ export function scanEntryLocally(
     });
   }
 
-  // 14. Diacritics
-  if (DIACRITICS_RE.test(t)) {
-    const fix = ruleDiacritics(t).fix;
-    issues.push({
-      key, original: orig, translation: t, suggestion: fix,
-      issue: "تشكيل/حركات داخل النص",
-      reason: "ترجمات اللعبة تُترك عادة بدون تشكيل لأنّه يستهلك بايتات بدون فائدة بصرية في الخطوط الافتراضية.",
-      severity: "low", type: "style", rule: "diacritics",
-    });
-  }
-
-  // 15. Hamza patterns
-  const hz = ruleHamzaPattern(t);
-  if (hz) {
-    issues.push({
-      key, original: orig, translation: t, suggestion: hz.fix,
-      issue: "خطأ همزة/إملاء شائع",
-      reason: hz.issue,
-      severity: "medium", type: "style", rule: "hamza_pattern",
-    });
-  }
-
-  // 16. Consistency (single capitalised word)
+  // 14. Consistency (single capitalised word)
   if (consistencyMap) {
     const origStripped = STRIP_FILLER(orig).trim();
     const tStripped = STRIP_FILLER(t).trim();
@@ -590,7 +538,7 @@ export function scanEntryLocally(
     }
   }
 
-  // 17. Duplicate translation
+  // 15. Duplicate translation
   if (duplicateKeys && duplicateKeys.length > 1) {
     const others = duplicateKeys.filter(k => k !== key);
     if (others.length > 0) {

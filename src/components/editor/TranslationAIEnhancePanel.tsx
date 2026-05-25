@@ -210,7 +210,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     }
   }, [scope, reviewMem]);
 
-  const analyzeTranslations = async (mode: "enhance" | "grammar") => {
+  const analyzeTranslations = async (mode: "enhance" | "grammar" | "combined") => {
     // Detect entries that changed since last scan and clear stale results
     const changedKeys = new Set<string>();
     for (const [key, oldText] of processedKeysRef.current) {
@@ -242,7 +242,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     }
 
     setIsAnalyzing(true);
-    setActiveTab(mode);
+    // الفحص الشامل يملأ كلا التبويبين — ابدأ بتبويب القواعد لأنّ الأخطاء الجوهريّة أولويّة.
+    setActiveTab(mode === "combined" ? "grammar" : mode);
     abortRef.current = false;
 
     // ----- Google Translate accuracy check (free, no API key) -----
@@ -428,6 +429,45 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         } else if (mode === "grammar" && data.issues) {
           allIssues = [...allIssues, ...data.issues];
           setGrammarIssues(prev => [...prev, ...data.issues]);
+        } else if (mode === "combined" && Array.isArray(data.results)) {
+          // تقسيم نتائج الفحص الشامل بين التبويبين حسب الفئة:
+          // style → لوحة تحسين الصياغة • wrong/reorder/weak → لوحة فحص القواعد.
+          const newSuggestions: EnhanceSuggestion[] = [];
+          const newIssues: GrammarIssue[] = [];
+          for (const r of data.results) {
+            if (r.category === "style") {
+              newSuggestions.push({
+                key: r.key,
+                original: r.original,
+                current: r.current,
+                suggested: r.suggested,
+                alternatives: r.alternatives || [],
+                reason: r.issue || r.reason || "تحسين صياغة",
+                detail: r.detail || "",
+                type: r.type || "style",
+              });
+            } else {
+              newIssues.push({
+                key: r.key,
+                original: r.original,
+                translation: r.translation,
+                issue: r.issue || "إصلاح قواعديّ + صياغة",
+                suggestion: r.suggested,
+                severity: r.severity,
+                detail: r.detail || "",
+                fixExplanation: r.fixExplanation || "",
+                category: r.category,
+              });
+            }
+          }
+          if (newSuggestions.length > 0) {
+            allSuggestions = [...allSuggestions, ...newSuggestions];
+            setSuggestions(prev => [...prev, ...newSuggestions]);
+          }
+          if (newIssues.length > 0) {
+            allIssues = [...allIssues, ...newIssues];
+            setGrammarIssues(prev => [...prev, ...newIssues]);
+          }
         }
       }
 
@@ -437,11 +477,16 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setIsAnalyzing(false);
     setProgress(null);
 
-    const count = mode === "enhance" ? allSuggestions.length : allIssues.length;
-    if (count === 0 && !abortRef.current) {
-      toast({ title: mode === "enhance" ? "✅ الترجمات جيدة" : "✅ لا توجد أخطاء" });
+    const enhanceCount = allSuggestions.length;
+    const grammarCount = allIssues.length;
+    const total = mode === "enhance" ? enhanceCount : mode === "grammar" ? grammarCount : enhanceCount + grammarCount;
+    if (total === 0 && !abortRef.current) {
+      const emptyTitle = mode === "enhance" ? "✅ الترجمات جيدة" : mode === "grammar" ? "✅ لا توجد أخطاء" : "✅ الترجمات سليمة قواعديّاً وأسلوبيّاً";
+      toast({ title: emptyTitle });
+    } else if (mode === "combined") {
+      toast({ title: `تم العثور على ${grammarCount} خطأ + ${enhanceCount} اقتراح` });
     } else {
-      toast({ title: `تم العثور على ${count} ${mode === "enhance" ? "اقتراح" : "خطأ"}` });
+      toast({ title: `تم العثور على ${total} ${mode === "enhance" ? "اقتراح" : "خطأ"}` });
     }
   };
 
@@ -984,7 +1029,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
       <CardContent className="space-y-4">
         {/* Action buttons */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <Button variant="default" size="sm" onClick={() => analyzeTranslations("combined")} disabled={isAnalyzing} className="gap-1.5 h-10">
+            {isAnalyzing && activeTab === "grammar" && suggestions.length > 0 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            <div className="text-right">
+              <p className="text-xs font-bold">فحص شامل (قواعد + صياغة)</p>
+              <p className="text-[10px] opacity-80">طلب واحد — يوفّر النقاط</p>
+            </div>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => analyzeTranslations("enhance")} disabled={isAnalyzing} className="gap-1.5 h-10">
             {isAnalyzing && activeTab === "enhance" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
             <div className="text-right">

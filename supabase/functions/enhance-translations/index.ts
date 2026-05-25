@@ -18,6 +18,32 @@ interface EnhanceEntry {
   tableName?: string;
 }
 
+// عدّاد علامات التنوين/الحركات/الشدّة/السكون وأشكال الهمزة. خطّ اللعبة لا يدعم
+// هذه الرموز، فأيّ اقتراح من الـ AI يضيف أو يحذف منها سيُرفض في الـ post-filter
+// أدناه (شبكة أمان فوق إرشادات الـ prompt).
+function countDiacriticsAndHamzas(text: string): number {
+  if (!text) return 0;
+  let count = 0;
+  for (const ch of text) {
+    const c = ch.charCodeAt(0);
+    // التنوين/الحركات/الشدّة/السكون والعلامات الموسَّعة.
+    if ((c >= 0x064B && c <= 0x0652) ||
+        (c >= 0x0610 && c <= 0x061A) ||
+        (c >= 0x0653 && c <= 0x065F) ||
+        c === 0x0670 ||
+        (c >= 0x06D6 && c <= 0x06DC) ||
+        (c >= 0x06DF && c <= 0x06E4) ||
+        c === 0x06E7 || c === 0x06E8 ||
+        (c >= 0x06EA && c <= 0x06ED)) {
+      count++;
+    } else if (c >= 0x0621 && c <= 0x0626) {
+      // أشكال الهمزة: ء آ أ ؤ إ ئ.
+      count++;
+    }
+  }
+  return count;
+}
+
 // قائمة الأسماء الأعلام والمصطلحات الخاصّة بـ Xenoblade Chronicles 1 — لا يجب على الـ AI
 // أن يقترح ترجمتها أو تغييرها لأنّ القاموس المعتمد يلتزم بنقل صوتي ثابت.
 const XC1_PROPER_NOUNS = [
@@ -41,7 +67,7 @@ Deno.serve(async (req) => {
   try {
     const { entries, mode, glossary, aiModel } = await req.json() as {
       entries: EnhanceEntry[];
-      mode?: 'enhance' | 'grammar';
+      mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
       aiModel?: string;
     };
@@ -112,9 +138,12 @@ Deno.serve(async (req) => {
 🔀 **reorder** — الترجمة صحيحة لغوياً وكلماتها سليمة، لكن **ترتيب الكلمات/الجُمل** غير سليم ويجعلها تُقرأ بشكل عكسي أو مربك
 ✍️ **weak** — الترجمة مفهومة لكنّها **ركيكة** (حرفيّة جداً، أسلوب ضعيف، تحتاج إعادة صياغة لتصبح طبيعيّة)
 
-🚫 **لا تُبلّغ عن**:
-- اختلافات همزات (إ/أ/ا) إلا لو كسرت المعنى
-- التنوين والحركات
+🚫 **ممنوع منعاً قاطعاً (نظام عرض اللعبة لا يدعمها — أيّ اقتراح يخالف ذلك سيُرفض):**
+- إضافة أو حذف أيّ من: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ)
+- إضافة أو حذف أيّ همزة (ء آ أ ؤ إ ئ) — اترك الكلمة كما هي حتّى لو كانت إملائيّاً ناقصة
+- يجب أن يكون عدد علامات التنوين/الحركات والهمزات في **الاقتراح** مساوياً تماماً لعددها في **الترجمة الحاليّة**
+
+🚫 **لا تُبلّغ أيضاً عن**:
 - الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) سواء بقيت إنجليزيّة أو نُقلت صوتياً
 - تفضيلات أسلوبيّة بحتة لو الجملة سليمة
 
@@ -193,9 +222,154 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         fixExplanation: i.fix_explanation || i.fixExplanation || '',
         suggestion: i.suggestion,
         severity: i.severity || 'medium',
-      })).filter((i) => i.key && i.suggestion);
+      })).filter((i) => i.key && i.suggestion)
+        // شبكة أمان: ارفض الاقتراحات التي تُضيف أو تحذف تنوين/حركات/همزات.
+        .filter((i) => countDiacriticsAndHamzas(i.suggestion!) === countDiacriticsAndHamzas(i.translation));
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Combined mode — فحص قواعد + تحسين صياغة في طلب واحد. يُرجع اقتراحاً
+    // نهائيّاً واحداً لكلّ مدخل يجمع كلّ الإصلاحات معاً (بلا تصادم).
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (mode === 'combined') {
+      const combinedPrompt = `أنت مدقّق ومحسّن ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص كلّ ترجمة من كلّ الجوانب (قواعد + إملاء + صياغة + دقّة + اتساق + ترتيب الكلمات) وأعِد **نصّاً نهائيّاً واحداً** يجمع كلّ الإصلاحات معاً في حقل suggested (لا تُرجع اقتراحاً للقواعد منفصلاً عن اقتراح للصياغة — كلّ الإصلاحات في نصّ واحد متناسق).
+
+صنّف المشكلة الرئيسيّة إلى **فئة واحدة فقط**:
+📛 **wrong** — ترجمة خاطئة فعلاً (المعنى مختلف، حرف ناقص يكسر كلمة، كلمات ملتصقة، لم تُترجم)
+🔀 **reorder** — صحيحة لغوياً وكلماتها سليمة لكن ترتيبها يجعلها تُقرأ بشكل عكسي
+✍️ **weak** — مفهومة لكنّها ركيكة (حرفيّة جداً، أسلوب ضعيف، تحتاج إعادة صياغة)
+🎨 **style** — تحسين صياغة/مصطلح/دقّة (بدون خطأ قواعديّ صريح)
+
+نوع المشكلة الفرعيّ (للفلترة):
+- missing_char — حرف ناقص/زائد
+- accuracy — ترجمة حرفيّة تحرف المعنى
+- style — أسلوب يحتاج إعادة صياغة
+- consistency — مصطلح غير متّسق
+- terminology — مصطلح من القاموس مترجم خطأ
+- grammar — خطأ نحويّ صرف
+- punctuation — مشكلة ترقيم
+
+🚫 **ممنوع منعاً قاطعاً (نظام عرض اللعبة لا يدعمها — أيّ اقتراح يخالف ذلك سيُرفض):**
+- إضافة أو حذف أيّ من: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ)
+- إضافة أو حذف أيّ همزة (ء آ أ ؤ إ ئ) — اترك الكلمة كما هي حتّى لو كانت إملائيّاً ناقصة
+- يجب أن يكون عدد علامات التنوين/الحركات والهمزات في **suggested** مساوياً تماماً لعددها في **الترجمة الحاليّة**
+
+🚫 **لا تقترح أيضاً**:
+- تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) سواء بقيت إنجليزيّة أو نُقلت صوتياً
+- تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة
+
+⚠️ **قواعد صارمة:**
+- لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.
+- لا تُعِد النصّ نفسه بدون تغيير.
+- لا تنتج اقتراحَين متناقضَين لنفس المدخل — اجمع كلّ الإصلاحات (قواعد + صياغة) في نصّ واحد متّسق.
+
+مستوى الخطورة:
+- high: خطأ يغيّر المعنى أو يجعل النصّ غير مفهوم (عادةً wrong)
+- medium: خطأ واضح يحتاج إصلاح (reorder/weak/style غالباً)
+- low: تحسين بسيط
+
+${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
+
+**النصوص للفحص:**
+${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+
+أجب بـ JSON فقط:
+{
+  "results": [
+    {
+      "index": 0,
+      "category": "wrong|reorder|weak|style",
+      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation",
+      "issue": "وصف مختصر جداً (3-7 كلمات)",
+      "detail": "اشرح المشكلة بدقّة (سطر أو سطرَين)",
+      "fix_explanation": "اشرح كلّ الإصلاحات المطبَّقة في suggested (قواعد + صياغة معاً) في سطر واحد",
+      "suggested": "النصّ النهائيّ المُحسَّن كاملاً (يجمع كلّ الإصلاحات)",
+      "alternatives": ["بديل ثانٍ", "بديل ثالث"],
+      "severity": "high|medium|low"
+    }
+  ]
+}
+
+كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.`;
+
+      const response = await callAI([
+        { role: 'system', content: 'أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل — لا تنتج اقتراحَين متعارضَين.' },
+        { role: 'user', content: combinedPrompt },
+      ]);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('Combined check error:', response.status, errText);
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: 'تم تجاوز حدّ الطلبات' }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        if (response.status === 402) {
+          return new Response(JSON.stringify({ error: 'الرصيد غير كافٍ' }), {
+            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        throw new Error(`AI error: ${response.status}`);
+      }
+
+      const aiResult = await response.json();
+      const content = aiResult.choices?.[0]?.message?.content || '';
+      type CombinedResultRaw = {
+        index?: number;
+        category?: string;
+        type?: string;
+        issue?: string;
+        detail?: string;
+        fix_explanation?: string;
+        fixExplanation?: string;
+        suggested?: string;
+        alternatives?: unknown;
+        severity?: string;
+      };
+      let parsed: { results: CombinedResultRaw[] } = { results: [] };
+      try {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        const raw = (jsonMatch[1] || content).trim();
+        const objMatch = raw.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          parsed = JSON.parse(objMatch[0]);
+        } else {
+          console.error('No JSON object found in combined response:', content.slice(0, 500));
+        }
+      } catch (e) {
+        console.error('JSON parse error (combined):', e, 'Content:', content.slice(0, 500));
+      }
+
+      // تنسيق موحَّد: كلّ نتيجة تحوي الحقول اللازمة لكلا اللوحَتين (issues + suggestions).
+      const mappedResults = (parsed.results || []).map((r) => {
+        const entry = entries[r.index ?? -1];
+        return {
+          key: entry?.key || '',
+          original: entry?.original || '',
+          translation: entry?.translation || '',
+          current: entry?.translation || '',
+          suggested: r.suggested,
+          suggestion: r.suggested,
+          alternatives: Array.isArray(r.alternatives) ? r.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim()) : [],
+          category: r.category && ['wrong', 'reorder', 'weak', 'style'].includes(r.category) ? r.category : 'style',
+          type: r.type || 'style',
+          issue: r.issue || '',
+          reason: r.issue || '',
+          detail: r.detail || '',
+          fixExplanation: r.fix_explanation || r.fixExplanation || '',
+          severity: r.severity || 'medium',
+        };
+      })
+        .filter((r) => r.key && r.suggested)
+        // شبكة أمان: ارفض الاقتراحات التي تُضيف أو تحذف تنوين/حركات/همزات.
+        .filter((r) => countDiacriticsAndHamzas(r.suggested!) === countDiacriticsAndHamzas(r.translation));
+
+      return new Response(JSON.stringify({ results: mappedResults }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -212,9 +386,12 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 4. **consistency** — نفس المصطلح مترجم بشكلَين مختلفَين بين الجُمل
 5. **terminology** — مصطلح من القاموس مترجم بشكل خاطئ
 
-🚫 **لا تقترح أبداً**:
-- تصحيح همزات (إ/أ/ا) إلا لو غيّرت المعنى
-- إضافة تنوين/حركات
+🚫 **ممنوع منعاً قاطعاً (نظام عرض اللعبة لا يدعمها — أيّ اقتراح يخالف ذلك سيُرفض):**
+- إضافة أو حذف أيّ من: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ)
+- إضافة أو حذف أيّ همزة (ء آ أ ؤ إ ئ) — اترك الكلمة كما هي حتّى لو كانت إملائيّاً ناقصة
+- يجب أن يكون عدد علامات التنوين/الحركات والهمزات في **suggested** مساوياً تماماً لعددها في **الترجمة الحاليّة**
+
+🚫 **لا تقترح أيضاً**:
 - تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) إلى الإنجليزيّة أو العكس — اتركها كما هي
 - تعديلات تفضيليّة في الأسلوب لو الجملة مفهومة
 
@@ -295,7 +472,9 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       reason: s.reason,
       detail: s.detail || '',
       type: s.type || 'style',
-    })).filter((s) => s.key && s.suggested);
+    })).filter((s) => s.key && s.suggested)
+      // شبكة أمان: ارفض الاقتراحات التي تُضيف أو تحذف تنوين/حركات/همزات.
+      .filter((s) => countDiacriticsAndHamzas(s.suggested!) === countDiacriticsAndHamzas(s.current));
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

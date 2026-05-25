@@ -2013,15 +2013,18 @@ Deno.serve(async (req) => {
       const result = await translateWithGoogle(entries, protectedEntries, glossaryMap);
       return buildSuccessResponse(entries, result);
     } else if (provider === 'deepseek') {
-      if (!providerApiKey) {
-        return new Response(JSON.stringify({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات' }), {
+      const dsKey = providerApiKey || Deno.env.get('DEEPSEEK_API_KEY');
+      if (!dsKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات أو في أسرار Lovable Cloud باسم DEEPSEEK_API_KEY' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+      const DEEPSEEK_MODELS = ['deepseek-chat', 'deepseek-reasoner'];
+      const dsModel = aiModel && DEEPSEEK_MODELS.includes(aiModel) ? aiModel : 'deepseek-chat';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const result = await translateWithOpenAICompat(
-        entries, protectedEntries, glossaryMap, providerApiKey,
-        'https://api.deepseek.com', 'deepseek-chat',
+        entries, protectedEntries, glossaryMap, dsKey,
+        'https://api.deepseek.com', dsModel,
       );
       return buildSuccessResponse(entries, result);
     } else if (provider === 'groq') {

@@ -76,8 +76,9 @@ Deno.serve(async (req) => {
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
 
     if (isDeepSeek && !DEEPSEEK_API_KEY) {
+      // 200 مع error field لـ supabase-js حتّى تصل رسالة الخطأ للواجهة.
       return new Response(JSON.stringify({ error: 'DeepSeek غير مُكوّن — أضف DEEPSEEK_API_KEY في أسرار Lovable Cloud' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     if (!isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
@@ -533,10 +534,11 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
   } catch (error) {
     console.error('Enhancement error:', error);
+    // 200 مع error field حتّى تصل رسالة الخطأ للواجهة عبر supabase.functions.invoke
+    // (الذي يبتلع جسم الردّ عند استجابات non-2xx).
     return new Response(JSON.stringify({
       error: error instanceof Error ? error.message : 'خطأ غير متوقَّع',
     }), {
-      status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

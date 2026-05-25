@@ -429,8 +429,17 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               return { data: null, count: textsToAnalyze.length };
             }
           }
-          // عرض الخطأ في الأداة بدلاً من ابتلاعه بصمت.
-          const msg = `فشل الاتصال بـ enhance-translations: ${errStr.slice(0, 200)}`;
+          // FunctionsHttpError يحوي Response كاملاً في .context — حاول استخراج
+          // رسالة الخطأ الحقيقيّة من جسم الردّ بدلاً من العبارة العامّة.
+          let detail = errStr;
+          try {
+            const ctx = (err as { context?: unknown })?.context;
+            if (ctx && typeof (ctx as Response).json === 'function') {
+              const body = await (ctx as Response).clone().json();
+              if (body?.error) detail = String(body.error);
+            }
+          } catch { /* ignore body-read failures */ }
+          const msg = `فشل الاتصال بـ enhance-translations: ${detail.slice(0, 400)}`;
           setLastError(msg);
           toast({ title: msg, variant: "destructive" });
           return { data: null, count: textsToAnalyze.length };

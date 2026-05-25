@@ -176,18 +176,21 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error('Grammar check error:', response.status, errText);
+        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
+        console.error(`[enhance] grammar ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
         if (response.status === 429) {
-          return new Response(JSON.stringify({ error: 'تم تجاوز حدّ الطلبات' }), {
-            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
         if (response.status === 402) {
-          return new Response(JSON.stringify({ error: 'الرصيد غير كافٍ' }), {
-            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        throw new Error(`AI error: ${response.status}`);
+        return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       const aiResult = await response.json();
@@ -319,18 +322,21 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error('Combined check error:', response.status, errText);
+        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
+        console.error(`[enhance] combined ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
         if (response.status === 429) {
-          return new Response(JSON.stringify({ error: 'تم تجاوز حدّ الطلبات' }), {
-            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
         if (response.status === 402) {
-          return new Response(JSON.stringify({ error: 'الرصيد غير كافٍ' }), {
-            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-        throw new Error(`AI error: ${response.status}`);
+        return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       const aiResult = await response.json();
@@ -468,18 +474,21 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('Enhance error:', response.status, errText);
+      const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
+      console.error(`[enhance] enhance ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: 'تم تجاوز حدّ الطلبات' }), {
-          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'الرصيد غير كافٍ' }), {
-          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      throw new Error(`AI error: ${response.status}`);
+      return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const aiResult = await response.json();

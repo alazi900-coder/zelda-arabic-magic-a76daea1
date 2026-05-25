@@ -101,15 +101,23 @@ Deno.serve(async (req) => {
     if (!isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
+    // DeepSeek يحتاج response_format=json_object صراحةً وإلّا يُرجع نصّاً
+    // داخل markdown fences لا يلتقطه parser الـ JSON دائماً (نفس تكوين
+    // translate-entries الذي يعمل مع جميع نماذج DeepSeek).
     const callAI = async (messages: Array<{ role: string; content: string }>) => {
       if (isDeepSeek) {
-        return await fetch('https://api.deepseek.com/v1/chat/completions', {
+        return await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: resolvedModel, messages }),
+          body: JSON.stringify({
+            model: resolvedModel,
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            messages,
+          }),
         });
       }
       return await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

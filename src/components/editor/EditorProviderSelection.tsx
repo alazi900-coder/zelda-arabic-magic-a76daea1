@@ -114,7 +114,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         )}
 
         {editor.translationProvider === 'deepseek' && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="flex gap-2 flex-1">
               <input
                 type="password"
@@ -149,6 +149,36 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                 {testConnStatus['deepseek'] === 'ok' ? '✅' : '❌'} {testConnMsg['deepseek']}
               </p>
             )}
+
+            {/* Model Selector */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-display text-muted-foreground">🐋 نموذج DeepSeek:</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: 'deepseek-chat', label: 'DeepSeek Chat', desc: 'سريع — V3 الافتراضي', badge: '⚡' },
+                  { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner', desc: 'استدلال متقدم (R1)', badge: '🧠' },
+                  { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', desc: '284B/13B — اقتصادي', badge: '🚀' },
+                  { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', desc: '1.6T/49B — الأقوى', badge: '🆕' },
+                ].map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => editor.setAiModel(m.id)}
+                    className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${
+                      editor.aiModel === m.id
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    <span className="font-display">{m.badge} {m.label}</span>
+                    <span className="text-[10px] opacity-70">{m.desc}</span>
+                  </button>
+                ))}
+              </div>
+              {editor.aiModel === 'deepseek-v4-pro' && (
+                <p className="text-[10px] text-amber-500 font-body">⚠️ V4 Pro أبطأ ويستهلك tokens أكثر — مناسب للنصوص المعقّدة</p>
+              )}
+            </div>
+
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground font-body">
                 {editor.userDeepSeekKey

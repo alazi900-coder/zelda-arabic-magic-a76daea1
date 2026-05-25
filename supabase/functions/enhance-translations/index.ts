@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     };
 
     // اختيار المسار: DeepSeek مباشر أو Lovable AI Gateway
-    const isDeepSeek = aiModel === 'deepseek-chat' || aiModel === 'deepseek-reasoner';
+    const isDeepSeek = aiModel === 'deepseek-chat' || aiModel === 'deepseek-reasoner' || aiModel === 'deepseek-v4-pro' || aiModel === 'deepseek-v4-flash';
     const resolvedModel = isDeepSeek
       ? (aiModel as string)
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');

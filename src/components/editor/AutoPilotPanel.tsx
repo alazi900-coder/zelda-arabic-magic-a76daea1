@@ -10,6 +10,13 @@ const GEMINI_MODELS = [
   { id: 'gemini-2.5-pro',   label: '2.5 Pro 💰',   note: 'مدفوع' },
 ];
 
+const DEEPSEEK_MODELS = [
+  { id: 'deepseek-chat',     label: 'Chat ⚡',      note: 'V3 — سريع (الافتراضي)' },
+  { id: 'deepseek-reasoner', label: 'Reasoner 🧠',  note: 'R1 — استدلال متقدّم' },
+  { id: 'deepseek-v4-flash', label: 'V4 Flash 🚀',  note: '284B/13B — اقتصادي' },
+  { id: 'deepseek-v4-pro',   label: 'V4 Pro 🆕',    note: '1.6T/49B — الأقوى' },
+];
+
 type Provider = 'gemini' | 'mymemory' | 'google' | 'deepseek';
 
 const PROVIDERS: { id: Provider; label: string; note: string }[] = [
@@ -150,6 +157,29 @@ export function AutoPilotPanel({
                 <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">نموذج Gemini</p>
                 <div className="flex flex-wrap gap-1">
                   {GEMINI_MODELS.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => setAiModel(m.id)}
+                      className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                        aiModel === m.id
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border bg-background hover:border-primary/50 text-foreground'
+                      }`}
+                      title={m.note}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* DeepSeek model selector */}
+            {translationProvider === 'deepseek' && (
+              <div>
+                <p className="text-[11px] font-semibold text-muted-foreground mb-1.5">نموذج DeepSeek</p>
+                <div className="flex flex-wrap gap-1">
+                  {DEEPSEEK_MODELS.map(m => (
                     <button
                       key={m.id}
                       onClick={() => setAiModel(m.id)}

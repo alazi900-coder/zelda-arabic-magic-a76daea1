@@ -47,10 +47,9 @@ Deno.serve(async (req) => {
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+    const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 
     // خريطة موحَّدة لكلّ النماذج المعروضة في TranslationAIEnhancePanel.
-    // ملاحظة: أضفنا gpt-5/gpt-5-mini/gpt-5-nano لتفادي السقوط الصامت إلى gemini-2.5-flash.
     const gatewayModelMap: Record<string, string> = {
       'gemini-3-flash-preview': 'google/gemini-3-flash-preview',
       'gemini-3-pro-preview': 'google/gemini-3-pro-preview',
@@ -61,10 +60,32 @@ Deno.serve(async (req) => {
       'gpt-5-mini': 'openai/gpt-5-mini',
       'gpt-5-nano': 'openai/gpt-5-nano',
     };
-    const resolvedModel = (aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash';
 
-    // مساعد لاستدعاء بوّابة Lovable AI.
+    // اختيار المسار: DeepSeek مباشر أو Lovable AI Gateway
+    const isDeepSeek = aiModel === 'deepseek-chat' || aiModel === 'deepseek-reasoner';
+    const resolvedModel = isDeepSeek
+      ? (aiModel as string)
+      : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
+
+    if (isDeepSeek && !DEEPSEEK_API_KEY) {
+      return new Response(JSON.stringify({ error: 'DeepSeek غير مُكوّن — أضف DEEPSEEK_API_KEY في أسرار Lovable Cloud' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
+    // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
     const callAI = async (messages: Array<{ role: string; content: string }>) => {
+      if (isDeepSeek) {
+        return await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model: resolvedModel, messages }),
+        });
+      }
       return await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {

@@ -4,14 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Loader2, Sparkles, Tag, LogIn, BookOpen, AlertTriangle, Eye, EyeOff, RotateCcw, CheckCircle2, Package } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
-import {
-  DEFAULT_OPENROUTER_MODEL,
-  isOpenRouterModelId,
-  getOpenRouterModels,
-  getOpenRouterFetchedAt,
-  refreshOpenRouterModels,
-  type OpenRouterModelOption,
-} from "@/lib/openrouter-models";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -74,38 +66,6 @@ const Editor = () => {
   const [testConnStatus, setTestConnStatus] = React.useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
   const [testConnMsg, setTestConnMsg] = React.useState<Record<string, string>>({});
 
-  // Dynamic OpenRouter free models list (refreshable)
-  const [orModels, setOrModels] = React.useState<OpenRouterModelOption[]>(() => getOpenRouterModels());
-  const [orModelsFetchedAt, setOrModelsFetchedAt] = React.useState<string | null>(() => getOpenRouterFetchedAt());
-  const [orModelsRefreshing, setOrModelsRefreshing] = React.useState(false);
-
-  const handleRefreshOrModels = React.useCallback(async () => {
-    setOrModelsRefreshing(true);
-    const { toast } = await import('@/hooks/use-toast');
-    try {
-      const fresh = await refreshOpenRouterModels();
-      setOrModels(fresh);
-      setOrModelsFetchedAt(new Date().toISOString());
-      toast({
-        title: '✅ تم تحديث القائمة',
-        description: `تم جلب ${fresh.length} موديلاً مجانياً متاحاً حالياً`,
-      });
-      // If currently selected model is no longer in the list, fall back to default
-      if (editor.aiModel && !fresh.some((m) => m.id === editor.aiModel)) {
-        editor.setAiModel(fresh[0]?.id || DEFAULT_OPENROUTER_MODEL);
-      }
-    } catch (e) {
-      toast({
-        title: '⚠️ فشل تحديث القائمة',
-        description: e instanceof Error ? e.message : 'تحقق من الاتصال بالإنترنت',
-        variant: 'destructive',
-      });
-    } finally {
-      setOrModelsRefreshing(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor.aiModel]);
-
 
   // Detect source game on mount
   React.useEffect(() => {
@@ -121,15 +81,7 @@ const Editor = () => {
     setTestConnMsg(prev => ({ ...prev, [provider]: '' }));
     try {
       const providerApiKey =
-        provider === 'deepseek' ? editor.userDeepSeekKey :
-        provider === 'groq' ? editor.userGroqKey :
-        provider === 'cerebras' ? editor.userCerebrasKey :
-        provider === 'openrouter' ? editor.userOpenRouterKey :
-        provider === 'bedrock' ? editor.userBedrockKey : undefined;
-      const aiModel =
-        provider === 'openrouter'
-          ? (isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL)
-          : editor.aiModel;
+        provider === 'deepseek' ? editor.userDeepSeekKey : undefined;
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
@@ -138,7 +90,7 @@ const Editor = () => {
           provider,
           userApiKey: provider === 'gemini' ? (editor.userGeminiKey || undefined) : undefined,
           providerApiKey: providerApiKey || undefined,
-          aiModel,
+          aiModel: editor.aiModel,
         }),
       });
       const data = await response.json();
@@ -154,7 +106,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userGroqKey, editor.userCerebrasKey, editor.userOpenRouterKey, editor.userBedrockKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.aiModel]);
 
   const isPokemon = React.useMemo(() => {
     if (isDanganronpa) return false;
@@ -441,10 +393,6 @@ const Editor = () => {
             testConnStatus={testConnStatus}
             testConnMsg={testConnMsg}
             handleTestConnection={handleTestConnection}
-            orModels={orModels}
-            orModelsRefreshing={orModelsRefreshing}
-            orModelsFetchedAt={orModelsFetchedAt}
-            handleRefreshOrModels={handleRefreshOrModels}
           />
 
           <EditorProgressStatus

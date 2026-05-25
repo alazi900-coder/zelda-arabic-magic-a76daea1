@@ -7,8 +7,6 @@ function migrateMultiKeyToSingle(): void {
   try {
     const pairs: Array<[string, string]> = [
       ['userGeminiKeys', 'userGeminiKey'],
-      ['userGroqKeys', 'userGroqKey'],
-      ['userCerebrasKeys', 'userCerebrasKey'],
     ];
     for (const [arrayKey, legacyKey] of pairs) {
       const raw = localStorage.getItem(arrayKey);
@@ -50,8 +48,8 @@ export function useEditorSettings() {
     try {
       const saved = localStorage.getItem('aiModel') || 'gemini-2.5-flash';
       if (DEAD_MODELS.includes(saved)) {
-        localStorage.setItem('aiModel', 'qwen/qwen-2.5-72b-instruct:free');
-        return 'qwen/qwen-2.5-72b-instruct:free';
+        localStorage.setItem('aiModel', 'gemini-2.5-flash');
+        return 'gemini-2.5-flash';
       }
       return saved;
     } catch { return 'gemini-2.5-flash'; }
@@ -61,29 +59,18 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  const [translationProvider, _setTranslationProvider] = useState<'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras' | 'bedrock'>(() => {
-    try { return (localStorage.getItem('translationProvider') as 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras' | 'bedrock') || 'gemini'; } catch { return 'gemini'; }
+  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek';
+  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek'];
+  const [translationProvider, _setTranslationProvider] = useState<TranslationProvider>(() => {
+    try {
+      const saved = localStorage.getItem('translationProvider') as TranslationProvider | null;
+      if (saved && VALID_PROVIDERS.includes(saved)) return saved;
+      return 'gemini';
+    } catch { return 'gemini'; }
   });
-  const setTranslationProvider = useCallback((p: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras' | 'bedrock') => {
+  const setTranslationProvider = useCallback((p: TranslationProvider) => {
     _setTranslationProvider(p);
     try { localStorage.setItem('translationProvider', p); } catch { /* localStorage unavailable - ignore */ }
-  }, []);
-
-  // OpenRouter (free GLM-4.6 access)
-  const [userOpenRouterKey, _setUserOpenRouterKey] = useState(() => {
-    try { return localStorage.getItem('userOpenRouterKey') || ''; } catch { return ''; }
-  });
-  const setUserOpenRouterKey = useCallback((key: string) => {
-    _setUserOpenRouterKey(key);
-    try { if (key) localStorage.setItem('userOpenRouterKey', key); else localStorage.removeItem('userOpenRouterKey'); } catch { /* localStorage unavailable - ignore */ }
-  }, []);
-
-  const [userBedrockKey, _setUserBedrockKey] = useState(() => {
-    try { return localStorage.getItem('userBedrockKey') || ''; } catch { return ''; }
-  });
-  const setUserBedrockKey = useCallback((key: string) => {
-    _setUserBedrockKey(key);
-    try { if (key) localStorage.setItem('userBedrockKey', key); else localStorage.removeItem('userBedrockKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [userDeepSeekKey, _setUserDeepSeekKey] = useState(() => {
@@ -92,22 +79,6 @@ export function useEditorSettings() {
   const setUserDeepSeekKey = useCallback((key: string) => {
     _setUserDeepSeekKey(key);
     try { if (key) localStorage.setItem('userDeepSeekKey', key); else localStorage.removeItem('userDeepSeekKey'); } catch { /* localStorage unavailable - ignore */ }
-  }, []);
-
-  const [userGroqKey, _setUserGroqKey] = useState(() => {
-    try { return localStorage.getItem('userGroqKey') || ''; } catch { return ''; }
-  });
-  const setUserGroqKey = useCallback((key: string) => {
-    _setUserGroqKey(key);
-    try { if (key) localStorage.setItem('userGroqKey', key); else localStorage.removeItem('userGroqKey'); } catch { /* localStorage unavailable - ignore */ }
-  }, []);
-
-  const [userCerebrasKey, _setUserCerebrasKey] = useState(() => {
-    try { return localStorage.getItem('userCerebrasKey') || ''; } catch { return ''; }
-  });
-  const setUserCerebrasKey = useCallback((key: string) => {
-    _setUserCerebrasKey(key);
-    try { if (key) localStorage.setItem('userCerebrasKey', key); else localStorage.removeItem('userCerebrasKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
@@ -349,10 +320,6 @@ export function useEditorSettings() {
     mirrorPunctuation, setMirrorPunctuation,
     userGeminiKey, setUserGeminiKey,
     userDeepSeekKey, setUserDeepSeekKey,
-    userGroqKey, setUserGroqKey,
-    userCerebrasKey, setUserCerebrasKey,
-    userOpenRouterKey, setUserOpenRouterKey,
-    userBedrockKey, setUserBedrockKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,
     myMemoryEmail, setMyMemoryEmail,

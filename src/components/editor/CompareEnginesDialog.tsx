@@ -16,9 +16,6 @@ interface CompareEnginesDialogProps {
   glossary: string;
   userGeminiKey: string;
   userDeepSeekKey?: string;
-  userGroqKey?: string;
-  userCerebrasKey?: string;
-  userOpenRouterKey?: string;
   myMemoryEmail: string;
   aiModel?: string;
 }
@@ -30,7 +27,7 @@ interface EngineConfig {
   provider: string;
   model?: string;
   description: string;
-  requiresKey?: 'gemini' | 'deepseek' | 'groq' | 'cerebras' | 'openrouter';
+  requiresKey?: 'gemini' | 'deepseek';
 }
 
 function buildEngines(): EngineConfig[] {
@@ -39,7 +36,6 @@ function buildEngines(): EngineConfig[] {
     { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
     { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
     { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
-    { id: 'groq', label: 'Groq', emoji: '⚡', provider: 'groq', description: 'سريع جداً (مجاني)', requiresKey: 'groq' },
     { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
     { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
   ];
@@ -142,21 +138,18 @@ function renderTranslationWithProtectedTags(text: string) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, myMemoryEmail,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, myMemoryEmail,
 }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, string | null>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingEngines, setLoadingEngines] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
-  // Recompute engines whenever the dialog opens, so a refreshed OpenRouter list is reflected.
+  // Recompute engines whenever the dialog opens.
   const ALL_ENGINES = React.useMemo(() => buildEngines(), [open]);
 
   const getProviderKey = (engine: EngineConfig): string | undefined => {
     if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;
-    if (engine.requiresKey === 'groq') return userGroqKey || undefined;
-    if (engine.requiresKey === 'cerebras') return userCerebrasKey || undefined;
-    if (engine.requiresKey === 'openrouter') return userOpenRouterKey || undefined;
     return undefined;
   };
 
@@ -236,7 +229,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="font-display">🔍 مقارنة جميع المحركات</DialogTitle>
           <DialogDescription className="text-xs">
-            مقارنة ترجمة نفس النص عبر <span className="font-bold text-primary">{ALL_ENGINES.length}</span> محركاً (Gemini · DeepSeek · Groq · OpenRouter ×6 · MyMemory · Google) — اختر الأفضل
+            مقارنة ترجمة نفس النص عبر <span className="font-bold text-primary">{ALL_ENGINES.length}</span> محركاً (Gemini · DeepSeek · MyMemory · Google) — اختر الأفضل
           </DialogDescription>
         </DialogHeader>
 

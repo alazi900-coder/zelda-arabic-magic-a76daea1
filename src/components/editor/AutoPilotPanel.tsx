@@ -10,13 +10,11 @@ const GEMINI_MODELS = [
   { id: 'gemini-2.5-pro',   label: '2.5 Pro 💰',   note: 'مدفوع' },
 ];
 
-type Provider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter';
+type Provider = 'gemini' | 'mymemory' | 'google' | 'deepseek';
 
 const PROVIDERS: { id: Provider; label: string; note: string }[] = [
   { id: 'gemini',      label: 'Gemini',         note: 'مفتاح Gemini' },
   { id: 'deepseek',   label: 'DeepSeek',        note: 'مفتاح DeepSeek' },
-  { id: 'groq',       label: 'Groq',            note: 'مفتاح Groq' },
-  { id: 'openrouter', label: 'OpenRouter',      note: 'مفتاح OpenRouter' },
   { id: 'mymemory',   label: 'MyMemory',        note: 'بريد إلكتروني' },
   { id: 'google',     label: 'Google Translate', note: 'مجاني بالكامل' },
 ];

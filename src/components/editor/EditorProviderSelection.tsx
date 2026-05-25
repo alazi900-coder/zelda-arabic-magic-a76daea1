@@ -3,24 +3,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { Key, Loader2, CheckCircle2, XCircle, Wifi, RefreshCw } from "lucide-react";
+import { Key, Loader2, CheckCircle2, XCircle, Wifi } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROMPT_PRESETS } from "@/components/editor/promptPresets";
-import {
-  DEFAULT_OPENROUTER_MODEL,
-  isOpenRouterModelId,
-  type OpenRouterModelOption,
-} from "@/lib/openrouter-models";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
   | "userGeminiKey" | "setUserGeminiKey"
   | "userDeepSeekKey" | "setUserDeepSeekKey"
-  | "userGroqKey" | "setUserGroqKey"
-  | "userCerebrasKey" | "setUserCerebrasKey"
-  | "userOpenRouterKey" | "setUserOpenRouterKey"
-  | "userBedrockKey" | "setUserBedrockKey"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
   | "myMemoryCharsUsed"
@@ -40,10 +31,6 @@ interface EditorProviderSelectionProps {
   testConnStatus: Record<string, TestConnState>;
   testConnMsg: Record<string, string>;
   handleTestConnection: (provider: string) => void | Promise<void>;
-  orModels: OpenRouterModelOption[];
-  orModelsRefreshing: boolean;
-  orModelsFetchedAt: string | null;
-  handleRefreshOrModels: () => void | Promise<void>;
 }
 
 const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
@@ -51,10 +38,6 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
   testConnStatus,
   testConnMsg,
   handleTestConnection,
-  orModels,
-  orModelsRefreshing,
-  orModelsFetchedAt,
-  handleRefreshOrModels,
 }) => (
   <Card className="mb-6 border-primary/20 bg-primary/5">
     <CardContent className="p-3 md:p-4">
@@ -70,10 +53,6 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'google' as const, label: '🌐 Google Translate', badge: '✅' },
               { id: 'gemini' as const, label: '🤖 Lovable AI', badge: editor.userGeminiKey ? '✅' : '⚡' },
               { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
-              { id: 'groq' as const, label: '⚡ Groq (Llama)', badge: editor.userGroqKey ? '✅' : '⚠️' },
-              { id: 'cerebras' as const, label: '🚀 Cerebras (Qwen)', badge: editor.userCerebrasKey ? '✅' : '⚠️' },
-              { id: 'openrouter' as const, label: '🆕 OpenRouter', badge: editor.userOpenRouterKey ? '✅' : '⚠️' },
-              { id: 'bedrock' as const, label: '☁️ Amazon Bedrock', badge: editor.userBedrockKey ? '✅' : '⚠️' },
             ].map(({ id, label, badge }) => (
               <Button
                 key={id}
@@ -181,305 +160,6 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                   احصل على مفتاح ↗
                 </a>
               )}
-            </div>
-          </div>
-        )}
-
-        {editor.translationProvider === 'groq' && (
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2 flex-1">
-              <input
-                type="password"
-                placeholder="الصق مفتاح Groq API هنا..."
-                value={editor.userGroqKey}
-                onChange={(e) => editor.setUserGroqKey(e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
-                dir="ltr"
-              />
-              {editor.userGroqKey && (
-                <Button
-                  variant="outline" size="sm"
-                  onClick={() => handleTestConnection('groq')}
-                  disabled={testConnStatus['groq'] === 'testing'}
-                  className="text-xs shrink-0 gap-1"
-                >
-                  {testConnStatus['groq'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
-                   testConnStatus['groq'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
-                   testConnStatus['groq'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
-                   <Wifi className="w-3 h-3" />}
-                  تجربة
-                </Button>
-              )}
-              {editor.userGroqKey && (
-                <Button variant="ghost" size="sm" onClick={() => editor.setUserGroqKey('')} className="text-xs text-destructive shrink-0">
-                  مسح
-                </Button>
-              )}
-            </div>
-            {testConnMsg['groq'] && (
-              <p className={`text-xs font-body ${testConnStatus['groq'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
-                {testConnStatus['groq'] === 'ok' ? '✅' : '❌'} {testConnMsg['groq']}
-              </p>
-            )}
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground font-body">
-                {editor.userGroqKey
-                  ? '✅ مفتاح Groq مفعّل — Llama 3.3 70B (14,400 طلب/يوم مجاناً)'
-                  : '⚠️ يحتاج مفتاح API — سجّل مجاناً على console.groq.com'}
-              </p>
-              {!editor.userGroqKey && (
-                <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
-                  احصل على مفتاح ↗
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-        {editor.translationProvider === 'cerebras' && (
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2 flex-1">
-              <input
-                type="password"
-                placeholder="الصق مفتاح Cerebras API هنا..."
-                value={editor.userCerebrasKey}
-                onChange={(e) => editor.setUserCerebrasKey(e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
-                dir="ltr"
-              />
-              {editor.userCerebrasKey && (
-                <Button
-                  variant="outline" size="sm"
-                  onClick={() => handleTestConnection('cerebras')}
-                  disabled={testConnStatus['cerebras'] === 'testing'}
-                  className="text-xs shrink-0 gap-1"
-                >
-                  {testConnStatus['cerebras'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
-                   testConnStatus['cerebras'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
-                   testConnStatus['cerebras'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
-                   <Wifi className="w-3 h-3" />}
-                  تجربة
-                </Button>
-              )}
-              {editor.userCerebrasKey && (
-                <Button variant="ghost" size="sm" onClick={() => editor.setUserCerebrasKey('')} className="text-xs text-destructive shrink-0">
-                  مسح
-                </Button>
-              )}
-            </div>
-            {testConnMsg['cerebras'] && (
-              <p className={`text-xs font-body ${testConnStatus['cerebras'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
-                {testConnStatus['cerebras'] === 'ok' ? '✅' : '❌'} {testConnMsg['cerebras']}
-              </p>
-            )}
-            {editor.userCerebrasKey && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                {[
-                  { id: 'qwen-3-235b-a22b-instruct-2507', label: '🌟 Qwen 3 235B', desc: 'الأفضل للعربية' },
-                  { id: 'llama-4-scout-17b-16e-instruct', label: '⚡ Llama 4 Scout', desc: 'سريع جداً' },
-                  { id: 'llama-4-maverick-17b-128e-instruct', label: '🦅 Llama 4 Maverick', desc: 'سياق طويل' },
-                  { id: 'llama-3.3-70b', label: '🦙 Llama 3.3 70B', desc: 'مستقر' },
-                ].map(m => {
-                  const isSelected = editor.aiModel === m.id || (m.id === 'qwen-3-235b-a22b-instruct-2507' && !['llama-4-scout-17b-16e-instruct', 'llama-4-maverick-17b-128e-instruct', 'llama-3.3-70b'].includes(editor.aiModel));
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => editor.setAiModel(m.id)}
-                      className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${
-                        isSelected ? 'border-primary bg-primary/10 text-foreground'
-                                   : 'border-border bg-background text-muted-foreground hover:border-primary/50'
-                      }`}
-                    >
-                      <span className="font-display">{m.label}</span>
-                      <span className="text-[10px] opacity-70 truncate w-full" dir="ltr">{m.id}</span>
-                      <span className="text-[10px] opacity-70">{m.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground font-body">
-                {editor.userCerebrasKey
-                  ? '✅ مفتاح Cerebras مفعّل — أسرع inference + 1M tokens/يوم مجاناً'
-                  : '⚠️ يحتاج مفتاح API — سجّل مجاناً على cloud.cerebras.ai'}
-              </p>
-              {!editor.userCerebrasKey && (
-                <a href="https://cloud.cerebras.ai/platform/" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
-                  احصل على مفتاح ↗
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-        {editor.translationProvider === 'openrouter' && (
-          <div className="flex flex-col gap-3">
-            {/* Free Model Selector */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-xs font-display text-muted-foreground">🆓 موديل OpenRouter المجاني ({orModels.length}):</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefreshOrModels}
-                  disabled={orModelsRefreshing}
-                  className="h-7 text-xs gap-1"
-                >
-                  {orModelsRefreshing ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3 h-3" />
-                  )}
-                  {orModelsRefreshing ? 'جاري التحديث...' : 'تحديث القائمة'}
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                {orModels.map(m => {
-                  const isSelected = (editor.aiModel === m.id) || (m.id === DEFAULT_OPENROUTER_MODEL && !isOpenRouterModelId(editor.aiModel));
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => editor.setAiModel(m.id)}
-                      className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${
-                        isSelected
-                          ? 'border-primary bg-primary/10 text-foreground'
-                          : 'border-border bg-background text-muted-foreground hover:border-primary/50'
-                      }`}
-                    >
-                      <span className="font-display">{m.badge} {m.label}</span>
-                      <span className="text-[10px] opacity-70 truncate w-full" dir="ltr">{m.id}</span>
-                      <span className="text-[10px] opacity-70">{m.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-muted-foreground font-body">
-                {orModelsFetchedAt
-                  ? `آخر تحديث: ${new Date(orModelsFetchedAt).toLocaleString('ar')} — اضغط "تحديث القائمة" لجلب أحدث الموديلات المجانية مباشرة من OpenRouter.`
-                  : 'القائمة الافتراضية — اضغط "تحديث القائمة" لجلب أحدث الموديلات المجانية مباشرة من OpenRouter.'}
-              </p>
-            </div>
-
-            {/* API Key */}
-            <div className="flex gap-2 flex-1">
-              <input
-                type="password"
-                placeholder="الصق مفتاح OpenRouter API هنا (sk-or-v1-...)..."
-                value={editor.userOpenRouterKey}
-                onChange={(e) => editor.setUserOpenRouterKey(e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
-                dir="ltr"
-              />
-              {editor.userOpenRouterKey && (
-                <Button
-                  variant="outline" size="sm"
-                  onClick={() => handleTestConnection('openrouter')}
-                  disabled={testConnStatus['openrouter'] === 'testing'}
-                  className="text-xs shrink-0 gap-1"
-                >
-                  {testConnStatus['openrouter'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
-                   testConnStatus['openrouter'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
-                   testConnStatus['openrouter'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
-                   <Wifi className="w-3 h-3" />}
-                  تجربة
-                </Button>
-              )}
-              {editor.userOpenRouterKey && (
-                <Button variant="ghost" size="sm" onClick={() => editor.setUserOpenRouterKey('')} className="text-xs text-destructive shrink-0">
-                  مسح
-                </Button>
-              )}
-            </div>
-            {testConnMsg['openrouter'] && (
-              <p className={`text-xs font-body ${testConnStatus['openrouter'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
-                {testConnStatus['openrouter'] === 'ok' ? '✅' : '❌'} {testConnMsg['openrouter']}
-              </p>
-            )}
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground font-body">
-                {editor.userOpenRouterKey
-                  ? `✅ مفتاح OpenRouter مفعّل — الموديل: ${isOpenRouterModelId(editor.aiModel) ? editor.aiModel : DEFAULT_OPENROUTER_MODEL}`
-                  : '🆓 احصل على مفتاح مجاني من openrouter.ai ثم اختر أحد الموديلات المجانية أعلاه'}
-              </p>
-              {!editor.userOpenRouterKey && (
-                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
-                  احصل على مفتاح ↗
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-        {editor.translationProvider === 'bedrock' && (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-display text-muted-foreground">🧠 نموذج Amazon Bedrock:</span>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                {[
-                  { id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', label: '🎯 Claude 3.5 Sonnet v2', desc: 'الأفضل للعربية' },
-                  { id: 'anthropic.claude-3-haiku-20240307-v1:0',    label: '⚡ Claude 3 Haiku',       desc: 'سريع وخفيف' },
-                  { id: 'us.anthropic.claude-sonnet-4-5-20251101-v1:0', label: '🌟 Claude Sonnet 4.5',  desc: 'أحدث Claude' },
-                  { id: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',  label: '🚀 Claude Haiku 4.5',   desc: 'أسرع Claude' },
-                  { id: 'meta.llama3-3-70b-instruct-v1:0',           label: '🦙 Llama 3.3 70B',        desc: 'Meta — متعدد اللغات' },
-                  { id: 'amazon.nova-pro-v1:0',                      label: '☁️ Nova Pro',             desc: 'Amazon — أرخص' },
-                  { id: 'amazon.nova-lite-v1:0',                     label: '💨 Nova Lite',            desc: 'Amazon — سريع جداً' },
-                  { id: 'amazon.nova-micro-v1:0',                    label: '🔬 Nova Micro',           desc: 'Amazon — الأخف' },
-                  { id: 'us.deepseek.r1-v1:0',                       label: '🐋 DeepSeek R1',          desc: 'استدلال عميق' },
-                ].map(m => {
-                  const isSelected = editor.aiModel === m.id || (!['anthropic.claude-3-5-sonnet-20241022-v2:0','anthropic.claude-3-haiku-20240307-v1:0','us.anthropic.claude-sonnet-4-5-20251101-v1:0','us.anthropic.claude-haiku-4-5-20251001-v1:0','meta.llama3-3-70b-instruct-v1:0','amazon.nova-pro-v1:0','amazon.nova-lite-v1:0','amazon.nova-micro-v1:0','us.deepseek.r1-v1:0'].includes(editor.aiModel) && m.id === 'anthropic.claude-3-5-sonnet-20241022-v2:0');
-                  return (
-                    <button key={m.id} onClick={() => editor.setAiModel(m.id)}
-                      className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${isSelected ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-background text-muted-foreground hover:border-primary/50'}`}
-                    >
-                      <span className="font-display">{m.label}</span>
-                      <span className="text-[10px] opacity-70 truncate w-full" dir="ltr">{m.id}</span>
-                      <span className="text-[10px] opacity-70">{m.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-display text-muted-foreground">🔑 بيانات AWS (accessKeyId::secretKey::region):</span>
-              <div className="flex gap-2 flex-1">
-                <input
-                  type="password"
-                  placeholder="AKIAIOSFODNN7EXAMPLE::wJalrXUtnFEMI/K7MDENG::us-east-1"
-                  value={editor.userBedrockKey}
-                  onChange={(e) => editor.setUserBedrockKey(e.target.value)}
-                  className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
-                  dir="ltr"
-                />
-                {editor.userBedrockKey && (
-                  <Button variant="outline" size="sm"
-                    onClick={() => handleTestConnection('bedrock')}
-                    disabled={testConnStatus['bedrock'] === 'testing'}
-                    className="text-xs shrink-0 gap-1"
-                  >
-                    {testConnStatus['bedrock'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
-                     testConnStatus['bedrock'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
-                     testConnStatus['bedrock'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
-                     <Wifi className="w-3 h-3" />}
-                    تجربة
-                  </Button>
-                )}
-                {editor.userBedrockKey && (
-                  <Button variant="ghost" size="sm" onClick={() => editor.setUserBedrockKey('')} className="text-xs text-destructive shrink-0">
-                    مسح
-                  </Button>
-                )}
-              </div>
-              {testConnMsg['bedrock'] && (
-                <p className={`text-xs font-body ${testConnStatus['bedrock'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
-                  {testConnStatus['bedrock'] === 'ok' ? '✅' : '❌'} {testConnMsg['bedrock']}
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground font-body">
-                {editor.userBedrockKey
-                  ? '✅ بيانات AWS مُدخَلة — تأكد من تفعيل النماذج في AWS Bedrock Console'
-                  : '⚠️ يحتاج بيانات AWS IAM — accessKeyId::secretKey::region (مثال: us-east-1)'}
-              </p>
             </div>
           </div>
         )}
@@ -596,7 +276,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
       <div className="flex items-center justify-between border-t border-border/50 pt-3 mt-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-display">⏱️ تنظيم سرعة الإرسال</span>
-          <span className="text-xs text-muted-foreground font-body">(يحترم حدود الموفّر لتفادي 429 — 4س Gemini / 3س OpenRouter / 2س Groq+Cerebras للمجاني)</span>
+          <span className="text-xs text-muted-foreground font-body">(يحترم حدود الموفّر لتفادي 429 — 4س Gemini للمجاني)</span>
         </div>
         <Switch
           checked={editor.aiThrottleEnabled}

@@ -18,30 +18,12 @@ interface EnhanceEntry {
   tableName?: string;
 }
 
-// عدّاد علامات التنوين/الحركات/الشدّة/السكون وأشكال الهمزة. خطّ اللعبة لا يدعم
-// هذه الرموز، فأيّ اقتراح من الـ AI يضيف أو يحذف منها سيُرفض في الـ post-filter
-// أدناه (شبكة أمان فوق إرشادات الـ prompt).
-function countDiacriticsAndHamzas(text: string): number {
-  if (!text) return 0;
-  let count = 0;
-  for (const ch of text) {
-    const c = ch.charCodeAt(0);
-    // التنوين/الحركات/الشدّة/السكون والعلامات الموسَّعة.
-    if ((c >= 0x064B && c <= 0x0652) ||
-        (c >= 0x0610 && c <= 0x061A) ||
-        (c >= 0x0653 && c <= 0x065F) ||
-        c === 0x0670 ||
-        (c >= 0x06D6 && c <= 0x06DC) ||
-        (c >= 0x06DF && c <= 0x06E4) ||
-        c === 0x06E7 || c === 0x06E8 ||
-        (c >= 0x06EA && c <= 0x06ED)) {
-      count++;
-    } else if (c >= 0x0621 && c <= 0x0626) {
-      // أشكال الهمزة: ء آ أ ؤ إ ئ.
-      count++;
-    }
-  }
-  return count;
+// خطّ اللعبة لا يدعم علامات التنوين/الحركات/الشدّة/السكون. نُزيلها تلقائيّاً
+// من اقتراحات الـ AI قبل إرجاعها لضمان توافقها مع خطّ اللعبة بصرف النظر عن
+// تجاهل الـ AI لتعليمات الـ prompt.
+function stripGameUnsupportedMarks(text: string): string {
+  if (!text) return text;
+  return text.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '');
 }
 
 // قائمة الأسماء الأعلام والمصطلحات الخاصّة بـ Xenoblade Chronicles 1 — لا يجب على الـ AI
@@ -100,6 +82,8 @@ Deno.serve(async (req) => {
     }
     if (!isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
+    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, entriesCount: entries?.length || 0 });
+
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
     // DeepSeek يحتاج response_format=json_object صراحةً وإلّا يُرجع نصّاً
     // داخل markdown fences لا يلتقطه parser الـ JSON دائماً (نفس تكوين
@@ -146,14 +130,16 @@ Deno.serve(async (req) => {
 🔀 **reorder** — الترجمة صحيحة لغوياً وكلماتها سليمة، لكن **ترتيب الكلمات/الجُمل** غير سليم ويجعلها تُقرأ بشكل عكسي أو مربك
 ✍️ **weak** — الترجمة مفهومة لكنّها **ركيكة** (حرفيّة جداً، أسلوب ضعيف، تحتاج إعادة صياغة لتصبح طبيعيّة)
 
-🚫 **ممنوع منعاً قاطعاً (نظام عرض اللعبة لا يدعمها — أيّ اقتراح يخالف ذلك سيُرفض):**
-- إضافة أو حذف أيّ من: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ)
-- إضافة أو حذف أيّ همزة (ء آ أ ؤ إ ئ) — اترك الكلمة كما هي حتّى لو كانت إملائيّاً ناقصة
-- يجب أن يكون عدد علامات التنوين/الحركات والهمزات في **الاقتراح** مساوياً تماماً لعددها في **الترجمة الحاليّة**
+🚫 **لا تستخدم في اقتراحاتك** (خطّ اللعبة لا يدعم هذه الرموز):
+- التنوين (ً ٌ ٍ)
+- الحركات (َ ُ ِ)
+- الشدّة (ّ) والسكون (ْ)
+(ستُنظَّف اقتراحاتك تلقائيّاً من هذه الرموز قبل عرضها — فلا تُضيع وقتك بإضافتها.)
 
 🚫 **لا تُبلّغ أيضاً عن**:
 - الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) سواء بقيت إنجليزيّة أو نُقلت صوتياً
 - تفضيلات أسلوبيّة بحتة لو الجملة سليمة
+- اقتراحات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ حقيقيّ
 
 ⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC. لا تَحذف أو تُضِف أيّ رمز من هذه النطاقات.
 
@@ -220,6 +206,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         console.error('JSON parse error:', e, 'Content:', content.slice(0, 500));
       }
 
+      console.log('[enhance] grammar mode parsed', { issuesCount: parsed.issues?.length || 0, model: resolvedModel });
       const mappedIssues = (parsed.issues || []).map((i) => ({
         key: entries[i.index ?? -1]?.key || '',
         original: entries[i.index ?? -1]?.original || '',
@@ -228,11 +215,11 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         issue: i.issue,
         detail: i.detail || '',
         fixExplanation: i.fix_explanation || i.fixExplanation || '',
-        suggestion: i.suggestion,
+        // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
+        // من رفض الاقتراح بالكامل، يكفي تنظيفه.
+        suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
         severity: i.severity || 'medium',
-      })).filter((i) => i.key && i.suggestion)
-        // شبكة أمان: ارفض الاقتراحات التي تُضيف أو تحذف تنوين/حركات/همزات.
-        .filter((i) => countDiacriticsAndHamzas(i.suggestion!) === countDiacriticsAndHamzas(i.translation));
+      })).filter((i) => i.key && i.suggestion && i.suggestion !== i.translation);
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -261,14 +248,16 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 - grammar — خطأ نحويّ صرف
 - punctuation — مشكلة ترقيم
 
-🚫 **ممنوع منعاً قاطعاً (نظام عرض اللعبة لا يدعمها — أيّ اقتراح يخالف ذلك سيُرفض):**
-- إضافة أو حذف أيّ من: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ)
-- إضافة أو حذف أيّ همزة (ء آ أ ؤ إ ئ) — اترك الكلمة كما هي حتّى لو كانت إملائيّاً ناقصة
-- يجب أن يكون عدد علامات التنوين/الحركات والهمزات في **suggested** مساوياً تماماً لعددها في **الترجمة الحاليّة**
+🚫 **لا تستخدم في suggested** (خطّ اللعبة لا يدعم هذه الرموز):
+- التنوين (ً ٌ ٍ)
+- الحركات (َ ُ ِ)
+- الشدّة (ّ) والسكون (ْ)
+(ستُنظَّف اقتراحاتك تلقائيّاً من هذه الرموز قبل عرضها.)
 
 🚫 **لا تقترح أيضاً**:
 - تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) سواء بقيت إنجليزيّة أو نُقلت صوتياً
 - تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة
+- تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ
 
 ⚠️ **قواعد صارمة:**
 - لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.
@@ -353,17 +342,24 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         console.error('JSON parse error (combined):', e, 'Content:', content.slice(0, 500));
       }
 
+      console.log('[enhance] combined mode parsed', { resultsCount: parsed.results?.length || 0, model: resolvedModel });
       // تنسيق موحَّد: كلّ نتيجة تحوي الحقول اللازمة لكلا اللوحَتين (issues + suggestions).
       const mappedResults = (parsed.results || []).map((r) => {
         const entry = entries[r.index ?? -1];
+        // إزالة علامات التشكيل تلقائيّاً من الاقتراح والبدائل.
+        const cleanedSuggested = stripGameUnsupportedMarks(r.suggested || '');
+        const cleanedAlternatives = Array.isArray(r.alternatives)
+          ? r.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
+            .map((a) => stripGameUnsupportedMarks(a as string))
+          : [];
         return {
           key: entry?.key || '',
           original: entry?.original || '',
           translation: entry?.translation || '',
           current: entry?.translation || '',
-          suggested: r.suggested,
-          suggestion: r.suggested,
-          alternatives: Array.isArray(r.alternatives) ? r.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim()) : [],
+          suggested: cleanedSuggested,
+          suggestion: cleanedSuggested,
+          alternatives: cleanedAlternatives,
           category: r.category && ['wrong', 'reorder', 'weak', 'style'].includes(r.category) ? r.category : 'style',
           type: r.type || 'style',
           issue: r.issue || '',
@@ -373,9 +369,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           severity: r.severity || 'medium',
         };
       })
-        .filter((r) => r.key && r.suggested)
-        // شبكة أمان: ارفض الاقتراحات التي تُضيف أو تحذف تنوين/حركات/همزات.
-        .filter((r) => countDiacriticsAndHamzas(r.suggested!) === countDiacriticsAndHamzas(r.translation));
+        .filter((r) => r.key && r.suggested && r.suggested !== r.translation);
 
       return new Response(JSON.stringify({ results: mappedResults }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -394,14 +388,16 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 4. **consistency** — نفس المصطلح مترجم بشكلَين مختلفَين بين الجُمل
 5. **terminology** — مصطلح من القاموس مترجم بشكل خاطئ
 
-🚫 **ممنوع منعاً قاطعاً (نظام عرض اللعبة لا يدعمها — أيّ اقتراح يخالف ذلك سيُرفض):**
-- إضافة أو حذف أيّ من: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ)
-- إضافة أو حذف أيّ همزة (ء آ أ ؤ إ ئ) — اترك الكلمة كما هي حتّى لو كانت إملائيّاً ناقصة
-- يجب أن يكون عدد علامات التنوين/الحركات والهمزات في **suggested** مساوياً تماماً لعددها في **الترجمة الحاليّة**
+🚫 **لا تستخدم في suggested** (خطّ اللعبة لا يدعم هذه الرموز):
+- التنوين (ً ٌ ٍ)
+- الحركات (َ ُ ِ)
+- الشدّة (ّ) والسكون (ْ)
+(ستُنظَّف اقتراحاتك تلقائيّاً من هذه الرموز قبل عرضها.)
 
 🚫 **لا تقترح أيضاً**:
 - تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) إلى الإنجليزيّة أو العكس — اتركها كما هي
 - تعديلات تفضيليّة في الأسلوب لو الجملة مفهومة
+- تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ
 
 ⚠️ **قواعد صارمة:**
 - لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.
@@ -471,18 +467,21 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       console.error('JSON parse error (enhance):', e, 'Content:', content.slice(0, 500));
     }
 
+    console.log('[enhance] enhance mode parsed', { suggestionsCount: parsed.suggestions?.length || 0, model: resolvedModel });
     const mappedSuggestions = (parsed.suggestions || []).map((s) => ({
       key: entries[s.index ?? -1]?.key || '',
       original: entries[s.index ?? -1]?.original || '',
       current: entries[s.index ?? -1]?.translation || '',
-      suggested: s.suggested,
-      alternatives: Array.isArray(s.alternatives) ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim()) : [],
+      // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
+      suggested: stripGameUnsupportedMarks(s.suggested || ''),
+      alternatives: Array.isArray(s.alternatives)
+        ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
+          .map((a) => stripGameUnsupportedMarks(a as string))
+        : [],
       reason: s.reason,
       detail: s.detail || '',
       type: s.type || 'style',
-    })).filter((s) => s.key && s.suggested)
-      // شبكة أمان: ارفض الاقتراحات التي تُضيف أو تحذف تنوين/حركات/همزات.
-      .filter((s) => countDiacriticsAndHamzas(s.suggested!) === countDiacriticsAndHamzas(s.current));
+    })).filter((s) => s.key && s.suggested && s.suggested !== s.current);
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

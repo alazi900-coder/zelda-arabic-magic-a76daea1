@@ -437,7 +437,7 @@ const Editor = () => {
           {/* AI Translation Enhancement */}
           {!editor.hiddenPanels.includes('ai-enhance') && (
             <TranslationAIEnhancePanel
-              entries={editor.state?.entries || []}
+              entries={editor.filteredEntries || []}
               translations={editor.state?.translations || {}}
               onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
               glossary={editor.activeGlossary}

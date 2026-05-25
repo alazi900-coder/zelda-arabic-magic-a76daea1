@@ -33,11 +33,7 @@ interface UseEditorTranslationProps {
   setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
   userGeminiKey: string;
   userDeepSeekKey: string;
-  userGroqKey: string;
-  userCerebrasKey: string;
-  userOpenRouterKey: string;
-  userBedrockKey: string;
-  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'groq' | 'openrouter' | 'cerebras' | 'bedrock';
+  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek';
   myMemoryEmail: string;
   addMyMemoryChars: (chars: number) => void;
   addAiRequest: (count?: number) => void;
@@ -65,18 +61,14 @@ interface UseEditorTranslationProps {
  */
 const PROVIDER_BATCH_DELAY_MS = {
   gemini:     { free: 4000, paid: 500 },  // ~15 RPM free tier
-  openrouter: { free: 3000, paid: 1000 }, // ~20 RPM typical free model
-  groq:       { free: 2000, paid: 500 },  // ~30 RPM free
-  cerebras:   { free: 2000, paid: 500 },  // ~30 RPM free, 1M tok/day
   deepseek:   { free: 0,    paid: 0 },    // generous; no proactive throttle
-  bedrock:    { free: 500,  paid: 500 },  // AWS has generous limits
   mymemory:   { free: 0,    paid: 0 },    // not AI; own char-budget logic
   google:     { free: 0,    paid: 0 },    // not AI
 } as const;
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey, userBedrockKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled,
 }: UseEditorTranslationProps) {
 
   /**
@@ -194,11 +186,7 @@ export function useEditorTranslation({
         glossary: activeGlossary,
         userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
         providerApiKey:
-          (translationProvider === 'deepseek' ? userDeepSeekKey :
-           translationProvider === 'groq' ? userGroqKey :
-           translationProvider === 'cerebras' ? userCerebrasKey :
-           translationProvider === 'openrouter' ? userOpenRouterKey :
-           translationProvider === 'bedrock' ? userBedrockKey : undefined) || undefined,
+          (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
         provider: translationProvider,
         myMemoryEmail: myMemoryEmail || undefined,
         rebalanceNewlines: rebalanceNewlines || undefined,
@@ -281,8 +269,8 @@ export function useEditorTranslation({
     // إعادة الإنشاء عند تغيّر إعدادات المزوّد/الموديل/القاموس حتى تُلتقط القيم الحديثة في buildPayload.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey,
-    userCerebrasKey, userOpenRouterKey, userBedrockKey, myMemoryEmail, rebalanceNewlines, npcMaxLines,
+    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
+    myMemoryEmail, rebalanceNewlines, npcMaxLines,
     npcMode, aiModel, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled,
   ]);
 
@@ -529,7 +517,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : translationProvider === 'bedrock' ? userBedrockKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
         });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
@@ -655,11 +643,7 @@ export function useEditorTranslation({
       : null;
     const hasPersonalKey =
       (translationProvider === 'gemini'     && !!userGeminiKey)     ||
-      (translationProvider === 'openrouter' && !!userOpenRouterKey) ||
-      (translationProvider === 'groq'       && !!userGroqKey)       ||
-      (translationProvider === 'cerebras'   && !!userCerebrasKey)   ||
-      (translationProvider === 'deepseek'   && !!userDeepSeekKey)   ||
-      (translationProvider === 'bedrock'    && !!userBedrockKey);
+      (translationProvider === 'deepseek'   && !!userDeepSeekKey);
     const batchDelayMs = !aiThrottleEnabled
       ? 0
       : aiRoutingMode === 'paid'
@@ -794,7 +778,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : translationProvider === 'bedrock' ? userBedrockKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -852,7 +836,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : translationProvider === 'bedrock' ? userBedrockKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -1009,7 +993,7 @@ export function useEditorTranslation({
             entries,
             glossary: activeGlossary,
             userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-            providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : translationProvider === 'bedrock' ? userBedrockKey : undefined) || undefined,
+            providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
             provider: translationProvider,
             myMemoryEmail: myMemoryEmail || undefined,
             npcMaxLines,
@@ -1207,7 +1191,7 @@ export function useEditorTranslation({
                 entries,
                 glossary: activeGlossary,
                 userApiKey: effectiveProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-                providerApiKey: (effectiveProvider === 'deepseek' ? userDeepSeekKey : effectiveProvider === 'groq' ? userGroqKey : effectiveProvider === 'cerebras' ? userCerebrasKey : effectiveProvider === 'openrouter' ? userOpenRouterKey : undefined) || undefined,
+                providerApiKey: (effectiveProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
                 provider: effectiveProvider,
                 myMemoryEmail: myMemoryEmail || undefined,
                 npcMaxLines,
@@ -1458,7 +1442,7 @@ export function useEditorTranslation({
               entries: [{ key, original: entry.original }],
               glossary: activeGlossary,
               userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'groq' ? userGroqKey : translationProvider === 'cerebras' ? userCerebrasKey : translationProvider === 'openrouter' ? userOpenRouterKey : translationProvider === 'bedrock' ? userBedrockKey : undefined) || undefined,
+              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
               provider: translationProvider,
               myMemoryEmail: myMemoryEmail || undefined,
               rebalanceNewlines: rebalanceNewlines || undefined,

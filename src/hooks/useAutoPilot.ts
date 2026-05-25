@@ -51,9 +51,6 @@ interface UseAutoPilotProps {
   translationProvider: string;
   userGeminiKey: string;
   userDeepSeekKey: string;
-  userGroqKey: string;
-  userCerebrasKey: string;
-  userOpenRouterKey: string;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
@@ -73,21 +70,13 @@ const RATE_LIMIT_WAIT_MS = 60_000;  // wait 60s on client-side 429 before retryi
 // 429 retries are INFINITE — the agent keeps going (even while user sleeps)
 // until the request succeeds or the user clicks Stop.
 
-function pickFreeProvider(
-  userOpenRouterKey: string,
-  userGroqKey: string,
-  userCerebrasKey: string,
-  myMemoryEmail: string,
-): { provider: string; model?: string; label: string } {
-  if (userCerebrasKey) return { provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B (Cerebras مجاني)' };
-  if (userOpenRouterKey) return { provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen 2.5 72B (OpenRouter مجاني)' };
-  if (userGroqKey) return { provider: 'groq', label: 'Groq Llama 3.3 (مجاني)' };
+function pickFreeProvider(): { provider: string; model?: string; label: string } {
   return { provider: 'google', label: 'Google Translate (مجاني تماماً)' };
 }
 
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
-  translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey, userOpenRouterKey,
+  translationProvider, userGeminiKey, userDeepSeekKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
   customPromptInstructions, aiRoutingMode = 'paid',
@@ -111,8 +100,8 @@ export function useAutoPilot({
   const clearDiagnostics = useCallback(() => setDiagnostics([]), []);
 
   const freeProviderLabel = useMemo(
-    () => pickFreeProvider(userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail).label,
-    [userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail],
+    () => pickFreeProvider().label,
+    [],
   );
 
   const stop = useCallback(() => { abortRef.current?.abort(); }, []);
@@ -123,11 +112,7 @@ export function useAutoPilot({
     forceModel?: string,
   ) => {
     const prov = forceProvider || translationProvider;
-    const provKey = prov === 'deepseek' ? userDeepSeekKey
-      : prov === 'groq' ? userGroqKey
-      : prov === 'cerebras' ? userCerebrasKey
-      : prov === 'openrouter' ? userOpenRouterKey
-      : undefined;
+    const provKey = prov === 'deepseek' ? userDeepSeekKey : undefined;
     return JSON.stringify({
       entries,
       glossary: activeGlossary,
@@ -138,12 +123,12 @@ export function useAutoPilot({
       rebalanceNewlines: rebalanceNewlines || undefined,
       npcMaxLines,
       npcMode: npcMode || undefined,
-      aiModel: forceModel || (prov === 'gemini' ? aiModel : prov === 'openrouter' && aiModel?.includes('/') ? aiModel : undefined),
+      aiModel: forceModel || (prov === 'gemini' ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
     });
-  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userGroqKey, userCerebrasKey,
-      userOpenRouterKey, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode]);
+  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
+      myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {
     if (!state || running) return;
@@ -184,24 +169,14 @@ export function useAutoPilot({
       else { setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...t } } : null); }
     };
 
-    const freeChoice = pickFreeProvider(userOpenRouterKey, userGroqKey, userCerebrasKey, myMemoryEmail);
+    const freeChoice = pickFreeProvider();
     const aiProvider = runMode === 'free' ? freeChoice.provider : translationProvider;
     const aiModelOverride = runMode === 'free' ? freeChoice.model : undefined;
 
-    // سلسلة Fallback: عند انتهاء الحصة يتحول تلقائياً للمزود التالي
-    const fallbackChain: Array<{ provider: string; model?: string; label: string }> = runMode === 'free'
-      ? [
-          ...(aiProvider !== 'cerebras' && userCerebrasKey ? [{ provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B (Cerebras)' }] : []),
-          ...(aiProvider !== 'groq' && userGroqKey ? [{ provider: 'groq', label: 'Groq Llama 3.3' }] : []),
-          { provider: 'google', label: 'Google Translate' },
-        ]
-      : [
-          // الوضع الذكي: إذا انتهت الحصة تحول للمجاني تلقائياً
-          ...(userCerebrasKey ? [{ provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B (Cerebras)' }] : []),
-          ...(userOpenRouterKey ? [{ provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen (OpenRouter مجاني)' }] : []),
-          ...(userGroqKey ? [{ provider: 'groq', label: 'Groq Llama 3.3' }] : []),
-          { provider: 'google', label: 'Google Translate' },
-        ];
+    // سلسلة Fallback: عند انتهاء الحصة يتحول تلقائياً للمجاني (Google Translate)
+    const fallbackChain: Array<{ provider: string; model?: string; label: string }> = [
+      { provider: 'google', label: 'Google Translate' },
+    ];
 
     const log = (msg: string, type: AutoPilotLog['type'] = 'info', ph = '') =>
       setLogs(prev => [...prev, { id: ++logIdRef.current, phase: ph, message: msg, type }]);
@@ -612,7 +587,7 @@ export function useAutoPilot({
       abortRef.current = null;
     }
   }, [state, setState, running, mode, previewMode, activeGlossary, parseGlossaryMap, translationProvider,
-      userGeminiKey, userGroqKey, userCerebrasKey, userOpenRouterKey, myMemoryEmail, rebalanceNewlines,
+      userGeminiKey, myMemoryEmail, rebalanceNewlines,
       npcMaxLines, aiModel, addAiRequest, addMyMemoryChars, qualityStats, filteredEntries, buildFetchBody]);
 
   const applyPending = useCallback((selectedKeys: Set<string>) => {

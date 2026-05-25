@@ -69,7 +69,7 @@ type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 const BATCH_SIZE = 50;
 const PARALLEL_REQUESTS = 3;
 
-interface ModelOption { value: string; label: string; group: "google" | "openai" | "local" | "free"; }
+interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }
 
 const MODEL_OPTIONS: ModelOption[] = [
   { value: "google-translate-check", label: "Google Translate — فحص دقة (مجاني)", group: "free" },
@@ -81,6 +81,8 @@ const MODEL_OPTIONS: ModelOption[] = [
   { value: "gpt-5", label: "GPT-5 (دقة قصوى)", group: "openai" },
   { value: "gpt-5-mini", label: "GPT-5 mini (متوازن — أرخص)", group: "openai" },
   { value: "gpt-5-nano", label: "GPT-5 nano (الأسرع — الأرخص)", group: "openai" },
+  { value: "deepseek-chat", label: "🐋 DeepSeek V4-Pro (رخيص جداً — قوي)", group: "deepseek" },
+  { value: "deepseek-reasoner", label: "🐋 DeepSeek Reasoner (تفكير معمّق)", group: "deepseek" },
 ];
 
 const GOOGLE_CHECK_CONCURRENCY = 3;
@@ -917,6 +919,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                     <SelectGroup>
                       <SelectLabel className="text-[10px]">OpenAI</SelectLabel>
                       {MODEL_OPTIONS.filter(m => m.group === "openai").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px]">DeepSeek</SelectLabel>
+                      {MODEL_OPTIONS.filter(m => m.group === "deepseek").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
                     </SelectGroup>
                   </SelectContent>
                 </Select>

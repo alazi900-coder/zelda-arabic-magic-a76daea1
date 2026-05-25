@@ -190,7 +190,25 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       }
 
       const aiResult = await response.json();
-      const content = aiResult.choices?.[0]?.message?.content || '';
+      // بعض مزوّدي الـ AI (منهم DeepSeek عندما يكون اسم النموذج غير معروف أو توجد مشكلة في
+      // الحساب) يُرجعون 200 OK مع error داخلي بدلاً من 4xx. يجب الكشف عن هذه الحالة حتّى
+      // لا تتحول إلى "تقدّم سريع بلا نتائج".
+      if (aiResult?.error) {
+        const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
+        console.error('[enhance] grammar AI inner error:', errMsg);
+        // 200 مع error field — لتفعيل toast في الواجهة (التي تعرض data.error)
+        // بدلاً من ابتلاع الخطأ عبر catch block.
+        return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
+        console.error('[enhance] grammar: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
+        return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const content = aiResult.choices[0]?.message?.content || '';
       type GrammarIssueRaw = { index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string };
       let parsed: { issues: GrammarIssueRaw[] } = { issues: [] };
       try {
@@ -315,7 +333,20 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       }
 
       const aiResult = await response.json();
-      const content = aiResult.choices?.[0]?.message?.content || '';
+      if (aiResult?.error) {
+        const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
+        console.error('[enhance] combined AI inner error:', errMsg);
+        return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
+        console.error('[enhance] combined: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
+        return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const content = aiResult.choices[0]?.message?.content || '';
       type CombinedResultRaw = {
         index?: number;
         category?: string;
@@ -451,7 +482,20 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     }
 
     const aiResult = await response.json();
-    const content = aiResult.choices?.[0]?.message?.content || '';
+    if (aiResult?.error) {
+      const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
+      console.error('[enhance] enhance AI inner error:', errMsg);
+      return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
+      console.error('[enhance] enhance: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
+      return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const content = aiResult.choices[0]?.message?.content || '';
     type EnhanceSuggestionRaw = { index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string };
     let parsed: { suggestions: EnhanceSuggestionRaw[] } = { suggestions: [] };
     try {

@@ -160,6 +160,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   glossary,
 }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<EnhanceSuggestion[]>([]);
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>([]);
   const [activeTab, setActiveTab] = useState<string>("enhance");
@@ -242,6 +243,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     }
 
     setIsAnalyzing(true);
+    setLastError(null); // امسح خطأ التشغيل السابق عند بدء تشغيل جديد.
     // الفحص الشامل يملأ كلا التبويبين — ابدأ بتبويب القواعد لأنّ الأخطاء الجوهريّة أولويّة.
     setActiveTab(mode === "combined" ? "grammar" : mode);
     abortRef.current = false;
@@ -395,6 +397,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           });
           if (error) throw error;
           if (data?.error) {
+            // أظهر الخطأ في الأداة وفي toast لضمان رؤيته (الـ toast قد يُفوت).
+            setLastError(data.error);
             toast({ title: data.error, variant: "destructive" });
             return { data: null, count: textsToAnalyze.length };
           }
@@ -402,18 +406,33 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           setProcessedCount(processedKeysRef.current.size);
           return { data, count: textsToAnalyze.length };
         } catch (err) {
-          if (String(err).includes('429')) {
+          const errStr = String(err);
+          if (errStr.includes('429')) {
             toast({ title: "تم تجاوز حد الطلبات، جاري الانتظار...", variant: "destructive" });
             await new Promise(r => setTimeout(r, 5000));
             try {
-              const { data } = await supabase.functions.invoke('enhance-translations', {
+              const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
                 body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000), aiModel: model },
               });
+              if (retryError) throw retryError;
+              if (data?.error) {
+                setLastError(data.error);
+                toast({ title: data.error, variant: "destructive" });
+                return { data: null, count: textsToAnalyze.length };
+              }
               for (const t of textsToAnalyze) processedKeysRef.current.set(t.key, t.translation);
               setProcessedCount(processedKeysRef.current.size);
               return { data, count: textsToAnalyze.length };
-            } catch { return { data: null, count: textsToAnalyze.length }; }
+            } catch (retryErr) {
+              const msg = `فشل بعد إعادة المحاولة: ${String(retryErr).slice(0, 200)}`;
+              setLastError(msg);
+              return { data: null, count: textsToAnalyze.length };
+            }
           }
+          // عرض الخطأ في الأداة بدلاً من ابتلاعه بصمت.
+          const msg = `فشل الاتصال بـ enhance-translations: ${errStr.slice(0, 200)}`;
+          setLastError(msg);
+          toast({ title: msg, variant: "destructive" });
           return { data: null, count: textsToAnalyze.length };
         }
       });
@@ -1028,6 +1047,20 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Inline error banner — أظهر أسباب الفشل داخل الأداة (ليس فقط toast) */}
+        {lastError && (
+          <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 text-xs">
+              <p className="font-bold mb-1">فشل الفحص</p>
+              <p className="break-words" dir="auto">{lastError}</p>
+            </div>
+            <button onClick={() => setLastError(null)} className="text-destructive/70 hover:text-destructive" aria-label="أغلق">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Action buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <Button variant="default" size="sm" onClick={() => analyzeTranslations("combined")} disabled={isAnalyzing} className="gap-1.5 h-10">

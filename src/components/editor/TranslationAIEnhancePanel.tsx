@@ -81,8 +81,10 @@ const MODEL_OPTIONS: ModelOption[] = [
   { value: "gpt-5", label: "GPT-5 (دقة قصوى)", group: "openai" },
   { value: "gpt-5-mini", label: "GPT-5 mini (متوازن — أرخص)", group: "openai" },
   { value: "gpt-5-nano", label: "GPT-5 nano (الأسرع — الأرخص)", group: "openai" },
-  { value: "deepseek-chat", label: "🐋 DeepSeek V4-Pro (رخيص جداً — قوي)", group: "deepseek" },
-  { value: "deepseek-reasoner", label: "🐋 DeepSeek Reasoner (تفكير معمّق)", group: "deepseek" },
+  { value: "deepseek-chat", label: "🐋 DeepSeek Chat (V3 — سريع)", group: "deepseek" },
+  { value: "deepseek-reasoner", label: "🐋 DeepSeek Reasoner (R1 — تفكير معمّق)", group: "deepseek" },
+  { value: "deepseek-v4-flash", label: "🐋 DeepSeek V4 Flash (284B/13B — اقتصادي)", group: "deepseek" },
+  { value: "deepseek-v4-pro", label: "🐋 DeepSeek V4 Pro (1.6T/49B — الأقوى)", group: "deepseek" },
 ];
 
 const GOOGLE_CHECK_CONCURRENCY = 3;

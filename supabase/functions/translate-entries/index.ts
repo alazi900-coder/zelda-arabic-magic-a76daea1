@@ -1844,7 +1844,7 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const DEEPSEEK_MODELS = ['deepseek-chat', 'deepseek-reasoner'];
+      const DEEPSEEK_MODELS = ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash'];
       const dsModel = aiModel && DEEPSEEK_MODELS.includes(aiModel) ? aiModel : 'deepseek-chat';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const result = await translateWithOpenAICompat(

@@ -70,9 +70,18 @@ Deno.serve(async (req) => {
     };
 
     // اختيار المسار: DeepSeek مباشر أو Lovable AI Gateway
-    const isDeepSeek = aiModel === 'deepseek-chat' || aiModel === 'deepseek-reasoner' || aiModel === 'deepseek-v4-pro' || aiModel === 'deepseek-v4-flash';
+    // ملاحظة: DeepSeek API لا يقبل سوى اسمَين رسميَّين: deepseek-chat و deepseek-reasoner.
+    // أسماء V4 من واجهتنا تُحوَّل إلى الاسمَين الفعليَّين قبل الإرسال وإلّا يفشل الطلب
+    // بصمت (200 OK مع error داخلي) وتظهر "تجاوز كلّ النصوص" بلا اقتراحات.
+    const DEEPSEEK_NAME_MAP: Record<string, string> = {
+      'deepseek-chat': 'deepseek-chat',
+      'deepseek-reasoner': 'deepseek-reasoner',
+      'deepseek-v4-flash': 'deepseek-chat',
+      'deepseek-v4-pro': 'deepseek-reasoner',
+    };
+    const isDeepSeek = !!aiModel && aiModel in DEEPSEEK_NAME_MAP;
     const resolvedModel = isDeepSeek
-      ? (aiModel as string)
+      ? DEEPSEEK_NAME_MAP[aiModel as string]
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
 
     if (isDeepSeek && !DEEPSEEK_API_KEY) {

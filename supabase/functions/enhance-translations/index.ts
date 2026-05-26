@@ -47,15 +47,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
       aiModel?: string;
+      providerApiKey?: string;
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+    // مفتاح DeepSeek: الأولوية للمفتاح القادم من الواجهة (إعدادات المستخدم)
+    // ثم سرّ Lovable Cloud كاحتياط — مطابق لسلوك translate-entries.
+    const DEEPSEEK_API_KEY = (providerApiKey && providerApiKey.trim()) || Deno.env.get('DEEPSEEK_API_KEY');
 
     // خريطة موحَّدة لكلّ النماذج المعروضة في TranslationAIEnhancePanel.
     const gatewayModelMap: Record<string, string> = {

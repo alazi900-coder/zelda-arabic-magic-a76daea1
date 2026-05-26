@@ -183,6 +183,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const abortRef = useRef(false);
+  /** Aborts in-flight Supabase function calls when the user clicks Stop. */
+  const abortControllerRef = useRef<AbortController | null>(null);
   /** Maps key → translation text at the time of last scan. */
   const processedKeysRef = useRef<Map<string, string>>(new Map());
 
@@ -247,6 +249,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // الفحص الشامل يملأ كلا التبويبين — ابدأ بتبويب القواعد لأنّ الأخطاء الجوهريّة أولويّة.
     setActiveTab(mode === "combined" ? "grammar" : mode);
     abortRef.current = false;
+    // أنشئ AbortController جديد لهذه الجلسة حتّى يقتل stopAnalysis الطلبات الجارية فوراً.
+    abortControllerRef.current = new AbortController();
+    const abortSignal = abortControllerRef.current.signal;
 
     // ----- Google Translate accuracy check (free, no API key) -----
     if (model === "google-translate-check") {
@@ -401,6 +406,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               aiModel: model,
               providerApiKey,
             },
+            signal: abortSignal,
           });
           if (error) throw error;
           if (data?.error) {
@@ -414,12 +420,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           return { data, count: textsToAnalyze.length };
         } catch (err) {
           const errStr = String(err);
+          // إذا المستخدم ضغط إيقاف تجاهل الخطأ بصمت (لا تعرض توست ولا تعيد المحاولة).
+          if (abortSignal.aborted || (err instanceof Error && err.name === 'AbortError') || errStr.includes('AbortError') || errStr.includes('aborted')) {
+            return { data: null, count: textsToAnalyze.length };
+          }
           if (errStr.includes('429')) {
             toast({ title: "تم تجاوز حد الطلبات، جاري الانتظار...", variant: "destructive" });
             await new Promise(r => setTimeout(r, 5000));
+            if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
                 body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000), aiModel: model, providerApiKey },
+                signal: abortSignal,
               });
               if (retryError) throw retryError;
               if (data?.error) {
@@ -525,7 +537,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     }
   };
 
-  const stopAnalysis = () => { abortRef.current = true; };
+  const stopAnalysis = () => {
+    abortRef.current = true;
+    // اقطع الطلبات الجارية فوراً حتّى لا ينتظر المستخدم اكتمال الدفعة الحاليّة.
+    abortControllerRef.current?.abort();
+    setIsAnalyzing(false);
+    setProgress(null);
+  };
 
   const applyOne = (key: string, newText: string) => {
     const previous = translations[key] || "";

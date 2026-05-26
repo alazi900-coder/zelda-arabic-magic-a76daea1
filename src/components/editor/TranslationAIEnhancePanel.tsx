@@ -381,6 +381,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       });
     }
 
+    // مفتاح DeepSeek مخزَّن في إعدادات المحرّر؛ نمرّره للدالّة عند اختيار نموذج DeepSeek.
+    const deepseekKey = (() => {
+      try { return localStorage.getItem('userDeepSeekKey') || ''; } catch { return ''; }
+    })();
+    const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined) : undefined;
+
     for (let i = 0; i < batches.length; i += PARALLEL_REQUESTS) {
       if (abortRef.current) break;
 
@@ -393,6 +399,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               mode,
               glossary: glossary?.slice(0, 5000),
               aiModel: model,
+              providerApiKey,
             },
           });
           if (error) throw error;

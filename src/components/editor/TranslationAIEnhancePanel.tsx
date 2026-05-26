@@ -66,8 +66,18 @@ type GrammarCategory = "wrong" | "reorder" | "weak";
 
 type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
-const BATCH_SIZE = 50;
-const PARALLEL_REQUESTS = 3;
+// تخصيص حجم الدفعة وعدد الطلبات المتوازية حسب المحرّك — يمنع اختناق النماذج الثقيلة (DeepSeek Reasoner)
+// مع الحفاظ على سرعة المحرّكات السريعة (Gemini Flash).
+const ENGINE_TUNING: Record<string, { batchSize: number; parallel: number }> = {
+  google: { batchSize: 50, parallel: 3 },
+  openai: { batchSize: 30, parallel: 2 },
+  deepseek: { batchSize: 20, parallel: 1 },
+  free: { batchSize: 50, parallel: 3 },
+  local: { batchSize: 50, parallel: 3 },
+};
+
+const PROCESSED_KEYS_STORAGE = 'xc1_enhance_processed_keys_v1';
+const FILTER_PREFS_STORAGE = 'xc1_enhance_filter_prefs_v1';
 
 interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }
 
@@ -86,6 +96,13 @@ const MODEL_OPTIONS: ModelOption[] = [
   { value: "deepseek-v4-flash", label: "🐋 DeepSeek V4 Flash (284B/13B — اقتصادي)", group: "deepseek" },
   { value: "deepseek-v4-pro", label: "🐋 DeepSeek V4 Pro (1.6T/49B — الأقوى)", group: "deepseek" },
 ];
+
+/** يرجع إعدادات الدفعة/التوازي المناسبة للمحرّك المختار. */
+function getEngineTuning(modelValue: string): { batchSize: number; parallel: number; group: string } {
+  const opt = MODEL_OPTIONS.find(m => m.value === modelValue);
+  const group = opt?.group ?? "google";
+  return { ...ENGINE_TUNING[group], group };
+}
 
 const GOOGLE_CHECK_CONCURRENCY = 3;
 // Rule 1 thresholds: words present but order broken.
@@ -165,6 +182,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>([]);
   const [activeTab, setActiveTab] = useState<string>("enhance");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  /** وقت بدء الفحص — يُستخدم لحساب ETA. */
+  const [scanStartTime, setScanStartTime] = useState<number | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<GrammarCategory | null>(null);
@@ -193,9 +212,61 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     loadReviewMemory().then(setReviewMem);
   }, []);
 
+  // استعد حالة الفحص السابق (المفاتيح المُعالَجة) عند فتح الأداة — يتجاهلها تلقائيّاً لو تغيّرت الترجمة.
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PROCESSED_KEYS_STORAGE);
+      if (!raw) return;
+      const arr = JSON.parse(raw) as [string, string][];
+      const validEntries: [string, string][] = [];
+      for (const [key, oldText] of arr) {
+        if (translations[key] === oldText) validEntries.push([key, oldText]);
+      }
+      processedKeysRef.current = new Map(validEntries);
+      setProcessedCount(validEntries.length);
+    } catch { /* ignore quota / parse errors */ }
+    // تشغيل واحد فقط عند الإنشاء
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // استعد تفضيلات الفلترة المحفوظة (عبر الجلسات).
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FILTER_PREFS_STORAGE);
+      if (!raw) return;
+      const prefs = JSON.parse(raw) as {
+        filterType?: string | null;
+        severityFilter?: string | null;
+        categoryFilter?: GrammarCategory | null;
+      };
+      if (prefs.filterType !== undefined) setFilterType(prefs.filterType);
+      if (prefs.severityFilter !== undefined) setSeverityFilter(prefs.severityFilter);
+      if (prefs.categoryFilter !== undefined) setCategoryFilter(prefs.categoryFilter);
+    } catch { /* ignore */ }
+    // تشغيل واحد فقط عند الإنشاء
+  }, []);
+
+  // احفظ تفضيلات الفلترة عند أيّ تغيير.
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(FILTER_PREFS_STORAGE, JSON.stringify({
+        filterType, severityFilter, categoryFilter,
+      }));
+    } catch { /* quota or disabled */ }
+  }, [filterType, severityFilter, categoryFilter]);
+
+  /** حفظ مفاتيح تمّت معالجتها إلى localStorage للاستئناف بعد إعادة التحميل. */
+  const persistProcessedKeys = useCallback(() => {
+    try {
+      const arr = Array.from(processedKeysRef.current.entries());
+      localStorage.setItem(PROCESSED_KEYS_STORAGE, JSON.stringify(arr));
+    } catch { /* quota or disabled */ }
+  }, []);
+
   const resetProcessedKeys = useCallback(() => {
     processedKeysRef.current = new Map();
     setProcessedCount(0);
+    try { localStorage.removeItem(PROCESSED_KEYS_STORAGE); } catch { /* ignore */ }
   }, []);
 
   // ----- Scope filter for which entries are sent to AI -----
@@ -246,6 +317,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
     setIsAnalyzing(true);
     setLastError(null); // امسح خطأ التشغيل السابق عند بدء تشغيل جديد.
+    setScanStartTime(Date.now()); // لقياس ETA.
     // الفحص الشامل يملأ كلا التبويبين — ابدأ بتبويب القواعد لأنّ الأخطاء الجوهريّة أولويّة.
     setActiveTab(mode === "combined" ? "grammar" : mode);
     abortRef.current = false;
@@ -373,10 +445,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     let allSuggestions: EnhanceSuggestion[] = [];
     let allIssues: GrammarIssue[] = [];
     let processed = 0;
+    const totalToProcess = translatedEntries.length;
+
+    // اضبط حجم الدفعة والتوازي بحسب المحرّك المختار.
+    const { batchSize, parallel } = getEngineTuning(model);
 
     const batches: { textsToAnalyze: { key: string; original: string; translation: string }[] }[] = [];
-    for (let i = 0; i < translatedEntries.length; i += BATCH_SIZE) {
-      const batch = translatedEntries.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < translatedEntries.length; i += batchSize) {
+      const batch = translatedEntries.slice(i, i + batchSize);
       batches.push({
         textsToAnalyze: batch.map(e => ({
           key: `${e.msbtFile}:${e.index}`,
@@ -392,10 +468,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     })();
     const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined) : undefined;
 
-    for (let i = 0; i < batches.length; i += PARALLEL_REQUESTS) {
+    for (let i = 0; i < batches.length; i += parallel) {
       if (abortRef.current) break;
 
-      const chunk = batches.slice(i, i + PARALLEL_REQUESTS);
+      const chunk = batches.slice(i, i + parallel);
+      /** ينقل عدّاد التقدّم للأمام بعد انتهاء دفعة (نجاح أو فشل) حتّى تظهر النسبة المئويّة فوراً. */
+      const advanceProgress = (count: number) => {
+        processed = Math.min(processed + count, totalToProcess);
+        setProgress({ current: processed, total: totalToProcess });
+      };
       const promises = chunk.map(async ({ textsToAnalyze }) => {
         try {
           const { data, error } = await supabase.functions.invoke('enhance-translations', {
@@ -413,10 +494,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             // أظهر الخطأ في الأداة وفي toast لضمان رؤيته (الـ toast قد يُفوت).
             setLastError(data.error);
             toast({ title: data.error, variant: "destructive" });
+            advanceProgress(textsToAnalyze.length);
             return { data: null, count: textsToAnalyze.length };
           }
           for (const t of textsToAnalyze) processedKeysRef.current.set(t.key, t.translation);
           setProcessedCount(processedKeysRef.current.size);
+          persistProcessedKeys();
+          advanceProgress(textsToAnalyze.length);
           return { data, count: textsToAnalyze.length };
         } catch (err) {
           const errStr = String(err);
@@ -437,14 +521,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               if (data?.error) {
                 setLastError(data.error);
                 toast({ title: data.error, variant: "destructive" });
+                advanceProgress(textsToAnalyze.length);
                 return { data: null, count: textsToAnalyze.length };
               }
               for (const t of textsToAnalyze) processedKeysRef.current.set(t.key, t.translation);
               setProcessedCount(processedKeysRef.current.size);
+              persistProcessedKeys();
+              advanceProgress(textsToAnalyze.length);
               return { data, count: textsToAnalyze.length };
             } catch (retryErr) {
               const msg = `فشل بعد إعادة المحاولة: ${String(retryErr).slice(0, 200)}`;
               setLastError(msg);
+              advanceProgress(textsToAnalyze.length);
               return { data: null, count: textsToAnalyze.length };
             }
           }
@@ -461,14 +549,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           const msg = `فشل الاتصال بـ enhance-translations: ${detail.slice(0, 400)}`;
           setLastError(msg);
           toast({ title: msg, variant: "destructive" });
+          advanceProgress(textsToAnalyze.length);
           return { data: null, count: textsToAnalyze.length };
         }
       });
 
       const results = await Promise.all(promises);
 
-      for (const { data, count } of results) {
-        processed += count;
+      for (const { data } of results) {
         if (!data) continue;
         if (mode === "enhance" && data.suggestions) {
           allSuggestions = [...allSuggestions, ...data.suggestions];
@@ -517,12 +605,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           }
         }
       }
-
-      setProgress({ current: Math.min(processed, translatedEntries.length), total: translatedEntries.length });
     }
 
     setIsAnalyzing(false);
     setProgress(null);
+    setScanStartTime(null);
 
     const enhanceCount = allSuggestions.length;
     const grammarCount = allIssues.length;
@@ -543,7 +630,28 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     abortControllerRef.current?.abort();
     setIsAnalyzing(false);
     setProgress(null);
+    setScanStartTime(null);
   };
+
+  /** حساب الوقت المتبقّي (ETA) بناءً على سرعة الدفعات المعالَجة. يرجع null إن لم تكفّ العينة. */
+  const etaMs = useMemo<number | null>(() => {
+    if (!progress || !scanStartTime || progress.current === 0) return null;
+    const elapsed = Date.now() - scanStartTime;
+    if (elapsed < 1500) return null; // أوّل لحظة، تقدير السرعة غير موثوق.
+    const rate = progress.current / elapsed; // entries per ms
+    const remaining = progress.total - progress.current;
+    return Math.max(0, Math.round(remaining / rate));
+  }, [progress, scanStartTime]);
+
+  const formatEta = (ms: number): string => {
+    if (ms < 60_000) return `~${Math.max(1, Math.round(ms / 1000))} ثانية`;
+    const min = Math.floor(ms / 60_000);
+    const sec = Math.round((ms % 60_000) / 1000);
+    return sec > 0 ? `~${min} دقيقة ${sec} ثانية` : `~${min} دقيقة`;
+  };
+
+  /** توليفة المحرّك المختار (للعرض في واجهة الإعدادات). */
+  const engineTuning = useMemo(() => getEngineTuning(model), [model]);
 
   const applyOne = (key: string, newText: string) => {
     const previous = translations[key] || "";
@@ -1026,6 +1134,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+                {/* ضبط تلقائي للدفعة/التوازي حسب المحرّك — يمنع اختناق DeepSeek */}
+                <p className="text-[10px] text-muted-foreground mt-1" dir="rtl">
+                  ضبط تلقائي: <strong className="text-foreground">{engineTuning.batchSize}</strong> إدخالة × <strong className="text-foreground">{engineTuning.parallel}</strong> طلب{engineTuning.parallel > 1 ? ' متوازي' : ''}
+                </p>
               </div>
               <div>
                 <label className="text-[10px] text-muted-foreground mb-1 block">نطاق الفحص</label>
@@ -1128,8 +1240,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             </Button>
           )}
           {!isAnalyzing && processedCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); setSeverityFilter(null); }} className="gap-1.5">
-              <RotateCcw className="w-3.5 h-3.5" /> إعادة فحص
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); setSeverityFilter(null); setCategoryFilter(null); }}
+              className="gap-1.5"
+              title="مسح المفاتيح المعالَجة والنتائج لبدء فحص جديد من الصفر"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> مسح وفحص جديد
             </Button>
           )}
           {appliedHistory.length > 0 && (
@@ -1153,12 +1271,21 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           )}
         </div>
 
-        {/* Progress bar */}
+        {/* Progress bar — مع نسبة مئويّة + ETA */}
         {progress && (
           <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>جاري الفحص...</span>
-              <span className="font-mono">{progress.current} / {progress.total}</span>
+            <div className="flex justify-between items-center text-xs text-muted-foreground gap-2 flex-wrap">
+              <span className="font-medium text-foreground">
+                جاري الفحص... {Math.round((progress.current / progress.total) * 100)}%
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {etaMs !== null && (
+                  <span className="text-primary font-medium">
+                    متبقّي: {formatEta(etaMs)}
+                  </span>
+                )}
+                <span className="font-mono">{progress.current} / {progress.total}</span>
+              </div>
             </div>
             <Progress value={(progress.current / progress.total) * 100} className="h-2" />
           </div>

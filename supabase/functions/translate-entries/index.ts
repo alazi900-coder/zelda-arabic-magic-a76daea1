@@ -1844,8 +1844,15 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const DEEPSEEK_MODELS = ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash'];
-      const dsModel = aiModel && DEEPSEEK_MODELS.includes(aiModel) ? aiModel : 'deepseek-chat';
+      // DeepSeek API الرسميّ لا يدعم سوى اسمَين: deepseek-chat / deepseek-reasoner.
+      // نحوّل أسماء V4 من الواجهة إلى الأسماء الفعليّة وإلّا تفشل الطلبات بصمت.
+      const DEEPSEEK_NAME_MAP: Record<string, string> = {
+        'deepseek-chat': 'deepseek-chat',
+        'deepseek-reasoner': 'deepseek-reasoner',
+        'deepseek-v4-flash': 'deepseek-chat',
+        'deepseek-v4-pro': 'deepseek-reasoner',
+      };
+      const dsModel = (aiModel && DEEPSEEK_NAME_MAP[aiModel]) || 'deepseek-chat';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, dsKey,

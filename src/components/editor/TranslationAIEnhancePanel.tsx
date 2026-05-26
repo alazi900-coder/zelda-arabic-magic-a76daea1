@@ -178,6 +178,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [editingText, setEditingText] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [appliedHistory, setAppliedHistory] = useState<{ key: string; previous: string; applied: string; ts: number }[]>([]);
+  const [deepSeekThinking, setDeepSeekThinking] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('xc1_deepseek_thinking');
+      return v === null ? true : v === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  React.useEffect(() => {
+    try { localStorage.setItem('xc1_deepseek_thinking', String(deepSeekThinking)); } catch { /* quota or disabled */ }
+  }, [deepSeekThinking]);
 
   const [reviewMem, setReviewMem] = useState<ReviewMemory>({ approved: {}, dismissed: {} });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -405,6 +417,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               glossary: glossary?.slice(0, 5000),
               aiModel: model,
               providerApiKey,
+              thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
             },
             signal: abortSignal,
           });
@@ -430,7 +443,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000), aiModel: model, providerApiKey },
+                body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000), aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;
@@ -1041,6 +1054,22 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 </Select>
               </div>
             </div>
+            {model.startsWith('deepseek') && (
+              <label className="flex items-center gap-2 text-xs cursor-pointer pt-1" dir="rtl">
+                <input
+                  type="checkbox"
+                  checked={deepSeekThinking}
+                  onChange={(e) => setDeepSeekThinking(e.target.checked)}
+                  className="accent-primary"
+                />
+                <span>
+                  🧠 وضع التفكير العميق
+                  <span className="text-[10px] text-muted-foreground mr-2">
+                    {deepSeekThinking ? '(أدقّ لكن أبطأ 4-8×)' : '(سريع وأرخص — جودة جيّدة لمعظم الحالات)'}
+                  </span>
+                </span>
+              </label>
+            )}
             <label className="flex items-center gap-2 text-xs cursor-pointer pt-1">
               <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} className="accent-primary" />
               عرض الفروقات (Diff) ملوّنة

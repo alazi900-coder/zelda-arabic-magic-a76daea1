@@ -47,12 +47,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
       aiModel?: string;
       providerApiKey?: string;
+      thinkingMode?: 'enabled' | 'disabled';
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -83,8 +84,12 @@ Deno.serve(async (req) => {
       'deepseek-v4-pro': 'deepseek-reasoner',
     };
     const isDeepSeek = !!aiModel && aiModel in DEEPSEEK_NAME_MAP;
+    // إذا أرسلت الواجهة thinkingMode فإنّه يفرض تفعيل/إدراج التفكير العميق على جميع
+    // نماذج DeepSeek: enabled → deepseek-reasoner (تفكير)، disabled → deepseek-chat (سريع).
     const resolvedModel = isDeepSeek
-      ? DEEPSEEK_NAME_MAP[aiModel as string]
+      ? (thinkingMode === 'enabled' ? 'deepseek-reasoner'
+        : thinkingMode === 'disabled' ? 'deepseek-chat'
+        : DEEPSEEK_NAME_MAP[aiModel as string])
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
 
     if (isDeepSeek && !DEEPSEEK_API_KEY) {
@@ -95,7 +100,7 @@ Deno.serve(async (req) => {
     }
     if (!isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, entriesCount: entries?.length || 0 });
+    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, thinkingMode: thinkingMode || 'default', entriesCount: entries?.length || 0 });
 
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
     // DeepSeek يحتاج response_format=json_object صراحةً وإلّا يُرجع نصّاً

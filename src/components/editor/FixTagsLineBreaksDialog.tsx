@@ -519,6 +519,8 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   useEffect(() => { try { localStorage.setItem("xc1_smartfix_engine", aiEngine); } catch { /* ignore */ } }, [aiEngine]);
   const [aiBusyKey, setAiBusyKey] = useState<string | null>(null);
   const [aiBulkBusy, setAiBulkBusy] = useState(false);
+  const [aiBulkProgress, setAiBulkProgress] = useState<{ done: number; total: number; applied: number } | null>(null);
+  const aiCancelRef = useRef(false);
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, AiSuggestion>>({});
 
   const totalIssues = (report?.autoFixable || 0) + (report?.needsReview || 0);

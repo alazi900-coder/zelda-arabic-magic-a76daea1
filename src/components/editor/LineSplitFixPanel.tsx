@@ -114,6 +114,7 @@ export const LineSplitFixPanel: React.FC<Props> = ({
   const [engine, setEngine] = useState<Engine>("local");
   const [geminiKey, setGeminiKey] = useState<string>(() => localStorage.getItem("gemini_api_key") || "");
   const [googleKey, setGoogleKey] = useState<string>(() => localStorage.getItem("google_translate_api_key") || "");
+  const [deepseekKey, setDeepseekKey] = useState<string>(() => localStorage.getItem("userDeepSeekKey") || "");
   const [busy, setBusy] = useState<string | null>(null); // key قيد المعالجة بـ AI، أو "all"
   const [diffFilter, setDiffFilter] = useState<"all" | "easy" | "hard" | "resolved">("all");
   const [page, setPage] = useState(0);

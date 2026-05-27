@@ -200,11 +200,16 @@ export function useEditorState() {
   };
 
   // === Load / Save ===
-  const detectPreTranslated = useCallback((editorState: EditorState): Record<string, string> => {
+  // NOTE: `clearedKeys` is an explicit set of rows the user wiped via
+  // "مسح الترجمات". Without this guard, the page-refresh path would
+  // re-detect baked-in Arabic from `entry.original` and silently restore the
+  // very rows the user just cleared.
+  const detectPreTranslated = useCallback((editorState: EditorState, clearedKeys?: Set<string>): Record<string, string> => {
     const arabicRegex = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF\u0750-\u077F\u08A0-\u08FF]/;
     const autoTranslations: Record<string, string> = {};
     for (const entry of editorState.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
+      if (clearedKeys?.has(key)) continue;
       if (!editorState.translations[key]?.trim() && arabicRegex.test(entry.original)) {
         autoTranslations[key] = entry.original;
       }
@@ -216,11 +221,18 @@ export function useEditorState() {
     const stored = await idbGet<EditorState>("editorState");
     if (!stored) return null;
     const validKeys = new Set(stored.entries.map(e => `${e.msbtFile}:${e.index}`));
+    // Parse clearedKeys FIRST so detectPreTranslated can honor them.
+    const storedClearedEarly = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;
+    const clearedFromStorage = new Set<string>(
+      Array.isArray(storedClearedEarly)
+        ? (storedClearedEarly as string[]).filter(k => validKeys.has(k))
+        : []
+    );
     const autoTranslations = detectPreTranslated({
       entries: stored.entries,
       translations: stored.translations || {},
       protectedEntries: new Set(),
-    });
+    }, clearedFromStorage);
 
     // Build legacy key mapping for old sequential keys
     const entriesByFile: Record<string, ExtractedEntry[]> = {};
@@ -264,13 +276,9 @@ export function useEditorState() {
     const bypassSet = new Set<string>(
       Array.isArray(storedBypass) ? (storedBypass as string[]) : []
     );
-    // clearedKeys is declared as Set<string> on EditorState but serialized as string[]
-    const storedCleared = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;
-    const clearedSet = new Set<string>(
-      Array.isArray(storedCleared)
-        ? (storedCleared as string[]).filter(k => validKeys.has(k))
-        : []
-    );
+    // clearedKeys: reuse the early-parsed set so the page-refresh path
+    // restores the same explicit-clear markers that gated detectPreTranslated.
+    const clearedSet = clearedFromStorage;
     const arabicRegex = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF\u0750-\u077F\u08A0-\u08FF]/;
     for (const entry of stored.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
@@ -391,11 +399,15 @@ export function useEditorState() {
         if (isFreshExtraction) {
           // Freshly extracted data — load directly, no recovery dialog
           // Clear the flag so next time recovery dialog shows normally
+          const storedClearedFresh = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;
+          const freshClearedSet = new Set<string>(
+            Array.isArray(storedClearedFresh) ? (storedClearedFresh as string[]) : []
+          );
           const autoTranslations = detectPreTranslated({
             entries: stored.entries,
             translations: stored.translations || {},
             protectedEntries: new Set(),
-          });
+          }, freshClearedSet);
           const mergedTranslations = { ...autoTranslations, ...(stored.translations || {}) };
           
           // Check if originals contain presentation forms (re-extraction from built file)
@@ -436,12 +448,14 @@ export function useEditorState() {
             translations: mergedTranslations,
             protectedEntries: new Set(),
             technicalBypass: new Set(),
+            clearedKeys: freshClearedSet,
             isDemo: false,
           });
           // Remove freshExtraction flag for future loads
           await idbSet("editorState", {
             entries: finalEntries,
             translations: mergedTranslations,
+            clearedKeys: Array.from(freshClearedSet),
           });
           const autoCount = Object.keys(autoTranslations).length;
           setLastSaved(`تم تحميل ${stored.entries.length} نص مستخرج` + (autoCount > 0 ? ` + اكتشاف ${autoCount} نص معرّب` : ''));
@@ -548,7 +562,10 @@ export function useEditorState() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => saveToIDB(state), AUTOSAVE_DELAY);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [state?.translations, saveToIDB]);
+    // Watch clearedKeys too: clearing a row may not mutate `translations`
+    // (if the row had no value yet) but still must be persisted so a page
+    // refresh doesn't re-detect baked-in Arabic from entry.original.
+  }, [state?.translations, state?.clearedKeys, saveToIDB]);
 
   // === Computed values ===
   const msbtFiles = useMemo(() => {
@@ -1149,12 +1166,17 @@ export function useEditorState() {
     if (clearUndoTimerRef.current) clearTimeout(clearUndoTimerRef.current);
     clearUndoTimerRef.current = setTimeout(() => setClearUndoBackup(null), 15000);
 
+    // Compute the next state first so we can both apply it AND flush it to
+    // IDB synchronously. The standard autosave is debounced 1.5s — if the
+    // user refreshes the page faster than that, the clear would be lost and
+    // detectPreTranslated would silently re-inject baked-in Arabic from
+    // entry.original. Persisting immediately closes that window.
+    let nextState: EditorState | null = null;
+    let toastMsg = "";
     if (scope === 'all') {
-      // Mark every entry as explicitly cleared so the build does NOT silently
-      // fall back to whatever is in the source BDAT bytes.
       const allCleared = new Set<string>(state.entries.map(e => `${e.msbtFile}:${e.index}`));
-      setState(prev => prev ? { ...prev, translations: {}, clearedKeys: allCleared } : null);
-      setLastSaved(`🗑️ تم مسح جميع الترجمات (${Object.keys(state.translations).length})`);
+      nextState = { ...state, translations: {}, clearedKeys: allCleared };
+      toastMsg = `🗑️ تم مسح جميع الترجمات (${Object.keys(state.translations).length})`;
     } else {
       const keysToRemove = new Set(filteredEntries.map(e => `${e.msbtFile}:${e.index}`));
       const newTranslations = { ...state.translations };
@@ -1170,11 +1192,19 @@ export function useEditorState() {
         // baked-in Arabic in the source BDAT that we must NOT keep.
         newCleared.add(key);
       }
-      setState(prev => prev ? { ...prev, translations: newTranslations, clearedKeys: newCleared } : null);
-      setLastSaved(`🗑️ تم مسح ${removed} ترجمة (${filterLabel || 'القسم المحدد'})`);
+      nextState = { ...state, translations: newTranslations, clearedKeys: newCleared };
+      toastMsg = `🗑️ تم مسح ${removed} ترجمة (${filterLabel || 'القسم المحدد'})`;
     }
+    setState(nextState);
+    setLastSaved(toastMsg);
+    // Cancel any pending debounced autosave and persist immediately.
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+    }
+    void saveToIDB(nextState);
     setTimeout(() => setLastSaved(""), 4000);
-  }, [state, filteredEntries, filterLabel]);
+  }, [state, filteredEntries, filterLabel, saveToIDB]);
 
   const handleUndoClear = useCallback(() => {
     if (!clearUndoBackup) return;

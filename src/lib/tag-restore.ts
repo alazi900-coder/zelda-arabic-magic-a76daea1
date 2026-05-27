@@ -401,10 +401,12 @@ function analyzeReasons(original: string, translation: string): RestoreIssueReas
   const normalized = normalizeLineBreakRepresentations(translation);
   const origTagSeq = extractTagSequence(original);
   const transTagSeq = extractTagSequence(translation);
-  const origBreaks = countLineBreaks(original);
-  const transBreaks = countLineBreaks(normalized);
-  const origLines = original.split("\n").length;
-  const transLines = normalized.split("\n").length;
+  // Hard-break aware line counting: [XENO:n ] and [System:PageBreak ] count
+  // as line terminators in the XC3 engine, so we count effective lines, not \n.
+  const origLines = countEffectiveLines(original);
+  const transLines = countEffectiveLines(normalized);
+  const origBreaks = Math.max(0, origLines - 1);
+  const transBreaks = Math.max(0, transLines - 1);
 
   const missingTags = Math.max(0, origTagSeq.length - transTagSeq.length);
   const extraTags = Math.max(0, transTagSeq.length - origTagSeq.length);

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   Wrench, FileText, FileCheck2, AlertTriangle, Sparkles,
-  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft, Wand2, Loader2,
+  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft, Wand2, Loader2, StopCircle,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -440,8 +440,8 @@ const IssueCard: React.FC<IssueCardProps> = ({
       {aiSuggestion && !isResolved && (
         <div className={`rounded border p-2 ${
           aiSuggestion.safe
-            ? "border-violet-500/60 bg-violet-50 dark:bg-violet-950/40 dark:border-violet-400/60"
-            : "border-orange-500/60 bg-orange-50 dark:bg-orange-950/40 dark:border-orange-400/60"
+            ? "border-violet-500/60 bg-violet-100 text-violet-950 dark:bg-violet-900/70 dark:text-violet-50 dark:border-violet-400/60"
+            : "border-orange-500/60 bg-orange-100 text-orange-950 dark:bg-orange-900/70 dark:text-orange-50 dark:border-orange-400/60"
         }`}>
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold">
@@ -466,11 +466,11 @@ const IssueCard: React.FC<IssueCardProps> = ({
             </div>
           </div>
           {aiSuggestion.reason && (
-            <div className={`text-[11px] mb-1 ${aiSuggestion.safe ? "text-sky-700 dark:text-sky-200" : "text-orange-700 dark:text-orange-200"}`}>
+            <div className="text-[11px] mb-1 opacity-90">
               {aiSuggestion.safe ? "ℹ️" : "⚠️"} {aiSuggestion.reason}
             </div>
           )}
-          <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" dir="rtl">
+          <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words font-medium" dir="rtl">
             {renderInvisible(aiSuggestion.text)}
           </div>
         </div>
@@ -519,6 +519,8 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   useEffect(() => { try { localStorage.setItem("xc1_smartfix_engine", aiEngine); } catch { /* ignore */ } }, [aiEngine]);
   const [aiBusyKey, setAiBusyKey] = useState<string | null>(null);
   const [aiBulkBusy, setAiBulkBusy] = useState(false);
+  const [aiBulkProgress, setAiBulkProgress] = useState<{ done: number; total: number; applied: number } | null>(null);
+  const aiCancelRef = useRef(false);
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, AiSuggestion>>({});
 
   const totalIssues = (report?.autoFixable || 0) + (report?.needsReview || 0);
@@ -590,16 +592,39 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
       toast({ title: "لا توجد عناصر للإصلاح", description: "كلّ العناصر إمّا تمّ حلّها أو لها اقتراح" });
       return;
     }
+    aiCancelRef.current = false;
     setAiBulkBusy(true);
+    setAiBulkProgress({ done: 0, total: pending.length, applied: 0 });
+    let suggestionsBefore = Object.keys(aiSuggestions).length;
     try {
       const CHUNK = 5;
       for (let i = 0; i < pending.length; i += CHUNK) {
-        await callSmartFix(pending.slice(i, i + CHUNK));
+        if (aiCancelRef.current) break;
+        const slice = pending.slice(i, i + CHUNK);
+        await callSmartFix(slice);
+        const nowCount = Object.keys(aiSuggestions).length;
+        setAiBulkProgress(prev => prev ? {
+          ...prev,
+          done: Math.min(prev.total, i + slice.length),
+          applied: prev.applied + slice.length,
+        } : null);
+        void nowCount; void suggestionsBefore;
+      }
+      if (aiCancelRef.current) {
+        toast({ title: "⏹ تمّ إيقاف الإصلاح", description: `توقّف بعد ${aiBulkProgress?.done ?? 0} عنصر` });
+      } else {
+        toast({ title: "✅ اكتمل الإصلاح بالـ AI", description: `راجع الاقتراحات وافبل أو ارفض كلّ واحد` });
       }
     } finally {
       setAiBulkBusy(false);
+      setAiBulkProgress(null);
     }
-  }, [report, resolvedKeys, aiSuggestions, callSmartFix]);
+  }, [report, resolvedKeys, aiSuggestions, callSmartFix, aiBulkProgress]);
+
+  const handleStopBulkAi = useCallback(() => {
+    aiCancelRef.current = true;
+    toast({ title: "⏹ جارٍ الإيقاف بعد الدفعة الحالية..." });
+  }, []);
 
   const handleSaveEdit = useCallback((key: string, value: string) => {
     onUpdateTranslation?.(key, value);
@@ -657,12 +682,17 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
         </div>
 
         {report && totalIssues > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-md border bg-muted/30 p-2 text-center shrink-0">
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">مفقودة <strong className="text-foreground tabular-nums">{report.issueTotals.missingTags}</strong></div>
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">زائدة/فاسدة <strong className="text-foreground tabular-nums">{report.issueTotals.extraTags + report.issueTotals.changedTagPositions}</strong></div>
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">مكان خاطئ <strong className="text-foreground tabular-nums">{report.issueTotals.misplacedTags}</strong></div>
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">فواصل أسطر <strong className="text-foreground tabular-nums">{report.issueTotals.missingLineBreaksAuto + report.issueTotals.missingLineBreaksPartial}</strong></div>
-          </div>
+          <details className="rounded-md border bg-muted/30 p-2 shrink-0 sm:open:p-2" open>
+            <summary className="cursor-pointer text-[11px] sm:text-xs font-medium text-muted-foreground sm:hidden mb-1.5">
+              تفاصيل المشاكل
+            </summary>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center">
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">مفقودة <strong className="text-foreground tabular-nums">{report.issueTotals.missingTags}</strong></div>
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">زائدة/فاسدة <strong className="text-foreground tabular-nums">{report.issueTotals.extraTags + report.issueTotals.changedTagPositions}</strong></div>
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">مكان خاطئ <strong className="text-foreground tabular-nums">{report.issueTotals.misplacedTags}</strong></div>
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">فواصل أسطر <strong className="text-foreground tabular-nums">{report.issueTotals.missingLineBreaksAuto + report.issueTotals.missingLineBreaksPartial}</strong></div>
+            </div>
+          </details>
         )}
 
         {totalIssues === 0 && !splitEntries ? (
@@ -789,34 +819,61 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
                     )}
 
                     {onUpdateTranslation && (
-                      <div className="rounded-md border border-violet-400/50 bg-violet-50 dark:bg-violet-950/30 p-2 mb-1.5 flex flex-col sm:flex-row sm:items-center gap-2">
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Wand2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
-                          <span className="text-[11px] sm:text-xs font-semibold text-violet-800 dark:text-violet-100">إصلاح ذكي بالـ AI</span>
+                      <div className="rounded-md border border-violet-400/50 bg-violet-50 dark:bg-violet-950/30 p-2 mb-1.5 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Wand2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
+                            <span className="text-[11px] sm:text-xs font-semibold text-violet-800 dark:text-violet-100">إصلاح ذكي بالـ AI</span>
+                          </div>
+                          <Select value={aiEngine} onValueChange={setAiEngine} disabled={aiBulkBusy}>
+                            <SelectTrigger className="h-8 text-xs sm:flex-1 min-w-0 bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="lovable:gemini-3-flash-preview" className="text-xs">⚡ Gemini 3 Flash (سريع — مجاني)</SelectItem>
+                              <SelectItem value="lovable:gemini-2.5-pro" className="text-xs">🧠 Gemini 2.5 Pro</SelectItem>
+                              <SelectItem value="lovable:gpt-5-mini" className="text-xs">✨ GPT-5 Mini</SelectItem>
+                              <SelectItem value="lovable:gpt-5" className="text-xs">✨ GPT-5</SelectItem>
+                              <SelectItem value="deepseek:deepseek-v4-flash" className="text-xs">🐋 DeepSeek V4 Flash</SelectItem>
+                              <SelectItem value="deepseek:deepseek-v4-pro" className="text-xs">🐋 DeepSeek V4 Pro (الأقوى)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {!aiBulkBusy ? (
+                            <Button
+                              type="button" size="sm" onClick={handleBulkAiFix}
+                              className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+                            >
+                              <Wand2 className="h-3.5 w-3.5" />
+                              إصلاح الكلّ بالـ AI
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button" size="sm" variant="destructive"
+                              onClick={handleStopBulkAi}
+                              className="gap-1.5 shrink-0"
+                            >
+                              <StopCircle className="h-3.5 w-3.5" />
+                              إيقاف
+                            </Button>
+                          )}
                         </div>
-                        <Select value={aiEngine} onValueChange={setAiEngine}>
-                          <SelectTrigger className="h-8 text-xs sm:flex-1 min-w-0 bg-background">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="lovable:gemini-3-flash-preview" className="text-xs">⚡ Gemini 3 Flash (سريع — مجاني)</SelectItem>
-                            <SelectItem value="lovable:gemini-2.5-pro" className="text-xs">🧠 Gemini 2.5 Pro</SelectItem>
-                            <SelectItem value="lovable:gpt-5-mini" className="text-xs">✨ GPT-5 Mini</SelectItem>
-                            <SelectItem value="lovable:gpt-5" className="text-xs">✨ GPT-5</SelectItem>
-                            <SelectItem value="deepseek:deepseek-v4-flash" className="text-xs">🐋 DeepSeek V4 Flash</SelectItem>
-                            <SelectItem value="deepseek:deepseek-v4-pro" className="text-xs">🐋 DeepSeek V4 Pro (الأقوى)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleBulkAiFix}
-                          disabled={aiBulkBusy}
-                          className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white shrink-0"
-                        >
-                          {aiBulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-                          إصلاح الكلّ بالـ AI
-                        </Button>
+                        {aiBulkBusy && aiBulkProgress && (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px] text-violet-900 dark:text-violet-100 font-medium">
+                              <span className="flex items-center gap-1.5">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                جارٍ الإصلاح... {aiBulkProgress.done} / {aiBulkProgress.total}
+                              </span>
+                              <span className="tabular-nums">{Math.round((aiBulkProgress.done / aiBulkProgress.total) * 100)}%</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-violet-200 dark:bg-violet-900/60 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-violet-600 dark:bg-violet-400 transition-all duration-300"
+                                style={{ width: `${(aiBulkProgress.done / aiBulkProgress.total) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 

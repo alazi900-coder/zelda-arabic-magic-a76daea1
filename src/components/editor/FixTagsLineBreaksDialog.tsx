@@ -4,12 +4,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { Textarea } from "@/components/ui/textarea";
 import {
   Wrench, FileText, FileCheck2, AlertTriangle, Sparkles,
-  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft,
+  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft, Wand2, Loader2,
 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import type { RestoreReport, RestoreIssue, RestoreIssueReasons } from "@/lib/tag-restore";
 import LineSplitFixPanel from "./LineSplitFixPanel";
 import type { LineSplitEntryRef } from "@/lib/line-split-quality";

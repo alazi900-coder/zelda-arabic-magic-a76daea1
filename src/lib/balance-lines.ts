@@ -48,12 +48,18 @@ function unshieldTagsAfterBalance(
 const TARGET_MAX = 42;
 const HARD_MAX = 48;
 
+/** Patterns whose tokens are NOT lexical Arabic words (XC3 tags, brackets, PUA). */
+const XC3_TAG_TOKEN = /\[\s*(?:XENO|System|ML)\s*:[^\]]*\]/i;
+
 function countLexicalWords(line: string): number {
-  const tokens = line.split(/\s+/).filter(Boolean);
+  // Strip XC3 tags entirely first — they're not words.
+  const cleaned = line.replace(/\[\s*(?:XENO|System|ML)\s*:[^\]]*\]/gi, ' ');
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
   let count = 0;
   for (const token of tokens) {
     if (/^◆\d+◆$/.test(token)) continue;
     if (/^TAG_\d+$/i.test(token)) continue;
+    if (XC3_TAG_TOKEN.test(token)) continue;
     if (/^[\p{P}\p{S}]+$/u.test(token)) continue;
     if (/[\p{L}\p{N}]/u.test(token)) count++;
   }
@@ -62,7 +68,8 @@ function countLexicalWords(line: string): number {
 
 function scoreSplit(lines: string[]): number {
   if (lines.length <= 1) return 0;
-  const lengths = lines.map((l) => l.length);
+  // Use visual length so PUA/tag-heavy lines aren't unfairly punished.
+  const lengths = lines.map((l) => visualLength(l));
   const avg = lengths.reduce((a, b) => a + b, 0) / lengths.length;
   const maxLen = Math.max(...lengths);
   const minLen = Math.min(...lengths);

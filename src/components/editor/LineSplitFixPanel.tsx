@@ -171,18 +171,26 @@ export const LineSplitFixPanel: React.FC<Props> = ({
 
   const callAi = async (items: LineSplitIssue[]): Promise<Record<string, string>> => {
     const backend = engineToBackend(engine);
+    const isDeepseek = engine === "deepseek-v4-flash" || engine === "deepseek-v4-pro";
     if (engine === "gemini-direct" && !geminiKey.trim()) {
       throw new Error("أدخل مفتاح Google Gemini أوّلاً.");
     }
     if (engine === "google-translate" && !googleKey.trim()) {
       throw new Error("أدخل مفتاح Google Cloud Translation أوّلاً.");
     }
+    if (isDeepseek && !deepseekKey.trim()) {
+      throw new Error("أدخل مفتاح DeepSeek API أوّلاً.");
+    }
     if (engine === "gemini-direct") localStorage.setItem("gemini_api_key", geminiKey);
     if (engine === "google-translate") localStorage.setItem("google_translate_api_key", googleKey);
+    if (isDeepseek) localStorage.setItem("userDeepSeekKey", deepseekKey);
 
     const payload = {
       ...backend,
-      apiKey: engine === "gemini-direct" ? geminiKey : engine === "google-translate" ? googleKey : undefined,
+      apiKey: engine === "gemini-direct" ? geminiKey
+            : engine === "google-translate" ? googleKey
+            : isDeepseek ? deepseekKey
+            : undefined,
       entries: items.map(it => ({ key: it.key, originalEn: it.original, currentAr: it.current })),
     };
     const { data, error } = await supabase.functions.invoke("improve-line-splits", { body: payload });

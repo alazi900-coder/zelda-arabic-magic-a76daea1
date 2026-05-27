@@ -3,15 +3,16 @@
 // محلّي بالكامل، بدون شبكة. يُعطي «درجة سوء» 0..100 + أسباب + اقتراح تقسيم أفضل.
 // =============================================================================
 
-const TAG_REGEX = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
+const TAG_REGEX = /[\uFFF9-\uFFFC\uE000-\uE0FF]|\[\s*(?:XENO|System|ML)\s*:[^\]]*\]/gi;
 
 /** كلمات/حروف لا يصحّ أن يبدأ بها سطر جديد في العربية. */
 const NO_START_TOKENS = new Set([
   "و", "ف", "ل", "ب", "ك",
   "في", "من", "إلى", "الى", "على", "عن", "مع", "حتى", "لكن", "لكنّ", "أو", "أم",
-  "ثم", "ثمّ", "إذ", "إذا", "كي", "بل", "لا", "ما", "لم", "لن", "قد",
+  "ثم", "ثمّ", "إذ", "إذا", "إذن", "كي", "بل", "لا", "ما", "لم", "لن", "قد", "لو",
   "هذا", "هذه", "هؤلاء", "ذلك", "تلك",
   "إنّ", "إنّما", "إن", "ربّما", "ربما", "لعلّ", "لعل", "كأنّ", "كأن", "سوف",
+  "إلّا", "إلا", "أيضاً", "أيضًا", "حيث", "عند", "عندما", "بينما", "رغم", "بَيْد", "بيد",
 ]);
 
 /** علامات ترقيم تنتهي بها الجمل عادةً. */
@@ -174,9 +175,9 @@ function findBreakCandidates(joined: string): BreakCandidate[] {
     if (NO_START_TOKENS.has(nextWord)) continue;
 
     let score = 1;
-    if (SENTENCE_END.test(prev)) score += 10;            // بعد علامة ترقيم نهائية
-    if (prev === "،" || prev === ",") score += 4;        // بعد فاصلة
-    if (prev === "؛" || prev === ";") score += 6;        // بعد فاصلة منقوطة
+    if (SENTENCE_END.test(prev)) score += 25;            // بعد علامة ترقيم نهائية (مكافأة قوية)
+    if (prev === "،" || prev === ",") score += 6;        // بعد فاصلة
+    if (prev === "؛" || prev === ";") score += 10;       // بعد فاصلة منقوطة
     if (next === "«" || next === '"' || next === "(") score += 2;
     // كلمة محتوى قبل الكسر (4+ حروف غير مسافة) → كسر طبيعي بعد كلمة كاملة
     const wordBefore = joined.slice(0, i).split(" ").pop() || "";
@@ -253,7 +254,9 @@ export function proposeBetterSplit(originalEn: string, translation: string): str
     prev = i + 1; // تجاوز المسافة
   }
   out += joined.slice(prev);
-  return out.trim();
+  // XC3 hard tags ([XENO:n], [System:PageBreak]) يجب أن تنتهي بسطر جديد دائماً.
+  out = out.replace(/(\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\])\s*/g, '$1\n');
+  return out.replace(/\n{2,}/g, '\n').trim();
 }
 
 // -----------------------------------------------------------------------------

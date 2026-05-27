@@ -245,7 +245,7 @@ interface IssueCardProps {
   onSaveEdit: (value: string) => void;
   // AI smart-fix
   aiBusy?: boolean;
-  aiSuggestion?: { text: string; safe: boolean; reason?: string; grafted?: boolean } | null;
+  aiSuggestion?: AiSuggestion | null;
   onRequestAiFix?: () => void;
   onAcceptAiFix?: () => void;
   onRejectAiFix?: () => void;

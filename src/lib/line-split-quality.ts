@@ -254,7 +254,9 @@ export function proposeBetterSplit(originalEn: string, translation: string): str
     prev = i + 1; // تجاوز المسافة
   }
   out += joined.slice(prev);
-  return out.trim();
+  // XC3 hard tags ([XENO:n], [System:PageBreak]) يجب أن تنتهي بسطر جديد دائماً.
+  out = out.replace(/(\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\])\s*/g, '$1\n');
+  return out.replace(/\n{2,}/g, '\n').trim();
 }
 
 // -----------------------------------------------------------------------------

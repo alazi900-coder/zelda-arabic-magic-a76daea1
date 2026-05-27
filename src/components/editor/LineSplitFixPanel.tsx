@@ -325,6 +325,15 @@ export const LineSplitFixPanel: React.FC<Props> = ({
             className="w-full text-xs bg-background border rounded px-2 py-1.5"
           />
         )}
+        {selectedEngineOpt.needsKey === "deepseek" && (
+          <input
+            type="password"
+            value={deepseekKey}
+            onChange={e => setDeepseekKey(e.target.value)}
+            placeholder="مفتاح DeepSeek API (sk-...)"
+            className="w-full text-xs bg-background border rounded px-2 py-1.5"
+          />
+        )}
 
         <div className="flex flex-wrap gap-2">
           <Button

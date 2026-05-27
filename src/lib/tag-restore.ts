@@ -7,6 +7,8 @@
 //
 // كلّ مسار ترجمة / بناء يجب أن يمرّ عبر `restoreTagsAndLineBreaks` كحارس أخير.
 
+import { countEffectiveLines, tokenize } from "./text-tokens";
+
 const TAG_REGEX_G = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
 const TAG_REGEX_SINGLE = /[\uFFF9-\uFFFC\uE000-\uE0FF]/;
 

@@ -780,11 +780,44 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
                         </Button>
                       </div>
                     )}
+
+                    {onUpdateTranslation && (
+                      <div className="rounded-md border border-violet-400/50 bg-violet-50 dark:bg-violet-950/30 p-2 mb-1.5 flex flex-col sm:flex-row sm:items-center gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Wand2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
+                          <span className="text-[11px] sm:text-xs font-semibold text-violet-800 dark:text-violet-100">إصلاح ذكي بالـ AI</span>
+                        </div>
+                        <Select value={aiEngine} onValueChange={setAiEngine}>
+                          <SelectTrigger className="h-8 text-xs sm:flex-1 min-w-0 bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="lovable:gemini-3-flash-preview" className="text-xs">⚡ Gemini 3 Flash (سريع — مجاني)</SelectItem>
+                            <SelectItem value="lovable:gemini-2.5-pro" className="text-xs">🧠 Gemini 2.5 Pro</SelectItem>
+                            <SelectItem value="lovable:gpt-5-mini" className="text-xs">✨ GPT-5 Mini</SelectItem>
+                            <SelectItem value="lovable:gpt-5" className="text-xs">✨ GPT-5</SelectItem>
+                            <SelectItem value="deepseek:deepseek-v4-flash" className="text-xs">🐋 DeepSeek V4 Flash</SelectItem>
+                            <SelectItem value="deepseek:deepseek-v4-pro" className="text-xs">🐋 DeepSeek V4 Pro (الأقوى)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleBulkAiFix}
+                          disabled={aiBulkBusy}
+                          className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+                        >
+                          {aiBulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                          إصلاح الكلّ بالـ AI
+                        </Button>
+                      </div>
+                    )}
+
                     <div className="text-[11px] sm:text-xs text-muted-foreground mb-1.5 leading-relaxed">
-                      هذه الترجمات بقيت للمراجعة فقط إذا لم يمكن تطبيق إصلاح آمن. اضغط «تعديل» في أيّ ترجمة، عدّلها هنا مباشرةً، ثم «حفظ».
+                      هذه الترجمات بقيت للمراجعة فقط إذا لم يمكن تطبيق إصلاح آمن. اضغط «تعديل» أو «إصلاح بالـ AI» لكلّ ترجمة.
                       {resolvedReviewCount > 0 && (
                         <span className="text-emerald-700 dark:text-emerald-300 font-semibold mr-1">
-                          أصلحت {resolvedReviewCount} يدويّاً.
+                          أصلحت {resolvedReviewCount} حتى الآن.
                         </span>
                       )}
                     </div>
@@ -801,6 +834,11 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
                             onStartEdit={() => setEditingKey(issue.key)}
                             onCancelEdit={() => setEditingKey(null)}
                             onSaveEdit={(v) => handleSaveEdit(issue.key, v)}
+                            aiBusy={aiBusyKey === issue.key}
+                            aiSuggestion={aiSuggestions[issue.key] || null}
+                            onRequestAiFix={() => handleRequestAiFix(issue)}
+                            onAcceptAiFix={() => handleAcceptAiFix(issue.key)}
+                            onRejectAiFix={() => handleRejectAiFix(issue.key)}
                           />
                         ))}
                         {report.needsReview > report.reviewExamples.length && (

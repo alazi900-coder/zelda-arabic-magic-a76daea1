@@ -592,16 +592,39 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
       toast({ title: "لا توجد عناصر للإصلاح", description: "كلّ العناصر إمّا تمّ حلّها أو لها اقتراح" });
       return;
     }
+    aiCancelRef.current = false;
     setAiBulkBusy(true);
+    setAiBulkProgress({ done: 0, total: pending.length, applied: 0 });
+    let suggestionsBefore = Object.keys(aiSuggestions).length;
     try {
       const CHUNK = 5;
       for (let i = 0; i < pending.length; i += CHUNK) {
-        await callSmartFix(pending.slice(i, i + CHUNK));
+        if (aiCancelRef.current) break;
+        const slice = pending.slice(i, i + CHUNK);
+        await callSmartFix(slice);
+        const nowCount = Object.keys(aiSuggestions).length;
+        setAiBulkProgress(prev => prev ? {
+          ...prev,
+          done: Math.min(prev.total, i + slice.length),
+          applied: prev.applied + slice.length,
+        } : null);
+        void nowCount; void suggestionsBefore;
+      }
+      if (aiCancelRef.current) {
+        toast({ title: "⏹ تمّ إيقاف الإصلاح", description: `توقّف بعد ${aiBulkProgress?.done ?? 0} عنصر` });
+      } else {
+        toast({ title: "✅ اكتمل الإصلاح بالـ AI", description: `راجع الاقتراحات وافبل أو ارفض كلّ واحد` });
       }
     } finally {
       setAiBulkBusy(false);
+      setAiBulkProgress(null);
     }
-  }, [report, resolvedKeys, aiSuggestions, callSmartFix]);
+  }, [report, resolvedKeys, aiSuggestions, callSmartFix, aiBulkProgress]);
+
+  const handleStopBulkAi = useCallback(() => {
+    aiCancelRef.current = true;
+    toast({ title: "⏹ جارٍ الإيقاف بعد الدفعة الحالية..." });
+  }, []);
 
   const handleSaveEdit = useCallback((key: string, value: string) => {
     onUpdateTranslation?.(key, value);

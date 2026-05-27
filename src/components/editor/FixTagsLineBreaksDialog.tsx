@@ -243,10 +243,17 @@ interface IssueCardProps {
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: (value: string) => void;
+  // AI smart-fix
+  aiBusy?: boolean;
+  aiSuggestion?: { text: string; safe: boolean; reason?: string } | null;
+  onRequestAiFix?: () => void;
+  onAcceptAiFix?: () => void;
+  onRejectAiFix?: () => void;
 }
 
 const IssueCard: React.FC<IssueCardProps> = ({
   issue, index, editable, isResolved, isEditing, onStartEdit, onCancelEdit, onSaveEdit,
+  aiBusy, aiSuggestion, onRequestAiFix, onAcceptAiFix, onRejectAiFix,
 }) => {
   const reasonLines = describeReasons(issue.reasons);
   const showAfter = issue.kind === "auto" && !isResolved;

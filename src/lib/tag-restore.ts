@@ -270,7 +270,10 @@ export function restoreTagsAndLineBreaks(original: string, translation: string):
   if (!translation) return translation;
   const stripped = stripHallucinatedTagBrackets(translation);
   const afterLineBreaks = restoreLineBreaks(original, stripped);
-  return restoreTechnicalTags(original, afterLineBreaks);
+  const afterPua = restoreTechnicalTags(original, afterLineBreaks);
+  // استرجاع الوسوم بالأقواس [XENO:...], [System:PageBreak ], [XENO:n ], [ML:...]
+  // المفقودة أو في غير مكانها — الـ PUA كان فقط للرموز غير المرئية.
+  return restoreTagsLocally(original, afterPua);
 }
 
 /** أسباب اعتبار الترجمة مكسورة. */

@@ -340,9 +340,20 @@ function countLineBreaks(text: string): number {
   return n;
 }
 
-/** يستخرج تتابع الرموز بترتيب ظهورها في النصّ. */
+/**
+ * Extract the ordered sequence of "tags" in a text — includes both PUA glyphs
+ * AND XC3 bracket tags ([XENO:...], [System:...], [ML:...], [/System:...]).
+ * Hard-break tags (XENO:n / System:PageBreak) are intentionally excluded here
+ * because they are tracked as line-breaks, not as tag presence/absence.
+ */
 function extractTagSequence(text: string): string[] {
-  return text.match(TAG_REGEX_G) || [];
+  if (!text) return [];
+  const out: string[] = [];
+  for (const t of tokenize(text)) {
+    if (t.kind === "pua" || t.kind === "control") out.push(t.raw);
+    else if (t.kind === "tag") out.push(t.raw);
+  }
+  return out;
 }
 
 /**

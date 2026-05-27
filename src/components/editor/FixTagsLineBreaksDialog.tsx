@@ -245,7 +245,7 @@ interface IssueCardProps {
   onSaveEdit: (value: string) => void;
   // AI smart-fix
   aiBusy?: boolean;
-  aiSuggestion?: { text: string; safe: boolean; reason?: string } | null;
+  aiSuggestion?: { text: string; safe: boolean; reason?: string; grafted?: boolean } | null;
   onRequestAiFix?: () => void;
   onAcceptAiFix?: () => void;
   onRejectAiFix?: () => void;
@@ -517,7 +517,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   useEffect(() => { try { localStorage.setItem("xc1_smartfix_engine", aiEngine); } catch { /* ignore */ } }, [aiEngine]);
   const [aiBusyKey, setAiBusyKey] = useState<string | null>(null);
   const [aiBulkBusy, setAiBulkBusy] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { text: string; safe: boolean; reason?: string }>>({});
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { text: string; safe: boolean; reason?: string; grafted?: boolean }>>({});
 
   const totalIssues = (report?.autoFixable || 0) + (report?.needsReview || 0);
   const affectedFiles = useMemo(
@@ -551,7 +551,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
       });
       if (error) throw new Error(error.message || "تعذّر الاتصال بالخدمة");
       if (data?.error) throw new Error(data.error);
-      const results = (data?.results || {}) as Record<string, { text: string; safe: boolean; reason?: string }>;
+      const results = (data?.results || {}) as Record<string, { text: string; safe: boolean; reason?: string; grafted?: boolean }>;
       const count = Object.keys(results).length;
       if (!count) {
         toast({ title: "لم يُرجع الذكاء الاصطناعي أيّ اقتراح", variant: "destructive" });

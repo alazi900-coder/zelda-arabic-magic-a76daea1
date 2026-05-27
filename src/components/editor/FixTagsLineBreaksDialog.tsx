@@ -435,6 +435,42 @@ const IssueCard: React.FC<IssueCardProps> = ({
         </div>
       )}
 
+      {aiSuggestion && !isResolved && (
+        <div className={`rounded border p-2 ${
+          aiSuggestion.safe
+            ? "border-violet-500/60 bg-violet-50 dark:bg-violet-950/40 dark:border-violet-400/60"
+            : "border-orange-500/60 bg-orange-50 dark:bg-orange-950/40 dark:border-orange-400/60"
+        }`}>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+              <Wand2 className="h-3 w-3" />
+              اقتراح الذكاء الاصطناعي
+              {aiSuggestion.safe ? (
+                <Badge className="bg-violet-600 text-white border-violet-700 text-[10px] h-4 px-1.5">آمن</Badge>
+              ) : (
+                <Badge className="bg-orange-600 text-white border-orange-700 text-[10px] h-4 px-1.5">يحتاج مراجعة</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button type="button" size="sm" variant="ghost" onClick={onRejectAiFix} className="h-7 gap-1 text-xs">
+                <X className="h-3 w-3" /> رفض
+              </Button>
+              <Button type="button" size="sm" onClick={onAcceptAiFix} className="h-7 gap-1 text-xs">
+                <Check className="h-3 w-3" /> قبول
+              </Button>
+            </div>
+          </div>
+          {!aiSuggestion.safe && aiSuggestion.reason && (
+            <div className="text-[11px] text-orange-700 dark:text-orange-200 mb-1">⚠️ {aiSuggestion.reason}</div>
+          )}
+          <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" dir="rtl">
+            {renderInvisible(aiSuggestion.text)}
+          </div>
+        </div>
+      )}
+
+
+
       {showAfter && (
         <div className="rounded border border-emerald-500/60 bg-emerald-100 text-emerald-950 dark:bg-emerald-900/70 dark:text-emerald-50 dark:border-emerald-400/60 p-2">
           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-100 mb-1">

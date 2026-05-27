@@ -51,9 +51,11 @@ type Engine =
   | "lovable-gemini-2.5-pro"
   | "lovable-gemini-2.5-flash"
   | "lovable-gpt-5-mini"
+  | "deepseek-v4-flash"
+  | "deepseek-v4-pro"
   | "google-translate";
 
-const ENGINE_OPTIONS: { value: Engine; label: string; needsKey?: "gemini" | "google" }[] = [
+const ENGINE_OPTIONS: { value: Engine; label: string; needsKey?: "gemini" | "google" | "deepseek" }[] = [
   { value: "local", label: "محلّي ذكي (فوري — افتراضي)" },
   { value: "gemini-direct", label: "Google Gemini API (مفتاحك)", needsKey: "gemini" },
   { value: "lovable-gemini-3-flash-preview", label: "Lovable AI · Gemini 3 Flash" },
@@ -61,6 +63,8 @@ const ENGINE_OPTIONS: { value: Engine; label: string; needsKey?: "gemini" | "goo
   { value: "lovable-gemini-2.5-pro", label: "Lovable AI · Gemini 2.5 Pro" },
   { value: "lovable-gemini-2.5-flash", label: "Lovable AI · Gemini 2.5 Flash" },
   { value: "lovable-gpt-5-mini", label: "Lovable AI · GPT-5 Mini" },
+  { value: "deepseek-v4-flash", label: "🐋 DeepSeek V4 Flash (مفتاحك)", needsKey: "deepseek" },
+  { value: "deepseek-v4-pro", label: "🐋 DeepSeek V4 Pro — الأقوى (مفتاحك)", needsKey: "deepseek" },
   { value: "google-translate", label: "Google Translate (round-trip)", needsKey: "google" },
 ];
 
@@ -68,6 +72,8 @@ function engineToBackend(eng: Engine): { engine: string; model?: string } {
   if (eng === "local") return { engine: "local" };
   if (eng === "gemini-direct") return { engine: "gemini-direct" };
   if (eng === "google-translate") return { engine: "google-translate" };
+  if (eng === "deepseek-v4-flash") return { engine: "deepseek", model: "deepseek-chat" };
+  if (eng === "deepseek-v4-pro") return { engine: "deepseek", model: "deepseek-reasoner" };
   const model = eng.replace("lovable-", "");
   return { engine: "lovable", model: `google/${model}`.replace("google/gpt", "openai/gpt") };
 }

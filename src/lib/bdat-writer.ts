@@ -314,17 +314,27 @@ export function patchBdatFile(
       // and at least one of those rows has a translation, route all of them
       // to that translation. This avoids keeping the dead English entry just
       // because some rows in the group weren't translated.
-      const groupHasTranslation = cells.some(c => c.translation !== undefined && c.translation !== c.origStr);
+      //
+      // Important: a cleared row may carry an empty translation ("" — meaning
+      // "explicitly blank, do NOT fall back to the source bytes"). Such empty
+      // translations must NOT be propagated to sibling cells whose translation
+      // is undefined, and untranslated siblings must NOT get pulled to "" just
+      // because one row in the group was cleared. So we look for a non-empty
+      // translation when routing siblings.
+      const sharedTranslation = cells.find(
+        c => c.translation !== undefined && c.translation !== c.origStr && c.translation.length > 0,
+      )?.translation;
 
       const textGroups = new Map<string, CellRef[]>();
       for (const cell of cells) {
         let effectiveText: string;
         if (cell.translation !== undefined && cell.translation !== cell.origStr) {
+          // Use the cell's own translation (possibly "" for an explicit clear).
           effectiveText = cell.translation;
-        } else if (groupHasTranslation) {
-          // Route untranslated cells to the FIRST translation in this group
+        } else if (sharedTranslation !== undefined) {
+          // Route untranslated cells to a non-empty sibling translation
           // so they share the same string entry (no duplicate English).
-          effectiveText = cells.find(c => c.translation !== undefined && c.translation !== c.origStr)!.translation!;
+          effectiveText = sharedTranslation;
         } else {
           effectiveText = cell.origStr;
         }

@@ -20,6 +20,11 @@ export interface EditorState {
   glossary?: string;
   technicalBypass?: Set<string>;
   fuzzyScores?: Record<string, number>;
+  // Keys explicitly cleared via "مسح الترجمات".
+  // At build time these rows are written as the English original (or empty
+  // if no English baseline exists), so the previously-built Arabic in the
+  // source BDAT does NOT come back as a fallback.
+  clearedKeys?: Set<string>;
   isDemo?: boolean; // true when showing demo data (no real BDAT file loaded)
 }
 

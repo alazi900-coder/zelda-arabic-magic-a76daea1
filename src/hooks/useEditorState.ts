@@ -264,6 +264,13 @@ export function useEditorState() {
     const bypassSet = new Set<string>(
       Array.isArray(storedBypass) ? (storedBypass as string[]) : []
     );
+    // clearedKeys is declared as Set<string> on EditorState but serialized as string[]
+    const storedCleared = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;
+    const clearedSet = new Set<string>(
+      Array.isArray(storedCleared)
+        ? (storedCleared as string[]).filter(k => validKeys.has(k))
+        : []
+    );
     const arabicRegex = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF\u0750-\u077F\u08A0-\u08FF]/;
     for (const entry of stored.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
@@ -298,6 +305,7 @@ export function useEditorState() {
       translations: mergedTranslations,
       protectedEntries: protectedSet,
       technicalBypass: bypassSet,
+      clearedKeys: clearedSet,
     };
 
     // Save immediately if we auto-fixed or converted legacy keys
@@ -307,6 +315,7 @@ export function useEditorState() {
         translations: finalState.translations,
         protectedEntries: Array.from(finalState.protectedEntries || []),
         technicalBypass: Array.from(finalState.technicalBypass || []),
+        clearedKeys: Array.from(finalState.clearedKeys || []),
       });
     }
 
@@ -509,6 +518,7 @@ export function useEditorState() {
       translations: editorState.translations,
       protectedEntries: Array.from(editorState.protectedEntries || []),
       technicalBypass: Array.from(editorState.technicalBypass || []),
+      clearedKeys: Array.from(editorState.clearedKeys || []),
     });
     setLastSaved(`آخر حفظ: ${new Date().toLocaleTimeString("ar-SA")}`);
   }, []);
@@ -775,7 +785,18 @@ export function useEditorState() {
       }
     }
 
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: finalValue } } : null);
+    setState(prev => {
+      if (!prev) return null;
+      // If the user is re-typing a translation for a previously-cleared row,
+      // remove the explicit-clear marker so build emits the new translation.
+      const next: EditorState = { ...prev, translations: { ...prev.translations, [key]: finalValue } };
+      if (finalValue.trim() && prev.clearedKeys?.has(key)) {
+        const newCleared = new Set(prev.clearedKeys);
+        newCleared.delete(key);
+        next.clearedKeys = newCleared;
+      }
+      return next;
+    });
 
     // Track translation history for versioning
     if (finalValue.trim()) {
@@ -800,7 +821,19 @@ export function useEditorState() {
     if (changedCount === 0) return 0;
 
     setPreviousTranslations(old => ({ ...old, ...prevTranslationsBatch }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...nextUpdates } } : null);
+    setState(prev => {
+      if (!prev) return null;
+      const next: EditorState = { ...prev, translations: { ...prev.translations, ...nextUpdates } };
+      if (prev.clearedKeys && prev.clearedKeys.size > 0) {
+        let mutated = false;
+        const newCleared = new Set(prev.clearedKeys);
+        for (const [k, v] of Object.entries(nextUpdates)) {
+          if (v && v.trim() && newCleared.delete(k)) mutated = true;
+        }
+        if (mutated) next.clearedKeys = newCleared;
+      }
+      return next;
+    });
 
     return changedCount;
   }, [state, setState, setPreviousTranslations]);
@@ -1117,19 +1150,27 @@ export function useEditorState() {
     clearUndoTimerRef.current = setTimeout(() => setClearUndoBackup(null), 15000);
 
     if (scope === 'all') {
-      setState(prev => prev ? { ...prev, translations: {} } : null);
+      // Mark every entry as explicitly cleared so the build does NOT silently
+      // fall back to whatever is in the source BDAT bytes.
+      const allCleared = new Set<string>(state.entries.map(e => `${e.msbtFile}:${e.index}`));
+      setState(prev => prev ? { ...prev, translations: {}, clearedKeys: allCleared } : null);
       setLastSaved(`🗑️ تم مسح جميع الترجمات (${Object.keys(state.translations).length})`);
     } else {
       const keysToRemove = new Set(filteredEntries.map(e => `${e.msbtFile}:${e.index}`));
       const newTranslations = { ...state.translations };
+      const newCleared = new Set<string>(state.clearedKeys || []);
       let removed = 0;
       for (const key of keysToRemove) {
         if (newTranslations[key]?.trim()) {
           delete newTranslations[key];
           removed++;
         }
+        // Always mark the filtered row as explicitly cleared, even if its
+        // translation was already empty in state — the row may still hold
+        // baked-in Arabic in the source BDAT that we must NOT keep.
+        newCleared.add(key);
       }
-      setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+      setState(prev => prev ? { ...prev, translations: newTranslations, clearedKeys: newCleared } : null);
       setLastSaved(`🗑️ تم مسح ${removed} ترجمة (${filterLabel || 'القسم المحدد'})`);
     }
     setTimeout(() => setLastSaved(""), 4000);
@@ -1137,7 +1178,17 @@ export function useEditorState() {
 
   const handleUndoClear = useCallback(() => {
     if (!clearUndoBackup) return;
-    setState(prev => prev ? { ...prev, translations: clearUndoBackup } : null);
+    // Restoring translations also cancels the "explicit clear" markers for
+    // any keys whose translations are back, so the build behaves normally.
+    setState(prev => {
+      if (!prev) return null;
+      const restored = clearUndoBackup;
+      const newCleared = new Set<string>(prev.clearedKeys || []);
+      for (const [k, v] of Object.entries(restored)) {
+        if (v && v.trim()) newCleared.delete(k);
+      }
+      return { ...prev, translations: restored, clearedKeys: newCleared };
+    });
     setClearUndoBackup(null);
     if (clearUndoTimerRef.current) clearTimeout(clearUndoTimerRef.current);
     setLastSaved("↩️ تم التراجع عن المسح واستعادة الترجمات ✅");

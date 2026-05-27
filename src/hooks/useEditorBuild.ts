@@ -260,6 +260,35 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const nonEmptyTranslations: Record<string, string> = {};
         for (const [k, v] of Object.entries(currentState.translations)) { if (v.trim()) nonEmptyTranslations[k] = v; }
 
+        // Explicitly-cleared rows: emit the English original (or empty when
+        // no English baseline exists) so a previously-built Arabic that is
+        // still baked into the source BDAT does NOT come back as a fallback.
+        const clearedKeys = currentState.clearedKeys;
+        let clearedRevertCount = 0;
+        let clearedBlankedCount = 0;
+        if (clearedKeys && clearedKeys.size > 0) {
+          const ARABIC_ANY = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+          const entryByKey = new Map<string, string>();
+          for (const e of currentState.entries) entryByKey.set(`${e.msbtFile}:${e.index}`, e.original);
+          for (const key of clearedKeys) {
+            if (nonEmptyTranslations[key]) continue; // user re-translated after clearing
+            const orig = entryByKey.get(key);
+            if (orig && !ARABIC_ANY.test(orig)) {
+              // English baseline available → restore it.
+              nonEmptyTranslations[key] = orig;
+              clearedRevertCount++;
+            } else {
+              // No English baseline → blank the row so the cleared Arabic
+              // doesn't get reused from the source BDAT bytes.
+              nonEmptyTranslations[key] = "";
+              clearedBlankedCount++;
+            }
+          }
+          if (clearedRevertCount > 0 || clearedBlankedCount > 0) {
+            console.log(`[BUILD] 🗑️ Cleared overrides: ${clearedRevertCount} reverted to English, ${clearedBlankedCount} blanked`);
+          }
+        }
+
         const totalKeys = Object.keys(currentState.translations).length;
         const nonEmptyCount = Object.keys(nonEmptyTranslations).length;
         setBuildProgress(`📊 وجدت ${nonEmptyCount} ترجمة من أصل ${totalKeys} مفتاح...`);

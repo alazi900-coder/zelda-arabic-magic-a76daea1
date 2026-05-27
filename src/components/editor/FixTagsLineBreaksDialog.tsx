@@ -4,12 +4,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { Textarea } from "@/components/ui/textarea";
 import {
   Wrench, FileText, FileCheck2, AlertTriangle, Sparkles,
-  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft,
+  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft, Wand2, Loader2,
 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import type { RestoreReport, RestoreIssue, RestoreIssueReasons } from "@/lib/tag-restore";
 import LineSplitFixPanel from "./LineSplitFixPanel";
 import type { LineSplitEntryRef } from "@/lib/line-split-quality";
@@ -240,10 +243,17 @@ interface IssueCardProps {
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: (value: string) => void;
+  // AI smart-fix
+  aiBusy?: boolean;
+  aiSuggestion?: { text: string; safe: boolean; reason?: string } | null;
+  onRequestAiFix?: () => void;
+  onAcceptAiFix?: () => void;
+  onRejectAiFix?: () => void;
 }
 
 const IssueCard: React.FC<IssueCardProps> = ({
   issue, index, editable, isResolved, isEditing, onStartEdit, onCancelEdit, onSaveEdit,
+  aiBusy, aiSuggestion, onRequestAiFix, onAcceptAiFix, onRejectAiFix,
 }) => {
   const reasonLines = describeReasons(issue.reasons);
   const showAfter = issue.kind === "auto" && !isResolved;
@@ -388,16 +398,32 @@ const IssueCard: React.FC<IssueCardProps> = ({
               )}
             </div>
             {editable && !isResolved && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onStartEdit}
-                className="h-7 gap-1 text-xs"
-              >
-                <Pencil className="h-3 w-3" />
-                تعديل
-              </Button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {onRequestAiFix && !aiSuggestion && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onRequestAiFix}
+                    disabled={aiBusy}
+                    className="h-7 gap-1 text-xs border-violet-400/70 text-violet-700 hover:bg-violet-100 dark:text-violet-200 dark:hover:bg-violet-900/40"
+                    title="اطلب من الذكاء الاصطناعي إعادة بناء الرموز وفواصل الأسطر دون تغيير المعنى"
+                  >
+                    {aiBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                    إصلاح بالذكاء الاصطناعي
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onStartEdit}
+                  className="h-7 gap-1 text-xs"
+                >
+                  <Pencil className="h-3 w-3" />
+                  تعديل
+                </Button>
+              </div>
             )}
           </div>
           <div
@@ -408,6 +434,42 @@ const IssueCard: React.FC<IssueCardProps> = ({
           </div>
         </div>
       )}
+
+      {aiSuggestion && !isResolved && (
+        <div className={`rounded border p-2 ${
+          aiSuggestion.safe
+            ? "border-violet-500/60 bg-violet-50 dark:bg-violet-950/40 dark:border-violet-400/60"
+            : "border-orange-500/60 bg-orange-50 dark:bg-orange-950/40 dark:border-orange-400/60"
+        }`}>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+              <Wand2 className="h-3 w-3" />
+              اقتراح الذكاء الاصطناعي
+              {aiSuggestion.safe ? (
+                <Badge className="bg-violet-600 text-white border-violet-700 text-[10px] h-4 px-1.5">آمن</Badge>
+              ) : (
+                <Badge className="bg-orange-600 text-white border-orange-700 text-[10px] h-4 px-1.5">يحتاج مراجعة</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button type="button" size="sm" variant="ghost" onClick={onRejectAiFix} className="h-7 gap-1 text-xs">
+                <X className="h-3 w-3" /> رفض
+              </Button>
+              <Button type="button" size="sm" onClick={onAcceptAiFix} className="h-7 gap-1 text-xs">
+                <Check className="h-3 w-3" /> قبول
+              </Button>
+            </div>
+          </div>
+          {!aiSuggestion.safe && aiSuggestion.reason && (
+            <div className="text-[11px] text-orange-700 dark:text-orange-200 mb-1">⚠️ {aiSuggestion.reason}</div>
+          )}
+          <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" dir="rtl">
+            {renderInvisible(aiSuggestion.text)}
+          </div>
+        </div>
+      )}
+
+
 
       {showAfter && (
         <div className="rounded border border-emerald-500/60 bg-emerald-100 text-emerald-950 dark:bg-emerald-900/70 dark:text-emerald-50 dark:border-emerald-400/60 p-2">
@@ -443,6 +505,15 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [resolvedKeys, setResolvedKeys] = useState<Set<string>>(new Set());
 
+  // ── حالة الإصلاح الذكي بالـ AI ────────────────────────────────────────────
+  const [aiEngine, setAiEngine] = useState<string>(() => {
+    try { return localStorage.getItem("xc1_smartfix_engine") || "lovable:gemini-3-flash-preview"; } catch { return "lovable:gemini-3-flash-preview"; }
+  });
+  useEffect(() => { try { localStorage.setItem("xc1_smartfix_engine", aiEngine); } catch { /* ignore */ } }, [aiEngine]);
+  const [aiBusyKey, setAiBusyKey] = useState<string | null>(null);
+  const [aiBulkBusy, setAiBulkBusy] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { text: string; safe: boolean; reason?: string }>>({});
+
   const totalIssues = (report?.autoFixable || 0) + (report?.needsReview || 0);
   const affectedFiles = useMemo(
     () => (report ? Object.keys(report.byFile).length : 0),
@@ -453,9 +524,75 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
     if (!report) return;
     setEditingKey(null);
     setResolvedKeys(new Set());
+    setAiSuggestions({});
     if (report.autoFixable === 0 && report.needsReview > 0) setTab("review");
     else setTab("auto");
   }, [report]);
+
+  const callSmartFix = useCallback(async (issues: RestoreIssue[]) => {
+    if (!issues.length) return;
+    const [engine, model] = aiEngine.split(":") as ["lovable" | "deepseek", string];
+    const deepseekKey = (() => {
+      try { return localStorage.getItem("userDeepSeekKey") || ""; } catch { return ""; }
+    })();
+    try {
+      const { data, error } = await supabase.functions.invoke("smart-tag-fix", {
+        body: {
+          engine,
+          aiModel: model,
+          providerApiKey: engine === "deepseek" ? (deepseekKey || undefined) : undefined,
+          entries: issues.map(i => ({ key: i.key, original: i.original, translation: i.before })),
+        },
+      });
+      if (error) throw new Error(error.message || "تعذّر الاتصال بالخدمة");
+      if (data?.error) throw new Error(data.error);
+      const results = (data?.results || {}) as Record<string, { text: string; safe: boolean; reason?: string }>;
+      const count = Object.keys(results).length;
+      if (!count) {
+        toast({ title: "لم يُرجع الذكاء الاصطناعي أيّ اقتراح", variant: "destructive" });
+        return;
+      }
+      setAiSuggestions(prev => ({ ...prev, ...results }));
+      toast({ title: `وصل ${count} اقتراح من الذكاء الاصطناعي`, description: "راجع وافقُ أو ارفض كلّ اقتراح" });
+    } catch (e) {
+      toast({ title: "فشل الإصلاح بالذكاء الاصطناعي", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    }
+  }, [aiEngine]);
+
+  const handleRequestAiFix = useCallback(async (issue: RestoreIssue) => {
+    setAiBusyKey(issue.key);
+    try { await callSmartFix([issue]); } finally { setAiBusyKey(null); }
+  }, [callSmartFix]);
+
+  const handleAcceptAiFix = useCallback((key: string) => {
+    const sug = aiSuggestions[key];
+    if (!sug || !onUpdateTranslation) return;
+    onUpdateTranslation(key, sug.text);
+    setResolvedKeys(prev => { const n = new Set(prev); n.add(key); return n; });
+    setAiSuggestions(prev => { const next = { ...prev }; delete next[key]; return next; });
+  }, [aiSuggestions, onUpdateTranslation]);
+
+  const handleRejectAiFix = useCallback((key: string) => {
+    setAiSuggestions(prev => { const next = { ...prev }; delete next[key]; return next; });
+  }, []);
+
+  const handleBulkAiFix = useCallback(async () => {
+    if (!report) return;
+    const pending = report.reviewExamples.filter(i => !resolvedKeys.has(i.key) && !aiSuggestions[i.key]);
+    if (!pending.length) {
+      toast({ title: "لا توجد عناصر للإصلاح", description: "كلّ العناصر إمّا تمّ حلّها أو لها اقتراح" });
+      return;
+    }
+    setAiBulkBusy(true);
+    try {
+      const CHUNK = 5;
+      for (let i = 0; i < pending.length; i += CHUNK) {
+        await callSmartFix(pending.slice(i, i + CHUNK));
+      }
+    } finally {
+      setAiBulkBusy(false);
+    }
+  }, [report, resolvedKeys, aiSuggestions, callSmartFix]);
 
   const handleSaveEdit = useCallback((key: string, value: string) => {
     onUpdateTranslation?.(key, value);
@@ -643,11 +780,44 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
                         </Button>
                       </div>
                     )}
+
+                    {onUpdateTranslation && (
+                      <div className="rounded-md border border-violet-400/50 bg-violet-50 dark:bg-violet-950/30 p-2 mb-1.5 flex flex-col sm:flex-row sm:items-center gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Wand2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />
+                          <span className="text-[11px] sm:text-xs font-semibold text-violet-800 dark:text-violet-100">إصلاح ذكي بالـ AI</span>
+                        </div>
+                        <Select value={aiEngine} onValueChange={setAiEngine}>
+                          <SelectTrigger className="h-8 text-xs sm:flex-1 min-w-0 bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="lovable:gemini-3-flash-preview" className="text-xs">⚡ Gemini 3 Flash (سريع — مجاني)</SelectItem>
+                            <SelectItem value="lovable:gemini-2.5-pro" className="text-xs">🧠 Gemini 2.5 Pro</SelectItem>
+                            <SelectItem value="lovable:gpt-5-mini" className="text-xs">✨ GPT-5 Mini</SelectItem>
+                            <SelectItem value="lovable:gpt-5" className="text-xs">✨ GPT-5</SelectItem>
+                            <SelectItem value="deepseek:deepseek-v4-flash" className="text-xs">🐋 DeepSeek V4 Flash</SelectItem>
+                            <SelectItem value="deepseek:deepseek-v4-pro" className="text-xs">🐋 DeepSeek V4 Pro (الأقوى)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleBulkAiFix}
+                          disabled={aiBulkBusy}
+                          className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+                        >
+                          {aiBulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                          إصلاح الكلّ بالـ AI
+                        </Button>
+                      </div>
+                    )}
+
                     <div className="text-[11px] sm:text-xs text-muted-foreground mb-1.5 leading-relaxed">
-                      هذه الترجمات بقيت للمراجعة فقط إذا لم يمكن تطبيق إصلاح آمن. اضغط «تعديل» في أيّ ترجمة، عدّلها هنا مباشرةً، ثم «حفظ».
+                      هذه الترجمات بقيت للمراجعة فقط إذا لم يمكن تطبيق إصلاح آمن. اضغط «تعديل» أو «إصلاح بالـ AI» لكلّ ترجمة.
                       {resolvedReviewCount > 0 && (
                         <span className="text-emerald-700 dark:text-emerald-300 font-semibold mr-1">
-                          أصلحت {resolvedReviewCount} يدويّاً.
+                          أصلحت {resolvedReviewCount} حتى الآن.
                         </span>
                       )}
                     </div>
@@ -664,6 +834,11 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
                             onStartEdit={() => setEditingKey(issue.key)}
                             onCancelEdit={() => setEditingKey(null)}
                             onSaveEdit={(v) => handleSaveEdit(issue.key, v)}
+                            aiBusy={aiBusyKey === issue.key}
+                            aiSuggestion={aiSuggestions[issue.key] || null}
+                            onRequestAiFix={() => handleRequestAiFix(issue)}
+                            onAcceptAiFix={() => handleAcceptAiFix(issue.key)}
+                            onRejectAiFix={() => handleRejectAiFix(issue.key)}
                           />
                         ))}
                         {report.needsReview > report.reviewExamples.length && (

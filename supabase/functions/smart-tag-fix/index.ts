@@ -94,6 +94,30 @@ async function callLovable(prompt: string, model: string): Promise<string> {
   return data?.choices?.[0]?.message?.content || "";
 }
 
+async function callGeminiDirect(prompt: string, apiKey: string): Promise<string> {
+  const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"];
+  let lastErr = "";
+  for (const m of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      signal: AbortSignal.timeout(90_000),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt + "\n\nأعِد JSON صالحاً فقط بدون أيّ نصّ خارجه." }] }],
+        generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+    lastErr = `${resp.status} ${(await resp.text()).slice(0, 200)}`;
+    if (resp.status !== 429 && resp.status !== 503) break;
+  }
+  throw new Error(`Gemini direct فشل: ${lastErr}`);
+}
+
 async function callDeepSeek(prompt: string, model: string, apiKey: string): Promise<string> {
   const resp = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -132,6 +156,63 @@ function stripDiacritics(s: string): string {
   return s.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, "");
 }
 
+/** Extract every tag token (PUA or XC3 bracket) in order. */
+function extractTags(text: string): string[] {
+  const re = /(\[(?:XENO|System|ML|\/System|\/ML)[^\]]*\])|([\uFFF9-\uFFFC\uE000-\uE0FF])/g;
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) out.push(m[0]);
+  return out;
+}
+
+/** Strip all tag tokens, return plain text. */
+function stripTagsAll(text: string): string {
+  return text.replace(/\[(?:XENO|System|ML|\/System|\/ML)[^\]]*\]/g, "")
+             .replace(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g, "");
+}
+
+/**
+ * If AI returned the right Arabic content but tag count/order drifted, try to
+ * graft the original tag sequence back: strip AI tags, then re-insert original
+ * tags at line boundaries (one tag per natural break/line in order).
+ * Returns null when grafting is unsafe (different tag count vs natural slots).
+ */
+function graftOriginalTags(original: string, aiText: string): string | null {
+  const origTags = extractTags(original);
+  if (origTags.length === 0) return aiText; // nothing to graft
+  // Build a "plain" template of the AI text where line breaks and PageBreak-style holes survive.
+  const stripped = stripTagsAll(aiText).replace(/\s*\n\s*/g, "\n").trim();
+  if (!stripped) return null;
+  // Where the original placed each tag among its words: compute index by stripping original tags
+  // and noting tag positions relative to original plain text length.
+  const origPlain = stripTagsAll(original);
+  const ratios: number[] = [];
+  let cursor = 0;
+  const reBoth = /(\[(?:XENO|System|ML|\/System|\/ML)[^\]]*\])|([\uFFF9-\uFFFC\uE000-\uE0FF])/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  void cursor;
+  while ((m = reBoth.exec(original))) {
+    const before = stripTagsAll(original.slice(0, m.index));
+    ratios.push(origPlain.length === 0 ? 0 : before.length / origPlain.length);
+    last = m.index + m[0].length;
+  }
+  void last;
+  // Map each ratio to a character index in stripped AI text and insert tag there.
+  const slots = ratios.map(r => Math.round(r * stripped.length));
+  // Sort tags by slot ascending while preserving original order tag-by-slot pairing.
+  const pairs = origTags.map((tag, i) => ({ tag, slot: slots[i] }));
+  pairs.sort((a, b) => a.slot - b.slot);
+  let out = stripped;
+  // Insert from right to left so earlier indices stay valid.
+  for (let i = pairs.length - 1; i >= 0; i--) {
+    const { tag, slot } = pairs[i];
+    const pos = Math.max(0, Math.min(out.length, slot));
+    out = out.slice(0, pos) + tag + out.slice(pos);
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -159,10 +240,11 @@ Deno.serve(async (req) => {
     };
 
     let content = "";
+    let usedFallback: string | null = null;
     if (engine === "deepseek") {
       const apiKey = (body.providerApiKey && body.providerApiKey.trim()) || Deno.env.get("DEEPSEEK_API_KEY");
       if (!apiKey) {
-        return new Response(JSON.stringify({ error: "DeepSeek غير مُكوّن — أضف DEEPSEEK_API_KEY أو مرّر providerApiKey" }), {
+        return new Response(JSON.stringify({ error: "DeepSeek غير مُكوّن — أضف مفتاحك في الإعدادات أو DEEPSEEK_API_KEY في أسرار Lovable Cloud" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -170,28 +252,53 @@ Deno.serve(async (req) => {
       content = await callDeepSeek(buildPrompt(body.entries), model, apiKey);
     } else {
       const model = GATEWAY_MAP[body.aiModel || "gemini-3-flash-preview"] || "google/gemini-3-flash-preview";
-      content = await callLovable(buildPrompt(body.entries), model);
+      try {
+        content = await callLovable(buildPrompt(body.entries), model);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // Auto-fallback to direct Gemini when Lovable AI is out of credits or rate-limited.
+        const isQuota = msg.startsWith("429:") || msg.startsWith("402:");
+        const geminiKey = Deno.env.get("GEMINI_API_KEY");
+        if (isQuota && geminiKey) {
+          console.log(`[smart-tag-fix] Lovable AI ${msg.slice(0, 8)} — fallback to Gemini direct`);
+          content = await callGeminiDirect(buildPrompt(body.entries), geminiKey);
+          usedFallback = "gemini-direct";
+        } else {
+          throw e;
+        }
+      }
     }
 
     const parsed = parseJsonLoose(content);
-    const out: Record<string, { text: string; safe: boolean; reason?: string }> = {};
+    const out: Record<string, { text: string; safe: boolean; reason?: string; grafted?: boolean }> = {};
     const byKey = new Map(body.entries.map(e => [e.key, e]));
 
     for (const r of parsed.results || []) {
       const src = byKey.get(r?.key);
       if (!src || typeof r.text !== "string" || !r.text.trim()) continue;
-      const cleaned = stripDiacritics(r.text);
-      const sigOrig = tagSignature(src.original);
-      const sigNew  = tagSignature(cleaned);
-      const safe = sigOrig === sigNew;
+      let cleaned = stripDiacritics(r.text);
+      let safe = tagSignature(src.original) === tagSignature(cleaned);
+      let grafted = false;
+      // إصلاح ذاتي: إذا اختلّ تسلسل الرموز، نحاول زرع رموز الأصل في الاقتراح.
+      if (!safe) {
+        const repaired = graftOriginalTags(src.original, cleaned);
+        if (repaired && tagSignature(src.original) === tagSignature(repaired)) {
+          cleaned = repaired;
+          safe = true;
+          grafted = true;
+        }
+      }
       out[src.key] = {
         text: cleaned,
         safe,
-        reason: safe ? undefined : "تسلسل الرموز التقنية في الاقتراح لا يطابق الأصل",
+        grafted,
+        reason: safe
+          ? (grafted ? "تمّ زرع رموز الأصل تلقائياً في النصّ المقترح" : undefined)
+          : "تسلسل الرموز التقنية في الاقتراح لا يطابق الأصل — راجع يدوياً قبل القبول",
       };
     }
 
-    return new Response(JSON.stringify({ results: out }), {
+    return new Response(JSON.stringify({ results: out, fallback: usedFallback }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

@@ -256,6 +256,10 @@ Deno.serve(async (req) => {
     } else if (body.engine === "google-translate") {
       if (!body.apiKey) throw new Error("apiKey مطلوب");
       raw = await callGoogleTranslate(body.entries, body.apiKey);
+    } else if (body.engine === "deepseek") {
+      const key = body.apiKey || Deno.env.get("DEEPSEEK_API_KEY");
+      if (!key) throw new Error("مفتاح DeepSeek مطلوب");
+      raw = await callDeepSeek(body.entries, body.model || "deepseek-reasoner", key);
     } else {
       return new Response(JSON.stringify({ error: "محرّك غير مدعوم في هذه النقطة." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

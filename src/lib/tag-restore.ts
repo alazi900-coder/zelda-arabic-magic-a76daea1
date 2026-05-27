@@ -234,13 +234,25 @@ export function restoreLineBreaks(original: string, translation: string): string
  * يُحذَف. هذا يحافظ على المحتوى العربي بين الأقواس (مثل `[ملاحظة]`)
  * ولا يلمس وسوم الـ PUA الحقيقيّة لأنّها ليست داخل أقواس.
  */
+/**
+ * Xenoblade Chronicles legitimate tag patterns. MUST be preserved verbatim.
+ * Examples: [XENO:n ], [XENO:wait wait=key ], [XENO:del del=this ],
+ *           [System:PageBreak ], [System:Ruby rt=... ], [/System:Ruby ],
+ *           [ML:icon icon=btn_a ], [ML:Dash ]
+ */
+const XC3_TAG_PREFIX_RE = /^\/?\s*(XENO|System|ML)\b/i;
+
+export function isXc3Tag(inside: string): boolean {
+  return XC3_TAG_PREFIX_RE.test(inside.trim());
+}
+
 export function stripHallucinatedTagBrackets(text: string): string {
   if (!text) return text;
-  // \[ ... \] حيث المحتوى ASCII فقط بنمط وسم لعبة وبدون حروف عربية.
-  // نمط مرن: حرف-أو-_ في البداية، ثمّ حروف ASCII/أرقام/`:` / `.` / `_` / `-` / `/` / مسافات.
-  return text.replace(/\[([A-Za-z_][A-Za-z0-9_:./\-\s]*)\]/g, (match, inside: string) => {
+  // Allow `=`, `'`, internal `/` inside the bracket so real XC3 tags match the regex.
+  return text.replace(/\[([A-Za-z_/][A-Za-z0-9_:./\-=\s']*)\]/g, (match, inside: string) => {
     if (/[\u0600-\u06FF]/.test(inside)) return match;
     if (/^TAG_\d+$/.test(inside.trim())) return match;
+    if (isXc3Tag(inside)) return match;
     return "";
   });
 }

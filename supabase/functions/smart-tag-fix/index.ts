@@ -94,6 +94,30 @@ async function callLovable(prompt: string, model: string): Promise<string> {
   return data?.choices?.[0]?.message?.content || "";
 }
 
+async function callGeminiDirect(prompt: string, apiKey: string): Promise<string> {
+  const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"];
+  let lastErr = "";
+  for (const m of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      signal: AbortSignal.timeout(90_000),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt + "\n\nأعِد JSON صالحاً فقط بدون أيّ نصّ خارجه." }] }],
+        generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+    lastErr = `${resp.status} ${(await resp.text()).slice(0, 200)}`;
+    if (resp.status !== 429 && resp.status !== 503) break;
+  }
+  throw new Error(`Gemini direct فشل: ${lastErr}`);
+}
+
 async function callDeepSeek(prompt: string, model: string, apiKey: string): Promise<string> {
   const resp = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -130,6 +154,63 @@ function parseJsonLoose(content: string): { results?: Array<{ key: string; text:
 
 function stripDiacritics(s: string): string {
   return s.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, "");
+}
+
+/** Extract every tag token (PUA or XC3 bracket) in order. */
+function extractTags(text: string): string[] {
+  const re = /(\[(?:XENO|System|ML|\/System|\/ML)[^\]]*\])|([\uFFF9-\uFFFC\uE000-\uE0FF])/g;
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) out.push(m[0]);
+  return out;
+}
+
+/** Strip all tag tokens, return plain text. */
+function stripTagsAll(text: string): string {
+  return text.replace(/\[(?:XENO|System|ML|\/System|\/ML)[^\]]*\]/g, "")
+             .replace(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g, "");
+}
+
+/**
+ * If AI returned the right Arabic content but tag count/order drifted, try to
+ * graft the original tag sequence back: strip AI tags, then re-insert original
+ * tags at line boundaries (one tag per natural break/line in order).
+ * Returns null when grafting is unsafe (different tag count vs natural slots).
+ */
+function graftOriginalTags(original: string, aiText: string): string | null {
+  const origTags = extractTags(original);
+  if (origTags.length === 0) return aiText; // nothing to graft
+  // Build a "plain" template of the AI text where line breaks and PageBreak-style holes survive.
+  const stripped = stripTagsAll(aiText).replace(/\s*\n\s*/g, "\n").trim();
+  if (!stripped) return null;
+  // Where the original placed each tag among its words: compute index by stripping original tags
+  // and noting tag positions relative to original plain text length.
+  const origPlain = stripTagsAll(original);
+  const ratios: number[] = [];
+  let cursor = 0;
+  const reBoth = /(\[(?:XENO|System|ML|\/System|\/ML)[^\]]*\])|([\uFFF9-\uFFFC\uE000-\uE0FF])/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  void cursor;
+  while ((m = reBoth.exec(original))) {
+    const before = stripTagsAll(original.slice(0, m.index));
+    ratios.push(origPlain.length === 0 ? 0 : before.length / origPlain.length);
+    last = m.index + m[0].length;
+  }
+  void last;
+  // Map each ratio to a character index in stripped AI text and insert tag there.
+  const slots = ratios.map(r => Math.round(r * stripped.length));
+  // Sort tags by slot ascending while preserving original order tag-by-slot pairing.
+  const pairs = origTags.map((tag, i) => ({ tag, slot: slots[i] }));
+  pairs.sort((a, b) => a.slot - b.slot);
+  let out = stripped;
+  // Insert from right to left so earlier indices stay valid.
+  for (let i = pairs.length - 1; i >= 0; i--) {
+    const { tag, slot } = pairs[i];
+    const pos = Math.max(0, Math.min(out.length, slot));
+    out = out.slice(0, pos) + tag + out.slice(pos);
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {

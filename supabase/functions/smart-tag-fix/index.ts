@@ -171,43 +171,94 @@ function stripTagsAll(text: string): string {
              .replace(/[\uFFF9-\uFFFC\uE000-\uE0FF]/g, "");
 }
 
+/** A letter character (Arabic, Latin, digit) where splitting mid-word is unsafe. */
+const LETTER_RE = /[\p{L}\p{N}]/u;
+
+/**
+ * Find a safe insertion point near `target` in `text`.
+ *  - "Safe" = position is at string edge, at whitespace/newline, or adjacent to
+ *    an existing tag bracket — i.e. never between two letters of one word.
+ *  - For hard-break tags ([XENO:n ], [System:PageBreak ]) we strongly prefer
+ *    an existing newline within the window.
+ *  - Returns -1 if no safe position is found within `window` characters.
+ */
+function findSafeSlot(text: string, target: number, isHardBreak: boolean, window = 25): number {
+  const len = text.length;
+  if (len === 0) return 0;
+  const clamp = (n: number) => Math.max(0, Math.min(len, n));
+  const isSafe = (pos: number) => {
+    if (pos <= 0 || pos >= len) return true;
+    const a = text[pos - 1];
+    const b = text[pos];
+    if (a === "\n" || b === "\n") return true;
+    if (/\s/.test(a) || /\s/.test(b)) return true;
+    // Adjacent to existing bracket tag is fine.
+    if (a === "]" || b === "[") return true;
+    // Both sides letters/digits → mid-word, unsafe.
+    return !(LETTER_RE.test(a) && LETTER_RE.test(b));
+  };
+  // 1) Hard breaks: prefer newline within window.
+  if (isHardBreak) {
+    for (let d = 0; d <= window; d++) {
+      for (const p of [clamp(target - d), clamp(target + d)]) {
+        if (p > 0 && p < len && (text[p - 1] === "\n" || text[p] === "\n")) return p;
+      }
+    }
+  }
+  // 2) Generic safe boundary (whitespace / edge / tag-adjacent).
+  if (isSafe(clamp(target))) return clamp(target);
+  for (let d = 1; d <= window; d++) {
+    const left = clamp(target - d);
+    if (isSafe(left)) return left;
+    const right = clamp(target + d);
+    if (isSafe(right)) return right;
+  }
+  return -1;
+}
+
 /**
  * If AI returned the right Arabic content but tag count/order drifted, try to
- * graft the original tag sequence back: strip AI tags, then re-insert original
- * tags at line boundaries (one tag per natural break/line in order).
- * Returns null when grafting is unsafe (different tag count vs natural slots).
+ * graft the original tag sequence back. Returns null if any tag cannot be
+ * placed at a safe boundary (mid-word) — caller falls back to manual review.
  */
 function graftOriginalTags(original: string, aiText: string): string | null {
   const origTags = extractTags(original);
-  if (origTags.length === 0) return aiText; // nothing to graft
-  // Build a "plain" template of the AI text where line breaks and PageBreak-style holes survive.
+  if (origTags.length === 0) return aiText;
   const stripped = stripTagsAll(aiText).replace(/\s*\n\s*/g, "\n").trim();
   if (!stripped) return null;
-  // Where the original placed each tag among its words: compute index by stripping original tags
-  // and noting tag positions relative to original plain text length.
   const origPlain = stripTagsAll(original);
   const ratios: number[] = [];
-  let cursor = 0;
   const reBoth = /(\[(?:XENO|System|ML|\/System|\/ML)[^\]]*\])|([\uFFF9-\uFFFC\uE000-\uE0FF])/g;
-  let last = 0;
   let m: RegExpExecArray | null;
-  void cursor;
   while ((m = reBoth.exec(original))) {
     const before = stripTagsAll(original.slice(0, m.index));
     ratios.push(origPlain.length === 0 ? 0 : before.length / origPlain.length);
-    last = m.index + m[0].length;
   }
-  void last;
-  // Map each ratio to a character index in stripped AI text and insert tag there.
-  const slots = ratios.map(r => Math.round(r * stripped.length));
-  // Sort tags by slot ascending while preserving original order tag-by-slot pairing.
-  const pairs = origTags.map((tag, i) => ({ tag, slot: slots[i] }));
-  pairs.sort((a, b) => a.slot - b.slot);
+  const HARD_BREAK_RE = /^\[(?:XENO:n|System:PageBreak)\s*\]$/;
+  const pairs = origTags.map((tag, i) => ({
+    tag,
+    target: Math.round(ratios[i] * stripped.length),
+    hard: HARD_BREAK_RE.test(tag),
+    order: i,
+  }));
+  // Pair tag-by-tag with its slot in original sequence order (no re-sorting by slot:
+  // re-sorting could place an earlier-original tag after a later one in the output).
+  // Compute safe positions in original order, then insert right-to-left.
+  const placements: { tag: string; pos: number }[] = [];
+  for (const p of pairs) {
+    const pos = findSafeSlot(stripped, p.target, p.hard);
+    if (pos < 0) return null; // unsafe — abort graft
+    placements.push({ tag: p.tag, pos });
+  }
+  // Enforce non-decreasing positions to preserve original tag order.
+  for (let i = 1; i < placements.length; i++) {
+    if (placements[i].pos < placements[i - 1].pos) {
+      placements[i].pos = placements[i - 1].pos;
+    }
+  }
   let out = stripped;
-  // Insert from right to left so earlier indices stay valid.
-  for (let i = pairs.length - 1; i >= 0; i--) {
-    const { tag, slot } = pairs[i];
-    const pos = Math.max(0, Math.min(out.length, slot));
+  for (let i = placements.length - 1; i >= 0; i--) {
+    const { tag, pos } = placements[i];
     out = out.slice(0, pos) + tag + out.slice(pos);
   }
   return out;

@@ -240,10 +240,11 @@ Deno.serve(async (req) => {
     };
 
     let content = "";
+    let usedFallback: string | null = null;
     if (engine === "deepseek") {
       const apiKey = (body.providerApiKey && body.providerApiKey.trim()) || Deno.env.get("DEEPSEEK_API_KEY");
       if (!apiKey) {
-        return new Response(JSON.stringify({ error: "DeepSeek غير مُكوّن — أضف DEEPSEEK_API_KEY أو مرّر providerApiKey" }), {
+        return new Response(JSON.stringify({ error: "DeepSeek غير مُكوّن — أضف مفتاحك في الإعدادات أو DEEPSEEK_API_KEY في أسرار Lovable Cloud" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -251,28 +252,53 @@ Deno.serve(async (req) => {
       content = await callDeepSeek(buildPrompt(body.entries), model, apiKey);
     } else {
       const model = GATEWAY_MAP[body.aiModel || "gemini-3-flash-preview"] || "google/gemini-3-flash-preview";
-      content = await callLovable(buildPrompt(body.entries), model);
+      try {
+        content = await callLovable(buildPrompt(body.entries), model);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // Auto-fallback to direct Gemini when Lovable AI is out of credits or rate-limited.
+        const isQuota = msg.startsWith("429:") || msg.startsWith("402:");
+        const geminiKey = Deno.env.get("GEMINI_API_KEY");
+        if (isQuota && geminiKey) {
+          console.log(`[smart-tag-fix] Lovable AI ${msg.slice(0, 8)} — fallback to Gemini direct`);
+          content = await callGeminiDirect(buildPrompt(body.entries), geminiKey);
+          usedFallback = "gemini-direct";
+        } else {
+          throw e;
+        }
+      }
     }
 
     const parsed = parseJsonLoose(content);
-    const out: Record<string, { text: string; safe: boolean; reason?: string }> = {};
+    const out: Record<string, { text: string; safe: boolean; reason?: string; grafted?: boolean }> = {};
     const byKey = new Map(body.entries.map(e => [e.key, e]));
 
     for (const r of parsed.results || []) {
       const src = byKey.get(r?.key);
       if (!src || typeof r.text !== "string" || !r.text.trim()) continue;
-      const cleaned = stripDiacritics(r.text);
-      const sigOrig = tagSignature(src.original);
-      const sigNew  = tagSignature(cleaned);
-      const safe = sigOrig === sigNew;
+      let cleaned = stripDiacritics(r.text);
+      let safe = tagSignature(src.original) === tagSignature(cleaned);
+      let grafted = false;
+      // إصلاح ذاتي: إذا اختلّ تسلسل الرموز، نحاول زرع رموز الأصل في الاقتراح.
+      if (!safe) {
+        const repaired = graftOriginalTags(src.original, cleaned);
+        if (repaired && tagSignature(src.original) === tagSignature(repaired)) {
+          cleaned = repaired;
+          safe = true;
+          grafted = true;
+        }
+      }
       out[src.key] = {
         text: cleaned,
         safe,
-        reason: safe ? undefined : "تسلسل الرموز التقنية في الاقتراح لا يطابق الأصل",
+        grafted,
+        reason: safe
+          ? (grafted ? "تمّ زرع رموز الأصل تلقائياً في النصّ المقترح" : undefined)
+          : "تسلسل الرموز التقنية في الاقتراح لا يطابق الأصل — راجع يدوياً قبل القبول",
       };
     }
 
-    return new Response(JSON.stringify({ results: out }), {
+    return new Response(JSON.stringify({ results: out, fallback: usedFallback }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

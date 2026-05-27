@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   Wrench, FileText, FileCheck2, AlertTriangle, Sparkles,
-  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft, Wand2, Loader2,
+  Pencil, Check, X, CornerDownLeft, RefreshCw, AlignLeft, Wand2, Loader2, StopCircle,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";

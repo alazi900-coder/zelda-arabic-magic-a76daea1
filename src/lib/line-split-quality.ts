@@ -175,9 +175,9 @@ function findBreakCandidates(joined: string): BreakCandidate[] {
     if (NO_START_TOKENS.has(nextWord)) continue;
 
     let score = 1;
-    if (SENTENCE_END.test(prev)) score += 10;            // بعد علامة ترقيم نهائية
-    if (prev === "،" || prev === ",") score += 4;        // بعد فاصلة
-    if (prev === "؛" || prev === ";") score += 6;        // بعد فاصلة منقوطة
+    if (SENTENCE_END.test(prev)) score += 25;            // بعد علامة ترقيم نهائية (مكافأة قوية)
+    if (prev === "،" || prev === ",") score += 6;        // بعد فاصلة
+    if (prev === "؛" || prev === ";") score += 10;       // بعد فاصلة منقوطة
     if (next === "«" || next === '"' || next === "(") score += 2;
     // كلمة محتوى قبل الكسر (4+ حروف غير مسافة) → كسر طبيعي بعد كلمة كاملة
     const wordBefore = joined.slice(0, i).split(" ").pop() || "";

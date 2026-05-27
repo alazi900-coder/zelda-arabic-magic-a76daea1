@@ -234,6 +234,8 @@ const InlineEditor: React.FC<InlineEditorProps> = ({ initialValue, original, onS
   );
 };
 
+type AiSuggestion = { text: string; safe: boolean; reason?: string; grafted?: boolean };
+
 interface IssueCardProps {
   issue: RestoreIssue;
   index: number;

@@ -227,6 +227,8 @@ export const LineSplitFixPanel: React.FC<Props> = ({
     if (!window.confirm(`تحسين ${visibleIssues.length} عنصر بـ AI؟ قد يستغرق وقتاً.`)) return;
     cancelRef.current = false;
     setBusy("all");
+    const total = visibleIssues.length;
+    const progressToast = toast({ title: `🌐 0/${total} — طُبِّق 0` });
     try {
       const BATCH = 15;
       let done = 0; let applied = 0;
@@ -239,10 +241,17 @@ export const LineSplitFixPanel: React.FC<Props> = ({
           if (next && apply(item.key, next)) applied++;
         }
         done += slice.length;
-        toast({ title: `🌐 ${done}/${visibleIssues.length} — طُبِّق ${applied}` });
+        progressToast.update({ id: progressToast.id, title: `🌐 ${done}/${total} — طُبِّق ${applied}` });
       }
-      if (cancelRef.current) toast({ title: `⏹ توقّف عند ${done}/${visibleIssues.length} — طُبِّق ${applied}` });
+      progressToast.dismiss();
+      toast({
+        title: cancelRef.current
+          ? `⏹ توقّف عند ${done}/${total} — طُبِّق ${applied}`
+          : `✅ انتهى التحسين بـ AI — طُبِّق ${applied}/${total}`,
+      });
+      setTimeout(() => { try { /* auto-fade */ } catch {} }, 0);
     } catch (e) {
+      progressToast.dismiss();
       toast({ title: "❌ خطأ AI", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally { setBusy(null); }
   };
@@ -259,15 +268,17 @@ export const LineSplitFixPanel: React.FC<Props> = ({
     const CHUNK = 200;
     let n = 0;
     const newResolved = new Set(resolvedKeys);
+    const progressToast = toast({ title: `⚡ 0/${toApply.length}` });
     try {
       for (let i = 0; i < toApply.length; i += CHUNK) {
         if (cancelLocalRef.current) break;
         const chunk = toApply.slice(i, i + CHUNK);
         for (const it of chunk) { onUpdateTranslation(it.key, it.proposed); newResolved.add(it.key); n++; }
         setResolvedKeys(new Set(newResolved));
-        toast({ title: `⚡ ${n}/${toApply.length}` });
+        progressToast.update({ id: progressToast.id, title: `⚡ ${n}/${toApply.length}` });
         await new Promise(r => setTimeout(r, 0));
       }
+      progressToast.dismiss();
       toast({
         title: cancelLocalRef.current ? `⏹ توقّف عند ${n}/${toApply.length}` : `✅ تمّ تطبيق ${n} تقسيم محلّي`,
         description: !cancelLocalRef.current && skipped > 0 ? `تُرك ${skipped} عنصر بدون تحسين متاح` : undefined,

@@ -7,6 +7,8 @@
 //
 // كلّ مسار ترجمة / بناء يجب أن يمرّ عبر `restoreTagsAndLineBreaks` كحارس أخير.
 
+import { countEffectiveLines, tokenize } from "./text-tokens";
+
 const TAG_REGEX_G = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
 const TAG_REGEX_SINGLE = /[\uFFF9-\uFFFC\uE000-\uE0FF]/;
 
@@ -234,13 +236,25 @@ export function restoreLineBreaks(original: string, translation: string): string
  * يُحذَف. هذا يحافظ على المحتوى العربي بين الأقواس (مثل `[ملاحظة]`)
  * ولا يلمس وسوم الـ PUA الحقيقيّة لأنّها ليست داخل أقواس.
  */
+/**
+ * Xenoblade Chronicles legitimate tag patterns. MUST be preserved verbatim.
+ * Examples: [XENO:n ], [XENO:wait wait=key ], [XENO:del del=this ],
+ *           [System:PageBreak ], [System:Ruby rt=... ], [/System:Ruby ],
+ *           [ML:icon icon=btn_a ], [ML:Dash ]
+ */
+const XC3_TAG_PREFIX_RE = /^\/?\s*(XENO|System|ML)\b/i;
+
+export function isXc3Tag(inside: string): boolean {
+  return XC3_TAG_PREFIX_RE.test(inside.trim());
+}
+
 export function stripHallucinatedTagBrackets(text: string): string {
   if (!text) return text;
-  // \[ ... \] حيث المحتوى ASCII فقط بنمط وسم لعبة وبدون حروف عربية.
-  // نمط مرن: حرف-أو-_ في البداية، ثمّ حروف ASCII/أرقام/`:` / `.` / `_` / `-` / `/` / مسافات.
-  return text.replace(/\[([A-Za-z_][A-Za-z0-9_:./\-\s]*)\]/g, (match, inside: string) => {
+  // Allow `=`, `'`, internal `/` inside the bracket so real XC3 tags match the regex.
+  return text.replace(/\[([A-Za-z_/][A-Za-z0-9_:./\-=\s']*)\]/g, (match, inside: string) => {
     if (/[\u0600-\u06FF]/.test(inside)) return match;
     if (/^TAG_\d+$/.test(inside.trim())) return match;
+    if (isXc3Tag(inside)) return match;
     return "";
   });
 }
@@ -326,9 +340,20 @@ function countLineBreaks(text: string): number {
   return n;
 }
 
-/** يستخرج تتابع الرموز بترتيب ظهورها في النصّ. */
+/**
+ * Extract the ordered sequence of "tags" in a text — includes both PUA glyphs
+ * AND XC3 bracket tags ([XENO:...], [System:...], [ML:...], [/System:...]).
+ * Hard-break tags (XENO:n / System:PageBreak) are intentionally excluded here
+ * because they are tracked as line-breaks, not as tag presence/absence.
+ */
 function extractTagSequence(text: string): string[] {
-  return text.match(TAG_REGEX_G) || [];
+  if (!text) return [];
+  const out: string[] = [];
+  for (const t of tokenize(text)) {
+    if (t.kind === "pua" || t.kind === "control") out.push(t.raw);
+    else if (t.kind === "tag") out.push(t.raw);
+  }
+  return out;
 }
 
 /**
@@ -376,10 +401,12 @@ function analyzeReasons(original: string, translation: string): RestoreIssueReas
   const normalized = normalizeLineBreakRepresentations(translation);
   const origTagSeq = extractTagSequence(original);
   const transTagSeq = extractTagSequence(translation);
-  const origBreaks = countLineBreaks(original);
-  const transBreaks = countLineBreaks(normalized);
-  const origLines = original.split("\n").length;
-  const transLines = normalized.split("\n").length;
+  // Hard-break aware line counting: [XENO:n ] and [System:PageBreak ] count
+  // as line terminators in the XC3 engine, so we count effective lines, not \n.
+  const origLines = countEffectiveLines(original);
+  const transLines = countEffectiveLines(normalized);
+  const origBreaks = Math.max(0, origLines - 1);
+  const transBreaks = Math.max(0, transLines - 1);
 
   const missingTags = Math.max(0, origTagSeq.length - transTagSeq.length);
   const extraTags = Math.max(0, transTagSeq.length - origTagSeq.length);

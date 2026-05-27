@@ -682,12 +682,17 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
         </div>
 
         {report && totalIssues > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-md border bg-muted/30 p-2 text-center shrink-0">
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">مفقودة <strong className="text-foreground tabular-nums">{report.issueTotals.missingTags}</strong></div>
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">زائدة/فاسدة <strong className="text-foreground tabular-nums">{report.issueTotals.extraTags + report.issueTotals.changedTagPositions}</strong></div>
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">مكان خاطئ <strong className="text-foreground tabular-nums">{report.issueTotals.misplacedTags}</strong></div>
-            <div className="text-[10px] sm:text-[11px] text-muted-foreground">فواصل أسطر <strong className="text-foreground tabular-nums">{report.issueTotals.missingLineBreaksAuto + report.issueTotals.missingLineBreaksPartial}</strong></div>
-          </div>
+          <details className="rounded-md border bg-muted/30 p-2 shrink-0 sm:open:p-2" open>
+            <summary className="cursor-pointer text-[11px] sm:text-xs font-medium text-muted-foreground sm:hidden mb-1.5">
+              تفاصيل المشاكل
+            </summary>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center">
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">مفقودة <strong className="text-foreground tabular-nums">{report.issueTotals.missingTags}</strong></div>
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">زائدة/فاسدة <strong className="text-foreground tabular-nums">{report.issueTotals.extraTags + report.issueTotals.changedTagPositions}</strong></div>
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">مكان خاطئ <strong className="text-foreground tabular-nums">{report.issueTotals.misplacedTags}</strong></div>
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground">فواصل أسطر <strong className="text-foreground tabular-nums">{report.issueTotals.missingLineBreaksAuto + report.issueTotals.missingLineBreaksPartial}</strong></div>
+            </div>
+          </details>
         )}
 
         {totalIssues === 0 && !splitEntries ? (

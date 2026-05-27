@@ -8,6 +8,7 @@
 // كلّ مسار ترجمة / بناء يجب أن يمرّ عبر `restoreTagsAndLineBreaks` كحارس أخير.
 
 import { countEffectiveLines, tokenize } from "./text-tokens";
+import { restoreTagsLocally } from "./xc3-tag-restoration";
 
 const TAG_REGEX_G = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
 const TAG_REGEX_SINGLE = /[\uFFF9-\uFFFC\uE000-\uE0FF]/;
@@ -269,7 +270,10 @@ export function restoreTagsAndLineBreaks(original: string, translation: string):
   if (!translation) return translation;
   const stripped = stripHallucinatedTagBrackets(translation);
   const afterLineBreaks = restoreLineBreaks(original, stripped);
-  return restoreTechnicalTags(original, afterLineBreaks);
+  const afterPua = restoreTechnicalTags(original, afterLineBreaks);
+  // استرجاع الوسوم بالأقواس [XENO:...], [System:PageBreak ], [XENO:n ], [ML:...]
+  // المفقودة أو في غير مكانها — الـ PUA كان فقط للرموز غير المرئية.
+  return restoreTagsLocally(original, afterPua);
 }
 
 /** أسباب اعتبار الترجمة مكسورة. */

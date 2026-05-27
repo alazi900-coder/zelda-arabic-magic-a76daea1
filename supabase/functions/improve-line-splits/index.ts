@@ -204,10 +204,22 @@ Deno.serve(async (req) => {
     }
     let raw: Record<string, string> = {};
     if (body.engine === "lovable") {
-      raw = await callLovable(body.entries, body.model || "google/gemini-3-flash-preview");
+      try {
+        raw = await callLovable(body.entries, body.model || "google/gemini-3-flash-preview");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Fallback تلقائي إلى Gemini المباشر عند نفاد رصيد Lovable أو تجاوز الحد
+        const geminiKey = Deno.env.get("GEMINI_API_KEY");
+        if ((msg.startsWith("402:") || msg.startsWith("429:")) && geminiKey) {
+          raw = await callGeminiDirect(body.entries, geminiKey);
+        } else {
+          throw err;
+        }
+      }
     } else if (body.engine === "gemini-direct") {
-      if (!body.apiKey) throw new Error("apiKey مطلوب");
-      raw = await callGeminiDirect(body.entries, body.apiKey);
+      const key = body.apiKey || Deno.env.get("GEMINI_API_KEY");
+      if (!key) throw new Error("apiKey مطلوب");
+      raw = await callGeminiDirect(body.entries, key);
     } else if (body.engine === "google-translate") {
       if (!body.apiKey) throw new Error("apiKey مطلوب");
       raw = await callGoogleTranslate(body.entries, body.apiKey);

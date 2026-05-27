@@ -398,16 +398,32 @@ const IssueCard: React.FC<IssueCardProps> = ({
               )}
             </div>
             {editable && !isResolved && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onStartEdit}
-                className="h-7 gap-1 text-xs"
-              >
-                <Pencil className="h-3 w-3" />
-                تعديل
-              </Button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {onRequestAiFix && !aiSuggestion && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onRequestAiFix}
+                    disabled={aiBusy}
+                    className="h-7 gap-1 text-xs border-violet-400/70 text-violet-700 hover:bg-violet-100 dark:text-violet-200 dark:hover:bg-violet-900/40"
+                    title="اطلب من الذكاء الاصطناعي إعادة بناء الرموز وفواصل الأسطر دون تغيير المعنى"
+                  >
+                    {aiBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                    إصلاح بالذكاء الاصطناعي
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onStartEdit}
+                  className="h-7 gap-1 text-xs"
+                >
+                  <Pencil className="h-3 w-3" />
+                  تعديل
+                </Button>
+              </div>
             )}
           </div>
           <div

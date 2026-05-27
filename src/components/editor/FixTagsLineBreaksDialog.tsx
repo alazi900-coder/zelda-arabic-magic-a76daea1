@@ -519,7 +519,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   useEffect(() => { try { localStorage.setItem("xc1_smartfix_engine", aiEngine); } catch { /* ignore */ } }, [aiEngine]);
   const [aiBusyKey, setAiBusyKey] = useState<string | null>(null);
   const [aiBulkBusy, setAiBulkBusy] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { text: string; safe: boolean; reason?: string; grafted?: boolean }>>({});
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, AiSuggestion>>({});
 
   const totalIssues = (report?.autoFixable || 0) + (report?.needsReview || 0);
   const affectedFiles = useMemo(

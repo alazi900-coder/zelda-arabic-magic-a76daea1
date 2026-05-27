@@ -12,7 +12,7 @@ const corsHeaders = {
 
 interface ReqEntry { key: string; originalEn: string; currentAr: string; }
 interface ReqBody {
-  engine: "lovable" | "gemini-direct" | "google-translate" | "local";
+  engine: "lovable" | "gemini-direct" | "google-translate" | "deepseek" | "local";
   model?: string;
   apiKey?: string;
   entries: ReqEntry[];

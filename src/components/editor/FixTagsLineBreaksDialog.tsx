@@ -440,8 +440,8 @@ const IssueCard: React.FC<IssueCardProps> = ({
       {aiSuggestion && !isResolved && (
         <div className={`rounded border p-2 ${
           aiSuggestion.safe
-            ? "border-violet-500/60 bg-violet-50 dark:bg-violet-950/40 dark:border-violet-400/60"
-            : "border-orange-500/60 bg-orange-50 dark:bg-orange-950/40 dark:border-orange-400/60"
+            ? "border-violet-500/60 bg-violet-100 text-violet-950 dark:bg-violet-900/70 dark:text-violet-50 dark:border-violet-400/60"
+            : "border-orange-500/60 bg-orange-100 text-orange-950 dark:bg-orange-900/70 dark:text-orange-50 dark:border-orange-400/60"
         }`}>
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold">
@@ -466,11 +466,11 @@ const IssueCard: React.FC<IssueCardProps> = ({
             </div>
           </div>
           {aiSuggestion.reason && (
-            <div className={`text-[11px] mb-1 ${aiSuggestion.safe ? "text-sky-700 dark:text-sky-200" : "text-orange-700 dark:text-orange-200"}`}>
+            <div className="text-[11px] mb-1 opacity-90">
               {aiSuggestion.safe ? "ℹ️" : "⚠️"} {aiSuggestion.reason}
             </div>
           )}
-          <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words" dir="rtl">
+          <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words font-medium" dir="rtl">
             {renderInvisible(aiSuggestion.text)}
           </div>
         </div>

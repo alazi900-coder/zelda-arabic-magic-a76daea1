@@ -505,6 +505,15 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [resolvedKeys, setResolvedKeys] = useState<Set<string>>(new Set());
 
+  // ── حالة الإصلاح الذكي بالـ AI ────────────────────────────────────────────
+  const [aiEngine, setAiEngine] = useState<string>(() => {
+    try { return localStorage.getItem("xc1_smartfix_engine") || "lovable:gemini-3-flash-preview"; } catch { return "lovable:gemini-3-flash-preview"; }
+  });
+  useEffect(() => { try { localStorage.setItem("xc1_smartfix_engine", aiEngine); } catch { /* ignore */ } }, [aiEngine]);
+  const [aiBusyKey, setAiBusyKey] = useState<string | null>(null);
+  const [aiBulkBusy, setAiBulkBusy] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { text: string; safe: boolean; reason?: string }>>({});
+
   const totalIssues = (report?.autoFixable || 0) + (report?.needsReview || 0);
   const affectedFiles = useMemo(
     () => (report ? Object.keys(report.byFile).length : 0),
@@ -515,9 +524,75 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
     if (!report) return;
     setEditingKey(null);
     setResolvedKeys(new Set());
+    setAiSuggestions({});
     if (report.autoFixable === 0 && report.needsReview > 0) setTab("review");
     else setTab("auto");
   }, [report]);
+
+  const callSmartFix = useCallback(async (issues: RestoreIssue[]) => {
+    if (!issues.length) return;
+    const [engine, model] = aiEngine.split(":") as ["lovable" | "deepseek", string];
+    const deepseekKey = (() => {
+      try { return localStorage.getItem("userDeepSeekKey") || ""; } catch { return ""; }
+    })();
+    try {
+      const { data, error } = await supabase.functions.invoke("smart-tag-fix", {
+        body: {
+          engine,
+          aiModel: model,
+          providerApiKey: engine === "deepseek" ? (deepseekKey || undefined) : undefined,
+          entries: issues.map(i => ({ key: i.key, original: i.original, translation: i.before })),
+        },
+      });
+      if (error) throw new Error(error.message || "تعذّر الاتصال بالخدمة");
+      if (data?.error) throw new Error(data.error);
+      const results = (data?.results || {}) as Record<string, { text: string; safe: boolean; reason?: string }>;
+      const count = Object.keys(results).length;
+      if (!count) {
+        toast({ title: "لم يُرجع الذكاء الاصطناعي أيّ اقتراح", variant: "destructive" });
+        return;
+      }
+      setAiSuggestions(prev => ({ ...prev, ...results }));
+      toast({ title: `وصل ${count} اقتراح من الذكاء الاصطناعي`, description: "راجع وافقُ أو ارفض كلّ اقتراح" });
+    } catch (e) {
+      toast({ title: "فشل الإصلاح بالذكاء الاصطناعي", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    }
+  }, [aiEngine]);
+
+  const handleRequestAiFix = useCallback(async (issue: RestoreIssue) => {
+    setAiBusyKey(issue.key);
+    try { await callSmartFix([issue]); } finally { setAiBusyKey(null); }
+  }, [callSmartFix]);
+
+  const handleAcceptAiFix = useCallback((key: string) => {
+    const sug = aiSuggestions[key];
+    if (!sug || !onUpdateTranslation) return;
+    onUpdateTranslation(key, sug.text);
+    setResolvedKeys(prev => { const n = new Set(prev); n.add(key); return n; });
+    setAiSuggestions(prev => { const next = { ...prev }; delete next[key]; return next; });
+  }, [aiSuggestions, onUpdateTranslation]);
+
+  const handleRejectAiFix = useCallback((key: string) => {
+    setAiSuggestions(prev => { const next = { ...prev }; delete next[key]; return next; });
+  }, []);
+
+  const handleBulkAiFix = useCallback(async () => {
+    if (!report) return;
+    const pending = report.reviewExamples.filter(i => !resolvedKeys.has(i.key) && !aiSuggestions[i.key]);
+    if (!pending.length) {
+      toast({ title: "لا توجد عناصر للإصلاح", description: "كلّ العناصر إمّا تمّ حلّها أو لها اقتراح" });
+      return;
+    }
+    setAiBulkBusy(true);
+    try {
+      const CHUNK = 5;
+      for (let i = 0; i < pending.length; i += CHUNK) {
+        await callSmartFix(pending.slice(i, i + CHUNK));
+      }
+    } finally {
+      setAiBulkBusy(false);
+    }
+  }, [report, resolvedKeys, aiSuggestions, callSmartFix]);
 
   const handleSaveEdit = useCallback((key: string, value: string) => {
     onUpdateTranslation?.(key, value);

@@ -1,25 +1,10 @@
 // =============================================================================
 // قواعد التحسين بالذكاء الاصطناعي
-// تعريف موحَّد للقواعد المُرسلة لـ enhance-translations مع إمكانية
-// تشغيل/إيقاف كلّ قاعدة من إعدادات اللوحة.
+// قواعد مبنيّة (built-in) + قواعد مخصّصة (custom) يضيفها المستخدم.
+// CRUD كامل للقواعد المخصّصة عبر localStorage.
 // =============================================================================
 
-export type EnhanceRuleId =
-  // Detection — ماذا يبحث الـ AI؟
-  | 'detect_missing_char'
-  | 'detect_accuracy'
-  | 'detect_phrasing'
-  | 'detect_word_order'
-  | 'detect_consistency'
-  | 'detect_terminology'
-  | 'detect_untranslated'
-  // Protection — ماذا لا يفعل الـ AI؟
-  | 'block_tashkeel'
-  | 'protect_proper_nouns'
-  | 'skip_preferences'
-  | 'skip_hamza_only'
-  | 'protect_tech_tags'
-  | 'no_identical_output';
+export type EnhanceRuleId = string; // مفتوح الآن لدعم القواعد المخصّصة
 
 export type EnhanceRuleKind = 'detect' | 'protect';
 
@@ -30,16 +15,15 @@ export interface EnhanceRule {
   kind: EnhanceRuleKind;
   /** القاعدة مُفعَّلة افتراضيّاً عند أوّل تشغيل. */
   defaultEnabled: boolean;
-  /**
-   * القاعدة حرجة (تحمي من كسر اللعبة).
-   * يُسمح بإيقافها لكن مع تحذير بصريّ.
-   */
+  /** القاعدة حرجة (تحمي من كسر اللعبة). يُسمح بإيقافها مع تحذير. */
   critical?: boolean;
   /** نصّ الـ prompt المُحقَن عند تفعيل القاعدة. */
   prompt: string;
+  /** قاعدة من إنشاء المستخدم (يمكن تعديلها/حذفها). */
+  custom?: boolean;
 }
 
-export const ENHANCE_RULES: EnhanceRule[] = [
+export const BUILTIN_RULES: EnhanceRule[] = [
   // ───── Detection ─────
   {
     id: 'detect_missing_char',
@@ -157,8 +141,47 @@ export const ENHANCE_RULES: EnhanceRule[] = [
 ];
 
 const STORAGE_KEY = 'xc1_enhance_rules_v1';
+const CUSTOM_STORAGE_KEY = 'xc1_enhance_custom_rules_v1';
 
-/** تُرجع مجموعة معرّفات القواعد المُفعَّلة (مع الافتراضات لأوّل تشغيل). */
+// ───── Custom rules CRUD ─────────────────────────────────────────────────────
+
+export function loadCustomRules(): EnhanceRule[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_STORAGE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((r): r is EnhanceRule =>
+        r && typeof r.id === 'string' && typeof r.label === 'string' &&
+        typeof r.prompt === 'string' && (r.kind === 'detect' || r.kind === 'protect')
+      )
+      .map(r => ({ ...r, custom: true }));
+  } catch { return []; }
+}
+
+export function saveCustomRules(rules: EnhanceRule[]): void {
+  try {
+    localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(rules.map(r => ({ ...r, custom: true }))));
+  } catch { /* تجاهل */ }
+}
+
+export function generateCustomRuleId(): string {
+  return `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// ───── Combined access ──────────────────────────────────────────────────────
+
+/** كلّ القواعد (مبنيّة + مخصّصة). */
+export function getAllRules(): EnhanceRule[] {
+  return [...BUILTIN_RULES, ...loadCustomRules()];
+}
+
+/** للتوافق مع الكود القديم. */
+export const ENHANCE_RULES = BUILTIN_RULES;
+
+// ───── Enabled set ──────────────────────────────────────────────────────────
+
 export function loadEnabledRules(): Set<EnhanceRuleId> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -166,21 +189,21 @@ export function loadEnabledRules(): Set<EnhanceRuleId> {
       const arr = JSON.parse(raw) as EnhanceRuleId[];
       if (Array.isArray(arr)) return new Set(arr);
     }
-  } catch {
-    /* تجاهل */
-  }
-  return new Set(ENHANCE_RULES.filter(r => r.defaultEnabled).map(r => r.id));
+  } catch { /* تجاهل */ }
+  // الافتراضي: كلّ المبنيّة المُفعَّلة + كلّ المخصّصة (لأنّها أُضيفت يدوياً)
+  const defaults = new Set<EnhanceRuleId>(
+    BUILTIN_RULES.filter(r => r.defaultEnabled).map(r => r.id)
+  );
+  for (const r of loadCustomRules()) defaults.add(r.id);
+  return defaults;
 }
 
 export function saveEnabledRules(ids: Set<EnhanceRuleId>): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
-  } catch {
-    /* تجاهل */
-  }
+  } catch { /* تجاهل */ }
 }
 
-/** تُرجع true إذا كانت كلّ القواعد المفعَّلة افتراضيّاً مُفعَّلة (للعرض). */
 export function isAllDefaultsEnabled(ids: Set<EnhanceRuleId>): boolean {
-  return ENHANCE_RULES.filter(r => r.defaultEnabled).every(r => ids.has(r.id));
+  return BUILTIN_RULES.filter(r => r.defaultEnabled).every(r => ids.has(r.id));
 }

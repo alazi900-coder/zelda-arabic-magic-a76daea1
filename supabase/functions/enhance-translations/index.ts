@@ -62,16 +62,61 @@ const RULES: RuleDef[] = [
 ];
 const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
 
-function buildRuleSections(enabledIds: string[] | undefined): { detect: string; protect: string } {
-  const enabled = (enabledIds && Array.isArray(enabledIds)) ? new Set(enabledIds) : DEFAULT_RULE_IDS;
-  const detectLines = RULES.filter(r => r.kind === 'detect' && enabled.has(r.id))
+function buildRuleSections(
+  enabledIds: string[] | undefined,
+  customRules: RuleDef[] | undefined,
+): { detect: string; protect: string } {
+  // اجمع المبنيّة + المخصّصة معاً قبل الفرز.
+  const all: RuleDef[] = [
+    ...RULES,
+    ...(Array.isArray(customRules) ? customRules.filter(r =>
+      r && typeof r.id === 'string' && typeof r.prompt === 'string' &&
+      (r.kind === 'detect' || r.kind === 'protect')
+    ) : []),
+  ];
+  // إذا لم تصل enabledRules (عملاء قدماء) فعّل المبنيّة فقط.
+  const enabled = (enabledIds && Array.isArray(enabledIds))
+    ? new Set(enabledIds)
+    : DEFAULT_RULE_IDS;
+  const detectLines = all.filter(r => r.kind === 'detect' && enabled.has(r.id))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
-  const protectLines = RULES.filter(r => r.kind === 'protect' && enabled.has(r.id)).map(r => r.prompt);
+  const protectLines = all.filter(r => r.kind === 'protect' && enabled.has(r.id)).map(r => r.prompt);
   const detect = detectLines.length > 0
     ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
     : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
   const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
   return { detect, protect };
+}
+
+// ─── Smart glossary filter ──────────────────────────────────────────────────
+// نأخذ القاموس الكامل ونُرتّبه بحيث المصطلحات الموجودة فعلاً في الدفعة الحالية
+// تتصدّر القائمة. هذا يضمن أنّ القطع لا يُضحّي بالمصطلحات ذات الصلة المباشرة.
+const GLOSSARY_BUDGET = 3500; // حدّ آمن لـ prompt context.
+function smartFilterGlossary(glossary: string | undefined, entries: EnhanceEntry[]): string {
+  if (!glossary) return '';
+  if (glossary.length <= GLOSSARY_BUDGET) return glossary;
+  // اجمع كلّ النصوص الأصليّة لتشكيل مجموعة بحث.
+  const haystack = entries.map(e => `${e.original} ${e.translation}`).join(' ').toLowerCase();
+  const lines = glossary.split('\n').filter(l => l.trim());
+  // ابحث عن المصطلح الإنجليزيّ (أوّل جزء قبل → أو | أو tab أو =).
+  const relevant: string[] = [];
+  const rest: string[] = [];
+  for (const line of lines) {
+    const term = (line.split(/[→|\t=]/)[0] || '').trim().toLowerCase();
+    if (term && term.length >= 2 && haystack.includes(term)) {
+      relevant.push(line);
+    } else {
+      rest.push(line);
+    }
+  }
+  // ابدأ بالمصطلحات ذات الصلة ثمّ الباقي حتّى نَملأ الميزانيّة.
+  const ordered = [...relevant, ...rest];
+  let out = '';
+  for (const line of ordered) {
+    if (out.length + line.length + 1 > GLOSSARY_BUDGET) break;
+    out += (out ? '\n' : '') + line;
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {
@@ -80,7 +125,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -88,12 +133,16 @@ Deno.serve(async (req) => {
       providerApiKey?: string;
       thinkingMode?: 'enabled' | 'disabled';
       enabledRules?: string[];
+      customRules?: RuleDef[];
     };
 
-    // قسّم القواعد المُفعَّلة إلى كتلتَي اكتشاف/حماية لاستخدامها في الـ prompts.
-    const ruleSections = buildRuleSections(enabledRules);
+    // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
+    const ruleSections = buildRuleSections(enabledRules, customRules);
     // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
     ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
+
+    // فرز ذكيّ للقاموس: الأولويّة للمصطلحات الموجودة في نصوص الدفعة.
+    const filteredGlossary = smartFilterGlossary(glossary, entries || []);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     // مفتاح DeepSeek: الأولوية للمفتاح القادم من الواجهة (إعدادات المستخدم)
@@ -317,7 +366,7 @@ ${ruleSections.protect}
 - medium: خطأ واضح يحتاج إصلاح (reorder/weak/style غالباً)
 - low: تحسين بسيط
 
-${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
+${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 **النصوص للفحص:**
 ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
@@ -451,7 +500,7 @@ ${ruleSections.protect}
 
 (ستُنظَّف اقتراحاتك تلقائيّاً من علامات التشكيل قبل عرضها.)
 
-${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
+${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 **النصوص للمراجعة:**
 ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}

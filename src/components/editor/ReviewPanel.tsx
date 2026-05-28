@@ -1,9 +1,57 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Sparkles, Loader2 } from "lucide-react";
 import { FILE_CATEGORIES, type ReviewResults, type ShortSuggestion, type ImproveResult } from "./types";
 import WordDiffView from "./WordDiffView";
+
+type DiffFilter = "all" | "significant" | "tags";
+
+// Matches XENO/System tags, bracketed codes, and the "n/" splitter
+const TAG_RE = /\[(?:XENO|System)[^\]]*\]|\[[A-Za-z0-9_:.\-]+\]|n\//g;
+
+function extractTags(s: string): string {
+  return (s.match(TAG_RE) || []).join("|");
+}
+function isTagChange(a: string, b: string): boolean {
+  return extractTags(a) !== extractTags(b);
+}
+function isSignificantChange(a: string, b: string): boolean {
+  if (!a || !b) return true;
+  const lenRatio = Math.abs(a.length - b.length) / Math.max(a.length, b.length);
+  if (lenRatio >= 0.2) return true;
+  const aw = a.trim().split(/\s+/);
+  const bw = b.trim().split(/\s+/);
+  const setA = new Set(aw);
+  let common = 0;
+  for (const w of bw) if (setA.has(w)) common++;
+  const total = Math.max(aw.length, bw.length);
+  return 1 - common / total >= 0.3;
+}
+function passesDiffFilter(filter: DiffFilter, current: string, suggested: string): boolean {
+  if (filter === "all") return true;
+  if (filter === "tags") return isTagChange(current, suggested);
+  return isSignificantChange(current, suggested);
+}
+
+const FilterBar: React.FC<{
+  value: DiffFilter;
+  onChange: (v: DiffFilter) => void;
+  counts: { all: number; significant: number; tags: number };
+}> = ({ value, onChange, counts }) => (
+  <div className="flex gap-1 mb-3 flex-wrap">
+    <Button size="sm" variant={value === "all" ? "default" : "outline"} onClick={() => onChange("all")} className="text-xs h-7">
+      الكل ({counts.all})
+    </Button>
+    <Button size="sm" variant={value === "significant" ? "default" : "outline"} onClick={() => onChange("significant")} className="text-xs h-7">
+      ✨ اختلافات كبيرة ({counts.significant})
+    </Button>
+    <Button size="sm" variant={value === "tags" ? "default" : "outline"} onClick={() => onChange("tags")} className="text-xs h-7">
+      🏷️ تعديلات الوسوم ({counts.tags})
+    </Button>
+  </div>
+);
+
 
 interface ReviewPanelProps {
   reviewResults: ReviewResults | null;

@@ -41,20 +41,59 @@ const XC1_PROPER_NOUNS = [
   'Gem', 'Crystal', 'Telethia', 'Faced Mechon',
 ].join(', ');
 
+// ─── Toggleable rules (mirrors src/lib/enhance-rules.ts) ─────────────────────
+// كلّ قاعدة لها id ونصّ prompt يُحقَن عند تفعيلها. الواجهة ترسل enabledRules:string[]
+// مع كلّ طلب؛ إذا لم تُرسَل (عملاء قدماء) تُستخدم القائمة الكاملة الافتراضيّة.
+interface RuleDef { id: string; kind: 'detect' | 'protect'; prompt: string }
+const RULES: RuleDef[] = [
+  { id: 'detect_missing_char', kind: 'detect', prompt: '**missing_char** — حرف ناقص أو زائد ("المعركه"↔"المعركة")' },
+  { id: 'detect_accuracy',     kind: 'detect', prompt: '**accuracy** — ترجمة حرفيّة تحرف المعنى أو تجعله ركيكاً' },
+  { id: 'detect_phrasing',     kind: 'detect', prompt: '**style/weak** — جملة ركيكة أو غير مفهومة تحتاج إعادة صياغة' },
+  { id: 'detect_word_order',   kind: 'detect', prompt: '**reorder** — صحيحة لغوياً لكن ترتيب الكلمات/الجُمل غير سليم' },
+  { id: 'detect_consistency',  kind: 'detect', prompt: '**consistency** — نفس المصطلح مترجم بشكلَين مختلفَين' },
+  { id: 'detect_terminology',  kind: 'detect', prompt: '**terminology** — مصطلح من القاموس مترجم بشكل خاطئ' },
+  { id: 'detect_untranslated', kind: 'detect', prompt: '**untranslated** — نصّ بقي إنجليزياً أو كلمات عربيّة ملتصقة بلا فراغات' },
+  { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
+  { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${'${XC1_PROPER_NOUNS}'}) سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
+  { id: 'skip_preferences',    kind: 'protect', prompt: '🚫 لا تقترح تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة.' },
+  { id: 'skip_hamza_only',     kind: 'protect', prompt: '🚫 لا تقترح تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ.' },
+  { id: 'protect_tech_tags',   kind: 'protect', prompt: '⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.' },
+  { id: 'no_identical_output', kind: 'protect', prompt: '⚠️ لا تُعِد النصّ نفسه بدون تغيير. إذا كانت الترجمة صحيحة، تخطَّاها.' },
+];
+const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
+
+function buildRuleSections(enabledIds: string[] | undefined): { detect: string; protect: string } {
+  const enabled = (enabledIds && Array.isArray(enabledIds)) ? new Set(enabledIds) : DEFAULT_RULE_IDS;
+  const detectLines = RULES.filter(r => r.kind === 'detect' && enabled.has(r.id))
+    .map((r, i) => `${i + 1}. ${r.prompt}`);
+  const protectLines = RULES.filter(r => r.kind === 'protect' && enabled.has(r.id)).map(r => r.prompt);
+  const detect = detectLines.length > 0
+    ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
+    : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
+  const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
+  return { detect, protect };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
       aiModel?: string;
       providerApiKey?: string;
       thinkingMode?: 'enabled' | 'disabled';
+      enabledRules?: string[];
     };
+
+    // قسّم القواعد المُفعَّلة إلى كتلتَي اكتشاف/حماية لاستخدامها في الـ prompts.
+    const ruleSections = buildRuleSections(enabledRules);
+    // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
+    ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     // مفتاح DeepSeek: الأولوية للمفتاح القادم من الواجهة (إعدادات المستخدم)

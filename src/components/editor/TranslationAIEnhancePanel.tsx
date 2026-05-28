@@ -422,11 +422,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             body: {
               entries: textsToAnalyze,
               mode,
-              glossary: glossary?.slice(0, 5000),
+              glossary, // إرسال القاموس كاملاً — الـ edge function يفرز ويقطع بذكاء
               aiModel: model,
               providerApiKey,
               thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
               enabledRules: Array.from(enabledRules),
+              customRules: customRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
             },
             signal: abortSignal,
           });

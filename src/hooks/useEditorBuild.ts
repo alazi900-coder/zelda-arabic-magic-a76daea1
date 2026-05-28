@@ -703,7 +703,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const truncControlCount = (truncated.match(/[\uFFF9-\uFFFC]/g) || []).length;
           const truncPuaCount = (truncated.match(/[\uE000-\uE0FF]/g) || []).length;
 
-          if (truncControlCount < origControlCount || truncPuaCount < origPuaCount) {
+          if ((truncControlCount < origControlCount || truncPuaCount < origPuaCount) && !previouslyBuiltKeys.has(key)) {
             // Truncation destroyed vital chars — revert to original English
             nonEmptyTranslations[key] = orig;
             console.warn(`[BUILD-TRUNC] Reverted "${key}" to English: truncation lost control/PUA chars`);

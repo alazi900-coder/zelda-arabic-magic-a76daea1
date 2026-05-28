@@ -557,6 +557,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const repairLog: SafetyRepairEntry[] = [];
 
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
 

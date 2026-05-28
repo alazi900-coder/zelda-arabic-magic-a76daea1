@@ -375,7 +375,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           if (fixedOpen === fixedClosed) {
             nonEmptyTranslations[key] = fixed;
             brokenBracketFixCount++;
-          } else {
+          } else if (!previouslyBuiltKeys.has(key)) {
             nonEmptyTranslations[key] = orig;
             brokenBracketRevertCount++;
           }

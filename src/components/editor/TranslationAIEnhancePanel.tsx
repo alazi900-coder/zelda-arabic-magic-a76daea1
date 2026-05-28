@@ -516,6 +516,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 alternatives: r.alternatives || [],
                 reason: r.issue || r.reason || "تحسين صياغة",
                 detail: r.detail || "",
+                fixExplanation: r.fixExplanation || "",
                 type: r.type || "style",
               });
             } else {

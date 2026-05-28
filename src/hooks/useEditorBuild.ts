@@ -344,6 +344,21 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         entryLabels.set(k, entry.label);
       }
 
+      // Detect entries whose "original" is actually a previously-built Arabic output
+      // (contains Arabic Presentation Forms — never produced by source English files).
+      // For these, safety gates must NOT revert user edits to the Arabic original:
+      // doing so silently re-bakes the old translation and discards the user's edit
+      // or clear. We skip the revert-to-orig branches for these keys; the user's
+      // intent wins. Only critical structural fixes (broken brackets) still apply.
+      const PRES_FORMS_DETECT = /[\uFB50-\uFDFF\uFE70-\uFEFF]/;
+      const previouslyBuiltKeys = new Set<string>();
+      for (const [k, orig] of entryOriginals) {
+        if (PRES_FORMS_DETECT.test(orig)) previouslyBuiltKeys.add(k);
+      }
+      if (previouslyBuiltKeys.size > 0) {
+        console.log(`[BUILD] 🔓 ${previouslyBuiltKeys.size} entries detected as previously-built — trusting user edits over Arabic "original"`);
+      }
+
       // === NEW PROTECTION 1: Fix broken/unclosed bracket tags ===
       // Detect tags like [XENO:wait wait=key  (missing ]) that cause engine freezes
       let brokenBracketFixCount = 0;

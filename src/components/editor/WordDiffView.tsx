@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { diffWords } from "@/lib/word-diff";
+import React, { memo, useMemo } from "react";
+import { diffWords, type DiffToken } from "@/lib/word-diff";
 
 interface WordDiffViewProps {
   oldText: string;
@@ -14,9 +14,21 @@ interface WordDiffViewProps {
  * - Removed words: red strike-through
  * - Added words: green underline
  * - Unchanged: normal
+ *
+ * Perf: memoized component + memoized diff. For identical strings
+ * we render the raw text directly (no token spans) to avoid React
+ * overhead on huge unchanged paragraphs.
  */
 const WordDiffView: React.FC<WordDiffViewProps> = ({ oldText, newText, dir = "rtl", className }) => {
-  const tokens = useMemo(() => diffWords(oldText || "", newText || ""), [oldText, newText]);
+  const tokens = useMemo<DiffToken[]>(
+    () => diffWords(oldText || "", newText || ""),
+    [oldText, newText]
+  );
+
+  // Hot path: nothing changed → skip per-token rendering entirely.
+  if (tokens.length === 1 && tokens[0].op === "equal") {
+    return <p className={className} dir={dir}>{tokens[0].text}</p>;
+  }
 
   return (
     <p className={className} dir={dir}>
@@ -45,4 +57,4 @@ const WordDiffView: React.FC<WordDiffViewProps> = ({ oldText, newText, dir = "rt
   );
 };
 
-export default WordDiffView;
+export default memo(WordDiffView);

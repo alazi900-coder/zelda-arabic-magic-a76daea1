@@ -395,6 +395,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const PRES_FORMS_RE = /[\uFB50-\uFDFF\uFE70-\uFEFF]/;
       let mixedFormsFixCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue; // user edited a previously-built file — trust as-is
         if (!RAW_ARABIC_RE.test(trans) || !PRES_FORMS_RE.test(trans)) continue;
         const { reverseBidi: revBidi, removeArabicPresentationForms: removePF } = await import("@/lib/arabic-processing");
         const rawText = removePF(revBidi(trans));

@@ -1854,11 +1854,48 @@ Deno.serve(async (req) => {
       };
       const dsModel = (aiModel && DEEPSEEK_NAME_MAP[aiModel]) || 'deepseek-chat';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
-      const result = await translateWithOpenAICompat(
-        entries, protectedEntries, glossaryMap, dsKey,
-        'https://api.deepseek.com', dsModel,
-      );
-      return buildSuccessResponse(entries, result);
+
+      // ====== تسريع deepseek-reasoner عبر التوازي ======
+      // reasoner بطيء لأنه يولّد تفكيراً طويلاً قبل الجواب. الحل: نقسّم الدفعة
+      // إلى قطع صغيرة (CHUNK) ونرسلها بالتوازي (CONCURRENCY) — كل قطعة تظل
+      // تستخدم reasoner الكامل، فالدقة محفوظة، والزمن الكلي ينخفض ~3-5×.
+      // deepseek-chat سريع أصلاً، فلا حاجة للتقسيم.
+      const isReasoner = dsModel === 'deepseek-reasoner';
+      const CHUNK = isReasoner ? 6 : entries.length;
+      const CONCURRENCY = isReasoner ? 4 : 1;
+
+      if (entries.length <= CHUNK) {
+        const result = await translateWithOpenAICompat(
+          entries, protectedEntries, glossaryMap, dsKey,
+          'https://api.deepseek.com', dsModel,
+        );
+        return buildSuccessResponse(entries, result);
+      }
+
+      // قسّم إلى قطع متتالية مع الحفاظ على المحاذاة بين entries و protectedEntries
+      const chunks: { e: typeof entries; p: typeof protectedEntries }[] = [];
+      for (let i = 0; i < entries.length; i += CHUNK) {
+        chunks.push({ e: entries.slice(i, i + CHUNK), p: protectedEntries.slice(i, i + CHUNK) });
+      }
+
+      const merged: Record<string, string> = {};
+      const aggStats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
+
+      // نفّذ بدفعات متوازية بحجم CONCURRENCY
+      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+        const slice = chunks.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(slice.map(c =>
+          translateWithOpenAICompat(c.e, c.p, glossaryMap, dsKey, 'https://api.deepseek.com', dsModel)
+        ));
+        for (const r of results) {
+          Object.assign(merged, r.translations);
+          aggStats.directMatches += r.glossaryStats.directMatches;
+          aggStats.lockedTerms += r.glossaryStats.lockedTerms;
+          aggStats.contextTerms += r.glossaryStats.contextTerms;
+        }
+      }
+
+      return buildSuccessResponse(entries, { translations: merged, glossaryStats: aggStats });
     } else {
       if (provider && provider !== 'gemini') {
         console.warn(`[translate-entries] Unhandled provider value "${provider}" — falling back to Lovable AI/Gemini path`);

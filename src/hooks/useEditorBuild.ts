@@ -528,6 +528,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
       let protectedRevertCount = 0;
       for (const [key, _trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const label = entryLabels.get(key) || '';
         // Extract table name from label like "TableName[row].column"
         const tableMatch = label.match(/^([^\[]+)\[/);

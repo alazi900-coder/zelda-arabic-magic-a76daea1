@@ -721,6 +721,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         let finalTagRepairCount = 0;
         let finalTagRevertCount = 0;
         for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+          if (previouslyBuiltKeys.has(key)) continue;
           const orig = entryOriginals.get(key);
           if (!orig) continue;
 

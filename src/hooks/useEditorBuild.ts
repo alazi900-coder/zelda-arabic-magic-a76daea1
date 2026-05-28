@@ -266,6 +266,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const clearedKeys = currentState.clearedKeys;
         let clearedRevertCount = 0;
         let clearedBlankedCount = 0;
+        // Keys explicitly cleared by the user with NO English baseline (orig is Arabic —
+        // e.g. previously-built file re-uploaded). We must keep "" through the build;
+        // the safety gates below compare "" vs the Arabic orig and would otherwise
+        // revert, silently re-introducing the cleared text into the output file.
+        const intentionallyBlankedKeys = new Set<string>();
         if (clearedKeys && clearedKeys.size > 0) {
           const ARABIC_ANY = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
           const entryByKey = new Map<string, string>();
@@ -274,13 +279,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             if (nonEmptyTranslations[key]) continue; // user re-translated after clearing
             const orig = entryByKey.get(key);
             if (orig && !ARABIC_ANY.test(orig)) {
-              // English baseline available → restore it.
               nonEmptyTranslations[key] = orig;
               clearedRevertCount++;
             } else {
-              // No English baseline → blank the row so the cleared Arabic
-              // doesn't get reused from the source BDAT bytes.
               nonEmptyTranslations[key] = "";
+              intentionallyBlankedKeys.add(key);
               clearedBlankedCount++;
             }
           }

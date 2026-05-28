@@ -14,7 +14,7 @@ import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
   Pencil, Undo2, ChevronDown, ChevronUp, FileText, Trash2, Upload,
-  FolderOpen,
+  FolderOpen, Shield,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,8 @@ import {
 } from "@/lib/enhance-memory";
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import type { ExtractedEntry } from "./types";
+import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
+import { loadEnabledRules, type EnhanceRuleId } from "@/lib/enhance-rules";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -177,6 +179,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [showRulesDialog, setShowRulesDialog] = useState(false);
+  const [enabledRules, setEnabledRules] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules());
   const [appliedHistory, setAppliedHistory] = useState<{ key: string; previous: string; applied: string; ts: number }[]>([]);
   const [deepSeekThinking, setDeepSeekThinking] = useState<boolean>(() => {
     try {
@@ -418,6 +422,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               aiModel: model,
               providerApiKey,
               thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
+              enabledRules: Array.from(enabledRules),
             },
             signal: abortSignal,
           });
@@ -443,7 +448,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000), aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined },
+                body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000), aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(enabledRules) },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;
@@ -992,10 +997,33 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <Sparkles className="w-4 h-4 text-primary" />
             تحسين الترجمة بالذكاء الاصطناعي
           </span>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowSettings(s => !s)} title="إعدادات">
-            {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px] gap-1"
+              onClick={() => setShowRulesDialog(true)}
+              title="قواعد الذكاء الاصطناعي"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              القواعد
+              <Badge variant="secondary" className="text-[9px] h-4 px-1.5 mr-0.5">
+                {enabledRules.size}
+              </Badge>
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowSettings(s => !s)} title="إعدادات">
+              {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
+          </div>
         </CardTitle>
+
+        {/* Rules dialog */}
+        <EnhanceRulesDialog
+          open={showRulesDialog}
+          onOpenChange={setShowRulesDialog}
+          onSaved={setEnabledRules}
+        />
+
 
         {/* Stats bar */}
         <div className="flex items-center gap-4 mt-2 flex-wrap">

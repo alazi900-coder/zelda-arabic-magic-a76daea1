@@ -41,20 +41,59 @@ const XC1_PROPER_NOUNS = [
   'Gem', 'Crystal', 'Telethia', 'Faced Mechon',
 ].join(', ');
 
+// ─── Toggleable rules (mirrors src/lib/enhance-rules.ts) ─────────────────────
+// كلّ قاعدة لها id ونصّ prompt يُحقَن عند تفعيلها. الواجهة ترسل enabledRules:string[]
+// مع كلّ طلب؛ إذا لم تُرسَل (عملاء قدماء) تُستخدم القائمة الكاملة الافتراضيّة.
+interface RuleDef { id: string; kind: 'detect' | 'protect'; prompt: string }
+const RULES: RuleDef[] = [
+  { id: 'detect_missing_char', kind: 'detect', prompt: '**missing_char** — حرف ناقص أو زائد ("المعركه"↔"المعركة")' },
+  { id: 'detect_accuracy',     kind: 'detect', prompt: '**accuracy** — ترجمة حرفيّة تحرف المعنى أو تجعله ركيكاً' },
+  { id: 'detect_phrasing',     kind: 'detect', prompt: '**style/weak** — جملة ركيكة أو غير مفهومة تحتاج إعادة صياغة' },
+  { id: 'detect_word_order',   kind: 'detect', prompt: '**reorder** — صحيحة لغوياً لكن ترتيب الكلمات/الجُمل غير سليم' },
+  { id: 'detect_consistency',  kind: 'detect', prompt: '**consistency** — نفس المصطلح مترجم بشكلَين مختلفَين' },
+  { id: 'detect_terminology',  kind: 'detect', prompt: '**terminology** — مصطلح من القاموس مترجم بشكل خاطئ' },
+  { id: 'detect_untranslated', kind: 'detect', prompt: '**untranslated** — نصّ بقي إنجليزياً أو كلمات عربيّة ملتصقة بلا فراغات' },
+  { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
+  { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${'${XC1_PROPER_NOUNS}'}) سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
+  { id: 'skip_preferences',    kind: 'protect', prompt: '🚫 لا تقترح تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة.' },
+  { id: 'skip_hamza_only',     kind: 'protect', prompt: '🚫 لا تقترح تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ.' },
+  { id: 'protect_tech_tags',   kind: 'protect', prompt: '⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.' },
+  { id: 'no_identical_output', kind: 'protect', prompt: '⚠️ لا تُعِد النصّ نفسه بدون تغيير. إذا كانت الترجمة صحيحة، تخطَّاها.' },
+];
+const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
+
+function buildRuleSections(enabledIds: string[] | undefined): { detect: string; protect: string } {
+  const enabled = (enabledIds && Array.isArray(enabledIds)) ? new Set(enabledIds) : DEFAULT_RULE_IDS;
+  const detectLines = RULES.filter(r => r.kind === 'detect' && enabled.has(r.id))
+    .map((r, i) => `${i + 1}. ${r.prompt}`);
+  const protectLines = RULES.filter(r => r.kind === 'protect' && enabled.has(r.id)).map(r => r.prompt);
+  const detect = detectLines.length > 0
+    ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
+    : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
+  const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
+  return { detect, protect };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
       aiModel?: string;
       providerApiKey?: string;
       thinkingMode?: 'enabled' | 'disabled';
+      enabledRules?: string[];
     };
+
+    // قسّم القواعد المُفعَّلة إلى كتلتَي اكتشاف/حماية لاستخدامها في الـ prompts.
+    const ruleSections = buildRuleSections(enabledRules);
+    // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
+    ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     // مفتاح DeepSeek: الأولوية للمفتاح القادم من الواجهة (إعدادات المستخدم)
@@ -142,24 +181,13 @@ Deno.serve(async (req) => {
     // Grammar check mode — فحص قواعديّ صارم بدون تعديلات أسلوبيّة.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'grammar') {
-      const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ Xenoblade Chronicles 1. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط**:
+      const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ Xenoblade Chronicles 1. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط** (wrong / reorder / weak) بناءً على القواعد المُفعَّلة أدناه:
 
-📛 **wrong** — ترجمة خاطئة فعلاً (المعنى مختلف عن الأصل، أو حرف ناقص يكسر الكلمة، أو كلمات ملتصقة، أو لم تُترجم أصلاً)
-🔀 **reorder** — الترجمة صحيحة لغوياً وكلماتها سليمة، لكن **ترتيب الكلمات/الجُمل** غير سليم ويجعلها تُقرأ بشكل عكسي أو مربك
-✍️ **weak** — الترجمة مفهومة لكنّها **ركيكة** (حرفيّة جداً، أسلوب ضعيف، تحتاج إعادة صياغة لتصبح طبيعيّة)
+${ruleSections.detect}
 
-🚫 **لا تستخدم في اقتراحاتك** (خطّ اللعبة لا يدعم هذه الرموز):
-- التنوين (ً ٌ ٍ)
-- الحركات (َ ُ ِ)
-- الشدّة (ّ) والسكون (ْ)
-(ستُنظَّف اقتراحاتك تلقائيّاً من هذه الرموز قبل عرضها — فلا تُضيع وقتك بإضافتها.)
+${ruleSections.protect}
 
-🚫 **لا تُبلّغ أيضاً عن**:
-- الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) سواء بقيت إنجليزيّة أو نُقلت صوتياً
-- تفضيلات أسلوبيّة بحتة لو الجملة سليمة
-- اقتراحات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ حقيقيّ
-
-⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC. لا تَحذف أو تُضِف أيّ رمز من هذه النطاقات.
+(ستُنظَّف اقتراحاتك تلقائيّاً من علامات التشكيل قبل عرضها — فلا تُضيع وقتك بإضافتها.)
 
 مستوى الخطورة:
 - high: خطأ يغيّر المعنى أو يجعل النصّ غير مفهوم (عادةً wrong)
@@ -270,38 +298,19 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     // نهائيّاً واحداً لكلّ مدخل يجمع كلّ الإصلاحات معاً (بلا تصادم).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'combined') {
-      const combinedPrompt = `أنت مدقّق ومحسّن ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص كلّ ترجمة من كلّ الجوانب (قواعد + إملاء + صياغة + دقّة + اتساق + ترتيب الكلمات) وأعِد **نصّاً نهائيّاً واحداً** يجمع كلّ الإصلاحات معاً في حقل suggested (لا تُرجع اقتراحاً للقواعد منفصلاً عن اقتراح للصياغة — كلّ الإصلاحات في نصّ واحد متناسق).
+      const combinedPrompt = `أنت مدقّق ومحسّن ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص كلّ ترجمة من كلّ الجوانب المُفعَّلة أدناه (قواعد + إملاء + صياغة + دقّة + اتساق + ترتيب الكلمات) وأعِد **نصّاً نهائيّاً واحداً** يجمع كلّ الإصلاحات معاً في حقل suggested (لا تُرجع اقتراحاً للقواعد منفصلاً عن اقتراح للصياغة).
 
-صنّف المشكلة الرئيسيّة إلى **فئة واحدة فقط**:
-📛 **wrong** — ترجمة خاطئة فعلاً (المعنى مختلف، حرف ناقص يكسر كلمة، كلمات ملتصقة، لم تُترجم)
-🔀 **reorder** — صحيحة لغوياً وكلماتها سليمة لكن ترتيبها يجعلها تُقرأ بشكل عكسي
-✍️ **weak** — مفهومة لكنّها ركيكة (حرفيّة جداً، أسلوب ضعيف، تحتاج إعادة صياغة)
-🎨 **style** — تحسين صياغة/مصطلح/دقّة (بدون خطأ قواعديّ صريح)
+صنّف الفئة الرئيسيّة (wrong/reorder/weak/style) بناءً على القواعد التالية:
 
-نوع المشكلة الفرعيّ (للفلترة):
-- missing_char — حرف ناقص/زائد
-- accuracy — ترجمة حرفيّة تحرف المعنى
-- style — أسلوب يحتاج إعادة صياغة
-- consistency — مصطلح غير متّسق
-- terminology — مصطلح من القاموس مترجم خطأ
-- grammar — خطأ نحويّ صرف
-- punctuation — مشكلة ترقيم
+${ruleSections.detect}
 
-🚫 **لا تستخدم في suggested** (خطّ اللعبة لا يدعم هذه الرموز):
-- التنوين (ً ٌ ٍ)
-- الحركات (َ ُ ِ)
-- الشدّة (ّ) والسكون (ْ)
-(ستُنظَّف اقتراحاتك تلقائيّاً من هذه الرموز قبل عرضها.)
+ضِف فئة إضافيّة "style" للتحسينات الأسلوبيّة بدون خطأ صريح.
 
-🚫 **لا تقترح أيضاً**:
-- تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) سواء بقيت إنجليزيّة أو نُقلت صوتياً
-- تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة
-- تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ
+${ruleSections.protect}
 
-⚠️ **قواعد صارمة:**
-- لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.
-- لا تُعِد النصّ نفسه بدون تغيير.
-- لا تنتج اقتراحَين متناقضَين لنفس المدخل — اجمع كلّ الإصلاحات (قواعد + صياغة) في نصّ واحد متّسق.
+(ستُنظَّف اقتراحاتك تلقائيّاً من علامات التشكيل قبل عرضها.)
+
+⚠️ لا تنتج اقتراحَين متناقضَين لنفس المدخل — اجمع كلّ الإصلاحات في نصّ واحد متّسق.
 
 مستوى الخطورة:
 - high: خطأ يغيّر المعنى أو يجعل النصّ غير مفهوم (عادةً wrong)
@@ -434,29 +443,13 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Enhance mode — تحسين صياغة + اقتراح بدائل (مع التزام صارم بالقاموس).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ Xenoblade Chronicles 1. ركّز على الأخطاء الجوهريّة فقط واقترح إصلاحاً.
+    const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ Xenoblade Chronicles 1. ركّز على الأخطاء وفقاً للقواعد المُفعَّلة أدناه واقترح إصلاحاً.
 
-**أنواع المشاكل المسموح بها فقط:**
-1. **missing_char** — حرف ناقص أو زائد ("المعركه"↔"المعركة")
-2. **accuracy** — ترجمة حرفيّة تحرف المعنى أو تجعله ركيكاً
-3. **style** — جملة بترتيب كلمات سيّئ أو غير مفهومة بحاجة إعادة صياغة
-4. **consistency** — نفس المصطلح مترجم بشكلَين مختلفَين بين الجُمل
-5. **terminology** — مصطلح من القاموس مترجم بشكل خاطئ
+${ruleSections.detect}
 
-🚫 **لا تستخدم في suggested** (خطّ اللعبة لا يدعم هذه الرموز):
-- التنوين (ً ٌ ٍ)
-- الحركات (َ ُ ِ)
-- الشدّة (ّ) والسكون (ْ)
-(ستُنظَّف اقتراحاتك تلقائيّاً من هذه الرموز قبل عرضها.)
+${ruleSections.protect}
 
-🚫 **لا تقترح أيضاً**:
-- تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS}) إلى الإنجليزيّة أو العكس — اتركها كما هي
-- تعديلات تفضيليّة في الأسلوب لو الجملة مفهومة
-- تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ
-
-⚠️ **قواعد صارمة:**
-- لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.
-- لا تُعِد النصّ نفسه بدون تغيير.
+(ستُنظَّف اقتراحاتك تلقائيّاً من علامات التشكيل قبل عرضها.)
 
 ${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
 

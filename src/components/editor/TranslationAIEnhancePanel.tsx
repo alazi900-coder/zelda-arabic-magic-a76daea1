@@ -1026,8 +1026,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         <EnhanceRulesDialog
           open={showRulesDialog}
           onOpenChange={setShowRulesDialog}
-          onSaved={setEnabledRules}
+          onSaved={(enabled, allRules) => {
+            setEnabledRules(enabled);
+            setCustomRules(allRules.filter(r => r.custom));
+          }}
         />
+
 
 
         {/* Stats bar */}

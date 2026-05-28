@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -133,12 +133,16 @@ Deno.serve(async (req) => {
       providerApiKey?: string;
       thinkingMode?: 'enabled' | 'disabled';
       enabledRules?: string[];
+      customRules?: RuleDef[];
     };
 
-    // قسّم القواعد المُفعَّلة إلى كتلتَي اكتشاف/حماية لاستخدامها في الـ prompts.
-    const ruleSections = buildRuleSections(enabledRules);
+    // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
+    const ruleSections = buildRuleSections(enabledRules, customRules);
     // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
     ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
+
+    // فرز ذكيّ للقاموس: الأولويّة للمصطلحات الموجودة في نصوص الدفعة.
+    const filteredGlossary = smartFilterGlossary(glossary, entries || []);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     // مفتاح DeepSeek: الأولوية للمفتاح القادم من الواجهة (إعدادات المستخدم)

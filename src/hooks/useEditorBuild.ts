@@ -768,6 +768,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         setBuildProgress(`📊 ملخص: ${keptCount} محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
         await yieldToUI();
 
+        // CRITICAL: re-apply explicit clears AFTER all safety gates above.
+        // Otherwise the gates (control-char / $N / bracket-tag / tag-sequence
+        // checks) compare "" vs the Arabic original and revert, undoing the
+        // user's intent to clear those rows.
+        if (intentionallyBlankedKeys.size > 0) {
+          for (const k of intentionallyBlankedKeys) {
+            nonEmptyTranslations[k] = "";
+          }
+          console.log(`[BUILD] 🔒 Re-enforced blank on ${intentionallyBlankedKeys.size} explicitly-cleared keys`);
+        }
+
         // Pre-scan: build per-file index of translations for O(1) lookup
       const perFileTranslations = new Map<string, Map<string, string>>();
       const perFileLegacy = new Map<string, Map<string, string>>();

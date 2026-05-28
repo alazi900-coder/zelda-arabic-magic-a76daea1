@@ -184,6 +184,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [showSettings, setShowSettings] = useState(false);
   const [showRulesDialog, setShowRulesDialog] = useState(false);
   const [enabledRules, setEnabledRules] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules());
+  const [customRules, setCustomRules] = useState<EnhanceRule[]>(() => loadCustomRules());
   const [appliedHistory, setAppliedHistory] = useState<{ key: string; previous: string; applied: string; ts: number }[]>([]);
   const [deepSeekThinking, setDeepSeekThinking] = useState<boolean>(() => {
     try {

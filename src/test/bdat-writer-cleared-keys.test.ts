@@ -12,12 +12,11 @@
  *     2. Not propagate "" to sibling rows that share the same source offset.
  */
 import { describe, it, expect } from "vitest";
-import { patchBdatFile, parseBdatFile } from "@/lib/bdat-parser";
+import { parseBdatFile } from "@/lib/bdat-parser";
 import { patchBdatFile as patchBdatFileWriter } from "@/lib/bdat-writer";
 import { BdatFile, BdatTable, BdatValueType } from "@/lib/bdat-parser";
 
 const encoder = new TextEncoder();
-void patchBdatFile;
 
 function buildBdatWithUniqueStrings(rows: string[], tableName = "T"): BdatFile {
   const tableOffset = 20;

@@ -266,6 +266,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const clearedKeys = currentState.clearedKeys;
         let clearedRevertCount = 0;
         let clearedBlankedCount = 0;
+        // Keys explicitly cleared by the user with NO English baseline (orig is Arabic —
+        // e.g. previously-built file re-uploaded). We must keep "" through the build;
+        // the safety gates below compare "" vs the Arabic orig and would otherwise
+        // revert, silently re-introducing the cleared text into the output file.
+        const intentionallyBlankedKeys = new Set<string>();
         if (clearedKeys && clearedKeys.size > 0) {
           const ARABIC_ANY = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
           const entryByKey = new Map<string, string>();
@@ -274,13 +279,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             if (nonEmptyTranslations[key]) continue; // user re-translated after clearing
             const orig = entryByKey.get(key);
             if (orig && !ARABIC_ANY.test(orig)) {
-              // English baseline available → restore it.
               nonEmptyTranslations[key] = orig;
               clearedRevertCount++;
             } else {
-              // No English baseline → blank the row so the cleared Arabic
-              // doesn't get reused from the source BDAT bytes.
               nonEmptyTranslations[key] = "";
+              intentionallyBlankedKeys.add(key);
               clearedBlankedCount++;
             }
           }
@@ -764,6 +767,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         console.log('%c[BUILD-LOG] ══════════════════════════════════════', 'color: #6366f1; font-weight: bold');
         setBuildProgress(`📊 ملخص: ${keptCount} محفوظة، ${totalRepairedAll} مُصلحة، ${totalRevertedAll} مُستعادة — جارٍ البناء...`);
         await yieldToUI();
+
+        // CRITICAL: re-apply explicit clears AFTER all safety gates above.
+        // Otherwise the gates (control-char / $N / bracket-tag / tag-sequence
+        // checks) compare "" vs the Arabic original and revert, undoing the
+        // user's intent to clear those rows.
+        if (intentionallyBlankedKeys.size > 0) {
+          for (const k of intentionallyBlankedKeys) {
+            nonEmptyTranslations[k] = "";
+          }
+          console.log(`[BUILD] 🔒 Re-enforced blank on ${intentionallyBlankedKeys.size} explicitly-cleared keys`);
+        }
 
         // Pre-scan: build per-file index of translations for O(1) lookup
       const perFileTranslations = new Map<string, Map<string, string>>();

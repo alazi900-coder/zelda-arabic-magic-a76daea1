@@ -906,27 +906,34 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const isEditing = editingKey === s.key;
     return (
       <div key={`${s.key}-${i}`} className="rounded-xl border bg-card p-3 sm:p-4 space-y-2.5 transition-all hover:shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-2">
-          <Badge variant="outline" className={`text-[10px] gap-1 shrink-0 ${config?.color || ''}`}>
+        {/* Mobile: badge */}
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <Badge variant="outline" className={`text-[10px] gap-1 ${config?.color || ''}`}>
             {config?.icon}{config?.label || s.type}
           </Badge>
-          <div className="flex gap-1 shrink-0">
-            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-primary/10" onClick={() => startEdit(s.key, s.suggested)} title="تعديل قبل التطبيق">
-              <Pencil className="w-3.5 h-3.5" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-green-500 hover:bg-green-500/10" onClick={() => applySuggestion(s)} title="تطبيق">
-              <Check className="w-4 h-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(s.key)} title="تجاهل">
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+        </div>
+        {/* Action buttons row — full width on mobile */}
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-1 sm:justify-end">
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10" onClick={() => startEdit(s.key, s.suggested)} title="تعديل قبل التطبيق">
+            <Pencil className="w-3.5 h-3.5" /> <span className="sm:hidden">تعديل</span>
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-green-500/40 text-green-600 hover:bg-green-500/10" onClick={() => applySuggestion(s)} title="تطبيق">
+            <Check className="w-4 h-4" /> <span className="sm:hidden">قبول</span>
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-destructive/30 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(s.key)} title="تجاهل">
+            <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
+          </Button>
         </div>
         <div className="space-y-1">
           <p className="text-sm font-semibold leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">{s.reason}</p>
           {s.detail && s.detail !== s.reason && (
             <p className="text-xs text-muted-foreground leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">
               <span className="font-bold text-foreground/70">لماذا؟ </span>{s.detail}
+            </p>
+          )}
+          {s.fixExplanation && (
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1">
+              <span className="font-bold">الحل المُطبَّق: </span>{s.fixExplanation}
             </p>
           )}
         </div>

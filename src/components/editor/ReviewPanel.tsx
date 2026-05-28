@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Sparkles, Loader2 } from "lucide-react";
 import { FILE_CATEGORIES, type ReviewResults, type ShortSuggestion, type ImproveResult } from "./types";
+import WordDiffView from "./WordDiffView";
 
 interface ReviewPanelProps {
   reviewResults: ReviewResults | null;
@@ -111,12 +112,20 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
                     <div>
                       <p className="text-muted-foreground">الحالي ({suggestion.currentBytes}/{suggestion.maxBytes} بايت)</p>
-                      <p className="p-2 bg-destructive/5 rounded border border-destructive/30">{suggestion.current}</p>
+                      <p className="p-2 bg-destructive/5 rounded border border-destructive/30" dir="rtl">{suggestion.current}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">المقترح ({suggestion.suggestedBytes}/{suggestion.maxBytes} بايت)</p>
-                      <p className="p-2 bg-primary/5 rounded border border-primary/30">{suggestion.suggested}</p>
+                      <p className="p-2 bg-primary/5 rounded border border-primary/30" dir="rtl">{suggestion.suggested}</p>
                     </div>
+                  </div>
+                  <div className="mb-2">
+                    <p className="text-muted-foreground text-[10px] mb-1">🎨 فروق الكلمات:</p>
+                    <WordDiffView
+                      oldText={suggestion.current}
+                      newText={suggestion.suggested}
+                      className="p-2 bg-background/50 rounded border border-border/30 text-xs leading-relaxed"
+                    />
                   </div>
                   <Button size="sm" onClick={() => { handleApplyShorterTranslation(suggestion.key, suggestion.suggested); setShortSuggestions(shortSuggestions.filter((_, idx) => idx !== i)); }} className="text-xs h-7">
                     ✓ تطبيق المقترح
@@ -153,6 +162,14 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
                       <p className="text-muted-foreground">المحسّن ({item.improvedBytes} بايت){item.maxBytes > 0 && item.improvedBytes > item.maxBytes ? ' ⚠️ يتجاوز الحد' : ''}</p>
                       <p className="p-2 bg-secondary/5 rounded border border-secondary/30" dir="rtl">{item.improved}</p>
                     </div>
+                  </div>
+                  <div className="mb-2">
+                    <p className="text-muted-foreground text-[10px] mb-1">🎨 فروق الكلمات (أحمر=محذوف، أخضر=مُضاف):</p>
+                    <WordDiffView
+                      oldText={item.current}
+                      newText={item.improved}
+                      className="p-2 bg-background/50 rounded border border-border/30 text-xs leading-relaxed"
+                    />
                   </div>
                   <Button size="sm" onClick={() => { handleApplyImprovement(item.key, item.improved); setImproveResults(improveResults.filter((_, idx) => idx !== i)); }} disabled={item.maxBytes > 0 && item.improvedBytes > item.maxBytes} className="text-xs h-7">
                     ✓ تطبيق التحسين

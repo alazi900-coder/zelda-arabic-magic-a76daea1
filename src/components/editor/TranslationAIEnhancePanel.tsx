@@ -26,7 +26,10 @@ import {
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import type { ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
-import { loadEnabledRules, type EnhanceRuleId } from "@/lib/enhance-rules";
+import {
+  loadEnabledRules, loadCustomRules,
+  type EnhanceRuleId, type EnhanceRule,
+} from "@/lib/enhance-rules";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];

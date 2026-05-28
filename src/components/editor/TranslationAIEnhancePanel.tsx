@@ -14,7 +14,7 @@ import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
   Pencil, Undo2, ChevronDown, ChevronUp, FileText, Trash2, Upload,
-  FolderOpen,
+  FolderOpen, Shield,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,8 @@ import {
 } from "@/lib/enhance-memory";
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import type { ExtractedEntry } from "./types";
+import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
+import { loadEnabledRules, type EnhanceRuleId } from "@/lib/enhance-rules";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];

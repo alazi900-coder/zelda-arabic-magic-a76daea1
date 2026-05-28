@@ -181,9 +181,12 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
               <Sparkles className="w-5 h-5 text-primary" />
               بدائل أقصر مقترحة
             </h3>
+            <FilterBar value={shortFilter} onChange={setShortFilter} counts={shortCounts} />
             <div className="max-h-64 overflow-y-auto space-y-3">
-              {shortSuggestions.map((suggestion, i) => (
-                <div key={i} className="p-3 rounded border border-border/50 bg-background/50">
+              {filteredShort.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">لا توجد اقتراحات تطابق الفلتر المحدد.</p>
+              ) : filteredShort.map((suggestion, i) => (
+                <div key={suggestion.key + i} className="p-3 rounded border border-border/50 bg-background/50">
                   <p className="text-xs text-muted-foreground mb-2">{suggestion.key}</p>
                   <p className="text-xs mb-2"><strong>الأصلي:</strong> {suggestion.original}</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
@@ -204,7 +207,7 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
                       className="p-2 bg-background/50 rounded border border-border/30 text-xs leading-relaxed"
                     />
                   </div>
-                  <Button size="sm" onClick={() => { handleApplyShorterTranslation(suggestion.key, suggestion.suggested); setShortSuggestions(shortSuggestions.filter((_, idx) => idx !== i)); }} className="text-xs h-7">
+                  <Button size="sm" onClick={() => { handleApplyShorterTranslation(suggestion.key, suggestion.suggested); setShortSuggestions((shortSuggestions ?? []).filter(s => s.key !== suggestion.key)); }} className="text-xs h-7">
                     ✓ تطبيق المقترح
                   </Button>
                 </div>
@@ -214,6 +217,7 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
               <Button size="sm" onClick={handleApplyAllShorterTranslations} className="text-xs h-7 flex-1">✓ تطبيق الكل ({shortSuggestions.length})</Button>
               <Button variant="ghost" size="sm" onClick={() => setShortSuggestions(null)} className="mt-0 text-xs">إغلاق الاقتراحات ✕</Button>
             </div>
+
           </CardContent>
         </Card>
       )}

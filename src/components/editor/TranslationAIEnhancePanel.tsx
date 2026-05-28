@@ -809,35 +809,35 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const isEditing = editingKey === g.key;
     return (
       <div key={`${g.key}-${i}`} className="rounded-xl border border-red-500/20 bg-card p-3 sm:p-4 space-y-2.5 transition-all hover:shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-            {(() => {
-              const cat = (g.category ?? 'wrong') as GrammarCategory;
-              const cc = categoryConfig[cat];
-              return (
-                <Badge variant="outline" className={`text-[10px] gap-1 ${cc.color}`} title={cc.description}>
-                  {cc.icon}{cc.label}
-                </Badge>
-              );
-            })()}
-            {g.severity && (
-              <Badge variant="outline" className={`text-[10px] ${severityConfig[g.severity]?.color}`}>
-                {severityConfig[g.severity]?.label}
+        {/* Mobile: badges row */}
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+          {(() => {
+            const cat = (g.category ?? 'wrong') as GrammarCategory;
+            const cc = categoryConfig[cat];
+            return (
+              <Badge variant="outline" className={`text-[10px] gap-1 ${cc.color}`} title={cc.description}>
+                {cc.icon}{cc.label}
               </Badge>
-            )}
-          </div>
-          <div className="flex gap-1 shrink-0">
-            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-primary/10" onClick={() => startEdit(g.key, g.suggestion)} title="تعديل">
-              <Pencil className="w-3.5 h-3.5" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-green-500 hover:bg-green-500/10" onClick={() => applySuggestion(g)} title="تطبيق">
-              <Check className="w-4 h-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-7 sm:w-7 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(g.key)} title="تجاهل">
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+            );
+          })()}
+          {g.severity && (
+            <Badge variant="outline" className={`text-[10px] ${severityConfig[g.severity]?.color}`}>
+              {severityConfig[g.severity]?.label}
+            </Badge>
+          )}
+        </div>
+        {/* Action buttons row — full width on mobile, sticky on desktop */}
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-1 sm:justify-end">
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10" onClick={() => startEdit(g.key, g.suggestion)} title="تعديل">
+            <Pencil className="w-3.5 h-3.5" /> <span className="sm:hidden">تعديل</span>
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-green-500/40 text-green-600 hover:bg-green-500/10" onClick={() => applySuggestion(g)} title="تطبيق">
+            <Check className="w-4 h-4" /> <span className="sm:hidden">قبول</span>
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-destructive/30 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(g.key)} title="تجاهل">
+            <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
+          </Button>
         </div>
         <div className="space-y-1.5">
           <p className="text-sm font-bold text-red-500 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">

@@ -53,6 +53,7 @@ const RULES: RuleDef[] = [
   { id: 'detect_consistency',  kind: 'detect', prompt: '**consistency** — نفس المصطلح مترجم بشكلَين مختلفَين' },
   { id: 'detect_terminology',  kind: 'detect', prompt: '**terminology** — مصطلح من القاموس مترجم بشكل خاطئ' },
   { id: 'detect_untranslated', kind: 'detect', prompt: '**untranslated** — نصّ بقي إنجليزياً أو كلمات عربيّة ملتصقة بلا فراغات' },
+  { id: 'detect_split_and_tags', kind: 'detect', prompt: '**split_and_tags** — التقسيم والوسوم التقنيّة:\n   • قارن طول الترجمة العربيّة بالنصّ الإنجليزي. إذا كانت أطول بكثير وتتجاوز سطر اللعبة، اختصرها قليلاً **مع الحفاظ على نفس المعنى تماماً** (ممنوع حذف معلومة أو تغيير القصد).\n   • أعِد التقسيم باستخدام `[XENO:n]` (الأساسي) أو `\\n` (نادر) بحيث تطابق مواضع التقسيم في النصّ الإنجليزي قدر الإمكان.\n   • أصلح الوسوم التقنيّة التالفة أو المفقودة: `[XENO:n]`, `[XENO:wait]`, `[Color:Red]`, `[Icon:*]`, `[System:PageBreak]` — استرجعها من الأصل بنفس العدد والترتيب. لا تُضِف وسماً غير موجود ولا تحذف وسماً موجوداً.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${'${XC1_PROPER_NOUNS}'}) سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'skip_preferences',    kind: 'protect', prompt: '🚫 لا تقترح تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة.' },

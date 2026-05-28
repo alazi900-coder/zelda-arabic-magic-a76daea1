@@ -179,6 +179,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [showRulesDialog, setShowRulesDialog] = useState(false);
+  const [enabledRules, setEnabledRules] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules());
   const [appliedHistory, setAppliedHistory] = useState<{ key: string; previous: string; applied: string; ts: number }[]>([]);
   const [deepSeekThinking, setDeepSeekThinking] = useState<boolean>(() => {
     try {

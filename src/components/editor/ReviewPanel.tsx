@@ -79,6 +79,35 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
   handleApplyImprovement, handleApplyAllImprovements,
   setReviewResults, setShortSuggestions, setImproveResults,
 }) => {
+  const [shortFilter, setShortFilter] = useState<DiffFilter>("all");
+  const [improveFilter, setImproveFilter] = useState<DiffFilter>("all");
+
+  const shortCounts = useMemo(() => {
+    const list = shortSuggestions ?? [];
+    return {
+      all: list.length,
+      significant: list.filter(s => isSignificantChange(s.current, s.suggested)).length,
+      tags: list.filter(s => isTagChange(s.current, s.suggested)).length,
+    };
+  }, [shortSuggestions]);
+  const filteredShort = useMemo(
+    () => (shortSuggestions ?? []).filter(s => passesDiffFilter(shortFilter, s.current, s.suggested)),
+    [shortSuggestions, shortFilter]
+  );
+
+  const improveCounts = useMemo(() => {
+    const list = improveResults ?? [];
+    return {
+      all: list.length,
+      significant: list.filter(s => isSignificantChange(s.current, s.improved)).length,
+      tags: list.filter(s => isTagChange(s.current, s.improved)).length,
+    };
+  }, [improveResults]);
+  const filteredImprove = useMemo(
+    () => (improveResults ?? []).filter(s => passesDiffFilter(improveFilter, s.current, s.improved)),
+    [improveResults, improveFilter]
+  );
+
   return (
     <>
       {reviewResults && (

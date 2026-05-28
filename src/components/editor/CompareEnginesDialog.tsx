@@ -36,6 +36,8 @@ function buildEngines(): EngineConfig[] {
     { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
     { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
     { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
+    { id: 'deepseek-v4-flash', label: 'DeepSeek v4 Flash', emoji: '🐬', provider: 'deepseek', model: 'deepseek-v4-flash', description: 'سريع — مفتاح شخصي', requiresKey: 'deepseek' },
+    { id: 'deepseek-v4-pro', label: 'DeepSeek v4 Pro', emoji: '🐋', provider: 'deepseek', model: 'deepseek-v4-pro', description: 'استدلال عميق — مفتاح شخصي', requiresKey: 'deepseek' },
     { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
     { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
   ];
@@ -229,7 +231,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="font-display">🔍 مقارنة جميع المحركات</DialogTitle>
           <DialogDescription className="text-xs">
-            مقارنة ترجمة نفس النص عبر <span className="font-bold text-primary">{ALL_ENGINES.length}</span> محركاً (Gemini · DeepSeek · MyMemory · Google) — اختر الأفضل
+            مقارنة ترجمة نفس النص عبر <span className="font-bold text-primary">{ALL_ENGINES.length}</span> محركاً (Gemini · GPT-5 · DeepSeek · MyMemory · Google) — اختر الأفضل
           </DialogDescription>
         </DialogHeader>
 

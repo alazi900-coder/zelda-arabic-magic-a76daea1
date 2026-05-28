@@ -720,6 +720,7 @@ export function useEditorState() {
         (filterStatus === "stuck-chars" && isTranslated && hasStuckChars(translation)) ||
         (filterStatus === "mixed-lang" && isTranslated && isMixedLanguage(translation)) ||
         (filterStatus === "has-tags" && hasTechnicalTags(e.original)) ||
+        (filterStatus === "no-tags" && !hasTechnicalTags(e.original)) ||
         (filterStatus === "damaged-tags" && qualityStats.damagedTagKeys.has(key)) ||
         (filterStatus === "missing-tags" && qualityStats.missingTagKeys.has(key)) ||
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
@@ -1129,7 +1130,7 @@ export function useEditorState() {
   const filterStatusLabels: Record<string, string> = {
     'translated': 'مترجم', 'untranslated': 'غير مترجم', 'problems': 'مشاكل',
     'needs-improve': 'تحتاج تحسين', 'too-short': 'قصيرة', 'too-long': 'طويلة',
-    'stuck-chars': 'أحرف ملتصقة', 'mixed-lang': 'مختلط', 'has-tags': 'أوسمة',
+    'stuck-chars': 'أحرف ملتصقة', 'mixed-lang': 'مختلط', 'has-tags': 'أوسمة', 'no-tags': 'بدون أوسمة',
     'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز',
     'has-newlines': 'أسطر متعددة',
   };

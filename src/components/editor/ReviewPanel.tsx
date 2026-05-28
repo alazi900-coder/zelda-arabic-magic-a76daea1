@@ -229,9 +229,12 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
               <Sparkles className="w-5 h-5 text-secondary" />
               تحسينات مقترحة ({improveResults.length})
             </h3>
+            <FilterBar value={improveFilter} onChange={setImproveFilter} counts={improveCounts} />
             <div className="max-h-80 overflow-y-auto space-y-3">
-              {improveResults.map((item, i) => (
-                <div key={i} className="p-3 rounded border border-border/50 bg-background/50">
+              {filteredImprove.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">لا توجد تحسينات تطابق الفلتر المحدد.</p>
+              ) : filteredImprove.map((item, i) => (
+                <div key={item.key + i} className="p-3 rounded border border-border/50 bg-background/50">
                   <p className="text-xs text-muted-foreground mb-2 font-mono">{item.key}</p>
                   <p className="text-xs mb-2"><strong>الأصلي:</strong> {item.original}</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
@@ -252,12 +255,13 @@ const ReviewPanel: React.FC<ReviewPanelProps> = ({
                       className="p-2 bg-background/50 rounded border border-border/30 text-xs leading-relaxed"
                     />
                   </div>
-                  <Button size="sm" onClick={() => { handleApplyImprovement(item.key, item.improved); setImproveResults(improveResults.filter((_, idx) => idx !== i)); }} disabled={item.maxBytes > 0 && item.improvedBytes > item.maxBytes} className="text-xs h-7">
+                  <Button size="sm" onClick={() => { handleApplyImprovement(item.key, item.improved); setImproveResults((improveResults ?? []).filter(it => it.key !== item.key)); }} disabled={item.maxBytes > 0 && item.improvedBytes > item.maxBytes} className="text-xs h-7">
                     ✓ تطبيق التحسين
                   </Button>
                 </div>
               ))}
             </div>
+
             <div className="flex gap-2 mt-3">
               <Button size="sm" onClick={handleApplyAllImprovements} className="text-xs h-7 flex-1">✓ تطبيق الكل ({improveResults.length})</Button>
               <Button variant="ghost" size="sm" onClick={() => setImproveResults(null)} className="text-xs">إغلاق ✕</Button>

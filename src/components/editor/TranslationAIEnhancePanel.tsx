@@ -422,6 +422,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               aiModel: model,
               providerApiKey,
               thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
+              enabledRules: Array.from(enabledRules),
             },
             signal: abortSignal,
           });

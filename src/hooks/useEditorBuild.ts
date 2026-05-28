@@ -472,6 +472,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const BRACKET_TAG_RE_BUILD = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
       let bracketRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         const origBracketTags = orig.match(BRACKET_TAG_RE_BUILD) || [];

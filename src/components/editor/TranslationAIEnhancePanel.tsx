@@ -49,6 +49,8 @@ interface EnhanceSuggestion {
   reason: string;
   /** Optional detailed explanation of WHY this is a problem. */
   detail?: string;
+  /** Explanation of the fix and why it solves the problem (combined mode). */
+  fixExplanation?: string;
   type: "style" | "grammar" | "accuracy" | "consistency" | "missing_char" | "terminology" | "punctuation";
 }
 

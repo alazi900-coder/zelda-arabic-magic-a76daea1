@@ -453,7 +453,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary: glossary?.slice(0, 5000), aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(enabledRules) },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(enabledRules), customRules: customRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })) },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;

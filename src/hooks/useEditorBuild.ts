@@ -496,6 +496,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // Tags may be present (multiset ok) but in wrong order — causes cinematic freezes
       let tagOrderRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         if (!hasTechnicalTags(orig)) continue;

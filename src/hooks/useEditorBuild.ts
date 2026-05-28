@@ -451,6 +451,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // === NEW PROTECTION 5: Revert entries with missing $N variables ===
       let dollarVarFixCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue; // trust user edit on previously-built file
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         const origVars = orig.match(/\$\d+/g);

@@ -344,6 +344,21 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         entryLabels.set(k, entry.label);
       }
 
+      // Detect entries whose "original" is actually a previously-built Arabic output
+      // (contains Arabic Presentation Forms — never produced by source English files).
+      // For these, safety gates must NOT revert user edits to the Arabic original:
+      // doing so silently re-bakes the old translation and discards the user's edit
+      // or clear. We skip the revert-to-orig branches for these keys; the user's
+      // intent wins. Only critical structural fixes (broken brackets) still apply.
+      const PRES_FORMS_DETECT = /[\uFB50-\uFDFF\uFE70-\uFEFF]/;
+      const previouslyBuiltKeys = new Set<string>();
+      for (const [k, orig] of entryOriginals) {
+        if (PRES_FORMS_DETECT.test(orig)) previouslyBuiltKeys.add(k);
+      }
+      if (previouslyBuiltKeys.size > 0) {
+        console.log(`[BUILD] 🔓 ${previouslyBuiltKeys.size} entries detected as previously-built — trusting user edits over Arabic "original"`);
+      }
+
       // === NEW PROTECTION 1: Fix broken/unclosed bracket tags ===
       // Detect tags like [XENO:wait wait=key  (missing ]) that cause engine freezes
       let brokenBracketFixCount = 0;
@@ -360,7 +375,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           if (fixedOpen === fixedClosed) {
             nonEmptyTranslations[key] = fixed;
             brokenBracketFixCount++;
-          } else {
+          } else if (!previouslyBuiltKeys.has(key)) {
             nonEmptyTranslations[key] = orig;
             brokenBracketRevertCount++;
           }
@@ -380,6 +395,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const PRES_FORMS_RE = /[\uFB50-\uFDFF\uFE70-\uFEFF]/;
       let mixedFormsFixCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue; // user edited a previously-built file — trust as-is
         if (!RAW_ARABIC_RE.test(trans) || !PRES_FORMS_RE.test(trans)) continue;
         const { reverseBidi: revBidi, removeArabicPresentationForms: removePF } = await import("@/lib/arabic-processing");
         const rawText = removePF(revBidi(trans));
@@ -435,6 +451,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // === NEW PROTECTION 5: Revert entries with missing $N variables ===
       let dollarVarFixCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue; // trust user edit on previously-built file
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         const origVars = orig.match(/\$\d+/g);
@@ -455,6 +472,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const BRACKET_TAG_RE_BUILD = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
       let bracketRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         const origBracketTags = orig.match(BRACKET_TAG_RE_BUILD) || [];
@@ -478,6 +496,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // Tags may be present (multiset ok) but in wrong order — causes cinematic freezes
       let tagOrderRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         if (!hasTechnicalTags(orig)) continue;
@@ -509,6 +528,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
       let protectedRevertCount = 0;
       for (const [key, _trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const label = entryLabels.get(key) || '';
         // Extract table name from label like "TableName[row].column"
         const tableMatch = label.match(/^([^\[]+)\[/);
@@ -537,6 +557,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       const repairLog: SafetyRepairEntry[] = [];
 
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
 
@@ -682,7 +703,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const truncControlCount = (truncated.match(/[\uFFF9-\uFFFC]/g) || []).length;
           const truncPuaCount = (truncated.match(/[\uE000-\uE0FF]/g) || []).length;
 
-          if (truncControlCount < origControlCount || truncPuaCount < origPuaCount) {
+          if ((truncControlCount < origControlCount || truncPuaCount < origPuaCount) && !previouslyBuiltKeys.has(key)) {
             // Truncation destroyed vital chars — revert to original English
             nonEmptyTranslations[key] = orig;
             console.warn(`[BUILD-TRUNC] Reverted "${key}" to English: truncation lost control/PUA chars`);
@@ -700,6 +721,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         let finalTagRepairCount = 0;
         let finalTagRevertCount = 0;
         for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
+          if (previouslyBuiltKeys.has(key)) continue;
           const orig = entryOriginals.get(key);
           if (!orig) continue;
 

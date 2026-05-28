@@ -366,7 +366,7 @@ ${ruleSections.protect}
 - medium: خطأ واضح يحتاج إصلاح (reorder/weak/style غالباً)
 - low: تحسين بسيط
 
-${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
+${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 **النصوص للفحص:**
 ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
@@ -500,7 +500,7 @@ ${ruleSections.protect}
 
 (ستُنظَّف اقتراحاتك تلقائيّاً من علامات التشكيل قبل عرضها.)
 
-${glossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${glossary.slice(0, 3000)}` : ''}
+${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 **النصوص للمراجعة:**
 ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}

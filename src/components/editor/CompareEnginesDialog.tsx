@@ -36,8 +36,10 @@ function buildEngines(): EngineConfig[] {
     { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
     { id: 'gemini-3.1', label: 'Gemini 3.1 Pro', emoji: '🆕', provider: 'gemini', model: 'gemini-3.1-pro-preview', description: 'أحدث نموذج Google' },
     { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
-    { id: 'deepseek-v4-flash', label: 'DeepSeek v4 Flash', emoji: '🐬', provider: 'deepseek', model: 'deepseek-v4-flash', description: 'سريع — مفتاح شخصي', requiresKey: 'deepseek' },
-    { id: 'deepseek-v4-pro', label: 'DeepSeek v4 Pro', emoji: '🐋', provider: 'deepseek', model: 'deepseek-v4-pro', description: 'استدلال عميق — مفتاح شخصي', requiresKey: 'deepseek' },
+    { id: 'deepseek-chat', label: 'DeepSeek Chat (V3)', emoji: '⚡', provider: 'deepseek', model: 'deepseek-chat', description: 'سريع V3 الافتراضي', requiresKey: 'deepseek' },
+    { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner (R1)', emoji: '🧩', provider: 'deepseek', model: 'deepseek-reasoner', description: 'استدلال متقدم R1', requiresKey: 'deepseek' },
+    { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', emoji: '🐬', provider: 'deepseek', model: 'deepseek-v4-flash', description: 'اقتصادي — 248B/13B', requiresKey: 'deepseek' },
+    { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', emoji: '🐋', provider: 'deepseek', model: 'deepseek-v4-pro', description: 'الأقوى — 1.6T/49B', requiresKey: 'deepseek' },
     { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
     { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
   ];

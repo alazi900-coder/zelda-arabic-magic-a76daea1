@@ -726,6 +726,9 @@ export function useEditorState() {
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
         (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && new TextEncoder().encode(translation).length > e.maxBytes) ||
         (filterStatus === "has-newlines" && e.original.includes('\n')) ||
+        // ترجمات تحوي حرف \n (literal newline). يفحص الترجمة فقط ولا يتفاعل
+        // مع وسم [XENO:n] النصي لأن [XENO:n] = 8 أحرف ASCII حرفية و \n = U+000A.
+        (filterStatus === "translation-has-newline" && isTranslated && translation.includes('\n')) ||
         (filterStatus === "xeno-n-missing" && matchesDeepDiagFilter("xeno-n-missing", e.original, translation)) ||
         (filterStatus === "excessive-lines" && matchesDeepDiagFilter("excessive-lines", e.original, translation)) ||
         (filterStatus === "byte-budget" && matchesDeepDiagFilter("byte-budget", e.original, translation)) ||

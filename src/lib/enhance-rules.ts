@@ -213,9 +213,9 @@ export function generateCustomRuleId(): string {
 
 // ───── Combined access ──────────────────────────────────────────────────────
 
-/** كلّ القواعد (مبنيّة + مخصّصة). */
+/** كلّ القواعد (مبنيّة مع الـ overrides + مخصّصة). */
 export function getAllRules(): EnhanceRule[] {
-  return [...BUILTIN_RULES, ...loadCustomRules()];
+  return [...getBuiltinRulesMerged(), ...loadCustomRules()];
 }
 
 /** للتوافق مع الكود القديم. */

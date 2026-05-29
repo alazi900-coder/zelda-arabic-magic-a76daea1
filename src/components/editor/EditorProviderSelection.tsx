@@ -155,8 +155,6 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               <span className="text-xs font-display text-muted-foreground">🐋 نموذج DeepSeek:</span>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { id: 'deepseek-chat', label: 'DeepSeek Chat', desc: 'سريع — V3 الافتراضي', badge: '⚡' },
-                  { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner', desc: 'استدلال متقدم (R1)', badge: '🧠' },
                   { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', desc: '284B/13B — اقتصادي', badge: '🚀' },
                   { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', desc: '1.6T/49B — الأقوى', badge: '🆕' },
                 ].map(m => (

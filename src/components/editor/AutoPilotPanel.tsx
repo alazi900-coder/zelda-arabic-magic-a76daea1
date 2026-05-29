@@ -11,8 +11,6 @@ const GEMINI_MODELS = [
 ];
 
 const DEEPSEEK_MODELS = [
-  { id: 'deepseek-chat',     label: 'Chat ⚡',      note: 'V3 — سريع (الافتراضي)' },
-  { id: 'deepseek-reasoner', label: 'Reasoner 🧠',  note: 'R1 — استدلال متقدّم' },
   { id: 'deepseek-v4-flash', label: 'V4 Flash 🚀',  note: '284B/13B — اقتصادي' },
   { id: 'deepseek-v4-pro',   label: 'V4 Pro 🆕',    note: '1.6T/49B — الأقوى' },
 ];

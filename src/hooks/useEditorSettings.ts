@@ -42,11 +42,19 @@ export function useEditorSettings() {
     try { if (key) localStorage.setItem('userGeminiKey', key); else localStorage.removeItem('userGeminiKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
+  const MODEL_ALIASES: Record<string, string> = {
+    'deepseek-chat': 'deepseek-v4-flash',
+    'deepseek-reasoner': 'deepseek-v4-pro',
+  };
   const DEAD_MODELS = ['z-ai/glm-4.6:free', 'z-ai/glm-4.6b-flash:free', 'z-ai/glm-4.5-air:free', 'openai/gpt-oss-120b:free'];
 
   const [aiModel, _setAiModel] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('aiModel') || 'gemini-2.5-flash';
+      if (MODEL_ALIASES[saved]) {
+        localStorage.setItem('aiModel', MODEL_ALIASES[saved]);
+        return MODEL_ALIASES[saved];
+      }
       if (DEAD_MODELS.includes(saved)) {
         localStorage.setItem('aiModel', 'gemini-2.5-flash');
         return 'gemini-2.5-flash';

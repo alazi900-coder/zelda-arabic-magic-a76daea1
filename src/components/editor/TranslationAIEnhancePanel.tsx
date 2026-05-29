@@ -1008,29 +1008,31 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     <Card className="border-primary/20">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2 justify-between">
-          <span className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            تحسين الترجمة بالذكاء الاصطناعي
+          <span className="flex items-center gap-2 min-w-0 flex-1">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+            <span className="truncate">تحسين الترجمة بالذكاء الاصطناعي</span>
           </span>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-[11px] gap-1"
-              onClick={() => setShowRulesDialog(true)}
-              title="قواعد الذكاء الاصطناعي"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              القواعد
-              <Badge variant="secondary" className="text-[9px] h-4 px-1.5 mr-0.5">
-                {enabledRules.size}
-              </Badge>
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowSettings(s => !s)} title="إعدادات">
-              {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </Button>
-          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setShowSettings(s => !s)} title="إعدادات">
+            {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </Button>
         </CardTitle>
+
+        {/* صف القواعد — ظاهر دائماً ومرئي على الموبايل */}
+        <div className="flex items-center justify-end pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 text-xs gap-1.5 border-primary/30 hover:bg-primary/10"
+            onClick={() => setShowRulesDialog(true)}
+            title="تفعيل/إيقاف/تعديل/إضافة قواعد التحسين"
+          >
+            <Shield className="w-3.5 h-3.5 text-primary" />
+            قواعد التحسين
+            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+              {enabledRules.size}
+            </Badge>
+          </Button>
+        </div>
 
         {/* Rules dialog */}
         <EnhanceRulesDialog

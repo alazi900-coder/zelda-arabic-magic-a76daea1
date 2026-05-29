@@ -33,6 +33,7 @@ type EditorSubset = Pick<
   | "tagsCount"
   | "newlinesCount"
   | "multiLineCount"
+  | "meaningfulNewlineCount"
   | "fuzzyCount"
   | "byteOverflowCount"
   | "deepDiagnosticCounts"
@@ -95,7 +96,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             <option value="has-tags">🔧 يحتوي رموز تقنية ({editor.tagsCount})</option>
             <option value="no-tags">📝 بدون رموز تقنية</option>
             {editor.newlinesCount > 0 && <option value="has-newlines">↵ يحتوي أسطر ({editor.newlinesCount})</option>}
-            {editor.multiLineCount > 0 && <option value="translation-has-newline">✏️ ترجمات فيها \n ({editor.multiLineCount})</option>}
+            {editor.meaningfulNewlineCount > 0 && <option value="translation-has-newline">✏️ ترجمات عربية فيها \n ({editor.meaningfulNewlineCount})</option>}
             {editor.fuzzyCount > 0 && <option value="fuzzy">🔍 مطابقة جزئية ({editor.fuzzyCount})</option>}
             {editor.byteOverflowCount > 0 && <option value="byte-overflow">⛔ تجاوز البايتات ({editor.byteOverflowCount})</option>}
             {editor.deepDiagnosticCounts.xenoNMissing > 0 && <option value="xeno-n-missing">↩️ [XENO:n] بدون \n ({editor.deepDiagnosticCounts.xenoNMissing})</option>}
@@ -150,7 +151,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           <option value="has-tags">🔧 رموز تقنية</option>
           <option value="no-tags">📝 بدون رموز تقنية</option>
           {editor.newlinesCount > 0 && <option value="has-newlines">↵ يحتوي أسطر ({editor.newlinesCount})</option>}
-          {editor.multiLineCount > 0 && <option value="translation-has-newline">✏️ ترجمات فيها \n ({editor.multiLineCount})</option>}
+          {editor.meaningfulNewlineCount > 0 && <option value="translation-has-newline">✏️ ترجمات عربية فيها \n ({editor.meaningfulNewlineCount})</option>}
           {editor.fuzzyCount > 0 && <option value="fuzzy">🔍 مطابقة جزئية ({editor.fuzzyCount})</option>}
           {editor.byteOverflowCount > 0 && <option value="byte-overflow">⛔ تجاوز البايتات ({editor.byteOverflowCount})</option>}
           {editor.deepDiagnosticCounts.xenoNMissing > 0 && <option value="xeno-n-missing">↩️ [XENO:n] بدون \n ({editor.deepDiagnosticCounts.xenoNMissing})</option>}

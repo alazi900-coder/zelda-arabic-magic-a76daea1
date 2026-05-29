@@ -66,10 +66,19 @@ const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
 function buildRuleSections(
   enabledIds: string[] | undefined,
   customRules: RuleDef[] | undefined,
+  builtinOverrides: Record<string, { prompt?: string }> | undefined,
 ): { detect: string; protect: string } {
-  // اجمع المبنيّة + المخصّصة معاً قبل الفرز.
+  // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
+  // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
+  const builtinWithOverrides: RuleDef[] = RULES.map(r => {
+    const o = builtinOverrides && builtinOverrides[r.id];
+    return (o && typeof o.prompt === 'string' && o.prompt.trim().length > 0)
+      ? { ...r, prompt: o.prompt }
+      : r;
+  });
+  // اجمع المبنيّة (مع overrides) + المخصّصة معاً قبل الفرز.
   const all: RuleDef[] = [
-    ...RULES,
+    ...builtinWithOverrides,
     ...(Array.isArray(customRules) ? customRules.filter(r =>
       r && typeof r.id === 'string' && typeof r.prompt === 'string' &&
       (r.kind === 'detect' || r.kind === 'protect')
@@ -126,7 +135,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -135,10 +144,11 @@ Deno.serve(async (req) => {
       thinkingMode?: 'enabled' | 'disabled';
       enabledRules?: string[];
       customRules?: RuleDef[];
+      builtinOverrides?: Record<string, { prompt?: string }>;
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides);
     // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
     ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
 

@@ -27,8 +27,8 @@ import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } fro
 import type { ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
 import {
-  loadEnabledRules, loadCustomRules,
-  type EnhanceRuleId, type EnhanceRule,
+  loadEnabledRules, loadCustomRules, loadBuiltinOverrides,
+  type EnhanceRuleId, type EnhanceRule, type BuiltinOverride,
 } from "@/lib/enhance-rules";
 
 interface TranslationAIEnhancePanelProps {
@@ -185,6 +185,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [showRulesDialog, setShowRulesDialog] = useState(false);
   const [enabledRules, setEnabledRules] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules());
   const [customRules, setCustomRules] = useState<EnhanceRule[]>(() => loadCustomRules());
+  // تعديلات المستخدم على prompts القواعد المبنيّة. تُرسل إلى الـedge function
+  // حتى يُطبّقها على نسخته المثبّتة من RULES قبل إرسالها للـAI.
+  const [builtinOverrides, setBuiltinOverrides] = useState<Record<string, BuiltinOverride>>(() => loadBuiltinOverrides());
   const [appliedHistory, setAppliedHistory] = useState<{ key: string; previous: string; applied: string; ts: number }[]>([]);
   const [deepSeekThinking, setDeepSeekThinking] = useState<boolean>(() => {
     try {
@@ -428,6 +431,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
               enabledRules: Array.from(enabledRules),
               customRules: customRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
+              builtinOverrides,
             },
             signal: abortSignal,
           });
@@ -453,7 +457,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(enabledRules), customRules: customRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })) },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(enabledRules), customRules: customRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;
@@ -1035,6 +1039,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           onSaved={(enabled, allRules) => {
             setEnabledRules(enabled);
             setCustomRules(allRules.filter(r => r.custom));
+            // أعد تحميل overrides بعد الحفظ حتى يجري إرسالها للـAI في الطلبات التالية.
+            setBuiltinOverrides(loadBuiltinOverrides());
           }}
         />
 

@@ -174,7 +174,7 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRules
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg h-[92vh] sm:h-auto sm:max-h-[92vh] flex flex-col p-4 sm:p-6" dir="rtl">
+      <DialogContent className="max-w-lg h-[92vh] sm:h-[85vh] flex flex-col p-4 sm:p-6" dir="rtl">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Shield className="w-5 h-5 text-primary" />

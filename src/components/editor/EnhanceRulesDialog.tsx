@@ -188,90 +188,90 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRules
           </DialogDescription>
         </DialogHeader>
 
-        {/* وضع التحرير/الإضافة */}
-        {editing && (
-          <div className="shrink-0 rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-bold text-primary">
-                {editing.id ? (editing.isBuiltin ? '✏️ تعديل قاعدة مبنيّة' : '✏️ تعديل قاعدة') : '➕ قاعدة جديدة'}
-              </p>
-              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditing(null)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px]">الاسم *</Label>
-              <Input
-                value={editing.label}
-                onChange={e => setEditing({ ...editing, label: e.target.value })}
-                placeholder="مثل: حماية كلمات معيّنة"
-                className="h-8 text-sm" dir="rtl"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px]">الوصف (اختياري)</Label>
-              <Input
-                value={editing.description}
-                onChange={e => setEditing({ ...editing, description: e.target.value })}
-                placeholder="شرح مختصر يظهر في القائمة"
-                className="h-8 text-sm" dir="rtl"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px]">البروميت المُرسَل للـ AI *</Label>
-              <Textarea
-                value={editing.prompt}
-                onChange={e => setEditing({ ...editing, prompt: e.target.value })}
-                placeholder="مثل: 🚫 لا تترجم كلمة 'Monado' أبداً."
-                className="text-sm min-h-[100px] font-mono"
-                dir="rtl"
-              />
-            </div>
-            {!editing.isBuiltin && (
-              <div className="space-y-1.5">
-                <Label className="text-[11px]">النوع</Label>
-                <RadioGroup
-                  value={editing.kind}
-                  onValueChange={(v) => setEditing({ ...editing, kind: v as 'detect' | 'protect' })}
-                  className="flex gap-3"
-                >
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <RadioGroupItem value="detect" /> اكتشاف
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <RadioGroupItem value="protect" /> حماية
-                  </label>
-                </RadioGroup>
+        <ScrollArea className="flex-1 min-h-0 -mx-1 px-1">
+          <div className="space-y-3 py-2">
+            {/* وضع التحرير/الإضافة */}
+            {editing && (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-primary">
+                    {editing.id ? (editing.isBuiltin ? '✏️ تعديل قاعدة مبنيّة' : '✏️ تعديل قاعدة') : '➕ قاعدة جديدة'}
+                  </p>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditing(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px]">الاسم *</Label>
+                  <Input
+                    value={editing.label}
+                    onChange={e => setEditing({ ...editing, label: e.target.value })}
+                    placeholder="مثل: حماية كلمات معيّنة"
+                    className="h-8 text-sm" dir="rtl"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px]">الوصف (اختياري)</Label>
+                  <Input
+                    value={editing.description}
+                    onChange={e => setEditing({ ...editing, description: e.target.value })}
+                    placeholder="شرح مختصر يظهر في القائمة"
+                    className="h-8 text-sm" dir="rtl"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px]">البروميت المُرسَل للـ AI *</Label>
+                  <Textarea
+                    value={editing.prompt}
+                    onChange={e => setEditing({ ...editing, prompt: e.target.value })}
+                    placeholder="مثل: 🚫 لا تترجم كلمة 'Monado' أبداً."
+                    className="text-sm min-h-[100px] font-mono"
+                    dir="rtl"
+                  />
+                </div>
+                {!editing.isBuiltin && (
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px]">النوع</Label>
+                    <RadioGroup
+                      value={editing.kind}
+                      onValueChange={(v) => setEditing({ ...editing, kind: v as 'detect' | 'protect' })}
+                      className="flex gap-3"
+                    >
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <RadioGroupItem value="detect" /> اكتشاف
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <RadioGroupItem value="protect" /> حماية
+                      </label>
+                    </RadioGroup>
+                  </div>
+                )}
+                <div className="flex gap-2 justify-end pt-1">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(null)}>
+                    إلغاء
+                  </Button>
+                  <Button
+                    size="sm" className="h-7 text-xs"
+                    onClick={saveEditing}
+                    disabled={!editing.label.trim() || !editing.prompt.trim()}
+                  >
+                    {editing.id ? 'حفظ التعديل' : 'إضافة'}
+                  </Button>
+                </div>
               </div>
             )}
-            <div className="flex gap-2 justify-end pt-1">
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(null)}>
-                إلغاء
-              </Button>
+
+            {/* زرّ إضافة دائم */}
+            {!editing && (
               <Button
-                size="sm" className="h-7 text-xs"
-                onClick={saveEditing}
-                disabled={!editing.label.trim() || !editing.prompt.trim()}
+                variant="outline" size="sm" onClick={startNew}
+                className="w-full gap-1.5 border-dashed border-primary/40 text-primary hover:bg-primary/5"
               >
-                {editing.id ? 'حفظ التعديل' : 'إضافة'}
+                <Plus className="w-4 h-4" />
+                إضافة قاعدة جديدة
               </Button>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* زرّ إضافة دائم في الأعلى */}
-        {!editing && (
-          <Button
-            variant="outline" size="sm" onClick={startNew}
-            className="shrink-0 w-full gap-1.5 border-dashed border-primary/40 text-primary hover:bg-primary/5"
-          >
-            <Plus className="w-4 h-4" />
-            إضافة قاعدة جديدة
-          </Button>
-        )}
-
-        <ScrollArea className="flex-1 min-h-0 -mx-1 px-1">
-          <div className="space-y-4 py-2">
             <section>
               <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-foreground">
                 <Search className="w-4 h-4 text-blue-500" />
@@ -293,6 +293,7 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRules
             </section>
           </div>
         </ScrollArea>
+
 
         <DialogFooter className="shrink-0 flex-row gap-2 flex-wrap sm:gap-2">
           <Button variant="outline" size="sm" onClick={handleResetDefaults} className="gap-1.5 h-8 text-xs">

@@ -107,7 +107,7 @@ export const BatchQualityModal: React.FC<Props> = ({ lastBatch, cumulative, onRe
                   <StatRow label="حروف عربية موجودة" ok={lastBatch.withArabic} total={lastBatch.total} />
                   <StatRow label="placeholders سليمة" ok={lastBatch.placeholdersOk} total={lastBatch.total} />
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">سطور (\n) أُزيلت تلقائياً:</span>
+                    <span className="text-muted-foreground">أسطر (\n) من الذكاء الاصطناعي (محفوظة):</span>
                     <span className="font-mono">{lastBatch.newlineStripped}</span>
                   </div>
                   <div>
@@ -132,7 +132,7 @@ export const BatchQualityModal: React.FC<Props> = ({ lastBatch, cumulative, onRe
               <StatRow label="حروف عربية موجودة" ok={cumulative.withArabic} total={cumulative.total} />
               <StatRow label="placeholders سليمة" ok={cumulative.placeholdersOk} total={cumulative.total} />
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">سطور (\n) أُزيلت تلقائياً:</span>
+                <span className="text-muted-foreground">أسطر (\n) من الذكاء الاصطناعي (محفوظة):</span>
                 <span className="font-mono">{cumulative.newlineStripped}</span>
               </div>
               <div>

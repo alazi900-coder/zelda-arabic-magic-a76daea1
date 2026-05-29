@@ -88,8 +88,6 @@ const MODEL_OPTIONS: ModelOption[] = [
   { value: "gpt-5", label: "GPT-5 (دقة قصوى)", group: "openai" },
   { value: "gpt-5-mini", label: "GPT-5 mini (متوازن — أرخص)", group: "openai" },
   { value: "gpt-5-nano", label: "GPT-5 nano (الأسرع — الأرخص)", group: "openai" },
-  { value: "deepseek-chat", label: "🐋 DeepSeek Chat (V3 — سريع)", group: "deepseek" },
-  { value: "deepseek-reasoner", label: "🐋 DeepSeek Reasoner (R1 — تفكير معمّق)", group: "deepseek" },
   { value: "deepseek-v4-flash", label: "🐋 DeepSeek V4 Flash (284B/13B — اقتصادي)", group: "deepseek" },
   { value: "deepseek-v4-pro", label: "🐋 DeepSeek V4 Pro (1.6T/49B — الأقوى)", group: "deepseek" },
 ];
@@ -1017,23 +1015,6 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           </Button>
         </CardTitle>
 
-        {/* صف القواعد — ظاهر دائماً ومرئي على الموبايل */}
-        <div className="flex items-center justify-end pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 px-3 text-xs gap-1.5 border-primary/30 hover:bg-primary/10"
-            onClick={() => setShowRulesDialog(true)}
-            title="تفعيل/إيقاف/تعديل/إضافة قواعد التحسين"
-          >
-            <Shield className="w-3.5 h-3.5 text-primary" />
-            قواعد التحسين
-            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-              {enabledRules.size}
-            </Badge>
-          </Button>
-        </div>
-
         {/* Rules dialog */}
         <EnhanceRulesDialog
           open={showRulesDialog}
@@ -1174,7 +1155,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         )}
 
         {/* Action buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowRulesDialog(true)} className="gap-1.5 h-10 border-primary/30 text-primary hover:bg-primary/10">
+            <Shield className="w-4 h-4" />
+            <div className="text-right">
+              <p className="text-xs font-bold">قواعد التحسين</p>
+              <p className="text-[10px] text-muted-foreground">{enabledRules.size} مفعّلة</p>
+            </div>
+          </Button>
           <Button variant="default" size="sm" onClick={() => analyzeTranslations("combined")} disabled={isAnalyzing} className="gap-1.5 h-10">
             {isAnalyzing && activeTab === "grammar" && suggestions.length > 0 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             <div className="text-right">

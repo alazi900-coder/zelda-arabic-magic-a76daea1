@@ -156,6 +156,33 @@ export const BUILTIN_RULES: EnhanceRule[] = [
 
 const STORAGE_KEY = 'xc1_enhance_rules_v1';
 const CUSTOM_STORAGE_KEY = 'xc1_enhance_custom_rules_v1';
+const OVERRIDES_STORAGE_KEY = 'xc1_enhance_builtin_overrides_v1';
+
+// ───── Built-in rule overrides ───────────────────────────────────────────────
+export type BuiltinOverride = Partial<Pick<EnhanceRule, 'label' | 'description' | 'prompt'>>;
+
+export function loadBuiltinOverrides(): Record<string, BuiltinOverride> {
+  try {
+    const raw = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    return (obj && typeof obj === 'object') ? obj : {};
+  } catch { return {}; }
+}
+
+export function saveBuiltinOverrides(overrides: Record<string, BuiltinOverride>): void {
+  try {
+    localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(overrides));
+  } catch { /* تجاهل */ }
+}
+
+export function getBuiltinRulesMerged(): EnhanceRule[] {
+  const overrides = loadBuiltinOverrides();
+  return BUILTIN_RULES.map(r => {
+    const o = overrides[r.id];
+    return o ? { ...r, ...o } : r;
+  });
+}
 
 // ───── Custom rules CRUD ─────────────────────────────────────────────────────
 

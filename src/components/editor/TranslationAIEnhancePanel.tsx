@@ -1010,9 +1010,22 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <Sparkles className="w-4 h-4 text-primary shrink-0" />
             <span className="truncate">تحسين الترجمة بالذكاء الاصطناعي</span>
           </span>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setShowSettings(s => !s)} title="إعدادات">
-            {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </Button>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10"
+              onClick={() => setShowRulesDialog(true)}
+              title="قواعد الذكاء الاصطناعي"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>القواعد</span>
+              <Badge variant="secondary" className="h-4 px-1 text-[9px]">{enabledRules.size}</Badge>
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowSettings(s => !s)} title="إعدادات">
+              {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
+          </div>
         </CardTitle>
 
         {/* Rules dialog */}

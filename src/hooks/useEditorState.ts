@@ -584,22 +584,6 @@ export function useEditorState() {
     return count;
   }, [state?.translations]);
 
-  // === Count meaningful Arabic translations containing \n ===
-  // يستثني المعرّفات/النصوص غير العربيّة والـ\n التي في بداية/نهاية النص فقط.
-  // يجب أن: (1) تحوي الترجمة عربيّة فعليّة، (2) الـ\n بين محتوى حقيقي (ليس trailing/leading فقط).
-  const meaningfulNewlineCount = useMemo(() => {
-    if (!state) return 0;
-    let count = 0;
-    for (const v of Object.values(state.translations)) {
-      if (!v) continue;
-      if (!v.includes('\n')) continue;
-      if (!hasArabicChars(v)) continue;
-      if (!v.trim().includes('\n')) continue;
-      count++;
-    }
-    return count;
-  }, [state?.translations]);
-
   // === Count entries where English original has \n ===
   const newlinesCount = useMemo(() => {
     if (!state) return 0;
@@ -742,11 +726,9 @@ export function useEditorState() {
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
         (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && new TextEncoder().encode(translation).length > e.maxBytes) ||
         (filterStatus === "has-newlines" && e.original.includes('\n')) ||
-        // ترجمات تحوي حرف \n "مفيد" داخل جملة عربيّة حقيقيّة. يستثني:
-        //   • المعرّفات (msg_xxx) والنصوص غير المترجمة (ياباني/إنجليزي)
-        //   • \n trailing/leading فقط (غير مفيد)
-        // لا يتفاعل مع [XENO:n] (8 أحرف ASCII) — الجملة التي فيها الاثنان تظهر.
-        (filterStatus === "translation-has-newline" && isTranslated && translation.includes('\n') && hasArabicChars(translation) && translation.trim().includes('\n')) ||
+        // ترجمات تحوي حرف \n (literal newline). يفحص الترجمة فقط،
+        // لا يتفاعل مع [XENO:n] (8 أحرف ASCII). يعرض أي ترجمة فيها السهم ↵.
+        (filterStatus === "translation-has-newline" && isTranslated && translation.includes('\n')) ||
         (filterStatus === "xeno-n-missing" && matchesDeepDiagFilter("xeno-n-missing", e.original, translation)) ||
         (filterStatus === "excessive-lines" && matchesDeepDiagFilter("excessive-lines", e.original, translation)) ||
         (filterStatus === "byte-budget" && matchesDeepDiagFilter("byte-budget", e.original, translation)) ||
@@ -1615,7 +1597,7 @@ export function useEditorState() {
     advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing,
     glossaryComplianceResults, checkingGlossaryCompliance,
     isSearchPinned, pinnedKeys,
-    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, meaningfulNewlineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
+    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     deepDiagnosticCounts,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
     ...glossary,

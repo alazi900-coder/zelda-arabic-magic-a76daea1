@@ -10,12 +10,13 @@ const corsHeaders = {
 // ============================================================================
 // Centralised here so EVERY provider goes through the same hygiene pass.
 
-/** Strip newlines (\n, \r) and replace with a single space. UI handles wrapping. */
+/** Normalize newlines: keep them intact (the editor needs them), collapse excess spaces only. */
 function stripNewlinesInValues(translations: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(translations)) {
     if (typeof v !== 'string') { out[k] = v as unknown as string; continue; }
-    out[k] = v.replace(/\r\n|\r|\n/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
+    // Normalize CRLF/CR → LF, collapse excess spaces/tabs, but preserve \n line breaks.
+    out[k] = v.replace(/\r\n|\r/g, '\n').replace(/[ \t]{2,}/g, ' ').replace(/[ \t]*\n[ \t]*/g, '\n').trim();
   }
   return out;
 }

@@ -358,19 +358,22 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       }
 
       console.log('[enhance] grammar mode parsed', { issuesCount: parsed.issues?.length || 0, model: resolvedModel });
-      const mappedIssues = (parsed.issues || []).map((i) => ({
-        key: entries[i.index ?? -1]?.key || '',
-        original: entries[i.index ?? -1]?.original || '',
-        translation: entries[i.index ?? -1]?.translation || '',
-        category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
-        issue: i.issue,
-        detail: i.detail || '',
-        fixExplanation: i.fix_explanation || i.fixExplanation || '',
-        // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
-        // من رفض الاقتراح بالكامل، يكفي تنظيفه.
-        suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
-        severity: i.severity || 'medium',
-      })).filter((i) => i.key && i.suggestion && i.suggestion !== i.translation);
+      const mappedIssues = (parsed.issues || []).map((i) => {
+        const entry = entries[i.index ?? -1];
+        return {
+          key: entry?.key || '',
+          original: entry?.original || '',
+          translation: entry?.translation || '',
+          category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
+          issue: i.issue,
+          detail: i.detail || '',
+          fixExplanation: i.fix_explanation || i.fixExplanation || '',
+          // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
+          // من رفض الاقتراح بالكامل، يكفي تنظيفه.
+          suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
+          severity: i.severity || 'medium',
+        };
+      }).filter((i) => i.key && i.suggestion && i.suggestion !== i.translation && !dropsOriginalTechnicalTags(i.original, i.suggestion));
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -519,7 +522,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           severity: r.severity || 'medium',
         };
       })
-        .filter((r) => r.key && r.suggested && r.suggested !== r.translation);
+        .filter((r) => r.key && r.suggested && r.suggested !== r.translation && !dropsOriginalTechnicalTags(r.original, r.suggested));
 
       return new Response(JSON.stringify({ results: mappedResults }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -619,20 +622,23 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     }
 
     console.log('[enhance] enhance mode parsed', { suggestionsCount: parsed.suggestions?.length || 0, model: resolvedModel });
-    const mappedSuggestions = (parsed.suggestions || []).map((s) => ({
-      key: entries[s.index ?? -1]?.key || '',
-      original: entries[s.index ?? -1]?.original || '',
-      current: entries[s.index ?? -1]?.translation || '',
-      // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
-      suggested: stripGameUnsupportedMarks(s.suggested || ''),
-      alternatives: Array.isArray(s.alternatives)
-        ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-          .map((a) => stripGameUnsupportedMarks(a as string))
-        : [],
-      reason: s.reason,
-      detail: s.detail || '',
-      type: s.type || 'style',
-    })).filter((s) => s.key && s.suggested && s.suggested !== s.current);
+    const mappedSuggestions = (parsed.suggestions || []).map((s) => {
+      const entry = entries[s.index ?? -1];
+      return {
+        key: entry?.key || '',
+        original: entry?.original || '',
+        current: entry?.translation || '',
+        // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
+        suggested: stripGameUnsupportedMarks(s.suggested || ''),
+        alternatives: Array.isArray(s.alternatives)
+          ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
+            .map((a) => stripGameUnsupportedMarks(a as string))
+          : [],
+        reason: s.reason,
+        detail: s.detail || '',
+        type: s.type || 'style',
+      };
+    }).filter((s) => s.key && s.suggested && s.suggested !== s.current && !dropsOriginalTechnicalTags(s.original, s.suggested));
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -173,6 +173,11 @@ Deno.serve(async (req) => {
     const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides);
     // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
     ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
+    if (ruleSections.detectCount === 0) {
+      return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // فرز ذكيّ للقاموس: الأولويّة للمصطلحات الموجودة في نصوص الدفعة.
     const filteredGlossary = smartFilterGlossary(glossary, entries || []);

@@ -1220,7 +1220,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         )}
 
         {/* Action buttons */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <Button variant="outline" size="sm" onClick={() => setShowRulesDialog(true)} className="gap-1.5 h-10 border-primary/30 text-primary hover:bg-primary/10">
             <Shield className="w-4 h-4" />
             <div className="text-right">
@@ -1247,6 +1247,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <div className="text-right">
               <p className="text-xs font-bold">فحص القواعد</p>
               <p className="text-[10px] text-muted-foreground">إملاء + نحو + ترقيم</p>
+            </div>
+          </Button>
+          <Button variant="outline" size="sm" onClick={repairTechnicalTagsOnly} disabled={isAnalyzing} className="gap-1.5 h-10 border-primary/30 text-primary hover:bg-primary/10">
+            <Shield className="w-4 h-4" />
+            <div className="text-right">
+              <p className="text-xs font-bold">إصلاح الوسوم فقط</p>
+              <p className="text-[10px] text-muted-foreground">بدون AI أو صياغة</p>
             </div>
           </Button>
         </div>

@@ -81,7 +81,7 @@ function hasExactTagSequence(original: string, suggested: string): boolean {
 
 function dropsOriginalTechnicalTags(original: string, suggested: string): boolean {
   const origTags = extractTechTags(original);
-  if (origTags.length === 0) return false;
+  if (origTags.length === 0) return extractTechTags(suggested).length > 0;
   return !hasExactTagSequence(original, suggested);
 }
 

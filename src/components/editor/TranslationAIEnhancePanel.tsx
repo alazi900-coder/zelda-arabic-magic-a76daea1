@@ -1087,6 +1087,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             setCustomRules(allRules.filter(r => r.custom));
             // أعد تحميل overrides بعد الحفظ حتى يجري إرسالها للـAI في الطلبات التالية.
             setBuiltinOverrides(loadBuiltinOverrides());
+            resetProcessedKeys();
+            setSuggestions([]);
+            setGrammarIssues([]);
+            setFilterType(null);
+            setSeverityFilter(null);
+            setCategoryFilter(null);
           }}
         />
 

@@ -89,7 +89,7 @@ function buildRuleSections(
   enabledIds: string[] | undefined,
   customRules: RuleDef[] | undefined,
   builtinOverrides: Record<string, { prompt?: string }> | undefined,
-): { detect: string; protect: string } {
+): { detect: string; protect: string; detectCount: number } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
   const builtinWithOverrides: RuleDef[] = RULES.map(r => {
@@ -117,7 +117,7 @@ function buildRuleSections(
     ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
     : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
   const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
-  return { detect, protect };
+  return { detect, protect, detectCount: detectLines.length };
 }
 
 // ─── Smart glossary filter ──────────────────────────────────────────────────

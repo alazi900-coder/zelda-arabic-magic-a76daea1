@@ -30,6 +30,8 @@ import {
   loadEnabledRules, loadCustomRules, loadBuiltinOverrides,
   type EnhanceRuleId, type EnhanceRule, type BuiltinOverride,
 } from "@/lib/enhance-rules";
+import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
+import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -75,6 +77,7 @@ type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
 const BATCH_SIZE = 50;
 const PARALLEL_REQUESTS = 3;
+const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
 interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }
 
@@ -237,6 +240,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   }, [scope, reviewMem]);
 
   const analyzeTranslations = async (mode: "enhance" | "grammar" | "combined") => {
+    const currentEnabledRules = loadEnabledRules();
+    const currentCustomRules = loadCustomRules();
+    const currentBuiltinOverrides = loadBuiltinOverrides();
+    setEnabledRules(currentEnabledRules);
+    setCustomRules(currentCustomRules);
+    setBuiltinOverrides(currentBuiltinOverrides);
+
     // Detect entries that changed since last scan and clear stale results
     const changedKeys = new Set<string>();
     for (const [key, oldText] of processedKeysRef.current) {
@@ -286,11 +296,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
       setProgress({ current: 0, total: inputs.length });
       setActiveTab("grammar");
+      const googleTagCheckEnabled = currentEnabledRules.has('detect_split_and_tags') || currentEnabledRules.has('protect_tech_tags');
+      const googleOrderCheckEnabled = currentEnabledRules.has('detect_word_order');
+      if (!googleTagCheckEnabled && !googleOrderCheckEnabled) {
+        setIsAnalyzing(false);
+        setProgress(null);
+        toast({ title: "لا توجد قواعد Google مفعّلة" });
+        return;
+      }
 
       // Rule 2: local pre-check for missing technical tags. Runs before the
       // back-translation and does not need network access.
       const preCheckIssues: GrammarIssue[] = [];
-      for (const entry of inputs) {
+      for (const entry of googleTagCheckEnabled ? inputs : []) {
         const origTags = (entry.original.match(GOOGLE_TAG_RE) || []).length;
         const transTags = (entry.translation.match(GOOGLE_TAG_RE) || []).length;
         const origPua = (entry.original.match(GOOGLE_PUA_RE) || []).length;
@@ -312,6 +330,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         });
       }
       if (preCheckIssues.length > 0) setGrammarIssues(prev => [...prev, ...preCheckIssues]);
+      if (!googleOrderCheckEnabled) {
+        setIsAnalyzing(false);
+        setProgress(null);
+        toast({ title: preCheckIssues.length > 0 ? `تم العثور على ${preCheckIssues.length} مشكلة وسوم` : "لا توجد وسوم مفقودة" });
+        return;
+      }
 
       const arabicTexts = inputs.map(i => i.translation);
       let failedCount = 0;
@@ -342,6 +366,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             // Rule 1: words present but order broken — the only post-back-translation rule.
             // Skip when either side has < 3 tokens; bigram overlap is meaningless there
             // and would falsely flag single-word translations (e.g. "Someday...").
+            if (!googleOrderCheckEnabled) continue;
             if (!isOrderComparable(entry.original, result.english)) continue;
             const presence = wordsJaccard(entry.original, result.english);
             const order = orderOverlap(entry.original, result.english);
@@ -429,9 +454,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               aiModel: model,
               providerApiKey,
               thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
-              enabledRules: Array.from(enabledRules),
-              customRules: customRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
-              builtinOverrides,
+              enabledRules: Array.from(currentEnabledRules),
+              customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
+              builtinOverrides: currentBuiltinOverrides,
             },
             signal: abortSignal,
           });
@@ -457,7 +482,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(enabledRules), customRules: customRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;
@@ -571,6 +596,42 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     abortControllerRef.current?.abort();
     setIsAnalyzing(false);
     setProgress(null);
+  };
+
+  const repairTechnicalTagsOnly = () => {
+    const fixes: GrammarIssue[] = [];
+    for (const entry of entries) {
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const current = translations[key];
+      if (!current?.trim() || !scopeFilter(entry, current)) continue;
+      const diffBefore = diffTechnicalTags(entry.original, current);
+      if (diffBefore.exactTagMatch && diffBefore.sequenceMatch) continue;
+      const repaired = restoreTagsLocally(entry.original, current);
+      const diffAfter = diffTechnicalTags(entry.original, repaired);
+      if (repaired === current || !diffAfter.exactTagMatch) continue;
+      fixes.push({
+        key,
+        original: entry.original,
+        translation: current,
+        issue: TECHNICAL_TAGS_ONLY_ISSUE,
+        suggestion: repaired,
+        severity: diffAfter.sequenceMatch ? "high" : "medium",
+        category: "wrong",
+        detail: "تمت مقارنة الوسوم في الأصل مع الترجمة واستعادة الناقص/التالف/غير المرتب بدون تغيير المعنى.",
+        fixExplanation: "إصلاح محلي آمن للوسوم فقط؛ لا يستخدم AI ولا يغيّر نص الترجمة إلا لإعادة ترتيب/استرجاع الوسوم.",
+      });
+      processedKeysRef.current.delete(key);
+    }
+
+    setActiveTab("grammar");
+    setGrammarIssues(prev => {
+      const fixedKeys = new Set(fixes.map(f => f.key));
+      return [...prev.filter(g => !(fixedKeys.has(g.key) && g.issue === TECHNICAL_TAGS_ONLY_ISSUE)), ...fixes];
+    });
+    toast({
+      title: fixes.length > 0 ? `تم العثور على ${fixes.length} إصلاح وسوم` : "لا توجد وسوم تقنية تحتاج إصلاح",
+      description: fixes.length > 0 ? "راجع النتائج ثم طبّقها، أو اضغط تطبيق الكل من تبويب الأخطاء." : undefined,
+    });
   };
 
   const applyOne = (key: string, newText: string) => {
@@ -1041,6 +1102,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             setCustomRules(allRules.filter(r => r.custom));
             // أعد تحميل overrides بعد الحفظ حتى يجري إرسالها للـAI في الطلبات التالية.
             setBuiltinOverrides(loadBuiltinOverrides());
+            resetProcessedKeys();
+            setSuggestions([]);
+            setGrammarIssues([]);
+            setFilterType(null);
+            setSeverityFilter(null);
+            setCategoryFilter(null);
           }}
         />
 
@@ -1174,7 +1241,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         )}
 
         {/* Action buttons */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <Button variant="outline" size="sm" onClick={() => setShowRulesDialog(true)} className="gap-1.5 h-10 border-primary/30 text-primary hover:bg-primary/10">
             <Shield className="w-4 h-4" />
             <div className="text-right">
@@ -1201,6 +1268,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <div className="text-right">
               <p className="text-xs font-bold">فحص القواعد</p>
               <p className="text-[10px] text-muted-foreground">إملاء + نحو + ترقيم</p>
+            </div>
+          </Button>
+          <Button variant="outline" size="sm" onClick={repairTechnicalTagsOnly} disabled={isAnalyzing} className="gap-1.5 h-10 border-primary/30 text-primary hover:bg-primary/10">
+            <Shield className="w-4 h-4" />
+            <div className="text-right">
+              <p className="text-xs font-bold">إصلاح الوسوم فقط</p>
+              <p className="text-[10px] text-muted-foreground">بدون AI أو صياغة</p>
             </div>
           </Button>
         </div>

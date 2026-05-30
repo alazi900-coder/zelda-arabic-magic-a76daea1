@@ -63,12 +63,33 @@ const RULES: RuleDef[] = [
   { id: 'no_identical_output', kind: 'protect', prompt: '⚠️ لا تُعِد النصّ نفسه بدون تغيير. إذا كانت الترجمة صحيحة، تخطَّاها.' },
 ];
 const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
+const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+
+function extractTechTags(text: string): string[] {
+  return [...(text || '').matchAll(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags))].map(m => m[0]);
+}
+
+function hasExactTagSequence(original: string, suggested: string): boolean {
+  const orig = extractTechTags(original);
+  const next = extractTechTags(suggested);
+  if (orig.length !== next.length) return false;
+  for (let i = 0; i < orig.length; i++) {
+    if (orig[i] !== next[i]) return false;
+  }
+  return true;
+}
+
+function dropsOriginalTechnicalTags(original: string, suggested: string): boolean {
+  const origTags = extractTechTags(original);
+  if (origTags.length === 0) return extractTechTags(suggested).length > 0;
+  return !hasExactTagSequence(original, suggested);
+}
 
 function buildRuleSections(
   enabledIds: string[] | undefined,
   customRules: RuleDef[] | undefined,
   builtinOverrides: Record<string, { prompt?: string }> | undefined,
-): { detect: string; protect: string } {
+): { detect: string; protect: string; detectCount: number } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
   const builtinWithOverrides: RuleDef[] = RULES.map(r => {
@@ -96,7 +117,7 @@ function buildRuleSections(
     ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
     : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
   const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
-  return { detect, protect };
+  return { detect, protect, detectCount: detectLines.length };
 }
 
 // ─── Smart glossary filter ──────────────────────────────────────────────────
@@ -152,6 +173,11 @@ Deno.serve(async (req) => {
     const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides);
     // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
     ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
+    if (ruleSections.detectCount === 0) {
+      return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // فرز ذكيّ للقاموس: الأولويّة للمصطلحات الموجودة في نصوص الدفعة.
     const filteredGlossary = smartFilterGlossary(glossary, entries || []);
@@ -273,7 +299,9 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
   ]
 }
 
-كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.`;
+كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.
+
+قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.`;
 
       const response = await callAI([
         { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة.' },
@@ -335,19 +363,22 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       }
 
       console.log('[enhance] grammar mode parsed', { issuesCount: parsed.issues?.length || 0, model: resolvedModel });
-      const mappedIssues = (parsed.issues || []).map((i) => ({
-        key: entries[i.index ?? -1]?.key || '',
-        original: entries[i.index ?? -1]?.original || '',
-        translation: entries[i.index ?? -1]?.translation || '',
-        category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
-        issue: i.issue,
-        detail: i.detail || '',
-        fixExplanation: i.fix_explanation || i.fixExplanation || '',
-        // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
-        // من رفض الاقتراح بالكامل، يكفي تنظيفه.
-        suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
-        severity: i.severity || 'medium',
-      })).filter((i) => i.key && i.suggestion && i.suggestion !== i.translation);
+      const mappedIssues = (parsed.issues || []).map((i) => {
+        const entry = entries[i.index ?? -1];
+        return {
+          key: entry?.key || '',
+          original: entry?.original || '',
+          translation: entry?.translation || '',
+          category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
+          issue: i.issue,
+          detail: i.detail || '',
+          fixExplanation: i.fix_explanation || i.fixExplanation || '',
+          // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
+          // من رفض الاقتراح بالكامل، يكفي تنظيفه.
+          suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
+          severity: i.severity || 'medium',
+        };
+      }).filter((i) => i.key && i.suggestion && i.suggestion !== i.translation && !dropsOriginalTechnicalTags(i.original, i.suggestion));
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -359,7 +390,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     // نهائيّاً واحداً لكلّ مدخل يجمع كلّ الإصلاحات معاً (بلا تصادم).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'combined') {
-      const combinedPrompt = `أنت مدقّق ومحسّن ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص كلّ ترجمة من كلّ الجوانب المُفعَّلة أدناه (قواعد + إملاء + صياغة + دقّة + اتساق + ترتيب الكلمات) وأعِد **نصّاً نهائيّاً واحداً** يجمع كلّ الإصلاحات معاً في حقل suggested (لا تُرجع اقتراحاً للقواعد منفصلاً عن اقتراح للصياغة).
+      const combinedPrompt = `أنت مدقّق ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص فقط القواعد المُفعَّلة أدناه، ولا تُبلّغ عن أي نوع مشكلة غير مذكور في القواعد المُفعَّلة. أعِد **نصّاً نهائيّاً واحداً** يجمع الإصلاحات المسموح بها فقط في حقل suggested.
 
 صنّف الفئة الرئيسيّة (wrong/reorder/weak/style) بناءً على القواعد التالية:
 
@@ -400,7 +431,9 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
   ]
 }
 
-كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.`;
+كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.
+
+قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.`;
 
       const response = await callAI([
         { role: 'system', content: 'أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل — لا تنتج اقتراحَين متعارضَين.' },
@@ -494,7 +527,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           severity: r.severity || 'medium',
         };
       })
-        .filter((r) => r.key && r.suggested && r.suggested !== r.translation);
+        .filter((r) => r.key && r.suggested && r.suggested !== r.translation && !dropsOriginalTechnicalTags(r.original, r.suggested));
 
       return new Response(JSON.stringify({ results: mappedResults }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -504,7 +537,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Enhance mode — تحسين صياغة + اقتراح بدائل (مع التزام صارم بالقاموس).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ Xenoblade Chronicles 1. ركّز على الأخطاء وفقاً للقواعد المُفعَّلة أدناه واقترح إصلاحاً.
+      const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص فقط القواعد المُفعَّلة أدناه، ولا تقترح أي تعديل خارجها.
 
 ${ruleSections.detect}
 
@@ -534,8 +567,9 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 **مهم:**
 - أعِد فقط الترجمات التي بها مشاكل حقيقيّة
 - لا تقترح تعديلات تفضيليّة بحتة
-- ركّز على الأخطاء الموضوعيّة والحروف الناقصة أولاً
+- ركّز فقط على أنواع الأخطاء الموجودة في القواعد المُفعَّلة
 - إذا كان النصّ صحيحاً لا تُعِده
+- إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
 - حقل detail إلزاميّ يشرح لماذا هذه مشكلة (سطر أو سطرَين)`;
 
     const response = await callAI([
@@ -593,20 +627,23 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     }
 
     console.log('[enhance] enhance mode parsed', { suggestionsCount: parsed.suggestions?.length || 0, model: resolvedModel });
-    const mappedSuggestions = (parsed.suggestions || []).map((s) => ({
-      key: entries[s.index ?? -1]?.key || '',
-      original: entries[s.index ?? -1]?.original || '',
-      current: entries[s.index ?? -1]?.translation || '',
-      // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
-      suggested: stripGameUnsupportedMarks(s.suggested || ''),
-      alternatives: Array.isArray(s.alternatives)
-        ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-          .map((a) => stripGameUnsupportedMarks(a as string))
-        : [],
-      reason: s.reason,
-      detail: s.detail || '',
-      type: s.type || 'style',
-    })).filter((s) => s.key && s.suggested && s.suggested !== s.current);
+    const mappedSuggestions = (parsed.suggestions || []).map((s) => {
+      const entry = entries[s.index ?? -1];
+      return {
+        key: entry?.key || '',
+        original: entry?.original || '',
+        current: entry?.translation || '',
+        // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
+        suggested: stripGameUnsupportedMarks(s.suggested || ''),
+        alternatives: Array.isArray(s.alternatives)
+          ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
+            .map((a) => stripGameUnsupportedMarks(a as string))
+          : [],
+        reason: s.reason,
+        detail: s.detail || '',
+        type: s.type || 'style',
+      };
+    }).filter((s) => s.key && s.suggested && s.suggested !== s.current && !dropsOriginalTechnicalTags(s.original, s.suggested));
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

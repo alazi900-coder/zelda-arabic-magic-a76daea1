@@ -583,6 +583,42 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setProgress(null);
   };
 
+  const repairTechnicalTagsOnly = () => {
+    const fixes: GrammarIssue[] = [];
+    for (const entry of entries) {
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const current = translations[key];
+      if (!current?.trim() || !scopeFilter(entry, current)) continue;
+      const diffBefore = diffTechnicalTags(entry.original, current);
+      if (diffBefore.exactTagMatch && diffBefore.sequenceMatch) continue;
+      const repaired = restoreTagsLocally(entry.original, current);
+      const diffAfter = diffTechnicalTags(entry.original, repaired);
+      if (repaired === current || !diffAfter.exactTagMatch) continue;
+      fixes.push({
+        key,
+        original: entry.original,
+        translation: current,
+        issue: TECHNICAL_TAGS_ONLY_ISSUE,
+        suggestion: repaired,
+        severity: diffAfter.sequenceMatch ? "high" : "medium",
+        category: "wrong",
+        detail: "تمت مقارنة الوسوم في الأصل مع الترجمة واستعادة الناقص/التالف/غير المرتب بدون تغيير المعنى.",
+        fixExplanation: "إصلاح محلي آمن للوسوم فقط؛ لا يستخدم AI ولا يغيّر نص الترجمة إلا لإعادة ترتيب/استرجاع الوسوم.",
+      });
+      processedKeysRef.current.delete(key);
+    }
+
+    setActiveTab("grammar");
+    setGrammarIssues(prev => {
+      const fixedKeys = new Set(fixes.map(f => f.key));
+      return [...prev.filter(g => !(fixedKeys.has(g.key) && g.issue === TECHNICAL_TAGS_ONLY_ISSUE)), ...fixes];
+    });
+    toast({
+      title: fixes.length > 0 ? `تم العثور على ${fixes.length} إصلاح وسوم` : "لا توجد وسوم تقنية تحتاج إصلاح",
+      description: fixes.length > 0 ? "راجع النتائج ثم طبّقها، أو اضغط تطبيق الكل من تبويب الأخطاء." : undefined,
+    });
+  };
+
   const applyOne = (key: string, newText: string) => {
     const previous = translations[key] || "";
     onApplySuggestion(key, newText);

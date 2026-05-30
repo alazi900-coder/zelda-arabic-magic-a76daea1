@@ -330,6 +330,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         });
       }
       if (preCheckIssues.length > 0) setGrammarIssues(prev => [...prev, ...preCheckIssues]);
+      if (!googleOrderCheckEnabled) {
+        setIsAnalyzing(false);
+        setProgress(null);
+        toast({ title: preCheckIssues.length > 0 ? `تم العثور على ${preCheckIssues.length} مشكلة وسوم` : "لا توجد وسوم مفقودة" });
+        return;
+      }
 
       const arabicTexts = inputs.map(i => i.translation);
       let failedCount = 0;

@@ -296,11 +296,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
       setProgress({ current: 0, total: inputs.length });
       setActiveTab("grammar");
+      const googleTagCheckEnabled = currentEnabledRules.has('detect_split_and_tags') || currentEnabledRules.has('protect_tech_tags');
+      const googleOrderCheckEnabled = currentEnabledRules.has('detect_word_order');
+      if (!googleTagCheckEnabled && !googleOrderCheckEnabled) {
+        setIsAnalyzing(false);
+        setProgress(null);
+        toast({ title: "لا توجد قواعد Google مفعّلة" });
+        return;
+      }
 
       // Rule 2: local pre-check for missing technical tags. Runs before the
       // back-translation and does not need network access.
       const preCheckIssues: GrammarIssue[] = [];
-      for (const entry of inputs) {
+      for (const entry of googleTagCheckEnabled ? inputs : []) {
         const origTags = (entry.original.match(GOOGLE_TAG_RE) || []).length;
         const transTags = (entry.translation.match(GOOGLE_TAG_RE) || []).length;
         const origPua = (entry.original.match(GOOGLE_PUA_RE) || []).length;
@@ -352,6 +360,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             // Rule 1: words present but order broken — the only post-back-translation rule.
             // Skip when either side has < 3 tokens; bigram overlap is meaningless there
             // and would falsely flag single-word translations (e.g. "Someday...").
+            if (!googleOrderCheckEnabled) continue;
             if (!isOrderComparable(entry.original, result.english)) continue;
             const presence = wordsJaccard(entry.original, result.english);
             const order = orderOverlap(entry.original, result.english);

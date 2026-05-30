@@ -30,6 +30,8 @@ import {
   loadEnabledRules, loadCustomRules, loadBuiltinOverrides,
   type EnhanceRuleId, type EnhanceRule, type BuiltinOverride,
 } from "@/lib/enhance-rules";
+import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
+import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -75,6 +77,7 @@ type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
 const BATCH_SIZE = 50;
 const PARALLEL_REQUESTS = 3;
+const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
 interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }
 

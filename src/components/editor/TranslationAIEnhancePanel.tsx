@@ -669,6 +669,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
   const applySuggestion = (item: EnhanceSuggestion | GrammarIssue) => {
     const newText = 'suggested' in item ? item.suggested : item.suggestion;
+    const previousText = 'current' in item ? item.current : item.translation;
+    if (isUnsafeEnglishReplacement(item.original, previousText, newText)) {
+      toast({
+        title: "تم منع اقتراح غير آمن",
+        description: "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية، لذلك لم يتم تطبيقه.",
+        variant: "destructive",
+      });
+      return;
+    }
     applyOne(item.key, newText);
     if ('suggested' in item) {
       setSuggestions(prev => prev.filter(s => s.key !== item.key));
@@ -703,16 +712,26 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
   const applyAll = () => {
     if (activeTab === "enhance") {
-      const list = filteredSuggestions;
-      for (const s of list) applyOne(s.key, s.suggested);
-      toast({ title: `✅ تم تطبيق ${list.length} اقتراح` });
-      const keys = new Set(list.map(s => s.key));
+      const list = bulkSuggestions;
+      const safe = list.filter(s => !isUnsafeEnglishReplacement(s.original, s.current, s.suggested));
+      for (const s of safe) applyOne(s.key, s.suggested);
+      const skipped = list.length - safe.length;
+      toast({
+        title: `✅ تم تطبيق ${safe.length} اقتراح`,
+        description: skipped > 0 ? `تم منع ${skipped} اقتراح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+      });
+      const keys = new Set(safe.map(s => s.key));
       setSuggestions(prev => prev.filter(s => !keys.has(s.key)));
     } else {
-      const list = filteredIssues;
-      for (const g of list) applyOne(g.key, g.suggestion);
-      toast({ title: `✅ تم إصلاح ${list.length} خطأ` });
-      const keys = new Set(list.map(g => g.key));
+      const list = bulkIssues;
+      const safe = list.filter(g => !isUnsafeEnglishReplacement(g.original, g.translation, g.suggestion));
+      for (const g of safe) applyOne(g.key, g.suggestion);
+      const skipped = list.length - safe.length;
+      toast({
+        title: `✅ تم إصلاح ${safe.length} خطأ`,
+        description: skipped > 0 ? `تم منع ${skipped} إصلاح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+      });
+      const keys = new Set(safe.map(g => g.key));
       setGrammarIssues(prev => prev.filter(g => !keys.has(g.key)));
     }
   };

@@ -85,6 +85,35 @@ function dropsOriginalTechnicalTags(original: string, suggested: string): boolea
   return !hasExactTagSequence(original, suggested);
 }
 
+const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g;
+const LATIN_RE = /[A-Za-z]/g;
+
+function stripTechForLanguageCheck(text: string): string {
+  return (text || '').replace(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags), ' ').replace(/\s+/g, ' ').trim();
+}
+
+function countMatches(text: string, re: RegExp): number {
+  return (text.match(new RegExp(re.source, re.flags)) || []).length;
+}
+
+function isUnsafeEnglishReplacement(original: string, previous: string, suggested: string): boolean {
+  const prevPlain = stripTechForLanguageCheck(previous);
+  const nextPlain = stripTechForLanguageCheck(suggested);
+  const originalPlain = stripTechForLanguageCheck(original).toLowerCase();
+  const prevArabic = countMatches(prevPlain, ARABIC_RE);
+  if (prevArabic === 0) return false;
+  const nextArabic = countMatches(nextPlain, ARABIC_RE);
+  const nextLatin = countMatches(nextPlain, LATIN_RE);
+  if (nextArabic === 0 && nextLatin > 2) return true;
+  if (nextArabic < Math.max(2, Math.floor(prevArabic * 0.35)) && nextLatin > nextArabic) return true;
+  if (originalPlain.length >= 8 && nextPlain.toLowerCase().includes(originalPlain)) return true;
+  return false;
+}
+
+function isSafeSuggestion(original: string, previous: string, suggested: string): boolean {
+  return !!suggested && !dropsOriginalTechnicalTags(original, suggested) && !isUnsafeEnglishReplacement(original, previous, suggested);
+}
+
 function buildRuleSections(
   enabledIds: string[] | undefined,
   customRules: RuleDef[] | undefined,

@@ -407,7 +407,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
           severity: i.severity || 'medium',
         };
-      }).filter((i) => i.key && i.suggestion && i.suggestion !== i.translation && !dropsOriginalTechnicalTags(i.original, i.suggestion));
+      }).filter((i) => i.key && i.suggestion !== i.translation && isSafeSuggestion(i.original, i.translation, i.suggestion));
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -556,7 +556,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           severity: r.severity || 'medium',
         };
       })
-        .filter((r) => r.key && r.suggested && r.suggested !== r.translation && !dropsOriginalTechnicalTags(r.original, r.suggested));
+        .filter((r) => r.key && r.suggested !== r.translation && isSafeSuggestion(r.original, r.translation, r.suggested));
 
       return new Response(JSON.stringify({ results: mappedResults }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -672,7 +672,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         detail: s.detail || '',
         type: s.type || 'style',
       };
-    }).filter((s) => s.key && s.suggested && s.suggested !== s.current && !dropsOriginalTechnicalTags(s.original, s.suggested));
+    }).filter((s) => s.key && s.suggested !== s.current && isSafeSuggestion(s.original, s.current, s.suggested));
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

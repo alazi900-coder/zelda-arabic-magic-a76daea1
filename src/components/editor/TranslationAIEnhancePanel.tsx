@@ -1382,7 +1382,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               </Button>
               <Button size="sm" variant="default" onClick={applyAll} className="gap-1.5 mr-auto">
                 <Zap className="w-4 h-4" />
-                تطبيق الكل ({activeTab === "enhance" ? filteredSuggestions.length : filteredIssues.length})
+                تطبيق المحدد ({activeTab === "enhance" ? bulkSuggestions.length : bulkIssues.length})
               </Button>
             </>
           )}
@@ -1480,15 +1480,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           {/* === Enhance results === */}
           <TabsContent value="enhance">
             {filteredSuggestions.length > 0 ? (
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-3 pr-1">
+              <ScrollArea className="h-[min(62vh,480px)] sm:h-[400px] max-w-full overflow-x-hidden">
+                <div className="space-y-3 px-1 max-w-full overflow-hidden">
                   {groupedSuggestions.size <= 1
                     ? filteredSuggestions.map((s, i) => renderSuggestionCard(s, i))
                     : Array.from(groupedSuggestions.entries()).map(([file, items]) => (
                       <Collapsible key={file} defaultOpen>
                         <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-right">
                           <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-xs font-medium truncate flex-1" dir="ltr">{file}</span>
+                          <span className="text-xs font-medium truncate flex-1 min-w-0" dir="ltr">{file}</span>
                           <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{items.length}</Badge>
                           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                         </CollapsibleTrigger>
@@ -1513,15 +1513,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           {/* === Grammar results === */}
           <TabsContent value="grammar">
             {filteredIssues.length > 0 ? (
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-3 pr-1">
+              <ScrollArea className="h-[min(62vh,480px)] sm:h-[400px] max-w-full overflow-x-hidden">
+                <div className="space-y-3 px-1 max-w-full overflow-hidden">
                   {groupedIssues.size <= 1
                     ? filteredIssues.map((g, i) => renderIssueCard(g, i))
                     : Array.from(groupedIssues.entries()).map(([file, items]) => (
                       <Collapsible key={file} defaultOpen>
                         <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-right">
                           <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-xs font-medium truncate flex-1" dir="ltr">{file}</span>
+                          <span className="text-xs font-medium truncate flex-1 min-w-0" dir="ltr">{file}</span>
                           <Badge variant="destructive" className="text-[10px] h-4 px-1.5 shrink-0">{items.length}</Badge>
                           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                         </CollapsibleTrigger>

@@ -105,6 +105,32 @@ const GOOGLE_ORDER_THRESHOLD = 0.4;
 const GOOGLE_TAG_RE = /\[[A-Z][^\]]*\]/g;
 const GOOGLE_PUA_RE = /[\uE000-\uF8FF\uFFF9-\uFFFC]/g;
 
+const LANGUAGE_TECH_RE = /[\uFFF9-\uFFFC\uE000-\uF8FF]+|\[[^\]]*\]|\{[^}]*\}/g;
+const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g;
+const LATIN_RE = /[A-Za-z]/g;
+
+function stripTechForLanguageCheck(text: string): string {
+  return (text || "").replace(LANGUAGE_TECH_RE, " ").replace(/\s+/g, " ").trim();
+}
+
+function countMatches(text: string, re: RegExp): number {
+  return (text.match(new RegExp(re.source, re.flags)) || []).length;
+}
+
+function isUnsafeEnglishReplacement(original: string, previous: string, next: string): boolean {
+  const prevPlain = stripTechForLanguageCheck(previous);
+  const nextPlain = stripTechForLanguageCheck(next);
+  const originalPlain = stripTechForLanguageCheck(original).toLowerCase();
+  const prevArabic = countMatches(prevPlain, ARABIC_RE);
+  if (prevArabic === 0) return false;
+  const nextArabic = countMatches(nextPlain, ARABIC_RE);
+  const nextLatin = countMatches(nextPlain, LATIN_RE);
+  if (nextArabic === 0 && nextLatin > 2) return true;
+  if (nextArabic < Math.max(2, Math.floor(prevArabic * 0.35)) && nextLatin > nextArabic) return true;
+  if (originalPlain.length >= 8 && nextPlain.toLowerCase().includes(originalPlain)) return true;
+  return false;
+}
+
 // --- Diff helpers: word-level + sentence-level ---
 function splitTokens(s: string, mode: "word" | "sentence"): string[] {
   if (mode === "sentence") {
@@ -771,6 +797,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     missing_char: { label: "حرف ناقص", icon: <AlertTriangle className="w-3 h-3" />, color: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
     terminology: { label: "مصطلح", icon: <BookOpen className="w-3 h-3" />, color: "bg-teal-500/10 text-teal-600 border-teal-500/20" },
     punctuation: { label: "ترقيم", icon: <Type className="w-3 h-3" />, color: "bg-pink-500/10 text-pink-600 border-pink-500/20" },
+    line_breaks: { label: "فواصل الأسطر", icon: <FileText className="w-3 h-3" />, color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+    split_and_tags: { label: "تقسيم ووسوم", icon: <Shield className="w-3 h-3" />, color: "bg-primary/10 text-primary border-primary/20" },
+    reorder: { label: "ترتيب", icon: <ArrowRight className="w-3 h-3" />, color: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
   };
 
   // ---- Filters + sort by severity (high → medium → low) ----
@@ -794,6 +823,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestions, filterType, searchQuery]);
 
+  const bulkSuggestions = useMemo(() => {
+    return suggestions
+      .filter(s => !filterType || s.type === filterType)
+      .sort((a, b) => (typeToSeverity[a.type] ?? 2) - (typeToSeverity[b.type] ?? 2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestions, filterType]);
+
   const filteredIssues = useMemo(() => {
     const catOrder: Record<string, number> = { wrong: 0, reorder: 1, weak: 2 };
     return grammarIssues
@@ -813,6 +849,23 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // never changes shape); including it would invalidate the memo every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grammarIssues, severityFilter, categoryFilter, searchQuery]);
+
+  const bulkIssues = useMemo(() => {
+    const catOrder: Record<string, number> = { wrong: 0, reorder: 1, weak: 2 };
+    return grammarIssues
+      .filter(g => {
+        if (severityFilter && g.severity !== severityFilter) return false;
+        if (categoryFilter && (g.category ?? 'wrong') !== categoryFilter) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const ca = catOrder[a.category ?? 'wrong'] ?? 0;
+        const cb = catOrder[b.category ?? 'wrong'] ?? 0;
+        if (ca !== cb) return ca - cb;
+        return (severityOrder[a.severity ?? 'low'] ?? 2) - (severityOrder[b.severity ?? 'low'] ?? 2);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grammarIssues, severityFilter, categoryFilter]);
 
   // ---- Group results by MSBT file ----
   const extractFile = (key: string) => key.replace(/:\d+$/, '') || key;

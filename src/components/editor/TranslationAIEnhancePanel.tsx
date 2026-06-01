@@ -977,19 +977,21 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
           </Button>
         </div>
-        <div className="space-y-1.5">
-          <p className="text-sm font-bold text-red-500 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">
+        <div className="space-y-1.5" dir="rtl">
+          <p className="text-sm font-bold text-red-500 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>
             <span className="text-foreground/60 font-normal">المشكلة: </span>{g.issue}
           </p>
           {g.detail && g.detail !== g.issue && (
-            <p className="text-xs text-muted-foreground leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">
-              <span className="font-bold text-foreground/70">السبب: </span>{g.detail}
-            </p>
+            <div className="rounded-md bg-muted/30 border border-border/60 px-2 py-1.5">
+              <p className="text-[10px] font-bold text-foreground/70 mb-0.5">السبب</p>
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{g.detail}</p>
+            </div>
           )}
           {g.fixExplanation && (
-            <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1">
-              <span className="font-bold">الحل المُطبَّق: </span>{g.fixExplanation}
-            </p>
+            <div className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1.5">
+              <p className="text-[10px] font-bold mb-0.5">الحل المُطبَّق</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{g.fixExplanation}</p>
+            </div>
           )}
         </div>
         <div dir="ltr" className="text-[10px] text-muted-foreground/70 font-mono truncate" title={g.key}>{g.key}</div>
@@ -1059,17 +1061,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
           </Button>
         </div>
-        <div className="space-y-1">
-          <p className="text-sm font-semibold leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">{s.reason}</p>
+        <div className="space-y-1" dir="rtl">
+          <p className="text-sm font-semibold leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{s.reason}</p>
           {s.detail && s.detail !== s.reason && (
-            <p className="text-xs text-muted-foreground leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">
-              <span className="font-bold text-foreground/70">لماذا؟ </span>{s.detail}
-            </p>
+            <div className="rounded-md bg-muted/30 border border-border/60 px-2 py-1.5">
+              <p className="text-[10px] font-bold text-foreground/70 mb-0.5">السبب</p>
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{s.detail}</p>
+            </div>
           )}
           {s.fixExplanation && (
-            <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1">
-              <span className="font-bold">الحل المُطبَّق: </span>{s.fixExplanation}
-            </p>
+            <div className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1.5">
+              <p className="text-[10px] font-bold mb-0.5">الحل المُطبَّق</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{s.fixExplanation}</p>
+            </div>
           )}
         </div>
         <div dir="ltr" className="text-[10px] text-muted-foreground/70 font-mono truncate" title={s.key}>{s.key}</div>

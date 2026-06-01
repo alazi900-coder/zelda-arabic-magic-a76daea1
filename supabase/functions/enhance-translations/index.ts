@@ -63,7 +63,7 @@ const RULES: RuleDef[] = [
   { id: 'no_identical_output', kind: 'protect', prompt: '⚠️ لا تُعِد النصّ نفسه بدون تغيير. إذا كانت الترجمة صحيحة، تخطَّاها.' },
 ];
 const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
-const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
 
 function extractTechTags(text: string): string[] {
   return [...(text || '').matchAll(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags))].map(m => m[0]);
@@ -83,6 +83,35 @@ function dropsOriginalTechnicalTags(original: string, suggested: string): boolea
   const origTags = extractTechTags(original);
   if (origTags.length === 0) return extractTechTags(suggested).length > 0;
   return !hasExactTagSequence(original, suggested);
+}
+
+const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g;
+const LATIN_RE = /[A-Za-z]/g;
+
+function stripTechForLanguageCheck(text: string): string {
+  return (text || '').replace(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags), ' ').replace(/\s+/g, ' ').trim();
+}
+
+function countMatches(text: string, re: RegExp): number {
+  return (text.match(new RegExp(re.source, re.flags)) || []).length;
+}
+
+function isUnsafeEnglishReplacement(original: string, previous: string, suggested: string): boolean {
+  const prevPlain = stripTechForLanguageCheck(previous);
+  const nextPlain = stripTechForLanguageCheck(suggested);
+  const originalPlain = stripTechForLanguageCheck(original).toLowerCase();
+  const prevArabic = countMatches(prevPlain, ARABIC_RE);
+  if (prevArabic === 0) return false;
+  const nextArabic = countMatches(nextPlain, ARABIC_RE);
+  const nextLatin = countMatches(nextPlain, LATIN_RE);
+  if (nextArabic === 0 && nextLatin > 2) return true;
+  if (nextArabic < Math.max(2, Math.floor(prevArabic * 0.35)) && nextLatin > nextArabic) return true;
+  if (originalPlain.length >= 8 && nextPlain.toLowerCase().includes(originalPlain)) return true;
+  return false;
+}
+
+function isSafeSuggestion(original: string, previous: string, suggested: string): boolean {
+  return !!suggested && !dropsOriginalTechnicalTags(original, suggested) && !isUnsafeEnglishReplacement(original, previous, suggested);
 }
 
 function buildRuleSections(
@@ -293,7 +322,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       "issue": "وصف مختصر جداً للمشكلة (3-7 كلمات)",
       "detail": "اشرح بدقّة: ما المشكلة؟ ولماذا هي مشكلة؟ (سطر أو سطرَين)",
       "fix_explanation": "اشرح الحلّ الذي طبّقته على النصّ ولماذا يحلّ المشكلة (سطر واحد)",
-      "suggestion": "النصّ المصحَّح كاملاً",
+      "suggestion": "النصّ العربي المصحَّح كاملاً",
       "severity": "high|medium|low"
     }
   ]
@@ -301,7 +330,9 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
 كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.
 
-قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.`;
+قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
+قاعدة لغة غير قابلة للتجاوز: إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggestion عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
+كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.`;
 
       const response = await callAI([
         { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة.' },
@@ -378,7 +409,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
           severity: i.severity || 'medium',
         };
-      }).filter((i) => i.key && i.suggestion && i.suggestion !== i.translation && !dropsOriginalTechnicalTags(i.original, i.suggestion));
+      }).filter((i) => i.key && i.suggestion !== i.translation && isSafeSuggestion(i.original, i.translation, i.suggestion));
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -420,11 +451,11 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     {
       "index": 0,
       "category": "wrong|reorder|weak|style",
-      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation",
+      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation|line_breaks|split_and_tags|reorder",
       "issue": "وصف مختصر جداً (3-7 كلمات)",
       "detail": "اشرح المشكلة بدقّة (سطر أو سطرَين)",
       "fix_explanation": "اشرح كلّ الإصلاحات المطبَّقة في suggested (قواعد + صياغة معاً) في سطر واحد",
-      "suggested": "النصّ النهائيّ المُحسَّن كاملاً (يجمع كلّ الإصلاحات)",
+      "suggested": "النصّ العربي النهائيّ المُحسَّن كاملاً (يجمع كلّ الإصلاحات)",
       "alternatives": ["بديل ثانٍ", "بديل ثالث"],
       "severity": "high|medium|low"
     }
@@ -433,7 +464,9 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
 كلّ الحقول إلزاميّة. أعِد فقط الترجمات التي بها مشكلة حقيقيّة.
 
-قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.`;
+قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
+قاعدة لغة غير قابلة للتجاوز: إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggested عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
+كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.`;
 
       const response = await callAI([
         { role: 'system', content: 'أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل — لا تنتج اقتراحَين متعارضَين.' },
@@ -527,7 +560,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           severity: r.severity || 'medium',
         };
       })
-        .filter((r) => r.key && r.suggested && r.suggested !== r.translation && !dropsOriginalTechnicalTags(r.original, r.suggested));
+        .filter((r) => r.key && r.suggested !== r.translation && isSafeSuggestion(r.original, r.translation, r.suggested));
 
       return new Response(JSON.stringify({ results: mappedResults }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -559,7 +592,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       "alternatives": ["بديل ثانٍ", "بديل ثالث"],
       "reason": "وصف مختصر للمشكلة (3-7 كلمات)",
       "detail": "شرح أطول يوضّح لماذا هذه مشكلة وأيّ قاعدة خالفتها الترجمة الحالية",
-      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation"
+      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation|line_breaks|split_and_tags|reorder"
     }
   ]
 }
@@ -570,7 +603,8 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 - ركّز فقط على أنواع الأخطاء الموجودة في القواعد المُفعَّلة
 - إذا كان النصّ صحيحاً لا تُعِده
 - إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
-- حقل detail إلزاميّ يشرح لماذا هذه مشكلة (سطر أو سطرَين)`;
+- إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggested عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
+- حقلا reason وdetail إلزاميّان وبالعربية: السبب أولاً ثم الحل المقترح باختصار.`;
 
     const response = await callAI([
       { role: 'system', content: 'أنت مترجم ومراجع محترف لـ Xenoblade Chronicles 1 (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. ركّز على الأخطاء الحقيقيّة لا الأسلوبيّة.' },
@@ -643,7 +677,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         detail: s.detail || '',
         type: s.type || 'style',
       };
-    }).filter((s) => s.key && s.suggested && s.suggested !== s.current && !dropsOriginalTechnicalTags(s.original, s.suggested));
+    }).filter((s) => s.key && s.suggested !== s.current && isSafeSuggestion(s.original, s.current, s.suggested));
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

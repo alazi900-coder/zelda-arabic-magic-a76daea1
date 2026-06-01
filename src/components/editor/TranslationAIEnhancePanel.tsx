@@ -105,6 +105,32 @@ const GOOGLE_ORDER_THRESHOLD = 0.4;
 const GOOGLE_TAG_RE = /\[[A-Z][^\]]*\]/g;
 const GOOGLE_PUA_RE = /[\uE000-\uF8FF\uFFF9-\uFFFC]/g;
 
+const LANGUAGE_TECH_RE = /[\uFFF9-\uFFFC\uE000-\uF8FF]+|\[[^\]]*\]|\{[^}]*\}/g;
+const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g;
+const LATIN_RE = /[A-Za-z]/g;
+
+function stripTechForLanguageCheck(text: string): string {
+  return (text || "").replace(LANGUAGE_TECH_RE, " ").replace(/\s+/g, " ").trim();
+}
+
+function countMatches(text: string, re: RegExp): number {
+  return (text.match(new RegExp(re.source, re.flags)) || []).length;
+}
+
+function isUnsafeEnglishReplacement(original: string, previous: string, next: string): boolean {
+  const prevPlain = stripTechForLanguageCheck(previous);
+  const nextPlain = stripTechForLanguageCheck(next);
+  const originalPlain = stripTechForLanguageCheck(original).toLowerCase();
+  const prevArabic = countMatches(prevPlain, ARABIC_RE);
+  if (prevArabic === 0) return false;
+  const nextArabic = countMatches(nextPlain, ARABIC_RE);
+  const nextLatin = countMatches(nextPlain, LATIN_RE);
+  if (nextArabic === 0 && nextLatin > 2) return true;
+  if (nextArabic < Math.max(2, Math.floor(prevArabic * 0.35)) && nextLatin > nextArabic) return true;
+  if (originalPlain.length >= 8 && nextPlain.toLowerCase().includes(originalPlain)) return true;
+  return false;
+}
+
 // --- Diff helpers: word-level + sentence-level ---
 function splitTokens(s: string, mode: "word" | "sentence"): string[] {
   if (mode === "sentence") {
@@ -643,6 +669,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
   const applySuggestion = (item: EnhanceSuggestion | GrammarIssue) => {
     const newText = 'suggested' in item ? item.suggested : item.suggestion;
+    const previousText = 'current' in item ? item.current : item.translation;
+    if (isUnsafeEnglishReplacement(item.original, previousText, newText)) {
+      toast({
+        title: "تم منع اقتراح غير آمن",
+        description: "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية، لذلك لم يتم تطبيقه.",
+        variant: "destructive",
+      });
+      return;
+    }
     applyOne(item.key, newText);
     if ('suggested' in item) {
       setSuggestions(prev => prev.filter(s => s.key !== item.key));
@@ -677,16 +712,26 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
   const applyAll = () => {
     if (activeTab === "enhance") {
-      const list = filteredSuggestions;
-      for (const s of list) applyOne(s.key, s.suggested);
-      toast({ title: `✅ تم تطبيق ${list.length} اقتراح` });
-      const keys = new Set(list.map(s => s.key));
+      const list = bulkSuggestions;
+      const safe = list.filter(s => !isUnsafeEnglishReplacement(s.original, s.current, s.suggested));
+      for (const s of safe) applyOne(s.key, s.suggested);
+      const skipped = list.length - safe.length;
+      toast({
+        title: `✅ تم تطبيق ${safe.length} اقتراح`,
+        description: skipped > 0 ? `تم منع ${skipped} اقتراح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+      });
+      const keys = new Set(safe.map(s => s.key));
       setSuggestions(prev => prev.filter(s => !keys.has(s.key)));
     } else {
-      const list = filteredIssues;
-      for (const g of list) applyOne(g.key, g.suggestion);
-      toast({ title: `✅ تم إصلاح ${list.length} خطأ` });
-      const keys = new Set(list.map(g => g.key));
+      const list = bulkIssues;
+      const safe = list.filter(g => !isUnsafeEnglishReplacement(g.original, g.translation, g.suggestion));
+      for (const g of safe) applyOne(g.key, g.suggestion);
+      const skipped = list.length - safe.length;
+      toast({
+        title: `✅ تم إصلاح ${safe.length} خطأ`,
+        description: skipped > 0 ? `تم منع ${skipped} إصلاح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+      });
+      const keys = new Set(safe.map(g => g.key));
       setGrammarIssues(prev => prev.filter(g => !keys.has(g.key)));
     }
   };
@@ -771,6 +816,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     missing_char: { label: "حرف ناقص", icon: <AlertTriangle className="w-3 h-3" />, color: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
     terminology: { label: "مصطلح", icon: <BookOpen className="w-3 h-3" />, color: "bg-teal-500/10 text-teal-600 border-teal-500/20" },
     punctuation: { label: "ترقيم", icon: <Type className="w-3 h-3" />, color: "bg-pink-500/10 text-pink-600 border-pink-500/20" },
+    line_breaks: { label: "فواصل الأسطر", icon: <FileText className="w-3 h-3" />, color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+    split_and_tags: { label: "تقسيم ووسوم", icon: <Shield className="w-3 h-3" />, color: "bg-primary/10 text-primary border-primary/20" },
+    reorder: { label: "ترتيب", icon: <ArrowRight className="w-3 h-3" />, color: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
   };
 
   // ---- Filters + sort by severity (high → medium → low) ----
@@ -794,6 +842,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestions, filterType, searchQuery]);
 
+  const bulkSuggestions = useMemo(() => {
+    return suggestions
+      .filter(s => !filterType || s.type === filterType)
+      .sort((a, b) => (typeToSeverity[a.type] ?? 2) - (typeToSeverity[b.type] ?? 2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestions, filterType]);
+
   const filteredIssues = useMemo(() => {
     const catOrder: Record<string, number> = { wrong: 0, reorder: 1, weak: 2 };
     return grammarIssues
@@ -813,6 +868,23 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // never changes shape); including it would invalidate the memo every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grammarIssues, severityFilter, categoryFilter, searchQuery]);
+
+  const bulkIssues = useMemo(() => {
+    const catOrder: Record<string, number> = { wrong: 0, reorder: 1, weak: 2 };
+    return grammarIssues
+      .filter(g => {
+        if (severityFilter && g.severity !== severityFilter) return false;
+        if (categoryFilter && (g.category ?? 'wrong') !== categoryFilter) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const ca = catOrder[a.category ?? 'wrong'] ?? 0;
+        const cb = catOrder[b.category ?? 'wrong'] ?? 0;
+        if (ca !== cb) return ca - cb;
+        return (severityOrder[a.severity ?? 'low'] ?? 2) - (severityOrder[b.severity ?? 'low'] ?? 2);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grammarIssues, severityFilter, categoryFilter]);
 
   // ---- Group results by MSBT file ----
   const extractFile = (key: string) => key.replace(/:\d+$/, '') || key;
@@ -905,19 +977,21 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
           </Button>
         </div>
-        <div className="space-y-1.5">
-          <p className="text-sm font-bold text-red-500 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">
+        <div className="space-y-1.5" dir="rtl">
+          <p className="text-sm font-bold text-red-500 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>
             <span className="text-foreground/60 font-normal">المشكلة: </span>{g.issue}
           </p>
           {g.detail && g.detail !== g.issue && (
-            <p className="text-xs text-muted-foreground leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">
-              <span className="font-bold text-foreground/70">السبب: </span>{g.detail}
-            </p>
+            <div className="rounded-md bg-muted/30 border border-border/60 px-2 py-1.5">
+              <p className="text-[10px] font-bold text-foreground/70 mb-0.5">السبب</p>
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{g.detail}</p>
+            </div>
           )}
           {g.fixExplanation && (
-            <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1">
-              <span className="font-bold">الحل المُطبَّق: </span>{g.fixExplanation}
-            </p>
+            <div className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1.5">
+              <p className="text-[10px] font-bold mb-0.5">الحل المُطبَّق</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{g.fixExplanation}</p>
+            </div>
           )}
         </div>
         <div dir="ltr" className="text-[10px] text-muted-foreground/70 font-mono truncate" title={g.key}>{g.key}</div>
@@ -987,17 +1061,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
           </Button>
         </div>
-        <div className="space-y-1">
-          <p className="text-sm font-semibold leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">{s.reason}</p>
+        <div className="space-y-1" dir="rtl">
+          <p className="text-sm font-semibold leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{s.reason}</p>
           {s.detail && s.detail !== s.reason && (
-            <p className="text-xs text-muted-foreground leading-relaxed [overflow-wrap:anywhere] [word-break:break-word]">
-              <span className="font-bold text-foreground/70">لماذا؟ </span>{s.detail}
-            </p>
+            <div className="rounded-md bg-muted/30 border border-border/60 px-2 py-1.5">
+              <p className="text-[10px] font-bold text-foreground/70 mb-0.5">السبب</p>
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{s.detail}</p>
+            </div>
           )}
           {s.fixExplanation && (
-            <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed [overflow-wrap:anywhere] [word-break:break-word] bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1">
-              <span className="font-bold">الحل المُطبَّق: </span>{s.fixExplanation}
-            </p>
+            <div className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed bg-emerald-500/5 border border-emerald-500/15 rounded px-2 py-1.5">
+              <p className="text-[10px] font-bold mb-0.5">الحل المُطبَّق</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]" style={{ unicodeBidi: "isolate" }}>{s.fixExplanation}</p>
+            </div>
           )}
         </div>
         <div dir="ltr" className="text-[10px] text-muted-foreground/70 font-mono truncate" title={s.key}>{s.key}</div>
@@ -1306,7 +1382,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               </Button>
               <Button size="sm" variant="default" onClick={applyAll} className="gap-1.5 mr-auto">
                 <Zap className="w-4 h-4" />
-                تطبيق الكل ({activeTab === "enhance" ? filteredSuggestions.length : filteredIssues.length})
+                تطبيق المحدد ({activeTab === "enhance" ? bulkSuggestions.length : bulkIssues.length})
               </Button>
             </>
           )}
@@ -1404,15 +1480,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           {/* === Enhance results === */}
           <TabsContent value="enhance">
             {filteredSuggestions.length > 0 ? (
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-3 pr-1">
+              <ScrollArea className="h-[min(62vh,480px)] sm:h-[400px] max-w-full overflow-x-hidden">
+                <div className="space-y-3 px-1 max-w-full overflow-hidden">
                   {groupedSuggestions.size <= 1
                     ? filteredSuggestions.map((s, i) => renderSuggestionCard(s, i))
                     : Array.from(groupedSuggestions.entries()).map(([file, items]) => (
                       <Collapsible key={file} defaultOpen>
                         <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-right">
                           <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-xs font-medium truncate flex-1" dir="ltr">{file}</span>
+                          <span className="text-xs font-medium truncate flex-1 min-w-0" dir="ltr">{file}</span>
                           <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{items.length}</Badge>
                           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                         </CollapsibleTrigger>
@@ -1437,15 +1513,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           {/* === Grammar results === */}
           <TabsContent value="grammar">
             {filteredIssues.length > 0 ? (
-              <ScrollArea className="h-[400px]">
-                <div className="space-y-3 pr-1">
+              <ScrollArea className="h-[min(62vh,480px)] sm:h-[400px] max-w-full overflow-x-hidden">
+                <div className="space-y-3 px-1 max-w-full overflow-hidden">
                   {groupedIssues.size <= 1
                     ? filteredIssues.map((g, i) => renderIssueCard(g, i))
                     : Array.from(groupedIssues.entries()).map(([file, items]) => (
                       <Collapsible key={file} defaultOpen>
                         <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-right">
                           <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-xs font-medium truncate flex-1" dir="ltr">{file}</span>
+                          <span className="text-xs font-medium truncate flex-1 min-w-0" dir="ltr">{file}</span>
                           <Badge variant="destructive" className="text-[10px] h-4 px-1.5 shrink-0">{items.length}</Badge>
                           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                         </CollapsibleTrigger>

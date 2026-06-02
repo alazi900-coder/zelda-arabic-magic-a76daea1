@@ -181,6 +181,17 @@ export function reshapeArabic(text: string): string {
 }
 
 export function reverseBidi(text: string): string {
+  // Handle hard breaks ([XENO:n] and [System:PageBreak]) as independent blocks
+  // to prevent line-swapping during BiDi reversal.
+  const hardBreakPattern = /(\[\s*(?:XENO\s*:\s*n|System\s*:\s*PageBreak)\s*\]\s*\n?)/gi;
+  const parts = text.split(hardBreakPattern);
+  if (parts.length > 1) {
+    return parts.map(part => {
+      if (hardBreakPattern.test(part)) return part;
+      return part ? reverseBidi(part) : '';
+    }).join('');
+  }
+
   // Protect technical tags as atomic placeholders before BiDi processing
   const tagPattern = /\\?\[\s*\w+\s*:[^\]]*?\s*\\?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}|\{[\w]+\}|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g;
   // Slot range: \uE0A0–\uE0FF = 96 slots (indices 0–95).

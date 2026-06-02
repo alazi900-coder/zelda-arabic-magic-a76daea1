@@ -182,7 +182,7 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   for (let i = 0; i < origTags.length; i++) {
     if (origTags[i] !== transTags[i]) { alreadyCorrect = false; break; }
   }
-  if (alreadyCorrect) return normalizeWhitespaceAfterReorder(ensureXenoNNewlines(translation), original);
+  if (alreadyCorrect) return normalizeWhitespaceAfterReorder(translation, original);
 
   // Replace each tag in the translation, in order, with the tag at the matching index in original
   let result = '';
@@ -195,14 +195,10 @@ function reorderTagsToMatchOriginal(original: string, translation: string): stri
   }
   result += translation.slice(cursor);
 
-  // Final safety pass: ensure every [XENO:n ] is followed by \n, then clean whitespace
-  result = ensureXenoNNewlines(result);
+  // Whitespace cleanup only — do NOT force-inject \n after [XENO:n].
+  // The XC3 engine treats [XENO:n] itself as a hard line break; adding an
+  // extra \n produced empty lines and shifted line order in-game.
   return normalizeWhitespaceAfterReorder(result, original);
-}
-
-/** Force every [XENO:n ] in the text to be followed by a newline char. */
-function ensureXenoNNewlines(text: string): string {
-  return text.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
 }
 
 /**

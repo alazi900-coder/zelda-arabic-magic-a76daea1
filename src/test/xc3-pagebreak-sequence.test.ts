@@ -34,30 +34,28 @@ describe("XC3 PageBreak + XENO:n + XENO:wait sequence integrity", () => {
     expect(result.text).toContain("[XENO:n ]");
   });
 
-  it("preserves [XENO:n ] + newline adjacency after reorder", () => {
+  it("does NOT inject extra \\n after [XENO:n ] when translator already wrote it", () => {
     const badTranslation =
       "مرحبًا.[XENO:wait wait=key ]همم[XENO:n ]\nللعشاء؟[System:PageBreak ] صعب.[XENO:wait wait=key ]ملفوف؟[System:PageBreak ][XENO:n ]\nتخصصي![XENO:wait wait=key ][XENO:del del=this ]";
 
     const result = repairTranslationTagsForBuild(ORIGINAL, badTranslation);
     expect(result.exactTagMatch).toBe(true);
-    // Every [XENO:n ] in the result must still be followed by \n (newline char)
-    const xenoMatches = [...result.text.matchAll(/\[XENO:n\s*\]([\s\S]?)/g)];
-    expect(xenoMatches.length).toBeGreaterThan(0);
-    for (const m of xenoMatches) {
-      expect(m[1]).toBe("\n");
-    }
+    // Same number of newlines as the translator wrote (no forced injection).
+    const inputNewlines = (badTranslation.match(/\n/g) || []).length;
+    const outputNewlines = (result.text.match(/\n/g) || []).length;
+    expect(outputNewlines).toBe(inputNewlines);
   });
 
-  it("preserves [XENO:n ]\\n even when reorderTagsToMatchOriginal triggers", () => {
-    // Translation where XENO:n appears BEFORE PageBreak (wrong order) and \n is intact
+  it("does NOT force-add \\n after [XENO:n ] when translator omitted it", () => {
+    // Translator deliberately wrote [XENO:n ] with no following \n.
+    // The XC3 engine treats [XENO:n ] itself as a hard break, so we must
+    // respect the translator's whitespace and not inject a phantom newline
+    // (which previously caused empty lines and shifted line order in-game).
     const badTranslation =
-      "مرحبًا.[XENO:n ]\n[System:PageBreak ][XENO:wait wait=key ]همم[XENO:n ]\n[System:PageBreak ][XENO:wait wait=key ]ملفوف[XENO:wait wait=key ][XENO:del del=this ]";
+      "مرحبًا.[XENO:n ][System:PageBreak ][XENO:wait wait=key ]همم[XENO:n ][System:PageBreak ][XENO:wait wait=key ]ملفوف[XENO:wait wait=key ][XENO:del del=this ]";
 
     const result = repairTranslationTagsForBuild(ORIGINAL, badTranslation);
-    // XENO:n must always have \n following it after reorder
-    const allXenoNIdx = [...result.text.matchAll(/\[XENO:n\s*\]/g)].map(m => m.index! + m[0].length);
-    for (const idx of allXenoNIdx) {
-      expect(result.text[idx]).toBe("\n");
-    }
+    // No \n should have been injected by the build pipeline.
+    expect(result.text.includes("\n")).toBe(false);
   });
 });

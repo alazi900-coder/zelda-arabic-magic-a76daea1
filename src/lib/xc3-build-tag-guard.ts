@@ -304,11 +304,9 @@ export function repairTranslationTagsForBuild(original: string, translation: str
     repairedText = reorderTagsToMatchOriginal(original, repairedText);
   }
 
-  // Step 4: Final safety pass — original [XENO:n] is always followed by \n in well-formed XC3 text.
-  // If our pipeline lost that newline, restore it to prevent cinematic freezes.
-  if (/\[XENO:n\s*\]\n/.test(original)) {
-    repairedText = repairedText.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
-  }
+  // Step 4: Respect the translator's whitespace. [XENO:n] is itself a hard
+  // line break in the XC3 engine — force-injecting \n after it produced
+  // empty lines and shifted line order in-game. We deliberately do nothing here.
 
   // Step 5: Final whitespace cleanup — never produce more blank lines than original had
   repairedText = normalizeWhitespaceAfterReorder(repairedText, original);

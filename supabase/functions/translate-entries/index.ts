@@ -114,59 +114,18 @@ function buildSuccessResponse(
 // Update here once → applies everywhere.
 
 /** System prompt — sets role, output language, JSON contract, tag safety. */
-const XC1_SYSTEM_PROMPT = `You are an ELITE game localizer and technical translator for Xenoblade Chronicles 1: Definitive Edition.
+const XC1_SYSTEM_PROMPT = `You are a professional Xenoblade Chronicles 1 (Definitive Edition) game text translator.
+Cast: Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla — set in the world of Bionis vs Mechonis.
 
-Cast: Shulk, Reyn, Fiora, Dunban, Melia, Riki, Sharla.
-Setting: Bionis vs Mechonis.
-
-Your task is to translate game strings from English to Arabic with 100% technical integrity.
-
-CRITICAL TECHNICAL RULES (ZERO TOLERANCE):
-
-1. OUTPUT LANGUAGE
-   - Output language MUST be Arabic only.
-   - Never output Chinese, Japanese, Korean, or other non-Arabic scripts.
-   - Never leave untranslated English names unless they are protected tokens.
-   - If a name is not provided in the glossary, transliterate it phonetically into Arabic letters.
-   - Example: Shulk → شولك, Fiora → فيورا.
-
-2. PROTECTED TOKENS
-   - You will encounter placeholders such as: TAG_0, TAG_1, TAG_2..., NEWLINE_0, NEWLINE_1, NEWLINE_2..., ⟪T0⟫, ⟪T1⟫, ⟪T2⟫..., and phrases like [Always Active] or [Battle Party].
-   - These are NON-TRANSLATABLE technical anchors.
-   - NEVER translate, modify, reorder, duplicate, merge, remove, rename, or alter their case.
-   - SPATIAL INTEGRITY: You MUST preserve their exact relative position within the sentence. 
-   - START-OF-SENTENCE RULE: If a TAG_N is at the very beginning of the English sentence, it MUST remain at the very beginning of the Arabic translation.
-   - DO NOT cluster tags at the end of the sentence. This is a hard failure.
-   - ATOMIC BLOCKS: A single TAG_N may represent multiple merged technical tags (e.g., [Always Active][XENO:n]). Treat it as one unbreakable object.
-   - Treat them as immutable technical objects.
-
-3. GLOSSARY ADHERENCE
-   - Any term wrapped in ⟪TN⟫ is a locked glossary term.
-   - Follow the supplied glossary entry exactly. Do not replace it with synonyms.
-
-4. LINE BREAK INTEGRITY
-   - NEWLINE_N placeholders are structural markers, not text. Never translate or remove them.
-   - The translation must contain exactly the same number of NEWLINE_N markers as the source in their original relative order.
-
-5. TAG INTEGRITY
-   - The count of protected tags must exactly match the source.
-   - Their relative order must remain unchanged.
-
-6. ARABIC LOCALIZATION RULES
-   - Use natural Modern Standard Arabic suitable for JRPG games. Never use Arabic diacritics (Tashkeel).
-   - Preserve the original tone, intent, and emotional weight.
-
-7. JSON SAFETY
-   - Return valid JSON only. Never output markdown or explanations.
-   - Escape characters correctly. Use double-backslashes (\\\\) whenever escaping is required.
-
-8. KEY INTEGRITY
-   - Output exactly the same keys received in the input (K0, K1, K2...).
-
-9. OUTPUT FORMAT
-   - Return ONLY a pure JSON object. No prose or markdown fences.
-
-Required schema: {"K0":"الترجمة هنا","K1":"الترجمة هنا","K2":"الترجمة هنا"}`;
+OUTPUT CONTRACT (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, TAG_2, ... (technical tags)
+   - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
+   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
+4. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
 
 /**
  * Build the user-facing prompt with full universe knowledge, ordered rules,
@@ -204,15 +163,11 @@ ${universeBlock}
 
 RULES — ordered by priority (top = most critical):
 
-[A] STRUCTURE & TAG INTEGRITY (MUST NEVER BREAK):
-1. Return ONLY a JSON object — keys must match input keys exactly (K0, K1, ...).
-2. TAG POSITIONING: Placeholders (TAG_N, NEWLINE_N, ⟪TN⟫) MUST stay in their original relative positions. 
-   - DO NOT MOVE TAGS TO THE END OF THE SENTENCE.
-   - Example: "Hello [TAG_0] world" -> "مرحباً [TAG_0] بالعالم" (CORRECT)
-   - Example: "Hello [TAG_0] world" -> "مرحباً بالعالم [TAG_0]" (WRONG - DO NOT DO THIS)
-3. Return EXACTLY ${expectedCount} entries.
-4. Placeholders are LOCKED — copy them EXACTLY as-is.
-5. Every translation MUST contain Arabic characters. Unknown names -> transliterate. English-only output is rejected.
+[A] STRUCTURE (MUST NEVER BREAK):
+1. Return ONLY a JSON object — keys must match input keys exactly (K0, K1, ...). Example: {"K0": "ترجمة", "K1": "ترجمة"}.
+2. Return EXACTLY ${expectedCount} entries. Do NOT skip, merge, split, or add extra entries. Each key gets its own translation.
+3. Placeholders ⟪T0⟫, ⟪T1⟫, TAG_0, TAG_1, etc. are LOCKED — copy them EXACTLY as-is. Never translate, modify, remove, reorder, or merge them.
+4. Every translation value MUST contain Arabic characters. NEVER return English source as the "translation". Unknown names → transliterate to Arabic phonetically. Returning English unchanged is a hard failure rejected by validation.
 
 [B] FORMATTING:
 5. Do NOT insert literal newline characters (\\n) in your translations. Use a single space instead — line wrapping is handled by a post-processing step that re-balances lines to fit in-game text boxes. If the source has multiple lines (cutscene), still return one continuous string; the splitter will rebuild the lines.
@@ -271,7 +226,6 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]/g, // [Tag:Value] and [/Tag:Value] and \[Tag:Value\]
     /\d+\s*\\?\[[A-Z]{2,10}\\?\]/g,       // N[TAG] patterns (e.g. 1[ML], 1\[XENO\])
     /\\?\[[A-Z]{2,10}\\?\]\s*\d+/g,       // [TAG]N patterns (e.g. [ML]1, [XENO]1)
-    /\[\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\]/g, // [Always Active], [Battle Party] patterns
     /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g, // \[Passive\], \[Arts Seal\], [Lock-On], [XENO]
     /\[\s*\w+\s*=\s*\w[^\]]*\]/g,       // [TAG=Value] patterns (e.g. [Color=Red])
     /\{\s*\w+\s*:\s*\w[^}]*\}/g,         // {TAG:Value} patterns (e.g. {player:name})
@@ -299,28 +253,9 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
 
   if (matches.length === 0) return { cleaned: shielded, tags };
 
-  // Merge adjacent tags into a single atomic block
-  const mergedMatches: { start: number; end: number; original: string }[] = [];
-  if (matches.length > 0) {
-    let current = { ...matches[0] };
-    for (let i = 1; i < matches.length; i++) {
-      const next = matches[i];
-      // If the gap between tags is just whitespace or nothing, merge them
-      const gap = shielded.slice(current.end, next.start);
-      if (/^\s*$/.test(gap)) {
-        current.original += gap + next.original;
-        current.end = next.end;
-      } else {
-        mergedMatches.push(current);
-        current = { ...next };
-      }
-    }
-    mergedMatches.push(current);
-  }
-
   let cleaned = '';
   let lastEnd = 0;
-  for (const m of mergedMatches) {
+  for (const m of matches) {
     cleaned += shielded.slice(lastEnd, m.start);
     const placeholder = `TAG_${counter}`;
     tags.set(placeholder, m.original);

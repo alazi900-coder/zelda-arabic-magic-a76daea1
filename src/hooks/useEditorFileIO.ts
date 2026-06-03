@@ -469,19 +469,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     const imported = repaired.parsed;
     const totalInFile = Object.keys(imported).length;
 
-    // Build Guard: Prevent importing old translations if build source is newer
-    if (state && state.entries.length > 0) {
-      if (totalInFile < state.entries.length * 0.5 && state.entries.length > 100) {
-        console.warn(`[ImportGuard] Blocked import of ${totalInFile} keys for state with ${state.entries.length} entries.`);
-        toast({
-          title: "⚠️ حماية الاستيراد",
-          description: "يبدو أن ملف الاستيراد قديم أو ناقص مقارنة بالمشروع الحالي. تم إلغاء العملية لحماية بياناتك.",
-          variant: "destructive"
-        });
-        return;
-      }
-    }
-
     if (totalInFile === 0) {
       toast({ title: "⚠️ الملف فارغ", description: "لا يحتوي على ترجمات صالحة.", variant: "destructive" });
       return;
@@ -818,28 +805,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   /** Apply imported translations (after conflict resolution or directly) */
   const applyImport = useCallback((cleanedImported: Record<string, string>, msg: string, repaired: { wasTruncated?: boolean; skippedCount?: number }) => {
-    const { restoreTagsLocally } = require("@/lib/xc3-tag-restoration");
-    
-    setState(prev => { 
-      if (!prev) return null; 
-      
-      const entryOriginals = new Map<string, string>();
-      for (const entry of prev.entries) {
-        entryOriginals.set(`${entry.msbtFile}:${entry.index}`, entry.original);
-      }
-
-      const repairedTranslations = { ...prev.translations };
-      for (const [key, value] of Object.entries(cleanedImported)) {
-        const originalText = entryOriginals.get(key);
-        if (originalText) {
-          repairedTranslations[key] = restoreTagsLocally(originalText, value.trim());
-        } else {
-          repairedTranslations[key] = value.trim();
-        }
-      }
-
-      return { ...prev, translations: repairedTranslations }; 
-    });
+    setState(prev => { if (!prev) return null; return { ...prev, translations: { ...prev.translations, ...cleanedImported } }; });
 
     toast({ title: "✅ تم الاستيراد", description: msg });
     setLastSaved(msg);

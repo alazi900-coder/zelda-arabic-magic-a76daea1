@@ -79,7 +79,7 @@ export interface FileCategory {
   color?: string; // Tailwind color class for icon
 }
 
-export const AUTOSAVE_DELAY = 300;
+export const AUTOSAVE_DELAY = 1500;
 // زيادة حجم الدفعة لتقليل عدد الطلبات وتقليل استهلاك حصة Gemini المجانية.
 // كل دفعة = طلب AI واحد. 20 نصاً = استهلاك 4x أقل مقارنة بـ 5.
 // Gemini Flash يدعم بسهولة 20 نصاً قصيراً-متوسطاً في طلب واحد (output ~8K tokens).

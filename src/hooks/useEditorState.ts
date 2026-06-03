@@ -220,15 +220,6 @@ export function useEditorState() {
   const loadSavedState = useCallback(async () => {
     const stored = await idbGet<EditorState>("editorState");
     if (!stored) return null;
-
-    const cleanTranslations = await idbGet<Record<string, string>>("cleanTranslations");
-    if (cleanTranslations && stored.translations) {
-      for (const key of Object.keys(stored.translations)) {
-        if (cleanTranslations[key]) {
-          stored.translations[key] = cleanTranslations[key];
-        }
-      }
-    }
     const validKeys = new Set(stored.entries.map(e => `${e.msbtFile}:${e.index}`));
     // Parse clearedKeys FIRST so detectPreTranslated can honor them.
     const storedClearedEarly = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;
@@ -536,17 +527,9 @@ export function useEditorState() {
   }, []);
 
   const saveToIDB = useCallback(async (editorState: EditorState) => {
-    const { stripBidiMarkers } = require("@/lib/arabic-processing");
-    
-    // Clean translations: strip BiDi markers before saving to DB
-    const cleanTranslations: Record<string, string> = {};
-    for (const [key, value] of Object.entries(editorState.translations)) {
-      cleanTranslations[key] = stripBidiMarkers(value);
-    }
-
     await idbSet("editorState", {
       entries: editorState.entries,
-      translations: cleanTranslations,
+      translations: editorState.translations,
       protectedEntries: Array.from(editorState.protectedEntries || []),
       technicalBypass: Array.from(editorState.technicalBypass || []),
       clearedKeys: Array.from(editorState.clearedKeys || []),

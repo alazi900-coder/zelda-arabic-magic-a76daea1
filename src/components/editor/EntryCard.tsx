@@ -78,8 +78,8 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
 }
 
 /** Renders text with technical tags highlighted visually */
-function HighlightedOriginal({ text }: { text: string }) {
-  const tagPattern = /(\[\s*\w+\s*:[^\]]*?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:\s*[^}]*\}|\{[\w]+\}|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC])/g;
+  function HighlightedOriginal({ text }: { text: string }) {
+    const tagPattern = /(\[\s*\w+\s*:[^\]]*?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:\s*[^}]*\}|\{[\w]+\}|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC])/g;
 
   const lines = text.split('\n');
 

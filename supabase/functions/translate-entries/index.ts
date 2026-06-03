@@ -131,7 +131,7 @@ CRITICAL TECHNICAL RULES (ZERO TOLERANCE):
    - Example: Shulk → شولك, Fiora → فيورا.
 
 2. PROTECTED TOKENS
-   - You will encounter placeholders such as: TAG_0, TAG_1, TAG_2..., NEWLINE_0, NEWLINE_1, NEWLINE_2..., ⟪T0⟫, ⟪T1⟫, ⟪T2⟫...
+   - You will encounter placeholders such as: TAG_0, TAG_1, TAG_2..., NEWLINE_0, NEWLINE_1, NEWLINE_2..., ⟪T0⟫, ⟪T1⟫, ⟪T2⟫..., and phrases like [Always Active] or [Battle Party].
    - These are NON-TRANSLATABLE technical anchors.
    - NEVER translate, modify, reorder, duplicate, merge, remove, rename, or alter their case.
    - SPATIAL INTEGRITY: You MUST preserve their exact relative position within the sentence. DO NOT cluster tags at the end of the sentence.
@@ -268,6 +268,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]/g, // [Tag:Value] and [/Tag:Value] and \[Tag:Value\]
     /\d+\s*\\?\[[A-Z]{2,10}\\?\]/g,       // N[TAG] patterns (e.g. 1[ML], 1\[XENO\])
     /\\?\[[A-Z]{2,10}\\?\]\s*\d+/g,       // [TAG]N patterns (e.g. [ML]1, [XENO]1)
+    /\[\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\]/g, // [Always Active], [Battle Party] patterns
     /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g, // \[Passive\], \[Arts Seal\], [Lock-On], [XENO]
     /\[\s*\w+\s*=\s*\w[^\]]*\]/g,       // [TAG=Value] patterns (e.g. [Color=Red])
     /\{\s*\w+\s*:\s*\w[^}]*\}/g,         // {TAG:Value} patterns (e.g. {player:name})

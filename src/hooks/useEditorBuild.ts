@@ -324,22 +324,31 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         // Strip newlines from bubble dialogue files (tlk, fev, cq) — game engine hides text with \n in bubbles
         const BUBBLE_FILE_PATTERNS = /(?:^|[:/])(?:tlk_|fev_|cq_)/i;
         let strippedNewlineCount = 0;
+        
+        const { fixMixedBidi } = await import("@/lib/arabic-processing");
+
         for (const [key, value] of Object.entries(nonEmptyTranslations)) {
           if (!value?.trim()) continue;
-          // Strip BiDi isolate markers before game build
-          if (value.includes('\u2068') || value.includes('\u2069')) {
-            nonEmptyTranslations[key] = stripBidiMarkers(value);
-          }
-          // Strip \n from bubble dialogue files
-          if (value.includes('\n') && BUBBLE_FILE_PATTERNS.test(key)) {
-            nonEmptyTranslations[key] = value.replace(/\n/g, ' ');
+          
+          // 1. Ensure we start with a clean text (strip any accidental markers)
+          let current = stripBidiMarkers(value);
+          
+          // 2. Strip \n from bubble dialogue files
+          if (current.includes('\n') && BUBBLE_FILE_PATTERNS.test(key)) {
+            current = current.replace(/\n/g, ' ');
             strippedNewlineCount++;
           }
-          const current = nonEmptyTranslations[key];
-          if (hasArabicPresentationForms(current)) continue;
-          if (!hasArabicCharsProcessing(current)) continue;
-          nonEmptyTranslations[key] = processArabicText(current, { arabicNumerals, mirrorPunct: mirrorPunctuation });
-          autoProcessedCountBin++;
+          
+          // 3. Apply BiDi/RLM only now, at build time
+          if (!hasArabicPresentationForms(current) && hasArabicCharsProcessing(current)) {
+            // Apply BiDi shaping and RLM isolation
+            current = processArabicText(current, { arabicNumerals, mirrorPunct: mirrorPunctuation });
+            // Wrap in BiDi isolates if it's mixed text
+            current = fixMixedBidi(current);
+            autoProcessedCountBin++;
+          }
+          
+          nonEmptyTranslations[key] = current;
         }
         if (strippedNewlineCount > 0) {
           setBuildProgress(`🫧 إزالة فواصل أسطر من ${strippedNewlineCount} نص فقاعي (tlk/fev/cq)...`);
@@ -1053,6 +1062,16 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           a.download = "xenoblade_arabized.zip";
           a.click();
           URL.revokeObjectURL(mergedUrl);
+
+          // Auto-download translation JSON backup alongside the build
+          const jsonContent = JSON.stringify(nonEmptyTranslations, null, 2);
+          const jsonBlob = new Blob([jsonContent], { type: "application/json" });
+          const jsonUrl = URL.createObjectURL(jsonBlob);
+          const jsonA = document.createElement("a");
+          jsonA.href = jsonUrl;
+          jsonA.download = `translations_backup_${new Date().toISOString().slice(0, 10)}.json`;
+          jsonA.click();
+          URL.revokeObjectURL(jsonUrl);
           const overflowSummary = allOverflowErrors.length > 0
             ? ` ⚠️ ${allOverflowErrors.length} نص تجاوز الحجم وتم تخطيه`
             : '';
@@ -1063,7 +1082,19 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           a.href = blobUrl;
           a.download = "xenoblade_arabized.zip";
           a.click();
-          setBuildProgress(`✅ تم بنجاح! تم تعديل ${modifiedCount} نص — الملفات في ملف ZIP`);
+          URL.revokeObjectURL(blobUrl);
+
+          // Auto-download translation JSON backup alongside the build
+          const jsonContent = JSON.stringify(nonEmptyTranslations, null, 2);
+          const jsonBlob = new Blob([jsonContent], { type: "application/json" });
+          const jsonUrl = URL.createObjectURL(jsonBlob);
+          const jsonA = document.createElement("a");
+          jsonA.href = jsonUrl;
+          jsonA.download = `translations_backup_${new Date().toISOString().slice(0, 10)}.json`;
+          jsonA.click();
+          URL.revokeObjectURL(jsonUrl);
+
+          setBuildProgress(`✅ تم بنجاح! تم تعديل ${modifiedCount} نص وتصدير نسخة الترجمة`);
         }
       } else if (localBdatResults.length > 0) {
         // Only binary BDAT files → pack ALL into a single ZIP

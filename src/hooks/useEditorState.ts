@@ -536,9 +536,17 @@ export function useEditorState() {
   }, []);
 
   const saveToIDB = useCallback(async (editorState: EditorState) => {
+    const { stripBidiMarkers } = require("@/lib/arabic-processing");
+    
+    // Clean translations: strip BiDi markers before saving to DB
+    const cleanTranslations: Record<string, string> = {};
+    for (const [key, value] of Object.entries(editorState.translations)) {
+      cleanTranslations[key] = stripBidiMarkers(value);
+    }
+
     await idbSet("editorState", {
       entries: editorState.entries,
-      translations: editorState.translations,
+      translations: cleanTranslations,
       protectedEntries: Array.from(editorState.protectedEntries || []),
       technicalBypass: Array.from(editorState.technicalBypass || []),
       clearedKeys: Array.from(editorState.clearedKeys || []),

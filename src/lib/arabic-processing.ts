@@ -190,10 +190,14 @@ export function reverseBidi(text: string): string {
   const hardBreakTest = /^\[\s*(?:XENO\s*:\s*n|System\s*:\s*PageBreak)\s*\]\s*\n?$/i;
   const parts = text.split(hardBreakSplit);
   if (parts.length > 1) {
-    return parts.map(part => {
+    const debug = typeof globalThis !== 'undefined' && (globalThis as any).__BIDI_DEBUG__;
+    if (debug) console.log('[reverseBidi:debug] parts before reverse:', parts);
+    const out = parts.map(part => {
       if (hardBreakTest.test(part)) return part;
       return part ? reverseBidi(part) : '';
-    }).join('');
+    });
+    if (debug) console.log('[reverseBidi:debug] parts after reverse:', out);
+    return out.join('');
   }
 
   // Protect technical tags as atomic placeholders before BiDi processing

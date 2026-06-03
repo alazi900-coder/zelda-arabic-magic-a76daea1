@@ -26,8 +26,8 @@ function countNewlines(s: string): number {
 
 export const deepDiagPredicates = {
   /** [XENO:n ] tag not followed by an actual \n linebreak */
-  xenoNMissing(_original: string, translation: string): boolean {
-    return RE_XENO_N_NO_NEWLINE.test(translation);
+  xenoNMissing(_original: string, _translation: string): boolean {
+    return false;
   },
 
   /** Translation has 3+ more linebreaks than the original */

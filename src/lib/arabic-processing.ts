@@ -181,23 +181,11 @@ export function reshapeArabic(text: string): string {
 }
 
 export function reverseBidi(text: string): string {
-  // Handle hard breaks ([XENO:n] and [System:PageBreak]) as independent blocks
-  // to prevent line-swapping during BiDi reversal.
-  // NOTE: use a non-global regex for .test() to avoid stateful lastIndex bug
-  // that intermittently mis-classifies hard-break tokens as content and
-  // causes line-order reversal in-game.
-  const hardBreakSplit = /(\[\s*(?:XENO\s*:\s*n|System\s*:\s*PageBreak)\s*\]\s*\n?)/gi;
-  const hardBreakTest = /^\[\s*(?:XENO\s*:\s*n|System\s*:\s*PageBreak)\s*\]\s*\n?$/i;
-  const parts = text.split(hardBreakSplit);
-  if (parts.length > 1) {
-    const debug = typeof globalThis !== 'undefined' && (globalThis as any).__BIDI_DEBUG__;
-    if (debug) console.log('[reverseBidi:debug] parts before reverse:', parts);
-    const out = parts.map(part => {
-      if (hardBreakTest.test(part)) return part;
-      return part ? reverseBidi(part) : '';
-    });
-    if (debug) console.log('[reverseBidi:debug] parts after reverse:', out);
-    return out.join('');
+  const xenoParts = text.split(/(\[XENO:n\s*\])/gi);
+  if (xenoParts.length > 1) {
+    return xenoParts.map(part =>
+      /^\[XENO:n\s*\]$/i.test(part) ? part : reverseBidi(part)
+    ).join('');
   }
 
   // Protect technical tags as atomic placeholders before BiDi processing

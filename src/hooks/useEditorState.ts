@@ -220,6 +220,15 @@ export function useEditorState() {
   const loadSavedState = useCallback(async () => {
     const stored = await idbGet<EditorState>("editorState");
     if (!stored) return null;
+
+    const cleanTranslations = await idbGet<Record<string, string>>("cleanTranslations");
+    if (cleanTranslations && stored.translations) {
+      for (const key of Object.keys(stored.translations)) {
+        if (cleanTranslations[key]) {
+          stored.translations[key] = cleanTranslations[key];
+        }
+      }
+    }
     const validKeys = new Set(stored.entries.map(e => `${e.msbtFile}:${e.index}`));
     // Parse clearedKeys FIRST so detectPreTranslated can honor them.
     const storedClearedEarly = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;

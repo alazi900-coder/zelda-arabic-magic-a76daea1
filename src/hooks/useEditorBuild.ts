@@ -80,6 +80,13 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       newTranslations[key] = processArabicText(value, { arabicNumerals, mirrorPunct: mirrorPunctuation });
       processedCount++;
     }
+    // حفظ النسخة النظيفة قبل المعالجة لاستخدامها عند التعديل لاحقاً
+    const cleanTranslations: Record<string, string> = {};
+    for (const [key, value] of Object.entries(currentState.translations)) {
+      cleanTranslations[key] = value;
+    }
+    idbSet("cleanTranslations", cleanTranslations);
+
     setState(prev => prev ? { ...prev, translations: newTranslations } : null);
     setApplyingArabic(false);
     setLastSaved(`✅ تم تطبيق المعالجة العربية على ${processedCount} نص` + (skippedCount > 0 ? ` (تم تخطي ${skippedCount} نص معالج مسبقاً)` : ''));
@@ -100,6 +107,13 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       newTranslations[key] = removeArabicPresentationForms(unReversed);
       revertedCount++;
     }
+    // حفظ النسخة النظيفة قبل المعالجة لاستخدامها عند التعديل لاحقاً
+    const cleanTranslations: Record<string, string> = {};
+    for (const [key, value] of Object.entries(currentState.translations)) {
+      cleanTranslations[key] = value;
+    }
+    idbSet("cleanTranslations", cleanTranslations);
+
     setState(prev => prev ? { ...prev, translations: newTranslations } : null);
     setApplyingArabic(false);
     setLastSaved(`↩️ تم التراجع عن المعالجة العربية لـ ${revertedCount} نص`);
@@ -214,6 +228,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
     // Force-save to IDB before reading data — prevents race condition with autosave
     if (forceSaveRef?.current) {
       await forceSaveRef.current();
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     setBuilding(true); setBuildProgress("تجهيز الترجمات...");
     try {
@@ -1301,6 +1316,20 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       a.download = `arabized_${langFileName}`;
       a.click();
       const expandedMsg = expandedCount > 0 ? ` (${expandedCount} تم توسيعها 📐)` : '';
+      // تصدير تلقائي للترجمات مع كل بناء
+      try {
+        const translationsToExport = stateRef.current?.translations || {};
+        const blob = new Blob([JSON.stringify(translationsToExport, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `translations_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.warn('فشل تصدير الترجمات التلقائي:', e);
+      }
+
       setBuildProgress(`✅ تم بنجاح! تم تعديل ${modifiedCount} نص${expandedMsg}`);
       setBuildStats({
         modifiedCount,

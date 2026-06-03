@@ -134,7 +134,10 @@ CRITICAL TECHNICAL RULES (ZERO TOLERANCE):
    - You will encounter placeholders such as: TAG_0, TAG_1, TAG_2..., NEWLINE_0, NEWLINE_1, NEWLINE_2..., ⟪T0⟫, ⟪T1⟫, ⟪T2⟫..., and phrases like [Always Active] or [Battle Party].
    - These are NON-TRANSLATABLE technical anchors.
    - NEVER translate, modify, reorder, duplicate, merge, remove, rename, or alter their case.
-   - SPATIAL INTEGRITY: You MUST preserve their exact relative position within the sentence. DO NOT cluster tags at the end of the sentence.
+   - SPATIAL INTEGRITY: You MUST preserve their exact relative position within the sentence. 
+   - START-OF-SENTENCE RULE: If a TAG_N is at the very beginning of the English sentence, it MUST remain at the very beginning of the Arabic translation.
+   - DO NOT cluster tags at the end of the sentence. This is a hard failure.
+   - ATOMIC BLOCKS: A single TAG_N may represent multiple merged technical tags (e.g., [Always Active][XENO:n]). Treat it as one unbreakable object.
    - Treat them as immutable technical objects.
 
 3. GLOSSARY ADHERENCE
@@ -296,9 +299,28 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
 
   if (matches.length === 0) return { cleaned: shielded, tags };
 
+  // Merge adjacent tags into a single atomic block
+  const mergedMatches: { start: number; end: number; original: string }[] = [];
+  if (matches.length > 0) {
+    let current = { ...matches[0] };
+    for (let i = 1; i < matches.length; i++) {
+      const next = matches[i];
+      // If the gap between tags is just whitespace or nothing, merge them
+      const gap = shielded.slice(current.end, next.start);
+      if (/^\s*$/.test(gap)) {
+        current.original += gap + next.original;
+        current.end = next.end;
+      } else {
+        mergedMatches.push(current);
+        current = { ...next };
+      }
+    }
+    mergedMatches.push(current);
+  }
+
   let cleaned = '';
   let lastEnd = 0;
-  for (const m of matches) {
+  for (const m of mergedMatches) {
     cleaned += shielded.slice(lastEnd, m.start);
     const placeholder = `TAG_${counter}`;
     tags.set(placeholder, m.original);

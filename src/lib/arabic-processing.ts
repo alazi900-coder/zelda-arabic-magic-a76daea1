@@ -183,11 +183,15 @@ export function reshapeArabic(text: string): string {
 export function reverseBidi(text: string): string {
   // Handle hard breaks ([XENO:n] and [System:PageBreak]) as independent blocks
   // to prevent line-swapping during BiDi reversal.
-  const hardBreakPattern = /(\[\s*(?:XENO\s*:\s*n|System\s*:\s*PageBreak)\s*\]\s*\n?)/gi;
-  const parts = text.split(hardBreakPattern);
+  // NOTE: use a non-global regex for .test() to avoid stateful lastIndex bug
+  // that intermittently mis-classifies hard-break tokens as content and
+  // causes line-order reversal in-game.
+  const hardBreakSplit = /(\[\s*(?:XENO\s*:\s*n|System\s*:\s*PageBreak)\s*\]\s*\n?)/gi;
+  const hardBreakTest = /^\[\s*(?:XENO\s*:\s*n|System\s*:\s*PageBreak)\s*\]\s*\n?$/i;
+  const parts = text.split(hardBreakSplit);
   if (parts.length > 1) {
     return parts.map(part => {
-      if (hardBreakPattern.test(part)) return part;
+      if (hardBreakTest.test(part)) return part;
       return part ? reverseBidi(part) : '';
     }).join('');
   }

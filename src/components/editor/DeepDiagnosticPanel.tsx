@@ -323,10 +323,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (XENO_N_FIXABLE_CATEGORIES.has(issue.category)) {
-      let fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+      let fixed = trans;
       // Re-balance after adding newlines so the total line count stays reasonable
       if (fixed !== trans) fixed = balanceLines(fixed);
-      return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
+      return { fixResult: fixed, reason: fixed !== trans ? '↩️ سيتم إضافة \n بعد [XENO:n ] وإعادة موازنة الأسطر' : '⚠️ لم يُعثر على وسم بدون سطر جديد' };
     }
 
     if (RLM_ISOLATION_CATEGORIES.has(issue.category)) {
@@ -425,10 +425,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (XENO_N_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
-      let fixed = issue.translation.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+      let fixed = issue.translation;
       if (fixed !== issue.translation) fixed = balanceLines(fixed);
       if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
-      toast({ title: '↩️ إصلاح', description: 'تم إضافة \\n بعد [XENO:n ] وإعادة موازنة الأسطر' });
+      toast({ title: '↩️ إصلاح', description: 'تم إضافة \n بعد [XENO:n ] وإعادة موازنة الأسطر' });
       return;
     }
 
@@ -529,7 +529,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           const key = uniqueKeys[i];
           const trans = state.translations[key];
           if (!trans) continue;
-          const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+          const fixed = trans;
           if (fixed !== trans) {
             updates[key] = fixed;
             count++;
@@ -682,11 +682,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         if (XENO_N_FIXABLE_CATEGORIES.has(issue.category)) {
           const trans = state.translations[issue.key];
           if (trans) {
-            const fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
+            const fixed = trans;
             if (fixed !== trans) {
               updates[issue.key] = fixed;
               counters.xenoN++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \\n بعد [XENO:n ]', before: trans, after: fixed });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↩️ تم إضافة \n بعد [XENO:n ]', before: trans, after: fixed });
             } else {
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على وسم بدون سطر جديد فعلياً', before: trans, after: trans });
             }

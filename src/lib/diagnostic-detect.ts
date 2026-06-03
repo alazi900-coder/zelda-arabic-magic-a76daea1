@@ -323,18 +323,6 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     });
   }
 
-  // 20. [XENO:n ] not followed by \n
-  const xenoNMatches = [...trimmed.matchAll(/\[XENO:n\s*\]/g)];
-  if (xenoNMatches.length > 0) {
-    const missingNewline = xenoNMatches.filter(m => {
-      const afterIdx = m.index! + m[0].length;
-      return afterIdx >= trimmed.length || trimmed[afterIdx] !== "\n";
-    });
-    if (missingNewline.length > 0) {
-      issues.push({ ...base, severity: "warning", category: "xeno_n_no_newline",
-        message: `${missingNewline.length} وسم [XENO:n ] غير متبوع بسطر جديد (\\n) — يمنع كسر السطر` });
-    }
-  }
 
   // 21. Missing RLM-isolation around technical tokens (Arabic + LTR-tag interaction)
   // Broadened: [Word:Value] tags (XENO/System/ML/Event/...), closing tags

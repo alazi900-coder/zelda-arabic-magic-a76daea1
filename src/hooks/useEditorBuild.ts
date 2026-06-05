@@ -47,9 +47,11 @@ interface UseEditorBuildProps {
   mirrorPunctuation: boolean;
   gameType?: string;
   forceSaveRef?: React.RefObject<() => Promise<void>>;
+  /** Called after a successful build — used to auto-export translations as JSON. */
+  onBuildSuccessRef?: React.RefObject<(() => void) | null>;
 }
 
-export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, gameType, forceSaveRef }: UseEditorBuildProps) {
+export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, gameType, forceSaveRef, onBuildSuccessRef }: UseEditorBuildProps) {
   // Use a ref to always access the LATEST state in async handlers
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -1085,6 +1087,14 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
       } catch (e) {
         console.warn("Could not save build translations snapshot:", e);
+      }
+
+      // Auto-export translations to a JSON file after a successful build so the
+      // user always has a fresh, on-disk backup of exactly what was built.
+      try {
+        onBuildSuccessRef?.current?.();
+      } catch (e) {
+        console.warn("Post-build auto-export failed:", e);
       }
 
       setBuilding(false);

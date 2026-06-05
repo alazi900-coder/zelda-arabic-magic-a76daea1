@@ -447,84 +447,14 @@ const XenobladeProcess = () => {
         }
       }
 
-      // Check for saved build translations (most reliable method)
+      // ⚠️ NOTE: Auto-restore from `buildTranslations` is intentionally DISABLED.
+      // It was silently reviving stale Arabic from a previous build and
+      // overwriting the user's newer edits/translations after they re-uploaded
+      // the source files. The user's current translations (in IDB editor state)
+      // remain the single source of truth. The `buildTranslations` snapshot is
+      // still WRITTEN at build time as a manual safety net, but no longer
+      // pulled back automatically here.
       const { idbClearExcept } = await import("@/lib/idb-storage");
-      const savedBuildTranslations = await idbGet<Record<string, string>>("buildTranslations");
-      
-      if (savedBuildTranslations && Object.keys(savedBuildTranslations).length > 0) {
-        // Build hash-normalized + multi-level fingerprint maps for current entries
-        // Build hash-normalized + multi-level fingerprint maps
-        const { murmur3_32 } = await import("@/lib/bdat-hash-dictionary");
-        const normalizeToHash = (part: string): string => {
-          const hexMatch = part.match(/^<0x([0-9a-fA-F]+)>$/);
-          if (hexMatch) return hexMatch[1].toLowerCase();
-          return murmur3_32(part).toString(16).padStart(8, '0').toLowerCase();
-        };
-        const normalizedMap = new Map<string, string>();
-        const exactMap = new Map<string, string>();
-        const noTableMap = new Map<string, string[]>();
-        const noColMap = new Map<string, string[]>();
-        const baseMap = new Map<string, string[]>();
-        const validKeys = new Set<string>();
-        for (const e of allEntries) {
-          const ek = `${e.msbtFile}:${e.index}`;
-          validKeys.add(ek);
-          if (ek.startsWith('bdat-bin:')) {
-            const parts = ek.split(':');
-            if (parts.length >= 6) {
-              const [filename, tableHash, rowIndex, colHash] = [parts[1], parts[2], parts[3], parts[4]];
-              // Hash-normalized fingerprint (primary)
-              const nfp = `${filename}:${normalizeToHash(tableHash)}:${rowIndex}:${normalizeToHash(colHash)}`;
-              normalizedMap.set(nfp, ek);
-              // Multi-level fallbacks
-              exactMap.set(`${filename}:${tableHash}:${rowIndex}:${colHash}`, ek);
-              const ntKey = `${filename}:*:${rowIndex}:${colHash}`;
-              const nt = noTableMap.get(ntKey) || []; nt.push(ek); noTableMap.set(ntKey, nt);
-              const ncKey = `${filename}:${tableHash}:${rowIndex}:*`;
-              const nc = noColMap.get(ncKey) || []; nc.push(ek); noColMap.set(ncKey, nc);
-              const bKey = `${filename}:*:${rowIndex}:*`;
-              const b = baseMap.get(bKey) || []; b.push(ek); baseMap.set(bKey, b);
-            }
-          }
-        }
-
-        const findNewKey = (oldKey: string): string | undefined => {
-          if (!oldKey.startsWith('bdat-bin:')) return undefined;
-          const parts = oldKey.split(':');
-          if (parts.length < 6) return undefined;
-          const [filename, tableHash, rowIndex, colHash] = [parts[1], parts[2], parts[3], parts[4]];
-          // 0. Hash-normalized exact match (handles hash↔name changes)
-          const nfp = `${filename}:${normalizeToHash(tableHash)}:${rowIndex}:${normalizeToHash(colHash)}`;
-          const normMatch = normalizedMap.get(nfp);
-          if (normMatch) return normMatch;
-          // 1-4. Multi-level fallbacks
-          const nk = exactMap.get(`${filename}:${tableHash}:${rowIndex}:${colHash}`);
-          if (nk) return nk;
-          const ntC = noTableMap.get(`${filename}:*:${rowIndex}:${colHash}`);
-          if (ntC && ntC.length === 1) return ntC[0];
-          const ncC = noColMap.get(`${filename}:${tableHash}:${rowIndex}:*`);
-          if (ncC && ncC.length === 1) return ncC[0];
-          const bC = baseMap.get(`${filename}:*:${rowIndex}:*`);
-          if (bC && bC.length === 1) return bC[0];
-          return undefined;
-        };
-
-        let restoredCount = 0;
-        for (const [k, v] of Object.entries(savedBuildTranslations)) {
-          if (!v?.trim()) continue;
-          if (validKeys.has(k) && !finalTranslations[k]) {
-            finalTranslations[k] = v;
-            restoredCount++;
-          } else {
-            const newKey = findNewKey(k);
-            if (newKey && !finalTranslations[newKey]) {
-              finalTranslations[newKey] = v;
-              restoredCount++;
-            }
-          }
-        }
-        addLog(`🔄 تم استعادة ${restoredCount} ترجمة من آخر بناء`);
-      }
 
       // Check if extracted texts contain presentation forms (re-extraction from built file)
       // (hasArabicPresentationForms already imported above; reuse isReUploadedBuild)

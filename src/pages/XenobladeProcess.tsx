@@ -456,6 +456,29 @@ const XenobladeProcess = () => {
       // pulled back automatically here.
       const { idbClearExcept } = await import("@/lib/idb-storage");
 
+      // === DIAGNOSTIC: translation source provenance at upload time ===
+      try {
+        const editorStateSnap = await idbGet<{ translations?: Record<string, string> }>("editorState");
+        const editorStateCount = editorStateSnap?.translations
+          ? Object.values(editorStateSnap.translations).filter(v => v?.trim()).length
+          : 0;
+        const buildSnap = await idbGet<Record<string, string>>("buildTranslations");
+        const buildSnapCount = buildSnap
+          ? Object.values(buildSnap).filter(v => v?.trim()).length
+          : 0;
+        const finalCount = Object.values(finalTranslations).filter(v => v?.trim()).length;
+        const autoCount = Object.values(autoTranslations).filter(v => v?.trim()).length;
+        addLog(`🔍 مصدر الترجمات:`);
+        addLog(`   • من الذاكرة الحيّة (editorState IDB): ${editorStateCount}`);
+        addLog(`   • من الكشف التلقائي للملف المرفوع: ${autoCount}`);
+        addLog(`   • snapshot قديم (buildTranslations): ${buildSnapCount} ${buildSnapCount > 0 ? '⚠️ غير مُستخدَم (تم تعطيله)' : ''}`);
+        addLog(`   ✅ المجموع المستخدم: ${finalCount}`);
+        console.log('[UPLOAD-SOURCE]', { editorStateCount, autoCount, buildSnapCount, finalCount });
+      } catch (e) {
+        console.warn('[UPLOAD-SOURCE] diagnostic failed:', e);
+      }
+
+
       // Check if extracted texts contain presentation forms (re-extraction from built file)
       // (hasArabicPresentationForms already imported above; reuse isReUploadedBuild)
       

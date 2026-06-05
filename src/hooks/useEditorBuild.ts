@@ -296,9 +296,30 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
         const totalKeys = Object.keys(currentState.translations).length;
         const nonEmptyCount = Object.keys(nonEmptyTranslations).length;
-        setBuildProgress(`📊 وجدت ${nonEmptyCount} ترجمة من أصل ${totalKeys} مفتاح...`);
+
+        // === DIAGNOSTIC: translation source provenance ===
+        // Confirms to the user (and dev console) that the build is reading from
+        // live React state (which is mirrored to IDB under `editorState`), NOT
+        // from the legacy `buildTranslations` snapshot. We also peek at the
+        // snapshot size for comparison so a stale/diverging snapshot is visible.
+        try {
+          const snapshot = await idbGet<Record<string, string>>("buildTranslations");
+          const snapshotSize = snapshot ? Object.keys(snapshot).filter(k => snapshot[k]?.trim()).length : 0;
+          console.log(
+            `[BUILD-SOURCE] ✅ Using LIVE in-memory translations (React state → editorState IDB).\n` +
+            `              In-memory non-empty: ${nonEmptyCount} / ${totalKeys} total keys.\n` +
+            `              buildTranslations snapshot in IDB: ${snapshotSize} (NOT used — kept only as manual safety net).`
+          );
+          setBuildProgress(
+            `📊 المصدر: الذاكرة الحيّة (${nonEmptyCount} ترجمة)` +
+            (snapshotSize > 0 ? ` · snapshot قديم محفوظ: ${snapshotSize} (لم يُستخدم)` : '')
+          );
+        } catch {
+          setBuildProgress(`📊 وجدت ${nonEmptyCount} ترجمة من أصل ${totalKeys} مفتاح...`);
+        }
         await yieldToUI();
         console.log('[BUILD] ✅ State has', totalKeys, 'total keys,', nonEmptyCount, 'non-empty');
+
         
         if (nonEmptyCount === 0) {
           setBuildProgress(`❌ لا توجد ترجمات! تأكد من ترجمة النصوص أولاً. (${totalKeys} مفتاح بدون ترجمات)`);

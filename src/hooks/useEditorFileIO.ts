@@ -11,7 +11,7 @@ function readFileAsText(file: File): Promise<string> {
   });
 }
 import type { ImportConflict } from "@/components/editor/ImportConflictDialog";
-import { removeArabicPresentationForms, stripBidiMarkers } from "@/lib/arabic-processing";
+import { removeArabicPresentationForms, stripBidiMarkers, hasArabicPresentationForms, reverseBidi } from "@/lib/arabic-processing";
 import type { EditorState } from "@/components/editor/types";
 import { ExtractedEntry, hasArabicChars, unReverseBidi, isTechnicalText } from "@/components/editor/types";
 import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
@@ -108,9 +108,23 @@ interface UseEditorFileIOProps {
   filterLabel: string;
 }
 
+/**
+ * Convert any Arabic text to canonical "logical" form:
+ *  - Strip BiDi isolate/marker codepoints
+ *  - Convert Presentation Forms back to standard Arabic
+ *  - If the input was already "built" (contained Presentation Forms),
+ *    un-reverse its visual order so the result is in logical reading order.
+ *
+ * This is the single source of truth for both EXPORT and IMPORT, making the
+ * roundtrip idempotent: re-importing a previously exported (or even previously
+ * built) file always lands on canonical, editable Arabic. The build step
+ * re-applies presentation/reversal as needed.
+ */
 function normalizeArabicPresentationForms(text: string): string {
   if (!text) return text;
-  return stripBidiMarkers(removeArabicPresentationForms(text));
+  const wasBuilt = hasArabicPresentationForms(text);
+  const standard = stripBidiMarkers(removeArabicPresentationForms(text));
+  return wasBuilt ? reverseBidi(standard) : standard;
 }
 
 function escapeCSV(text: string): string {

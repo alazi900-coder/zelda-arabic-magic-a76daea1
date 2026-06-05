@@ -115,7 +115,9 @@ export function useEditorState() {
   const quality = useEditorQuality({ state });
   const { isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, needsImprovement, qualityStats, needsImproveCount, categoryProgress, translatedCount } = quality;
 
-  const build = useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, gameType: "xenoblade", forceSaveRef });
+  // Ref wired below to fileIO.handleExportTranslations so the build can auto-export after success
+  const onBuildSuccessRef = useRef<(() => void) | null>(null);
+  const build = useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, gameType: "xenoblade", forceSaveRef, onBuildSuccessRef });
   const { building, buildProgress, dismissBuildProgress, applyingArabic, buildStats, setBuildStats, buildPreview, showBuildConfirm, setShowBuildConfirm, bdatFileStats, safetyRepairs, showSafetyReport, setShowSafetyReport, integrityResult, showIntegrityDialog, setShowIntegrityDialog, checkingIntegrity, handleApplyArabicProcessing, handleUndoArabicProcessing, handlePreBuild, handleBuild, handleCheckIntegrity } = build;
 
 
@@ -1231,6 +1233,8 @@ export function useEditorState() {
 
   const fileIO = useEditorFileIO({ state, setState, setLastSaved, filteredEntries, filterLabel });
   const { normalizeArabicPresentationForms } = fileIO;
+  // Wire post-build auto-export
+  useEffect(() => { onBuildSuccessRef.current = fileIO.handleExportTranslations; }, [fileIO.handleExportTranslations]);
 
   // === Review (extracted to useEditorReview) ===
   const review = useEditorReview({

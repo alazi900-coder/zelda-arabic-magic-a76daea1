@@ -127,6 +127,40 @@ function normalizeArabicPresentationForms(text: string): string {
   return wasBuilt ? reverseBidi(standard) : standard;
 }
 
+/**
+ * فحص سلامة الاستيراد: يقارن مجموعة وترتيب الوسوم بين الأصل والترجمة المستوردة.
+ * يمنع الكتابة عند: اختلاف عدّ/مجموعة الوسوم، أو انقلاب ترتيب كامل.
+ */
+export function validateImportedTagIntegrity(
+  original: string,
+  imported: string,
+): { ok: true } | { ok: false; reason: string } {
+  if (!original || !imported) return { ok: true };
+  const extractTags = (s: string): string[] => {
+    const out: string[] = [];
+    const bracket = s.match(/\[[^\]\n]+\]/g) || [];
+    out.push(...bracket);
+    const pua = s.match(/[\uE000-\uE0FF]+/g) || [];
+    out.push(...pua);
+    return out;
+  };
+  const oTags = extractTags(original);
+  const iTags = extractTags(imported);
+  if (oTags.length === 0 && iTags.length === 0) return { ok: true };
+
+  const sortKey = (a: string[]) => [...a].sort().join('§');
+  if (sortKey(oTags) !== sortKey(iTags)) {
+    return { ok: false, reason: `tag-mismatch original=[${oTags.join('|')}] imported=[${iTags.join('|')}]` };
+  }
+  if (oTags.length >= 2) {
+    const reversed = [...oTags].reverse();
+    if (iTags.every((t, i) => t === reversed[i]) && iTags.join('§') !== oTags.join('§')) {
+      return { ok: false, reason: `tag-order-reversed ${oTags.join('|')} → ${iTags.join('|')}` };
+    }
+  }
+  return { ok: true };
+}
+
 function escapeCSV(text: string): string {
   if (text.includes('"') || text.includes(',') || text.includes('\n') || text.includes('\r')) {
     return '"' + text.replace(/"/g, '""') + '"';

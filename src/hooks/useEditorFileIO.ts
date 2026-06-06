@@ -853,7 +853,31 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   /** Apply imported translations (after conflict resolution or directly) */
   const applyImport = useCallback((cleanedImported: Record<string, string>, msg: string, repaired: { wasTruncated?: boolean; skippedCount?: number }) => {
-    setState(prev => { if (!prev) return null; return { ...prev, translations: { ...prev.translations, ...cleanedImported } }; });
+    // ── فحص سلامة الوسوم قبل أي كتابة ──
+    const blocked: { key: string; reason: string }[] = [];
+    const safeImported: Record<string, string> = {};
+    const entryMap = new Map((state?.entries || []).map(e => [`${e.msbtFile}:${e.index}`, e]));
+    for (const [key, value] of Object.entries(cleanedImported)) {
+      const entry = entryMap.get(key);
+      if (!entry) { safeImported[key] = value; continue; }
+      const v = validateImportedTagIntegrity(entry.original, value);
+      if (v.ok) {
+        safeImported[key] = value;
+      } else {
+        blocked.push({ key, reason: v.reason });
+      }
+    }
+    if (blocked.length > 0) {
+      console.warn(`🛡️ [import-guard] منع ${blocked.length} ترجمة بسبب اختلاف/انقلاب الوسوم:`);
+      for (const b of blocked.slice(0, 10)) console.warn(`  • ${b.key}: ${b.reason}`);
+      toast({
+        title: `🛡️ منع ${blocked.length} ترجمة`,
+        description: `اختلاف أو انقلاب في الوسوم. راجع الكونسول للتفاصيل.`,
+        variant: "destructive",
+      });
+    }
+
+    setState(prev => { if (!prev) return null; return { ...prev, translations: { ...prev.translations, ...safeImported } }; });
 
     toast({ title: "✅ تم الاستيراد", description: msg });
     setLastSaved(msg);
@@ -865,7 +889,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       const newTranslations = { ...prevState.translations };
       const newProtected = new Set(prevState.protectedEntries || []);
       let count = 0;
-      const importedKeys = new Set(Object.keys(cleanedImported));
+      const importedKeys = new Set(Object.keys(safeImported));
       for (const entry of prevState.entries) {
         const key = `${entry.msbtFile}:${entry.index}`;
         if (importedKeys.has(key)) continue;
@@ -887,7 +911,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       return { ...prevState, translations: newTranslations, protectedEntries: newProtected };
     });
     if (capturedRepairCount > 0) setLastSaved(prev => prev + ` + تصحيح ${capturedRepairCount} نص معكوس`);
-  }, [setState, setLastSaved]);
+  }, [state, setState, setLastSaved]);
 
   /** Handle conflict dialog confirmation */
   const handleConflictConfirm = useCallback((acceptedKeys: Set<string>) => {

@@ -1273,6 +1273,7 @@ async function translateWithOpenAICompat(
   // a wrong-language string.
   const FORBIDDEN_SCRIPT = /[\u0370-\u03ff\u0400-\u04ff\u0590-\u05ff\u0e00-\u0e7f\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
   let droppedForeign = 0;
+  let droppedTagCluster = 0;
   for (let i = 0; i < needsAI.length; i++) {
     const item = needsAI[i];
     let translated = translationsObj[`K${i}`]?.trim();
@@ -1283,6 +1284,12 @@ async function translateWithOpenAICompat(
     }
     translated = normalizeTagPlaceholders(translated);
     translated = normalizeLockedTermPlaceholders(translated);
+    // كشف تكدّس الوسوم في النهاية قبل فك القفل — نتفقّد على نسخة TAG_N الخام
+    if (isTagPositionCorrupted(item.pe.cleaned, translated)) {
+      droppedTagCluster++;
+      console.warn(`[${providerName}] tag-cluster detected key=${item.entry.key} — keeping original`);
+      continue;
+    }
     translated = unlockTerms(translated, item.termLocks.locks);
     translated = stripUnexpectedPlaceholders(translated, new Set(item.pe.tags.keys()));
     if (glossaryMap) translated = applyGlossaryPost(translated, glossaryMap);
@@ -1290,6 +1297,9 @@ async function translateWithOpenAICompat(
   }
   if (droppedForeign > 0) {
     console.warn(`[${providerName}] dropped ${droppedForeign}/${needsAI.length} translations containing non-Arabic scripts (CJK/Cyrillic/etc.)`);
+  }
+  if (droppedTagCluster > 0) {
+    console.warn(`[${providerName}] dropped ${droppedTagCluster}/${needsAI.length} translations with tag-position clustering`);
   }
 
   return { translations: result, glossaryStats: stats };

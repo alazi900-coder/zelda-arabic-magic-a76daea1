@@ -125,7 +125,9 @@ OUTPUT CONTRACT (highest priority — violations are hard failures):
    - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
    - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
    Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
-4. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it — never "ترجمة TAG_0 TAG_1" or "TAG_0 TAG_1 ترجمة". Tag position carries game meaning (icons, status, line markers).
+5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
+
 
 /**
  * Build the user-facing prompt with full universe knowledge, ordered rules,

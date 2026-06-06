@@ -788,6 +788,26 @@ function extractTechTags(text: string): string[] {
 }
 
 /** Remove invented tags and enforce original tag multiset */
+/**
+ * كشف تجميع الوسوم في نهاية الترجمة.
+ * يُرجع true إذا كانت TAG_N في الإدخال موزّعة لكنها تكدّست في نهاية الإخراج —
+ * مؤشّر شائع على أن المحرّك (خصوصاً DeepSeek) نقل الوسوم بدل تركها في مكانها.
+ */
+function isTagPositionCorrupted(cleanedInput: string, translated: string): boolean {
+  const inPositions = [...cleanedInput.matchAll(/TAG_\d+/g)].map(m => m.index!);
+  const outPositions = [...translated.matchAll(/TAG_\d+/g)].map(m => m.index!);
+  if (inPositions.length < 2 || outPositions.length !== inPositions.length) return false;
+  const inLen = Math.max(1, cleanedInput.length);
+  const outLen = Math.max(1, translated.length);
+  // امتداد الوسوم في الإدخال كنسبة من طول النص
+  const inSpan = (inPositions[inPositions.length - 1] - inPositions[0]) / inLen;
+  const outSpan = (outPositions[outPositions.length - 1] - outPositions[0]) / outLen;
+  // أول وسم في الإخراج بعد منتصف النص = كلها متأخّرة
+  const allLate = outPositions[0] / outLen > 0.55;
+  // كانت موزّعة (>25% امتداد) لكنها أصبحت متجمّعة (<15%) ومتأخّرة
+  return inSpan > 0.25 && outSpan < 0.15 && allLate;
+}
+
 function enforceTagIntegrity(original: string, translation: string): string {
   const origTags = extractTechTags(original);
   if (origTags.length === 0) return translation;

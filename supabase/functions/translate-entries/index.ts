@@ -125,7 +125,9 @@ OUTPUT CONTRACT (highest priority — violations are hard failures):
    - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
    - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
    Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
-4. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it — never "ترجمة TAG_0 TAG_1" or "TAG_0 TAG_1 ترجمة". Tag position carries game meaning (icons, status, line markers).
+5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
+
 
 /**
  * Build the user-facing prompt with full universe knowledge, ordered rules,
@@ -786,6 +788,26 @@ function extractTechTags(text: string): string[] {
 }
 
 /** Remove invented tags and enforce original tag multiset */
+/**
+ * كشف تجميع الوسوم في نهاية الترجمة.
+ * يُرجع true إذا كانت TAG_N في الإدخال موزّعة لكنها تكدّست في نهاية الإخراج —
+ * مؤشّر شائع على أن المحرّك (خصوصاً DeepSeek) نقل الوسوم بدل تركها في مكانها.
+ */
+function isTagPositionCorrupted(cleanedInput: string, translated: string): boolean {
+  const inPositions = [...cleanedInput.matchAll(/TAG_\d+/g)].map(m => m.index!);
+  const outPositions = [...translated.matchAll(/TAG_\d+/g)].map(m => m.index!);
+  if (inPositions.length < 2 || outPositions.length !== inPositions.length) return false;
+  const inLen = Math.max(1, cleanedInput.length);
+  const outLen = Math.max(1, translated.length);
+  // امتداد الوسوم في الإدخال كنسبة من طول النص
+  const inSpan = (inPositions[inPositions.length - 1] - inPositions[0]) / inLen;
+  const outSpan = (outPositions[outPositions.length - 1] - outPositions[0]) / outLen;
+  // أول وسم في الإخراج بعد منتصف النص = كلها متأخّرة
+  const allLate = outPositions[0] / outLen > 0.55;
+  // كانت موزّعة (>25% امتداد) لكنها أصبحت متجمّعة (<15%) ومتأخّرة
+  return inSpan > 0.25 && outSpan < 0.15 && allLate;
+}
+
 function enforceTagIntegrity(original: string, translation: string): string {
   const origTags = extractTechTags(original);
   if (origTags.length === 0) return translation;
@@ -1251,6 +1273,7 @@ async function translateWithOpenAICompat(
   // a wrong-language string.
   const FORBIDDEN_SCRIPT = /[\u0370-\u03ff\u0400-\u04ff\u0590-\u05ff\u0e00-\u0e7f\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
   let droppedForeign = 0;
+  let droppedTagCluster = 0;
   for (let i = 0; i < needsAI.length; i++) {
     const item = needsAI[i];
     let translated = translationsObj[`K${i}`]?.trim();
@@ -1261,6 +1284,12 @@ async function translateWithOpenAICompat(
     }
     translated = normalizeTagPlaceholders(translated);
     translated = normalizeLockedTermPlaceholders(translated);
+    // كشف تكدّس الوسوم في النهاية قبل فك القفل — نتفقّد على نسخة TAG_N الخام
+    if (isTagPositionCorrupted(item.pe.cleaned, translated)) {
+      droppedTagCluster++;
+      console.warn(`[${providerName}] tag-cluster detected key=${item.entry.key} — keeping original`);
+      continue;
+    }
     translated = unlockTerms(translated, item.termLocks.locks);
     translated = stripUnexpectedPlaceholders(translated, new Set(item.pe.tags.keys()));
     if (glossaryMap) translated = applyGlossaryPost(translated, glossaryMap);
@@ -1268,6 +1297,9 @@ async function translateWithOpenAICompat(
   }
   if (droppedForeign > 0) {
     console.warn(`[${providerName}] dropped ${droppedForeign}/${needsAI.length} translations containing non-Arabic scripts (CJK/Cyrillic/etc.)`);
+  }
+  if (droppedTagCluster > 0) {
+    console.warn(`[${providerName}] dropped ${droppedTagCluster}/${needsAI.length} translations with tag-position clustering`);
   }
 
   return { translations: result, glossaryStats: stats };

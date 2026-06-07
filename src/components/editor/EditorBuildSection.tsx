@@ -91,8 +91,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       )}
 
       {/* Arabic Processing + Build Buttons */}
-      <div className="flex gap-3 mb-6">
-        <Button size="lg" variant="secondary" onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic} className="flex-1 font-display font-bold">
+      <div className="flex flex-wrap gap-2 sm:gap-3 mb-6">
+        <Button size="lg" variant="secondary" onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic} className="flex-1 min-w-[200px] font-display font-bold">
           {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
         </Button>
         <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic} className="font-body gap-1 shrink-0" title="التراجع عن المعالجة العربية">

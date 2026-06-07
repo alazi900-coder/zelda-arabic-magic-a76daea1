@@ -164,11 +164,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             } finally {
               setDrBuilding(false);
             }
-          }} disabled={drBuilding} className="flex-1 font-display font-bold">
+          }} disabled={drBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {drBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Package className="w-4 h-4 mr-2" />} بناء ملفات Danganronpa
           </Button>
         ) : (
-          <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 font-display font-bold">
+          <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 min-w-[200px] font-display font-bold">
             {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
           </Button>
         )}

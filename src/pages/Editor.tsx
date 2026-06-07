@@ -615,6 +615,7 @@ const Editor = () => {
           {editor.showFindReplace && editor.state && (
             <FindReplacePanel
               entries={editor.state.entries}
+              filteredEntries={editor.filteredEntries}
               translations={editor.state.translations}
               onReplace={editor.handleBulkReplace}
               onClose={() => editor.setShowFindReplace(false)}

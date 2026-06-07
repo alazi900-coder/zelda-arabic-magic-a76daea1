@@ -673,35 +673,6 @@ const EntryCard: React.FC<EntryCardProps> = ({
               })}
             </div>
           )}
-          {/* Translation Memory Suggestions */}
-          {tmSuggestions && tmSuggestions.length > 0 && (
-            <div className="mt-2 p-2 rounded border border-secondary/20 bg-secondary/5 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-secondary font-semibold">
-                <History className="w-3.5 h-3.5" />
-                <span>اقتراحات من ذاكرة الترجمة</span>
-              </div>
-              {tmSuggestions.map((s, i) => (
-                <div key={i} className="flex items-start gap-2 text-[11px] group">
-                  <span className="shrink-0 px-1 py-0.5 rounded bg-secondary/15 text-secondary border border-secondary/20 text-[10px]">
-                    {s.similarity}%
-                  </span>
-                  <div className="flex-1 min-w-0 space-y-0.5">
-                    <p className="text-muted-foreground truncate" title={s.original}>{s.original}</p>
-                    <p className="text-foreground font-body truncate" dir="rtl" title={s.translation}>{s.translation}</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-secondary hover:bg-secondary/10 shrink-0"
-                    onClick={() => updateTranslation(key, s.translation)}
-                    title="استخدام هذه الترجمة"
-                  >
-                    استخدام
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
           {/* Byte usage progress bar — uses UTF-8 to match max_utf8_bytes from parser/inspector */}
           {entry.maxBytes > 0 && translation && (() => {
             const byteUsed = new TextEncoder().encode(translation).length;

@@ -140,7 +140,30 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
   setShowFontTest,
   setFontTestWord,
   setShowArabicProcessConfirm,
-}) => (
+}) => {
+  const handleExportProcessedArabic = React.useCallback(async () => {
+    const st = editor.state;
+    if (!st) return;
+    const { processArabicText, hasArabicChars, hasArabicPresentationForms } = await import("@/lib/arabic-processing");
+    const processed: Record<string, string> = {};
+    for (const [key, value] of Object.entries(st.translations || {})) {
+      if (!value?.trim()) continue;
+      processed[key] = hasArabicPresentationForms(value) || !hasArabicChars(value)
+        ? value
+        : processArabicText(value, { arabicNumerals: editor.arabicNumerals, mirrorPunct: editor.mirrorPunctuation });
+    }
+    const blob = new Blob([JSON.stringify(processed, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `translations-processed-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    const { toast } = await import("@/hooks/use-toast");
+    toast({ title: "✅ تم التصدير بعد المعالجة", description: `${Object.keys(processed).length} ترجمة (الملف فقط معالج، الذاكرة لم تتغير)` });
+  }, [editor.state, editor.arabicNumerals, editor.mirrorPunctuation]);
+
+  return (
   <>
           {/* Cloud & Actions */}
           {isMobile ? (

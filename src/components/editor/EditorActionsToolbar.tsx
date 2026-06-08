@@ -14,6 +14,8 @@ type EditorSubset = Pick<
   | "advancedAnalysisTab"
   | "advancedAnalyzing"
   | "applyingArabic"
+  | "arabicNumerals"
+  | "mirrorPunctuation"
   | "autoMergeToBundled"
   | "autoSmartReview"
   | "bundledConflicts"

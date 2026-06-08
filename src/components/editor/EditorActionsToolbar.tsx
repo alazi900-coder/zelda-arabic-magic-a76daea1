@@ -677,6 +677,8 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
             </div>
           )}
   </>
-);
+  );
+};
+
 
 export default EditorActionsToolbar;

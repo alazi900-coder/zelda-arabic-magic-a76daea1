@@ -189,6 +189,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                     </div>
                   )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportProcessedArabic}><Sparkles className="w-4 h-4 text-secondary" /> تصدير JSON (معالج عربي ✨)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX</DropdownMenuItem>

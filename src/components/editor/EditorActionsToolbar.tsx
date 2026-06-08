@@ -14,6 +14,8 @@ type EditorSubset = Pick<
   | "advancedAnalysisTab"
   | "advancedAnalyzing"
   | "applyingArabic"
+  | "arabicNumerals"
+  | "mirrorPunctuation"
   | "autoMergeToBundled"
   | "autoSmartReview"
   | "bundledConflicts"
@@ -138,7 +140,30 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
   setShowFontTest,
   setFontTestWord,
   setShowArabicProcessConfirm,
-}) => (
+}) => {
+  const handleExportProcessedArabic = React.useCallback(async () => {
+    const st = editor.state;
+    if (!st) return;
+    const { processArabicText, hasArabicChars, hasArabicPresentationForms } = await import("@/lib/arabic-processing");
+    const processed: Record<string, string> = {};
+    for (const [key, value] of Object.entries(st.translations || {})) {
+      if (!value?.trim()) continue;
+      processed[key] = hasArabicPresentationForms(value) || !hasArabicChars(value)
+        ? value
+        : processArabicText(value, { arabicNumerals: editor.arabicNumerals, mirrorPunct: editor.mirrorPunctuation });
+    }
+    const blob = new Blob([JSON.stringify(processed, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `translations-processed-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    const { toast } = await import("@/hooks/use-toast");
+    toast({ title: "✅ تم التصدير بعد المعالجة", description: `${Object.keys(processed).length} ترجمة (الملف فقط معالج، الذاكرة لم تتغير)` });
+  }, [editor.state, editor.arabicNumerals, editor.mirrorPunctuation]);
+
+  return (
   <>
           {/* Cloud & Actions */}
           {isMobile ? (
@@ -164,6 +189,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                     </div>
                   )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportProcessedArabic}><Sparkles className="w-4 h-4 text-secondary" /> تصدير JSON (معالج عربي ✨)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX</DropdownMenuItem>
@@ -424,6 +450,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                     </div>
                   )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportProcessedArabic}><Sparkles className="w-4 h-4 text-secondary" /> تصدير JSON (معالج عربي ✨ - الملف فقط)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF (memoQ/Trados)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX (ذاكرة ترجمة)</DropdownMenuItem>
@@ -652,6 +679,8 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
             </div>
           )}
   </>
-);
+  );
+};
+
 
 export default EditorActionsToolbar;

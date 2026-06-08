@@ -42,7 +42,7 @@ function highlightSegments(text: string, regex: RegExp | null): React.ReactNode 
     while ((m = re.exec(text)) !== null) {
       if (m.index > lastIndex) parts.push(text.slice(lastIndex, m.index));
       parts.push(
-        <mark key={i++} className="bg-yellow-400/40 text-foreground rounded px-0.5 font-bold">
+        <mark key={i++} className="bg-green-500/50 text-foreground rounded px-1 font-bold ring-1 ring-green-600/60">
           {m[0]}
         </mark>,
       );

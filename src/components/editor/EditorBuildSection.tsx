@@ -2,7 +2,8 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, Package, FileDown } from "lucide-react";
+import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, Package, FileDown, Download } from "lucide-react";
+import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -98,6 +99,37 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic} className="font-body gap-1 shrink-0" title="التراجع عن المعالجة العربية">
           <RotateCcw className="w-4 h-4" />
           <span className="hidden sm:inline">تراجع</span>
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            const st = editor.state;
+            if (!st) return;
+            const processed: Record<string, string> = {};
+            for (const [key, value] of Object.entries(st.translations || {})) {
+              if (!value?.trim()) continue;
+              processed[key] = hasArabicPresentationForms(value) || !hasArabicChars(value)
+                ? value
+                : processArabicText(value, { arabicNumerals: editor.arabicNumerals, mirrorPunct: editor.mirrorPunctuation });
+            }
+            const blob = new Blob([JSON.stringify(processed, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `translations-processed-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            import("@/hooks/use-toast").then(({ toast }) =>
+              toast({ title: "✅ تم التصدير", description: `${Object.keys(processed).length} ترجمة بعد المعالجة العربية` })
+            );
+          }}
+          disabled={editor.applyingArabic}
+          className="font-body gap-1 shrink-0"
+          title="تصدير الترجمات بعد تطبيق المعالجة العربية"
+        >
+          <Download className="w-4 h-4" />
+          <span className="hidden sm:inline">تصدير معالج</span>
         </Button>
         <Button size="sm" variant="outline" onClick={() => setShowDiagnostic(true)} disabled={editor.building} className="font-body gap-1 shrink-0" title="تشخيص ما قبل البناء">
           <BarChart3 className="w-4 h-4" />

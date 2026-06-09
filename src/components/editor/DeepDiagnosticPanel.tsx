@@ -118,6 +118,11 @@ interface DeepDiagnosticPanelProps {
   onApplyFixesBatch?: (updates: Record<string, string>) => number;
   onFilterByKeys?: (keys: Set<string>) => void;
   onFixSelectedLocally?: (keys: string[]) => void;
+  /** When provided, the scan only inspects entries whose key is in this set.
+   *  Used to honor the editor's active filters (search/file/category/status/table/column/pinned). */
+  scopeKeys?: Set<string> | null;
+  /** Human-readable label shown in the scope chip (e.g. "1,240 نص مصفّى"). */
+  scopeLabel?: string | null;
 }
 
 // Categories fixable via build tag guard

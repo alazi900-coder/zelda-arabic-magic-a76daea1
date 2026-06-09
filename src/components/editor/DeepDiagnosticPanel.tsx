@@ -133,7 +133,7 @@ const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
 // Categories fixable by wrapping tech tags with U+200F (RLM)
 const RLM_ISOLATION_CATEGORIES = new Set(["missing_rlm_isolation"]);
 // Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
-const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"]);
+const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines", "under_split"]);
 // All locally fixable categories
 const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
 

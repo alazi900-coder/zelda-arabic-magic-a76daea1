@@ -270,6 +270,14 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       message: `${transEffectiveLines} سطر مقابل ${origEffectiveLines} في الأصل — زيادة ${transNewlines - origNewlines}` });
   }
 
+  // 15b. Under-split — original has multiple lines but translation has fewer.
+  // Auto-fixable via splitEvenlyByLines. Separate from newline_mismatch so the
+  // user can fix only "missing splits" in one bulk action.
+  if (origEffectiveLines >= 2 && transEffectiveLines < origEffectiveLines) {
+    issues.push({ ...base, severity: "warning", category: "under_split",
+      message: `${origEffectiveLines} سطر في الأصل لكن الترجمة ${transEffectiveLines} فقط — يحتاج تقسيم` });
+  }
+
   // 16. Empty translation
   if (translation.length > 0 && trimmed.length === 0) {
     issues.push({ ...base, severity: "warning", category: "empty_translation",

@@ -87,6 +87,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "newline_mismatch", label: "فرق كبير بعدد الأسطر", icon: "📄", severity: "warning", description: "عدد الأسطر في الترجمة يختلف كثيراً عن الأصل — قد يكسر صندوق الحوار" },
   { id: "byte_budget", label: "تجاوز ميزانية البايتات", icon: "💾", severity: "warning", description: "الترجمة أكبر من ضعف حجم الأصل بالبايتات — قد تستنفد ذاكرة المحرك" },
   { id: "excessive_lines", label: "أسطر زائدة عن الأصل", icon: "📐", severity: "warning", description: "الترجمة تحتوي أسطر أكثر بكثير من الأصل (+3) — قد تكسر صندوق الحوار" },
+  { id: "under_split", label: "أسطر ناقصة (تحتاج تقسيم)", icon: "✂️", severity: "warning", description: "الأصل متعدد الأسطر لكن الترجمة جُمعت في سطر/أسطر أقل — يتم تقسيمها تلقائياً مع احترام [XENO:n ]" },
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
@@ -117,6 +118,11 @@ interface DeepDiagnosticPanelProps {
   onApplyFixesBatch?: (updates: Record<string, string>) => number;
   onFilterByKeys?: (keys: Set<string>) => void;
   onFixSelectedLocally?: (keys: string[]) => void;
+  /** When provided, the scan only inspects entries whose key is in this set.
+   *  Used to honor the editor's active filters (search/file/category/status/table/column/pinned). */
+  scopeKeys?: Set<string> | null;
+  /** Human-readable label shown in the scope chip (e.g. "1,240 نص مصفّى"). */
+  scopeLabel?: string | null;
 }
 
 // Categories fixable via build tag guard
@@ -132,11 +138,11 @@ const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
 // Categories fixable by wrapping tech tags with U+200F (RLM)
 const RLM_ISOLATION_CATEGORIES = new Set(["missing_rlm_isolation"]);
 // Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
-const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"]);
+const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines", "under_split"]);
 // All locally fixable categories
 const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
 
-export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
+export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -145,6 +151,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const latestStateRef = useRef(state);
+  const scopeKeysRef = useRef(scopeKeys);
+  useEffect(() => { scopeKeysRef.current = scopeKeys; }, [scopeKeys]);
 
   // Build entry lookup map for O(1) access
   const entryMap = useMemo(() => {
@@ -170,9 +178,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     // scan inside the diagnostic Web Worker — this keeps the main thread
     // responsive on mobile while we run regex over thousands of entries.
     const currentState = latestStateRef.current;
+    const scope = scopeKeysRef.current;
     const batch: DetectItem[] = [];
     for (const entry of currentState.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
+      if (scope && !scope.has(key)) continue;
       const translation = currentState.translations[key];
       if (!translation) continue;
       batch.push({
@@ -890,14 +900,21 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant="destructive" onClick={() => runScan(false)} disabled={scanning} className="font-display font-bold">
                 {scanning ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Search className="w-4 h-4 ml-1" />}
-                {scanning ? "جاري الفحص..." : "فحص شامل"}
+                {scanning ? "جاري الفحص..." : scopeKeys && scopeKeys.size > 0 ? "فحص النطاق المصفّى" : "فحص شامل"}
               </Button>
+              {scopeKeys && scopeKeys.size > 0 && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <Filter className="w-3 h-3" />
+                  {scopeLabel || `${scopeKeys.size.toLocaleString()} نص ضمن الفلتر الحالي`}
+                </Badge>
+              )}
               {scanned && !scanning && (
                 <span className="text-xs text-muted-foreground">
-                  فُحص {state.entries.length} نص — وُجدت {issues.length} مشكلة
+                  فُحص {(scopeKeys?.size ?? state.entries.length).toLocaleString()} نص — وُجدت {issues.length} مشكلة
                 </span>
               )}
             </div>
+
 
             {/* Progress bar during scan */}
             {scanning && scanProgress.total > 0 && (

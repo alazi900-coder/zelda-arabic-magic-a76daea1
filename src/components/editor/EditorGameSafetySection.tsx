@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import DeepDiagnosticPanel from "@/components/editor/DeepDiagnosticPanel";
 import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
@@ -15,6 +15,10 @@ type EditorSubset = Pick<
   | "setFilterStatus"
   | "setSearch"
   | "setCurrentPage"
+  | "setPinnedKeys"
+  | "setIsSearchPinned"
+  | "filteredEntries"
+  | "isFilterActive"
   | "activeGlossary"
   | "legacyCommaSplitEnabled"
 >;
@@ -26,6 +30,30 @@ interface EditorGameSafetySectionProps {
 const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ editor }) => {
   if (!editor.state) return null;
   const state = editor.state;
+
+  // Honor the editor's active filters/search when scanning so users can scope
+  // the deep diagnostic to the current view (cards/search/file/category/table/column/pinned).
+  const scopeKeys = useMemo(() => {
+    if (!editor.isFilterActive) return null;
+    return new Set(editor.filteredEntries.map((e) => `${e.msbtFile}:${e.index}`));
+  }, [editor.isFilterActive, editor.filteredEntries]);
+
+  const scopeLabel = scopeKeys
+    ? `${scopeKeys.size.toLocaleString()} نص ضمن الفلتر/البحث الحالي`
+    : null;
+
+  // Show only the diagnostic-selected entries in the editor by pinning them
+  // (bypasses every other filter — exact set).
+  const focusDeepDiagnosticKeys = (keys: Set<string>) => {
+    editor.setPinnedKeys(keys);
+    editor.setIsSearchPinned(true);
+    editor.setCurrentPage(0);
+    setTimeout(() => {
+      const list = document.querySelector('[data-entries-list]');
+      if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
+
   return (
   <Card className="border-2 border-destructive/40 bg-destructive/5 shadow-lg">
     <CardContent className="p-4 space-y-3">
@@ -48,15 +76,17 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
 
       <DeepDiagnosticPanel
         state={state}
+        scopeKeys={scopeKeys}
+        scopeLabel={scopeLabel}
         onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
         onApplyFixesBatch={(updates) => editor.updateTranslationsBatch(updates)}
         onFixSelectedLocally={(keys) => editor.handleLocalFixSelectedTags(keys)}
-        onFilterByKeys={() => {
-          editor.setFilterStatus('problems');
-        }}
+        onFilterByKeys={(keys) => focusDeepDiagnosticKeys(keys)}
         onNavigateToEntry={(key) => {
           editor.setFilterStatus('all');
           editor.setSearch('');
+          editor.setPinnedKeys(null);
+          editor.setIsSearchPinned(false);
           setTimeout(() => {
             const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
             if (idx >= 0) {
@@ -78,12 +108,12 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
       <QualityChecksPanel
         state={state}
         onApplyFix={(key, fix) => editor.updateTranslation(key, fix)}
-        onFilterByKeys={() => {
-          editor.setFilterStatus('problems');
-        }}
+        onFilterByKeys={(keys) => focusDeepDiagnosticKeys(keys)}
         onNavigateToEntry={(key) => {
           editor.setFilterStatus('all');
           editor.setSearch('');
+          editor.setPinnedKeys(null);
+          editor.setIsSearchPinned(false);
           setTimeout(() => {
             const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
             if (idx >= 0) {

@@ -178,9 +178,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     // scan inside the diagnostic Web Worker — this keeps the main thread
     // responsive on mobile while we run regex over thousands of entries.
     const currentState = latestStateRef.current;
+    const scope = scopeKeysRef.current;
     const batch: DetectItem[] = [];
     for (const entry of currentState.entries) {
       const key = `${entry.msbtFile}:${entry.index}`;
+      if (scope && !scope.has(key)) continue;
       const translation = currentState.translations[key];
       if (!translation) continue;
       batch.push({

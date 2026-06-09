@@ -900,14 +900,21 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant="destructive" onClick={() => runScan(false)} disabled={scanning} className="font-display font-bold">
                 {scanning ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Search className="w-4 h-4 ml-1" />}
-                {scanning ? "جاري الفحص..." : "فحص شامل"}
+                {scanning ? "جاري الفحص..." : scopeKeys && scopeKeys.size > 0 ? "فحص النطاق المصفّى" : "فحص شامل"}
               </Button>
+              {scopeKeys && scopeKeys.size > 0 && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <Filter className="w-3 h-3" />
+                  {scopeLabel || `${scopeKeys.size.toLocaleString()} نص ضمن الفلتر الحالي`}
+                </Badge>
+              )}
               {scanned && !scanning && (
                 <span className="text-xs text-muted-foreground">
-                  فُحص {state.entries.length} نص — وُجدت {issues.length} مشكلة
+                  فُحص {(scopeKeys?.size ?? state.entries.length).toLocaleString()} نص — وُجدت {issues.length} مشكلة
                 </span>
               )}
             </div>
+
 
             {/* Progress bar during scan */}
             {scanning && scanProgress.total > 0 && (

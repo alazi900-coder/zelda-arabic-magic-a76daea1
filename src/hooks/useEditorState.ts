@@ -1600,7 +1600,7 @@ export function useEditorState() {
     // Advanced Analysis
     advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing,
     glossaryComplianceResults, checkingGlossaryCompliance,
-    isSearchPinned, pinnedKeys,
+    isSearchPinned, pinnedKeys, setPinnedKeys, setIsSearchPinned,
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     deepDiagnosticCounts,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,

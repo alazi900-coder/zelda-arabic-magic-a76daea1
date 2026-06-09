@@ -142,7 +142,7 @@ const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"
 // All locally fixable categories
 const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
 
-export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally }: DeepDiagnosticPanelProps) {
+export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -151,6 +151,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
   const latestStateRef = useRef(state);
+  const scopeKeysRef = useRef(scopeKeys);
+  useEffect(() => { scopeKeysRef.current = scopeKeys; }, [scopeKeys]);
 
   // Build entry lookup map for O(1) access
   const entryMap = useMemo(() => {

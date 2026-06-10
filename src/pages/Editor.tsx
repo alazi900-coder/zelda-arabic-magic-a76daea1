@@ -623,6 +623,11 @@ const Editor = () => {
             />
           )}
 
+          {/* Draggable FAB to open Find & Replace */}
+          {editor.state && !editor.showFindReplace && (
+            <FloatingFindReplaceButton onClick={() => editor.setShowFindReplace(true)} />
+          )}
+
           <EditorEntryListSection
             editor={editor}
             isMobile={isMobile}

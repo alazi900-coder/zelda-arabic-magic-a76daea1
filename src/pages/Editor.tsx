@@ -16,6 +16,7 @@ import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
 import BatchQualityModal from "@/components/editor/BatchQualityModal";
 import QuickReviewMode from "@/components/editor/QuickReviewMode";
 import FindReplacePanel from "@/components/editor/FindReplacePanel";
+import FloatingFindReplaceButton from "@/components/editor/FloatingFindReplaceButton";
 
 
 
@@ -620,6 +621,11 @@ const Editor = () => {
               onReplace={editor.handleBulkReplace}
               onClose={() => editor.setShowFindReplace(false)}
             />
+          )}
+
+          {/* Draggable FAB to open Find & Replace */}
+          {editor.state && !editor.showFindReplace && (
+            <FloatingFindReplaceButton onClick={() => editor.setShowFindReplace(true)} />
           )}
 
           <EditorEntryListSection

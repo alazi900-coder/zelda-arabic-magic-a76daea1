@@ -16,6 +16,7 @@ import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
 import BatchQualityModal from "@/components/editor/BatchQualityModal";
 import QuickReviewMode from "@/components/editor/QuickReviewMode";
 import FindReplacePanel from "@/components/editor/FindReplacePanel";
+import FloatingFindReplaceButton from "@/components/editor/FloatingFindReplaceButton";
 
 
 

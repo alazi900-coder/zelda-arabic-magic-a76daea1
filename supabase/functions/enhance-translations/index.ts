@@ -609,64 +609,28 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 - إذا كان النصّ صحيحاً لا تُعِده
 - إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
 - إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggested عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
-- حقلا reason وdetail إلزاميّان وبالعربية: السبب أولاً ثم الحل المقترح باختصار.`;
+- حقلا reason وdetail إلزاميّان وبالعربية: السبب أولاً ثم الحل المقترح باختصار.
 
-    const response = await callAI([
-      { role: 'system', content: 'أنت مترجم ومراجع محترف لـ Xenoblade Chronicles 1 (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. ركّز على الأخطاء الحقيقيّة لا الأسلوبيّة.' },
-      { role: 'user', content: enhancePrompt },
-    ]);
+🎯 **تعليمات شاملة الفحص (إلزاميّة):**
+1. **اقرأ كل ترجمة كاملةً** وطبّق *جميع* القواعد المُفعَّلة عليها قبل الانتقال للتالية.
+2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-5 اقتراحات.
+3. **Cascade:** إذا اكتشفت مشكلة في ترجمة، فحص بقيّة القواعد عليها أيضاً وادمج كل التحسينات في **suggested نهائيّ واحد** — ممنوع مدخلَين لنفس index.`;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
-      console.error(`[enhance] enhance ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const passResult = await runPasses<{ index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string }>(
+      passes || 1,
+      () => callOnceParse(
+        [
+          { role: 'system', content: 'أنت مترجم ومراجع محترف لـ Xenoblade Chronicles 1 (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.' },
+          { role: 'user', content: enhancePrompt },
+        ],
+        'suggestions',
+        'enhance',
+      ),
+    );
+    if (passResult.errorResponse) return passResult.errorResponse;
 
-    const aiResult = await response.json();
-    if (aiResult?.error) {
-      const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
-      console.error('[enhance] enhance AI inner error:', errMsg);
-      return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
-      console.error('[enhance] enhance: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
-      return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const content = aiResult.choices[0]?.message?.content || '';
-    type EnhanceSuggestionRaw = { index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string };
-    let parsed: { suggestions: EnhanceSuggestionRaw[] } = { suggestions: [] };
-    try {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-      const raw = (jsonMatch[1] || content).trim();
-      const objMatch = raw.match(/\{[\s\S]*\}/);
-      if (objMatch) {
-        parsed = JSON.parse(objMatch[0]);
-      } else {
-        console.error('No JSON object found in enhance response:', content.slice(0, 500));
-      }
-    } catch (e) {
-      console.error('JSON parse error (enhance):', e, 'Content:', content.slice(0, 500));
-    }
-
-    console.log('[enhance] enhance mode parsed', { suggestionsCount: parsed.suggestions?.length || 0, model: resolvedModel });
-    const mappedSuggestions = (parsed.suggestions || []).map((s) => {
+    console.log('[enhance] enhance mode parsed', { suggestionsCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
+    const mappedSuggestions = passResult.merged.map((s) => {
       const entry = entries[s.index ?? -1];
       return {
         key: entry?.key || '',

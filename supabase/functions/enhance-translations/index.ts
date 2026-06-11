@@ -180,13 +180,49 @@ function smartFilterGlossary(glossary: string | undefined, entries: EnhanceEntry
   return out;
 }
 
+// ─── Multi-pass coverage helper ─────────────────────────────────────────────
+// يُنفّذ نفس استدعاء الـ AI عدّة مرّات بالتوازي ويدمج النتائج بحسب index.
+// السبب: نماذج AI غير حتميّة — كل مرور يكتشف مشاكل قد فاتت المرور الآخر.
+// النتيجة: تغطية شبه شاملة في فحص واحد بدلاً من إجبار المستخدم على إعادة الفحص.
+function richnessScore(item: Record<string, unknown>): number {
+  const s = (v: unknown) => (typeof v === 'string' ? v.length : 0);
+  return s(item.detail) + s(item.fix_explanation) + s(item.fixExplanation)
+    + s(item.suggested) + s(item.suggestion) + s(item.issue) + s(item.reason);
+}
+
+async function runPasses<T extends { index?: number }>(
+  passCount: number,
+  callOnce: () => Promise<{ items: T[]; errorResponse?: Response }>,
+): Promise<{ merged: T[]; errorResponse?: Response }> {
+  const n = Math.min(Math.max(1, passCount || 1), 3);
+  const results = await Promise.all(Array.from({ length: n }, () => callOnce()));
+  // إذا فشلت كل المرورات بنفس الخطأ، أرجعه؛ خلاف ذلك ادمج الناجح فقط.
+  const allFailed = results.every(r => r.errorResponse);
+  if (allFailed) return { merged: [], errorResponse: results[0].errorResponse };
+  const byIndex = new Map<number, T>();
+  for (const r of results) {
+    if (r.errorResponse) continue;
+    for (const item of r.items) {
+      const idx = item.index;
+      if (typeof idx !== 'number') continue;
+      const existing = byIndex.get(idx);
+      if (!existing) { byIndex.set(idx, item); continue; }
+      if (richnessScore(item as unknown as Record<string, unknown>)
+        > richnessScore(existing as unknown as Record<string, unknown>)) {
+        byIndex.set(idx, item);
+      }
+    }
+  }
+  return { merged: [...byIndex.values()] };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -196,6 +232,7 @@ Deno.serve(async (req) => {
       enabledRules?: string[];
       customRules?: RuleDef[];
       builtinOverrides?: Record<string, { prompt?: string }>;
+      passes?: number;
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.

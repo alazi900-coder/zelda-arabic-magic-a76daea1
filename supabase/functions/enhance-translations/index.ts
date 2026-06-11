@@ -420,69 +420,30 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
 قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
 قاعدة لغة غير قابلة للتجاوز: إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggestion عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
-كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.`;
+كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.
 
-      const response = await callAI([
-        { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة.' },
-        { role: 'user', content: grammarPrompt },
-      ]);
+🎯 **تعليمات شاملة الفحص (إلزاميّة):**
+1. **افحص كل ترجمة بدقة قبل اعتبارها سليمة** — اقرأ النصّ كاملاً، لا تتخطَّ سطراً.
+2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-4 مشاكل وتترك الباقي.
+3. **مرّ على كل قاعدة من القواعد المُفعَّلة بالترتيب على كل ترجمة** — لا تركّز على نوع واحد فقط.
+4. **Cascade — قاعدة الدمج:** إذا اكتشفت أن ترجمة بها مشكلة من قاعدة، طبّق *أيضاً* بقيّة القواعد المُفعَّلة عليها وادمج جميع الإصلاحات في حقل suggestion **النهائيّ الواحد**. لا تُرجع مدخلَين منفصلَين لنفس الترجمة.
+5. سجّل الترجمات السليمة فعلاً فقط بحذفها من الإخراج (لا تُعِدها بدون تغيير).`;
 
-      if (!response.ok) {
-        const errText = await response.text();
-        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
-        console.error(`[enhance] grammar ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      const passResult = await runPasses<{ index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string }>(
+        passes || 1,
+        () => callOnceParse(
+          [
+            { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة. كن شاملاً — أعِد كل المشاكل الحقيقيّة في مرّة واحدة.' },
+            { role: 'user', content: grammarPrompt },
+          ],
+          'issues',
+          'grammar',
+        ),
+      );
+      if (passResult.errorResponse) return passResult.errorResponse;
 
-      const aiResult = await response.json();
-      // بعض مزوّدي الـ AI (منهم DeepSeek عندما يكون اسم النموذج غير معروف أو توجد مشكلة في
-      // الحساب) يُرجعون 200 OK مع error داخلي بدلاً من 4xx. يجب الكشف عن هذه الحالة حتّى
-      // لا تتحول إلى "تقدّم سريع بلا نتائج".
-      if (aiResult?.error) {
-        const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
-        console.error('[enhance] grammar AI inner error:', errMsg);
-        // 200 مع error field — لتفعيل toast في الواجهة (التي تعرض data.error)
-        // بدلاً من ابتلاع الخطأ عبر catch block.
-        return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
-        console.error('[enhance] grammar: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
-        return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const content = aiResult.choices[0]?.message?.content || '';
-      type GrammarIssueRaw = { index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string };
-      let parsed: { issues: GrammarIssueRaw[] } = { issues: [] };
-      try {
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        const raw = (jsonMatch[1] || content).trim();
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          parsed = JSON.parse(objMatch[0]);
-        } else {
-          console.error('No JSON object found in AI response:', content.slice(0, 500));
-        }
-      } catch (e) {
-        console.error('JSON parse error:', e, 'Content:', content.slice(0, 500));
-      }
-
-      console.log('[enhance] grammar mode parsed', { issuesCount: parsed.issues?.length || 0, model: resolvedModel });
-      const mappedIssues = (parsed.issues || []).map((i) => {
+      console.log('[enhance] grammar mode parsed', { issuesCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
+      const mappedIssues = passResult.merged.map((i) => {
         const entry = entries[i.index ?? -1];
         return {
           key: entry?.key || '',

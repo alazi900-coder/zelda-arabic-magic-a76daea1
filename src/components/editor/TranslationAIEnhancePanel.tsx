@@ -75,8 +75,12 @@ type GrammarCategory = "wrong" | "reorder" | "weak";
 
 type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
-const BATCH_SIZE = 50;
+// انتباه أعلى للـ AI لكل ترجمة — دفعات أصغر تقلّل تخطّي المشاكل.
+const BATCH_SIZE = 25;
 const PARALLEL_REQUESTS = 3;
+// عدد المرورات الداخلية على كل دفعة (تُنفَّذ بالتوازي داخل الـ edge function)
+// لزيادة شموليّة الكشف بدون الحاجة لإعادة الفحص يدويّاً.
+const SCAN_PASSES = 2;
 const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
 interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }

@@ -324,6 +324,57 @@ Deno.serve(async (req) => {
       });
     };
 
+    // ─── Single AI call + JSON parse ──────────────────────────────────────
+    // يعزل استدعاء الـAI وتحليل JSON في دالّة واحدة تُعيد إمّا قائمة العناصر
+    // أو Response جاهز للخطأ. يستخدمها runPasses لتنفيذ مرورات متعدّدة.
+    async function callOnceParse<T>(
+      messages: Array<{ role: string; content: string }>,
+      arrayField: string,
+      modeLabel: string,
+    ): Promise<{ items: T[]; errorResponse?: Response }> {
+      let response: Response;
+      try {
+        response = await callAI(messages);
+      } catch (e) {
+        console.error(`[enhance] ${modeLabel} network error:`, e);
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ شبكة: ${String(e).slice(0, 200)}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      if (!response.ok) {
+        const errText = await response.text();
+        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
+        console.error(`[enhance] ${modeLabel} ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
+        let errMsg: string;
+        if (response.status === 429) errMsg = `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})`;
+        else if (response.status === 402) errMsg = `الرصيد غير كافٍ على ${provider}`;
+        else errMsg = `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}`;
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: errMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      const aiResult = await response.json();
+      if (aiResult?.error) {
+        const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
+        console.error(`[enhance] ${modeLabel} AI inner error:`, errMsg);
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
+        console.error(`[enhance] ${modeLabel}: no choices in AI response`, JSON.stringify(aiResult).slice(0, 500));
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel})` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      const content = aiResult.choices[0]?.message?.content || '';
+      let parsed: Record<string, unknown> = {};
+      try {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        const raw = (jsonMatch[1] || content).trim();
+        const objMatch = raw.match(/\{[\s\S]*\}/);
+        if (objMatch) parsed = JSON.parse(objMatch[0]);
+        else console.error(`[enhance] ${modeLabel}: no JSON object`, content.slice(0, 500));
+      } catch (e) {
+        console.error(`[enhance] ${modeLabel} JSON parse error:`, e, content.slice(0, 500));
+      }
+      const arr = parsed[arrayField];
+      return { items: Array.isArray(arr) ? arr as T[] : [] };
+    }
+
+
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

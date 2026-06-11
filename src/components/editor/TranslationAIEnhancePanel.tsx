@@ -487,6 +487,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               enabledRules: Array.from(currentEnabledRules),
               customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
               builtinOverrides: currentBuiltinOverrides,
+              passes: SCAN_PASSES,
             },
             signal: abortSignal,
           });

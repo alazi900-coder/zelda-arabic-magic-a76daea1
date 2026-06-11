@@ -75,8 +75,12 @@ type GrammarCategory = "wrong" | "reorder" | "weak";
 
 type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
-const BATCH_SIZE = 50;
+// انتباه أعلى للـ AI لكل ترجمة — دفعات أصغر تقلّل تخطّي المشاكل.
+const BATCH_SIZE = 25;
 const PARALLEL_REQUESTS = 3;
+// عدد المرورات الداخلية على كل دفعة (تُنفَّذ بالتوازي داخل الـ edge function)
+// لزيادة شموليّة الكشف بدون الحاجة لإعادة الفحص يدويّاً.
+const SCAN_PASSES = 2;
 const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
 interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }
@@ -483,6 +487,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               enabledRules: Array.from(currentEnabledRules),
               customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
               builtinOverrides: currentBuiltinOverrides,
+              passes: SCAN_PASSES,
             },
             signal: abortSignal,
           });
@@ -508,7 +513,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;
@@ -549,11 +554,21 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         processed += count;
         if (!data) continue;
         if (mode === "enhance" && data.suggestions) {
-          allSuggestions = [...allSuggestions, ...data.suggestions];
-          setSuggestions(prev => [...prev, ...data.suggestions]);
+          const fresh = (data.suggestions as EnhanceSuggestion[]).filter(
+            (s) => !allSuggestions.some(x => x.key === s.key)
+          );
+          if (fresh.length > 0) {
+            allSuggestions = [...allSuggestions, ...fresh];
+            setSuggestions(prev => [...prev, ...fresh]);
+          }
         } else if (mode === "grammar" && data.issues) {
-          allIssues = [...allIssues, ...data.issues];
-          setGrammarIssues(prev => [...prev, ...data.issues]);
+          const fresh = (data.issues as GrammarIssue[]).filter(
+            (g) => !allIssues.some(x => x.key === g.key)
+          );
+          if (fresh.length > 0) {
+            allIssues = [...allIssues, ...fresh];
+            setGrammarIssues(prev => [...prev, ...fresh]);
+          }
         } else if (mode === "combined" && Array.isArray(data.results)) {
           // تقسيم نتائج الفحص الشامل بين التبويبين حسب الفئة:
           // style → لوحة تحسين الصياغة • wrong/reorder/weak → لوحة فحص القواعد.
@@ -561,6 +576,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           const newIssues: GrammarIssue[] = [];
           for (const r of data.results) {
             if (r.category === "style") {
+              if (allSuggestions.some(x => x.key === r.key) || newSuggestions.some(x => x.key === r.key)) continue;
               newSuggestions.push({
                 key: r.key,
                 original: r.original,
@@ -573,6 +589,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 type: r.type || "style",
               });
             } else {
+              if (allIssues.some(x => x.key === r.key) || newIssues.some(x => x.key === r.key)) continue;
               newIssues.push({
                 key: r.key,
                 original: r.original,

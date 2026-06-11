@@ -180,13 +180,49 @@ function smartFilterGlossary(glossary: string | undefined, entries: EnhanceEntry
   return out;
 }
 
+// ─── Multi-pass coverage helper ─────────────────────────────────────────────
+// يُنفّذ نفس استدعاء الـ AI عدّة مرّات بالتوازي ويدمج النتائج بحسب index.
+// السبب: نماذج AI غير حتميّة — كل مرور يكتشف مشاكل قد فاتت المرور الآخر.
+// النتيجة: تغطية شبه شاملة في فحص واحد بدلاً من إجبار المستخدم على إعادة الفحص.
+function richnessScore(item: Record<string, unknown>): number {
+  const s = (v: unknown) => (typeof v === 'string' ? v.length : 0);
+  return s(item.detail) + s(item.fix_explanation) + s(item.fixExplanation)
+    + s(item.suggested) + s(item.suggestion) + s(item.issue) + s(item.reason);
+}
+
+async function runPasses<T extends { index?: number }>(
+  passCount: number,
+  callOnce: () => Promise<{ items: T[]; errorResponse?: Response }>,
+): Promise<{ merged: T[]; errorResponse?: Response }> {
+  const n = Math.min(Math.max(1, passCount || 1), 3);
+  const results = await Promise.all(Array.from({ length: n }, () => callOnce()));
+  // إذا فشلت كل المرورات بنفس الخطأ، أرجعه؛ خلاف ذلك ادمج الناجح فقط.
+  const allFailed = results.every(r => r.errorResponse);
+  if (allFailed) return { merged: [], errorResponse: results[0].errorResponse };
+  const byIndex = new Map<number, T>();
+  for (const r of results) {
+    if (r.errorResponse) continue;
+    for (const item of r.items) {
+      const idx = item.index;
+      if (typeof idx !== 'number') continue;
+      const existing = byIndex.get(idx);
+      if (!existing) { byIndex.set(idx, item); continue; }
+      if (richnessScore(item as unknown as Record<string, unknown>)
+        > richnessScore(existing as unknown as Record<string, unknown>)) {
+        byIndex.set(idx, item);
+      }
+    }
+  }
+  return { merged: [...byIndex.values()] };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -196,6 +232,7 @@ Deno.serve(async (req) => {
       enabledRules?: string[];
       customRules?: RuleDef[];
       builtinOverrides?: Record<string, { prompt?: string }>;
+      passes?: number;
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
@@ -287,6 +324,57 @@ Deno.serve(async (req) => {
       });
     };
 
+    // ─── Single AI call + JSON parse ──────────────────────────────────────
+    // يعزل استدعاء الـAI وتحليل JSON في دالّة واحدة تُعيد إمّا قائمة العناصر
+    // أو Response جاهز للخطأ. يستخدمها runPasses لتنفيذ مرورات متعدّدة.
+    async function callOnceParse<T>(
+      messages: Array<{ role: string; content: string }>,
+      arrayField: string,
+      modeLabel: string,
+    ): Promise<{ items: T[]; errorResponse?: Response }> {
+      let response: Response;
+      try {
+        response = await callAI(messages);
+      } catch (e) {
+        console.error(`[enhance] ${modeLabel} network error:`, e);
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ شبكة: ${String(e).slice(0, 200)}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      if (!response.ok) {
+        const errText = await response.text();
+        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
+        console.error(`[enhance] ${modeLabel} ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
+        let errMsg: string;
+        if (response.status === 429) errMsg = `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})`;
+        else if (response.status === 402) errMsg = `الرصيد غير كافٍ على ${provider}`;
+        else errMsg = `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}`;
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: errMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      const aiResult = await response.json();
+      if (aiResult?.error) {
+        const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
+        console.error(`[enhance] ${modeLabel} AI inner error:`, errMsg);
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
+        console.error(`[enhance] ${modeLabel}: no choices in AI response`, JSON.stringify(aiResult).slice(0, 500));
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel})` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+      }
+      const content = aiResult.choices[0]?.message?.content || '';
+      let parsed: Record<string, unknown> = {};
+      try {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+        const raw = (jsonMatch[1] || content).trim();
+        const objMatch = raw.match(/\{[\s\S]*\}/);
+        if (objMatch) parsed = JSON.parse(objMatch[0]);
+        else console.error(`[enhance] ${modeLabel}: no JSON object`, content.slice(0, 500));
+      } catch (e) {
+        console.error(`[enhance] ${modeLabel} JSON parse error:`, e, content.slice(0, 500));
+      }
+      const arr = parsed[arrayField];
+      return { items: Array.isArray(arr) ? arr as T[] : [] };
+    }
+
+
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -332,69 +420,30 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
 قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
 قاعدة لغة غير قابلة للتجاوز: إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggestion عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
-كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.`;
+كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.
 
-      const response = await callAI([
-        { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة.' },
-        { role: 'user', content: grammarPrompt },
-      ]);
+🎯 **تعليمات شاملة الفحص (إلزاميّة):**
+1. **افحص كل ترجمة بدقة قبل اعتبارها سليمة** — اقرأ النصّ كاملاً، لا تتخطَّ سطراً.
+2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-4 مشاكل وتترك الباقي.
+3. **مرّ على كل قاعدة من القواعد المُفعَّلة بالترتيب على كل ترجمة** — لا تركّز على نوع واحد فقط.
+4. **Cascade — قاعدة الدمج:** إذا اكتشفت أن ترجمة بها مشكلة من قاعدة، طبّق *أيضاً* بقيّة القواعد المُفعَّلة عليها وادمج جميع الإصلاحات في حقل suggestion **النهائيّ الواحد**. لا تُرجع مدخلَين منفصلَين لنفس الترجمة.
+5. سجّل الترجمات السليمة فعلاً فقط بحذفها من الإخراج (لا تُعِدها بدون تغيير).`;
 
-      if (!response.ok) {
-        const errText = await response.text();
-        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
-        console.error(`[enhance] grammar ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      const passResult = await runPasses<{ index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string }>(
+        passes || 1,
+        () => callOnceParse(
+          [
+            { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة. كن شاملاً — أعِد كل المشاكل الحقيقيّة في مرّة واحدة.' },
+            { role: 'user', content: grammarPrompt },
+          ],
+          'issues',
+          'grammar',
+        ),
+      );
+      if (passResult.errorResponse) return passResult.errorResponse;
 
-      const aiResult = await response.json();
-      // بعض مزوّدي الـ AI (منهم DeepSeek عندما يكون اسم النموذج غير معروف أو توجد مشكلة في
-      // الحساب) يُرجعون 200 OK مع error داخلي بدلاً من 4xx. يجب الكشف عن هذه الحالة حتّى
-      // لا تتحول إلى "تقدّم سريع بلا نتائج".
-      if (aiResult?.error) {
-        const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
-        console.error('[enhance] grammar AI inner error:', errMsg);
-        // 200 مع error field — لتفعيل toast في الواجهة (التي تعرض data.error)
-        // بدلاً من ابتلاع الخطأ عبر catch block.
-        return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
-        console.error('[enhance] grammar: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
-        return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const content = aiResult.choices[0]?.message?.content || '';
-      type GrammarIssueRaw = { index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string };
-      let parsed: { issues: GrammarIssueRaw[] } = { issues: [] };
-      try {
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        const raw = (jsonMatch[1] || content).trim();
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          parsed = JSON.parse(objMatch[0]);
-        } else {
-          console.error('No JSON object found in AI response:', content.slice(0, 500));
-        }
-      } catch (e) {
-        console.error('JSON parse error:', e, 'Content:', content.slice(0, 500));
-      }
-
-      console.log('[enhance] grammar mode parsed', { issuesCount: parsed.issues?.length || 0, model: resolvedModel });
-      const mappedIssues = (parsed.issues || []).map((i) => {
+      console.log('[enhance] grammar mode parsed', { issuesCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
+      const mappedIssues = passResult.merged.map((i) => {
         const entry = entries[i.index ?? -1];
         return {
           key: entry?.key || '',
@@ -466,76 +515,32 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 
 قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
 قاعدة لغة غير قابلة للتجاوز: إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggested عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
-كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.`;
+كل الشرح في issue/detail/fix_explanation يجب أن يكون بالعربية وبترتيب واضح: المشكلة ثم السبب ثم الحل.
 
-      const response = await callAI([
-        { role: 'system', content: 'أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل — لا تنتج اقتراحَين متعارضَين.' },
-        { role: 'user', content: combinedPrompt },
-      ]);
+🎯 **تعليمات شاملة الفحص (إلزاميّة — اقرأها قبل البدء):**
+1. **اقرأ كل ترجمة كاملةً بدقّة** ولا تتخطَّ سطراً. تعامل مع كل ترجمة كمهمّة منفصلة.
+2. **هدفك إيجاد جميع المشاكل في فحص واحد** — لا تكتفِ بأبرز 3-5 مشاكل وتترك بقيّة الدفعة. إن وجدت 10-20 مشكلة حقيقيّة فأعِدها كلّها.
+3. **مرّ على كل قاعدة من القواعد المُفعَّلة (1، 2، 3 …) على كل ترجمة بالترتيب** قبل أن تنتقل إلى الترجمة التالية.
+4. **Cascade — قاعدة الدمج الذكيّ:** إذا انطبقت قاعدة على ترجمة، طبّق *جميع* القواعد الأخرى عليها أيضاً، وادمج كلّ الإصلاحات في **نصّ suggested نهائيّ واحد متّسق**. ممنوع إصدار مدخلَين لنفس index.
+5. اختر **فئة category واحدة** هي الأخطر (wrong > reorder > weak > style).
+6. الترجمات السليمة فعلاً: لا تُدرجها في النتائج.`;
 
-      if (!response.ok) {
-        const errText = await response.text();
-        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
-        console.error(`[enhance] combined ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      const passResult = await runPasses<{ index?: number; category?: string; type?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggested?: string; alternatives?: unknown; severity?: string }>(
+        passes || 1,
+        () => callOnceParse(
+          [
+            { role: 'system', content: 'أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل. كن شاملاً — أعِد كل المشاكل دفعةً واحدةً.' },
+            { role: 'user', content: combinedPrompt },
+          ],
+          'results',
+          'combined',
+        ),
+      );
+      if (passResult.errorResponse) return passResult.errorResponse;
 
-      const aiResult = await response.json();
-      if (aiResult?.error) {
-        const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
-        console.error('[enhance] combined AI inner error:', errMsg);
-        return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
-        console.error('[enhance] combined: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
-        return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const content = aiResult.choices[0]?.message?.content || '';
-      type CombinedResultRaw = {
-        index?: number;
-        category?: string;
-        type?: string;
-        issue?: string;
-        detail?: string;
-        fix_explanation?: string;
-        fixExplanation?: string;
-        suggested?: string;
-        alternatives?: unknown;
-        severity?: string;
-      };
-      let parsed: { results: CombinedResultRaw[] } = { results: [] };
-      try {
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-        const raw = (jsonMatch[1] || content).trim();
-        const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          parsed = JSON.parse(objMatch[0]);
-        } else {
-          console.error('No JSON object found in combined response:', content.slice(0, 500));
-        }
-      } catch (e) {
-        console.error('JSON parse error (combined):', e, 'Content:', content.slice(0, 500));
-      }
-
-      console.log('[enhance] combined mode parsed', { resultsCount: parsed.results?.length || 0, model: resolvedModel });
+      console.log('[enhance] combined mode parsed', { resultsCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
       // تنسيق موحَّد: كلّ نتيجة تحوي الحقول اللازمة لكلا اللوحَتين (issues + suggestions).
-      const mappedResults = (parsed.results || []).map((r) => {
+      const mappedResults = passResult.merged.map((r) => {
         const entry = entries[r.index ?? -1];
         // إزالة علامات التشكيل تلقائيّاً من الاقتراح والبدائل.
         const cleanedSuggested = stripGameUnsupportedMarks(r.suggested || '');
@@ -604,64 +609,28 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 - إذا كان النصّ صحيحاً لا تُعِده
 - إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.
 - إذا كانت الترجمة الحالية عربيّة، يجب أن يبقى suggested عربيّاً. ممنوع نسخ النص الإنجليزي الأصلي أو استبدال الترجمة العربية بالإنجليزية.
-- حقلا reason وdetail إلزاميّان وبالعربية: السبب أولاً ثم الحل المقترح باختصار.`;
+- حقلا reason وdetail إلزاميّان وبالعربية: السبب أولاً ثم الحل المقترح باختصار.
 
-    const response = await callAI([
-      { role: 'system', content: 'أنت مترجم ومراجع محترف لـ Xenoblade Chronicles 1 (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. ركّز على الأخطاء الحقيقيّة لا الأسلوبيّة.' },
-      { role: 'user', content: enhancePrompt },
-    ]);
+🎯 **تعليمات شاملة الفحص (إلزاميّة):**
+1. **اقرأ كل ترجمة كاملةً** وطبّق *جميع* القواعد المُفعَّلة عليها قبل الانتقال للتالية.
+2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-5 اقتراحات.
+3. **Cascade:** إذا اكتشفت مشكلة في ترجمة، فحص بقيّة القواعد عليها أيضاً وادمج كل التحسينات في **suggested نهائيّ واحد** — ممنوع مدخلَين لنفس index.`;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
-      console.error(`[enhance] enhance ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: `الرصيد غير كافٍ على ${provider}` }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ error: `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const passResult = await runPasses<{ index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string }>(
+      passes || 1,
+      () => callOnceParse(
+        [
+          { role: 'system', content: 'أنت مترجم ومراجع محترف لـ Xenoblade Chronicles 1 (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.' },
+          { role: 'user', content: enhancePrompt },
+        ],
+        'suggestions',
+        'enhance',
+      ),
+    );
+    if (passResult.errorResponse) return passResult.errorResponse;
 
-    const aiResult = await response.json();
-    if (aiResult?.error) {
-      const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
-      console.error('[enhance] enhance AI inner error:', errMsg);
-      return new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
-      console.error('[enhance] enhance: no choices in AI response', JSON.stringify(aiResult).slice(0, 500));
-      return new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel}) أو حالة الخدمة` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const content = aiResult.choices[0]?.message?.content || '';
-    type EnhanceSuggestionRaw = { index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string };
-    let parsed: { suggestions: EnhanceSuggestionRaw[] } = { suggestions: [] };
-    try {
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-      const raw = (jsonMatch[1] || content).trim();
-      const objMatch = raw.match(/\{[\s\S]*\}/);
-      if (objMatch) {
-        parsed = JSON.parse(objMatch[0]);
-      } else {
-        console.error('No JSON object found in enhance response:', content.slice(0, 500));
-      }
-    } catch (e) {
-      console.error('JSON parse error (enhance):', e, 'Content:', content.slice(0, 500));
-    }
-
-    console.log('[enhance] enhance mode parsed', { suggestionsCount: parsed.suggestions?.length || 0, model: resolvedModel });
-    const mappedSuggestions = (parsed.suggestions || []).map((s) => {
+    console.log('[enhance] enhance mode parsed', { suggestionsCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
+    const mappedSuggestions = passResult.merged.map((s) => {
       const entry = entries[s.index ?? -1];
       return {
         key: entry?.key || '',

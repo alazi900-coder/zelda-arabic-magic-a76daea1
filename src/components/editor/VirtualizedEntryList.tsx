@@ -65,6 +65,7 @@ const VirtualizedEntryList = React.memo(({
   onRejectFuzzy,
   onCompare,
   onSplitNewline,
+  onShowRelated,
   findSimilar,
   height = 600,
   legacyCommaSplitEnabled,

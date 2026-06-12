@@ -3,9 +3,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Wrench, CheckCircle2, X, Sparkles, Search, Type } from "lucide-react";
+import { ChevronDown, ChevronUp, Wrench, CheckCircle2, X, Sparkles, Search, Type, FileDown } from "lucide-react";
 import { EditorState } from "@/components/editor/types";
 import { checkArabicTypos, applyTypoFix, type TypoResult } from "@/lib/arabic-typo-checker";
+import { extractTags, downloadReport } from "@/lib/tag-extractor";
 
 
 

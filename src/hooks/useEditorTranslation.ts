@@ -103,7 +103,7 @@ export function useEditorTranslation({
     if (englishLineCount <= 1) {
       const { cleanText, tags } = protectTags(translated);
       const flat = cleanText.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-      const result = restoreTags(flat, tags);
+      const result = restoreTags(flat, tags).replace(/\r\n?/g, '\n').replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
       if (/TAG_\d+/.test(result)) {
         console.warn(`[autoSyncLines] Unreplaced tag placeholder in key: ${key}`);
       }

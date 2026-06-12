@@ -32,14 +32,12 @@ describe("evaluateMsbtSafety — MSBT hard gate", () => {
     expect(r.reason).toMatch(/أقواس/);
   });
 
-  it("DELETES translation with surplus closing Ruby tags that repair can't fix", () => {
-    // Repair restores missing closes, but here we have MORE closes than opens.
-    const r = evaluateMsbtSafety(
-      "[System:Ruby ruby=x]Hi[/System:Ruby]",
-      "مرحبا[/System:Ruby][/System:Ruby]"
-    );
+  it("DELETES translation with extra surplus brackets (catastrophic)", () => {
+    // Extra `]` with no matching `[` — unrepairable structural break.
+    const r = evaluateMsbtSafety("[Tag:x]Hi", "[Tag:x]مرحبا]]]");
     expect(r.action).toBe("delete");
   });
+
 
 
   // === Regression tests for the silent-revert bug ===

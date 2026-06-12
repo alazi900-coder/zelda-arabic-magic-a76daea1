@@ -171,9 +171,11 @@ interface Props {
   counts?: Record<string, number>;
   totalEntries?: number;
   className?: string;
+  /** عند تمريرها يظهر زر حذف أحمر بجانب كل قسم/فرع/جدول. */
+  onDeleteScope?: (tables: string[], label: string) => void;
 }
 
-const TableFilterTree: React.FC<Props> = ({ value, onChange, tables, counts, totalEntries, className }) => {
+const TableFilterTree: React.FC<Props> = ({ value, onChange, tables, counts, totalEntries, className, onDeleteScope }) => {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [openCats, setOpenCats] = React.useState<Set<string>>(new Set());

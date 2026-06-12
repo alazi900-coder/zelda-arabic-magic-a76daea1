@@ -458,16 +458,18 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === NEW PROTECTION 4: Revert entries with NULL characters ===
+      // === PROTECTION 4: NULL char warning (NEVER revert) ===
+      // Translations containing NULL characters are kept; only a warning is
+      // surfaced so the user can decide whether to fix them.
       let nullCharFixCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         if (trans.includes('\x00')) {
-          const orig = entryOriginals.get(key);
-          if (orig) { nonEmptyTranslations[key] = orig; nullCharFixCount++; }
+          nullCharFixCount++;
+          console.warn(`[BUILD-SAFETY] NULL char in ${key} — translation kept (no revert)`);
         }
       }
       if (nullCharFixCount > 0) {
-        setBuildProgress(`⛔ استعادة ${nullCharFixCount} نص يحتوي على رموز NULL...`);
+        setBuildProgress(`⚠️ ${nullCharFixCount} نص يحتوي على رموز NULL — تم الاحتفاظ بالترجمة...`);
         await yieldToUI();
       }
 

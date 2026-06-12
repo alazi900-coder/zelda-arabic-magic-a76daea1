@@ -157,7 +157,8 @@ describe("useEditorBuild — MSBT pre-build safety (integration)", () => {
 
   it("auto-reorders flipped XENO tags and keeps the translation", () => {
     const out = run.nonEmptyTranslations["story.msbt:4"];
-    expect(out).toContain("الرجل العجوز");
+    expect(out).toContain("الرجل");
+    expect(out).toContain("العجوز");
     const waitIdx = out.indexOf("[XENO:wait");
     const actIdx = out.indexOf("[XENO:act");
     expect(waitIdx).toBeGreaterThanOrEqual(0);

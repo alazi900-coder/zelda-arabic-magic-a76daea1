@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => ({
         // Force the new service worker to activate immediately
         skipWaiting: true,
         clientsClaim: true,
+        // Delete stale Workbox precaches from older deploys so users don't
+        // need to clear cookies/site-data to receive updates.
+        cleanupOutdatedCaches: true,
       },
       manifest: {
         name: "أداة تعريب Xenoblade Chronicles 3",

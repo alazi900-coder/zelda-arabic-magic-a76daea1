@@ -94,7 +94,12 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
   { id: "missing_rlm_isolation", label: "وسوم بدون عزل اتجاهي", icon: "🧭", severity: "warning", description: "وسوم تقنية ([XENO]/[System]/[ML]/[Event]/{var}/$N) غير محاطة بعلامة RLM — يخلط محرك اللعبة ترتيب الكلمات حولها" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
+  { id: "bare_tag_remnant", label: "بقايا وسوم تقنية كنص", icon: "🏚️", severity: "critical", description: "كلمات وسوم تقنية (FAT/XENO/System/ML/Event…) تسرّبت كنص ظاهر بدون أقواس [ ] — تظهر للاعب بدل الأيقونة/الأمر" },
 ];
+
+// Categories that belong to the NEW tag-remnant check — toggled by the
+// "فحص الوسوم الجديد" switch. Existing checks above are unaffected.
+const NEW_TAG_CHECK_CATEGORIES = new Set(["bare_tag_remnant"]);
 
 // ═══════════════════════════════════════════════════
 // Detection — re-exported from the pure module so it can run inside the

@@ -55,23 +55,29 @@ export default function UpdateBanner() {
   const handleUpdate = async () => {
     setUpdating(true);
     try {
-      // 1) Tell the waiting SW (if any) to activate.
       const reg = await navigator.serviceWorker?.getRegistration();
-      if (reg?.waiting) {
-        reg.waiting.postMessage({ type: "SKIP_WAITING" });
-      }
-      // 2) Nuke ALL caches — Workbox precache + any runtime caches.
-      //    Without this, the browser keeps serving the old index.html
-      //    and the user has to manually clear site data.
+
+      // Delete ONLY the SW's HTTP/precache caches.
+      // IndexedDB & localStorage (where ALL your translations live) are NOT touched.
       if ("caches" in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
+
+      if (reg?.waiting) {
+        // Activating the waiting SW will fire controllerchange → auto-reload.
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        // Safety fallback in case controllerchange doesn't fire within 1.5s
+        setTimeout(() => {
+          window.location.replace(window.location.pathname + "?_v=" + Date.now());
+        }, 1500);
+        return;
+      }
     } catch {
       // ignore — we still want to reload
     }
-    // 3) Hard reload to fetch the fresh shell.
-    window.location.reload();
+    // No waiting SW: force network fetch with cache-busting param.
+    window.location.replace(window.location.pathname + "?_v=" + Date.now());
   };
 
   if (!showUpdate) return null;

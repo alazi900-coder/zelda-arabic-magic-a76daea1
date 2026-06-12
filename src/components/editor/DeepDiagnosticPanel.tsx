@@ -94,7 +94,12 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
   { id: "missing_rlm_isolation", label: "وسوم بدون عزل اتجاهي", icon: "🧭", severity: "warning", description: "وسوم تقنية ([XENO]/[System]/[ML]/[Event]/{var}/$N) غير محاطة بعلامة RLM — يخلط محرك اللعبة ترتيب الكلمات حولها" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
+  { id: "bare_tag_remnant", label: "بقايا وسوم تقنية كنص", icon: "🏚️", severity: "critical", description: "كلمات وسوم تقنية (FAT/XENO/System/ML/Event…) تسرّبت كنص ظاهر بدون أقواس [ ] — تظهر للاعب بدل الأيقونة/الأمر" },
 ];
+
+// Categories that belong to the NEW tag-remnant check — toggled by the
+// "فحص الوسوم الجديد" switch. Existing checks above are unaffected.
+const NEW_TAG_CHECK_CATEGORIES = new Set(["bare_tag_remnant"]);
 
 // ═══════════════════════════════════════════════════
 // Detection — re-exported from the pure module so it can run inside the
@@ -150,6 +155,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [activeFilter, setActiveFilter] = useState<string | null>(null); 
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
+  // Toggle for the NEW tag-remnant check. Default ON. When OFF, results from
+  // NEW_TAG_CHECK_CATEGORIES are hidden from counts/filters/fixes — existing
+  // checks are unaffected either way.
+  const [newTagCheckEnabled, setNewTagCheckEnabled] = useState(true);
   const latestStateRef = useRef(state);
   const scopeKeysRef = useRef(scopeKeys);
   useEffect(() => { scopeKeysRef.current = scopeKeys; }, [scopeKeys]);
@@ -216,33 +225,42 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   }, []);
 
 
+  // Visible issues honor the new-tag-check toggle. Everything downstream
+  // (counts, badges, filters, bulk fixes, navigation) reads from this list so
+  // the toggle uniformly hides/shows the new category without touching the
+  // worker scan.
+  const visibleIssues = useMemo(() => {
+    if (newTagCheckEnabled) return issues;
+    return issues.filter(i => !NEW_TAG_CHECK_CATEGORIES.has(i.category));
+  }, [issues, newTagCheckEnabled]);
+
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const cat of CATEGORIES) counts[cat.id] = 0;
-    for (const issue of issues) counts[issue.category] = (counts[issue.category] || 0) + 1;
+    for (const issue of visibleIssues) counts[issue.category] = (counts[issue.category] || 0) + 1;
     return counts;
-  }, [issues]);
+  }, [visibleIssues]);
 
   const severityCounts = useMemo(() => {
     const c = { critical: 0, warning: 0, info: 0 };
-    for (const issue of issues) c[issue.severity]++;
+    for (const issue of visibleIssues) c[issue.severity]++;
     return c;
-  }, [issues]);
+  }, [visibleIssues]);
 
   const filteredIssues = useMemo(() => {
-    if (!activeFilter) return issues;
-    return issues.filter(i => i.category === activeFilter);
-  }, [issues, activeFilter]);
+    if (!activeFilter) return visibleIssues;
+    return visibleIssues.filter(i => i.category === activeFilter);
+  }, [visibleIssues, activeFilter]);
 
   const issuesByKey = useMemo(() => {
     const map = new Map<string, DiagnosticIssue[]>();
-    for (const issue of issues) {
+    for (const issue of visibleIssues) {
       const existing = map.get(issue.key);
       if (existing) existing.push(issue);
       else map.set(issue.key, [issue]);
     }
     return map;
-  }, [issues]);
+  }, [visibleIssues]);
 
   const applyBatchUpdates = useCallback((updates: Record<string, string>) => {
     const entries = Object.entries(updates);
@@ -263,12 +281,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   }, [onApplyFix, onApplyFixesBatch]);
 
   const handleFilterInEditor = useCallback((categoryId: string) => {
-    const keys = new Set(issues.filter(i => i.category === categoryId).map(i => i.key));
+    const keys = new Set(visibleIssues.filter(i => i.category === categoryId).map(i => i.key));
     if (keys.size > 0 && onFilterByKeys) {
       onFilterByKeys(keys);
       toast({ title: "🔍 تصفية", description: `عرض ${keys.size} نص في المحرر` });
     }
-  }, [issues, onFilterByKeys]);
+  }, [visibleIssues, onFilterByKeys]);
 
   /** Run the same build guard used during export; if result is still unsafe, restore English */
   const getSafeTagRepair = useCallback((entry: ExtractedEntry, text: string) => {
@@ -473,7 +491,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   /** Fix all issues in active category */
   const handleLocalFixAll = useCallback(() => {
     if (!activeFilter) return;
-    const categoryIssues = issues.filter(issue => issue.category === activeFilter);
+    const categoryIssues = visibleIssues.filter(issue => issue.category === activeFilter);
     const uniqueKeys = [...new Set(categoryIssues.map(issue => issue.key))];
     if (uniqueKeys.length === 0) return;
 
@@ -609,12 +627,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       toast({ title: '🗑️ حذف', description: `تم مسح ${count} ترجمة فارغة` });
       setTimeout(() => runScan(true), 250);
     }
-  }, [activeFilter, applyBatchUpdates, applyTagFixes, issues, onApplyFix, onApplyFixesBatch, entryMap, state.translations, runScan]);
+  }, [activeFilter, applyBatchUpdates, applyTagFixes, visibleIssues, onApplyFix, onApplyFixesBatch, entryMap, state.translations, runScan]);
 
   /** Fix ALL fixable issues across all categories at once (chunked to avoid browser freeze) */
   const handleFixEverything = useCallback(() => {
     if (!onApplyFix && !onApplyFixesBatch) return;
-    const allFixableIssues = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
+    const allFixableIssues = visibleIssues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
     const processedKeys = new Set<string>();
     const tagFixKeys: string[] = [];
     const reportEntries: FixReportEntry[] = [];
@@ -855,7 +873,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;
   const activeFilterKeys = activeFilter
-    ? new Set(issues.filter(issue => issue.category === activeFilter).map(issue => issue.key))
+    ? new Set(visibleIssues.filter(issue => issue.category === activeFilter).map(issue => issue.key))
     : new Set<string>();
   const canLocalFixActiveFilter = Boolean(
     activeFilter &&
@@ -863,7 +881,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     LOCAL_FIXABLE_CATEGORIES.has(activeFilter) &&
     activeFilterKeys.size > 0
   );
-  const totalFixable = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).length;
+  const totalFixable = visibleIssues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).length;
 
   return (
     <>
@@ -910,10 +928,27 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               )}
               {scanned && !scanning && (
                 <span className="text-xs text-muted-foreground">
-                  فُحص {(scopeKeys?.size ?? state.entries.length).toLocaleString()} نص — وُجدت {issues.length} مشكلة
+                  فُحص {(scopeKeys?.size ?? state.entries.length).toLocaleString()} نص — وُجدت {visibleIssues.length} مشكلة
                 </span>
               )}
             </div>
+
+            {/* New tag-remnant check toggle */}
+            <label className="flex items-center gap-2 text-xs cursor-pointer select-none p-2 rounded border border-border/40 bg-muted/20 hover:bg-muted/30 transition-colors">
+              <input
+                type="checkbox"
+                checked={newTagCheckEnabled}
+                onChange={(e) => setNewTagCheckEnabled(e.target.checked)}
+                className="rounded border-border"
+              />
+              <span className="font-display font-bold">
+                🏚️ فحص بقايا الوسوم التقنية (FAT/XENO/System…)
+              </span>
+              <span className="text-muted-foreground font-body text-[10px] ms-auto">
+                {newTagCheckEnabled ? "مُفعّل" : "موقوف"}
+              </span>
+            </label>
+
 
 
             {/* Progress bar during scan */}
@@ -935,7 +970,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               </div>
             )}
 
-            {scanned && issues.length > 0 && (
+            {scanned && visibleIssues.length > 0 && (
               <>
                 {/* Summary */}
                 <div className={`p-3 rounded-lg border ${
@@ -974,7 +1009,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                   <div className="flex gap-2">
                     <Button size="sm" variant="destructive" className="flex-1 font-display font-bold text-sm" onClick={handleFixEverything}>
                       <Zap className="w-4 h-4 ml-1" />
-                      ⚡ إصلاح كل المشاكل ({new Set(issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
+                      ⚡ إصلاح كل المشاكل ({new Set(visibleIssues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
                     </Button>
                     {fixReport && (
                       <Button size="sm" variant="outline" className="text-xs" onClick={() => setFixReport({ ...fixReport })}>
@@ -1096,7 +1131,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               </>
             )}
 
-            {scanned && issues.length === 0 && (
+            {scanned && visibleIssues.length === 0 && (
               <div className="text-center p-4 bg-secondary/10 rounded-lg border border-secondary/30">
                 <CheckCircle2 className="w-8 h-8 text-secondary mx-auto mb-2" />
                 <p className="text-sm font-display font-bold">✅ لا توجد مشاكل حرجة</p>

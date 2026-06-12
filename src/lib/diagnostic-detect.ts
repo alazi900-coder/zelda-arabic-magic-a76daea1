@@ -61,6 +61,10 @@ const RE_CORRUPTED_DOLLAR = /دولار\s*\$?\d+|\d+\s*\.\s*\$|\$\s*\.\s*\d+|\d+
 const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_TRANSLATED_TECHNICAL_SLOT = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]|\{[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\}/g;
+// Bare technical-tag keywords leaked into translation as plain text (no
+// surrounding brackets/braces). Word boundary on both sides to avoid matching
+// substrings inside larger English identifiers.
+const RE_BARE_TAG_KEYWORD = /\b(?:FAT|XENO|System|ML|Event|PageBreak|Ruby|Icon|Wait|Color|Time|Sound|Voice|Anim|Talk|Speed|Pos|Page|Break)\b/g;
 
 const encoder = new TextEncoder();
 
@@ -369,5 +373,26 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });
   }
 
+  // 23. Bare technical tag remnants — tag keywords (FAT/XENO/System/ML/…)
+  // leaking as plain text in the translation (outside any [ ]/{ } brackets).
+  // Common failure mode: AI strips brackets but keeps the inner keyword,
+  // producing visible "FAT", "XENO", "System" inside Arabic prose. Flag only
+  // when the translation has MORE bare occurrences than the original.
+  {
+    const stripBrackets = (s: string) => s.replace(/\[[^\]]*\]/g, "").replace(/\{[^}]*\}/g, "");
+    const transStripped = stripBrackets(trimmed);
+    const origStripped = stripBrackets(entry.original);
+    const bareTrans = transStripped.match(RE_BARE_TAG_KEYWORD) || [];
+    const bareOrig = origStripped.match(RE_BARE_TAG_KEYWORD) || [];
+    if (bareTrans.length > bareOrig.length) {
+      const sample = Array.from(new Set(bareTrans)).slice(0, 5).join("، ");
+      issues.push({
+        ...base, severity: "critical", category: "bare_tag_remnant",
+        message: `${bareTrans.length - bareOrig.length} بقايا وسم تقني ظاهرة كنص: ${sample}${bareTrans.length > 5 ? "..." : ""}`,
+      });
+    }
+  }
+
   return issues;
 }
+

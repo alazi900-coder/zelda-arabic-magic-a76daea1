@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered, Shield } from "lucide-react";
+import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered, Shield, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
@@ -156,6 +156,7 @@ interface EntryCardProps {
   onRejectFuzzy?: (key: string) => void;
   onCompare?: (entry: ExtractedEntry) => void;
   onSplitNewline?: (key: string) => void;
+  onShowRelated?: (entry: ExtractedEntry) => void;
   tmSuggestions?: TMSuggestion[];
   legacyCommaSplitEnabled?: boolean;
 }
@@ -189,7 +190,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage,
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
   handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag,
-  onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, tmSuggestions,
+  onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, tmSuggestions,
   legacyCommaSplitEnabled,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
@@ -476,6 +477,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
               {onCompare && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => onCompare(entry)} title="مقارنة المحركات الثلاثة">
                   <GitCompareArrows className="w-4 h-4 text-accent" />
+                </Button>
+              )}
+              {onShowRelated && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => onShowRelated(entry)} title="🔗 عرض الترجمات المتعلقة">
+                  <Link2 className="w-4 h-4 text-primary" />
                 </Button>
               )}
               {translation?.trim() && (

@@ -42,6 +42,7 @@ interface EditorEntryListSectionProps {
   showDiffView: boolean;
   setShowDiffView: (v: boolean) => void;
   setCompareEntry: (e: ExtractedEntry | null) => void;
+  setRelatedEntry?: (e: ExtractedEntry | null) => void;
   findSimilar: ReturnType<typeof useTranslationMemory>["findSimilar"];
 }
 
@@ -51,6 +52,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
   showDiffView,
   setShowDiffView,
   setCompareEntry,
+  setRelatedEntry,
   findSimilar,
 }) => (
   <>
@@ -100,6 +102,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
         onRejectFuzzy={editor.handleRejectFuzzy}
         onCompare={(entry) => setCompareEntry(entry)}
         onSplitNewline={editor.handleSplitSingleEntry}
+        onShowRelated={setRelatedEntry ? (entry) => setRelatedEntry(entry) : undefined}
         findSimilar={findSimilar}
         height={Math.max(400, window.innerHeight - 300)}
         legacyCommaSplitEnabled={editor.legacyCommaSplitEnabled}

@@ -788,11 +788,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
                 reason: 'رموز تحكم/خاصة مفقودة بعد الإصلاح', missingControl: origCC - fixedCC, missingPua: origPUA - fixedPUA });
             }
           } else {
-            nonEmptyTranslations[key] = orig;
-            finalTagRevertCount++;
-            repairLog.push({ key, label: entryLabels.get(key) || key, action: 'reverted',
-              reason: ccBroken ? 'رموز تحكم مفقودة' : 'رموز خاصة مفقودة',
-              missingControl: ccBroken ? origCC - transCC : 0, missingPua: puaBroken ? origPUA - transPUA : 0 });
+            // Repair couldn't make any changes — but don't blindly revert to English.
+            // Keep the user's translation and just log the missing chars warning.
+            console.warn(`[BUILD-SAFETY] Kept translation despite missing control/PUA chars ${key}: missingCC=${ccBroken ? origCC - transCC : 0} missingPUA=${puaBroken ? origPUA - transPUA : 0}`);
           }
         }
 

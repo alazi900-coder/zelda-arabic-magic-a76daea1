@@ -515,28 +515,27 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === PROTECTION 6: Tag SEQUENCE order validation ===
-      // Tags may be present (multiset ok) but in wrong order — causes cinematic freezes
+      // === PROTECTION 6: Tag repair (NO revert to English) ===
+      // Apply best-effort tag repair. Never silently revert to English here —
+      // even a slightly-wrong tag order is preferable to losing the translation entirely.
+      let tagRepairCount = 0;
       let tagOrderRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         if (!hasTechnicalTags(orig)) continue;
-        // Repair and check sequence in one step
         const repaired = repairTranslationTagsForBuild(orig, trans);
         if (repaired.changed) {
           nonEmptyTranslations[key] = repaired.text;
+          tagRepairCount++;
         }
         if (!repaired.sequenceMatch) {
-          nonEmptyTranslations[key] = orig;
-          tagOrderRevertCount++;
-          console.warn(`[BUILD-SAFETY] Tag sequence mismatch in ${key} — reverted to original`);
+          console.warn(`[BUILD-SAFETY] Tag sequence mismatch in ${key} — kept translation (no revert)`);
         }
       }
-      if (tagOrderRevertCount > 0) {
-        setBuildProgress(`🔀 استعادة ${tagOrderRevertCount} نص (ترتيب الوسوم التقنية مختلف عن الأصل)...`);
-        console.warn(`[BUILD-SAFETY] Reverted ${tagOrderRevertCount} entries with wrong tag sequence order`);
+      if (tagRepairCount > 0) {
+        setBuildProgress(`🔀 إصلاح ترتيب الوسوم في ${tagRepairCount} نص...`);
         await yieldToUI();
       }
 

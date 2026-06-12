@@ -473,8 +473,8 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === PROTECTION 5: Repair (don't revert) entries with missing $N variables ===
-      // Try local repair first. Only revert if repair couldn't restore the variables.
+      // === PROTECTION 5: Repair (NEVER revert) entries with missing $N variables ===
+      // Try local repair first. If repair fails, keep the translation and warn.
       let dollarVarFixCount = 0;
       let dollarVarRepairCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
@@ -490,8 +490,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             nonEmptyTranslations[key] = repaired.text;
             dollarVarRepairCount++;
           } else {
-            nonEmptyTranslations[key] = orig;
+            // Keep the user's translation — just count for the warning report.
             dollarVarFixCount++;
+            console.warn(`[BUILD-SAFETY] Missing $N in ${key} — translation kept (no revert)`);
           }
         }
       }
@@ -500,7 +501,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
       if (dollarVarFixCount > 0) {
-        setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N غير قابلة للإصلاح...`);
+        setBuildProgress(`⚠️ ${dollarVarFixCount} نص بمتغيرات $N غير قابلة للإصلاح — تم الاحتفاظ بالترجمة...`);
         await yieldToUI();
       }
 

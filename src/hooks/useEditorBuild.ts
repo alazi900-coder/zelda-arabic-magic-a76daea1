@@ -979,50 +979,70 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await yieldToUI();
         }
 
-        // Hard safety gate before server build: repair what يمكن إصلاحه locally, and skip anything still dangerous
+        // Hard safety gate before server build — uses pure `evaluateMsbtSafety`
+        // helper from `src/lib/build-safety-gates.ts` so that the logic is
+        // covered by unit tests and cannot silently regress.
+        const { evaluateMsbtSafety } = await import("@/lib/build-safety-gates");
         let fixedTechnicalCount = 0;
         let skippedUnsafeCount = 0;
+        const msbtRepairLog: SafetyRepairEntry[] = [];
         for (const entry of currentState.entries) {
           const key = `${entry.msbtFile}:${entry.index}`;
-          let trans = nonEmptyTranslations[key];
+          const trans = nonEmptyTranslations[key];
           if (!trans) continue;
 
-          const tagRepair = repairTranslationTagsForBuild(entry.original, trans);
-          trans = tagRepair.text;
-          if (tagRepair.changed) {
-            fixedTechnicalCount++;
-          }
+          const result = evaluateMsbtSafety(entry.original, trans);
+          const label = entry.msbtFile && entry.index !== undefined ? `${entry.msbtFile}#${entry.index}` : key;
 
-          const hasNullChar = trans.includes('\x00');
-          const bracketMismatch = ((trans.match(/\[/g) || []).length !== (trans.match(/\]/g) || []).length);
-          const rubyOpenCount = (trans.match(/\[\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
-          const rubyCloseCount = (trans.match(/\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
-
-          // Only delete on truly catastrophic conditions that would crash the game.
-          // Tag-multiset / sequence / control-char mismatches are kept as best-effort —
-          // a partially-correct translation is far better than silent English fallback.
-          if (hasNullChar || bracketMismatch || rubyOpenCount !== rubyCloseCount) {
+          if (result.action === "delete") {
             delete nonEmptyTranslations[key];
             skippedUnsafeCount++;
-            console.warn(`[BUILD-SAFETY] MSBT entry deleted (hard fail) ${key}: nullChar=${hasNullChar} bracketMismatch=${bracketMismatch} rubyMismatch=${rubyOpenCount !== rubyCloseCount}`);
+            msbtRepairLog.push({
+              key, label, action: "reverted",
+              reason: result.reason || "نص خطر تم استبعاده",
+              missingControl: 0, missingPua: 0,
+            });
+            console.warn(`[BUILD-SAFETY] MSBT entry deleted ${key}: ${result.reason}`);
             continue;
           }
-          if (!tagRepair.exactTagMatch || !tagRepair.sequenceMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
-            console.warn(`[BUILD-SAFETY] MSBT entry kept with tag warnings ${key}: exactTag=${tagRepair.exactTagMatch} seq=${tagRepair.sequenceMatch} closing=${!tagRepair.missingClosingTags} ctrl=${!tagRepair.missingControlOrPua}`);
+
+          if (result.action === "repair") {
+            fixedTechnicalCount++;
+            msbtRepairLog.push({
+              key, label, action: "repaired",
+              reason: result.warnings.length > 0
+                ? `إصلاح وسوم تقنية (${result.warnings.join(" / ")})`
+                : "إصلاح وسوم تقنية",
+              missingControl: 0, missingPua: 0,
+            });
+          } else if (result.warnings.length > 0) {
+            // Kept but with warnings — show in report so the user knows.
+            msbtRepairLog.push({
+              key, label, action: "repaired",
+              reason: `تم الاحتفاظ بالترجمة مع تنبيهات: ${result.warnings.join(" / ")}`,
+              missingControl: 0, missingPua: 0,
+            });
           }
 
-          nonEmptyTranslations[key] = trans;
+          nonEmptyTranslations[key] = result.text;
+        }
+
+        // Merge MSBT report with any earlier (BDAT-side) entries and surface it.
+        if (msbtRepairLog.length > 0) {
+          setSafetyRepairs(prev => [...prev, ...msbtRepairLog]);
+          setShowSafetyReport(true);
         }
 
         if (fixedTechnicalCount > 0) {
-          setBuildProgress(`🏷️ تم إصلاح ${fixedTechnicalCount} نص تقني قبل البناء...`);
+          setBuildProgress(`🏷️ تم إصلاح ${fixedTechnicalCount} نص MSBT قبل البناء...`);
           await yieldToUI();
         }
 
         if (skippedUnsafeCount > 0) {
-          setBuildProgress(`🛡️ تم استبعاد ${skippedUnsafeCount} نص خطر تلقائياً لحماية اللعبة...`);
+          setBuildProgress(`🛡️ تم استبعاد ${skippedUnsafeCount} نص MSBT خطر — راجع تقرير الأمان للتفاصيل...`);
           await yieldToUI();
         }
+
         
         formData.append("translations", JSON.stringify(nonEmptyTranslations));
         formData.append("protectedEntries", JSON.stringify(Array.from(currentState.protectedEntries || [])));

@@ -737,9 +737,8 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const truncPuaCount = (truncated.match(/[\uE000-\uE0FF]/g) || []).length;
 
           if ((truncControlCount < origControlCount || truncPuaCount < origPuaCount) && !previouslyBuiltKeys.has(key)) {
-            // Truncation destroyed vital chars — revert to original English
-            nonEmptyTranslations[key] = orig;
-            console.warn(`[BUILD-TRUNC] Reverted "${key}" to English: truncation lost control/PUA chars`);
+            // Truncation lost vital chars — KEEP the (untruncated) translation and warn.
+            console.warn(`[BUILD-TRUNC] Kept "${key}" — truncation would have lost control/PUA chars (no revert)`);
           } else {
             nonEmptyTranslations[key] = truncated;
           }

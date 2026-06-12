@@ -294,12 +294,32 @@ export function convertToArabicNumerals(text: string): string {
 export function mirrorPunctuation(text: string): string {
   const PUNCT_MAP: Record<string, string> = { '?': '؟', ',': '،', ';': '؛' };
   const BRACKET_MAP: Record<string, string> = { '(': ')', ')': '(' };
-  
-  return [...text].map(ch => {
+
+  // Protect parens/brackets that wrap a technical tag (e.g. ([ML:icon icon=enh36]))
+  // so decorative parens around in-game icons are not mirrored.
+  const protectedItems: string[] = [];
+  const PLACEHOLDER_BASE = 0xE800; // private use, distinct from icon range E000-E0FF
+  const protect = (s: string) => {
+    const i = protectedItems.length;
+    protectedItems.push(s);
+    return String.fromCharCode(PLACEHOLDER_BASE + i);
+  };
+  let working = text
+    .replace(/\(\s*\\?\[[^\]]+\\?\]\s*\)/g, protect)
+    .replace(/\\?\[[^\]]+\\?\]/g, protect)
+    .replace(/\{[\w]+\}/g, protect);
+
+  working = [...working].map(ch => {
     const code = ch.charCodeAt(0);
     if (code >= 0xE000 && code <= 0xE0FF) return ch;
+    if (code >= PLACEHOLDER_BASE && code < PLACEHOLDER_BASE + protectedItems.length) return ch;
     return PUNCT_MAP[ch] || BRACKET_MAP[ch] || ch;
   }).join('');
+
+  return working.replace(
+    new RegExp(`[\\u${PLACEHOLDER_BASE.toString(16)}-\\u${(PLACEHOLDER_BASE + 0xFF).toString(16)}]`, 'g'),
+    (ch) => protectedItems[ch.charCodeAt(0) - PLACEHOLDER_BASE] ?? ch
+  );
 }
 
 export function removeArabicPresentationForms(text: string): string {

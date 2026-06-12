@@ -1215,6 +1215,7 @@ export function useEditorTranslation({
                     translated = restoreTagsLocally(entry.original, translated);
                     translated = autoFixTagBrackets(entry.original, translated);
                   }
+                  translated = autoSyncLines(key, translated, entry);
                   allTranslations[key] = translated;
                 }
               }

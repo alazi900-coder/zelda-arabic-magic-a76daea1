@@ -994,19 +994,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const result = evaluateMsbtSafety(entry.original, trans);
           const label = entry.msbtFile && entry.index !== undefined ? `${entry.msbtFile}#${entry.index}` : key;
 
+          // NEVER delete translations. Even catastrophic conditions
+          // (NULL, unbalanced brackets, Ruby mismatch) are reported as
+          // warnings only — the user keeps full control over the text.
           if (result.action === "delete") {
-            delete nonEmptyTranslations[key];
-            skippedUnsafeCount++;
             msbtRepairLog.push({
-              key, label, action: "reverted",
-              reason: result.reason || "نص خطر تم استبعاده",
+              key, label, action: "repaired",
+              reason: `⚠️ تحذير خطر — تم الاحتفاظ بالترجمة: ${result.reason || "بنية غير آمنة"}`,
               missingControl: 0, missingPua: 0,
             });
-            console.warn(`[BUILD-SAFETY] MSBT entry deleted ${key}: ${result.reason}`);
-            continue;
-          }
-
-          if (result.action === "repair") {
+            console.warn(`[BUILD-SAFETY] MSBT entry kept with critical warning ${key}: ${result.reason}`);
+          } else if (result.action === "repair") {
             fixedTechnicalCount++;
             msbtRepairLog.push({
               key, label, action: "repaired",

@@ -52,15 +52,26 @@ export default function UpdateBanner() {
     };
   }, []);
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     setUpdating(true);
-    navigator.serviceWorker?.getRegistration().then((reg) => {
+    try {
+      // 1) Tell the waiting SW (if any) to activate.
+      const reg = await navigator.serviceWorker?.getRegistration();
       if (reg?.waiting) {
         reg.waiting.postMessage({ type: "SKIP_WAITING" });
-      } else {
-        window.location.reload();
       }
-    });
+      // 2) Nuke ALL caches — Workbox precache + any runtime caches.
+      //    Without this, the browser keeps serving the old index.html
+      //    and the user has to manually clear site data.
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      // ignore — we still want to reload
+    }
+    // 3) Hard reload to fetch the fresh shell.
+    window.location.reload();
   };
 
   if (!showUpdate) return null;

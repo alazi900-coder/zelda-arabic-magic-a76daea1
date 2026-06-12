@@ -276,6 +276,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
       </div>
     )}
   </div>
-);
+  );
+};
 
 export default EditorFiltersBar;

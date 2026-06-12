@@ -45,6 +45,25 @@ function buildEngines(): EngineConfig[] {
 
 const TECH_TAG_RENDER_REGEX = /([\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\[\s*\/?\s*\w+\s*:[^\]]*?\s*\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\})/g;
 
+// Normalize broken closing tags from MT engines:
+//   [System:Color/]  ->  [/System:Color]
+//   [System:Color /] ->  [/System:Color]
+//   [Word/]          ->  [/Word]
+// Only converts when the original text contains the corresponding [/Word...] form,
+// so we never invent closing tags the game doesn't expect.
+function normalizeReversedSlashTags(originalText: string, translatedText: string): string {
+  const reversedRe = /\[\s*([A-Za-z][A-Za-z0-9]*(?:\s*:\s*[A-Za-z0-9_]+)?)\s*\/\s*\]/g;
+  return translatedText.replace(reversedRe, (match, inner: string) => {
+    const normalizedInner = inner.replace(/\s+/g, '');
+    const expectedClosing = `[/${normalizedInner}]`;
+    // Only rewrite if the original actually has this closing tag form
+    if (originalText.includes(`[/${normalizedInner}`) || originalText.includes(`[/ ${normalizedInner}`)) {
+      return expectedClosing;
+    }
+    return match;
+  });
+}
+
 function extractTags(text: string): string[] {
   const r = new RegExp(TECH_TAG_RENDER_REGEX.source, 'g');
   return Array.from(text.matchAll(r)).map(m => m[0]);

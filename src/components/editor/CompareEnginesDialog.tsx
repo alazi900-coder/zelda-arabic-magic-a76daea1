@@ -207,7 +207,8 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
         setErrors(prev => ({ ...prev, [engine.id]: errMsg }));
       } else {
         const data = await response.json();
-        const translation = data.translations?.[key] || null;
+        const rawTranslation = data.translations?.[key] || null;
+        const translation = rawTranslation ? normalizeReversedSlashTags(entry.original, rawTranslation) : null;
         if (translation) {
           setResults(prev => ({ ...prev, [engine.id]: translation }));
         } else {

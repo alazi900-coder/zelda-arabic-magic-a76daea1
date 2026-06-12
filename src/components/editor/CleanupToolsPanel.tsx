@@ -345,6 +345,21 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
               </Button>
             </div>
 
+            {/* Tag extractor — local, no AI, chunked async */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs h-9 gap-1.5 border-purple-500/30 text-purple-600 hover:bg-purple-500/10"
+              onClick={(e) => { e.stopPropagation(); handleExtractTags(); }}
+              disabled={extracting || state.entries.length === 0}
+            >
+              {extracting ? (
+                <><Sparkles className="w-3 h-3 animate-spin" /> جاري الاستخراج... {extractProgress}%</>
+              ) : (
+                <><FileDown className="w-3 h-3" /> استخراج الوسوم التقنية (TXT)</>
+              )}
+            </Button>
+
             {/* Enabled tools */}
             <div className="flex flex-wrap gap-2">
               {enabledTools.map(id => (

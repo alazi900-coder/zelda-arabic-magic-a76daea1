@@ -61,6 +61,10 @@ const RE_CORRUPTED_DOLLAR = /دولار\s*\$?\d+|\d+\s*\.\s*\$|\$\s*\.\s*\d+|\d+
 const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_TRANSLATED_TECHNICAL_SLOT = /\d+\s*\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\\?\]\s*\d+|\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s]+\\?\]|\{[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s:]+\}/g;
+// Bare technical-tag keywords leaked into translation as plain text (no
+// surrounding brackets/braces). Word boundary on both sides to avoid matching
+// substrings inside larger English identifiers.
+const RE_BARE_TAG_KEYWORD = /\b(?:FAT|XENO|System|ML|Event|PageBreak|Ruby|Icon|Wait|Color|Time|Sound|Voice|Anim|Talk|Speed|Pos|Page|Break)\b/g;
 
 const encoder = new TextEncoder();
 

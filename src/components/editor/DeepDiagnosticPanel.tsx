@@ -225,33 +225,42 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   }, []);
 
 
+  // Visible issues honor the new-tag-check toggle. Everything downstream
+  // (counts, badges, filters, bulk fixes, navigation) reads from this list so
+  // the toggle uniformly hides/shows the new category without touching the
+  // worker scan.
+  const visibleIssues = useMemo(() => {
+    if (newTagCheckEnabled) return issues;
+    return issues.filter(i => !NEW_TAG_CHECK_CATEGORIES.has(i.category));
+  }, [issues, newTagCheckEnabled]);
+
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const cat of CATEGORIES) counts[cat.id] = 0;
-    for (const issue of issues) counts[issue.category] = (counts[issue.category] || 0) + 1;
+    for (const issue of visibleIssues) counts[issue.category] = (counts[issue.category] || 0) + 1;
     return counts;
-  }, [issues]);
+  }, [visibleIssues]);
 
   const severityCounts = useMemo(() => {
     const c = { critical: 0, warning: 0, info: 0 };
-    for (const issue of issues) c[issue.severity]++;
+    for (const issue of visibleIssues) c[issue.severity]++;
     return c;
-  }, [issues]);
+  }, [visibleIssues]);
 
   const filteredIssues = useMemo(() => {
-    if (!activeFilter) return issues;
-    return issues.filter(i => i.category === activeFilter);
-  }, [issues, activeFilter]);
+    if (!activeFilter) return visibleIssues;
+    return visibleIssues.filter(i => i.category === activeFilter);
+  }, [visibleIssues, activeFilter]);
 
   const issuesByKey = useMemo(() => {
     const map = new Map<string, DiagnosticIssue[]>();
-    for (const issue of issues) {
+    for (const issue of visibleIssues) {
       const existing = map.get(issue.key);
       if (existing) existing.push(issue);
       else map.set(issue.key, [issue]);
     }
     return map;
-  }, [issues]);
+  }, [visibleIssues]);
 
   const applyBatchUpdates = useCallback((updates: Record<string, string>) => {
     const entries = Object.entries(updates);

@@ -45,11 +45,12 @@ export function evaluateMsbtSafety(original: string, translation: string): MsbtG
   const rubyClose = (text.match(/\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
   const rubyMismatch = rubyOpen !== rubyClose;
 
-  if (hasNullChar) return { action: "delete", text, reason: "يحتوي على رمز NULL", warnings: [] };
-  if (bracketMismatch) return { action: "delete", text, reason: `أقواس غير متوازنة (${openBrackets}[ vs ${closeBrackets}])`, warnings: [] };
-  if (rubyMismatch) return { action: "delete", text, reason: `وسوم Ruby غير متطابقة (${rubyOpen} مفتوح / ${rubyClose} مغلق)`, warnings: [] };
-
+  // NEVER delete. Catastrophic conditions are reported as warnings only —
+  // the translation is always kept, and the user decides whether to fix it.
   const warnings: string[] = [];
+  if (hasNullChar) warnings.push("⚠️ يحتوي على رمز NULL (قد يسبب توقف اللعبة)");
+  if (bracketMismatch) warnings.push(`⚠️ أقواس غير متوازنة (${openBrackets}[ vs ${closeBrackets}])`);
+  if (rubyMismatch) warnings.push(`⚠️ وسوم Ruby غير متطابقة (${rubyOpen} مفتوح / ${rubyClose} مغلق)`);
   if (!tagRepair.exactTagMatch) warnings.push("اختلاف عدد الوسوم التقنية");
   if (!tagRepair.sequenceMatch) warnings.push("ترتيب الوسوم مختلف عن الأصل");
   if (tagRepair.missingClosingTags) warnings.push("وسوم إغلاق ناقصة");

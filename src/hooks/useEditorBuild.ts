@@ -622,10 +622,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const pureTransText = trans.replace(RE_SPECIAL, '').trim();
 
         if (!pureTransText) {
-          // No real text in translation — revert to original
-          nonEmptyTranslations[key] = orig;
+          // NEVER revert — keep the user's translation and just warn.
           revertedCount++;
-          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'ترجمة فارغة بعد إزالة الرموز', missingControl: missingControlN, missingPua: missingPuaN });
+          repairLog.push({ key, label: entryLabel, action: 'repaired', reason: '⚠️ تم الاحتفاظ بالترجمة — لا يوجد نص بعد إزالة الرموز', missingControl: missingControlN, missingPua: missingPuaN });
           continue;
         }
 

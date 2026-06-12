@@ -32,14 +32,15 @@ describe("evaluateMsbtSafety — MSBT hard gate", () => {
     expect(r.reason).toMatch(/أقواس/);
   });
 
-  it("DELETES translation with unbalanced Ruby tags that repair can't fix", () => {
-    // Use a translation where the closing tag is impossible to restore from context.
+  it("DELETES translation with surplus closing Ruby tags that repair can't fix", () => {
+    // Repair restores missing closes, but here we have MORE closes than opens.
     const r = evaluateMsbtSafety(
-      "[System:Ruby ruby=x]Hi[/System:Ruby] world",
-      "[System:Ruby ruby=x]مرحبا [System:Ruby ruby=y]عالم"
+      "[System:Ruby ruby=x]Hi[/System:Ruby]",
+      "مرحبا[/System:Ruby][/System:Ruby]"
     );
     expect(r.action).toBe("delete");
   });
+
 
   // === Regression tests for the silent-revert bug ===
 

@@ -5,6 +5,59 @@ import DebouncedInput from "@/components/editor/DebouncedInput";
 import { type FilterStatus, type FilterTechnical } from "@/components/editor/types";
 import type { useEditorState } from "@/hooks/useEditorState";
 
+/**
+ * Group BDAT table names by their semantic prefix and render them inside
+ * <optgroup> elements with Arabic labels so the dropdown is scannable.
+ *
+ * Order matters — more specific prefixes (e.g. `pc_arts_`) must be tested
+ * before broader category buckets (e.g. `pctalk_` would otherwise eat it).
+ */
+const TABLE_CATEGORIES: Array<{ label: string; match: (t: string) => boolean }> = [
+  { label: "⚔️ القتال — مهارات وأعداء",       match: (t) => /^BTL_/i.test(t) },
+  { label: "✨ الفنون (Arts)",                 match: (t) => /^(pc_arts|nopon_arts)/i.test(t) },
+  { label: "💬 الحوارات الجانبية",              match: (t) => /^pctalk_/i.test(t) },
+  { label: "🎒 الأغراض والمعدات",               match: (t) => /^ITM_/i.test(t) },
+  { label: "📔 السجل والمهام",                  match: (t) => /^JNL_/i.test(t) },
+  { label: "📋 القوائم والواجهة",               match: (t) => /^MNU_/i.test(t) },
+  { label: "🗺️ العالم والخرائط",                match: (t) => /^FLD_/i.test(t) },
+  { label: "🧭 الخرائط المصغّرة",               match: (t) => /^minimaplist/i.test(t) },
+  { label: "🏘️ Colony 6 — إعادة الإعمار",      match: (t) => /^CL6_/i.test(t) },
+];
+
+function groupTables(tables: string[]) {
+  const groups = TABLE_CATEGORIES.map((c) => ({ label: c.label, tables: [] as string[] }));
+  const other: string[] = [];
+  for (const t of tables) {
+    const idx = TABLE_CATEGORIES.findIndex((c) => c.match(t));
+    if (idx === -1) other.push(t);
+    else groups[idx].tables.push(t);
+  }
+  const result = groups.filter((g) => g.tables.length > 0);
+  if (other.length) result.push({ label: "📦 أخرى", tables: other });
+  return result;
+}
+
+interface TableOptionsProps {
+  tables: string[];
+  counts?: Record<string, number>;
+}
+
+const GroupedTableOptions: React.FC<TableOptionsProps> = ({ tables, counts }) => {
+  const groups = React.useMemo(() => groupTables(tables), [tables]);
+  return (
+    <>
+      {groups.map((g) => (
+        <optgroup key={g.label} label={g.label}>
+          {g.tables.map((t) => (
+            <option key={t} value={t}>{t} ({counts?.[t] || 0})</option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  );
+};
+
+
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
   | "state"
@@ -116,7 +169,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           {editor.bdatTableNames.length > 0 && (
             <select value={editor.filterTable} onChange={e => { editor.setFilterTable(e.target.value); editor.setFilterColumn("all"); }} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[180px]">
               <option value="all">كل الجداول ({editor.state?.entries.length ?? 0})</option>
-              {editor.bdatTableNames.map(t => <option key={t} value={t}>{t} ({editor.bdatTableCounts?.[t] || 0})</option>)}
+              <GroupedTableOptions tables={editor.bdatTableNames} counts={editor.bdatTableCounts} />
             </select>
           )}
           {editor.bdatColumnNames.length > 0 && editor.filterTable !== "all" && (
@@ -166,7 +219,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
         {editor.bdatTableNames.length > 0 && (
           <select value={editor.filterTable} onChange={e => { editor.setFilterTable(e.target.value); editor.setFilterColumn("all"); }} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
             <option value="all">كل الجداول ({editor.state?.entries.length ?? 0})</option>
-            {editor.bdatTableNames.map(t => <option key={t} value={t}>{t} ({editor.bdatTableCounts?.[t] || 0})</option>)}
+            <GroupedTableOptions tables={editor.bdatTableNames} counts={editor.bdatTableCounts} />
           </select>
         )}
         {editor.bdatColumnNames.length > 0 && editor.filterTable !== "all" && (

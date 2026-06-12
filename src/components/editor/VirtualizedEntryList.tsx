@@ -152,10 +152,16 @@ function RowMeasurer({ index, onHeight, children }: { index: number; onHeight: (
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (ref.current) {
-      const h = ref.current.getBoundingClientRect().height;
-      onHeight(index, h + 8);
+    if (!ref.current) return;
+    // Skip re-measure while the user is typing inside this row — prevents
+    // the virtual list from resetting offsets, which on mobile causes the
+    // keyboard to close and the view to jump.
+    const active = document.activeElement as HTMLElement | null;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable) && ref.current.contains(active)) {
+      return;
     }
+    const h = ref.current.getBoundingClientRect().height;
+    onHeight(index, h + 8);
   });
 
   return <div ref={ref}>{children}</div>;

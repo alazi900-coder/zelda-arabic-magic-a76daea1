@@ -190,7 +190,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage,
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
   handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag,
-  onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, tmSuggestions,
+  onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, tmSuggestions,
   legacyCommaSplitEnabled,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;

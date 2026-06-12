@@ -185,17 +185,19 @@ describe("useEditorBuild — MSBT pre-build safety (integration)", () => {
     expect(out).not.toBe("\uE001 New Game");
   });
 
-  it("DELETES entries with NULL char and reports them", () => {
-    expect(run.nonEmptyTranslations["danger.msbt:8"]).toBeUndefined();
+  it("KEEPS entries with NULL char (never deletes) and reports a critical warning", () => {
+    expect(run.nonEmptyTranslations["danger.msbt:8"]).toBeDefined();
+    expect(run.nonEmptyTranslations["danger.msbt:8"]).toContain("مرحبا");
     const report = run.safetyRepairs.find(r => r.key === "danger.msbt:8");
-    expect(report?.action).toBe("reverted");
+    expect(report?.action).toBe("repaired");
     expect(report?.reason).toMatch(/NULL/);
   });
 
-  it("DELETES entries with unbalanced brackets and reports them", () => {
-    expect(run.nonEmptyTranslations["danger.msbt:9"]).toBeUndefined();
+  it("KEEPS entries with unbalanced brackets (never deletes) and reports a warning", () => {
+    expect(run.nonEmptyTranslations["danger.msbt:9"]).toBeDefined();
+    expect(run.nonEmptyTranslations["danger.msbt:9"]).toContain("مرحبا");
     const report = run.safetyRepairs.find(r => r.key === "danger.msbt:9");
-    expect(report?.action).toBe("reverted");
+    expect(report?.action).toBe("repaired");
     expect(report?.reason).toMatch(/أقواس/);
   });
 
@@ -203,8 +205,8 @@ describe("useEditorBuild — MSBT pre-build safety (integration)", () => {
     expect(run.nonEmptyTranslations["system.msbt:10"]).toBeUndefined();
   });
 
-  it("reports exactly two catastrophic deletions for this sample set", () => {
-    expect(run.skippedUnsafeCount).toBe(2);
+  it("never deletes any translation — skippedUnsafeCount is always 0", () => {
+    expect(run.skippedUnsafeCount).toBe(0);
   });
 
   it("reports repairs for entries that needed tag/variable fixes", () => {

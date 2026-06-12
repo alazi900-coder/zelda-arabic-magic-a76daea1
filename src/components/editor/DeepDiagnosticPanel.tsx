@@ -155,6 +155,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const [activeFilter, setActiveFilter] = useState<string | null>(null); 
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
   const [fixReport, setFixReport] = useState<FixReport | null>(null);
+  // Toggle for the NEW tag-remnant check. Default ON. When OFF, results from
+  // NEW_TAG_CHECK_CATEGORIES are hidden from counts/filters/fixes — existing
+  // checks are unaffected either way.
+  const [newTagCheckEnabled, setNewTagCheckEnabled] = useState(true);
   const latestStateRef = useRef(state);
   const scopeKeysRef = useRef(scopeKeys);
   useEffect(() => { scopeKeysRef.current = scopeKeys; }, [scopeKeys]);

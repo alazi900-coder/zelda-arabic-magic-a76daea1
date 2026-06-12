@@ -56,13 +56,13 @@ function runMsbtPreBuild(entries: MsbtEntry[]): RunResult {
     const label = `${entry.msbtFile}#${entry.index}`;
 
     if (result.action === "delete") {
-      delete nonEmptyTranslations[key];
-      skippedUnsafeCount++;
+      // NEVER delete — keep the translation and report a critical warning.
       safetyRepairs.push({
-        key, label, action: "reverted",
-        reason: result.reason || "نص خطر تم استبعاده",
+        key, label, action: "repaired",
+        reason: `⚠️ تحذير خطر — تم الاحتفاظ بالترجمة: ${result.reason || "بنية غير آمنة"}`,
         missingControl: 0, missingPua: 0,
       });
+      nonEmptyTranslations[key] = result.text;
       continue;
     }
 

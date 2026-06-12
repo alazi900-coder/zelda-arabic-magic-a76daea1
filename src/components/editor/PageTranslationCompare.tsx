@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CheckCircle2, X } from "lucide-react";
+import { countEffectiveLines } from "@/lib/text-tokens";
 
 interface PageTranslationCompareProps {
   open: boolean;
@@ -91,6 +92,7 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
               const old = oldTranslations[key] || '';
               const newT = newTranslations[key] || '';
               const changed = old !== newT;
+              const isSingleLineOriginal = countEffectiveLines(original) <= 1;
 
               return (
                 <div
@@ -114,7 +116,7 @@ const PageTranslationCompare: React.FC<PageTranslationCompareProps> = ({
                       {old}
                     </div>
                   )}
-                  <div className={`text-xs font-body pr-6 ${changed ? 'text-primary font-semibold' : ''}`} dir="rtl">
+                  <div className={`text-xs font-body pr-6 ${isSingleLineOriginal ? 'whitespace-nowrap overflow-x-auto' : 'whitespace-pre-wrap break-words'} ${changed ? 'text-primary font-semibold' : ''}`} dir="rtl">
                     {newT}
                   </div>
                 </div>

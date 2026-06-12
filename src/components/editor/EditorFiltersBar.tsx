@@ -168,10 +168,13 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             <option value="only">تقني فقط</option>
           </select>
           {editor.bdatTableNames.length > 0 && (
-            <select value={editor.filterTable} onChange={e => { editor.setFilterTable(e.target.value); editor.setFilterColumn("all"); }} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[180px]">
-              <option value="all">كل الجداول ({editor.state?.entries.length ?? 0})</option>
-              <GroupedTableOptions tables={editor.bdatTableNames} counts={editor.bdatTableCounts} />
-            </select>
+            <TableFilterTree
+              value={editor.filterTable}
+              onChange={(v) => { editor.setFilterTable(v); editor.setFilterColumn("all"); }}
+              tables={editor.bdatTableNames}
+              counts={editor.bdatTableCounts}
+              totalEntries={editor.state?.entries.length ?? 0}
+            />
           )}
           {editor.bdatColumnNames.length > 0 && editor.filterTable !== "all" && (
             <select value={editor.filterColumn} onChange={e => editor.setFilterColumn(e.target.value)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[160px]">

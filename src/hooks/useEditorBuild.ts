@@ -1304,8 +1304,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
 
         if (!tagRepair.exactTagMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
-          delete nonEmptyTranslations[key];
+          // KEEP the translation — only count it as needing user attention.
           tagSkipCount++;
+          console.warn(`[BUILD-TAGS] ${key} kept with tag warnings (no delete): exactTagMatch=${tagRepair.exactTagMatch}, missingClosing=${tagRepair.missingClosingTags}, missingControl=${tagRepair.missingControlOrPua}`);
           continue;
         }
 

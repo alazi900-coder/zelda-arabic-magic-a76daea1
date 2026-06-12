@@ -13,14 +13,30 @@ export interface MirrorCharsResult {
 
 /** Swap mirrored directional characters: () ↔ )( and <> ↔ >< */
 export function fixMirroredChars(text: string): string {
-  // Use placeholder to avoid double-swap
-  return text
-    .replace(/\(/g, '\x00OPEN\x00')
+  // Protect tags AND any parens/brackets that wrap a technical tag
+  // e.g. ([ML:icon icon=enh36]) — parens here are decorative around an in-game icon
+  // and must NOT be mirrored (would render as )icon( in the game).
+  const protectedItems: string[] = [];
+  const protect = (s: string) => {
+    const i = protectedItems.length;
+    protectedItems.push(s);
+    return `\x00P${i}\x00`;
+  };
+  let safe = text
+    // Parens wrapping a tag: ( [Tag:...] ) or (\[Tag:...\])
+    .replace(/\(\s*\\?\[[^\]]+\\?\]\s*\)/g, protect)
+    // Angle brackets wrapping a tag: <[Tag:...]>
+    .replace(/<\s*\\?\[[^\]]+\\?\]\s*>/g, protect)
+    // Standalone technical tags & placeholders
+    .replace(/\\?\[[^\]]+\\?\]|\{[\w]+\}|<[\w\/][^>]*>|[\uE000-\uE0FF]+|[\uFFF9-\uFFFB]+|\([A-Z][^)]{1,100}\)/g, protect);
+  safe = safe
+    .replace(/\(/g, '\x01OPEN\x01')
     .replace(/\)/g, '(')
-    .replace(/\x00OPEN\x00/g, ')')
-    .replace(/</g, '\x00LT\x00')
+    .replace(/\x01OPEN\x01/g, ')')
+    .replace(/</g, '\x01LT\x01')
     .replace(/>/g, '<')
-    .replace(/\x00LT\x00/g, '>');
+    .replace(/\x01LT\x01/g, '>');
+  return safe.replace(/\x00P(\d+)\x00/g, (_, i) => protectedItems[+i]);
 }
 
 interface MirrorCharsCleanPanelProps {

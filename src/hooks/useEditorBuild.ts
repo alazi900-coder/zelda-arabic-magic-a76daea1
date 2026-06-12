@@ -779,10 +779,10 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             const fixedCC = (tagRepair.text.match(RE_CONTROL_BUILD) || []).length;
             const fixedPUA = (tagRepair.text.match(RE_PUA_BUILD) || []).length;
             if ((origCC > 0 && fixedCC !== origCC) || (origPUA > 0 && fixedPUA !== origPUA)) {
-              nonEmptyTranslations[key] = orig;
+              // KEEP the repaired translation even if some chars are still missing.
               finalTagRevertCount++;
-              repairLog.push({ key, label: entryLabels.get(key) || key, action: 'reverted',
-                reason: 'رموز تحكم/خاصة مفقودة بعد الإصلاح', missingControl: origCC - fixedCC, missingPua: origPUA - fixedPUA });
+              repairLog.push({ key, label: entryLabels.get(key) || key, action: 'repaired',
+                reason: '⚠️ تم الاحتفاظ بالترجمة — رموز تحكم/خاصة مفقودة بعد الإصلاح', missingControl: origCC - fixedCC, missingPua: origPUA - fixedPUA });
             }
           } else {
             // Repair couldn't make any changes — but don't blindly revert to English.

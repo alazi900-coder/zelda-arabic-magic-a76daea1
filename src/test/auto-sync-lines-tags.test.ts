@@ -18,6 +18,9 @@ function syncLines(translated: string, englishLineCount: number, charLimit = 42,
   }
 
   const result = restoreTags(balanced, tags);
+  if (englishLineCount <= 1) {
+    return result.replace(/\r\n?/g, '\n').replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  }
   return result;
 }
 

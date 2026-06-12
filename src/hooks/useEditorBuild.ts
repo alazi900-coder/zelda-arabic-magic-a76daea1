@@ -399,8 +399,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             nonEmptyTranslations[key] = fixed;
             brokenBracketFixCount++;
           } else if (!previouslyBuiltKeys.has(key)) {
-            nonEmptyTranslations[key] = orig;
+            // KEEP the translation — only warn about broken brackets.
             brokenBracketRevertCount++;
+            console.warn(`[BUILD-SAFETY] Broken bracket in ${key} — translation kept (no revert)`);
           }
         }
       }
@@ -458,21 +459,23 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === NEW PROTECTION 4: Revert entries with NULL characters ===
+      // === PROTECTION 4: NULL char warning (NEVER revert) ===
+      // Translations containing NULL characters are kept; only a warning is
+      // surfaced so the user can decide whether to fix them.
       let nullCharFixCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         if (trans.includes('\x00')) {
-          const orig = entryOriginals.get(key);
-          if (orig) { nonEmptyTranslations[key] = orig; nullCharFixCount++; }
+          nullCharFixCount++;
+          console.warn(`[BUILD-SAFETY] NULL char in ${key} — translation kept (no revert)`);
         }
       }
       if (nullCharFixCount > 0) {
-        setBuildProgress(`⛔ استعادة ${nullCharFixCount} نص يحتوي على رموز NULL...`);
+        setBuildProgress(`⚠️ ${nullCharFixCount} نص يحتوي على رموز NULL — تم الاحتفاظ بالترجمة...`);
         await yieldToUI();
       }
 
-      // === PROTECTION 5: Repair (don't revert) entries with missing $N variables ===
-      // Try local repair first. Only revert if repair couldn't restore the variables.
+      // === PROTECTION 5: Repair (NEVER revert) entries with missing $N variables ===
+      // Try local repair first. If repair fails, keep the translation and warn.
       let dollarVarFixCount = 0;
       let dollarVarRepairCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
@@ -488,8 +491,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             nonEmptyTranslations[key] = repaired.text;
             dollarVarRepairCount++;
           } else {
-            nonEmptyTranslations[key] = orig;
+            // Keep the user's translation — just count for the warning report.
             dollarVarFixCount++;
+            console.warn(`[BUILD-SAFETY] Missing $N in ${key} — translation kept (no revert)`);
           }
         }
       }
@@ -498,13 +502,13 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
       if (dollarVarFixCount > 0) {
-        setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N غير قابلة للإصلاح...`);
+        setBuildProgress(`⚠️ ${dollarVarFixCount} نص بمتغيرات $N غير قابلة للإصلاح — تم الاحتفاظ بالترجمة...`);
         await yieldToUI();
       }
 
-      // === Post-BiDi bracket tag validation ===
+      // === Post-BiDi bracket tag validation (NEVER revert) ===
       // After Arabic processing, bracket tags [Tag:Value] may get corrupted by BiDi reversal.
-      // Verify that all original bracket tags survived intact; revert entries where they didn't.
+      // Translation is always kept — we only warn so the user can fix it manually.
       const BRACKET_TAG_RE_BUILD = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
       let bracketRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
@@ -513,18 +517,15 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         if (!orig) continue;
         const origBracketTags = orig.match(BRACKET_TAG_RE_BUILD) || [];
         if (origBracketTags.length === 0) continue;
-        // Check each original bracket tag exists in the processed translation
         const missingTags = origBracketTags.filter(tag => !trans.includes(tag));
         if (missingTags.length > 0) {
-          // Bracket tags were corrupted by BiDi — revert to original
-          nonEmptyTranslations[key] = orig;
+          // Translation kept — warning only.
           bracketRevertCount++;
-          console.warn(`[BUILD-SAFETY] Bracket tag corrupted in ${key}: missing ${missingTags.join(', ')}`);
+          console.warn(`[BUILD-SAFETY] Bracket tag changed in ${key}: missing ${missingTags.join(', ')} — translation kept (no revert)`);
         }
       }
       if (bracketRevertCount > 0) {
-        setBuildProgress(`🔒 استعادة ${bracketRevertCount} نص (أقواس تقنية تالفة بعد المعالجة العربية)...`);
-        console.warn(`[BUILD-SAFETY] Reverted ${bracketRevertCount} entries with corrupted bracket tags after Arabic processing`);
+        setBuildProgress(`⚠️ ${bracketRevertCount} نص بأقواس تقنية تالفة بعد المعالجة العربية — تم الاحتفاظ بالترجمة...`);
         await yieldToUI();
       }
 
@@ -622,10 +623,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const pureTransText = trans.replace(RE_SPECIAL, '').trim();
 
         if (!pureTransText) {
-          // No real text in translation — revert to original
-          nonEmptyTranslations[key] = orig;
+          // NEVER revert — keep the user's translation and just warn.
           revertedCount++;
-          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'ترجمة فارغة بعد إزالة الرموز', missingControl: missingControlN, missingPua: missingPuaN });
+          repairLog.push({ key, label: entryLabel, action: 'repaired', reason: '⚠️ تم الاحتفاظ بالترجمة — لا يوجد نص بعد إزالة الرموز', missingControl: missingControlN, missingPua: missingPuaN });
           continue;
         }
 
@@ -694,10 +694,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             repairLog.push({ key, label: entryLabel, action: 'repaired', reason: 'توزيع رموز داخلية في النص', missingControl: missingControlN, missingPua: missingPuaN });
           }
         } else {
-          // Complex/unexpected structure — fall back to original for safety
-          nonEmptyTranslations[key] = orig;
+          // NEVER revert — keep the user's translation and warn instead.
           revertedCount++;
-          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'بنية رموز معقدة لا يمكن إصلاحها', missingControl: missingControlN, missingPua: missingPuaN });
+          repairLog.push({ key, label: entryLabel, action: 'repaired', reason: '⚠️ تم الاحتفاظ بالترجمة — بنية رموز معقدة لم تُصلَح تلقائياً', missingControl: missingControlN, missingPua: missingPuaN });
         }
       }
 
@@ -739,9 +738,8 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const truncPuaCount = (truncated.match(/[\uE000-\uE0FF]/g) || []).length;
 
           if ((truncControlCount < origControlCount || truncPuaCount < origPuaCount) && !previouslyBuiltKeys.has(key)) {
-            // Truncation destroyed vital chars — revert to original English
-            nonEmptyTranslations[key] = orig;
-            console.warn(`[BUILD-TRUNC] Reverted "${key}" to English: truncation lost control/PUA chars`);
+            // Truncation lost vital chars — KEEP the (untruncated) translation and warn.
+            console.warn(`[BUILD-TRUNC] Kept "${key}" — truncation would have lost control/PUA chars (no revert)`);
           } else {
             nonEmptyTranslations[key] = truncated;
           }
@@ -782,10 +780,10 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             const fixedCC = (tagRepair.text.match(RE_CONTROL_BUILD) || []).length;
             const fixedPUA = (tagRepair.text.match(RE_PUA_BUILD) || []).length;
             if ((origCC > 0 && fixedCC !== origCC) || (origPUA > 0 && fixedPUA !== origPUA)) {
-              nonEmptyTranslations[key] = orig;
+              // KEEP the repaired translation even if some chars are still missing.
               finalTagRevertCount++;
-              repairLog.push({ key, label: entryLabels.get(key) || key, action: 'reverted',
-                reason: 'رموز تحكم/خاصة مفقودة بعد الإصلاح', missingControl: origCC - fixedCC, missingPua: origPUA - fixedPUA });
+              repairLog.push({ key, label: entryLabels.get(key) || key, action: 'repaired',
+                reason: '⚠️ تم الاحتفاظ بالترجمة — رموز تحكم/خاصة مفقودة بعد الإصلاح', missingControl: origCC - fixedCC, missingPua: origPUA - fixedPUA });
             }
           } else {
             // Repair couldn't make any changes — but don't blindly revert to English.
@@ -994,19 +992,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const result = evaluateMsbtSafety(entry.original, trans);
           const label = entry.msbtFile && entry.index !== undefined ? `${entry.msbtFile}#${entry.index}` : key;
 
+          // NEVER delete translations. Even catastrophic conditions
+          // (NULL, unbalanced brackets, Ruby mismatch) are reported as
+          // warnings only — the user keeps full control over the text.
           if (result.action === "delete") {
-            delete nonEmptyTranslations[key];
-            skippedUnsafeCount++;
             msbtRepairLog.push({
-              key, label, action: "reverted",
-              reason: result.reason || "نص خطر تم استبعاده",
+              key, label, action: "repaired",
+              reason: `⚠️ تحذير خطر — تم الاحتفاظ بالترجمة: ${result.reason || "بنية غير آمنة"}`,
               missingControl: 0, missingPua: 0,
             });
-            console.warn(`[BUILD-SAFETY] MSBT entry deleted ${key}: ${result.reason}`);
-            continue;
-          }
-
-          if (result.action === "repair") {
+            console.warn(`[BUILD-SAFETY] MSBT entry kept with critical warning ${key}: ${result.reason}`);
+          } else if (result.action === "repair") {
             fixedTechnicalCount++;
             msbtRepairLog.push({
               key, label, action: "repaired",
@@ -1308,8 +1304,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         }
 
         if (!tagRepair.exactTagMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
-          delete nonEmptyTranslations[key];
+          // KEEP the translation — only count it as needing user attention.
           tagSkipCount++;
+          console.warn(`[BUILD-TAGS] ${key} kept with tag warnings (no delete): exactTagMatch=${tagRepair.exactTagMatch}, missingClosing=${tagRepair.missingClosingTags}, missingControl=${tagRepair.missingControlOrPua}`);
           continue;
         }
 

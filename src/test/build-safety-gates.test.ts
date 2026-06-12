@@ -20,22 +20,24 @@ describe("evaluateMsbtSafety — MSBT hard gate", () => {
     expect(r.text).toContain("[System:PageBreak]");
   });
 
-  it("DELETES translation containing NULL char (catastrophic)", () => {
+  it("WARNS but KEEPS translation containing NULL char (never deletes)", () => {
     const r = evaluateMsbtSafety("Hello", "مرحبا\x00خطر");
-    expect(r.action).toBe("delete");
-    expect(r.reason).toMatch(/NULL/);
+    expect(r.action).not.toBe("delete");
+    expect(r.text).toContain("مرحبا");
+    expect(r.warnings.some((w) => /NULL/.test(w))).toBe(true);
   });
 
-  it("DELETES translation with unbalanced brackets", () => {
+  it("WARNS but KEEPS translation with unbalanced brackets (never deletes)", () => {
     const r = evaluateMsbtSafety("Hello [System:n]", "مرحبا [System:n");
-    expect(r.action).toBe("delete");
-    expect(r.reason).toMatch(/أقواس/);
+    expect(r.action).not.toBe("delete");
+    expect(r.text).toContain("مرحبا");
+    expect(r.warnings.some((w) => /أقواس/.test(w))).toBe(true);
   });
 
-  it("DELETES translation with extra surplus brackets (catastrophic)", () => {
-    // Extra `]` with no matching `[` — unrepairable structural break.
+  it("WARNS but KEEPS translation with extra surplus brackets (never deletes)", () => {
     const r = evaluateMsbtSafety("[Tag:x]Hi", "[Tag:x]مرحبا]]]");
-    expect(r.action).toBe("delete");
+    expect(r.action).not.toBe("delete");
+    expect(r.text).toContain("مرحبا");
   });
 
 
@@ -99,11 +101,11 @@ describe("evaluateDollarVarGate — $N variable gate", () => {
     expect(r.text).not.toContain("دولار");
   });
 
-  it("REVERTS only when $N is unrepairable", () => {
+  it("WARNS but KEEPS translation when $N is unrepairable (never reverts)", () => {
     const r = evaluateDollarVarGate("Deals $1 damage to $2", "يسبب ضرراً");
-    expect(r.action).toBe("revert");
-    expect(r.text).toBe("Deals $1 damage to $2");
-    expect(r.reason).toBeTruthy();
+    expect(r.action).toBe("warn");
+    expect(r.text).toBe("يسبب ضرراً");
+    expect(r.reason).toMatch(/\$/);
   });
 
   it("REGRESSION: tries repair BEFORE reverting (no premature revert)", () => {

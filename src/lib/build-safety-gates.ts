@@ -45,11 +45,12 @@ export function evaluateMsbtSafety(original: string, translation: string): MsbtG
   const rubyClose = (text.match(/\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
   const rubyMismatch = rubyOpen !== rubyClose;
 
-  if (hasNullChar) return { action: "delete", text, reason: "يحتوي على رمز NULL", warnings: [] };
-  if (bracketMismatch) return { action: "delete", text, reason: `أقواس غير متوازنة (${openBrackets}[ vs ${closeBrackets}])`, warnings: [] };
-  if (rubyMismatch) return { action: "delete", text, reason: `وسوم Ruby غير متطابقة (${rubyOpen} مفتوح / ${rubyClose} مغلق)`, warnings: [] };
-
+  // NEVER delete. Catastrophic conditions are reported as warnings only —
+  // the translation is always kept, and the user decides whether to fix it.
   const warnings: string[] = [];
+  if (hasNullChar) warnings.push("⚠️ يحتوي على رمز NULL (قد يسبب توقف اللعبة)");
+  if (bracketMismatch) warnings.push(`⚠️ أقواس غير متوازنة (${openBrackets}[ vs ${closeBrackets}])`);
+  if (rubyMismatch) warnings.push(`⚠️ وسوم Ruby غير متطابقة (${rubyOpen} مفتوح / ${rubyClose} مغلق)`);
   if (!tagRepair.exactTagMatch) warnings.push("اختلاف عدد الوسوم التقنية");
   if (!tagRepair.sequenceMatch) warnings.push("ترتيب الوسوم مختلف عن الأصل");
   if (tagRepair.missingClosingTags) warnings.push("وسوم إغلاق ناقصة");
@@ -59,16 +60,16 @@ export function evaluateMsbtSafety(original: string, translation: string): MsbtG
 }
 
 export interface DollarVarGateResult {
-  action: "keep" | "repair" | "revert";
+  action: "keep" | "repair" | "warn";
   text: string;
+  /** Localized Arabic warning; present only when $N vars are still missing. */
   reason?: string;
 }
 
 /**
- * `$N` variable gate. If the original has `$1`/`$2`/... and the translation
- * dropped them, first try local repair (handles `دولار1`, `1.$`, etc.).
- * Only revert if repair fails — silent revert without a repair attempt
- * is a bug we explicitly test against.
+ * `$N` variable gate. NEVER reverts to English. Tries local repair first
+ * (handles `دولار1`, `1.$`, etc.). If repair fails, the user's translation
+ * is kept and a warning is surfaced in the build safety report.
  */
 export function evaluateDollarVarGate(original: string, translation: string): DollarVarGateResult {
   const origVars = original.match(/\$\d+/g);
@@ -79,7 +80,8 @@ export function evaluateDollarVarGate(original: string, translation: string): Do
   if (repaired.changed && origVars.every((v) => repaired.text.includes(v))) {
     return { action: "repair", text: repaired.text };
   }
-  return { action: "revert", text: original, reason: "متغيرات $N غير قابلة للإصلاح" };
+  const missing = origVars.filter((v) => !translation.includes(v));
+  return { action: "warn", text: translation, reason: `متغيرات $N ناقصة: ${missing.join(", ")}` };
 }
 
 export interface ControlPuaGateResult {

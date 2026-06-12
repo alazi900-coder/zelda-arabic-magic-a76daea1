@@ -78,22 +78,47 @@ function scanSingle(text: string, file: string, categories: Record<Category, Map
 }
 
 /**
- * Chunked async extraction. Yields to the event loop every CHUNK_SIZE entries
- * so the UI stays responsive even on 50k+ entries.
+ * Adaptive chunked async extraction.
+ *
+ * Auto-tunes batch size to keep each chunk under ~16ms (one frame), so the UI
+ * stays at 60fps regardless of device speed. Strategy:
+ *  - Start with a conservative chunk (200 entries).
+ *  - Measure actual processing time per chunk.
+ *  - Grow chunk size when fast, shrink when slow, clamped to [50, 5000].
+ *  - Always yield to the event loop between chunks via `requestAnimationFrame`
+ *    when available (falls back to setTimeout(0)).
  */
 export async function extractTags(
   entries: ExtractorEntry[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<TagReport> {
-  const CHUNK_SIZE = 500;
+  const TARGET_MS = 12;     // ~16ms frame budget minus overhead
+  const MIN_CHUNK = 50;
+  const MAX_CHUNK = 5000;
+  let chunkSize = 200;
+
   const categories = Object.fromEntries(
     CATEGORIES.map((c) => [c, new Map<string, Occurrence>()]),
   ) as Record<Category, Map<string, Occurrence>>;
 
+  const yieldToUI = () =>
+    new Promise<void>((r) => {
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => r());
+      } else {
+        setTimeout(r, 0);
+      }
+    });
+
+  const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
   let scanned = 0;
-  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
-    const chunk = entries.slice(i, i + CHUNK_SIZE);
-    for (const e of chunk) {
+  let i = 0;
+  while (i < entries.length) {
+    const end = Math.min(i + chunkSize, entries.length);
+    const t0 = now();
+    for (let j = i; j < end; j++) {
+      const e = entries[j];
       if (!e.original) continue;
       try {
         scanSingle(e.original, e.msbtFile || "(unknown)", categories);
@@ -102,8 +127,19 @@ export async function extractTags(
         // never crash on a single bad entry
       }
     }
-    onProgress?.(Math.min(i + CHUNK_SIZE, entries.length), entries.length);
-    await new Promise<void>((r) => setTimeout(r, 0));
+    const elapsed = now() - t0;
+    i = end;
+
+    onProgress?.(i, entries.length);
+    await yieldToUI();
+
+    // Adaptive resize: aim for TARGET_MS per chunk.
+    if (elapsed > 0) {
+      const ratio = TARGET_MS / elapsed;
+      // Dampen the adjustment (75% old, 25% new) to avoid oscillation.
+      const next = chunkSize * (0.75 + 0.25 * ratio);
+      chunkSize = Math.max(MIN_CHUNK, Math.min(MAX_CHUNK, Math.round(next)));
+    }
   }
 
   return { totalEntries: entries.length, scannedEntries: scanned, categories };

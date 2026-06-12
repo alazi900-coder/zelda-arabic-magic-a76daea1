@@ -3,9 +3,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Wrench, CheckCircle2, X, Sparkles, Search, Type } from "lucide-react";
+import { ChevronDown, ChevronUp, Wrench, CheckCircle2, X, Sparkles, Search, Type, FileDown } from "lucide-react";
 import { EditorState } from "@/components/editor/types";
 import { checkArabicTypos, applyTypoFix, type TypoResult } from "@/lib/arabic-typo-checker";
+import { extractTags, downloadReport } from "@/lib/tag-extractor";
 
 
 
@@ -120,6 +121,30 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
   const [scanResults, setScanResults] = useState<CleanupResult[] | null>(null);
   const [typoResults, setTypoResults] = useState<TypoResult[] | null>(null);
   const [typoScanning, setTypoScanning] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(0);
+
+  // --- Tag extractor (local, no AI) ---
+  const handleExtractTags = useCallback(async () => {
+    if (extracting) return;
+    setExtracting(true);
+    setExtractProgress(0);
+    try {
+      const entries = state.entries.map((e) => ({
+        msbtFile: e.msbtFile,
+        original: e.original || "",
+      }));
+      const report = await extractTags(entries, (done, total) => {
+        setExtractProgress(total > 0 ? Math.round((done / total) * 100) : 0);
+      });
+      downloadReport(report);
+    } catch (err) {
+      console.error("Tag extraction failed:", err);
+    } finally {
+      setExtracting(false);
+      setExtractProgress(0);
+    }
+  }, [state.entries, extracting]);
 
   // --- Typo checker ---
   const handleTypoScan = useCallback(() => {
@@ -319,6 +344,21 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
                 )}
               </Button>
             </div>
+
+            {/* Tag extractor — local, no AI, chunked async */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs h-9 gap-1.5 border-purple-500/30 text-purple-600 hover:bg-purple-500/10"
+              onClick={(e) => { e.stopPropagation(); handleExtractTags(); }}
+              disabled={extracting || state.entries.length === 0}
+            >
+              {extracting ? (
+                <><Sparkles className="w-3 h-3 animate-spin" /> جاري الاستخراج... {extractProgress}%</>
+              ) : (
+                <><FileDown className="w-3 h-3" /> استخراج الوسوم التقنية (TXT)</>
+              )}
+            </Button>
 
             {/* Enabled tools */}
             <div className="flex flex-wrap gap-2">

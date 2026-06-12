@@ -209,6 +209,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             counts={editor.bdatTableCounts}
             totalEntries={editor.state?.entries.length ?? 0}
             className="w-full max-w-none"
+            onDeleteScope={handleDeleteScope}
           />
         )}
         {editor.bdatColumnNames.length > 0 && editor.filterTable !== "all" && (

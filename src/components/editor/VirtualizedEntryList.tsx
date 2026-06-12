@@ -34,6 +34,7 @@ interface VirtualizedEntryListProps {
   onRejectFuzzy: (key: string) => void;
   onCompare: (entry: ExtractedEntry) => void;
   onSplitNewline: (key: string) => void;
+  onShowRelated?: (entry: ExtractedEntry) => void;
   findSimilar: (key: string, original: string) => TMSuggestion[];
   height?: number;
   legacyCommaSplitEnabled?: boolean;

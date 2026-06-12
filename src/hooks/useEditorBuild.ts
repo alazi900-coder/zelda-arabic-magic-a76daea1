@@ -399,8 +399,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             nonEmptyTranslations[key] = fixed;
             brokenBracketFixCount++;
           } else if (!previouslyBuiltKeys.has(key)) {
-            nonEmptyTranslations[key] = orig;
+            // KEEP the translation — only warn about broken brackets.
             brokenBracketRevertCount++;
+            console.warn(`[BUILD-SAFETY] Broken bracket in ${key} — translation kept (no revert)`);
           }
         }
       }

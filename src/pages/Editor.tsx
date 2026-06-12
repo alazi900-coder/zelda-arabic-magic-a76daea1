@@ -56,6 +56,7 @@ const Editor = () => {
   const [showBuildSection, setShowBuildSection] = React.useState(false);
   const [showExportEnglishDialog, setShowExportEnglishDialog] = React.useState(false);
   const [compareEntry, setCompareEntry] = React.useState<import("@/components/editor/types").ExtractedEntry | null>(null);
+  const [relatedEntry, setRelatedEntry] = React.useState<import("@/components/editor/types").ExtractedEntry | null>(null);
   const [showClearConfirm, setShowClearConfirm] = React.useState<'all' | 'filtered' | null>(null);
   const [showTagRepair, setShowTagRepair] = React.useState(false);
   const [showArabicProcessConfirm, setShowArabicProcessConfirm] = React.useState(false);

@@ -102,6 +102,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
         onRejectFuzzy={editor.handleRejectFuzzy}
         onCompare={(entry) => setCompareEntry(entry)}
         onSplitNewline={editor.handleSplitSingleEntry}
+        onShowRelated={setRelatedEntry ? (entry) => setRelatedEntry(entry) : undefined}
         findSimilar={findSimilar}
         height={Math.max(400, window.innerHeight - 300)}
         legacyCommaSplitEnabled={editor.legacyCommaSplitEnabled}

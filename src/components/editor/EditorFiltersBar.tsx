@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Filter, Eye, Replace, Columns, Wand2 } from "lucide-react";
 import DebouncedInput from "@/components/editor/DebouncedInput";
+import TableFilterTree from "@/components/editor/TableFilterTree";
 import { type FilterStatus, type FilterTechnical } from "@/components/editor/types";
 import type { useEditorState } from "@/hooks/useEditorState";
 

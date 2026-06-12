@@ -7,6 +7,7 @@ import { Loader2, Check, Sparkles, AlertTriangle, Wrench, Play, PlayCircle } fro
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { countEffectiveLines } from "@/lib/text-tokens";
 
 interface CompareEnginesDialogProps {
   open: boolean;
@@ -62,6 +63,12 @@ function normalizeReversedSlashTags(originalText: string, translatedText: string
     }
     return match;
   });
+}
+
+function normalizeTranslationForEntry(originalText: string, translatedText: string): string {
+  const normalized = normalizeReversedSlashTags(originalText, translatedText);
+  if (countEffectiveLines(originalText) > 1) return normalized;
+  return normalized.replace(/\r\n?/g, "\n").replace(/\n+/g, " ").replace(/[ \t\f\v]{2,}/g, " ").trim();
 }
 
 function extractTags(text: string): string[] {
@@ -138,20 +145,20 @@ function autoFixTags(originalText: string, translatedText: string): string {
   return rebuilt.replace(/\s{2,}/g, ' ').trim();
 }
 
-function renderTranslationWithProtectedTags(text: string) {
+function renderTranslationWithProtectedTags(text: string, singleLine = false) {
   const parts = text.split(TECH_TAG_RENDER_REGEX).filter(Boolean);
   return parts.map((part, idx) => {
     if (TECH_TAG_RENDER_REGEX.test(part)) {
       TECH_TAG_RENDER_REGEX.lastIndex = 0;
       return (
-        <span key={`tag-${idx}`} dir="ltr" className="inline-flex items-center px-1 py-0.5 mx-0.5 rounded font-mono text-xs bg-primary/15 text-primary border border-primary/25 whitespace-pre-wrap break-all">
+        <span key={`tag-${idx}`} dir="ltr" className={`inline-flex items-center px-1 py-0.5 mx-0.5 rounded font-mono text-xs bg-primary/15 text-primary border border-primary/25 ${singleLine ? "whitespace-nowrap align-baseline" : "whitespace-pre-wrap break-all"}`}>
           {part}
         </span>
       );
     }
     TECH_TAG_RENDER_REGEX.lastIndex = 0;
     return (
-      <span key={`txt-${idx}`} dir="auto" style={{ unicodeBidi: "plaintext" }}>
+      <span key={`txt-${idx}`} dir="auto" className={singleLine ? "whitespace-nowrap" : undefined} style={{ unicodeBidi: "plaintext" }}>
         {part}
       </span>
     );

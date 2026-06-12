@@ -156,6 +156,7 @@ interface EntryCardProps {
   onRejectFuzzy?: (key: string) => void;
   onCompare?: (entry: ExtractedEntry) => void;
   onSplitNewline?: (key: string) => void;
+  onShowRelated?: (entry: ExtractedEntry) => void;
   tmSuggestions?: TMSuggestion[];
   legacyCommaSplitEnabled?: boolean;
 }

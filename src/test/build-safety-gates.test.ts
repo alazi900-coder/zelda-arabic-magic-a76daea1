@@ -101,11 +101,11 @@ describe("evaluateDollarVarGate — $N variable gate", () => {
     expect(r.text).not.toContain("دولار");
   });
 
-  it("REVERTS only when $N is unrepairable", () => {
+  it("WARNS but KEEPS translation when $N is unrepairable (never reverts)", () => {
     const r = evaluateDollarVarGate("Deals $1 damage to $2", "يسبب ضرراً");
-    expect(r.action).toBe("revert");
-    expect(r.text).toBe("Deals $1 damage to $2");
-    expect(r.reason).toBeTruthy();
+    expect(r.action).toBe("warn");
+    expect(r.text).toBe("يسبب ضرراً");
+    expect(r.reason).toMatch(/\$/);
   });
 
   it("REGRESSION: tries repair BEFORE reverting (no premature revert)", () => {

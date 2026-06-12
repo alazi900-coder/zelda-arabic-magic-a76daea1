@@ -479,6 +479,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   <GitCompareArrows className="w-4 h-4 text-accent" />
                 </Button>
               )}
+              {onShowRelated && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => onShowRelated(entry)} title="🔗 عرض الترجمات المتعلقة">
+                  <Link2 className="w-4 h-4 text-primary" />
+                </Button>
+              )}
               {translation?.trim() && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={handleBackTranslate} disabled={backTranslating} title="ترجمة عكسية — تحقق من دقة الترجمة">
                   {backTranslating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4 text-accent" />}

@@ -42,6 +42,7 @@ interface EditorEntryListSectionProps {
   showDiffView: boolean;
   setShowDiffView: (v: boolean) => void;
   setCompareEntry: (e: ExtractedEntry | null) => void;
+  setRelatedEntry?: (e: ExtractedEntry | null) => void;
   findSimilar: ReturnType<typeof useTranslationMemory>["findSimilar"];
 }
 
@@ -51,6 +52,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
   showDiffView,
   setShowDiffView,
   setCompareEntry,
+  setRelatedEntry,
   findSimilar,
 }) => (
   <>

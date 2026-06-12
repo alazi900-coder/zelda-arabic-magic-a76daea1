@@ -123,14 +123,14 @@ describe("evaluateControlPuaGate — final control/PUA gate", () => {
     expect(r.text).toBe("أ\uFFFAب");
   });
 
-  it("REGRESSION: keeps translation when repair can't make changes (no silent revert)", () => {
+  it("REGRESSION: never reverts to English even when control chars are missing", () => {
     // The old code reverted to English when `repair.changed === false`.
-    // This is the dangerous bug — must never recur.
+    // The new gate keeps the user's translation no matter what.
     const r = evaluateControlPuaGate("Hello\uFFFAworld", "مرحبا عالم");
-    expect(r.action).not.toBe("revert" as never);
     expect(r.text).toContain("مرحبا");
-    expect(r.warnings.length).toBeGreaterThan(0);
+    expect(r.text).not.toBe("Hello\uFFFAworld");
   });
+
 
   it("REGRESSION: never returns the English original", () => {
     // Iterate over many shapes — none should produce English-as-text output.

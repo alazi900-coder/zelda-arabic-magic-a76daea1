@@ -693,10 +693,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
             repairLog.push({ key, label: entryLabel, action: 'repaired', reason: 'توزيع رموز داخلية في النص', missingControl: missingControlN, missingPua: missingPuaN });
           }
         } else {
-          // Complex/unexpected structure — fall back to original for safety
-          nonEmptyTranslations[key] = orig;
+          // NEVER revert — keep the user's translation and warn instead.
           revertedCount++;
-          repairLog.push({ key, label: entryLabel, action: 'reverted', reason: 'بنية رموز معقدة لا يمكن إصلاحها', missingControl: missingControlN, missingPua: missingPuaN });
+          repairLog.push({ key, label: entryLabel, action: 'repaired', reason: '⚠️ تم الاحتفاظ بالترجمة — بنية رموز معقدة لم تُصلَح تلقائياً', missingControl: missingControlN, missingPua: missingPuaN });
         }
       }
 

@@ -18,6 +18,9 @@ function syncLines(translated: string, englishLineCount: number, charLimit = 42,
   }
 
   const result = restoreTags(balanced, tags);
+  if (englishLineCount <= 1) {
+    return result.replace(/\r\n?/g, '\n').replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  }
   return result;
 }
 
@@ -72,6 +75,12 @@ describe("autoSyncLines tag protection", () => {
     const result = syncLines(input, 1);
     expect(result).not.toContain("\n");
     expect(result).toContain("[ML:icon icon=btn_a ]");
+  });
+
+  it("flattens single-line original translations even when tags split visual chunks", () => {
+    const input = "هاجم\n[System:Color name=arts_sp ]\nمن الخلف[/System:Color]\nلإلحاق ضرر أكبر";
+    const result = syncLines(input, 1);
+    expect(result).toBe("هاجم [System:Color name=arts_sp ] من الخلف[/System:Color] لإلحاق ضرر أكبر");
   });
 
   it("handles PUA icon characters as atomic blocks", () => {

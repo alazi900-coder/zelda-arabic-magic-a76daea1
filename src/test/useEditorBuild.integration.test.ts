@@ -228,7 +228,7 @@ describe("useEditorBuild — bulk fuzz (no silent reverts across 100 entries)", 
     (i: number) => ({ o: `Got $1 gold #${i}`, t: `حصلت على دولار1 ذهب #${i}` }),
     (i: number) => ({ o: `Hello\uFFFAworld #${i}`, t: `مرحبا عالم #${i}` }),
     (i: number) => ({ o: `[XENO:n] line ${i}`, t: `سطر ${i}` }),
-    (i: number) => ({ o: `\uE00${i % 10} icon ${i}`, t: `أيقونة ${i}` }),
+    (i: number) => ({ o: `${String.fromCharCode(0xE000 + (i % 10))} icon ${i}`, t: `أيقونة ${i}` }),
     (i: number) => ({
       o: `[XENO:wait wait=k ][XENO:act act=A ]hi ${i}`,
       t: `[XENO:act act=A ][XENO:wait wait=k ]مرحبا ${i}`,

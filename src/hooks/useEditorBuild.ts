@@ -471,21 +471,34 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === NEW PROTECTION 5: Revert entries with missing $N variables ===
+      // === PROTECTION 5: Repair (don't revert) entries with missing $N variables ===
+      // Try local repair first. Only revert if repair couldn't restore the variables.
       let dollarVarFixCount = 0;
+      let dollarVarRepairCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
-        if (previouslyBuiltKeys.has(key)) continue; // trust user edit on previously-built file
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         const origVars = orig.match(/\$\d+/g);
         if (!origVars || origVars.length === 0) continue;
         if (origVars.some(v => !trans.includes(v))) {
-          nonEmptyTranslations[key] = orig;
-          dollarVarFixCount++;
+          // Try to repair $N via tag guard (handles دولار1, 1.$, $.1, etc.)
+          const repaired = repairTranslationTagsForBuild(orig, trans);
+          if (repaired.changed && origVars.every(v => repaired.text.includes(v))) {
+            nonEmptyTranslations[key] = repaired.text;
+            dollarVarRepairCount++;
+          } else {
+            nonEmptyTranslations[key] = orig;
+            dollarVarFixCount++;
+          }
         }
       }
+      if (dollarVarRepairCount > 0) {
+        setBuildProgress(`💲 إصلاح ${dollarVarRepairCount} نص بمتغيرات $N...`);
+        await yieldToUI();
+      }
       if (dollarVarFixCount > 0) {
-        setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N مفقودة...`);
+        setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N غير قابلة للإصلاح...`);
         await yieldToUI();
       }
 

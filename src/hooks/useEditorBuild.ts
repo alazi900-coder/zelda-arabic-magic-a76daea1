@@ -1000,18 +1000,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const rubyOpenCount = (trans.match(/\[\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
           const rubyCloseCount = (trans.match(/\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
 
-          if (
-            hasNullChar ||
-            bracketMismatch ||
-            rubyOpenCount !== rubyCloseCount ||
-            !tagRepair.exactTagMatch ||
-            !tagRepair.sequenceMatch ||
-            tagRepair.missingClosingTags ||
-            tagRepair.missingControlOrPua
-          ) {
+          // Only delete on truly catastrophic conditions that would crash the game.
+          // Tag-multiset / sequence / control-char mismatches are kept as best-effort —
+          // a partially-correct translation is far better than silent English fallback.
+          if (hasNullChar || bracketMismatch || rubyOpenCount !== rubyCloseCount) {
             delete nonEmptyTranslations[key];
             skippedUnsafeCount++;
+            console.warn(`[BUILD-SAFETY] MSBT entry deleted (hard fail) ${key}: nullChar=${hasNullChar} bracketMismatch=${bracketMismatch} rubyMismatch=${rubyOpenCount !== rubyCloseCount}`);
             continue;
+          }
+          if (!tagRepair.exactTagMatch || !tagRepair.sequenceMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
+            console.warn(`[BUILD-SAFETY] MSBT entry kept with tag warnings ${key}: exactTag=${tagRepair.exactTagMatch} seq=${tagRepair.sequenceMatch} closing=${!tagRepair.missingClosingTags} ctrl=${!tagRepair.missingControlOrPua}`);
           }
 
           nonEmptyTranslations[key] = trans;

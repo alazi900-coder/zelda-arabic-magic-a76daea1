@@ -74,6 +74,12 @@ describe("autoSyncLines tag protection", () => {
     expect(result).toContain("[ML:icon icon=btn_a ]");
   });
 
+  it("flattens single-line original translations even when tags split visual chunks", () => {
+    const input = "هاجم\n[System:Color name=arts_sp ]\nمن الخلف[/System:Color]\nلإلحاق ضرر أكبر";
+    const result = syncLines(input, 1);
+    expect(result).toBe("هاجم [System:Color name=arts_sp ] من الخلف[/System:Color] لإلحاق ضرر أكبر");
+  });
+
   it("handles PUA icon characters as atomic blocks", () => {
     const input = "\uE001\uE002 اختر السلاح المناسب للمعركة القادمة واستعد جيداً للمواجهة الكبرى";
     const result = syncLines(input, 2);

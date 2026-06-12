@@ -121,6 +121,30 @@ export default function CleanupToolsPanel({ state, onApplyFix, onApplyAll }: Cle
   const [scanResults, setScanResults] = useState<CleanupResult[] | null>(null);
   const [typoResults, setTypoResults] = useState<TypoResult[] | null>(null);
   const [typoScanning, setTypoScanning] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(0);
+
+  // --- Tag extractor (local, no AI) ---
+  const handleExtractTags = useCallback(async () => {
+    if (extracting) return;
+    setExtracting(true);
+    setExtractProgress(0);
+    try {
+      const entries = state.entries.map((e) => ({
+        msbtFile: e.msbtFile,
+        original: e.original || "",
+      }));
+      const report = await extractTags(entries, (done, total) => {
+        setExtractProgress(total > 0 ? Math.round((done / total) * 100) : 0);
+      });
+      downloadReport(report);
+    } catch (err) {
+      console.error("Tag extraction failed:", err);
+    } finally {
+      setExtracting(false);
+      setExtractProgress(0);
+    }
+  }, [state.entries, extracting]);
 
   // --- Typo checker ---
   const handleTypoScan = useCallback(() => {

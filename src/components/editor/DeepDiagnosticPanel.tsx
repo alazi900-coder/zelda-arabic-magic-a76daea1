@@ -933,6 +933,23 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               )}
             </div>
 
+            {/* New tag-remnant check toggle */}
+            <label className="flex items-center gap-2 text-xs cursor-pointer select-none p-2 rounded border border-border/40 bg-muted/20 hover:bg-muted/30 transition-colors">
+              <input
+                type="checkbox"
+                checked={newTagCheckEnabled}
+                onChange={(e) => setNewTagCheckEnabled(e.target.checked)}
+                className="rounded border-border"
+              />
+              <span className="font-display font-bold">
+                🏚️ فحص بقايا الوسوم التقنية (FAT/XENO/System…)
+              </span>
+              <span className="text-muted-foreground font-body text-[10px] ms-auto">
+                {newTagCheckEnabled ? "مُفعّل" : "موقوف"}
+              </span>
+            </label>
+
+
 
             {/* Progress bar during scan */}
             {scanning && scanProgress.total > 0 && (

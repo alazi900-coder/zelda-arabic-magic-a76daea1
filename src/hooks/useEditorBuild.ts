@@ -505,9 +505,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === Post-BiDi bracket tag validation ===
+      // === Post-BiDi bracket tag validation (NEVER revert) ===
       // After Arabic processing, bracket tags [Tag:Value] may get corrupted by BiDi reversal.
-      // Verify that all original bracket tags survived intact; revert entries where they didn't.
+      // Translation is always kept — we only warn so the user can fix it manually.
       const BRACKET_TAG_RE_BUILD = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
       let bracketRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
@@ -516,18 +516,15 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         if (!orig) continue;
         const origBracketTags = orig.match(BRACKET_TAG_RE_BUILD) || [];
         if (origBracketTags.length === 0) continue;
-        // Check each original bracket tag exists in the processed translation
         const missingTags = origBracketTags.filter(tag => !trans.includes(tag));
         if (missingTags.length > 0) {
-          // Bracket tags were corrupted by BiDi — revert to original
-          nonEmptyTranslations[key] = orig;
+          // Translation kept — warning only.
           bracketRevertCount++;
-          console.warn(`[BUILD-SAFETY] Bracket tag corrupted in ${key}: missing ${missingTags.join(', ')}`);
+          console.warn(`[BUILD-SAFETY] Bracket tag changed in ${key}: missing ${missingTags.join(', ')} — translation kept (no revert)`);
         }
       }
       if (bracketRevertCount > 0) {
-        setBuildProgress(`🔒 استعادة ${bracketRevertCount} نص (أقواس تقنية تالفة بعد المعالجة العربية)...`);
-        console.warn(`[BUILD-SAFETY] Reverted ${bracketRevertCount} entries with corrupted bracket tags after Arabic processing`);
+        setBuildProgress(`⚠️ ${bracketRevertCount} نص بأقواس تقنية تالفة بعد المعالجة العربية — تم الاحتفاظ بالترجمة...`);
         await yieldToUI();
       }
 

@@ -96,26 +96,28 @@ export function useEditorTranslation({
    */
   const autoSyncLines = (key: string, translated: string, originalEntry?: ExtractedEntry): string => {
     if (!originalEntry) return translated;
-    if (!legacyCommaSplitEnabled) return translated;
     const englishLineCount = countEffectiveLines(originalEntry.original);
 
-    // Protect tags before any text manipulation
-    const { cleanText, tags } = protectTags(translated);
-
-    // Flatten (remove newlines, collapse spaces)
-    const flat = cleanText.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-
-    let balanced: string;
+    // إصلاح حرج: إذا كان النص الأصلي سطراً واحداً، يجب أن تكون الترجمة سطراً واحداً
+    // حتى لو أضاف الذكاء الاصطناعي \n من تلقاء نفسه. يطبَّق دائماً (مستقل عن legacy).
     if (englishLineCount <= 1) {
-      balanced = flat;
-    } else {
-      balanced = splitEvenlyByLines(flat, englishLineCount);
+      const { cleanText, tags } = protectTags(translated);
+      const flat = cleanText.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      const result = restoreTags(flat, tags);
+      if (/TAG_\d+/.test(result)) {
+        console.warn(`[autoSyncLines] Unreplaced tag placeholder in key: ${key}`);
+      }
+      return result;
     }
 
-    // Restore tags
+    // المسار القديم متعدد الأسطر — يبقى محكوماً بالعلم القديم.
+    if (!legacyCommaSplitEnabled) return translated;
+
+    const { cleanText, tags } = protectTags(translated);
+    const flat = cleanText.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const balanced = splitEvenlyByLines(flat, englishLineCount);
     const result = restoreTags(balanced, tags);
 
-    // Validate: warn if any placeholder leaked
     if (/TAG_\d+/.test(result)) {
       console.warn(`[autoSyncLines] Unreplaced tag placeholder in key: ${key}`);
     }

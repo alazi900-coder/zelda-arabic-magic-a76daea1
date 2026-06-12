@@ -62,7 +62,37 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
   isMobile,
   showDiffView,
   setShowDiffView,
-}) => (
+}) => {
+  /** حذف ترجمات كل المدخلات التي تنتمي لقائمة جداول معيّنة. */
+  const handleDeleteScope = React.useCallback(async (tables: string[], label: string) => {
+    if (!editor.state) return;
+    const tableSet = new Set(tables);
+    const updates: Record<string, string> = {};
+    let translatedCount = 0;
+    for (const e of editor.state.entries) {
+      const m = e.label.match(/^(.+?)\[\d+\]\./);
+      if (!m || !tableSet.has(m[1])) continue;
+      const key = `${e.msbtFile}:${e.index}`;
+      if ((editor.state.translations[key] || '').trim() !== '') {
+        updates[key] = '';
+        translatedCount++;
+      }
+    }
+    if (translatedCount === 0) {
+      const { toast } = await import('sonner');
+      toast.info(`لا توجد ترجمات في «${label}»`);
+      return;
+    }
+    const ok = window.confirm(
+      `سيتم حذف ${translatedCount} ترجمة من «${label}» (${tables.length} جدول).\n\nهل أنت متأكد؟`
+    );
+    if (!ok) return;
+    const count = editor.updateTranslationsBatch(updates);
+    const { toast } = await import('sonner');
+    toast.success(`تم حذف ${count} ترجمة من «${label}»`);
+  }, [editor]);
+
+  return (
   <div className="mb-6 p-3 md:p-4 bg-card rounded border border-border">
     <div className="flex gap-2 md:gap-3 items-center">
       <DebouncedInput
@@ -124,6 +154,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
               tables={editor.bdatTableNames}
               counts={editor.bdatTableCounts}
               totalEntries={editor.state?.entries.length ?? 0}
+              onDeleteScope={handleDeleteScope}
             />
           )}
           {editor.bdatColumnNames.length > 0 && editor.filterTable !== "all" && (
@@ -178,6 +209,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             counts={editor.bdatTableCounts}
             totalEntries={editor.state?.entries.length ?? 0}
             className="w-full max-w-none"
+            onDeleteScope={handleDeleteScope}
           />
         )}
         {editor.bdatColumnNames.length > 0 && editor.filterTable !== "all" && (
@@ -246,6 +278,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
       </div>
     )}
   </div>
-);
+  );
+};
 
 export default EditorFiltersBar;

@@ -281,12 +281,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   }, [onApplyFix, onApplyFixesBatch]);
 
   const handleFilterInEditor = useCallback((categoryId: string) => {
-    const keys = new Set(issues.filter(i => i.category === categoryId).map(i => i.key));
+    const keys = new Set(visibleIssues.filter(i => i.category === categoryId).map(i => i.key));
     if (keys.size > 0 && onFilterByKeys) {
       onFilterByKeys(keys);
       toast({ title: "🔍 تصفية", description: `عرض ${keys.size} نص في المحرر` });
     }
-  }, [issues, onFilterByKeys]);
+  }, [visibleIssues, onFilterByKeys]);
 
   /** Run the same build guard used during export; if result is still unsafe, restore English */
   const getSafeTagRepair = useCallback((entry: ExtractedEntry, text: string) => {
@@ -491,7 +491,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   /** Fix all issues in active category */
   const handleLocalFixAll = useCallback(() => {
     if (!activeFilter) return;
-    const categoryIssues = issues.filter(issue => issue.category === activeFilter);
+    const categoryIssues = visibleIssues.filter(issue => issue.category === activeFilter);
     const uniqueKeys = [...new Set(categoryIssues.map(issue => issue.key))];
     if (uniqueKeys.length === 0) return;
 
@@ -627,12 +627,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       toast({ title: '🗑️ حذف', description: `تم مسح ${count} ترجمة فارغة` });
       setTimeout(() => runScan(true), 250);
     }
-  }, [activeFilter, applyBatchUpdates, applyTagFixes, issues, onApplyFix, onApplyFixesBatch, entryMap, state.translations, runScan]);
+  }, [activeFilter, applyBatchUpdates, applyTagFixes, visibleIssues, onApplyFix, onApplyFixesBatch, entryMap, state.translations, runScan]);
 
   /** Fix ALL fixable issues across all categories at once (chunked to avoid browser freeze) */
   const handleFixEverything = useCallback(() => {
     if (!onApplyFix && !onApplyFixesBatch) return;
-    const allFixableIssues = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
+    const allFixableIssues = visibleIssues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category));
     const processedKeys = new Set<string>();
     const tagFixKeys: string[] = [];
     const reportEntries: FixReportEntry[] = [];
@@ -873,7 +873,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const criticalCount = severityCounts.critical;
   const warningCount = severityCounts.warning;
   const activeFilterKeys = activeFilter
-    ? new Set(issues.filter(issue => issue.category === activeFilter).map(issue => issue.key))
+    ? new Set(visibleIssues.filter(issue => issue.category === activeFilter).map(issue => issue.key))
     : new Set<string>();
   const canLocalFixActiveFilter = Boolean(
     activeFilter &&
@@ -881,7 +881,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     LOCAL_FIXABLE_CATEGORIES.has(activeFilter) &&
     activeFilterKeys.size > 0
   );
-  const totalFixable = issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).length;
+  const totalFixable = visibleIssues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).length;
 
   return (
     <>
@@ -928,7 +928,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               )}
               {scanned && !scanning && (
                 <span className="text-xs text-muted-foreground">
-                  فُحص {(scopeKeys?.size ?? state.entries.length).toLocaleString()} نص — وُجدت {issues.length} مشكلة
+                  فُحص {(scopeKeys?.size ?? state.entries.length).toLocaleString()} نص — وُجدت {visibleIssues.length} مشكلة
                 </span>
               )}
             </div>
@@ -953,7 +953,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               </div>
             )}
 
-            {scanned && issues.length > 0 && (
+            {scanned && visibleIssues.length > 0 && (
               <>
                 {/* Summary */}
                 <div className={`p-3 rounded-lg border ${
@@ -992,7 +992,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                   <div className="flex gap-2">
                     <Button size="sm" variant="destructive" className="flex-1 font-display font-bold text-sm" onClick={handleFixEverything}>
                       <Zap className="w-4 h-4 ml-1" />
-                      ⚡ إصلاح كل المشاكل ({new Set(issues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
+                      ⚡ إصلاح كل المشاكل ({new Set(visibleIssues.filter(i => LOCAL_FIXABLE_CATEGORIES.has(i.category)).map(i => i.key)).size} نص)
                     </Button>
                     {fixReport && (
                       <Button size="sm" variant="outline" className="text-xs" onClick={() => setFixReport({ ...fixReport })}>
@@ -1114,7 +1114,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               </>
             )}
 
-            {scanned && issues.length === 0 && (
+            {scanned && visibleIssues.length === 0 && (
               <div className="text-center p-4 bg-secondary/10 rounded-lg border border-secondary/30">
                 <CheckCircle2 className="w-8 h-8 text-secondary mx-auto mb-2" />
                 <p className="text-sm font-display font-bold">✅ لا توجد مشاكل حرجة</p>

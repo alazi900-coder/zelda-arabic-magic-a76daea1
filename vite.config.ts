@@ -22,12 +22,22 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        // Force the new service worker to activate immediately
         skipWaiting: true,
         clientsClaim: true,
-        // Delete stale Workbox precaches from older deploys so users don't
-        // need to clear cookies/site-data to receive updates.
         cleanupOutdatedCaches: true,
+        // CRITICAL: HTML navigations must hit network first so users always
+        // get the latest shell after a deploy. Falls back to cache offline.
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === "navigate",
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "html-shell",
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 10 },
+            },
+          },
+        ],
       },
       manifest: {
         name: "أداة تعريب Xenoblade Chronicles 3",

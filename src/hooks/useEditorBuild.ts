@@ -471,21 +471,34 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === NEW PROTECTION 5: Revert entries with missing $N variables ===
+      // === PROTECTION 5: Repair (don't revert) entries with missing $N variables ===
+      // Try local repair first. Only revert if repair couldn't restore the variables.
       let dollarVarFixCount = 0;
+      let dollarVarRepairCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
-        if (previouslyBuiltKeys.has(key)) continue; // trust user edit on previously-built file
+        if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         const origVars = orig.match(/\$\d+/g);
         if (!origVars || origVars.length === 0) continue;
         if (origVars.some(v => !trans.includes(v))) {
-          nonEmptyTranslations[key] = orig;
-          dollarVarFixCount++;
+          // Try to repair $N via tag guard (handles دولار1, 1.$, $.1, etc.)
+          const repaired = repairTranslationTagsForBuild(orig, trans);
+          if (repaired.changed && origVars.every(v => repaired.text.includes(v))) {
+            nonEmptyTranslations[key] = repaired.text;
+            dollarVarRepairCount++;
+          } else {
+            nonEmptyTranslations[key] = orig;
+            dollarVarFixCount++;
+          }
         }
       }
+      if (dollarVarRepairCount > 0) {
+        setBuildProgress(`💲 إصلاح ${dollarVarRepairCount} نص بمتغيرات $N...`);
+        await yieldToUI();
+      }
       if (dollarVarFixCount > 0) {
-        setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N مفقودة...`);
+        setBuildProgress(`💲 استعادة ${dollarVarFixCount} نص بمتغيرات $N غير قابلة للإصلاح...`);
         await yieldToUI();
       }
 
@@ -515,28 +528,27 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         await yieldToUI();
       }
 
-      // === PROTECTION 6: Tag SEQUENCE order validation ===
-      // Tags may be present (multiset ok) but in wrong order — causes cinematic freezes
+      // === PROTECTION 6: Tag repair (NO revert to English) ===
+      // Apply best-effort tag repair. Never silently revert to English here —
+      // even a slightly-wrong tag order is preferable to losing the translation entirely.
+      let tagRepairCount = 0;
       let tagOrderRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
         if (!orig) continue;
         if (!hasTechnicalTags(orig)) continue;
-        // Repair and check sequence in one step
         const repaired = repairTranslationTagsForBuild(orig, trans);
         if (repaired.changed) {
           nonEmptyTranslations[key] = repaired.text;
+          tagRepairCount++;
         }
         if (!repaired.sequenceMatch) {
-          nonEmptyTranslations[key] = orig;
-          tagOrderRevertCount++;
-          console.warn(`[BUILD-SAFETY] Tag sequence mismatch in ${key} — reverted to original`);
+          console.warn(`[BUILD-SAFETY] Tag sequence mismatch in ${key} — kept translation (no revert)`);
         }
       }
-      if (tagOrderRevertCount > 0) {
-        setBuildProgress(`🔀 استعادة ${tagOrderRevertCount} نص (ترتيب الوسوم التقنية مختلف عن الأصل)...`);
-        console.warn(`[BUILD-SAFETY] Reverted ${tagOrderRevertCount} entries with wrong tag sequence order`);
+      if (tagRepairCount > 0) {
+        setBuildProgress(`🔀 إصلاح ترتيب الوسوم في ${tagRepairCount} نص...`);
         await yieldToUI();
       }
 
@@ -776,11 +788,9 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
                 reason: 'رموز تحكم/خاصة مفقودة بعد الإصلاح', missingControl: origCC - fixedCC, missingPua: origPUA - fixedPUA });
             }
           } else {
-            nonEmptyTranslations[key] = orig;
-            finalTagRevertCount++;
-            repairLog.push({ key, label: entryLabels.get(key) || key, action: 'reverted',
-              reason: ccBroken ? 'رموز تحكم مفقودة' : 'رموز خاصة مفقودة',
-              missingControl: ccBroken ? origCC - transCC : 0, missingPua: puaBroken ? origPUA - transPUA : 0 });
+            // Repair couldn't make any changes — but don't blindly revert to English.
+            // Keep the user's translation and just log the missing chars warning.
+            console.warn(`[BUILD-SAFETY] Kept translation despite missing control/PUA chars ${key}: missingCC=${ccBroken ? origCC - transCC : 0} missingPUA=${puaBroken ? origPUA - transPUA : 0}`);
           }
         }
 
@@ -988,18 +998,17 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           const rubyOpenCount = (trans.match(/\[\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
           const rubyCloseCount = (trans.match(/\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi) || []).length;
 
-          if (
-            hasNullChar ||
-            bracketMismatch ||
-            rubyOpenCount !== rubyCloseCount ||
-            !tagRepair.exactTagMatch ||
-            !tagRepair.sequenceMatch ||
-            tagRepair.missingClosingTags ||
-            tagRepair.missingControlOrPua
-          ) {
+          // Only delete on truly catastrophic conditions that would crash the game.
+          // Tag-multiset / sequence / control-char mismatches are kept as best-effort —
+          // a partially-correct translation is far better than silent English fallback.
+          if (hasNullChar || bracketMismatch || rubyOpenCount !== rubyCloseCount) {
             delete nonEmptyTranslations[key];
             skippedUnsafeCount++;
+            console.warn(`[BUILD-SAFETY] MSBT entry deleted (hard fail) ${key}: nullChar=${hasNullChar} bracketMismatch=${bracketMismatch} rubyMismatch=${rubyOpenCount !== rubyCloseCount}`);
             continue;
+          }
+          if (!tagRepair.exactTagMatch || !tagRepair.sequenceMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
+            console.warn(`[BUILD-SAFETY] MSBT entry kept with tag warnings ${key}: exactTag=${tagRepair.exactTagMatch} seq=${tagRepair.sequenceMatch} closing=${!tagRepair.missingClosingTags} ctrl=${!tagRepair.missingControlOrPua}`);
           }
 
           nonEmptyTranslations[key] = trans;

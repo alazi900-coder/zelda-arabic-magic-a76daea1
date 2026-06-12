@@ -636,10 +636,57 @@ const Editor = () => {
             showDiffView={showDiffView}
             setShowDiffView={setShowDiffView}
             setCompareEntry={setCompareEntry}
+            setRelatedEntry={setRelatedEntry}
             findSimilar={findSimilar}
           />
         </div>
         </div>
+
+        <RelatedEntriesDialog
+          open={!!relatedEntry}
+          onOpenChange={(open) => { if (!open) setRelatedEntry(null); }}
+          entry={relatedEntry}
+          entries={editor.state?.entries || []}
+          translations={editor.state?.translations || {}}
+          onNavigateToEntry={(key) => {
+            editor.setFilterStatus('all');
+            editor.setSearch('');
+            editor.setPinnedKeys(null);
+            editor.setIsSearchPinned(false);
+            setTimeout(() => {
+              const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
+              if (idx >= 0) {
+                const page = Math.floor(idx / 50);
+                editor.setCurrentPage(page);
+                setTimeout(() => {
+                  const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'animate-pulse');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'animate-pulse'), 2500);
+                  }
+                }, 100);
+              }
+            }, 50);
+          }}
+          onPinKeys={(keys) => {
+            editor.setPinnedKeys(keys);
+            editor.setIsSearchPinned(true);
+            editor.setCurrentPage(0);
+            setTimeout(() => {
+              const list = document.querySelector('[data-entries-list]');
+              if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 80);
+          }}
+          onFilterByTable={(tableName) => {
+            editor.setPinnedKeys(null);
+            editor.setIsSearchPinned(false);
+            editor.setFilterStatus('all');
+            editor.setSearch('');
+            editor.setFilterTable(tableName);
+            editor.setCurrentPage(0);
+          }}
+        />
 
         <EditorDialogs
           editor={editor}

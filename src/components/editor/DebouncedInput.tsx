@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, memo } from "react";
 import { INPUT_DEBOUNCE } from "./types";
 
-const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocus, multiline }: {
+const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocus, multiline, noSoftWrap }: {
   value: string;
   onChange: (val: string) => void;
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
   multiline?: boolean;
+  noSoftWrap?: boolean;
 }) => {
   const [localValue, setLocalValue] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -69,8 +70,9 @@ const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocu
         className={className}
         autoFocus={autoFocus}
         dir="rtl"
-        rows={Math.max(2, (localValue.match(/\n/g) || []).length + 1)}
-        style={{ resize: 'vertical', minHeight: '2.5rem', unicodeBidi: 'isolate' }}
+        rows={noSoftWrap ? 1 : Math.max(2, (localValue.match(/\n/g) || []).length + 1)}
+        wrap={noSoftWrap ? "off" : "soft"}
+        style={{ resize: 'vertical', minHeight: '2.5rem', unicodeBidi: 'isolate', whiteSpace: noSoftWrap ? 'pre' : undefined, overflowX: noSoftWrap ? 'auto' : undefined }}
       />
     );
   }

@@ -215,7 +215,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
       } else {
         const data = await response.json();
         const rawTranslation = data.translations?.[key] || null;
-        const translation = rawTranslation ? normalizeReversedSlashTags(entry.original, rawTranslation) : null;
+        const translation = rawTranslation ? normalizeTranslationForEntry(entry.original, rawTranslation) : null;
         if (translation) {
           setResults(prev => ({ ...prev, [engine.id]: translation }));
         } else {
@@ -279,6 +279,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                 const isEngineLoading = loadingEngines.has(engine.id);
                 const integrity = result && entry ? checkTagIntegrity(entry.original, result) : null;
                 const hasProblem = integrity && !integrity.ok;
+                const isSingleLineOriginal = countEffectiveLines(entry.original) <= 1;
 
                 return (
                   <div
@@ -349,8 +350,8 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
                       </div>
                     ) : result ? (
                       <>
-                        <p className="text-sm font-body whitespace-pre-wrap break-words" dir="rtl">
-                          {renderTranslationWithProtectedTags(result)}
+                        <p className={`text-sm font-body ${isSingleLineOriginal ? "whitespace-nowrap overflow-x-auto" : "whitespace-pre-wrap break-words"}`} dir="rtl">
+                          {renderTranslationWithProtectedTags(result, isSingleLineOriginal)}
                         </p>
                         {hasProblem && (
                           <Alert variant="destructive" className="mt-2 py-2 px-3">

@@ -169,7 +169,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           {editor.bdatTableNames.length > 0 && (
             <select value={editor.filterTable} onChange={e => { editor.setFilterTable(e.target.value); editor.setFilterColumn("all"); }} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[180px]">
               <option value="all">كل الجداول ({editor.state?.entries.length ?? 0})</option>
-              {editor.bdatTableNames.map(t => <option key={t} value={t}>{t} ({editor.bdatTableCounts?.[t] || 0})</option>)}
+              <GroupedTableOptions tables={editor.bdatTableNames} counts={editor.bdatTableCounts} />
             </select>
           )}
           {editor.bdatColumnNames.length > 0 && editor.filterTable !== "all" && (

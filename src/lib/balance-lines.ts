@@ -429,6 +429,107 @@ export function splitEvenlyByLines(text: string, numLines: number): string {
   return hardBreaksEqual(text, joined) ? joined : text;
 }
 
+/**
+ * Align the translation's hard breaks to the ORIGINAL's structure.
+ * Places [XENO:n ]/[System:PageBreak ] tokens at the same semantic positions
+ * as in the original, distributing the translation tokens proportionally by
+ * the word count of each original segment.
+ *
+ * Inline tags inside the translation (e.g. `[XENO:act act=EVT_EXT1]`,
+ * `[XENO:wait wait=key]`) are kept as atomic tokens — never split.
+ */
+export function splitByOriginalBreaks(original: string, translation: string): string {
+  if (!translation) return translation;
+  const breakRe = new RegExp(XENO_N_HARD_BREAK.source, 'g');
+
+  // 1. Find break tokens in the ORIGINAL (with their exact form incl. trailing \n).
+  const breaks: { match: string; index: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = breakRe.exec(original)) !== null) {
+    breaks.push({ match: m[0], index: m.index });
+  }
+
+  // No breaks in original → flatten translation to a single line.
+  if (breaks.length === 0) {
+    return translation
+      .replace(new RegExp(XENO_N_HARD_BREAK.source, 'g'), ' ')
+      .replace(/\n+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  // 2. Split the original into N+1 segments around the breaks.
+  const origSegments: string[] = [];
+  let last = 0;
+  for (const b of breaks) {
+    origSegments.push(original.slice(last, b.index));
+    last = b.index + b.match.length;
+  }
+  origSegments.push(original.slice(last));
+
+  // 3. Flatten the translation (drop ALL break tokens & newlines).
+  const flat = translation
+    .replace(new RegExp(XENO_N_HARD_BREAK.source, 'g'), ' ')
+    .replace(/\n+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // 4. Tokenize: bracketed tags stay atomic, then whitespace-separated tokens.
+  const tokenRe = /\[[^\]]*\]|\S+/g;
+  const tokens: string[] = [];
+  let t: RegExpExecArray | null;
+  while ((t = tokenRe.exec(flat)) !== null) tokens.push(t[0]);
+
+  if (tokens.length === 0) return translation;
+
+  // 5. Weight each original segment by lexical word count (tags excluded).
+  const weights = origSegments.map(seg => {
+    const cleaned = seg.replace(/\[[^\]]*\]/g, ' ').trim();
+    const w = cleaned.split(/\s+/).filter(Boolean).length;
+    return Math.max(1, w);
+  });
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+  // 6. Compute cut points across tokens; ensure each segment gets ≥1 token.
+  const N = tokens.length;
+  const numSegs = origSegments.length;
+  const cuts: number[] = [];
+  let acc = 0;
+  for (let i = 0; i < numSegs - 1; i++) {
+    acc += weights[i];
+    let c = Math.round((acc / totalWeight) * N);
+    // Keep at least 1 token in each remaining segment.
+    const minC = i + 1;
+    const maxC = N - (numSegs - 1 - i);
+    if (c < minC) c = minC;
+    if (c > maxC) c = maxC;
+    if (cuts.length && c <= cuts[cuts.length - 1]) c = cuts[cuts.length - 1] + 1;
+    cuts.push(c);
+  }
+
+  // 7. Build segments from tokens and rejoin with original break tokens.
+  const segs: string[] = [];
+  let start = 0;
+  for (const c of cuts) {
+    segs.push(tokens.slice(start, c).join(' '));
+    start = c;
+  }
+  segs.push(tokens.slice(start).join(' '));
+
+  let result = '';
+  for (let i = 0; i < segs.length; i++) {
+    result += segs[i];
+    if (i < breaks.length) {
+      // Ensure clean join: no trailing space before the break token.
+      result = result.replace(/\s+$/, '');
+      result += breaks[i].match;
+      // If the break token didn't already end with \n but original had one, keep behavior:
+      // (XENO_N_HARD_BREAK already captures the optional \n, so this is faithful.)
+    }
+  }
+  return result;
+}
+
 /** Check if text has orphan lines (single lexical word on a line) */
 export function hasOrphanLines(text: string): boolean {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);

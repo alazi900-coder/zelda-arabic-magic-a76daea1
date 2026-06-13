@@ -70,7 +70,7 @@ const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocu
         className={className}
         autoFocus={autoFocus}
         dir="rtl"
-        rows={noSoftWrap ? 1 : Math.max(2, (localValue.match(/\n/g) || []).length + 1)}
+        rows={Math.max(noSoftWrap ? 1 : 2, (localValue.match(/\n/g) || []).length + 1)}
         wrap={noSoftWrap ? "off" : "soft"}
         style={{ resize: 'vertical', minHeight: '2.5rem', unicodeBidi: 'isolate', whiteSpace: noSoftWrap ? 'pre' : undefined, overflowX: noSoftWrap ? 'auto' : undefined }}
       />

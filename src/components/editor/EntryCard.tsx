@@ -372,31 +372,19 @@ const EntryCard: React.FC<EntryCardProps> = ({
                       variant="outline"
                       className="h-6 text-[11px] px-2 gap-1 border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
                       onClick={() => {
-                        const { cleanText, tags } = protectTags(translation);
-                        // اجعل النص مسطّحاً أولاً (نزيل أي \n داخلية بمسافة لمنع الالتصاق)
-                        const flat = cleanText
-                          .replace(/\r\n?/g, '\n')
-                          .replace(/\n+/g, ' ')
-                          .replace(/[ \t]{2,}/g, ' ')
-                          .trim();
-                        let rebuilt: string;
-                        if (engLines <= 1) {
-                          rebuilt = flat;
-                        } else {
-                          rebuilt = splitEvenlyByLines(flat, engLines);
-                        }
-                        let fixed = restoreTags(rebuilt, tags);
-                        if (engLines <= 1) {
-                          // نظّف أي \n قد تكون كانت محفوظة داخل الوسوم
-                          fixed = fixed.replace(/\r\n?/g, '\n').replace(/\n+/g, ' ').replace(/[ \t]{2,}/g, ' ').trim();
-                        }
-                        if (fixed !== translation) {
+                        // Re-align the translation's hard-breaks to the ORIGINAL's
+                        // structure: places [XENO:n ]/[System:PageBreak ] at the same
+                        // semantic positions and re-distributes words proportionally,
+                        // so a short English first line doesn't get a long Arabic line
+                        // and vice-versa. Inline tags are kept atomic.
+                        const fixed = splitByOriginalBreaks(entry.original, translation);
+                        if (fixed && fixed !== translation) {
                           updateTranslation(key, fixed);
                           toast({
                             title: '🔧 إصلاح الأسطر',
                             description: engLines <= 1
                               ? 'تم دمج الترجمة في سطر واحد'
-                              : `تم إعادة توزيع الترجمة على ${engLines} أسطر`,
+                              : `تمت محاذاة الترجمة مع مواضع [XENO:n] في الأصل (${engLines} أسطر)`,
                           });
                         }
                       }}

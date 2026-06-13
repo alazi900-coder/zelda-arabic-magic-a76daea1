@@ -180,14 +180,74 @@ function smartFilterGlossary(glossary: string | undefined, entries: EnhanceEntry
   return out;
 }
 
-// ─── Multi-pass coverage helper ─────────────────────────────────────────────
-// يُنفّذ نفس استدعاء الـ AI عدّة مرّات بالتوازي ويدمج النتائج بحسب index.
-// السبب: نماذج AI غير حتميّة — كل مرور يكتشف مشاكل قد فاتت المرور الآخر.
-// النتيجة: تغطية شبه شاملة في فحص واحد بدلاً من إجبار المستخدم على إعادة الفحص.
-function richnessScore(item: Record<string, unknown>): number {
-  const s = (v: unknown) => (typeof v === 'string' ? v.length : 0);
-  return s(item.detail) + s(item.fix_explanation) + s(item.fixExplanation)
-    + s(item.suggested) + s(item.suggestion) + s(item.issue) + s(item.reason);
+// ─── Multi-pass coverage + Multi-issue merge helper ─────────────────────────
+// ينفّذ عدّة مرورات بالتوازي ويدمج النتائج بحسب index.
+// التحسين الجديد (Phase 1+2): بدل اختيار "الأغنى" وإسقاط الباقي، ندمج المشاكل
+// المختلفة لنفس النص في سجل واحد:
+//   • issue/reason: تُجمع بفاصل " • " (بلا تكرار حرفيّ).
+//   • detail/fix_explanation: تُجمع بأسطر منفصلة.
+//   • alternatives: اتحاد بلا تكرار.
+//   • suggested/suggestion: نختار الأطول غير الفارغ (الأكثر اكتمالاً للإصلاحات).
+//   • category: نحتفظ بأخطر فئة (wrong > reorder > weak > style).
+//   • severity: نحتفظ بالأعلى (high > medium > low).
+// هذا يحلّ: "فقدان المشاكل الثانوية" + "Dedup الذي يُسقط بدل أن يدمج".
+const SEVERITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+const CATEGORY_RANK: Record<string, number> = { wrong: 4, reorder: 3, weak: 2, style: 1 };
+
+function pickHigherRanked(a: unknown, b: unknown, rank: Record<string, number>): unknown {
+  const ra = rank[(a as string) || ''] ?? 0;
+  const rb = rank[(b as string) || ''] ?? 0;
+  return rb > ra ? b : a;
+}
+
+function mergeStringList(existing: string | undefined, incoming: string | undefined, sep: string): string {
+  const a = (existing || '').trim();
+  const b = (incoming || '').trim();
+  if (!a) return b;
+  if (!b) return a;
+  const parts = a.split(sep).map(s => s.trim()).filter(Boolean);
+  if (parts.some(p => p === b)) return a;
+  return `${a}${sep}${b}`;
+}
+
+function mergeAlternatives(a: unknown, b: unknown): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const arr of [a, b]) {
+    if (!Array.isArray(arr)) continue;
+    for (const item of arr) {
+      if (typeof item !== 'string') continue;
+      const t = item.trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+function mergeIssueItems<T extends Record<string, unknown>>(existing: T, incoming: T): T {
+  const merged: Record<string, unknown> = { ...existing };
+  merged.issue = mergeStringList(existing.issue as string, incoming.issue as string, ' • ');
+  merged.reason = mergeStringList(existing.reason as string, incoming.reason as string, ' • ');
+  merged.detail = mergeStringList(existing.detail as string, incoming.detail as string, '\n');
+  merged.fix_explanation = mergeStringList(
+    (existing.fix_explanation as string) || (existing.fixExplanation as string),
+    (incoming.fix_explanation as string) || (incoming.fixExplanation as string),
+    '\n',
+  );
+  const sa = (existing.suggested as string) || (existing.suggestion as string) || '';
+  const sb = (incoming.suggested as string) || (incoming.suggestion as string) || '';
+  const finalSug = sb.trim().length > sa.trim().length ? sb : sa;
+  if ('suggested' in existing || 'suggested' in incoming) merged.suggested = finalSug;
+  if ('suggestion' in existing || 'suggestion' in incoming) merged.suggestion = finalSug;
+  if ('alternatives' in existing || 'alternatives' in incoming) {
+    merged.alternatives = mergeAlternatives(existing.alternatives, incoming.alternatives);
+  }
+  merged.category = pickHigherRanked(existing.category, incoming.category, CATEGORY_RANK);
+  merged.severity = pickHigherRanked(existing.severity, incoming.severity, SEVERITY_RANK);
+  merged.type = (existing.type as string) || (incoming.type as string);
+  return merged as T;
 }
 
 async function runPasses<T extends { index?: number }>(
@@ -196,7 +256,6 @@ async function runPasses<T extends { index?: number }>(
 ): Promise<{ merged: T[]; errorResponse?: Response }> {
   const n = Math.min(Math.max(1, passCount || 1), 3);
   const results = await Promise.all(Array.from({ length: n }, () => callOnce()));
-  // إذا فشلت كل المرورات بنفس الخطأ، أرجعه؛ خلاف ذلك ادمج الناجح فقط.
   const allFailed = results.every(r => r.errorResponse);
   if (allFailed) return { merged: [], errorResponse: results[0].errorResponse };
   const byIndex = new Map<number, T>();
@@ -207,10 +266,7 @@ async function runPasses<T extends { index?: number }>(
       if (typeof idx !== 'number') continue;
       const existing = byIndex.get(idx);
       if (!existing) { byIndex.set(idx, item); continue; }
-      if (richnessScore(item as unknown as Record<string, unknown>)
-        > richnessScore(existing as unknown as Record<string, unknown>)) {
-        byIndex.set(idx, item);
-      }
+      byIndex.set(idx, mergeIssueItems(existing as Record<string, unknown>, item as Record<string, unknown>) as T);
     }
   }
   return { merged: [...byIndex.values()] };
@@ -426,7 +482,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 1. **افحص كل ترجمة بدقة قبل اعتبارها سليمة** — اقرأ النصّ كاملاً، لا تتخطَّ سطراً.
 2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-4 مشاكل وتترك الباقي.
 3. **مرّ على كل قاعدة من القواعد المُفعَّلة بالترتيب على كل ترجمة** — لا تركّز على نوع واحد فقط.
-4. **Cascade — قاعدة الدمج:** إذا اكتشفت أن ترجمة بها مشكلة من قاعدة، طبّق *أيضاً* بقيّة القواعد المُفعَّلة عليها وادمج جميع الإصلاحات في حقل suggestion **النهائيّ الواحد**. لا تُرجع مدخلَين منفصلَين لنفس الترجمة.
+4. **Multi-Issue:** يُسمح بإصدار عدّة سجلّات لنفس index كلٌّ بفئة مختلفة (wrong / reorder / weak)، شرط أن يكون suggestion في كلٍّ منها نصّاً عربيّاً نهائيّاً كاملاً يصلح المشكلة المعنيّة. النظام يدمجها تلقائيّاً.
 5. سجّل الترجمات السليمة فعلاً فقط بحذفها من الإخراج (لا تُعِدها بدون تغيير).`;
 
       const passResult = await runPasses<{ index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string }>(
@@ -482,7 +538,8 @@ ${ruleSections.protect}
 
 (ستُنظَّف اقتراحاتك تلقائيّاً من علامات التشكيل قبل عرضها.)
 
-⚠️ لا تنتج اقتراحَين متناقضَين لنفس المدخل — اجمع كلّ الإصلاحات في نصّ واحد متّسق.
+⚠️ **يُسمح بإصدار أكثر من مدخل لنفس index** إذا اكتشفت أكثر من نوع مشكلة (مثلاً: ترتيب + ركاكة + مصطلح خاطئ). أعِد سجلّاً منفصلاً لكلّ مشكلة بفئة category مختلفة. النظام سيدمجها تلقائيّاً.
+كلّ سجلّ منفصل يجب أن يحتوي suggested نصّاً عربيّاً نهائيّاً كاملاً (وليس جزءاً فقط من الإصلاح).
 
 مستوى الخطورة:
 - high: خطأ يغيّر المعنى أو يجعل النصّ غير مفهوم (عادةً wrong)
@@ -521,8 +578,8 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 1. **اقرأ كل ترجمة كاملةً بدقّة** ولا تتخطَّ سطراً. تعامل مع كل ترجمة كمهمّة منفصلة.
 2. **هدفك إيجاد جميع المشاكل في فحص واحد** — لا تكتفِ بأبرز 3-5 مشاكل وتترك بقيّة الدفعة. إن وجدت 10-20 مشكلة حقيقيّة فأعِدها كلّها.
 3. **مرّ على كل قاعدة من القواعد المُفعَّلة (1، 2، 3 …) على كل ترجمة بالترتيب** قبل أن تنتقل إلى الترجمة التالية.
-4. **Cascade — قاعدة الدمج الذكيّ:** إذا انطبقت قاعدة على ترجمة، طبّق *جميع* القواعد الأخرى عليها أيضاً، وادمج كلّ الإصلاحات في **نصّ suggested نهائيّ واحد متّسق**. ممنوع إصدار مدخلَين لنفس index.
-5. اختر **فئة category واحدة** هي الأخطر (wrong > reorder > weak > style).
+4. **Multi-Issue:** يُسمح بإصدار عدّة مدخلات لنفس index كلٌّ بفئة مختلفة (wrong + reorder + weak). كلّ سجلّ يجب أن يحوي suggested نهائيّاً كاملاً يصلح المشكلة المعنيّة على الأقلّ. النظام يدمج تلقائيّاً.
+5. اختر فئة واحدة لكلّ سجلّ، الأخطر إن كانت المشكلة الواحدة قابلة للتصنيف بأكثر من فئة (wrong > reorder > weak > style).
 6. الترجمات السليمة فعلاً: لا تُدرجها في النتائج.`;
 
       const passResult = await runPasses<{ index?: number; category?: string; type?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggested?: string; alternatives?: unknown; severity?: string }>(
@@ -614,7 +671,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
 🎯 **تعليمات شاملة الفحص (إلزاميّة):**
 1. **اقرأ كل ترجمة كاملةً** وطبّق *جميع* القواعد المُفعَّلة عليها قبل الانتقال للتالية.
 2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-5 اقتراحات.
-3. **Cascade:** إذا اكتشفت مشكلة في ترجمة، فحص بقيّة القواعد عليها أيضاً وادمج كل التحسينات في **suggested نهائيّ واحد** — ممنوع مدخلَين لنفس index.`;
+3. **Multi-Issue:** يُسمح بإصدار عدّة سجلّات لنفس index لمشاكل من فئات/أنواع مختلفة، شرط أن يكون suggested في كلٍّ منها نصّاً عربيّاً نهائيّاً كاملاً. النظام يدمجها تلقائيّاً.`;
 
     const passResult = await runPasses<{ index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string }>(
       passes || 1,

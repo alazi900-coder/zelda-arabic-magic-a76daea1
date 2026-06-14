@@ -830,7 +830,9 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             while ((mm = reBoth.exec(cur)) !== null) {
               const b = cur[mm.index - 1];
               const a = cur[mm.index + mm[0].length];
-              if (b !== '\u200F' || a !== '\u200F') unisolated++;
+              const okRlm = b === '\u200F' && a === '\u200F';
+              const okIsolate = b === '\u2066' && a === '\u2069';
+              if (!okRlm && !okIsolate) unisolated++;
             }
             if (unisolated === 0) continue;
             residualRtl.push({

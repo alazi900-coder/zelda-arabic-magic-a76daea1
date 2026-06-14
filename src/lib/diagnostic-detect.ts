@@ -359,7 +359,11 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     while ((m = tagRe.exec(trimmed)) !== null) {
       const before = trimmed[m.index - 1];
       const after = trimmed[m.index + m[0].length];
-      if (before !== '\u200F' || after !== '\u200F') unisolated++;
+      // Accept either legacy RLM (U+200F) wrapping OR new LRI/PDI isolate
+      // (U+2066 ... U+2069). Both prevent in-game word-reorder around tags.
+      const okRlm = before === '\u200F' && after === '\u200F';
+      const okIsolate = before === '\u2066' && after === '\u2069';
+      if (!okRlm && !okIsolate) unisolated++;
     }
     if (unisolated > 0) {
       issues.push({ ...base, severity: "warning", category: "missing_rlm_isolation",

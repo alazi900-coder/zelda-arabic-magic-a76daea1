@@ -201,7 +201,10 @@ export function reverseBidi(text: string): string {
   }
 
   // Protect technical tags as atomic placeholders before BiDi processing
-  const tagPattern = /\\?\[\s*\w+\s*:[^\]]*?\s*\\?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}|\{[\w]+\}|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g;
+  // NOTE: `\/?` after `[` is critical — without it, closing colon tags like
+  // [/System:Color] are NOT protected, and BiDi reversal moves the leading "/"
+  // to the other side of the tag, producing in-game corruption "System:Color]./".
+  const tagPattern = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}|\{[\w]+\}|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g;
   // Slot range: \uE0A0–\uE0FF = 96 slots (indices 0–95).
   // Beyond that the char code exits the range and the restoration regex won't match,
   // so we leave overflow tags unshielded (they consist of ASCII/bracket chars that

@@ -227,51 +227,60 @@ function normalizeWhitespaceAfterReorder(text: string, original: string): string
 }
 
 /**
- * RLM-Isolation: Wrap each technical token with U+200F (Right-to-Left Mark) so
- * Unicode BiDi treats the token as a neutral island inside the surrounding RTL
- * paragraph. Without this, Xenoblade's word-wrap (which runs on the rendered
- * BiDi-resolved string) reorders Arabic words around LTR-shaped tokens —
- * exactly the bug seen in the user's screenshots where line 2 contained a
- * fragment that belongs at the end of the sentence.
+ * Directional-Isolate wrap: surround each technical token with
+ *   U+2066 LRI ... U+2069 PDI
+ * so Unicode BiDi treats the token as an LTR isolate inside the surrounding
+ * RTL paragraph. This fixes TWO classes of in-game corruption:
  *
- * Coverage (broadened): every LTR technical token that can appear in XC text:
- *  - Bracket tags: [XENO:n], [XENO:wait wait=key], [System:PageBreak],
- *    [System:Ruby ...], [/System:Ruby], [ML:icon icon=copyright],
- *    [Event:...], generic [Word:Value], and number-prefixed/suffixed forms
- *    like 1[XENO:n] or [XENO:wait]2.
- *  - Brace tags: {var}, {Word:value}.
- *  - $N variable placeholders ($1, $2, ...).
+ *  1. Word-reorder around the tag: from outside, the isolate is a single
+ *     neutral, so Arabic word order is preserved (same benefit RLM gave).
+ *  2. Internal-slash corruption: inside a closing tag like [/System:Color],
+ *     the leading "/" is a BiDi-neutral. With plain RLM bracketing, rule N1
+ *     resolved "[/" toward paragraph direction (RTL) and the slash jumped to
+ *     the right of "System:Color]", producing the in-game artifact
+ *     "System:Color]./". An LRI isolate's first-strong character is "S"
+ *     (Latin, LTR), so every neutral inside ("[", "/", "]") resolves LTR and
+ *     the slash stays glued to "System".
  *
  * Strategy:
- *  - Only wrap if surrounding context contains Arabic letters.
- *  - Idempotent: never adds a second RLM if one is already adjacent.
- *  - Applied at build-time only — editor / dictionaries / memory keep clean text.
- *  - RLM is zero-width invisible — does not affect glyph shaping or visible width.
+ *  - Only wrap if the surrounding text contains Arabic letters.
+ *  - Idempotent: never adds a second LRI/PDI if already adjacent.
+ *  - Strips any legacy RLM (U+200F) bracketing first so we don't end up with
+ *    mixed RLM+LRI marks on the same tag.
+ *  - Zero-width invisible marks — no effect on glyph shaping or visible width.
+ *  - Applied at build-time only; editor / dictionaries / memory keep clean text.
  */
 const RLM = '\u200F';
-// Broad technical-token pattern. Order matters: longer / number-affixed
-// variants come before bare bracket tags so the regex engine consumes them
-// as single units (preventing partial wrapping).
+const LRI = '\u2066';
+const PDI = '\u2069';
 const TAG_FOR_RLM_REGEX = /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\{\s*\w+\s*:[^}]*\}|\{\s*\w+\s*\}|\$\d+/g;
 const ARABIC_LETTER_RANGE = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
-function wrapTechTagsWithRLM(text: string): string {
-  // Quick reject: if no Arabic anywhere, no BiDi conflict can occur.
-  if (!ARABIC_LETTER_RANGE.test(text)) return text;
+function stripLegacyRlmAroundTags(text: string): string {
+  // Remove RLM marks adjacent to a tech token, so we can replace them with
+  // LRI/PDI isolates without doubling up marks.
+  return text.replace(
+    new RegExp(`\\u200F?(${TAG_FOR_RLM_REGEX.source})\\u200F?`, 'g'),
+    '$1',
+  );
+}
 
-  return text.replace(TAG_FOR_RLM_REGEX, (match, offset: number, full: string) => {
+function wrapTechTagsWithRLM(text: string): string {
+  if (!ARABIC_LETTER_RANGE.test(text)) return text;
+  const cleaned = stripLegacyRlmAroundTags(text);
+  return cleaned.replace(TAG_FOR_RLM_REGEX, (match, offset: number, full: string) => {
     const charBefore = full[offset - 1];
     const charAfter = full[offset + match.length];
-    const needsBefore = charBefore !== RLM;
-    const needsAfter = charAfter !== RLM;
-    return `${needsBefore ? RLM : ''}${match}${needsAfter ? RLM : ''}`;
+    const needsBefore = charBefore !== LRI;
+    const needsAfter = charAfter !== PDI;
+    return `${needsBefore ? LRI : ''}${match}${needsAfter ? PDI : ''}`;
   });
 }
 
-/** Detect whether a translated string already has RLM isolation applied
+/** Detect whether a translated string already has directional-isolate wrapping
  *  on every technical token it contains. */
 export function hasRlmIsolation(text: string): boolean {
-  if (!ARABIC_LETTER_RANGE.test(text)) return true; // N/A
+  if (!ARABIC_LETTER_RANGE.test(text)) return true;
   let foundAny = false;
   const re = new RegExp(TAG_FOR_RLM_REGEX.source, TAG_FOR_RLM_REGEX.flags);
   let m: RegExpExecArray | null;
@@ -279,12 +288,11 @@ export function hasRlmIsolation(text: string): boolean {
     foundAny = true;
     const before = text[m.index - 1];
     const after = text[m.index + m[0].length];
-    if (before !== RLM || after !== RLM) return false;
+    if (before !== LRI || after !== PDI) return false;
   }
   return foundAny ? true : true;
 }
 
-/** Public helper for the Deep Diagnostic auto-fixer. */
 export function applyRlmIsolation(text: string): string {
   return wrapTechTagsWithRLM(text);
 }

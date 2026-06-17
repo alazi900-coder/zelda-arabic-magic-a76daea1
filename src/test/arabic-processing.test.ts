@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reshapeArabic, reverseBidi, processArabicText, hasArabicPresentationForms, convertToArabicNumerals, mirrorPunctuation } from '@/lib/arabic-processing';
+import { reshapeArabic, reverseBidi, processArabicText, hasArabicPresentationForms, convertToArabicNumerals, mirrorPunctuation, removeArabicPresentationForms } from '@/lib/arabic-processing';
 
 describe('Arabic Processing', () => {
   it('reshapeArabic should produce presentation forms', () => {
@@ -25,6 +25,14 @@ describe('Arabic Processing', () => {
     console.log('Processed codes:', [...result].map(c => c.charCodeAt(0).toString(16)).join(' '));
     
     expect(hasArabicPresentationForms(result)).toBe(true);
+  });
+
+  it('removeArabicPresentationForms should preserve lam-alef ligatures', () => {
+    expect(removeArabicPresentationForms('ﺍﻻﻭﻝ')).toBe('الاول');
+    expect(removeArabicPresentationForms('ﻻ')).toBe('لا');
+    expect(removeArabicPresentationForms('ﻷ')).toBe('لأ');
+    expect(removeArabicPresentationForms('ﻹ')).toBe('لإ');
+    expect(removeArabicPresentationForms('ﻵ')).toBe('لآ');
   });
 
   it('reverseBidi after reshape should reverse character order', () => {

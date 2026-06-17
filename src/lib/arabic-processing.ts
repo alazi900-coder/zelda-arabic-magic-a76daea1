@@ -95,6 +95,13 @@ const PRESENTATION_FORMS_TO_STANDARD: Record<number, number> = {
   0xFE7C: 0x0651, 0xFE7D: 0x0651, 0xFE7E: 0x0652, 0xFE7F: 0x0652,
 };
 
+const LAM_ALEF_PRESENTATION_FORMS_TO_STANDARD: Record<number, string> = {
+  0xFEF5: 'لآ', 0xFEF6: 'لآ',
+  0xFEF7: 'لأ', 0xFEF8: 'لأ',
+  0xFEF9: 'لإ', 0xFEFA: 'لإ',
+  0xFEFB: 'لا', 0xFEFC: 'لا',
+};
+
 function canConnectAfter(code: number): boolean {
   const forms = ARABIC_FORMS[code];
   if (!forms) return false;
@@ -328,6 +335,8 @@ export function mirrorPunctuation(text: string): string {
 export function removeArabicPresentationForms(text: string): string {
   return [...text].map(ch => {
     const code = ch.charCodeAt(0);
+    const lamAlef = LAM_ALEF_PRESENTATION_FORMS_TO_STANDARD[code];
+    if (lamAlef) return lamAlef;
     const standardCode = PRESENTATION_FORMS_TO_STANDARD[code];
     return standardCode ? String.fromCharCode(standardCode) : ch;
   }).join('');

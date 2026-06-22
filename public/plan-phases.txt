@@ -1,0 +1,145 @@
+════════════════════════════════════════════════════════════════
+  خطة تنفيذ الـ 50 ميزة — 4 مراحل متسلسلة
+════════════════════════════════════════════════════════════════
+
+كيفية البدء في كل جلسة:
+  «نفّذ المرحلة [N] من plan-phases.txt، الميزة [X].
+   اقرأ جميع ملفات المرحلة أولاً، ثم اعرض الخطة وانتظر موافقتي.
+   التزم بـ CLAUDE.md.»
+
+ملفات ممنوع المساس بها في كل المراحل:
+  • src/integrations/supabase/client.ts   (auto-generated)
+  • src/integrations/supabase/types.ts    (auto-generated)
+  • src/lib/build-safety-gates.ts         (حساس — guard)
+  • src/lib/xc3-build-tag-guard.ts        (حساس — guard)
+  • .env  /  supabase/config.toml         (auto-managed)
+
+────────────────────────────────────────────────────────────────
+ المرحلة 1 — الأساسيات  (لا تعتمد على أي مرحلة)
+ الميزات: 11, 12, 13, 14, 15, 16, 33, 34, 35, 36, 48
+────────────────────────────────────────────────────────────────
+الهدف: بنية تخزين + إعدادات + حالة الإدخال + اختصارات + ثيم.
+
+الملفات الجديدة:
+  • src/lib/idb-schema.ts
+      جداول: snapshots, todos, entry_notes, user_settings
+  • src/hooks/useAutoSave.ts                (12)
+  • src/hooks/useSessionRecovery.ts         (13)
+  • src/hooks/useKeyboardShortcuts.ts       (11)
+  • src/components/settings/KeymapSettings.tsx
+  • src/components/settings/ThemeToggle.tsx (33)
+  • src/components/editor/FocusMode.tsx     (14)
+  • src/components/editor/TodoPanel.tsx     (15)
+
+الملفات المعدَّلة:
+  • src/types/editor.ts
+      إضافة: lastModifiedAt, reviewedAt, note?, isTodo?
+  • src/components/editor/EntryCard.tsx
+      عرض شارة الحالة (36) + أيقونة ملاحظة (48) + scale focus (35)
+  • src/components/editor/FilterBar.tsx     (16)
+  • src/components/editor/EditorActionsToolbar.tsx  (34: A-/A+)
+  • src/index.css                          (CSS tokens لـ 33, 34, 36)
+
+التحقق: حفظ تلقائي يعمل (IDB)، إعادة فتح تستعيد، اختصار يبدّل ثيم.
+
+────────────────────────────────────────────────────────────────
+ المرحلة 2 — معالجة النص و AI  (تعتمد على المرحلة 1)
+ الميزات: 1-10, 17, 20, 21-30, 37, 38
+────────────────────────────────────────────────────────────────
+الهدف: كل أدوات الجودة + شات AI + تحسينات الترجمة.
+
+Edge functions جديدة (supabase/functions/):
+  • spell-check-arabic/index.ts            (1)
+  • chat-translate/index.ts                (21, 23)
+  • back-translate/index.ts                (25)
+  • tone-detect/index.ts                   (26)
+  • auto-glossary/index.ts                 (28)
+
+Edge functions معدَّلة:
+  • translate-entries/index.ts             (22: 3 صيغ، 30: styles)
+
+ملفات منطق جديدة (src/lib/):
+  • duplicate-translation-detector.ts      (2)
+  • literal-translation-detector.ts        (5)
+  • pronoun-consistency.ts                 (6)
+  • diagnostic-detect.ts                   (7, 9)
+  • arabic-readability.ts                  (8)
+  • character-limit-checker.ts             (29)
+  • enhance-memory.ts                      (24)
+  • glossary-engine-master.ts              (موجود — وسّع لـ auto-glossary)
+
+مكونات UI جديدة (src/components/editor/):
+  • QualityChecksPanel.tsx                 (1, 10)
+  • ConsistencyCheckPanel.tsx              (2, 6)
+  • QuickReviewMode.tsx                    (4)
+  • GlossaryCompliancePanel.tsx            (7)
+  • TranslationStatsPanel.tsx              (17)
+  • DeepDiagnosticPanel.tsx                (5, 8, 9)
+  • ChatTranslatePanel.tsx                 (21)
+  • FileSummaryPanel.tsx                   (27)
+  • TranslationAIEnhancePanel.tsx          (30 — إن لم يوجد)
+  • FindReplacePanel.tsx                   (20)
+  • ProgressHeatmap.tsx                    (37)
+  • TranslationProgressDashboard.tsx       (38 — تعديل)
+
+تعديل types:
+  • src/types/editor.ts: confidence, tone, qualityFlags
+
+التحقق: كل لوحة تظهر نتائج، AI يستجيب، confidence تظهر.
+
+────────────────────────────────────────────────────────────────
+ المرحلة 3 — البناء والتعبئة والمشاركة  (تعتمد على 1+2)
+ الميزات: 18, 19, 31, 32, 39, 40, 41, 42, 43, 45, 46, 47, 49
+────────────────────────────────────────────────────────────────
+الهدف: مصدِّرات، نسخ سحابي، سجل، إيماءات، Pomodoro.
+
+ملفات جديدة (src/lib/):
+  • tmx-exporter.ts                        (41)
+  • csv-exporter.ts                        (47)
+  • pdf-report.ts                          (45) — bun add jspdf
+  • glossary-sync.ts                       (42)
+  • danganronpa-po-parser.ts               (46 — وسّع لـ xliff)
+
+مكونات جديدة:
+  • src/components/editor/PomodoroTimer.tsx       (18)
+  • src/components/editor/MultiPasteDialog.tsx    (19)
+  • src/components/editor/InGamePreview.tsx       (31)
+  • src/components/editor/EntryHistoryDialog.tsx  (49)
+  • src/components/editor/ShareEntryDialog.tsx    (43)
+  • src/hooks/useDesktopNotifications.ts          (39)
+
+تعديل:
+  • src/components/editor/EntryCard.tsx
+      إيماءات سحب (40) + سجل (49) زر
+  • IndexedDB: جدول entry_history
+
+Migrations Supabase:
+  • glossary_cloud (id, user_id, key, value)
+      + RLS + GRANT
+  • shared_entries (id, payload jsonb, created_at)
+      + RLS قراءة عامة بـ id فقط
+
+الأصول:
+  • public/fonts/xc-arabic.woff2 إن وُجد → @font-face (32)
+
+التحقق: TMX/CSV/PDF يُحمَّل، مشاركة تعطي URL يعمل.
+
+────────────────────────────────────────────────────────────────
+ المرحلة 4 — اختياري متقدم  (تعتمد على كل ما سبق)
+ الميزات: 44, 50
+────────────────────────────────────────────────────────────────
+لا تنفّذها إلا بطلب صريح. مكلفة وزائدة لفرد واحد.
+
+  • backup-drive (Google OAuth + Drive API)            (44)
+  • useRealtimeSync + collab_sessions (Supabase Realtime) (50)
+
+────────────────────────────────────────────────────────────────
+ ترتيب التنفيذ الموصى به
+────────────────────────────────────────────────────────────────
+  أسبوع 1:  المرحلة 1 كاملة (11-16, 33-36, 48)
+  أسبوع 2:  من المرحلة 2: 12, 13, 17, 20, 22, 24
+  أسبوع 3:  باقي المرحلة 2 (الفحوصات)
+  أسبوع 4:  المرحلة 3 (تصدير + سجل)
+  لاحقاً:   المرحلة 4 فقط عند الحاجة
+
+════════════════════════════════════════════════════════════════

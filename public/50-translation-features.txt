@@ -1,0 +1,271 @@
+════════════════════════════════════════════════════════════════
+  50 ميزة لمساعدة المترجم الفرد — أداة ترجمة Xenoblade العربية
+════════════════════════════════════════════════════════════════
+
+تعليمات الاستخدام:
+  لتنفيذ ميزة، الصق هذه الرسالة في الشات:
+  «نفّذ الميزة رقم [N] من ملف 50-translation-features.txt.
+   التزم بـ CLAUDE.md (خطة أولاً، ثم تنفيذ سطحي بلا توسّع).
+   اعرض الخطة وانتظر موافقتي.»
+
+────────────────────────────────────────────────────────────────
+ المجموعة 1 — الجودة والمراجعة (1-10)
+────────────────────────────────────────────────────────────────
+
+1) مدقق إملائي عربي ذكي
+   • أين: supabase/functions/spell-check-arabic/index.ts (جديد)
+        + src/components/editor/QualityChecksPanel.tsx (جديد)
+   • كيف: Edge function تستدعي Lovable AI Gateway (google/gemini-2.5-flash)
+        ترسل النص العربي وتعيد قائمة أخطاء + اقتراحات.
+        UI: زر «فحص إملائي» في شريط أدوات المحرر.
+
+2) كاشف الترجمات المكررة
+   • أين: src/lib/duplicate-translation-detector.ts (جديد)
+        + src/components/editor/ConsistencyCheckPanel.tsx (جديد)
+   • كيف: يبني Map<englishText, Set<arabicTranslations>>
+        يبلّغ عن أي نص إنجليزي مُترجَم بعدة صياغات مختلفة.
+
+3) درجة ثقة لكل إدخال
+   • أين: src/types/editor.ts (إضافة confidence: number)
+        + src/components/editor/EntryCard.tsx (عرض الشارة)
+   • كيف: حسابياً من: طول النسبة، تطابق المصطلحات، عدد التعديلات.
+
+4) وضع المراجعة على مرحلتين (Two-Pass)
+   • أين: src/components/editor/QuickReviewMode.tsx (جديد)
+   • كيف: عرض إدخال واحد على الشاشة + اختصارات (✓ موافق / ✗ مراجعة).
+        يستخدم reviewedAt من types/editor.
+
+5) كاشف الترجمة الحرفية
+   • أين: src/lib/literal-translation-detector.ts (جديد)
+   • كيف: قواعد heuristic: ترتيب الكلمات، حرفية الضمائر،
+        نسبة الكلمات الإنجليزية الباقية.
+
+6) فحص اتساق الضمائر
+   • أين: src/lib/pronoun-consistency.ts (جديد)
+   • كيف: لكل شخصية (من القاموس)، تحقق أن المخاطبة موحدة
+        (مذكر/مؤنث/مفرد/جمع) عبر جميع جملها.
+
+7) كشف الأسماء غير المترجَمة
+   • أين: src/lib/diagnostic-detect.ts (جديد)
+   • كيف: مطابقة Glossary بالعربي. أي اسم في الإنجليزي
+        غير موجود مقابلَه العربي في الترجمة = تنبيه.
+
+8) درجة قابلية القراءة بالعربية
+   • أين: src/lib/arabic-readability.ts (جديد)
+   • كيف: متوسط طول الكلمة + الجملة + نسبة الكلمات النادرة.
+
+9) كاشف الكلمات الإنجليزية المتبقية في النص العربي
+   • أين: src/lib/diagnostic-detect.ts (نفس #7)
+   • كيف: Regex /[A-Za-z]{3,}/ خارج الوسوم [XENO:...].
+
+10) لوحة الفحوصات الموحدة
+   • أين: src/components/editor/QualityChecksPanel.tsx
+   • كيف: تجميع نتائج 1-9 في تبويب واحد مع أعداد + قفز للإدخال.
+
+────────────────────────────────────────────────────────────────
+ المجموعة 2 — الإنتاجية (11-20)
+────────────────────────────────────────────────────────────────
+
+11) خريطة مفاتيح قابلة للتخصيص
+   • أين: src/hooks/useKeyboardShortcuts.ts (جديد)
+        + src/components/settings/KeymapSettings.tsx (جديد)
+   • كيف: تُخزَّن في IndexedDB (جدول user_settings).
+
+12) حفظ تلقائي كل 30 ثانية
+   • أين: src/hooks/useAutoSave.ts (جديد)
+   • كيف: setInterval → IndexedDB table «snapshots»
+        مع آخر 10 نسخ متجددة (FIFO).
+
+13) استرداد الجلسة بعد الإغلاق المفاجئ
+   • أين: src/hooks/useSessionRecovery.ts (جديد)
+   • كيف: عند الإقلاع، إذا وُجد snapshot أحدث من آخر «حفظ يدوي»
+        اعرض Dialog «استرداد؟ / تجاهل».
+
+14) وضع التركيز (Focus Mode)
+   • أين: src/components/editor/FocusMode.tsx (جديد)
+   • كيف: يخفي كل اللوحات ويعرض إدخالاً واحداً مكبَّراً.
+
+15) قائمة مهام (Todo) داخلية
+   • أين: src/components/editor/TodoPanel.tsx (جديد)
+        + IndexedDB table «todos» {id, entryKey, note, done}
+   • كيف: زر «ضع علامة todo» على كل EntryCard.
+
+16) فلاتر متقدمة (مُترجَم/فارغ/مُراجَع/todo)
+   • أين: src/components/editor/FilterBar.tsx (تعديل قائم)
+   • كيف: شيبس متعددة + حالة isFilterActive (راجع mem rules).
+
+17) إحصائيات يومية
+   • أين: src/components/editor/TranslationStatsPanel.tsx (جديد)
+   • كيف: عدّاد للإدخالات المُترجَمة اليوم (من lastModifiedAt).
+
+18) مؤقت Pomodoro
+   • أين: src/components/editor/PomodoroTimer.tsx (جديد)
+   • كيف: 25 دقيقة / 5 دقائق، إشعار صوتي عند الانتهاء.
+
+19) لصق متعدد (Multi-Paste)
+   • أين: src/components/editor/MultiPasteDialog.tsx (جديد)
+   • كيف: لصق نص بسطور، يوزَّع تلقائياً على N إدخالات متتالية.
+
+20) بحث/استبدال Regex
+   • أين: src/components/editor/FindReplacePanel.tsx (جديد)
+   • كيف: واجهة بحث + معاينة قبل الاستبدال + Undo.
+
+────────────────────────────────────────────────────────────────
+ المجموعة 3 — الذكاء الاصطناعي المتقدم (21-30)
+────────────────────────────────────────────────────────────────
+
+21) شات ترجمة (اسأل عن سياق)
+   • أين: supabase/functions/chat-translate/index.ts (جديد)
+        + src/components/editor/ChatTranslatePanel.tsx (جديد)
+   • كيف: محادثة مع Gemini تمرر الإدخال الحالي + القاموس كسياق.
+
+22) 3 صيغ ترجمة لكل إدخال
+   • أين: supabase/functions/translate-entries/index.ts (تعديل)
+   • كيف: prompt يطلب 3 بدائل (رسمي/أدبي/عامي).
+
+23) شرح سبب الترجمة
+   • أين: نفس chat-translate
+   • كيف: حقل reasoning في الرد.
+
+24) تعلّم من تصحيحات المستخدم
+   • أين: src/lib/enhance-memory.ts (جديد)
+        + IndexedDB table «correction_memory»
+   • كيف: كل تصحيح يدوي يُخزَّن (original_ar, corrected_ar)
+        ويُحقَن كأمثلة Few-shot في prompts لاحقة.
+
+25) فحص الترجمة العكسية (Back-translate)
+   • أين: supabase/functions/back-translate/index.ts (جديد)
+   • كيف: يُترجم العربي → إنجليزي ويقارن مع الأصل (تشابه دلالي).
+
+26) كشف النبرة (رسمي/قتالي/كوميدي)
+   • أين: supabase/functions/tone-detect/index.ts (جديد)
+   • كيف: Gemini يصنف، النتيجة تُعرض شارة على EntryCard.
+
+27) ملخص تلقائي للملف
+   • أين: src/components/editor/FileSummaryPanel.tsx (جديد)
+   • كيف: عند فتح ملف bdat، يلخّص Gemini محتواه (مَشاهد، شخصيات).
+
+28) قاموس تلقائي من الملف
+   • أين: supabase/functions/auto-glossary/index.ts (جديد)
+   • كيف: يستخرج أسماء العَلَم المتكررة ويقترح إضافتها.
+
+29) عدّ حروف صارم لعناصر UI
+   • أين: src/lib/character-limit-checker.ts (جديد)
+   • كيف: لجداول MNU_* الحد الأقصى N حرف، تحذير أحمر إذا تُجوُز.
+
+30) أنماط إعادة كتابة (موجز/تفصيلي/شاعري)
+   • أين: src/components/editor/TranslationAIEnhancePanel.tsx (تعديل)
+   • كيف: أزرار تمرر style param إلى translate-entries.
+
+────────────────────────────────────────────────────────────────
+ المجموعة 4 — واجهة المستخدم وتجربتها (31-40)
+────────────────────────────────────────────────────────────────
+
+31) معاينة شبيهة باللعبة
+   • أين: src/components/editor/InGamePreview.tsx (جديد)
+   • كيف: قالب HTML بخلفية صندوق حوار XC + خط اللعبة.
+
+32) خط Xenoblade الحقيقي للمعاينة
+   • أين: public/fonts/xc-arabic.woff2 (موجود؟) + CSS @font-face
+   • كيف: يُستخدَم في InGamePreview فقط.
+
+33) ثيم فاتح/داكن/تلقائي
+   • أين: src/components/settings/ThemeToggle.tsx (جديد)
+   • كيف: tailwind dark: + localStorage 'theme'.
+
+34) أزرار A- / A+ لحجم الخط
+   • أين: src/components/editor/EditorActionsToolbar.tsx (تعديل)
+   • كيف: CSS var --editor-font-size + IndexedDB.
+
+35) تكبير عند التركيز
+   • أين: src/components/editor/EntryCard.tsx
+   • كيف: onFocus → scale-105 transition.
+
+36) تلوين حسب الحالة (مُترجَم/فارغ/مُراجَع)
+   • أين: src/components/editor/EntryCard.tsx + CSS tokens
+   • كيف: border-l-4 بلون token دلالي (نجاح/تحذير/خطأ).
+
+37) خريطة حرارية للتقدم
+   • أين: src/components/editor/ProgressHeatmap.tsx (جديد)
+   • كيف: شبكة مربعات (كل مربع = ملف) ملوّنة بنسبة الإنجاز.
+
+38) ETA لشريط التقدم
+   • أين: src/components/editor/TranslationProgressDashboard.tsx (تعديل)
+   • كيف: من معدّل آخر 10 دقائق (lastModifiedAt).
+
+39) إشعارات سطح المكتب
+   • أين: src/hooks/useDesktopNotifications.ts (جديد)
+   • كيف: Notification API عند انتهاء batch AI طويل.
+
+40) إيماءات لمس على الجوال
+   • أين: src/components/editor/EntryCard.tsx
+   • كيف: سحب لليمين = ✓ موافق، لليسار = todo.
+
+────────────────────────────────────────────────────────────────
+ المجموعة 5 — النسخ الاحتياطي والمشاركة (41-50)
+────────────────────────────────────────────────────────────────
+
+41) تصدير TMX (ذاكرة ترجمة قياسية)
+   • أين: src/lib/tmx-exporter.ts (جديد)
+   • كيف: يولّد XML بصيغة TMX 1.4.
+
+42) مزامنة قاموس عبر Cloud
+   • أين: supabase migration: جدول glossary_cloud + RLS
+        + src/lib/glossary-sync.ts (جديد)
+   • كيف: Pull/Push بزرين، آخر تعديل يفوز.
+
+43) مشاركة إدخال واحد (رابط)
+   • أين: src/components/editor/ShareEntryDialog.tsx (جديد)
+        + supabase: جدول shared_entries (id, payload jsonb)
+   • كيف: زر «شارك» يولّد UUID + URL قراءة فقط.
+
+44) نسخ Google Drive (متقدم — تخطّاه للفرد)
+   • أين: supabase/functions/backup-drive/index.ts (جديد)
+   • كيف: OAuth Google + Drive API upload JSON.
+
+45) تقرير PDF
+   • أين: src/lib/pdf-report.ts (جديد) — مكتبة jspdf
+   • كيف: إحصائيات + قائمة إدخالات مع الفهرسة.
+
+46) استيراد .po / .xliff
+   • أين: src/lib/danganronpa-po-parser.ts (موجود — وسّع)
+   • كيف: دعم XLIFF 1.2 إضافة على PO.
+
+47) تصدير CSV
+   • أين: src/lib/csv-exporter.ts (جديد)
+   • كيف: PapaParse → blob → download.
+
+48) ملاحظات لكل إدخال
+   • أين: IndexedDB table «entry_notes» {entryKey, note}
+        + src/components/editor/EntryCard.tsx (أيقونة 📝)
+
+49) سجل تعديلات لكل إدخال
+   • أين: IndexedDB table «entry_history» {entryKey, ar, at}
+        + src/components/editor/EntryHistoryDialog.tsx (جديد)
+   • كيف: عند كل حفظ، append. عرض timeline + Restore.
+
+50) تحرير تشاركي لحظي (متقدم جداً — تخطّاه للفرد)
+   • أين: supabase Realtime + جدول collab_sessions
+        + src/hooks/useRealtimeSync.ts (جديد)
+
+────────────────────────────────────────────────────────────────
+ الأولويات الموصى بها للمترجم الفرد
+────────────────────────────────────────────────────────────────
+  ابدأ بهذه العشرة:
+    12 (حفظ تلقائي)        — حماية العمل
+    13 (استرداد جلسة)      — حماية العمل
+    15 (Todo)              — تنظيم
+    16 (فلاتر)             — تنقّل أسرع
+    20 (بحث/استبدال)       — تحرير شامل
+    22 (3 صيغ)             — جودة AI
+    24 (تعلّم من تصحيحاتك) — تحسين مستمر
+    38 (ETA)               — تحفيز
+    48 (ملاحظات)           — ذاكرة شخصية
+    49 (سجل تعديلات)       — أمان نفسي
+
+  تجنّبها (مبالغة لفرد واحد):
+    44 (Google Drive)      — تعقيد OAuth
+    50 (تحرير تشاركي)      — لا حاجة
+    31 (معاينة لعبة)       — قيمة جمالية فقط
+
+════════════════════════════════════════════════════════════════

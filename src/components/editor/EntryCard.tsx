@@ -486,10 +486,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
               <DebouncedInput
                 value={translation}
                 onChange={(val) => updateTranslation(key, val)}
-                placeholder="أدخل الترجمة..."
+                placeholder="أدخل الترجمة... (اضغط ✓ أو Ctrl+Enter للحفظ)"
                 className="flex-1 w-full px-3 py-2 rounded bg-background border border-border font-body text-sm"
                 multiline
                 noSoftWrap
+                manualCommit
               />
               {translation?.trim() && (
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 px-1" dir="ltr">

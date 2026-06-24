@@ -292,11 +292,13 @@ const Editor = () => {
                   </CardContent>
                 </Card>
                 <div className="flex items-center self-center">
-                  <BatchQualityModal
-                    lastBatch={editor.lastBatchQuality}
-                    cumulative={editor.cumulativeQuality}
-                    onReset={editor.resetBatchQuality}
-                  />
+                  <React.Suspense fallback={null}>
+                    <BatchQualityModal
+                      lastBatch={editor.lastBatchQuality}
+                      cumulative={editor.cumulativeQuality}
+                      onReset={editor.resetBatchQuality}
+                    />
+                  </React.Suspense>
                 </div>
                 <Card className="flex-1 min-w-[140px]">
                   <CardContent className="flex items-center gap-3 p-4">

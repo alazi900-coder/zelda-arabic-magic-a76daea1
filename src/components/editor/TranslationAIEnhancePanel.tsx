@@ -80,7 +80,9 @@ const BATCH_SIZE = 25;
 const PARALLEL_REQUESTS = 3;
 // عدد المرورات الداخلية على كل دفعة (تُنفَّذ بالتوازي داخل الـ edge function)
 // لزيادة شموليّة الكشف بدون الحاجة لإعادة الفحص يدويّاً.
-const SCAN_PASSES = 2;
+// Single pass: same prompt repeated didn't improve quality (model converges)
+// and doubled API cost. Cascade instructions in the prompt already cover variety.
+const SCAN_PASSES = 1;
 const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
 interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }

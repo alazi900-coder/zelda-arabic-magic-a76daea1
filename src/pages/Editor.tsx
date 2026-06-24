@@ -13,7 +13,7 @@ import {
 import { useEditorState } from "@/hooks/useEditorState";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
-import BatchQualityModal from "@/components/editor/BatchQualityModal";
+const BatchQualityModal = React.lazy(() => import("@/components/editor/BatchQualityModal"));
 import QuickReviewMode from "@/components/editor/QuickReviewMode";
 import FindReplacePanel from "@/components/editor/FindReplacePanel";
 import FloatingFindReplaceButton from "@/components/editor/FloatingFindReplaceButton";
@@ -44,7 +44,7 @@ import EditorProgressStatus from "@/components/editor/EditorProgressStatus";
 import EditorBuildSection from "@/components/editor/EditorBuildSection";
 import EditorProviderSelection from "@/components/editor/EditorProviderSelection";
 import EditorActionsToolbar from "@/components/editor/EditorActionsToolbar";
-import RelatedEntriesDialog from "@/components/editor/RelatedEntriesDialog";
+const RelatedEntriesDialog = React.lazy(() => import("@/components/editor/RelatedEntriesDialog"));
 
 const Editor = () => {
   const editor = useEditorState();
@@ -292,11 +292,13 @@ const Editor = () => {
                   </CardContent>
                 </Card>
                 <div className="flex items-center self-center">
-                  <BatchQualityModal
-                    lastBatch={editor.lastBatchQuality}
-                    cumulative={editor.cumulativeQuality}
-                    onReset={editor.resetBatchQuality}
-                  />
+                  <React.Suspense fallback={null}>
+                    <BatchQualityModal
+                      lastBatch={editor.lastBatchQuality}
+                      cumulative={editor.cumulativeQuality}
+                      onReset={editor.resetBatchQuality}
+                    />
+                  </React.Suspense>
                 </div>
                 <Card className="flex-1 min-w-[140px]">
                   <CardContent className="flex items-center gap-3 p-4">
@@ -642,7 +644,9 @@ const Editor = () => {
         </div>
         </div>
 
-        <RelatedEntriesDialog
+        {relatedEntry && (
+          <React.Suspense fallback={null}>
+            <RelatedEntriesDialog
           open={!!relatedEntry}
           onOpenChange={(open) => { if (!open) setRelatedEntry(null); }}
           entry={relatedEntry}
@@ -686,7 +690,9 @@ const Editor = () => {
             editor.setFilterTable(tableName);
             editor.setCurrentPage(0);
           }}
-        />
+            />
+          </React.Suspense>
+        )}
 
         <EditorDialogs
           editor={editor}

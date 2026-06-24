@@ -644,7 +644,9 @@ const Editor = () => {
         </div>
         </div>
 
-        <RelatedEntriesDialog
+        {relatedEntry && (
+          <React.Suspense fallback={null}>
+            <RelatedEntriesDialog
           open={!!relatedEntry}
           onOpenChange={(open) => { if (!open) setRelatedEntry(null); }}
           entry={relatedEntry}

@@ -82,7 +82,12 @@ describe("repairTranslationTagsForBuild", () => {
       "You earned $1 points",
       "حصلت على $1 نقطة",
     );
-    expect(result.text).toBe("حصلت على $1 نقطة");
+    // Build wraps $N with U+2066 LRI / U+2069 PDI (BiDi isolates) to prevent
+    // in-game word reorder around the LTR token. The isolates are zero-width
+    // and invisible. Strip them to compare semantic content.
+    const stripped = result.text.replace(/[\u2066\u2069]/g, "");
+    expect(stripped).toBe("حصلت على $1 نقطة");
+    expect(result.text).toContain("\u2066$1\u2069");
     expect(result.exactTagMatch).toBe(true);
   });
 

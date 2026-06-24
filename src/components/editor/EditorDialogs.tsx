@@ -151,31 +151,40 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
       <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
       <SafetyRepairReport
         open={editor.showSafetyReport}
-        onOpenChange={editor.setShowSafetyReport}
-        repairs={editor.safetyRepairs}
-        onNavigateToEntry={(key) => {
-          editor.setFilterStatus('all');
-          editor.setSearch('');
-          setTimeout(() => {
-            const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
-            if (idx >= 0) {
-              const page = Math.floor(idx / 50);
-              editor.setCurrentPage(page);
-              setTimeout(() => {
-                const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }, 100);
-            }
-          }, 50);
-        }}
-      />
-      <IntegrityCheckDialog
-        open={editor.showIntegrityDialog}
-        onOpenChange={editor.setShowIntegrityDialog}
-        result={editor.integrityResult}
-        checking={editor.checkingIntegrity}
-        onRecheck={editor.handleCheckIntegrity}
-      />
+      {editor.buildStats && (
+        <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
+      )}
+      {editor.showSafetyReport && (
+        <SafetyRepairReport
+          open={editor.showSafetyReport}
+          onOpenChange={editor.setShowSafetyReport}
+          repairs={editor.safetyRepairs}
+          onNavigateToEntry={(key) => {
+            editor.setFilterStatus('all');
+            editor.setSearch('');
+            setTimeout(() => {
+              const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
+              if (idx >= 0) {
+                const page = Math.floor(idx / 50);
+                editor.setCurrentPage(page);
+                setTimeout(() => {
+                  const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }
+            }, 50);
+          }}
+        />
+      )}
+      {editor.showIntegrityDialog && (
+        <IntegrityCheckDialog
+          open={editor.showIntegrityDialog}
+          onOpenChange={editor.setShowIntegrityDialog}
+          result={editor.integrityResult}
+          checking={editor.checkingIntegrity}
+          onRecheck={editor.handleCheckIntegrity}
+        />
+      )}
       <BuildConfirmDialog
         open={editor.showBuildConfirm}
         onOpenChange={editor.setShowBuildConfirm}
@@ -183,35 +192,42 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
         onConfirm={editor.handleBuild}
         building={editor.building}
       />
-      <PreBuildDiagnostic
-        open={showDiagnostic}
-        onOpenChange={setShowDiagnostic}
-        state={editor.state}
-        onProceedToBuild={() => { setShowDiagnostic(false); editor.handlePreBuild(); }}
-      />
-      <CompareEnginesDialog
-        open={!!compareEntry}
-        onOpenChange={(open) => { if (!open) setCompareEntry(null); }}
-        entry={compareEntry}
-        onSelect={(key, translation) => editor.updateTranslation(key, translation)}
-        glossary={editor.activeGlossary}
-        userGeminiKey={editor.userGeminiKey}
-        userDeepSeekKey={editor.userDeepSeekKey}
-        myMemoryEmail={editor.myMemoryEmail}
-        aiModel={editor.aiModel}
-      />
+      {showDiagnostic && (
+        <PreBuildDiagnostic
+          open={showDiagnostic}
+          onOpenChange={setShowDiagnostic}
+          state={editor.state}
+          onProceedToBuild={() => { setShowDiagnostic(false); editor.handlePreBuild(); }}
+        />
+      )}
+      {compareEntry && (
+        <CompareEnginesDialog
+          open={!!compareEntry}
+          onOpenChange={(open) => { if (!open) setCompareEntry(null); }}
+          entry={compareEntry}
+          onSelect={(key, translation) => editor.updateTranslation(key, translation)}
+          glossary={editor.activeGlossary}
+          userGeminiKey={editor.userGeminiKey}
+          userDeepSeekKey={editor.userDeepSeekKey}
+          myMemoryEmail={editor.myMemoryEmail}
+          aiModel={editor.aiModel}
+        />
+      )}
       <ExportEnglishDialog
         open={showExportEnglishDialog}
         onOpenChange={setShowExportEnglishDialog}
         totalCount={untranslatedCount}
         onExport={(chunkSize, format) => format === "json" ? editor.handleExportEnglishOnlyJson(chunkSize) : editor.handleExportEnglishOnly(chunkSize)}
       />
-      <ImportConflictDialog
-        open={editor.importConflicts.length > 0}
-        conflicts={editor.importConflicts}
-        onConfirm={editor.handleConflictConfirm}
-        onCancel={editor.handleConflictCancel}
-      />
+      {editor.importConflicts.length > 0 && (
+        <ImportConflictDialog
+          open={editor.importConflicts.length > 0}
+          conflicts={editor.importConflicts}
+          onConfirm={editor.handleConflictConfirm}
+          onCancel={editor.handleConflictCancel}
+        />
+      )}
+
 
       {/* Clear Translations Confirmation */}
       <AlertDialog open={!!showClearConfirm} onOpenChange={(v) => { if (!v) setShowClearConfirm(null); }}>

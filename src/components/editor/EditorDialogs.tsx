@@ -148,9 +148,6 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
         />
       )}
 
-      <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
-      <SafetyRepairReport
-        open={editor.showSafetyReport}
       {editor.buildStats && (
         <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
       )}

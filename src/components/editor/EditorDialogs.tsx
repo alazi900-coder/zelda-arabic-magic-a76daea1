@@ -13,19 +13,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
-import BuildStatsDialog from "@/components/editor/BuildStatsDialog";
 import BuildConfirmDialog from "@/components/editor/BuildConfirmDialog";
-import CompareEnginesDialog from "@/components/editor/CompareEnginesDialog";
 import ExportEnglishDialog from "@/components/editor/ExportEnglishDialog";
-import ImportConflictDialog from "@/components/editor/ImportConflictDialog";
-import SafetyRepairReport from "@/components/editor/SafetyRepairReport";
-import IntegrityCheckDialog from "@/components/editor/IntegrityCheckDialog";
-import PreBuildDiagnostic from "@/components/editor/PreBuildDiagnostic";
-import PageTranslationCompare from "@/components/editor/PageTranslationCompare";
-import GlossaryTranslationPreview from "@/components/editor/GlossaryTranslationPreview";
-import GlossaryMergePreviewDialog from "@/components/editor/GlossaryMergePreviewDialog";
 import ToolHelpDialog, { ToolType } from "@/components/editor/ToolHelpDialog";
-import FixTagsLineBreaksDialog from "@/components/editor/FixTagsLineBreaksDialog";
+// Heavy dialogs split into separate chunks; mounted only when opened.
+const BuildStatsDialog = React.lazy(() => import("@/components/editor/BuildStatsDialog"));
+const CompareEnginesDialog = React.lazy(() => import("@/components/editor/CompareEnginesDialog"));
+const ImportConflictDialog = React.lazy(() => import("@/components/editor/ImportConflictDialog"));
+const SafetyRepairReport = React.lazy(() => import("@/components/editor/SafetyRepairReport"));
+const IntegrityCheckDialog = React.lazy(() => import("@/components/editor/IntegrityCheckDialog"));
+const PreBuildDiagnostic = React.lazy(() => import("@/components/editor/PreBuildDiagnostic"));
+const PageTranslationCompare = React.lazy(() => import("@/components/editor/PageTranslationCompare"));
+const GlossaryTranslationPreview = React.lazy(() => import("@/components/editor/GlossaryTranslationPreview"));
+const GlossaryMergePreviewDialog = React.lazy(() => import("@/components/editor/GlossaryMergePreviewDialog"));
+const FixTagsLineBreaksDialog = React.lazy(() => import("@/components/editor/FixTagsLineBreaksDialog"));
 import type { useEditorState } from "@/hooks/useEditorState";
 import type { ExtractedEntry } from "@/components/editor/types";
 import { isTechnicalText } from "@/components/editor/types";
@@ -91,7 +92,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
   untranslatedCount,
 }) => {
   return (
-    <>
+    <React.Suspense fallback={null}>
       <AlertDialog open={editor.showRetranslateConfirm} onOpenChange={editor.setShowRetranslateConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -113,66 +114,74 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      <FixTagsLineBreaksDialog
-        open={!!editor.restoreReport}
-        report={editor.restoreReport}
-        onClose={editor.dismissRestoreReport}
-        onApply={editor.handleApplyTagsAndLineBreaksFix}
-        onUpdateTranslation={editor.updateTranslation}
-        onRescan={editor.handleScanTagsAndLineBreaks}
-        onApplySmartReorder={editor.handleApplySmartTagReorder}
-        splitEntries={editor.state?.entries.map(e => ({
-          msbtFile: e.msbtFile,
-          index: e.index,
-          label: e.label,
-          original: e.original,
-        }))}
-        splitTranslations={editor.state?.translations}
-        onJumpToEntry={(key) => {
-          editor.setFilterStatus('all');
-          editor.setSearch('');
-          setTimeout(() => {
-            const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
-            if (idx >= 0) {
-              const page = Math.floor(idx / 50);
-              editor.setCurrentPage(page);
-              setTimeout(() => {
-                const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }, 100);
-            }
-          }, 50);
-        }}
-      />
+      {editor.restoreReport && (
+        <FixTagsLineBreaksDialog
+          open={!!editor.restoreReport}
+          report={editor.restoreReport}
+          onClose={editor.dismissRestoreReport}
+          onApply={editor.handleApplyTagsAndLineBreaksFix}
+          onUpdateTranslation={editor.updateTranslation}
+          onRescan={editor.handleScanTagsAndLineBreaks}
+          onApplySmartReorder={editor.handleApplySmartTagReorder}
+          splitEntries={editor.state?.entries.map(e => ({
+            msbtFile: e.msbtFile,
+            index: e.index,
+            label: e.label,
+            original: e.original,
+          }))}
+          splitTranslations={editor.state?.translations}
+          onJumpToEntry={(key) => {
+            editor.setFilterStatus('all');
+            editor.setSearch('');
+            setTimeout(() => {
+              const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
+              if (idx >= 0) {
+                const page = Math.floor(idx / 50);
+                editor.setCurrentPage(page);
+                setTimeout(() => {
+                  const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }
+            }, 50);
+          }}
+        />
+      )}
 
-      <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
-      <SafetyRepairReport
-        open={editor.showSafetyReport}
-        onOpenChange={editor.setShowSafetyReport}
-        repairs={editor.safetyRepairs}
-        onNavigateToEntry={(key) => {
-          editor.setFilterStatus('all');
-          editor.setSearch('');
-          setTimeout(() => {
-            const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
-            if (idx >= 0) {
-              const page = Math.floor(idx / 50);
-              editor.setCurrentPage(page);
-              setTimeout(() => {
-                const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }, 100);
-            }
-          }, 50);
-        }}
-      />
-      <IntegrityCheckDialog
-        open={editor.showIntegrityDialog}
-        onOpenChange={editor.setShowIntegrityDialog}
-        result={editor.integrityResult}
-        checking={editor.checkingIntegrity}
-        onRecheck={editor.handleCheckIntegrity}
-      />
+      {editor.buildStats && (
+        <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
+      )}
+      {editor.showSafetyReport && (
+        <SafetyRepairReport
+          open={editor.showSafetyReport}
+          onOpenChange={editor.setShowSafetyReport}
+          repairs={editor.safetyRepairs}
+          onNavigateToEntry={(key) => {
+            editor.setFilterStatus('all');
+            editor.setSearch('');
+            setTimeout(() => {
+              const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
+              if (idx >= 0) {
+                const page = Math.floor(idx / 50);
+                editor.setCurrentPage(page);
+                setTimeout(() => {
+                  const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }
+            }, 50);
+          }}
+        />
+      )}
+      {editor.showIntegrityDialog && (
+        <IntegrityCheckDialog
+          open={editor.showIntegrityDialog}
+          onOpenChange={editor.setShowIntegrityDialog}
+          result={editor.integrityResult}
+          checking={editor.checkingIntegrity}
+          onRecheck={editor.handleCheckIntegrity}
+        />
+      )}
       <BuildConfirmDialog
         open={editor.showBuildConfirm}
         onOpenChange={editor.setShowBuildConfirm}
@@ -180,35 +189,42 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
         onConfirm={editor.handleBuild}
         building={editor.building}
       />
-      <PreBuildDiagnostic
-        open={showDiagnostic}
-        onOpenChange={setShowDiagnostic}
-        state={editor.state}
-        onProceedToBuild={() => { setShowDiagnostic(false); editor.handlePreBuild(); }}
-      />
-      <CompareEnginesDialog
-        open={!!compareEntry}
-        onOpenChange={(open) => { if (!open) setCompareEntry(null); }}
-        entry={compareEntry}
-        onSelect={(key, translation) => editor.updateTranslation(key, translation)}
-        glossary={editor.activeGlossary}
-        userGeminiKey={editor.userGeminiKey}
-        userDeepSeekKey={editor.userDeepSeekKey}
-        myMemoryEmail={editor.myMemoryEmail}
-        aiModel={editor.aiModel}
-      />
+      {showDiagnostic && (
+        <PreBuildDiagnostic
+          open={showDiagnostic}
+          onOpenChange={setShowDiagnostic}
+          state={editor.state}
+          onProceedToBuild={() => { setShowDiagnostic(false); editor.handlePreBuild(); }}
+        />
+      )}
+      {compareEntry && (
+        <CompareEnginesDialog
+          open={!!compareEntry}
+          onOpenChange={(open) => { if (!open) setCompareEntry(null); }}
+          entry={compareEntry}
+          onSelect={(key, translation) => editor.updateTranslation(key, translation)}
+          glossary={editor.activeGlossary}
+          userGeminiKey={editor.userGeminiKey}
+          userDeepSeekKey={editor.userDeepSeekKey}
+          myMemoryEmail={editor.myMemoryEmail}
+          aiModel={editor.aiModel}
+        />
+      )}
       <ExportEnglishDialog
         open={showExportEnglishDialog}
         onOpenChange={setShowExportEnglishDialog}
         totalCount={untranslatedCount}
         onExport={(chunkSize, format) => format === "json" ? editor.handleExportEnglishOnlyJson(chunkSize) : editor.handleExportEnglishOnly(chunkSize)}
       />
-      <ImportConflictDialog
-        open={editor.importConflicts.length > 0}
-        conflicts={editor.importConflicts}
-        onConfirm={editor.handleConflictConfirm}
-        onCancel={editor.handleConflictCancel}
-      />
+      {editor.importConflicts.length > 0 && (
+        <ImportConflictDialog
+          open={editor.importConflicts.length > 0}
+          conflicts={editor.importConflicts}
+          onConfirm={editor.handleConflictConfirm}
+          onCancel={editor.handleConflictCancel}
+        />
+      )}
+
 
       {/* Clear Translations Confirmation */}
       <AlertDialog open={!!showClearConfirm} onOpenChange={(v) => { if (!v) setShowClearConfirm(null); }}>
@@ -350,7 +366,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
           }
         }}
       />
-    </>
+    </React.Suspense>
   );
 };
 

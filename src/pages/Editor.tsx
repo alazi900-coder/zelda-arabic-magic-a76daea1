@@ -44,7 +44,7 @@ import EditorProgressStatus from "@/components/editor/EditorProgressStatus";
 import EditorBuildSection from "@/components/editor/EditorBuildSection";
 import EditorProviderSelection from "@/components/editor/EditorProviderSelection";
 import EditorActionsToolbar from "@/components/editor/EditorActionsToolbar";
-import RelatedEntriesDialog from "@/components/editor/RelatedEntriesDialog";
+const RelatedEntriesDialog = React.lazy(() => import("@/components/editor/RelatedEntriesDialog"));
 
 const Editor = () => {
   const editor = useEditorState();

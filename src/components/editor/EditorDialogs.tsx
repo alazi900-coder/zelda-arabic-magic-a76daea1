@@ -92,7 +92,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
   untranslatedCount,
 }) => {
   return (
-    <>
+    <React.Suspense fallback={null}>
       <AlertDialog open={editor.showRetranslateConfirm} onOpenChange={editor.setShowRetranslateConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>

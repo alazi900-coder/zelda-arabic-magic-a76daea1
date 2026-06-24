@@ -1,86 +1,53 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRegisterSW } from "virtual:pwa-register/react";
 
 /**
  * Top update banner — shows automatically when a new SW build is waiting.
- * The previous floating buttons (force-update / backup / import) were removed
- * at the user's request to declutter the screen.
  */
 export default function UpdateBanner() {
-  const [showUpdate, setShowUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
-
-  useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-
-    const checkForUpdate = () => {
-      navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
-    };
-
-    navigator.serviceWorker.getRegistration().then((reg) => {
-      if (reg?.waiting) setShowUpdate(true);
-      reg?.addEventListener("updatefound", () => {
-        const newSW = reg.installing;
-        newSW?.addEventListener("statechange", () => {
-          if (newSW.state === "installed" && navigator.serviceWorker.controller) {
-            setShowUpdate(true);
-          }
-        });
-      });
-    }).catch(() => {});
-
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      // Check for updates periodically
+      if (r) {
+        setInterval(() => {
+          r.update();
+        }, 2 * 60 * 1000); // 2 minutes
       }
-    });
-
-    checkForUpdate();
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") checkForUpdate();
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    const interval = setInterval(checkForUpdate, 2 * 60 * 1000);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
+    },
+    onRegisterError(error) {
+      console.error('SW registration error', error);
+    },
+  });
 
   const handleUpdate = async () => {
     setUpdating(true);
     try {
-      const reg = await navigator.serviceWorker?.getRegistration();
-
-      // Delete ONLY the SW's HTTP/precache caches.
-      // IndexedDB & localStorage (where ALL your translations live) are NOT touched.
+      // Delete caches to ensure absolute freshness
       if ("caches" in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
 
-      if (reg?.waiting) {
-        // Activating the waiting SW will fire controllerchange → auto-reload.
-        reg.waiting.postMessage({ type: "SKIP_WAITING" });
-        // Safety fallback in case controllerchange doesn't fire within 1.5s
-        setTimeout(() => {
-          window.location.replace(window.location.pathname + "?_v=" + Date.now());
-        }, 1500);
-        return;
-      }
-    } catch {
-      // ignore — we still want to reload
+      // Tell the service worker to skip waiting and reload the page
+      updateServiceWorker(true);
+
+      // Fallback reload just in case updateServiceWorker takes too long or fails
+      setTimeout(() => {
+        window.location.replace(window.location.pathname + "?_v=" + Date.now());
+      }, 1500);
+    } catch (e) {
+      console.error('Failed to update service worker', e);
+      window.location.replace(window.location.pathname + "?_v=" + Date.now());
     }
-    // No waiting SW: force network fetch with cache-busting param.
-    window.location.replace(window.location.pathname + "?_v=" + Date.now());
   };
 
-  if (!showUpdate) return null;
+  if (!needRefresh) return null;
 
   return (
     <div className="fixed top-0 inset-x-0 z-[100] bg-gradient-to-l from-primary to-accent text-primary-foreground py-2.5 px-4 flex items-center justify-center gap-4 shadow-xl animate-in slide-in-from-top duration-300">

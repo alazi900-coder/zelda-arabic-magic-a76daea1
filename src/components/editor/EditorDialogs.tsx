@@ -114,37 +114,39 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      <FixTagsLineBreaksDialog
-        open={!!editor.restoreReport}
-        report={editor.restoreReport}
-        onClose={editor.dismissRestoreReport}
-        onApply={editor.handleApplyTagsAndLineBreaksFix}
-        onUpdateTranslation={editor.updateTranslation}
-        onRescan={editor.handleScanTagsAndLineBreaks}
-        onApplySmartReorder={editor.handleApplySmartTagReorder}
-        splitEntries={editor.state?.entries.map(e => ({
-          msbtFile: e.msbtFile,
-          index: e.index,
-          label: e.label,
-          original: e.original,
-        }))}
-        splitTranslations={editor.state?.translations}
-        onJumpToEntry={(key) => {
-          editor.setFilterStatus('all');
-          editor.setSearch('');
-          setTimeout(() => {
-            const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
-            if (idx >= 0) {
-              const page = Math.floor(idx / 50);
-              editor.setCurrentPage(page);
-              setTimeout(() => {
-                const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }, 100);
-            }
-          }, 50);
-        }}
-      />
+      {editor.restoreReport && (
+        <FixTagsLineBreaksDialog
+          open={!!editor.restoreReport}
+          report={editor.restoreReport}
+          onClose={editor.dismissRestoreReport}
+          onApply={editor.handleApplyTagsAndLineBreaksFix}
+          onUpdateTranslation={editor.updateTranslation}
+          onRescan={editor.handleScanTagsAndLineBreaks}
+          onApplySmartReorder={editor.handleApplySmartTagReorder}
+          splitEntries={editor.state?.entries.map(e => ({
+            msbtFile: e.msbtFile,
+            index: e.index,
+            label: e.label,
+            original: e.original,
+          }))}
+          splitTranslations={editor.state?.translations}
+          onJumpToEntry={(key) => {
+            editor.setFilterStatus('all');
+            editor.setSearch('');
+            setTimeout(() => {
+              const idx = editor.state?.entries.findIndex(e => `${e.msbtFile}:${e.index}` === key) ?? -1;
+              if (idx >= 0) {
+                const page = Math.floor(idx / 50);
+                editor.setCurrentPage(page);
+                setTimeout(() => {
+                  const el = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }
+            }, 50);
+          }}
+        />
+      )}
 
       <BuildStatsDialog stats={editor.buildStats} onClose={() => editor.setBuildStats(null)} />
       <SafetyRepairReport

@@ -351,7 +351,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
           }
         }}
       />
-    </>
+    </React.Suspense>
   );
 };
 

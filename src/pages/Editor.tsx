@@ -690,7 +690,9 @@ const Editor = () => {
             editor.setFilterTable(tableName);
             editor.setCurrentPage(0);
           }}
-        />
+            />
+          </React.Suspense>
+        )}
 
         <EditorDialogs
           editor={editor}

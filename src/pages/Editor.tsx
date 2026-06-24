@@ -13,7 +13,7 @@ import {
 import { useEditorState } from "@/hooks/useEditorState";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
-import BatchQualityModal from "@/components/editor/BatchQualityModal";
+const BatchQualityModal = React.lazy(() => import("@/components/editor/BatchQualityModal"));
 import QuickReviewMode from "@/components/editor/QuickReviewMode";
 import FindReplacePanel from "@/components/editor/FindReplacePanel";
 import FloatingFindReplaceButton from "@/components/editor/FloatingFindReplaceButton";

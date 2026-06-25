@@ -712,6 +712,33 @@ const Editor = () => {
           </React.Suspense>
         )}
 
+        {sceneContextEntry && (
+          <React.Suspense fallback={null}>
+            <SceneContextPanel
+              open={!!sceneContextEntry}
+              onClose={() => setSceneContextEntry(null)}
+              entry={sceneContextEntry}
+              entries={editor.state?.entries || []}
+              translations={editor.state?.translations || {}}
+            />
+          </React.Suspense>
+        )}
+
+        {contextSuggestEntry && (
+          <React.Suspense fallback={null}>
+            <ContextSuggestPanel
+              open={!!contextSuggestEntry}
+              onClose={() => setContextSuggestEntry(null)}
+              entry={contextSuggestEntry}
+              entries={editor.state?.entries || []}
+              translations={editor.state?.translations || {}}
+              glossary={editor.activeGlossary}
+              onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
+            />
+          </React.Suspense>
+        )}
+
+
         <EditorDialogs
           editor={editor}
           showDiagnostic={showDiagnostic}

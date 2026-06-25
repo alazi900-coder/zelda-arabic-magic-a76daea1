@@ -160,6 +160,7 @@ interface EntryCardProps {
   onShowRelated?: (entry: ExtractedEntry) => void;
   tmSuggestions?: TMSuggestion[];
   legacyCommaSplitEnabled?: boolean;
+  extraToolButtons?: { onClick: () => void; icon: string; title: string; cls?: string }[];
 }
 
 function findGlossaryMatches(original: string, glossary?: string): { term: string; translation: string }[] {
@@ -192,7 +193,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
   handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag,
   onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, tmSuggestions,
-  legacyCommaSplitEnabled,
+  legacyCommaSplitEnabled, extraToolButtons,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
   const isTech = isTechnicalText(entry.original);
@@ -512,6 +513,24 @@ const EntryCard: React.FC<EntryCardProps> = ({
               <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleTranslateSingle(entry)} disabled={translatingSingle === key} title="ترجمة هذا النص">
                 {translatingSingle === key ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-primary" />}
               </Button>
+              {extraToolButtons && extraToolButtons.length > 0 && (
+                <>
+                  <span className="w-px h-5 bg-border/50" aria-hidden />
+                  {extraToolButtons.map((btn, i) => (
+                    <Button
+                      key={i}
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={`h-9 w-9 shrink-0 text-base ${btn.cls || ""}`}
+                      onClick={btn.onClick}
+                      title={btn.title}
+                    >
+                      <span aria-hidden>{btn.icon}</span>
+                    </Button>
+                  ))}
+                </>
+              )}
               {onCompare && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => onCompare(entry)} title="مقارنة المحركات الثلاثة">
                   <GitCompareArrows className="w-4 h-4 text-accent" />

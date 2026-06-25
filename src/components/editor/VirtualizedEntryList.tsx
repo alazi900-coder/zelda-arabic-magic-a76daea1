@@ -38,6 +38,7 @@ interface VirtualizedEntryListProps {
   findSimilar: (key: string, original: string) => TMSuggestion[];
   height?: number;
   legacyCommaSplitEnabled?: boolean;
+  buildExtraToolButtons?: (entry: ExtractedEntry) => { onClick: () => void; icon: string; title: string; cls?: string }[];
 }
 
 const ESTIMATED_ITEM_SIZE = 280;
@@ -69,6 +70,7 @@ const VirtualizedEntryList = React.memo(({
   findSimilar,
   height = 600,
   legacyCommaSplitEnabled,
+  buildExtraToolButtons,
 }: VirtualizedEntryListProps) => {
   const listRef = useRef<VList>(null);
   const rowHeights = useRef<Record<number, number>>({});
@@ -125,6 +127,7 @@ const VirtualizedEntryList = React.memo(({
             onShowRelated={onShowRelated}
             tmSuggestions={findSimilar(key, entry.original)}
             legacyCommaSplitEnabled={legacyCommaSplitEnabled}
+            extraToolButtons={buildExtraToolButtons?.(entry)}
           />
         </RowMeasurer>
       </div>

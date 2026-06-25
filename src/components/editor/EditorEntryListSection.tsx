@@ -44,6 +44,7 @@ interface EditorEntryListSectionProps {
   setCompareEntry: (e: ExtractedEntry | null) => void;
   setRelatedEntry?: (e: ExtractedEntry | null) => void;
   findSimilar: ReturnType<typeof useTranslationMemory>["findSimilar"];
+  buildExtraToolButtons?: (entry: ExtractedEntry) => { onClick: () => void; icon: string; title: string; cls?: string }[];
 }
 
 const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
@@ -54,6 +55,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
   setCompareEntry,
   setRelatedEntry,
   findSimilar,
+  buildExtraToolButtons,
 }) => (
   <>
     {/* Diff View */}
@@ -106,6 +108,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
         findSimilar={findSimilar}
         height={Math.max(400, window.innerHeight - 300)}
         legacyCommaSplitEnabled={editor.legacyCommaSplitEnabled}
+        buildExtraToolButtons={buildExtraToolButtons}
       />
     ) : null}
 

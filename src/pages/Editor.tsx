@@ -45,6 +45,8 @@ import EditorBuildSection from "@/components/editor/EditorBuildSection";
 import EditorProviderSelection from "@/components/editor/EditorProviderSelection";
 import EditorActionsToolbar from "@/components/editor/EditorActionsToolbar";
 const RelatedEntriesDialog = React.lazy(() => import("@/components/editor/RelatedEntriesDialog"));
+const SceneContextPanel = React.lazy(() => import("@/components/editor/SceneContextPanel"));
+const ContextSuggestPanel = React.lazy(() => import("@/components/editor/ContextSuggestPanel"));
 
 const Editor = () => {
   const editor = useEditorState();
@@ -57,6 +59,8 @@ const Editor = () => {
   const [showExportEnglishDialog, setShowExportEnglishDialog] = React.useState(false);
   const [compareEntry, setCompareEntry] = React.useState<import("@/components/editor/types").ExtractedEntry | null>(null);
   const [relatedEntry, setRelatedEntry] = React.useState<import("@/components/editor/types").ExtractedEntry | null>(null);
+  const [sceneContextEntry, setSceneContextEntry] = React.useState<import("@/components/editor/types").ExtractedEntry | null>(null);
+  const [contextSuggestEntry, setContextSuggestEntry] = React.useState<import("@/components/editor/types").ExtractedEntry | null>(null);
   const [showClearConfirm, setShowClearConfirm] = React.useState<'all' | 'filtered' | null>(null);
   const [showTagRepair, setShowTagRepair] = React.useState(false);
   const [showArabicProcessConfirm, setShowArabicProcessConfirm] = React.useState(false);
@@ -640,6 +644,20 @@ const Editor = () => {
             setCompareEntry={setCompareEntry}
             setRelatedEntry={setRelatedEntry}
             findSimilar={findSimilar}
+            buildExtraToolButtons={(entry) => [
+              {
+                onClick: () => setSceneContextEntry(entry),
+                icon: "🎬",
+                title: "عرض سياق المشهد",
+                cls: "bg-muted/40 text-muted-foreground hover:bg-muted",
+              },
+              {
+                onClick: () => setContextSuggestEntry(entry),
+                icon: "💡",
+                title: "اقتراحات سياقية بالـ AI",
+                cls: "bg-primary/10 text-primary hover:bg-primary/20",
+              },
+            ]}
           />
         </div>
         </div>
@@ -693,6 +711,33 @@ const Editor = () => {
             />
           </React.Suspense>
         )}
+
+        {sceneContextEntry && (
+          <React.Suspense fallback={null}>
+            <SceneContextPanel
+              open={!!sceneContextEntry}
+              onClose={() => setSceneContextEntry(null)}
+              entry={sceneContextEntry}
+              entries={editor.state?.entries || []}
+              translations={editor.state?.translations || {}}
+            />
+          </React.Suspense>
+        )}
+
+        {contextSuggestEntry && (
+          <React.Suspense fallback={null}>
+            <ContextSuggestPanel
+              open={!!contextSuggestEntry}
+              onClose={() => setContextSuggestEntry(null)}
+              entry={contextSuggestEntry}
+              entries={editor.state?.entries || []}
+              translations={editor.state?.translations || {}}
+              glossary={editor.activeGlossary}
+              onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
+            />
+          </React.Suspense>
+        )}
+
 
         <EditorDialogs
           editor={editor}

@@ -1,0 +1,29 @@
+{
+  "name": "أداة تعريب Xenoblade Chronicles 3",
+  "short_name": "تعريب XC3",
+  "description": "أداة لتعريب ملفات لعبة Xenoblade Chronicles 3 تلقائياً",
+  "theme_color": "#0f2617",
+  "background_color": "#0f2617",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

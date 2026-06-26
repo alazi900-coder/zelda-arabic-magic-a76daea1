@@ -3,9 +3,10 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
- * Top update banner — shows automatically when a new SW build is waiting.
- * The previous floating buttons (force-update / backup / import) were removed
- * at the user's request to declutter the screen.
+ * Legacy update banner.
+ * New builds no longer register an app-shell service worker, but this component
+ * helps returning users activate the one-time cleanup worker without touching
+ * IndexedDB/localStorage where translations are stored.
  */
 export default function UpdateBanner() {
   const [showUpdate, setShowUpdate] = useState(false);
@@ -14,29 +15,34 @@ export default function UpdateBanner() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    const checkForUpdate = () => {
-      navigator.serviceWorker.getRegistration().then((reg) => reg?.update()).catch(() => {});
+    let refreshing = false;
+    const reloadOnce = () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
     };
 
-    navigator.serviceWorker.getRegistration().then((reg) => {
-      if (reg?.waiting) setShowUpdate(true);
-      reg?.addEventListener("updatefound", () => {
-        const newSW = reg.installing;
-        newSW?.addEventListener("statechange", () => {
-          if (newSW.state === "installed" && navigator.serviceWorker.controller) {
-            setShowUpdate(true);
-          }
+    navigator.serviceWorker.addEventListener("controllerchange", reloadOnce);
+
+    const watchRegistration = (reg: ServiceWorkerRegistration) => {
+      if (reg.waiting) setShowUpdate(true);
+      reg.addEventListener("updatefound", () => {
+        const worker = reg.installing;
+        worker?.addEventListener("statechange", () => {
+          if (worker.state === "installed") setShowUpdate(true);
         });
       });
-    }).catch(() => {});
+    };
 
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
+    const checkForUpdate = async () => {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        registrations.forEach(watchRegistration);
+        await Promise.allSettled(registrations.map((reg) => reg.update()));
+      } catch {
+        // ignore service-worker cleanup failures
       }
-    });
+    };
 
     checkForUpdate();
 
@@ -49,35 +55,22 @@ export default function UpdateBanner() {
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
+      navigator.serviceWorker.removeEventListener("controllerchange", reloadOnce);
     };
   }, []);
 
   const handleUpdate = async () => {
     setUpdating(true);
     try {
-      const reg = await navigator.serviceWorker?.getRegistration();
-
-      // Delete ONLY the SW's HTTP/precache caches.
-      // IndexedDB & localStorage (where ALL your translations live) are NOT touched.
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-
-      if (reg?.waiting) {
-        // Activating the waiting SW will fire controllerchange → auto-reload.
-        reg.waiting.postMessage({ type: "SKIP_WAITING" });
-        // Safety fallback in case controllerchange doesn't fire within 1.5s
-        setTimeout(() => {
-          window.location.replace(window.location.pathname + "?_v=" + Date.now());
-        }, 1500);
-        return;
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const reg of registrations) {
+        await reg.update().catch(() => undefined);
+        reg.waiting?.postMessage({ type: "SKIP_WAITING" });
       }
     } catch {
-      // ignore — we still want to reload
+      // ignore — reload fallback below still gets a fresh network shell
     }
-    // No waiting SW: force network fetch with cache-busting param.
-    window.location.replace(window.location.pathname + "?_v=" + Date.now());
+    setTimeout(() => window.location.reload(), 800);
   };
 
   if (!showUpdate) return null;

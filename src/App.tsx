@@ -75,6 +75,7 @@ const App = () => (
                 <Route path="/danganronpa/classic" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa"><DanganronpaClassicProcess /></ErrorBoundary>} />
                 <Route path="/wilay" element={<WilayViewer />} />
                 <Route path="/lagp-packer" element={<ErrorBoundary fallbackTitle="خطأ في أداة LAGP"><LagpPacker /></ErrorBoundary>} />
+                <Route path="/pwa-status" element={<PwaStatus />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

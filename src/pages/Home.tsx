@@ -121,6 +121,9 @@ const Home = () => {
       <footer className="py-6 text-center text-sm text-muted-foreground border-t border-border">
         <div>أداة تعريب الألعاب — مشروع مفتوح المصدر 🇸🇦</div>
         <div className="mt-1 text-xs opacity-60">الإصدار {APP_VERSION}</div>
+        <Link to="/pwa-status" className="inline-flex items-center gap-1.5 mt-2 text-xs text-primary hover:underline">
+          <Activity className="w-3.5 h-3.5" /> حالة التطبيق والتحديثات
+        </Link>
       </footer>
     </div>
   );

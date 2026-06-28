@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Lock, Unlock } from "lucide-react";
+import { ArrowRight, Lock, Unlock, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 

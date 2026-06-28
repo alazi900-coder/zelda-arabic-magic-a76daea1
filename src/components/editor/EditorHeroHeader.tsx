@@ -32,6 +32,13 @@ const EditorHeroHeader: React.FC<EditorHeroHeaderProps> = ({
           </Link>
         )}
         <div className="flex items-center gap-2">
+          <Link
+            to="/pwa-status"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-2.5 py-1.5 transition-colors"
+            title="حالة التطبيق والتحديثات"
+          >
+            <Activity className="w-3.5 h-3.5" /> التحديثات
+          </Link>
           <Button
             variant={pageLocked ? "destructive" : "outline"}
             size="sm"

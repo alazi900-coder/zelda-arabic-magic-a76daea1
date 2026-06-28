@@ -4,6 +4,7 @@ import { ArrowRight, RefreshCw, Trash2, Activity, AlertTriangle, CheckCircle2 } 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { APP_VERSION } from "@/lib/version";
+import ChangelogCard from "@/components/ChangelogCard";
 import heroBg from "@/assets/xc3-hero-bg.jpg";
 
 interface SwInfo {
@@ -158,6 +159,9 @@ export default function PwaStatus() {
             </div>
           )}
         </Card>
+
+        <ChangelogCard initialCount={3} />
+
 
         {state?.blockReason && (
           <Card className="p-4 border-destructive/40 bg-destructive/5">

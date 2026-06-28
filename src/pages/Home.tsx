@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import xc3Bg from "@/assets/xc3-hero-bg.jpg";
 import pokemonBg from "@/assets/pokemon-sv-hero-bg.jpg";

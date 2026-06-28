@@ -94,6 +94,19 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
     setLoading(true);
     setError(null);
     try {
+      // Read translation provider preferences from localStorage so suggestions
+      // use the same engine the user already picked for translation.
+      let provider = "gemini";
+      let aiModel = "";
+      let providerApiKey = "";
+      try {
+        provider = localStorage.getItem("translationProvider") || "gemini";
+        aiModel = localStorage.getItem("aiModel") || "";
+        if (provider === "deepseek") {
+          providerApiKey = localStorage.getItem("userDeepSeekKey") || "";
+        }
+      } catch { /* localStorage unavailable */ }
+
       const res = await fetch(getEdgeFunctionUrl("context-suggest"), {
         method: "POST",
         headers: getSupabaseHeaders(),
@@ -102,6 +115,9 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           context: contextWindow,
           glossary: glossarySnippet,
           file: entry.msbtFile.split(":")[1] || entry.msbtFile,
+          provider,
+          aiModel,
+          providerApiKey,
         }),
       });
       const data = await res.json();

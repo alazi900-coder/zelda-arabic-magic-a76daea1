@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
+import ChangelogCard from "@/components/ChangelogCard";
 import xc3Bg from "@/assets/xc3-hero-bg.jpg";
 import pokemonBg from "@/assets/pokemon-sv-hero-bg.jpg";
 import danganronpaBg from "@/assets/danganronpa-hero-bg.jpg";
@@ -116,6 +117,12 @@ const Home = () => {
           ))}
         </div>
       </section>
+
+      {/* آخر التحديثات */}
+      <section className="max-w-3xl mx-auto px-4 pb-8">
+        <ChangelogCard initialCount={1} />
+      </section>
+
 
       {/* Footer */}
       <footer className="py-6 text-center text-sm text-muted-foreground border-t border-border">

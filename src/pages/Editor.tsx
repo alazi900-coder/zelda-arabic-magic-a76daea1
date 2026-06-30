@@ -733,6 +733,7 @@ const Editor = () => {
               entries={editor.state?.entries || []}
               translations={editor.state?.translations || {}}
               glossary={editor.activeGlossary}
+              findSimilar={findSimilar}
               onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
             />
           </React.Suspense>

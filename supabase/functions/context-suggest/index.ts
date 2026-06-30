@@ -7,9 +7,17 @@ interface ContextEntry {
   translation: string;
 }
 
+interface TmExample {
+  original: string;
+  translation: string;
+  similarity?: number;
+}
+
 interface RequestBody {
   target: ContextEntry;
   context: ContextEntry[];
+  tmExamples?: TmExample[];
+  maxBytes?: number;
   glossary?: string;
   file?: string;
   provider?: 'gemini' | 'deepseek' | 'mymemory' | 'google';

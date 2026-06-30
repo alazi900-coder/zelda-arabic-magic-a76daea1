@@ -90,13 +90,28 @@ function buildUserPrompt(body: RequestBody): string {
     ? `\n\nالقاموس (مصطلح=ترجمة):\n${body.glossary}`
     : '';
   const fileLine = body.file ? `\nالملف: ${body.file}` : '';
+
+  // Translation Memory examples — help the model stay consistent with prior
+  // translations of similar sentences across the project.
+  const tm = (body.tmExamples || []).filter((t) => t?.translation?.trim());
+  const tmBlock = tm.length
+    ? `\n\nذاكرة الترجمة (جمل سابقة مشابهة — حافظ على نفس المصطلحات والأسلوب):\n${tm
+        .map((t, i) => `${i + 1}. EN: ${t.original}\n   AR: ${t.translation}${t.similarity ? ` (تشابه ${t.similarity}%)` : ''}`)
+        .join('\n')}`
+    : '';
+
+  // Hard byte limit — XC stores translations in fixed-size UTF-16LE buffers.
+  const byteLimitBlock = (body.maxBytes && body.maxBytes > 0)
+    ? `\n\n⚠️ قيد إلزامي: الترجمة يجب ألا تتجاوز ${body.maxBytes} بايت بترميز UTF-16LE (كل حرف عربي = 2 بايت تقريباً، أي بحد أقصى ~${Math.floor(body.maxBytes / 2)} حرف). إن لم تستطع، اختصر دون فقد المعنى.`
+    : '';
+
   return `النص المستهدف:
 EN: ${body.target.original}
 AR الحالية: ${body.target.translation || '(لا توجد)'}
 ${fileLine}
 
 السياق المحيط (${body.context.length} سطر):
-${ctxLines || '(لا يوجد سياق)'}${glossaryBlock}
+${ctxLines || '(لا يوجد سياق)'}${tmBlock}${glossaryBlock}${byteLimitBlock}
 
 أعد 3 اقتراحات عبر استدعاء الدالة return_suggestions.`;
 }

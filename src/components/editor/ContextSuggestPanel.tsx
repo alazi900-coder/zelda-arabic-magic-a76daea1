@@ -6,7 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Brain, Copy, Check, Pencil, RefreshCcw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { idbGet, idbSet } from "@/lib/idb-storage";
 import type { ExtractedEntry } from "./types";
+import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 
 interface Suggestion {
   translation: string;
@@ -23,11 +25,39 @@ interface ContextSuggestPanelProps {
   entries: ExtractedEntry[];
   translations: Record<string, string>;
   glossary?: string;
+  findSimilar?: (entryKey: string, original: string, minSimilarity?: number) => TMSuggestion[];
   onApplyTranslation: (key: string, text: string) => void;
 }
 
-// In-memory cache keyed by `${msbtFile}:${index}` so re-opens skip the AI call.
-const suggestionCache = new Map<string, { suggestions: Suggestion[]; contextNote: string }>();
+// Persistent IndexedDB cache. Keyed by `ctxsugg:<msbtFile>:<index>`.
+// TTL: 7 days. In-memory mirror avoids IDB reads on rapid re-opens.
+const TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const memCache = new Map<string, { suggestions: Suggestion[]; contextNote: string; ts: number }>();
+const cacheKey = (k: string) => `ctxsugg:${k}`;
+
+async function readCache(k: string) {
+  const mem = memCache.get(k);
+  if (mem && Date.now() - mem.ts < TTL_MS) return mem;
+  try {
+    const v = await idbGet<{ suggestions: Suggestion[]; contextNote: string; ts: number }>(cacheKey(k));
+    if (v && Date.now() - v.ts < TTL_MS) {
+      memCache.set(k, v);
+      return v;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+async function writeCache(k: string, suggestions: Suggestion[], contextNote: string) {
+  const v = { suggestions, contextNote, ts: Date.now() };
+  memCache.set(k, v);
+  try { await idbSet(cacheKey(k), v); } catch { /* ignore */ }
+}
+
+async function clearCache(k: string) {
+  memCache.delete(k);
+  try { await idbSet(cacheKey(k), undefined); } catch { /* ignore */ }
+}
 
 const STYLE_STYLES: Record<Suggestion["style"], { emoji: string; cls: string }> = {
   formal: { emoji: "📜", cls: "bg-blue-500/15 text-blue-500 border-blue-500/30" },
@@ -38,7 +68,7 @@ const STYLE_STYLES: Record<Suggestion["style"], { emoji: string; cls: string }> 
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
 
 const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
-  open, onClose, entry, entries, translations, glossary, onApplyTranslation,
+  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation,
 }) => {
   const key = entry ? `${entry.msbtFile}:${entry.index}` : "";
   const currentTranslation = entry ? translations[key] || "" : "";
@@ -50,21 +80,24 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [fromCache, setFromCache] = useState(false);
 
-  // Load from cache on open.
+  // Load from cache on open (now async — IndexedDB).
   useEffect(() => {
     if (!open || !entry) return;
-    const cached = suggestionCache.get(key);
-    if (cached) {
+    let cancelled = false;
+    setEditingIdx(null);
+    setSuggestions([]);
+    setContextNote("");
+    setError(null);
+    setFromCache(false);
+    readCache(key).then((cached) => {
+      if (cancelled || !cached) return;
       setSuggestions(cached.suggestions);
       setContextNote(cached.contextNote);
-      setError(null);
-    } else {
-      setSuggestions([]);
-      setContextNote("");
-      setError(null);
-    }
-    setEditingIdx(null);
+      setFromCache(true);
+    });
+    return () => { cancelled = true; };
   }, [open, entry, key]);
 
   const contextWindow = useMemo(() => {
@@ -84,6 +117,18 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
       }));
   }, [entry, entries, translations]);
 
+  // Translation Memory examples — top 3 similar previously-translated entries.
+  const tmExamples = useMemo(() => {
+    if (!entry || !findSimilar) return [];
+    try {
+      return findSimilar(key, entry.original, 40).slice(0, 3).map((m) => ({
+        original: m.original,
+        translation: m.translation,
+        similarity: m.similarity,
+      }));
+    } catch { return []; }
+  }, [entry, key, findSimilar]);
+
   const glossarySnippet = useMemo(() => {
     if (!glossary?.trim()) return "";
     return glossary.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).slice(0, 40).join("\n");
@@ -93,9 +138,8 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
     if (!entry) return;
     setLoading(true);
     setError(null);
+    setFromCache(false);
     try {
-      // Read translation provider preferences from localStorage so suggestions
-      // use the same engine the user already picked for translation.
       let provider = "gemini";
       let aiModel = "";
       let providerApiKey = "";
@@ -113,6 +157,8 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
         body: JSON.stringify({
           target: { original: entry.original, translation: currentTranslation },
           context: contextWindow,
+          tmExamples,
+          maxBytes: entry.maxBytes || 0,
           glossary: glossarySnippet,
           file: entry.msbtFile.split(":")[1] || entry.msbtFile,
           provider,
@@ -126,7 +172,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
       const note: string = data?.contextNote || "";
       setSuggestions(sg);
       setContextNote(note);
-      suggestionCache.set(key, { suggestions: sg, contextNote: note });
+      await writeCache(key, sg, note);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -189,6 +235,15 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
               </p>
             </div>
           )}
+          {/* Signal which contextual sources will be fed to the model */}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <Badge variant="outline" className="text-[10px]">📑 سياق: {contextWindow.length}</Badge>
+            <Badge variant="outline" className="text-[10px]">🧠 ذاكرة TM: {tmExamples.length}</Badge>
+            {maxBytes > 0 && <Badge variant="outline" className="text-[10px]">🔒 حد: {maxBytes} B</Badge>}
+            {fromCache && suggestions.length > 0 && (
+              <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-600 border-amber-500/30">⚡ من الذاكرة</Badge>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto -mx-2 px-2 py-3 space-y-3">
@@ -296,7 +351,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
                 );
               })}
               <div className="pt-2">
-                <Button size="sm" variant="outline" onClick={() => { suggestionCache.delete(key); generate(); }} disabled={loading}>
+                <Button size="sm" variant="outline" onClick={async () => { await clearCache(key); generate(); }} disabled={loading}>
                   <RefreshCcw className="w-3.5 h-3.5 ml-1" /> إعادة التوليد
                 </Button>
               </div>

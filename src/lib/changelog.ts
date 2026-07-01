@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.1",
+    date: "2026-07-01",
+    changes: [
+      { kind: "fixed", text: "إصلاح ظهور نسخة قديمة من الأداة بشكل متقطع (صفحات مفقودة مثل بوكيمون، ميزات ناقصة). أُضيف تنظيف استباقي لأي Service Worker قديم وكاش المتصفح عند كل فتح للصفحة مع إعادة تحميل تلقائية واحدة عند اكتشافه." },
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-06-30",
     changes: [

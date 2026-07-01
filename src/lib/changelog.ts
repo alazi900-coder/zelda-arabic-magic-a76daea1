@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.2",
+    date: "2026-07-01",
+    changes: [
+      { kind: "fixed", text: "استمرار ظهور نسخة قديمة عند فتح الموقع مباشرة رغم وجود تحديث: أُضيف فحص إصدار حقيقي مقابل الخادم عند كل فتح — يقارن meta app-version المحمّل مع نسخة index.html على الخادم (no-store)، وإذا اختلفا يُجبر إعادة تحميل مع كسر كاش المتصفح (?_v=). يُعاد الفحص أيضاً عند العودة إلى التبويب." },
+    ],
+  },
+  {
     version: "1.6.1",
     date: "2026-07-01",
     changes: [

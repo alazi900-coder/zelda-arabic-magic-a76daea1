@@ -27,6 +27,35 @@
   <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f6abdfa1-a8dc-42a1-aefa-84e7ad3ae257/id-preview-f9389b73--ae81de18-2d61-430d-aa24-885b04c84a6b.lovable.app-1771475599166.png">
   <meta name="twitter:card" content="summary_large_image">
 </head>
+  <script>
+    // Aggressive stale-cache cleanup: this app is NOT a PWA anymore.
+    // Old service workers from previous deployments can serve stale HTML/JS.
+    (function () {
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            if (!regs.length) return;
+            var hadController = !!navigator.serviceWorker.controller;
+            Promise.allSettled(regs.map(function (r) { return r.unregister(); })).then(function () {
+              if ('caches' in window) {
+                caches.keys().then(function (names) {
+                  Promise.allSettled(names.map(function (n) { return caches.delete(n); })).then(function () {
+                    if (hadController && !sessionStorage.getItem('__sw_cleaned__')) {
+                      sessionStorage.setItem('__sw_cleaned__', '1');
+                      location.reload();
+                    }
+                  });
+                });
+              } else if (hadController && !sessionStorage.getItem('__sw_cleaned__')) {
+                sessionStorage.setItem('__sw_cleaned__', '1');
+                location.reload();
+              }
+            });
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    })();
+  </script>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

@@ -29,9 +29,25 @@
   <meta name="twitter:card" content="summary_large_image">
 </head>
   <script>
-    // Aggressive stale-cache cleanup: this app is NOT a PWA anymore.
-    // Old service workers from previous deployments can serve stale HTML/JS.
+    // Aggressive stale-content cleanup + hard version check.
+    // This app is NOT a PWA anymore. Old service workers or the browser's
+    // HTTP cache can serve stale HTML/JS. We:
+    //  1) Unregister any lingering SW + clear Cache Storage.
+    //  2) Fetch the current index.html with no-store and compare its
+    //     <meta name="app-version"> against ours. If different → hard reload
+    //     with a cache-busting query so the browser must re-fetch chunks.
     (function () {
+      var CURRENT = document.querySelector('meta[name="app-version"]');
+      var CURRENT_VERSION = CURRENT ? CURRENT.getAttribute('content') : null;
+
+      function bustReload() {
+        try { sessionStorage.setItem('__ver_busted__', '1'); } catch (e) {}
+        var u = new URL(location.href);
+        u.searchParams.set('_v', Date.now().toString(36));
+        location.replace(u.toString());
+      }
+
+      // 1) Kill any leftover service worker + caches.
       try {
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then(function (regs) {
@@ -43,17 +59,45 @@
                   Promise.allSettled(names.map(function (n) { return caches.delete(n); })).then(function () {
                     if (hadController && !sessionStorage.getItem('__sw_cleaned__')) {
                       sessionStorage.setItem('__sw_cleaned__', '1');
-                      location.reload();
+                      bustReload();
                     }
                   });
                 });
               } else if (hadController && !sessionStorage.getItem('__sw_cleaned__')) {
                 sessionStorage.setItem('__sw_cleaned__', '1');
-                location.reload();
+                bustReload();
               }
             });
           }).catch(function () {});
         }
+      } catch (e) {}
+
+      // 2) Version drift check against the server (bypasses HTTP cache).
+      try {
+        if (CURRENT_VERSION && !sessionStorage.getItem('__ver_checked__')) {
+          sessionStorage.setItem('__ver_checked__', '1');
+          fetch('/index.html?_=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.text() : null; })
+            .then(function (html) {
+              if (!html) return;
+              var m = html.match(/name=["']app-version["']\s+content=["']([^"']+)["']/i);
+              var serverVer = m ? m[1] : null;
+              if (serverVer && serverVer !== CURRENT_VERSION && !sessionStorage.getItem('__ver_busted__')) {
+                console.warn('[version-check] stale version', CURRENT_VERSION, '→', serverVer, '— reloading');
+                bustReload();
+              } else {
+                // Reset busted flag once we're on the fresh version.
+                if (serverVer === CURRENT_VERSION) sessionStorage.removeItem('__ver_busted__');
+              }
+            })
+            .catch(function () {});
+        }
+        // Allow re-check on tab focus.
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') {
+            sessionStorage.removeItem('__ver_checked__');
+          }
+        });
       } catch (e) {}
     })();
   </script>

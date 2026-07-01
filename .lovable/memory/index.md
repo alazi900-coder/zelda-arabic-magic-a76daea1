@@ -13,6 +13,10 @@ Updated: today
 - Supabase Edge: Use `src/lib/supabase-edge.ts` for unified authorization headers.
 - Translation history util lives at `src/lib/translation-history.ts` (not in TranslationToolsPanel).
 - OpenRouter has automatic fallback chain: tries 5 free models on 404/429 — surfaces toast `fallbackUsed`.
+- Every release bumps 3 files together: `src/lib/version.ts` APP_VERSION, `index.html` `<meta name="app-version">`, and `src/lib/changelog.ts` (see mem preference below).
+
+## Memories
+- [Version bump triple sync](mem://preferences/version-bump-triple-sync) — release checklist: APP_VERSION + index.html meta + changelog must stay in sync for the stale-cache guard to work
 
 ## Memories
 - [BDAT Engine Master](mem://technical/bdat-engine-master) — XC3 binary logic, hashes, structural fingerprinting

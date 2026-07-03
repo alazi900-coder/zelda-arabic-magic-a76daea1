@@ -38,6 +38,8 @@ const Danganronpa = lazyWithIgnoredRef(() => import("./pages/Danganronpa"));
 const DanganronpaProcess = lazyWithIgnoredRef(() => import("./pages/DanganronpaProcess"));
 const DanganronpaClassicProcess = lazyWithIgnoredRef(() => import("./pages/DanganronpaClassicProcess"));
 const PwaStatus = lazyWithIgnoredRef(() => import("./pages/PwaStatus"));
+const Risen = lazyWithIgnoredRef(() => import("./pages/Risen"));
+const RisenProcess = lazyWithIgnoredRef(() => import("./pages/RisenProcess"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <div ref={ref} className="min-h-screen flex items-center justify-center bg-background" {...props}>
@@ -76,6 +78,8 @@ const App = () => (
                 <Route path="/wilay" element={<WilayViewer />} />
                 <Route path="/lagp-packer" element={<ErrorBoundary fallbackTitle="خطأ في أداة LAGP"><LagpPacker /></ErrorBoundary>} />
                 <Route path="/pwa-status" element={<PwaStatus />} />
+                <Route path="/risen" element={<Risen />} />
+                <Route path="/risen/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Risen"><RisenProcess /></ErrorBoundary>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

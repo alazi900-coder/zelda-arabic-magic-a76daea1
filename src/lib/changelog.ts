@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.7.0",
+    date: "2026-07-03",
+    changes: [
+      { kind: "added", text: "دعم أولي للعبة Risen 1 (محرك Genome): استخراج ملف strings.p00 كاملاً — الجداول الثلاثة (quests / infos / documents) — والترجمة عبر المحرر الحالي مع كل الميزات (AI، القاموس، ذاكرة الترجمة)، ثم إعادة بناء الملف تلقائياً. متاح من صفحة /risen." },
+      { kind: "added", text: "Parser + Writer ثنائي دقيق لصيغة TAB0 مع اختبارات roundtrip كاملة (بنية الحقول، إزاحات الجداول، الحقول السياقية Owner/Role/Voice تُمرَّر إلى AI enhance)." },
+    ],
+  },
+  {
     version: "1.6.2",
     date: "2026-07-01",
     changes: [

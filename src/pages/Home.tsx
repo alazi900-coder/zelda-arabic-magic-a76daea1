@@ -32,6 +32,18 @@ const games = [
     arrowClass: "text-[hsl(0,80%,60%)]",
   },
   {
+    title: "Risen 1",
+    subtitle: "عرّب رايزن 1",
+    desc: "استخراج نصوص محرك Genome من ملف strings.p00 (المهام، الحوارات، الوثائق) وإعادة بناء الملف تلقائياً — دعم أولي",
+    link: "/risen",
+    image: xc3Bg,
+    formats: ["strings.p00", "TAB0"],
+    cardClass: "border-[hsl(100,35%,40%)]/30 hover:border-[hsl(100,35%,40%)]/60",
+    formatClass: "bg-[hsl(100,35%,40%)]/20 text-[hsl(90,50%,60%)] border-[hsl(100,35%,40%)]/30",
+    subtitleClass: "text-[hsl(90,50%,60%)]",
+    arrowClass: "text-[hsl(90,50%,60%)]",
+  },
+  {
     title: "Danganronpa",
     subtitle: "عرّب دانجانرونبا",
     desc: "استخراج النصوص من ملفات PAK و LIN و SPC و STX — يدعم جميع أجزاء السلسلة",

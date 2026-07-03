@@ -25,7 +25,7 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
           >
             <Sparkles className="w-4 h-4" style={{ color: ACCENT }} />
             <span className="text-sm font-display font-semibold" style={{ color: ACCENT }}>
-              دعم أولي — إصدار تجريبي
+              أداة تعريب Risen 1
             </span>
           </div>
           <h1 className="text-4xl md:text-6xl font-display font-black mb-6 leading-tight drop-shadow-lg">
@@ -73,7 +73,6 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
               <ul className="list-disc pr-5 space-y-1 text-muted-foreground">
                 <li>محرك اللعبة (Genome Engine) يستخدم <strong>خطوط نقطية (Bitmap)</strong> بترميز CP1252 ولا يدعم Unicode أصلاً. النص العربي سيُكتب صحيحاً في الملف، لكن اللعبة لن تعرضه ما لم يُستبدل الخط لاحقاً — استبدال الخط خارج نطاق هذه المرحلة.</li>
                 <li>افتراضياً نستبدل النص الإنجليزي (<code className="font-mono text-xs">English_Text</code>) بالعربي.</li>
-                <li>هذا دعم <strong>أولي</strong> بُنِي على المواصفة الموثقة للصيغة. قد يحتاج تعديلاً بسيطاً بعد أول اختبار على ملف حقيقي.</li>
               </ul>
             </div>
           </div>

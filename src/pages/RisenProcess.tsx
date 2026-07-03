@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Upload, ArrowRight, FileArchive, Download, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
-import { extractEntriesFromP00 } from "@/lib/risen-extractor";
-import { rebuildP00, makeKey, type TranslationMap } from "@/lib/risen-tab0-writer";
-import { DEFAULT_ARABIC_TARGET_FIELD } from "@/lib/risen-tab0-parser";
+import { extractEntriesFromP00, DEFAULT_ARABIC_TARGET_FIELD } from "@/lib/risen-extractor";
+import { parseRisenP00Full, applyTranslations, buildRisenP00, makeKey } from "@/lib/risen-p00";
 import type { EditorState } from "@/components/editor/types";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
@@ -97,9 +96,9 @@ const RisenProcess = () => {
         return;
       }
 
-      // Convert editor keys `${msbtFile}:${index}` → rebuild keys `${table}:${field}:${index}`
+      // Convert editor keys `${msbtFile}:${index}` → rebuild keys makeKey(table, field, index)
       const targetField = meta?.targetField ?? DEFAULT_ARABIC_TARGET_FIELD;
-      const translations: TranslationMap = new Map();
+      const translations = new Map<string, string>();
       let translatedCount = 0;
       for (const [key, value] of Object.entries(editorState.translations)) {
         if (!value?.trim()) continue;
@@ -117,10 +116,12 @@ const RisenProcess = () => {
         return;
       }
 
-      const result = rebuildP00(buffer, translations, { targetField });
+      const doc = parseRisenP00Full(buffer);
+      applyTranslations(doc, translations);
+      const rebuilt = buildRisenP00(doc);
 
       // Download
-      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+      const blob = new Blob([rebuilt], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -128,13 +129,11 @@ const RisenProcess = () => {
       a.click();
       URL.revokeObjectURL(url);
 
-      const deltaStr = result.sizeDelta >= 0 ? `+${result.sizeDelta}` : `${result.sizeDelta}`;
+      const delta = rebuilt.byteLength - buffer.byteLength;
+      const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
       toast.success(
-        `تم البناء: ${translatedCount} ترجمة | حجم ${result.newSize.toLocaleString()} بايت (${deltaStr})`
+        `تم البناء: ${translatedCount} ترجمة | حجم ${rebuilt.byteLength.toLocaleString()} بايت (${deltaStr})`
       );
-      if (result.warnings.length) {
-        for (const w of result.warnings) toast.warning(w);
-      }
     } catch (err) {
       console.error(err);
       toast.error("فشل البناء: " + (err as Error).message);

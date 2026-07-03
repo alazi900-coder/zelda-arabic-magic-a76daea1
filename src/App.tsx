@@ -27,16 +27,11 @@ const Xenoblade = lazyWithIgnoredRef(() => import("./pages/Xenoblade"));
 const XenobladeProcess = lazyWithIgnoredRef(() => import("./pages/XenobladeProcess"));
 const WilayViewer = lazyWithIgnoredRef(() => import("./pages/WilayViewer"));
 const LagpPacker = lazyWithIgnoredRef(() => import("./pages/LagpPacker"));
-const Pokemon = lazyWithIgnoredRef(() => import("./pages/Pokemon"));
-const PokemonProcess = lazyWithIgnoredRef(() => import("./pages/PokemonProcess"));
 const Editor = lazyWithIgnoredRef(() => import("./pages/Editor"));
 const Auth = lazyWithIgnoredRef(() => import("./pages/Auth"));
 const NotFound = lazyWithIgnoredRef(() => import("./pages/NotFound"));
 const Install = lazyWithIgnoredRef(() => import("./pages/Install"));
 const ModPackager = lazyWithIgnoredRef(() => import("./pages/ModPackager"));
-const Danganronpa = lazyWithIgnoredRef(() => import("./pages/Danganronpa"));
-const DanganronpaProcess = lazyWithIgnoredRef(() => import("./pages/DanganronpaProcess"));
-const DanganronpaClassicProcess = lazyWithIgnoredRef(() => import("./pages/DanganronpaClassicProcess"));
 const PwaStatus = lazyWithIgnoredRef(() => import("./pages/PwaStatus"));
 const Risen = lazyWithIgnoredRef(() => import("./pages/Risen"));
 const RisenProcess = lazyWithIgnoredRef(() => import("./pages/RisenProcess"));
@@ -69,12 +64,7 @@ const App = () => (
                 <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/install" element={<Install />} />
-                <Route path="/pokemon" element={<Pokemon />} />
-                <Route path="/pokemon/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة بوكيمون"><PokemonProcess /></ErrorBoundary>} />
                 <Route path="/mod-packager" element={<ModPackager />} />
-                <Route path="/danganronpa" element={<Danganronpa />} />
-                <Route path="/danganronpa/v3" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa V3"><DanganronpaProcess /></ErrorBoundary>} />
-                <Route path="/danganronpa/classic" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Danganronpa"><DanganronpaClassicProcess /></ErrorBoundary>} />
                 <Route path="/wilay" element={<WilayViewer />} />
                 <Route path="/lagp-packer" element={<ErrorBoundary fallbackTitle="خطأ في أداة LAGP"><LagpPacker /></ErrorBoundary>} />
                 <Route path="/pwa-status" element={<PwaStatus />} />

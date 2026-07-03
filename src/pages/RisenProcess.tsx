@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Upload, ArrowRight, FileArchive, Download, Loader2, CheckCircle2 } from "lucide-react";
+import { Upload, ArrowRight, FileArchive, Download, Loader2, CheckCircle2, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
 import { extractEntriesFromP00, DEFAULT_ARABIC_TARGET_FIELD } from "@/lib/risen-extractor";
@@ -23,6 +23,11 @@ const RisenProcess = () => {
   const [busy, setBusy] = useState(false);
   const [meta, setMeta] = useState<RisenMeta | null>(null);
   const [building, setBuilding] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const addLog = useCallback((msg: string) => {
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString("ar-SA")}] ${msg}`]);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -33,16 +38,27 @@ const RisenProcess = () => {
 
   const handleFile = useCallback(async (file: File) => {
     setBusy(true);
+    setLogs([]);
+    addLog(`بدء قراءة الملف: ${file.name} (${file.size.toLocaleString()} بايت)`);
     try {
       const buffer = await file.arrayBuffer();
+      addLog("تم تحميل الملف في الذاكرة، جاري تحليل جداول TAB0...");
+
       const result = extractEntriesFromP00(buffer);
+      addLog(`تم تحليل ${result.doc.tables.length} جدول: ${result.doc.tables.map((t) => t.name).join("، ")}`);
+      for (const s of result.stats.perTable) {
+        addLog(`  ${s.table}: ${s.rows} صف، ${s.translatable} قابل للترجمة`);
+      }
+
       if (result.entries.length === 0) {
+        addLog("خطأ: لم يتم العثور على أي نص قابل للترجمة");
         toast.error("لم يتم العثور على أي نص قابل للترجمة في هذا الملف");
         return;
       }
 
       // Store raw buffer for later rebuild
       await idbSet(RISEN_BUFFER_KEY, buffer);
+      addLog("تم حفظ الملف الأصلي محلياً لاستخدامه لاحقاً عند البناء");
 
       // Save meta
       const newMeta: RisenMeta = {
@@ -65,6 +81,8 @@ const RisenProcess = () => {
         clearedKeys: new Set(),
       };
       await idbSet("editorState", editorState);
+      await idbSet("editor-source-game", "risen");
+      addLog(`تم تحميل ${result.entries.length} نص في المحرر`);
 
       // Store originals map so editor "detectPreTranslated" behaves sanely
       const originals: Record<string, string> = {};
@@ -72,26 +90,32 @@ const RisenProcess = () => {
       await idbSet("originalTexts", originals);
 
       toast.success(`تم استخراج ${result.entries.length} نص من ${result.stats.perTable.length} جدول`);
+      addLog("جاري التوجيه إلى المحرر...");
       // Navigate to editor
       navigate("/editor");
     } catch (err) {
       console.error(err);
+      addLog(`خطأ: ${(err as Error).message}`);
       toast.error("فشل قراءة الملف: " + (err as Error).message);
     } finally {
       setBusy(false);
     }
-  }, [navigate]);
+  }, [navigate, addLog]);
 
   const handleBuild = useCallback(async () => {
     setBuilding(true);
+    setLogs([]);
+    addLog("بدء البناء...");
     try {
       const buffer = await idbGet<ArrayBuffer>(RISEN_BUFFER_KEY);
       if (!buffer) {
+        addLog("خطأ: لا يوجد ملف مصدر محفوظ");
         toast.error("لا يوجد ملف مصدر — ارفع strings.p00 أولاً");
         return;
       }
       const editorState = await idbGet<EditorState>("editorState");
       if (!editorState || editorState.entries.length === 0) {
+        addLog("خطأ: لا توجد بيانات محرر محفوظة");
         toast.error("لا توجد ترجمات في المحرر");
         return;
       }
@@ -110,14 +134,19 @@ const RisenProcess = () => {
         translations.set(makeKey(table, targetField, index), value);
         translatedCount++;
       }
+      addLog(`تم جمع ${translatedCount} ترجمة من المحرر`);
 
       if (translatedCount === 0) {
+        addLog("خطأ: لم تُدخل أي ترجمة بعد");
         toast.error("لم تُدخل أي ترجمة بعد");
         return;
       }
 
+      addLog("جاري تحليل الملف الأصلي من جديد...");
       const doc = parseRisenP00Full(buffer);
+      addLog(`تم تحليل ${doc.tables.length} جدول، جاري تطبيق الترجمات...`);
       applyTranslations(doc, translations);
+      addLog("جاري إعادة بناء الملف بالكامل...");
       const rebuilt = buildRisenP00(doc);
 
       // Download
@@ -131,16 +160,18 @@ const RisenProcess = () => {
 
       const delta = rebuilt.byteLength - buffer.byteLength;
       const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
+      addLog(`نجح البناء: حجم جديد ${rebuilt.byteLength.toLocaleString()} بايت (${deltaStr} عن الأصل)`);
       toast.success(
         `تم البناء: ${translatedCount} ترجمة | حجم ${rebuilt.byteLength.toLocaleString()} بايت (${deltaStr})`
       );
     } catch (err) {
       console.error(err);
+      addLog(`خطأ: ${(err as Error).message}`);
       toast.error("فشل البناء: " + (err as Error).message);
     } finally {
       setBuilding(false);
     }
-  }, [meta]);
+  }, [meta, addLog]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
@@ -243,6 +274,35 @@ const RisenProcess = () => {
                 <><Download className="w-5 h-5 ml-2" /> بناء وتنزيل</>
               )}
             </Button>
+          </div>
+        )}
+
+        {/* Log */}
+        {logs.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display font-bold">سجل العمليات</h2>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const blob = new Blob([logs.join("\n")], { type: "text/plain" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `risen-process-log-${new Date().toISOString().slice(0, 10)}.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <FileDown className="w-4 h-4 ml-1" /> تصدير
+              </Button>
+            </div>
+            <div className="max-h-96 overflow-y-auto font-mono text-xs bg-background/50 rounded-lg p-3 space-y-1">
+              {logs.map((line, i) => (
+                <div key={i} className="text-muted-foreground">{line}</div>
+              ))}
+            </div>
           </div>
         )}
       </div>

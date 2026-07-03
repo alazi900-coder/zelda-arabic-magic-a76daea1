@@ -68,7 +68,6 @@ const Editor = () => {
   const [fontTestWord, setFontTestWord] = React.useState("");
   const [pageLocked, setPageLocked] = React.useState(false);
   const [showToolHelp, setShowToolHelp] = React.useState<ToolType>(null);
-  const [drBuilding, setDrBuilding] = React.useState(false);
   const [sourceGame, setSourceGame] = React.useState<string | null>(null);
   const [testConnStatus, setTestConnStatus] = React.useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
   const [testConnMsg, setTestConnMsg] = React.useState<Record<string, string>>({});
@@ -80,8 +79,6 @@ const Editor = () => {
       idbGet<string>("editor-source-game").then(g => { if (g) setSourceGame(g); });
     });
   }, []);
-
-  const isDanganronpa = sourceGame?.startsWith("danganronpa");
 
   const handleTestConnection = React.useCallback(async (provider: string) => {
     setTestConnStatus(prev => ({ ...prev, [provider]: 'testing' }));
@@ -115,13 +112,8 @@ const Editor = () => {
     }
   }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.aiModel]);
 
-  const isPokemon = React.useMemo(() => {
-    if (isDanganronpa) return false;
-    if (!editor.state?.entries?.length) return false;
-    return !editor.state.entries[0].msbtFile.startsWith("bdat-bin:");
-  }, [editor.state?.entries, isDanganronpa]);
-  const gameType = isPokemon ? "pokemon" : isDanganronpa ? "danganronpa" : "xenoblade";
-  const processPath = isDanganronpa ? "/danganronpa/classic" : isPokemon ? "/pokemon/process" : "/process";
+  const isRisen = sourceGame === "risen";
+  const processPath = isRisen ? "/risen/process" : "/process";
 
   // Keyboard shortcuts
   useEditorKeyboard({
@@ -398,7 +390,7 @@ const Editor = () => {
 
           <EditorProgressStatus
             editor={editor}
-            isDanganronpa={!!isDanganronpa}
+            isDanganronpa={false}
             setShowTagRepair={setShowTagRepair}
           />
 
@@ -583,14 +575,11 @@ const Editor = () => {
 
           <EditorBuildSection
             editor={editor}
-            isDanganronpa={!!isDanganronpa}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
             setShowDiagnostic={setShowDiagnostic}
-            drBuilding={drBuilding}
-            setDrBuilding={setDrBuilding}
           />
 
           {/* Quality Stats Panel */}

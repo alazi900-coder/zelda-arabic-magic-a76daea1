@@ -19,9 +19,7 @@
 import {
   parseP00,
   parseTab0,
-  type ParsedP00,
   type Tab0Table,
-  type TabField,
 } from "./risen-tab0-parser";
 
 export interface RebuildResult {

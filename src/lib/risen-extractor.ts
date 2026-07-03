@@ -14,6 +14,7 @@ import {
   DEFAULT_ARABIC_TARGET_FIELD,
   CONTEXT_FIELDS,
   type ParsedP00,
+  type TabField,
 } from "./risen-tab0-parser";
 import { makeKey } from "./risen-tab0-writer";
 
@@ -42,12 +43,17 @@ export function extractEntriesFromP00(
   const perTable: Array<{ table: string; rows: number; translatable: number }> = [];
 
   for (const table of parsed.tables) {
-    // Pick which field to read the source text from.
-    let sourceField = table.fields.find((f) =>
-      SOURCE_FIELD_PREFERENCE.includes(f.name)
-    );
-    if (!sourceField) sourceField = table.fields.find((f) => f.name === targetField);
-    if (!sourceField) {
+    // Candidate source fields, in fallback order (English → German → French → ...).
+    // Resolved per ROW below, not once for the whole table: a row may have its
+    // text only in a non-preferred language while the preferred one is empty.
+    const candidateFields: TabField[] = SOURCE_FIELD_PREFERENCE
+      .map((name) => table.fields.find((f) => f.name === name))
+      .filter((f): f is TabField => f !== undefined);
+    if (candidateFields.length === 0) {
+      const fallback = table.fields.find((f) => f.name === targetField);
+      if (fallback) candidateFields.push(fallback);
+    }
+    if (candidateFields.length === 0) {
       perTable.push({ table: table.name, rows: 0, translatable: 0 });
       continue;
     }
@@ -57,12 +63,16 @@ export function extractEntriesFromP00(
     // Context fields
     const ctxFields = table.fields.filter((f) => CONTEXT_FIELDS.includes(f.name));
 
-    const rowCount = sourceField.rowCount;
+    const rowCount = candidateFields[0].rowCount;
     let translatableCount = 0;
 
     for (let r = 0; r < rowCount; r++) {
-      const original = sourceField.values[r] ?? "";
-      if (!original.trim()) continue; // skip empty source rows
+      let original = "";
+      for (const field of candidateFields) {
+        const v = field.values[r];
+        if (v && v.trim()) { original = v; break; }
+      }
+      if (!original) continue; // all language variants empty for this row
       translatableCount++;
 
       const id = idField?.values[r] ?? `${table.name}#${r}`;

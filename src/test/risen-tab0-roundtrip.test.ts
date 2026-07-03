@@ -1,6 +1,69 @@
 import { describe, it, expect } from "vitest";
-import { parseP00, parseTab0, findAllTab0Offsets } from "@/lib/risen-tab0-parser";
+import { parseP00, findAllTab0Offsets } from "@/lib/risen-tab0-parser";
 import { rebuildP00, makeKey } from "@/lib/risen-tab0-writer";
+import { extractEntriesFromP00 } from "@/lib/risen-extractor";
+
+const enc = (s: string): Uint8Array => {
+  const buf = new Uint8Array(s.length * 2);
+  const dv = new DataView(buf.buffer);
+  for (let i = 0; i < s.length; i++) dv.setUint16(i * 2, s.charCodeAt(i), true);
+  return buf;
+};
+
+const buildTab0 = (fields: { name: string; values: string[] }[]): Uint8Array => {
+  const parts: Uint8Array[] = [];
+  parts.push(new Uint8Array([0x54, 0x41, 0x42, 0x30])); // TAB0
+  const header = new Uint8Array(16);
+  new DataView(header.buffer).setUint16(0, 1, true);
+  new DataView(header.buffer).setUint16(2, 1, true);
+  new DataView(header.buffer).setBigInt64(4, 0n, true);
+  new DataView(header.buffer).setUint32(12, fields.length, true);
+  parts.push(header);
+  for (const field of fields) {
+    const fh = new Uint8Array(5);
+    fh[0] = 1;
+    new DataView(fh.buffer).setUint16(1, 1, true);
+    new DataView(fh.buffer).setUint16(3, field.name.length, true);
+    parts.push(fh);
+    parts.push(enc(field.name));
+    const rc = new Uint8Array(4);
+    new DataView(rc.buffer).setUint32(0, field.values.length, true);
+    parts.push(rc);
+    for (const v of field.values) {
+      const sl = new Uint8Array(2);
+      new DataView(sl.buffer).setUint16(0, v.length, true);
+      parts.push(sl);
+      parts.push(enc(v));
+    }
+  }
+  let total = 0;
+  for (const p of parts) total += p.length;
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+};
+
+/** Wrap one or more pre-built TAB0 table byte blocks into a minimal strings.p00-shaped file. */
+function wrapAsFile(tables: Uint8Array[]): ArrayBuffer {
+  const preHeader = new Uint8Array(16);
+  const trailer = new Uint8Array(32);
+  const offsets: number[] = [];
+  let cursor = preHeader.length;
+  for (const t of tables) {
+    offsets.push(cursor);
+    cursor += t.length;
+  }
+  const trailerOff = cursor;
+  const totalSize = trailerOff + trailer.length;
+  new DataView(preHeader.buffer).setUint32(4, totalSize, true);
+
+  const out = new Uint8Array(totalSize);
+  out.set(preHeader, 0);
+  for (let i = 0; i < tables.length; i++) out.set(tables[i], offsets[i]);
+  out.set(trailer, trailerOff);
+  return out.buffer;
+}
 
 /**
  * Build a synthetic strings.p00-like buffer with:
@@ -9,47 +72,6 @@ import { rebuildP00, makeKey } from "@/lib/risen-tab0-writer";
  *   - 32-byte trailer that includes each table's offset (mimics FileInfoHdr)
  */
 function buildSynthetic(): { buffer: ArrayBuffer; totalSizeOffset: number } {
-  const enc = (s: string): Uint8Array => {
-    const buf = new Uint8Array(s.length * 2);
-    const dv = new DataView(buf.buffer);
-    for (let i = 0; i < s.length; i++) dv.setUint16(i * 2, s.charCodeAt(i), true);
-    return buf;
-  };
-
-  const buildTab0 = (fields: { name: string; values: string[] }[]): Uint8Array => {
-    const parts: Uint8Array[] = [];
-    parts.push(new Uint8Array([0x54, 0x41, 0x42, 0x30])); // TAB0
-    const header = new Uint8Array(16);
-    new DataView(header.buffer).setUint16(0, 1, true);
-    new DataView(header.buffer).setUint16(2, 1, true);
-    new DataView(header.buffer).setBigInt64(4, 0n, true);
-    new DataView(header.buffer).setUint32(12, fields.length, true);
-    parts.push(header);
-    for (const field of fields) {
-      const fh = new Uint8Array(5);
-      fh[0] = 1;
-      new DataView(fh.buffer).setUint16(1, 1, true);
-      new DataView(fh.buffer).setUint16(3, field.name.length, true);
-      parts.push(fh);
-      parts.push(enc(field.name));
-      const rc = new Uint8Array(4);
-      new DataView(rc.buffer).setUint32(0, field.values.length, true);
-      parts.push(rc);
-      for (const v of field.values) {
-        const sl = new Uint8Array(2);
-        new DataView(sl.buffer).setUint16(0, v.length, true);
-        parts.push(sl);
-        parts.push(enc(v));
-      }
-    }
-    let total = 0;
-    for (const p of parts) total += p.length;
-    const out = new Uint8Array(total);
-    let o = 0;
-    for (const p of parts) { out.set(p, o); o += p.length; }
-    return out;
-  };
-
   const table1 = buildTab0([
     { name: "ID", values: ["Q1", "Q2"] },
     { name: "English_Text", values: ["Hello world", "Second quest"] },
@@ -170,5 +192,57 @@ describe("Risen TAB0 rebuild roundtrip", () => {
     expect(foundOld).toBe(false);
     // And the new offset should appear at the same slot
     expect(outView.getUint32(trailerStart + 4, true)).toBe(newT2Offset);
+  });
+});
+
+describe("Risen per-row source-language fallback", () => {
+  it("falls back to German_Text for a row whose English_Text is empty, without dropping the row", () => {
+    const table = buildTab0([
+      { name: "ID", values: ["Q1", "Q2"] },
+      { name: "English_Text", values: ["Hello world", ""] },
+      { name: "German_Text", values: ["Hallo Welt", "Nur auf Deutsch"] },
+    ]);
+    const buffer = wrapAsFile([table]);
+
+    const result = extractEntriesFromP00(buffer);
+    expect(result.entries.length).toBe(2);
+    expect(result.entries[0].original).toBe("Hello world");
+    // Row 2 has no English text — must fall back to German instead of being dropped.
+    expect(result.entries[1].original).toBe("Nur auf Deutsch");
+  });
+
+  it("drops a row only when every language variant is empty", () => {
+    const table = buildTab0([
+      { name: "ID", values: ["Q1"] },
+      { name: "English_Text", values: [""] },
+      { name: "German_Text", values: [""] },
+    ]);
+    const buffer = wrapAsFile([table]);
+
+    const result = extractEntriesFromP00(buffer);
+    expect(result.entries.length).toBe(0);
+  });
+});
+
+describe("Risen TAB0 false-positive signature rejection", () => {
+  it("rejects a coincidental TAB0 byte sequence inside string data without throwing or misidentifying it as a table", () => {
+    // Two UTF-16 code units whose LE bytes are exactly 0x54 0x41 0x42 0x30 ("TAB0"),
+    // embedded in the middle of ordinary string content (not at a real table boundary).
+    const fakeMagic = String.fromCharCode(0x4154, 0x3042);
+    const table = buildTab0([
+      { name: "ID", values: ["Q1"] },
+      { name: "English_Text", values: ["Before " + fakeMagic + " and some trailing padding text"] },
+    ]);
+    const buffer = wrapAsFile([table]);
+
+    // Sanity check: the raw byte scan does find the coincidental match (plus the real header).
+    const rawOffsets = findAllTab0Offsets(buffer);
+    expect(rawOffsets.length).toBeGreaterThan(1);
+
+    expect(() => parseP00(buffer)).not.toThrow();
+    const parsed = parseP00(buffer);
+    // Only the real table should be recognized — the coincidental match must be rejected.
+    expect(parsed.tables.length).toBe(1);
+    expect(parsed.tables[0].fields[1].values[0]).toContain(fakeMagic);
   });
 });

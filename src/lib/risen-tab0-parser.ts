@@ -85,7 +85,7 @@ function readUtf16LE(buf: DataView, offset: number, unitCount: number): string {
   return out;
 }
 
-/** Scan the whole buffer for TAB0 signatures. Returns byte offsets. */
+/** Scan the whole buffer for TAB0 signatures (raw, unvalidated). Returns byte offsets. */
 export function findAllTab0Offsets(buffer: ArrayBuffer): number[] {
   const view = new Uint8Array(buffer);
   const out: number[] = [];
@@ -100,6 +100,49 @@ export function findAllTab0Offsets(buffer: ArrayBuffer): number[] {
     }
   }
   return out;
+}
+
+const MIN_PLAUSIBLE_FIELD_COUNT = 1;
+const MAX_PLAUSIBLE_FIELD_COUNT = 50;
+
+function isPrintableFieldName(name: string): boolean {
+  if (name.length === 0 || name.length > 100) return false;
+  for (let i = 0; i < name.length; i++) {
+    const c = name.charCodeAt(i);
+    if (c < 0x20 || c > 0x7e) return false;
+  }
+  return true;
+}
+
+/**
+ * Reject a candidate "TAB0" offset that is just a coincidental byte match inside
+ * string data (rather than a real table header) — without throwing. Checks that
+ * field_count is plausible and that the first field's name is a sane printable
+ * string immediately after the header.
+ */
+function isValidTab0Candidate(buffer: ArrayBuffer, offset: number): boolean {
+  try {
+    const view = new DataView(buffer);
+    let p = offset + 4; // skip "TAB0" magic
+    if (p + 4 + 8 + 4 > view.byteLength) return false;
+    p += 4; // version (u16, u16)
+    p += 8; // timestamp (i64)
+    const fieldCount = view.getUint32(p, true); p += 4;
+    if (fieldCount < MIN_PLAUSIBLE_FIELD_COUNT || fieldCount > MAX_PLAUSIBLE_FIELD_COUNT) {
+      return false;
+    }
+
+    if (p + 1 + 2 + 2 > view.byteLength) return false;
+    p += 1; // flag
+    p += 2; // unk
+    const nameLen = view.getUint16(p, true); p += 2;
+    if (nameLen === 0 || nameLen > 100) return false;
+    if (p + nameLen * 2 > view.byteLength) return false;
+    const name = readUtf16LE(view, p, nameLen);
+    return isPrintableFieldName(name);
+  } catch {
+    return false;
+  }
 }
 
 /** Parse a single TAB0 table starting at `start` (offset of the "TAB0" magic). */
@@ -191,7 +234,15 @@ function guessTableName(index: number, total: number, fields: TabField[]): strin
 
 /** Parse a whole `strings.p00` file. */
 export function parseP00(buffer: ArrayBuffer): ParsedP00 {
-  const offsets = findAllTab0Offsets(buffer);
+  const candidates = findAllTab0Offsets(buffer);
+  const offsets: number[] = [];
+  for (const c of candidates) {
+    if (isValidTab0Candidate(buffer, c)) {
+      offsets.push(c);
+    } else {
+      console.warn(`Rejected false-positive TAB0 signature match at offset ${c} (not a real table header)`);
+    }
+  }
   if (offsets.length === 0) {
     throw new Error("No TAB0 signatures found — is this really a Risen strings.p00 file?");
   }

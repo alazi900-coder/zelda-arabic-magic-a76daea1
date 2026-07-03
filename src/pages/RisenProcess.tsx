@@ -7,7 +7,7 @@ import { idbSet, idbGet } from "@/lib/idb-storage";
 import { extractEntriesFromP00 } from "@/lib/risen-extractor";
 import { rebuildP00, makeKey, type TranslationMap } from "@/lib/risen-tab0-writer";
 import { DEFAULT_ARABIC_TARGET_FIELD } from "@/lib/risen-tab0-parser";
-import type { EditorState, ExtractedEntry } from "@/components/editor/types";
+import type { EditorState } from "@/components/editor/types";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";

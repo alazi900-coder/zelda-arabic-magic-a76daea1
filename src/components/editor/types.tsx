@@ -11,6 +11,10 @@ export interface ExtractedEntry {
   label: string;
   original: string;
   maxBytes: number;
+  /** Risen 1: Role field for infos.tab rows (used for category classification). */
+  risenRole?: string;
+  /** Risen 1: Owner field (NPC name) for infos.tab rows. */
+  risenOwner?: string;
 }
 
 export interface EditorState {
@@ -713,4 +717,46 @@ export function isTechnicalText(text: string): boolean {
 
 export function entryKey(entry: ExtractedEntry): string {
   return `${entry.msbtFile}:${entry.index}`;
+}
+
+// === Risen 1 Categories ===
+export const RISEN_CATEGORIES: FileCategory[] = [
+  { id: "risen-quest",     label: "المهام (Quests)",      emoji: "📜", icon: "ScrollText",     color: "text-orange-400" },
+  { id: "risen-document",  label: "الوثائق والكتب",         emoji: "📖", icon: "BookText",       color: "text-amber-400"  },
+  { id: "risen-story",     label: "شخصيات القصة الرئيسية", emoji: "🎭", icon: "Drama",          color: "text-violet-400" },
+  { id: "risen-merchant",  label: "التجار والحرفيون",      emoji: "🛒", icon: "ShoppingCart",   color: "text-green-400"  },
+  { id: "risen-guard",     label: "الحراس والجنود",        emoji: "🛡️", icon: "ShieldCheck",   color: "text-blue-400"   },
+  { id: "risen-inquisitor",label: "محاكم التفتيش",         emoji: "⚔️", icon: "Sword",          color: "text-red-400"    },
+  { id: "risen-mage",      label: "السحرة والكهنة",        emoji: "✨", icon: "Sparkles",       color: "text-fuchsia-400"},
+  { id: "risen-bandit",    label: "قطاع الطرق والقراصنة",  emoji: "💀", icon: "Skull",          color: "text-rose-500"   },
+  { id: "risen-villager",  label: "القرويون والفلاحون",    emoji: "🏕️", icon: "Tent",           color: "text-teal-400"   },
+  { id: "risen-npc-other", label: "حوارات NPC أخرى",       emoji: "💬", icon: "MessageCircle",  color: "text-cyan-400"   },
+];
+
+/**
+ * Categorize a Risen 1 entry.
+ * - quests.tab → risen-quest, documents.tab → risen-document
+ * - infos.tab → bucketed by Role / Owner fields (lenient substring match)
+ */
+export function categorizeRisenEntry(entry: ExtractedEntry): string {
+  const file = entry.msbtFile.toLowerCase();
+  if (file.startsWith("quests")) return "risen-quest";
+  if (file.startsWith("documents")) return "risen-document";
+  // infos.tab (or fallback): classify by Role/Owner
+  const role = (entry.risenRole || "").toLowerCase();
+  const owner = (entry.risenOwner || "").toLowerCase();
+  const s = `${role} ${owner}`;
+  // Story protagonists / named leads (common Risen 1 names)
+  if (/\b(hero|patty|steelbeard|mendoza|inquisitor|commandant|slayne|carlos|severin|master ignatius|master illumar|master erwin|master herodot|scherbenherz)\b/.test(s)) {
+    // Inquisitor faction takes precedence over generic story tag
+    if (/inquisitor|commandant/.test(role)) return "risen-inquisitor";
+    return "risen-story";
+  }
+  if (/inquisit|order[_\s-]?soldier|order[_\s-]?knight/.test(role)) return "risen-inquisitor";
+  if (/mage|priest|monk|nomad|magic|apprentice|novice|guru/.test(role)) return "risen-mage";
+  if (/bandit|outlaw|pirate|thief|smuggler|scavenger|robber/.test(role)) return "risen-bandit";
+  if (/merchant|trader|vendor|smith|blacksmith|alchemist|innkeeper|barkeep|cook|craftsman|hunter/.test(role)) return "risen-merchant";
+  if (/guard|warrior|soldier|militia|warden|swordsman|captain|watchman/.test(role)) return "risen-guard";
+  if (/peasant|villager|citizen|farmer|beggar|worker|servant|maid|child|woman|man|slave|prisoner/.test(role)) return "risen-villager";
+  return "risen-npc-other";
 }

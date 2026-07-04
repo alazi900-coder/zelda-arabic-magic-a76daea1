@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
   ExtractedEntry, EditorState, PAGE_SIZE,
-  categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, isTechnicalText, hasTechnicalTags,
+  categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, isTechnicalText, hasTechnicalTags,
 } from "@/components/editor/types";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
@@ -406,6 +406,7 @@ export function useEditorTranslation({
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
       return categorizeBdatTable(e.label, sourceFile, e.original);
     }
+    if (/\.tab$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

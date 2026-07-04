@@ -19,11 +19,17 @@
 import type { ExtractedEntry } from "@/components/editor/types";
 import {
   parseRisenP00Full,
+  applyTranslations,
+  buildRisenP00,
   makeKey,
   type RisenP00Document,
   type RisenTableRaw,
   type RisenFieldRaw,
 } from "./risen-p00";
+import { idbGet } from "./idb-storage";
+
+const RISEN_BUFFER_KEY = "risenSourceBuffer";
+const RISEN_META_KEY = "risenMeta";
 
 export interface RisenExtractResult {
   doc: RisenP00Document;
@@ -158,5 +164,65 @@ export function extractEntriesFromP00(
       totalRows: entries.length,
       perTable,
     },
+  };
+}
+
+export interface RisenBuildResult {
+  buffer: ArrayBuffer;
+  filename: string;
+  translatedCount: number;
+  originalSize: number;
+}
+
+/**
+ * Build the translated strings.p00/pak from the editor's saved translations —
+ * the single build implementation shared by RisenProcess.tsx's dedicated build
+ * button and the Editor's generic build button (EditorBuildSection.tsx), so a
+ * Risen session can be built from either page without duplicating this logic.
+ *
+ * Reads the source buffer saved by RisenProcess.tsx at extraction time; throws
+ * a user-facing Arabic message if it's missing or no translations were entered.
+ */
+export async function buildRisenOutputFromState(
+  translations: Record<string, string>
+): Promise<RisenBuildResult> {
+  const buffer = await idbGet<ArrayBuffer>(RISEN_BUFFER_KEY);
+  if (!buffer) {
+    throw new Error("لا يوجد ملف مصدر — ارفع strings.p00 أو strings.pak من صفحة Risen أولاً");
+  }
+
+  const meta = await idbGet<{ filename?: string; targetField?: string }>(RISEN_META_KEY);
+  const targetField = meta?.targetField || DEFAULT_ARABIC_TARGET_FIELD;
+
+  // Convert editor keys `${msbtFile}:${index}` → rebuild keys makeKey(table, field, index).
+  // msbtFile is either the table name (English_Text) or `${table}:stagedir` (English_StageDir).
+  const translationsMap = new Map<string, string>();
+  let translatedCount = 0;
+  for (const [key, value] of Object.entries(translations)) {
+    if (!value?.trim()) continue;
+    const lastColon = key.lastIndexOf(":");
+    if (lastColon === -1) continue;
+    const msbtFile = key.slice(0, lastColon);
+    const index = parseInt(key.slice(lastColon + 1), 10);
+    if (isNaN(index)) continue;
+    const table = stripStageDirSuffix(msbtFile);
+    const fieldForEntry = isStageDirMsbtFile(msbtFile) ? STAGEDIR_TARGET_FIELD : targetField;
+    translationsMap.set(makeKey(table, fieldForEntry, index), value);
+    translatedCount++;
+  }
+
+  if (translatedCount === 0) {
+    throw new Error("لم تُدخل أي ترجمة بعد");
+  }
+
+  const doc = parseRisenP00Full(buffer);
+  applyTranslations(doc, translationsMap);
+  const rebuilt = buildRisenP00(doc);
+
+  return {
+    buffer: rebuilt,
+    filename: meta?.filename || "strings.p00",
+    translatedCount,
+    originalSize: buffer.byteLength,
   };
 }

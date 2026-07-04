@@ -1,14 +1,16 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { RotateCcw, StopCircle, BarChart3 } from "lucide-react";
 import CategoryProgress from "@/components/editor/CategoryProgress";
+import RisenSubFilters from "@/components/editor/RisenSubFilters";
 import FileLoadReport from "@/components/editor/FileLoadReport";
 import { PanelSettingsMenu } from "@/components/editor/PanelSettingsMenu";
 import { AutoPilotPanel } from "@/components/editor/AutoPilotPanel";
 import BdatBuildReport from "@/components/editor/BdatBuildReport";
 import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
+import { buildRisenCategories } from "@/lib/risen/categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -16,6 +18,8 @@ type EditorSubset = Pick<
   | "state"
   | "categoryProgress"
   | "filterCategory" | "setFilterCategory"
+  | "filterRisenOwner" | "setFilterRisenOwner"
+  | "filterRisenItemPrefix" | "setFilterRisenItemPrefix"
   | "qualityStats" | "filterStatus" | "setFilterStatus"
   | "handleFixDamagedTags" | "translating"
   | "handleRedistributeTags" | "tagsCount"
@@ -49,9 +53,12 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   isDanganronpa,
   setShowTagRepair,
 }) => {
+  const entries = editor.state?.entries;
+  const isRisen = !!entries?.some((e) => /\.tab$/i.test(e.msbtFile));
+  // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
+  const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
   if (!editor.state) return null;
   const state = editor.state;
-  const isRisen = state.entries.some((e) => /\.tab$/i.test(e.msbtFile));
   return (
     <>
       {/* Category Progress */}
@@ -70,7 +77,19 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         isBdat={!isRisen && editor.bdatTableNames.length > 0}
         isDanganronpa={!isRisen && isDanganronpa}
         isRisen={isRisen}
+        risenCategories={risenCategories}
       />
+
+      {isRisen && (
+        <RisenSubFilters
+          entries={state.entries}
+          activeCategories={editor.filterCategory}
+          filterRisenOwner={editor.filterRisenOwner}
+          setFilterRisenOwner={editor.setFilterRisenOwner}
+          filterRisenItemPrefix={editor.filterRisenItemPrefix}
+          setFilterRisenItemPrefix={editor.setFilterRisenItemPrefix}
+        />
+      )}
 
       {/* Progress Bar */}
       <div className="space-y-2 mb-6">

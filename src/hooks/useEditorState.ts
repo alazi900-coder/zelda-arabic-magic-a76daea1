@@ -28,6 +28,7 @@ import {
   type RestoreReport,
 } from "@/lib/tag-restore";
 import { normalizeBreakStyleToSource } from "@/lib/balance-lines";
+import { NO_OWNER_LABEL, getItemIdPrefix } from "@/lib/risen/categories";
 export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();
@@ -84,6 +85,9 @@ export function useEditorState() {
   const [filterTechnical, setFilterTechnical] = useState<FilterTechnical>("all");
   const [filterTable, setFilterTable] = useState<string>("all");
   const [filterColumn, setFilterColumn] = useState<string>("all");
+  // Risen 1 sub-filters (Level 2): Owner within the dialogue category, ID-prefix within items. No-op for other games.
+  const [filterRisenOwner, setFilterRisenOwner] = useState<string | null>(null);
+  const [filterRisenItemPrefix, setFilterRisenItemPrefix] = useState<string | null>(null);
   const [translateProgress, setTranslateProgress] = useState("");
   const [lastSaved, setLastSaved] = useState<string>("");
   const [cloudSyncing, setCloudSyncing] = useState(false);
@@ -712,7 +716,12 @@ export function useEditorState() {
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
       const isRisen = !isBdat && /\.tab$/i.test(e.msbtFile);
       const isDr = !isBdat && !isRisen && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? categorizeRisenEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
+        (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
+      const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||
+        getItemIdPrefix(e.label) === filterRisenItemPrefix;
       const matchStatus = 
         filterStatus === "all" || 
         (filterStatus === "translated" && isTranslated) ||
@@ -746,11 +755,11 @@ export function useEditorState() {
       const labelMatch = e.label.match(/^(.+?)\[(\d+)\]\.(.+)$/);
       const matchTable = filterTable === "all" || (labelMatch && labelMatch[1] === filterTable);
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
-      return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn;
+      return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys]);
 
-  useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn]);
+  useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix]);
 
   const totalPages = Math.ceil(filteredEntries.length / PAGE_SIZE);
   const paginatedEntries = useMemo(() => {
@@ -1589,6 +1598,7 @@ export function useEditorState() {
   return {
     // State
     state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace,
+    filterRisenOwner, filterRisenItemPrefix,
     pendingRecovery, handleRecoverSession, handleStartFresh,
     hasStoredOriginals, originalsDetectedAsPreviousBuild,
     building, buildProgress, dismissBuildProgress, translating, translateProgress,
@@ -1619,6 +1629,7 @@ export function useEditorState() {
 
     // Setters
     setSearch, setFilterFile, setFilterCategory, setFilterStatus, setFilterTechnical, setFilterTable, setFilterColumn,
+    setFilterRisenOwner, setFilterRisenItemPrefix,
     setFiltersOpen, setShowQualityStats, setQuickReviewMode, setQuickReviewIndex, setShowFindReplace,
     setCurrentPage, setShowRetranslateConfirm,
     ...settings,

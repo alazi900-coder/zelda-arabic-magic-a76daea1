@@ -575,6 +575,7 @@ const Editor = () => {
 
           <EditorBuildSection
             editor={editor}
+            isRisen={isRisen}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

@@ -6,12 +6,10 @@ import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
 import {
   extractEntriesFromP00,
+  buildRisenOutputFromState,
   DEFAULT_ARABIC_TARGET_FIELD,
   STAGEDIR_TARGET_FIELD,
-  isStageDirMsbtFile,
-  stripStageDirSuffix,
 } from "@/lib/risen-extractor";
-import { parseRisenP00Full, applyTranslations, buildRisenP00, makeKey } from "@/lib/risen-p00";
 import type { EditorState } from "@/components/editor/types";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
@@ -115,12 +113,6 @@ const RisenProcess = () => {
     setLogs([]);
     addLog("بدء البناء...");
     try {
-      const buffer = await idbGet<ArrayBuffer>(RISEN_BUFFER_KEY);
-      if (!buffer) {
-        addLog("خطأ: لا يوجد ملف مصدر محفوظ");
-        toast.error("لا يوجد ملف مصدر — ارفع strings.p00 أولاً");
-        return;
-      }
       const editorState = await idbGet<EditorState>("editorState");
       if (!editorState || editorState.entries.length === 0) {
         addLog("خطأ: لا توجد بيانات محرر محفوظة");
@@ -128,51 +120,24 @@ const RisenProcess = () => {
         return;
       }
 
-      // Convert editor keys `${msbtFile}:${index}` → rebuild keys makeKey(table, field, index).
-      // msbtFile is either the table name (English_Text) or `${table}:stagedir` (English_StageDir).
-      const translations = new Map<string, string>();
-      let translatedCount = 0;
-      for (const [key, value] of Object.entries(editorState.translations)) {
-        if (!value?.trim()) continue;
-        const lastColon = key.lastIndexOf(":");
-        if (lastColon === -1) continue;
-        const msbtFile = key.slice(0, lastColon);
-        const index = parseInt(key.slice(lastColon + 1), 10);
-        if (isNaN(index)) continue;
-        const table = stripStageDirSuffix(msbtFile);
-        const fieldForEntry = isStageDirMsbtFile(msbtFile) ? STAGEDIR_TARGET_FIELD : DEFAULT_ARABIC_TARGET_FIELD;
-        translations.set(makeKey(table, fieldForEntry, index), value);
-        translatedCount++;
-      }
-      addLog(`تم جمع ${translatedCount} ترجمة من المحرر`);
-
-      if (translatedCount === 0) {
-        addLog("خطأ: لم تُدخل أي ترجمة بعد");
-        toast.error("لم تُدخل أي ترجمة بعد");
-        return;
-      }
-
-      addLog("جاري تحليل الملف الأصلي من جديد...");
-      const doc = parseRisenP00Full(buffer);
-      addLog(`تم تحليل ${doc.tables.length} جدول، جاري تطبيق الترجمات...`);
-      applyTranslations(doc, translations);
-      addLog("جاري إعادة بناء الملف بالكامل...");
-      const rebuilt = buildRisenP00(doc);
+      addLog("جاري تحليل الملف الأصلي وتطبيق الترجمات...");
+      const result = await buildRisenOutputFromState(editorState.translations);
+      addLog(`تم جمع ${result.translatedCount} ترجمة وإعادة بناء الملف`);
 
       // Download
-      const blob = new Blob([rebuilt], { type: "application/octet-stream" });
+      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = meta?.filename || "strings.p00";
+      a.download = result.filename;
       a.click();
       URL.revokeObjectURL(url);
 
-      const delta = rebuilt.byteLength - buffer.byteLength;
+      const delta = result.buffer.byteLength - result.originalSize;
       const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
-      addLog(`نجح البناء: حجم جديد ${rebuilt.byteLength.toLocaleString()} بايت (${deltaStr} عن الأصل)`);
+      addLog(`نجح البناء: حجم جديد ${result.buffer.byteLength.toLocaleString()} بايت (${deltaStr} عن الأصل)`);
       toast.success(
-        `تم البناء: ${translatedCount} ترجمة | حجم ${rebuilt.byteLength.toLocaleString()} بايت (${deltaStr})`
+        `تم البناء: ${result.translatedCount} ترجمة | حجم ${result.buffer.byteLength.toLocaleString()} بايت (${deltaStr})`
       );
     } catch (err) {
       console.error(err);
@@ -181,7 +146,7 @@ const RisenProcess = () => {
     } finally {
       setBuilding(false);
     }
-  }, [meta, addLog]);
+  }, [addLog]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">

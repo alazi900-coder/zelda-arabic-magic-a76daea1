@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download } from "lucide-react";
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
+import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -18,6 +19,7 @@ type EditorSubset = Pick<
 
 interface EditorBuildSectionProps {
   editor: EditorSubset;
+  isRisen?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -27,12 +29,37 @@ interface EditorBuildSectionProps {
 
 const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   editor,
+  isRisen = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
   setShowArabicProcessConfirm,
   setShowDiagnostic,
-}) => (
+}) => {
+  const [risenBuilding, setRisenBuilding] = useState(false);
+
+  const handleRisenBuild = async () => {
+    setRisenBuilding(true);
+    try {
+      const result = await buildRisenOutputFromState(editor.state?.translations || {});
+      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "✅ تم البناء", description: `${result.translatedCount} ترجمة | ${result.buffer.byteLength.toLocaleString()} بايت` });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setRisenBuilding(false);
+    }
+  };
+
+  return (
   <Collapsible open={showBuildSection} onOpenChange={setShowBuildSection}>
     <div className="flex items-center justify-between mb-3">
       <CollapsibleTrigger asChild>
@@ -133,12 +160,19 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <ShieldCheck className="w-4 h-4" />
           <span className="hidden sm:inline">سلامة</span>
         </Button>
-        <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 min-w-[200px] font-display font-bold">
-          {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
-        </Button>
+        {isRisen ? (
+          <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {risenBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف Risen وتنزيله
+          </Button>
+        ) : (
+          <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 min-w-[200px] font-display font-bold">
+            {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
+          </Button>
+        )}
       </div>
     </CollapsibleContent>
   </Collapsible>
-);
+  );
+};
 
 export default EditorBuildSection;

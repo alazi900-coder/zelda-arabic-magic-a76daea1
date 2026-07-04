@@ -30,6 +30,9 @@ export interface EditorState {
   // source BDAT does NOT come back as a fallback.
   clearedKeys?: Set<string>;
   isDemo?: boolean; // true when showing demo data (no real BDAT file loaded)
+  /** Risen 1: keys whose translation needed a tag auto-appended (e.g. <Exit> → "خروج" لكن
+   * الوسم عاد ملحقاً) — تُعرَض كتنبيه "يحتاج مراجعة" حتى يتحقق المترجم يدوياً. */
+  risenTagReviewKeys?: Set<string>;
 }
 
 export interface ReviewIssue {

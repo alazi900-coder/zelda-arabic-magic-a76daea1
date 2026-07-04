@@ -140,6 +140,9 @@ interface EntryCardProps {
   isProtected: boolean;
   hasProblem: boolean;
   isDamagedTag?: boolean;
+  /** Risen 1: translation had a missing tag auto-appended — needs a human look
+   * (the tag may have been translated as a word instead of preserved). */
+  isRisenTagReviewNeeded?: boolean;
   fuzzyScore?: number;
   isMobile: boolean;
   translatingSingle: string | null;
@@ -190,7 +193,7 @@ function findGlossaryMatches(original: string, glossary?: string): { term: strin
 }
 
 const EntryCard: React.FC<EntryCardProps> = ({
-  entry, translation, isProtected, hasProblem, isDamagedTag, fuzzyScore, isMobile,
+  entry, translation, isProtected, hasProblem, isDamagedTag, isRisenTagReviewNeeded, fuzzyScore, isMobile,
   translatingSingle, improvingTranslations, previousTranslations, glossary,
   isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage,
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
@@ -471,6 +474,14 @@ const EntryCard: React.FC<EntryCardProps> = ({
                     >
                       إصلاح ⚡
                     </Button>
+                  </span>
+                )}
+                {isRisenTagReviewNeeded && (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 font-semibold"
+                    title="أُلحق وسم Risen ناقص تلقائياً — قد يكون تُرجم ككلمة بدل الإبقاء عليه، راجع النص"
+                  >
+                    ⚠️ يحتاج مراجعة (وسم Risen)
                   </span>
                 )}
                 {/* Corrupted $N variable warning */}

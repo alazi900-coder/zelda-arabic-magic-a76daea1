@@ -10,6 +10,7 @@ interface VirtualizedEntryListProps {
     translations: Record<string, string>;
     protectedEntries?: Set<string>;
     fuzzyScores?: Record<string, number>;
+    risenTagReviewKeys?: Set<string>;
   };
   qualityStats: {
     problemKeys: Set<string>;
@@ -105,6 +106,7 @@ const VirtualizedEntryList = React.memo(({
             isProtected={state.protectedEntries?.has(key) || false}
             hasProblem={qualityStats.problemKeys.has(key)}
             isDamagedTag={qualityStats.damagedTagKeys.has(key)}
+            isRisenTagReviewNeeded={state.risenTagReviewKeys?.has(key) || false}
             fuzzyScore={state.fuzzyScores?.[key]}
             isMobile={isMobile}
             translatingSingle={translatingSingle}

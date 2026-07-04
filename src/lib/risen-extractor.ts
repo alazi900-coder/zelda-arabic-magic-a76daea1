@@ -27,6 +27,7 @@ import {
   type RisenFieldRaw,
 } from "./risen-p00";
 import { idbGet } from "./idb-storage";
+import { hasRisenTags, restoreRisenTags } from "./risen-tag-guard";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";
@@ -172,6 +173,8 @@ export interface RisenBuildResult {
   filename: string;
   translatedCount: number;
   originalSize: number;
+  /** Number of translations that had a missing Risen tag (e.g. <Exit>) auto-appended before build. */
+  tagRepairCount: number;
 }
 
 /**
@@ -182,9 +185,16 @@ export interface RisenBuildResult {
  *
  * Reads the source buffer saved by RisenProcess.tsx at extraction time; throws
  * a user-facing Arabic message if it's missing or no translations were entered.
+ *
+ * `entries` (optional, pass when available) enables a build-time safety net:
+ * any translation missing a Risen tag present in its original (e.g. <Exit>,
+ * $(name)) gets the tag safely appended before writing — the same repair the
+ * editor applies live on manual edits, covering translations saved before
+ * this protection existed or edited outside the normal flow.
  */
 export async function buildRisenOutputFromState(
-  translations: Record<string, string>
+  translations: Record<string, string>,
+  entries?: ExtractedEntry[],
 ): Promise<RisenBuildResult> {
   const buffer = await idbGet<ArrayBuffer>(RISEN_BUFFER_KEY);
   if (!buffer) {
@@ -194,17 +204,34 @@ export async function buildRisenOutputFromState(
   const meta = await idbGet<{ filename?: string; targetField?: string }>(RISEN_META_KEY);
   const targetField = meta?.targetField || DEFAULT_ARABIC_TARGET_FIELD;
 
+  const originalByKey = new Map<string, string>();
+  if (entries) {
+    for (const e of entries) originalByKey.set(`${e.msbtFile}:${e.index}`, e.original);
+  }
+
   // Convert editor keys `${msbtFile}:${index}` → rebuild keys makeKey(table, field, index).
   // msbtFile is either the table name (English_Text) or `${table}:stagedir` (English_StageDir).
   const translationsMap = new Map<string, string>();
   let translatedCount = 0;
-  for (const [key, value] of Object.entries(translations)) {
-    if (!value?.trim()) continue;
+  let tagRepairCount = 0;
+  for (const [key, rawValue] of Object.entries(translations)) {
+    if (!rawValue?.trim()) continue;
     const lastColon = key.lastIndexOf(":");
     if (lastColon === -1) continue;
     const msbtFile = key.slice(0, lastColon);
     const index = parseInt(key.slice(lastColon + 1), 10);
     if (isNaN(index)) continue;
+
+    let value = rawValue;
+    const original = originalByKey.get(key);
+    if (original && hasRisenTags(original)) {
+      const repaired = restoreRisenTags(original, value);
+      if (repaired.changed) {
+        value = repaired.text;
+        tagRepairCount++;
+      }
+    }
+
     const table = stripStageDirSuffix(msbtFile);
     const fieldForEntry = isStageDirMsbtFile(msbtFile) ? STAGEDIR_TARGET_FIELD : targetField;
     translationsMap.set(makeKey(table, fieldForEntry, index), value);
@@ -224,5 +251,6 @@ export async function buildRisenOutputFromState(
     filename: meta?.filename || "strings.p00",
     translatedCount,
     originalSize: buffer.byteLength,
+    tagRepairCount,
   };
 }

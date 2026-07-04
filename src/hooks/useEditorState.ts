@@ -28,6 +28,7 @@ import {
   type RestoreReport,
 } from "@/lib/tag-restore";
 import { normalizeBreakStyleToSource } from "@/lib/balance-lines";
+import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import { NO_OWNER_LABEL, getItemIdPrefix } from "@/lib/risen/categories";
 export function useEditorState() {
   // === Extracted hooks ===
@@ -790,6 +791,24 @@ export function useEditorState() {
     // Auto-validate: check for missing/foreign technical tags
     let finalValue = value;
     const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
+    const isRisenEntry = !!entry && /\.tab$/i.test(entry.msbtFile);
+    let risenNeedsReview = false;
+    if (isRisenEntry && entry && hasRisenTags(entry.original) && value.trim()) {
+      const repaired = restoreRisenTags(entry.original, finalValue);
+      finalValue = repaired.text;
+      risenNeedsReview = repaired.needsReview;
+      if (repaired.changed) {
+        const now = Date.now();
+        if (now - lastTagFixToastRef.current > 5000) {
+          lastTagFixToastRef.current = now;
+          toast({
+            title: "⚠️ وسم Risen ناقص",
+            description: "تم إلحاق الوسم الناقص تلقائياً — راجع الترجمة يدوياً؛ قد يكون الوسم تُرجم بدل الإبقاء عليه.",
+            duration: 5000,
+          });
+        }
+      }
+    }
     if (entry && hasTechnicalTags(entry.original) && value.trim()) {
       // Check for missing closing tags BEFORE auto-fix (to show user what was wrong)
       const missingClosing = findMissingClosingTags(entry.original, value);
@@ -835,6 +854,11 @@ export function useEditorState() {
         const newCleared = new Set(prev.clearedKeys);
         newCleared.delete(key);
         next.clearedKeys = newCleared;
+      }
+      if (isRisenEntry) {
+        const reviewKeys = new Set(prev.risenTagReviewKeys);
+        if (risenNeedsReview) reviewKeys.add(key); else reviewKeys.delete(key);
+        next.risenTagReviewKeys = reviewKeys;
       }
       return next;
     });

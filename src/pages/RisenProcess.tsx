@@ -121,8 +121,11 @@ const RisenProcess = () => {
       }
 
       addLog("جاري تحليل الملف الأصلي وتطبيق الترجمات...");
-      const result = await buildRisenOutputFromState(editorState.translations);
+      const result = await buildRisenOutputFromState(editorState.translations, editorState.entries);
       addLog(`تم جمع ${result.translatedCount} ترجمة وإعادة بناء الملف`);
+      if (result.tagRepairCount > 0) {
+        addLog(`⚠️ ${result.tagRepairCount} ترجمة كان ينقصها وسم Risen — أُلحق تلقائياً، يُنصح بمراجعتها`);
+      }
 
       // Download
       const blob = new Blob([result.buffer], { type: "application/octet-stream" });

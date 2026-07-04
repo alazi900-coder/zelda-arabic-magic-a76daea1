@@ -41,7 +41,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const handleRisenBuild = async () => {
     setRisenBuilding(true);
     try {
-      const result = await buildRisenOutputFromState(editor.state?.translations || {});
+      const result = await buildRisenOutputFromState(editor.state?.translations || {}, editor.state?.entries);
       const blob = new Blob([result.buffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -50,7 +50,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       a.click();
       URL.revokeObjectURL(url);
       const { toast } = await import("@/hooks/use-toast");
-      toast({ title: "✅ تم البناء", description: `${result.translatedCount} ترجمة | ${result.buffer.byteLength.toLocaleString()} بايت` });
+      toast({
+        title: "✅ تم البناء",
+        description: `${result.translatedCount} ترجمة | ${result.buffer.byteLength.toLocaleString()} بايت${result.tagRepairCount > 0 ? ` | ⚠️ ${result.tagRepairCount} وسم Risen أُلحق تلقائياً — راجعها` : ""}`,
+      });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });

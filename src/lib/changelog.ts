@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.8.1",
+    date: "2026-07-04",
+    changes: [
+      { kind: "fixed", text: "بروميت الترجمة بالذكاء الاصطناعي (Gemini/Lovable/DeepSeek) كان مُثبَّتاً دائماً على عالم Xenoblade Chronicles بلا أي وعي بلعبة Risen 1 — فكان يترجم كلمات عامة مثل magic إلى \"إيثر\" (مصطلح خاص بـ Xenoblade). أصبحت الواجهة ترسل هوية اللعبة مع كل طلب ترجمة، ويستخدم الخادم معرفة عامة بعالم Risen 1 بدل شخصيات ومصطلحات Xenoblade عند الحاجة." },
+    ],
+  },
+  {
     version: "1.8.0",
     date: "2026-07-04",
     changes: [

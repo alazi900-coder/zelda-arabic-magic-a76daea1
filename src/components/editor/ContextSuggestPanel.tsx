@@ -134,6 +134,10 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
     return glossary.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).slice(0, 40).join("\n");
   }, [glossary]);
 
+  // Risen entries use "table.tab" as msbtFile (no "bdat-bin:"/"bdat:" prefix);
+  // same detection used elsewhere (e.g. Editor.tsx, EditorProgressStatus.tsx).
+  const isRisen = /\.tab$/i.test(entry?.msbtFile || "");
+
   const generate = async () => {
     if (!entry) return;
     setLoading(true);
@@ -164,6 +168,8 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           provider,
           aiModel,
           providerApiKey,
+          game: isRisen ? "risen" : "xenoblade",
+          speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined,
         }),
       });
       const data = await res.json();

@@ -1,4 +1,5 @@
-// Context-aware translation suggestions for Xenoblade entries.
+// Context-aware translation suggestions (Xenoblade, Risen 1, and any other
+// game entry sent — see the `game` field on RequestBody).
 // Supports Lovable AI Gateway (Gemini/GPT) and DeepSeek (V4 Pro/Flash).
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
@@ -13,6 +14,11 @@ interface TmExample {
   similarity?: number;
 }
 
+interface Speaker {
+  owner?: string;
+  role?: string;
+}
+
 interface RequestBody {
   target: ContextEntry;
   context: ContextEntry[];
@@ -23,11 +29,24 @@ interface RequestBody {
   provider?: 'gemini' | 'deepseek' | 'mymemory' | 'google';
   aiModel?: string;
   providerApiKey?: string;
+  /** Which game this entry is from — the system prompt names it correctly instead
+   * of always assuming Xenoblade. Defaults to Xenoblade for backward compatibility
+   * with callers that don't send it yet. */
+  game?: 'xenoblade' | 'risen';
+  /** Risen: the speaking NPC (Owner/Role fields from infos.tab), when known. */
+  speaker?: Speaker;
 }
 
 const DEFAULT_LOVABLE_MODEL = 'google/gemini-3-flash-preview';
 
-const SYSTEM_PROMPT = `أنت مترجم ألعاب فيديو متخصص في سلسلة Xenoblade Chronicles.
+const GAME_LABELS: Record<string, string> = {
+  xenoblade: 'سلسلة Xenoblade Chronicles',
+  risen: 'لعبة Risen 1 (محرك Genome — عالم RPG مفتوح بطابع قروسطي)',
+};
+
+function buildSystemPrompt(game?: string): string {
+  const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
+  return `أنت مترجم ألعاب فيديو متخصص في ${gameLabel}.
 قدّم 3 اقتراحات مختلفة لترجمة النص المستهدف بأساليب متنوعة:
 - formal (رسمي): لغة فصحى مهذبة مناسبة للقصة الرئيسية والشخصيات الرسمية.
 - natural (طبيعي): حوار يومي سلس يناسب معظم المواقف.
@@ -36,10 +55,11 @@ const SYSTEM_PROMPT = `أنت مترجم ألعاب فيديو متخصص في �
 قواعد صارمة:
 1. التزم تماماً بمصطلحات القاموس المُعطى — لا تغيّر ترجمة مصطلح موجود فيه.
 2. احفظ كل الرموز التقنية والمتغيرات كما هي بدون أي تعديل: الأقواس [Tag], الأكواد {var}, الأحرف الخاصة \uFFF9-\uFFFC و \uE000-\uF8FF, ورموز السطر \\n.
-3. لا تخترع شخصيات أو معلومات. استخدم السياق المُعطى لفهم نبرة الحديث فقط.
+3. لا تخترع شخصيات أو معلومات. استخدم السياق المُعطى (وهوية المتحدث إن وُجدت) لفهم نبرة الحديث فقط.
 4. اشرح سبب كل اقتراح في جملة عربية موجزة (≤ 15 كلمة).
 5. confidence رقم بين 0 و 1 يعكس ثقتك في ملاءمة الاقتراح للسياق.
 6. contextNote: ملاحظة عربية قصيرة جداً (سطر واحد) عن السياق العام.`;
+}
 
 const SUGGESTIONS_JSON_SCHEMA_HINT = `أعد JSON بالشكل التالي بالضبط ولا تضف أي نص خارجه:
 {
@@ -90,6 +110,9 @@ function buildUserPrompt(body: RequestBody): string {
     ? `\n\nالقاموس (مصطلح=ترجمة):\n${body.glossary}`
     : '';
   const fileLine = body.file ? `\nالملف: ${body.file}` : '';
+  const speakerLine = (body.speaker?.owner || body.speaker?.role)
+    ? `\nالمتحدث: ${[body.speaker.owner, body.speaker.role].filter(Boolean).join(' — ')}`
+    : '';
 
   // Translation Memory examples — help the model stay consistent with prior
   // translations of similar sentences across the project.
@@ -108,7 +131,7 @@ function buildUserPrompt(body: RequestBody): string {
   return `النص المستهدف:
 EN: ${body.target.original}
 AR الحالية: ${body.target.translation || '(لا توجد)'}
-${fileLine}
+${fileLine}${speakerLine}
 
 السياق المحيط (${body.context.length} سطر):
 ${ctxLines || '(لا يوجد سياق)'}${tmBlock}${glossaryBlock}${byteLimitBlock}
@@ -151,7 +174,7 @@ async function callDeepSeek(body: RequestBody, apiKey: string, model: string): P
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + SUGGESTIONS_JSON_SCHEMA_HINT },
+        { role: 'system', content: buildSystemPrompt(body.game) + '\n\n' + SUGGESTIONS_JSON_SCHEMA_HINT },
         { role: 'user', content: buildUserPrompt(body) },
       ],
     }),
@@ -181,7 +204,7 @@ async function callLovable(body: RequestBody, apiKey: string, model: string): Pr
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: buildSystemPrompt(body.game) },
         { role: 'user', content: buildUserPrompt(body) },
       ],
       tools: [tool],

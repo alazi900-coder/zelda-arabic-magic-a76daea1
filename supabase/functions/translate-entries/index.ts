@@ -1869,6 +1869,19 @@ Deno.serve(async (req) => {
     } else if (provider === 'google') {
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const result = await translateWithGoogle(entries, protectedEntries, glossaryMap);
+      // translateWithGoogle swallows per-entry network errors (logs + continues) so a
+      // few failed requests don't block the rest of the batch. But if EVERY entry
+      // failed, that's Google's free endpoint being blocked/rate-limited for this
+      // server — silently returning an empty "success" left users with no feedback
+      // at all ("لا يعمل" with no error). Surface it as a real error in that case.
+      if (Object.keys(result.translations).length === 0 && entries.length > 0) {
+        return new Response(JSON.stringify({
+          error: 'تعذّر الاتصال بخدمة Google Translate المجانية (قد تكون محظورة مؤقتاً من هذا الخادم) — جرّب مزوّداً آخر مثل Gemini أو DeepSeek',
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       return buildSuccessResponse(entries, result);
     } else if (provider === 'deepseek') {
       const dsKey = providerApiKey || Deno.env.get('DEEPSEEK_API_KEY');

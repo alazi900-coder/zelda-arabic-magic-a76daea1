@@ -171,7 +171,8 @@ function buildXC1UserPrompt(opts: {
     ? `RISEN 1 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Genome-engine open-world medieval-fantasy RPG — a hero shipwrecked on a mysterious island, torn between the Inquisition (a militant/monastic order) and free bandit/mage camps.
 • This is a DIFFERENT game from Xenoblade Chronicles — do NOT use Xenoblade terminology, character names, or lore under any circumstance.
-• Use plain, natural Arabic for generic fantasy/RPG concepts based on their literal English meaning — e.g. magic → سحر, mana → مانا, spell → تعويذة, potion → جرعة, guild/order → نقابة/طائفة, temple → معبد, bandit → قاطع طريق.`
+• Use plain, natural Arabic for generic fantasy/RPG concepts based on their literal English meaning — e.g. magic → سحر, mana → مانا, spell → تعويذة, potion → جرعة, guild/order → نقابة/طائفة, temple → معبد, bandit → قاطع طريق.
+• Pickup/reward notifications like "<amount> x <name> obtained!": the item name placeholder's grammatical gender is unknown, so NEVER end with a gendered pronoun suffix referring to it (do not default to "تم الحصول عليها" or "تم الحصول عليه"). Prefer a gender-neutral verb phrase placed before the placeholders instead, e.g. "تم الحصول على <amount> x <name>!".`
     : detailed
     ? `XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.

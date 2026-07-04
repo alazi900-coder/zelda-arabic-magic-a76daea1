@@ -51,6 +51,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
 }) => {
   if (!editor.state) return null;
   const state = editor.state;
+  const isRisen = state.entries.some((e) => /\.tab$/i.test(e.msbtFile));
   return (
     <>
       {/* Category Progress */}
@@ -66,8 +67,9 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         isFixing={editor.translating}
         onRedistributeTags={editor.handleRedistributeTags}
         tagsCount={editor.tagsCount}
-        isBdat={editor.bdatTableNames.length > 0}
-        isDanganronpa={isDanganronpa}
+        isBdat={!isRisen && editor.bdatTableNames.length > 0}
+        isDanganronpa={!isRisen && isDanganronpa}
+        isRisen={isRisen}
       />
 
       {/* Progress Bar */}

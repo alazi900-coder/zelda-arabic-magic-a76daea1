@@ -34,6 +34,30 @@ export default function UpdateBanner() {
       });
     };
 
+    // أي Service Worker يتحكّم فعلياً في الصفحة الآن هو بقايا قديمة — هذا
+    // التطبيق لا يُسجّل أي SW جديد إطلاقاً. تنظيف index.html يحاول مرّة واحدة
+    // فقط لكل جلسة تصفّح (sessionStorage)، فإن لم تكتمل تلك المحاولة لا تُعاد
+    // أبداً حتى يُغلق التبويب. هنا نعيد المحاولة في كل دورة فحص (كل دقيقتين
+    // + عند التركيز على التبويب) بدل الاكتفاء بمحاولة واحدة، مع فاصل قصير
+    // لمنع التكرار السريع المتداخل فقط (وليس منعاً دائماً).
+    const forceCleanupIfControlled = async () => {
+      if (!navigator.serviceWorker.controller) return;
+      const last = Number(sessionStorage.getItem("__ub_cleanup_at__") || "0");
+      if (Date.now() - last < 10_000) return;
+      sessionStorage.setItem("__ub_cleanup_at__", String(Date.now()));
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.allSettled(registrations.map((reg) => reg.unregister()));
+        if ("caches" in window) {
+          const names = await caches.keys();
+          await Promise.allSettled(names.map((n) => caches.delete(n)));
+        }
+      } catch {
+        // ignore — reload below still attempts a fresh network shell
+      }
+      reloadOnce();
+    };
+
     const checkForUpdate = async () => {
       try {
         const registrations = await navigator.serviceWorker.getRegistrations();
@@ -42,6 +66,7 @@ export default function UpdateBanner() {
       } catch {
         // ignore service-worker cleanup failures
       }
+      await forceCleanupIfControlled();
     };
 
     checkForUpdate();

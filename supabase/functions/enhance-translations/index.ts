@@ -55,6 +55,10 @@ const RULES: RuleDef[] = [
   { id: 'detect_untranslated', kind: 'detect', prompt: '**untranslated** — نصّ بقي إنجليزياً أو كلمات عربيّة ملتصقة بلا فراغات' },
   { id: 'detect_line_breaks', kind: 'detect', prompt: '**line_breaks** — فواصل الأسطر `\\n` و `[XENO:n]`:\n   • قارن **عدد ومواضع** فواصل الأسطر في الترجمة العربيّة بالنصّ الإنجليزي الأصلي:\n       – عدّ مرّات `[XENO:n]` (وسم تقنيّ) — يجب أن تتطابق عدداً وترتيباً مع الأصل\n       – عدّ مرّات `\\n` (حرف سطر جديد U+000A) — يجب أن تتطابق عدداً وترتيباً مع الأصل\n   • إذا فقدت الترجمة فاصلاً موجوداً في الأصل → أضِفه في موقعه الطبيعي (بين جملتَين متّسقتَين بنفس الموضع في الأصل)\n   • إذا أضافت الترجمة فاصلاً غير موجود في الأصل → احذفه\n   • لا تخلط بين `[XENO:n]` و `\\n` — كلٌّ منهما له موضعه ونوعه في الأصل، احتفظ بنفس النوع في نفس الموضع\n   • **مهم تقنيّاً:** `[XENO:n]` نصّ ASCII حرفيّ من 8 أحرف. `\\n` حرف Unicode واحد (U+000A). لا تخلط بينهما.\n   • لا تُغيّر معنى أو كلمات أو ترتيب النصّ — فقط أعِد ضبط فواصل الأسطر فقط لا غير.' },
   { id: 'detect_split_and_tags', kind: 'detect', prompt: '**split_and_tags** — التقسيم والوسوم التقنيّة:\n   • قارن طول الترجمة العربيّة بالنصّ الإنجليزي. إذا كانت أطول بكثير وتتجاوز سطر اللعبة، اختصرها قليلاً **مع الحفاظ على نفس المعنى تماماً** (ممنوع حذف معلومة أو تغيير القصد).\n   • أعِد التقسيم باستخدام `[XENO:n]` (الأساسي) أو `\\n` (نادر) بحيث تطابق مواضع التقسيم في النصّ الإنجليزي قدر الإمكان.\n   • أصلح الوسوم التقنيّة التالفة أو المفقودة: `[XENO:n]`, `[XENO:wait]`, `[Color:Red]`, `[Icon:*]`, `[System:PageBreak]` — استرجعها من الأصل بنفس العدد والترتيب. لا تُضِف وسماً غير موجود ولا تحذف وسماً موجوداً.' },
+  // Risen-only rules: prompt text is still declared here but is only injected when
+  // the request's game === 'risen' (see RISEN_ONLY_RULE_IDS below) — no effect on Xenoblade.
+  { id: 'detect_risen_gendered_pickup', kind: 'detect', prompt: '**accuracy** — [خاص بـ Risen] ضمير مذكّر/مؤنث ثابت (عليها/عليه/فيها/منه...) مرتبط باسم عنصر أو غرض مجهول الجنس في جملة قصيرة مثل إشعارات الحصول على غرض (مثال: "<amount> x <name> obtained!") — الصياغة الصحيحة محايدة الجنس (مثل "تم الحصول على" بدل "تم الحصول عليها/عليه")' },
+  { id: 'detect_risen_line_structure', kind: 'detect', prompt: '**line_breaks** — [خاص بـ Risen] بنية الأسطر جزء من التنسيق في المستندات والرسائل الطويلة: قارن عدد ومواضع الأسطر الفارغة (بما فيها الفارغة في البداية) بين الأصل والترجمة — إن دُمجت أو حُذفت أعِد ضبطها لتطابق الأصل تماماً دون تغيير الكلمات' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'skip_preferences',    kind: 'protect', prompt: '🚫 لا تقترح تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة.' },
@@ -63,6 +67,46 @@ const RULES: RuleDef[] = [
   { id: 'no_identical_output', kind: 'protect', prompt: '⚠️ لا تُعِد النصّ نفسه بدون تغيير. إذا كانت الترجمة صحيحة، تخطَّاها.' },
 ];
 const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
+/** Rules whose prompt text only makes sense for Risen — excluded from the prompt entirely for Xenoblade, regardless of enabled state. */
+const RISEN_ONLY_RULE_IDS = new Set(['detect_risen_gendered_pickup', 'detect_risen_line_structure']);
+
+// ─── Rule-disable enforcement ────────────────────────────────────────────────
+// القواعد أعلاه كانت تعتمد فقط على التزام النموذج بتعليمات الـ prompt: تعطيل
+// قاعدة كشف واحدة يحذف سطرها من الـ prompt لكن لا شيء يمنع نموذجاً غير مُلتزم
+// من إرجاع نتيجة من نفس النوع. الخرائط التالية تُطبَّق على ردّ الـ AI بعد
+// التحليل لرفض أي نتيجة نوعها يخصّ قاعدة غير مُفعَّلة فعلياً.
+const TYPE_TO_RULE_ID: Record<string, string> = {
+  missing_char: 'detect_missing_char',
+  accuracy: 'detect_accuracy',
+  grammar: 'detect_accuracy',
+  punctuation: 'detect_accuracy',
+  style: 'detect_phrasing',
+  reorder: 'detect_word_order',
+  consistency: 'detect_consistency',
+  terminology: 'detect_terminology',
+  untranslated: 'detect_untranslated',
+  line_breaks: 'detect_line_breaks',
+  split_and_tags: 'detect_split_and_tags',
+};
+
+function isTypeEnabled(type: string | undefined, enabledSet: Set<string>): boolean {
+  const ruleId = TYPE_TO_RULE_ID[type || ''];
+  if (!ruleId) return true; // نوع غير معروف/مخصّص — لا نحظره احتياطاً.
+  return enabledSet.has(ruleId);
+}
+
+// وضع "القواعد" (grammar) يُرجع فئة خشنة فقط (wrong/reorder/weak) لا نوعاً دقيقاً،
+// لذا الإنفاذ هنا تقريبيّ: نربط كلّ فئة بمجموعة القواعد التي غالباً تنتجها.
+const CATEGORY_RULE_FAMILY: Record<string, string[]> = {
+  reorder: ['detect_word_order'],
+  weak: ['detect_phrasing'],
+  wrong: ['detect_missing_char', 'detect_accuracy', 'detect_terminology', 'detect_untranslated', 'detect_risen_gendered_pickup'],
+};
+
+function isCategoryEnabled(category: string | undefined, enabledSet: Set<string>): boolean {
+  const family = CATEGORY_RULE_FAMILY[category || 'wrong'] || CATEGORY_RULE_FAMILY.wrong;
+  return family.some(id => enabledSet.has(id));
+}
 const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
 
 function extractTechTags(text: string): string[] {
@@ -118,7 +162,8 @@ function buildRuleSections(
   enabledIds: string[] | undefined,
   customRules: RuleDef[] | undefined,
   builtinOverrides: Record<string, { prompt?: string }> | undefined,
-): { detect: string; protect: string; detectCount: number } {
+  isRisen: boolean,
+): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
   const builtinWithOverrides: RuleDef[] = RULES.map(r => {
@@ -139,14 +184,16 @@ function buildRuleSections(
   const enabled = (enabledIds && Array.isArray(enabledIds))
     ? new Set(enabledIds)
     : DEFAULT_RULE_IDS;
-  const detectLines = all.filter(r => r.kind === 'detect' && enabled.has(r.id))
+  // القواعد الخاصّة بـ Risen لا تُحقَن في الـ prompt إطلاقاً عند Xenoblade، حتى لو كانت مُفعَّلة.
+  const isActive = (r: RuleDef) => enabled.has(r.id) && (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen);
+  const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
-  const protectLines = all.filter(r => r.kind === 'protect' && enabled.has(r.id)).map(r => r.prompt);
+  const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
   const detect = detectLines.length > 0
     ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
     : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
   const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
-  return { detect, protect, detectCount: detectLines.length };
+  return { detect, protect, detectCount: detectLines.length, enabledSet: enabled };
 }
 
 // ─── Smart glossary filter ──────────────────────────────────────────────────
@@ -296,7 +343,7 @@ Deno.serve(async (req) => {
     const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     const properNounsSection = isRisen
@@ -522,7 +569,11 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
           severity: i.severity || 'medium',
         };
-      }).filter((i) => i.key && i.suggestion !== i.translation && isSafeSuggestion(i.original, i.translation, i.suggestion));
+      }).filter((i) =>
+        i.key && i.suggestion !== i.translation &&
+        isSafeSuggestion(i.original, i.translation, i.suggestion) &&
+        isCategoryEnabled(i.category, ruleSections.enabledSet),
+      );
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -630,7 +681,11 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           severity: r.severity || 'medium',
         };
       })
-        .filter((r) => r.key && r.suggested !== r.translation && isSafeSuggestion(r.original, r.translation, r.suggested));
+        .filter((r) =>
+          r.key && r.suggested !== r.translation &&
+          isSafeSuggestion(r.original, r.translation, r.suggested) &&
+          isTypeEnabled(r.type, ruleSections.enabledSet),
+        );
 
       return new Response(JSON.stringify({ results: mappedResults }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -713,7 +768,11 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         detail: s.detail || '',
         type: s.type || 'style',
       };
-    }).filter((s) => s.key && s.suggested !== s.current && isSafeSuggestion(s.original, s.current, s.suggested));
+    }).filter((s) =>
+      s.key && s.suggested !== s.current &&
+      isSafeSuggestion(s.original, s.current, s.suggested) &&
+      isTypeEnabled(s.type, ruleSections.enabledSet),
+    );
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

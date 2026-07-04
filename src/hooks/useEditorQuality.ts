@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
-import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasTechnicalTags } from "@/components/editor/types";
+import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasTechnicalTags } from "@/components/editor/types";
 import { checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
 
 export interface QualityStats {

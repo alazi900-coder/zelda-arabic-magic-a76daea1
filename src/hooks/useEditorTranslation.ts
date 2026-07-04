@@ -234,6 +234,7 @@ export function useEditorTranslation({
         aiModel,
         extraInstructions: buildExtraInstructions(customPromptInstructions),
         routingMode: aiRoutingMode,
+        game: isRisenSource ? "risen" : "xenoblade",
       }),
       fetcher: async (payload) => {
         // === Cache lookup قبل الإرسال ===
@@ -310,7 +311,7 @@ export function useEditorTranslation({
   }, [
     activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines,
-    npcMode, aiModel, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled,
+    npcMode, aiModel, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled, isRisenSource,
   ]);
 
   // عند unmount: نُفرغ ما تجمّع لتجنّب طلبات معلقة.
@@ -557,7 +558,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
         });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
@@ -818,7 +819,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -876,7 +877,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -1040,6 +1041,7 @@ export function useEditorTranslation({
             aiModel,
             extraInstructions: buildExtraInstructions(customPromptInstructions),
               routingMode: aiRoutingMode,
+            game: isRisenSource ? "risen" : "xenoblade",
           }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
@@ -1238,6 +1240,7 @@ export function useEditorTranslation({
                 aiModel,
                 extraInstructions: buildExtraInstructions(customPromptInstructions),
               routingMode: aiRoutingMode,
+                game: isRisenSource ? "risen" : "xenoblade",
               }),
             });
             if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
@@ -1491,6 +1494,7 @@ export function useEditorTranslation({
               aiModel,
               extraInstructions: buildExtraInstructions(customPromptInstructions),
               routingMode: aiRoutingMode,
+              game: isRisenSource ? "risen" : "xenoblade",
             }),
           });
           if (!response.ok) { stillFailed.push(entry); continue; }

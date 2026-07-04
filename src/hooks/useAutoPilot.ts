@@ -126,9 +126,10 @@ export function useAutoPilot({
       aiModel: forceModel || (prov === 'gemini' ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
+      game: /\.tab$/i.test(state?.entries?.[0]?.msbtFile || '') ? 'risen' : 'xenoblade',
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
-      myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode]);
+      myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode, state]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {
     if (!state || running) return;

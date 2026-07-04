@@ -128,6 +128,22 @@ OUTPUT CONTRACT (highest priority — violations are hard failures):
 4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it — never "ترجمة TAG_0 TAG_1" or "TAG_0 TAG_1 ترجمة". Tag position carries game meaning (icons, status, line markers).
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
 
+/** System prompt for non-Xenoblade games (currently: Risen 1) — same structural
+ * rules as XC1_SYSTEM_PROMPT, but without any Xenoblade lore/terminology so the
+ * model doesn't map generic words (e.g. "magic") to XC-specific terms (e.g. "إيثر"). */
+const RISEN_SYSTEM_PROMPT = `You are a professional video game text translator working on Risen 1 (Genome engine — open-world medieval-fantasy RPG). This is NOT Xenoblade Chronicles — do not use any Xenoblade terminology or lore.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, TAG_2, ... (technical tags)
+   - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
+   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it — never "ترجمة TAG_0 TAG_1" or "TAG_0 TAG_1 ترجمة". Tag position carries game meaning (icons, status, line markers).
+5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
+6. Use natural Arabic equivalents for generic medieval-fantasy/RPG concepts based on their plain English meaning — e.g. magic → سحر, mana → مانا, spell → تعويذة, potion → جرعة, guild → نقابة, temple → معبد. Never substitute a term from another game's lore (e.g. never translate "magic" as "إيثر" — that is a Xenoblade-specific term with no meaning here).`;
 
 /**
  * Build the user-facing prompt with full universe knowledge, ordered rules,
@@ -143,10 +159,20 @@ function buildXC1UserPrompt(opts: {
   contextSection?: string;
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
+  /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
+  game?: 'xenoblade' | 'risen';
 }): string {
-  const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false } = opts;
+  const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
-  const universeBlock = detailed
+  const isRisen = game === 'risen';
+  const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+
+  const universeBlock = isRisen
+    ? `RISEN 1 UNIVERSE — KEY KNOWLEDGE:
+• Setting: Genome-engine open-world medieval-fantasy RPG — a hero shipwrecked on a mysterious island, torn between the Inquisition (a militant/monastic order) and free bandit/mage camps.
+• This is a DIFFERENT game from Xenoblade Chronicles — do NOT use Xenoblade terminology, character names, or lore under any circumstance.
+• Use plain, natural Arabic for generic fantasy/RPG concepts based on their literal English meaning — e.g. magic → سحر, mana → مانا, spell → تعويذة, potion → جرعة, guild/order → نقابة/طائفة, temple → معبد, bandit → قاطع طريق.`
+    : detailed
     ? `XENOBLADE CHRONICLES 1 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Two colossal titans — Bionis (بيونيس) and Mechonis (ميكونيس) — frozen mid-battle above an endless sea. The people of Bionis fight the mechanical Mechon (ميكون) army.
 • Main party: Shulk (شولك, determined/analytical, wields the Monado), Reyn (رين, energetic/loyal/blunt), Fiora (فيورا, warm/gentle, Shulk's childhood friend), Dunban (دانبان, honorable/composed elder warrior), Melia (ميليا, dignified/formal High Entia princess), Riki (ريكي, cheerful/childlike Nopon hero), Sharla (شارلا, caring/nurturing medic).
@@ -159,7 +185,11 @@ function buildXC1UserPrompt(opts: {
 • Antagonists: Zanza (زانزا), Egil (إيجل), Metal Face (الوجه المعدني).
 • Key terms: Monado (المونادو), Ether (إيثر), Colony 9 (المستعمرة 9), Mechon (ميكون), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا).`;
 
-  return `Translate the following Xenoblade Chronicles 1 game texts from English to Arabic.
+  const npcVoiceRule = isRisen
+    ? 'NPC dialogue — use natural modern spoken Arabic matching the tone implied by the text and any speaker info given in context. Do NOT assume Xenoblade characters (Shulk, Reyn, etc.) — this is a different game.'
+    : "NPC dialogue — match the speaker's personality: casual/blunt for Reyn and Riki, formal/dignified for Melia and Dunban, warm for Sharla and Fiora.";
+
+  return `Translate the following ${gameLabel} game texts from English to Arabic.
 
 ${universeBlock}
 
@@ -179,9 +209,9 @@ RULES — ordered by priority (top = most critical):
 [C] TERMINOLOGY & STYLE:
 8. Glossary terms — if a term appears in the glossary section, you MUST use its EXACT Arabic translation. No alternatives, no synonyms, no paraphrasing. Match possessive forms too (e.g. "Noah's" uses the glossary entry for "Noah"). NON-NEGOTIABLE.
 9. Consistency — if a word/phrase was translated a certain way in "Previously Translated Texts", you MUST translate it the same way.
-10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب) consistent with the Arabic Xenoblade Chronicles 1 community — not overly formal classical Arabic.
+10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب)${isRisen ? '' : ' consistent with the Arabic Xenoblade Chronicles 1 community'} — not overly formal classical Arabic.
 11. Preserve proper nouns using the Arabic forms listed above. Unknown names → transliterate phonetically.
-12. NPC dialogue — match the speaker's personality: casual/blunt for Reyn and Riki, formal/dignified for Melia and Dunban, warm for Sharla and Fiora.${npcRule}${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
+12. ${npcVoiceRule}${npcRule}${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
 
 Input texts (JSON object — translate each value, return with the SAME keys):
 {
@@ -369,6 +399,8 @@ let _rebalanceNewlines = false;
 let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
+/** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
+let _game: 'xenoblade' | 'risen' = 'xenoblade';
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -1222,6 +1254,7 @@ async function translateWithOpenAICompat(
     categorySection,
     userInstructionsSection,
     detailed: false,
+    game: _game,
   });
 
   const providerName = baseUrl.includes('deepseek') ? 'DeepSeek' : 'OpenAI-Compat';
@@ -1238,7 +1271,7 @@ async function translateWithOpenAICompat(
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: XC1_SYSTEM_PROMPT },
+        { role: 'system', content: _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
         { role: 'user', content: prompt },
       ],
     }),
@@ -1468,6 +1501,7 @@ async function translateWithAI(
     glossarySection,
     contextSection,
     detailed: true,
+    game: _game,
   });
 
   // Routing mode determines which provider to use:
@@ -1638,7 +1672,7 @@ async function translateWithAI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: XC1_SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
           generationConfig: { temperature: 0.3 },
         }),
       });
@@ -1735,7 +1769,7 @@ async function translateWithAI(
           body: JSON.stringify({
             model: lovableModel,
             messages: [
-              { role: 'system', content: XC1_SYSTEM_PROMPT },
+              { role: 'system', content: _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
               { role: 'user', content: aiPrompt },
             ],
           }),
@@ -1824,7 +1858,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, extraInstructions, routingMode } = await req.json() as {
+    const { entries, glossary, context, userApiKey, providerApiKey, provider, myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, extraInstructions, routingMode, game } = await req.json() as {
       entries: { key: string; original: string }[];
       glossary?: string;
       context?: { key: string; original: string; translation?: string }[];
@@ -1838,6 +1872,8 @@ Deno.serve(async (req) => {
       aiModel?: string;
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
+      /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
+      game?: 'xenoblade' | 'risen';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -1849,6 +1885,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
+    _game = game === 'risen' ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

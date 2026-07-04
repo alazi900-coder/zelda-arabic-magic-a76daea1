@@ -206,6 +206,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
           providerApiKey: providerKey,
           myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
           aiModel: engine.model || undefined,
+          game: /\.tab$/i.test(entry.msbtFile || '') ? 'risen' : 'xenoblade',
         }),
       });
       if (!response.ok) {

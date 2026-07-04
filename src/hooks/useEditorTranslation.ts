@@ -406,6 +406,7 @@ export function useEditorTranslation({
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
       return categorizeBdatTable(e.label, sourceFile, e.original);
     }
+    if (/\.tab$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

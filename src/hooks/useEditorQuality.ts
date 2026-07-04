@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
-import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasTechnicalTags } from "@/components/editor/types";
+import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasTechnicalTags } from "@/components/editor/types";
 import { checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
 
 export interface QualityStats {
@@ -209,8 +209,9 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           const translation = translations[key] || '';
           const isBdat = RE_BDAT_LABEL.test(entry.label);
           const sourceFile = entry.msbtFile.startsWith('bdat-bin:') ? entry.msbtFile.split(':')[1] : entry.msbtFile.startsWith('bdat:') ? entry.msbtFile.slice(5) : undefined;
-          const isDr = entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
-          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
+          const isRisen = !isBdat && /\.tab$/i.test(entry.msbtFile);
+          const isDr = !isBdat && !isRisen && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
+          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
 
           const cached = cache.get(key);
           let result: EntryCacheResult;

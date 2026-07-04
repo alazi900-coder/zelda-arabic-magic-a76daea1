@@ -20,7 +20,7 @@ import { useEditorCleanup } from "@/hooks/useEditorCleanup";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
 import { deepDiagPredicates, matchesDeepDiagFilter } from "@/lib/deep-diagnostic-predicates";
 import { useAutoPilot } from "@/hooks/useAutoPilot";
-import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
+import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
 import {
   scanTranslationsForRestore,
   buildRestoreUpdates,
@@ -710,8 +710,9 @@ export function useEditorState() {
       const matchFile = filterFile === "all" || e.msbtFile === filterFile;
       const isBdat = /^.+?\[\d+\]\./.test(e.label);
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
-      const isDr = !isBdat && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const isRisen = !isBdat && /\.tab$/i.test(e.msbtFile);
+      const isDr = !isBdat && !isRisen && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? categorizeRisenEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchStatus = 
         filterStatus === "all" || 
         (filterStatus === "translated" && isTranslated) ||

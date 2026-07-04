@@ -82,6 +82,9 @@ function extractFieldGroup(
     .filter((f): f is RisenFieldRaw => f !== undefined);
   if (candidateFields.length === 0) return 0;
 
+  const roleField = table.fields.find((f) => f.name === "Role");
+  const ownerField = table.fields.find((f) => f.name === "Owner");
+
   const rowCount = candidateFields[0].values.length;
   let translatableCount = 0;
 
@@ -103,6 +106,8 @@ function extractFieldGroup(
       label: id.length > 60 ? id.slice(0, 60) + "…" : id,
       original,
       maxBytes: RISEN_MAX_BYTES,
+      risenRole: roleField?.values[r] || undefined,
+      risenOwner: ownerField?.values[r] || undefined,
     });
 
     const ctxParts: string[] = [];

@@ -1,5 +1,5 @@
 import React from "react";
-import { FILE_CATEGORIES, BDAT_CATEGORIES, DR_CATEGORIES } from "./types";
+import { FILE_CATEGORIES, BDAT_CATEGORIES, DR_CATEGORIES, RISEN_CATEGORIES } from "./types";
 import {
   AlertTriangle, Wrench, Loader2, Sparkles, RefreshCw,
   Monitor, Swords, Users, Skull, ScrollText, MapPin, BookOpen,
@@ -34,10 +34,11 @@ interface CategoryProgressProps {
   tagsCount?: number;
   isBdat?: boolean;
   isDanganronpa?: boolean;
+  isRisen?: boolean;
 }
 
-const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false }) => {
-  const categories = isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
+const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false }) => {
+  const categories = isRisen ? RISEN_CATEGORIES : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
   const activeCats = categories.filter(cat => categoryProgress[cat.id]);
   if (activeCats.length === 0 && !categoryProgress['other']) return null;
 

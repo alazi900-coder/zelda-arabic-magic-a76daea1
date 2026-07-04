@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Upload, ArrowRight, FileArchive, Download, Loader2, CheckCircle2, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
-import { extractEntriesFromP00, DEFAULT_ARABIC_TARGET_FIELD } from "@/lib/risen-extractor";
+import {
+  extractEntriesFromP00,
+  DEFAULT_ARABIC_TARGET_FIELD,
+  STAGEDIR_TARGET_FIELD,
+  isStageDirMsbtFile,
+  stripStageDirSuffix,
+} from "@/lib/risen-extractor";
 import { parseRisenP00Full, applyTranslations, buildRisenP00, makeKey } from "@/lib/risen-p00";
 import type { EditorState } from "@/components/editor/types";
 
@@ -24,6 +30,7 @@ const RisenProcess = () => {
   const [meta, setMeta] = useState<RisenMeta | null>(null);
   const [building, setBuilding] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [includeStageDir, setIncludeStageDir] = useState(false);
 
   const addLog = useCallback((msg: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString("ar-SA")}] ${msg}`]);
@@ -44,8 +51,9 @@ const RisenProcess = () => {
       const buffer = await file.arrayBuffer();
       addLog("تم تحميل الملف في الذاكرة، جاري تحليل جداول TAB0...");
 
-      const result = extractEntriesFromP00(buffer);
+      const result = extractEntriesFromP00(buffer, DEFAULT_ARABIC_TARGET_FIELD, { includeStageDir });
       addLog(`تم تحليل ${result.doc.tables.length} جدول: ${result.doc.tables.map((t) => t.name).join("، ")}`);
+      addLog(`المصدر: English_Text فقط (fallback إلى German_Text للصفوف الفاضية)${includeStageDir ? " + StageDir" : ""}`);
       for (const s of result.stats.perTable) {
         addLog(`  ${s.table}: ${s.rows} صف، ${s.translatable} قابل للترجمة`);
       }
@@ -100,7 +108,7 @@ const RisenProcess = () => {
     } finally {
       setBusy(false);
     }
-  }, [navigate, addLog]);
+  }, [navigate, addLog, includeStageDir]);
 
   const handleBuild = useCallback(async () => {
     setBuilding(true);
@@ -120,18 +128,20 @@ const RisenProcess = () => {
         return;
       }
 
-      // Convert editor keys `${msbtFile}:${index}` → rebuild keys makeKey(table, field, index)
-      const targetField = meta?.targetField ?? DEFAULT_ARABIC_TARGET_FIELD;
+      // Convert editor keys `${msbtFile}:${index}` → rebuild keys makeKey(table, field, index).
+      // msbtFile is either the table name (English_Text) or `${table}:stagedir` (English_StageDir).
       const translations = new Map<string, string>();
       let translatedCount = 0;
       for (const [key, value] of Object.entries(editorState.translations)) {
         if (!value?.trim()) continue;
-        const parts = key.split(":");
-        if (parts.length !== 2) continue;
-        const [table, indexStr] = parts;
-        const index = parseInt(indexStr, 10);
+        const lastColon = key.lastIndexOf(":");
+        if (lastColon === -1) continue;
+        const msbtFile = key.slice(0, lastColon);
+        const index = parseInt(key.slice(lastColon + 1), 10);
         if (isNaN(index)) continue;
-        translations.set(makeKey(table, targetField, index), value);
+        const table = stripStageDirSuffix(msbtFile);
+        const fieldForEntry = isStageDirMsbtFile(msbtFile) ? STAGEDIR_TARGET_FIELD : DEFAULT_ARABIC_TARGET_FIELD;
+        translations.set(makeKey(table, fieldForEntry, index), value);
         translatedCount++;
       }
       addLog(`تم جمع ${translatedCount} ترجمة من المحرر`);
@@ -154,7 +164,7 @@ const RisenProcess = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "strings.p00";
+      a.download = meta?.filename || "strings.p00";
       a.click();
       URL.revokeObjectURL(url);
 
@@ -190,14 +200,24 @@ const RisenProcess = () => {
               <Upload className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="font-display font-bold">1. ارفع strings.p00</h2>
+              <h2 className="font-display font-bold">1. ارفع strings.p00 أو strings.pak</h2>
               <p className="text-sm text-muted-foreground">من مسار <code className="font-mono">_work/Data/Strings/</code></p>
             </div>
           </div>
+          <label className="flex items-center gap-2 mb-3 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              checked={includeStageDir}
+              onChange={(e) => setIncludeStageDir(e.target.checked)}
+              disabled={busy}
+              className="rounded border-border"
+            />
+            إظهار نصوص StageDir (توجيه أداء قصير، مثل "يضحك")
+          </label>
           <label className="block">
             <input
               type="file"
-              accept="*/*"
+              accept=".p00,.pak"
               className="hidden"
               disabled={busy}
               onChange={(e) => {
@@ -214,7 +234,7 @@ const RisenProcess = () => {
               ) : (
                 <>
                   <FileArchive className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm">اضغط لاختيار strings.p00</p>
+                  <p className="text-sm">اضغط لاختيار strings.p00 أو strings.pak</p>
                 </>
               )}
             </div>
@@ -256,9 +276,10 @@ const RisenProcess = () => {
                 <Download className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h2 className="font-display font-bold">3. بناء strings.p00 المُعرَّب</h2>
+                <h2 className="font-display font-bold">3. بناء الملف المُعرَّب</h2>
                 <p className="text-sm text-muted-foreground">
-                  يقرأ ترجمات المحرر ويستبدل حقل <code className="font-mono">{meta.targetField}</code> بها
+                  يقرأ ترجمات المحرر ويستبدل حقل <code className="font-mono">{meta.targetField}</code>
+                  {" "}(و<code className="font-mono">{STAGEDIR_TARGET_FIELD}</code> إن وُجد) بها
                 </p>
               </div>
             </div>

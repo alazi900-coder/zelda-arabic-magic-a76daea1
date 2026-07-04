@@ -86,8 +86,8 @@ export function makeKey(table: string, field: string, rowIndex: number): string 
 // إعدادات التصنيف
 // ============================================================================
 
-const TEXT_FIELD_REGEX = /^(German|English|French|Italian|Spanish)_Text$/;
-const STAGEDIR_FIELD_REGEX = /^(German|English|French)_StageDir$/;
+const TEXT_FIELD_REGEX = /^(German|English|French|Italian|Spanish|Polish|Russian)_[Tt]ext$/;
+const STAGEDIR_FIELD_REGEX = /^(German|English|French|Italian|Spanish|Polish|Russian)_StageDir$/;
 
 export function isTranslatableField(fieldName: string): boolean {
   return TEXT_FIELD_REGEX.test(fieldName) || STAGEDIR_FIELD_REGEX.test(fieldName);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRisenP00Full, buildRisenP00, applyTranslations, makeKey } from "@/lib/risen-p00";
+import { parseRisenP00Full, buildRisenP00, applyTranslations, makeKey, isTranslatableField } from "@/lib/risen-p00";
 import { extractEntriesFromP00 } from "@/lib/risen-extractor";
 
 /**
@@ -237,6 +237,79 @@ describe("Risen per-row source-language fallback", () => {
     expect(result.entries.length).toBe(2);
     expect(result.entries[0].original).toBe("Hello");
     expect(result.entries[1].original).toBe("Nur Deutsch");
+  });
+});
+
+describe("Risen English-only extraction (multi-language .pak tables)", () => {
+  it("only sources from English_Text, falling back to German_Text per row — other 5 languages never surface", () => {
+    const table = buildTab0([
+      { name: "ID", values: ["Q1", "Q2"] },
+      { name: "German_Text", values: ["Hallo Welt", "Nur Deutsch"] },
+      { name: "English_Text", values: ["Hello world", ""] },
+      { name: "French_Text", values: ["Bonjour le monde", "Seulement français"] },
+      { name: "Italian_Text", values: ["Ciao mondo", "Solo italiano"] },
+      { name: "Spanish_text", values: ["Hola mundo", "Solo español"] },
+      { name: "Polish_text", values: ["Witaj świecie", "Tylko polski"] },
+      { name: "Russian_Text", values: ["Привет мир", "Только русский"] },
+    ]);
+    const buffer = wrapAsFile([table], ["quests.tab"]);
+
+    const result = extractEntriesFromP00(buffer);
+    expect(result.entries.length).toBe(2);
+    expect(result.entries[0].original).toBe("Hello world");
+    // English empty for row 2 → falls back to German specifically, not French/Italian/etc.
+    expect(result.entries[1].original).toBe("Nur Deutsch");
+
+    const allOriginals = result.entries.map((e) => e.original);
+    for (const leaked of ["Bonjour le monde", "Seulement français", "Ciao mondo", "Hola mundo", "Witaj świecie", "Привет мир"]) {
+      expect(allOriginals).not.toContain(leaked);
+    }
+  });
+
+  it("excludes StageDir fields by default, includes them only when includeStageDir is set", () => {
+    const table = buildTab0([
+      { name: "ID", values: ["I1"] },
+      { name: "English_Text", values: ["Hello"] },
+      { name: "English_StageDir", values: ["(laughs)"] },
+      { name: "German_StageDir", values: ["(lacht)"] },
+    ]);
+    const buffer = wrapAsFile([table], ["infos.tab"]);
+
+    const withoutStageDir = extractEntriesFromP00(buffer);
+    expect(withoutStageDir.entries.length).toBe(1);
+    expect(withoutStageDir.entries[0].original).toBe("Hello");
+
+    const withStageDir = extractEntriesFromP00(buffer, "English_Text", { includeStageDir: true });
+    expect(withStageDir.entries.length).toBe(2);
+    const stageDirEntry = withStageDir.entries.find((e) => e.msbtFile.endsWith(":stagedir"));
+    expect(stageDirEntry?.original).toBe("(laughs)");
+  });
+});
+
+describe("Risen translatable field whitelist (mixed-case languages, .pak)", () => {
+  it("recognizes lowercase '_text' suffix variants and the 2 new languages", () => {
+    expect(isTranslatableField("Polish_text")).toBe(true);
+    expect(isTranslatableField("Spanish_text")).toBe(true);
+    expect(isTranslatableField("Polish_Text")).toBe(true);
+    expect(isTranslatableField("Russian_Text")).toBe(true);
+    expect(isTranslatableField("Polish_StageDir")).toBe(true);
+    expect(isTranslatableField("Russian_StageDir")).toBe(true);
+    expect(isTranslatableField("Owner")).toBe(false);
+  });
+
+  it("preserves the original field name casing exactly on rebuild (Polish_text stays lowercase)", () => {
+    const table = buildTab0([
+      { name: "ID", values: ["Q1"] },
+      { name: "English_Text", values: ["Hello"] },
+      { name: "Polish_text", values: ["Witaj"] },
+    ]);
+    const buffer = wrapAsFile([table], ["quests.tab"]);
+    const doc = parseRisenP00Full(buffer);
+    const rebuilt = buildRisenP00(doc);
+    const reparsed = parseRisenP00Full(rebuilt);
+    const fieldNames = reparsed.tables[0].fields.map((f) => f.name);
+    expect(fieldNames).toContain("Polish_text");
+    expect(fieldNames).not.toContain("Polish_Text");
   });
 });
 

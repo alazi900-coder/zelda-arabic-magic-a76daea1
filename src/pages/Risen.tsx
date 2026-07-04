@@ -38,7 +38,7 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
             </span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-lg mx-auto font-body">
-            استخراج نصوص لعبة Risen 1 من ملف <code className="font-mono text-sm px-1.5 py-0.5 rounded bg-muted">strings.p00</code> وترجمتها إلى العربية، ثم إعادة بناء الملف جاهزاً للعبة.
+            استخراج نصوص لعبة Risen 1 من ملف <code className="font-mono text-sm px-1.5 py-0.5 rounded bg-muted">strings.p00</code> أو <code className="font-mono text-sm px-1.5 py-0.5 rounded bg-muted">strings.pak</code> وترجمتها إلى العربية، ثم إعادة بناء الملف جاهزاً للعبة.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
             <Link to="/risen/process">
@@ -72,7 +72,7 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
               <strong className="font-display block mb-1">قيود مهمة قبل البدء</strong>
               <ul className="list-disc pr-5 space-y-1 text-muted-foreground">
                 <li>محرك اللعبة (Genome Engine) يستخدم <strong>خطوط نقطية (Bitmap)</strong> بترميز CP1252 ولا يدعم Unicode أصلاً. النص العربي سيُكتب صحيحاً في الملف، لكن اللعبة لن تعرضه ما لم يُستبدل الخط لاحقاً — استبدال الخط خارج نطاق هذه المرحلة.</li>
-                <li>افتراضياً نستبدل النص الإنجليزي (<code className="font-mono text-xs">English_Text</code>) بالعربي.</li>
+                <li>يعرض المحرر النص الإنجليزي فقط كمصدر للترجمة (مع رجوع تلقائي للألماني لو صف معيّن نصه الإنجليزي فاضٍ). باقي اللغات لا تظهر بالمحرر، ونستبدل <code className="font-mono text-xs">English_Text</code> بالعربي عند البناء.</li>
               </ul>
             </div>
           </div>
@@ -82,16 +82,16 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
       <GameInfoSection
         accentColor={ACCENT}
         secondaryColor={SECONDARY}
-        fileFormat="strings.p00"
-        fileFormatDesc="ملف واحد يحتوي كل نصوص اللعبة القابلة للترجمة (المهام، الحوارات، الوثائق) بصيغة TAB0 داخلية وبترميز UTF-16LE."
+        fileFormat="strings.p00 / strings.pak"
+        fileFormatDesc="ملف واحد يحتوي كل نصوص اللعبة القابلة للترجمة (المهام، الحوارات، الوثائق، وغيرها) بصيغة TAB0 داخلية وبترميز UTF-16LE. النسخة الأحدث من اللعبة تستخدم امتداد .pak بنفس البنية الداخلية بالضبط."
         requiredFiles={[
-          { name: "strings.p00", desc: "يوجد في مسار _work/Data/Strings داخل مجلد اللعبة" },
+          { name: "strings.p00", desc: "يوجد في مسار _work/Data/Strings داخل مجلد اللعبة (النسخة الأصلية)" },
+          { name: "strings.pak", desc: "نفس المسار، بنفس البنية الداخلية (النسخة الأحدث من اللعبة)" },
         ]}
         tools={[
-          { name: "أداتنا", desc: "استخراج الجداول الثلاثة (quests / infos / documents) وترجمتها ثم إعادة بناء الملف تلقائياً" },
-          { name: "GenomePak (خارجي)", desc: "لفك واستخراج ملفات .pak من مجلد اللعبة قبل الوصول إلى strings.p00 (خارج نطاق هذه الأداة حالياً)" },
+          { name: "أداتنا", desc: "استخراج كل الجداول الداخلية (المهام، الحوارات، الوثائق، وغيرها) وترجمتها ثم إعادة بناء الملف تلقائياً" },
         ]}
-        method="ارفع ملف strings.p00. الأداة تفكّ الجداول الثنائية الثلاثة، وتعرض النصوص الإنجليزية في المحرر لتترجمها إلى العربية باستخدام كامل ميزات المحرر (AI، القاموس، ذاكرة الترجمة، إلخ). عند الانتهاء، ارجع إلى صفحة Risen واضغط 'بناء الملف' لتحميل strings.p00 جديد."
+        method="ارفع ملف strings.p00 أو strings.pak. الأداة تفكّ كل الجداول الداخلية، وتعرض النص الإنجليزي فقط بالمحرر لتترجمه إلى العربية باستخدام كامل ميزات المحرر (AI، القاموس، ذاكرة الترجمة، إلخ). عند الانتهاء، ارجع إلى صفحة Risen واضغط 'بناء الملف' لتحميل الملف المُعرَّب."
         notes="لعمل الترجمة ظاهرة داخل اللعبة، يلزم لاحقاً استبدال ملف الخط (bitmap font) بخط يدعم Unicode/العربية — هذه المرحلة تنتج الملف النصي الصحيح فقط."
       />
     </div>

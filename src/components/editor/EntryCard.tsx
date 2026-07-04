@@ -8,8 +8,11 @@ import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
-import { hasOrphanLines, visualLength, splitEvenlyByLines, splitByOriginalBreaks } from "@/lib/balance-lines";
-import { countEffectiveLines } from "@/lib/text-tokens";
+import {
+  hasOrphanLines, visualLength, splitEvenlyByLines, splitByOriginalBreaks,
+  hasEngineLineBreakTags, mapTranslationToLineSkeleton,
+} from "@/lib/balance-lines";
+import { countEffectiveLines, countLines } from "@/lib/text-tokens";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
 import { fixMixedBidi } from "@/lib/arabic-processing";
@@ -320,11 +323,22 @@ const EntryCard: React.FC<EntryCardProps> = ({
               ))}
             </div>
           )}
-          {entry.original.includes('\n') && (
-            <span className="inline-flex text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 mb-2">
-              ↵ {entry.original.split('\n').length} أسطر في الأصل
-            </span>
-          )}
+          {entry.original.includes('\n') && (() => {
+            const origLineCount = countLines(entry.original);
+            const trLineCount = translation?.trim() ? countLines(translation) : null;
+            // Live feedback: green once the draft's line count matches the
+            // original, red/warning while it differs, neutral before any draft.
+            const colorClass = trLineCount === null
+              ? 'bg-accent/10 text-accent border-accent/20'
+              : trLineCount === origLineCount
+                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                : 'bg-destructive/10 text-destructive border-destructive/20';
+            return (
+              <span className={`inline-flex text-[10px] px-1.5 py-0.5 rounded border mb-2 ${colorClass}`}>
+                ↵ {origLineCount} سطرًا ({origLineCount - 1} فاصلًا){trLineCount !== null && trLineCount !== origLineCount ? ` — الترجمة: ${trLineCount}` : ''}
+              </span>
+            );
+          })()}
           {translation?.trim() && (() => {
             const confidence = computeConfidence(entry, translation);
             const isLiteral = detectLiteralTranslation(entry.original, translation);
@@ -363,7 +377,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
                     🌐 إصلاح الاتجاه ↩
                   </Button>
                 )}
-                {translation && (() => {
+                {translation && hasEngineLineBreakTags(entry.original) && (() => {
                   const engLines = countEffectiveLines(entry.original);
                   const arbLines = countEffectiveLines(translation);
                   if (engLines === arbLines) return null;
@@ -394,6 +408,40 @@ const EntryCard: React.FC<EntryCardProps> = ({
                         : `إعادة توزيع الترجمة على ${engLines} أسطر لتطابق الأصل`}
                     >
                       📐 إصلاح الأسطر ({arbLines}→{engLines})
+                    </Button>
+                  );
+                })()}
+                {/* Plain multi-line text with no engine tags (e.g. Risen documents) —
+                    structure-mapping fix: never flattens, refuses instead of guessing. */}
+                {translation && !hasEngineLineBreakTags(entry.original) && (() => {
+                  const origLineCount = countLines(entry.original);
+                  if (origLineCount <= 1) return null;
+                  const trLineCount = countLines(translation);
+                  if (origLineCount === trLineCount) return null;
+                  return (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[11px] px-2 gap-1 border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                      onClick={() => {
+                        const result = mapTranslationToLineSkeleton(entry.original, translation);
+                        if (result.ok && result.text) {
+                          updateTranslation(key, result.text);
+                          toast({
+                            title: '🔧 إصلاح الأسطر',
+                            description: `تمت إعادة توزيع الترجمة على ${origLineCount} سطرًا مطابقة للأصل`,
+                          });
+                        } else {
+                          toast({
+                            title: '⚠️ تعذّر إصلاح الأسطر',
+                            description: `الترجمة فيها ${result.actualContentLines} أسطر محتوى، الأصل يتطلب ${result.expectedContentLines}`,
+                            variant: 'destructive',
+                          });
+                        }
+                      }}
+                      title={`إعادة توزيع الترجمة على ${origLineCount} سطرًا لتطابق الأصل`}
+                    >
+                      📐 إصلاح الأسطر ({trLineCount}→{origLineCount})
                     </Button>
                   );
                 })()}

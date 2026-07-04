@@ -530,6 +530,109 @@ export function splitByOriginalBreaks(original: string, translation: string): st
   return result;
 }
 
+/**
+ * Does `text` use XC engine line-break tags ([XENO:n]/[System:PageBreak])?
+ * `splitByOriginalBreaks` only understands these — for plain multi-line text
+ * with no such tags (e.g. Risen in-game documents), it has no breaks to work
+ * with and collapses everything to one line. `mapTranslationToLineSkeleton`
+ * below is the correct tool for that case instead.
+ */
+export function hasEngineLineBreakTags(text: string): boolean {
+  return new RegExp(XENO_N_HARD_BREAK.source).test(text);
+}
+
+export type LineSlotKind = "empty" | "list" | "prose";
+
+/** The break style used by `text`: "\r\n" if present, else "\n". */
+export function detectBreakStyle(text: string): "\r\n" | "\n" {
+  return text.includes("\r\n") ? "\r\n" : "\n";
+}
+
+/**
+ * Classify each line of a plain multi-line original into a skeleton slot:
+ * empty (deliberate page-layout spacing), list item (starts with optional
+ * spaces then "-"), or prose.
+ */
+export function buildLineSkeleton(original: string): LineSlotKind[] {
+  return original.split(/\r\n|\n/).map((line) => {
+    if (line.trim() === "") return "empty";
+    if (/^\s*-/.test(line)) return "list";
+    return "prose";
+  });
+}
+
+export interface SkeletonMapResult {
+  ok: boolean;
+  text?: string;
+  expectedContentLines?: number;
+  actualContentLines?: number;
+}
+
+/**
+ * Map a user's translation onto the ORIGINAL's line skeleton — structure
+ * mapping, not rewrapping. Empty skeleton slots stay empty; every non-empty
+ * slot (list item or prose) consumes exactly one non-empty translation line,
+ * in order. Refuses (does not guess/merge) when the translation's content-line
+ * count doesn't match the skeleton's content-slot count — the caller should
+ * leave the text unchanged and surface `expectedContentLines`/`actualContentLines`
+ * to the user in that case. Preserves the original's break style (\r\n vs \n).
+ */
+export function mapTranslationToLineSkeleton(original: string, translation: string): SkeletonMapResult {
+  const skeleton = buildLineSkeleton(original);
+  const breakStyle = detectBreakStyle(original);
+  const expectedContentLines = skeleton.filter((slot) => slot !== "empty").length;
+
+  const contentLines = translation
+    .split(/\r\n|\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+
+  if (contentLines.length !== expectedContentLines) {
+    return { ok: false, expectedContentLines, actualContentLines: contentLines.length };
+  }
+
+  let i = 0;
+  const resultLines = skeleton.map((slot) => (slot === "empty" ? "" : contentLines[i++]));
+  return { ok: true, text: resultLines.join(breakStyle) };
+}
+
+/**
+ * Silently normalize `text`'s line-break style to match `source`'s (\r\n vs \n).
+ * No-op if `text` has no line breaks or already matches.
+ */
+export function normalizeBreakStyleToSource(source: string, text: string): string {
+  if (!text.includes("\n")) return text;
+  return detectBreakStyle(source) === "\r\n"
+    ? text.replace(/\r\n|\n/g, "\r\n")
+    : text.replace(/\r\n/g, "\n");
+}
+
+export interface LineStructureValidation {
+  ok: boolean;
+  originalLines: number;
+  translatedLines: number;
+  emptyMaskMatches: boolean;
+}
+
+/**
+ * Validate that `translated` reproduces `original`'s line structure: the same
+ * total line count AND the same positions of empty lines (order-sensitive).
+ */
+export function validateLineStructure(original: string, translated: string): LineStructureValidation {
+  const origLines = original.split(/\r\n|\n/);
+  const trLines = translated.split(/\r\n|\n/);
+  const origMask = origLines.map((line) => line.trim() === "");
+  const trMask = trLines.map((line) => line.trim() === "");
+  const sameCount = origLines.length === trLines.length;
+  const maskMatches = sameCount && origMask.every((v, i) => v === trMask[i]);
+  return {
+    ok: sameCount && maskMatches,
+    originalLines: origLines.length,
+    translatedLines: trLines.length,
+    emptyMaskMatches: maskMatches,
+  };
+}
+
 /** Check if text has orphan lines (single lexical word on a line) */
 export function hasOrphanLines(text: string): boolean {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);

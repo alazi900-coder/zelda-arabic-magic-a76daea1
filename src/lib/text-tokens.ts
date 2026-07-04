@@ -133,6 +133,22 @@ export function countHardBreaks(text: string): number {
 }
 
 /**
+ * Canonical, tag-agnostic line count: the number of lines a plain-text string
+ * splits into on \r\n or \n. Unlike `countEffectiveLines` (which additionally
+ * treats XC3 cinematic markers as breaks), this counts ONLY literal line
+ * breaks — the correct definition for plain multi-line text with no engine
+ * tags (e.g. Risen's in-game book/letter entries).
+ *
+ * A leading break produces an empty first line, which IS counted:
+ *   countLines("") === 1
+ *   countLines("\r\nA") === 2
+ *   countLines("A\r\nB") === 2
+ */
+export function countLines(text: string): number {
+  return text.split(/\r\n|\n/).length;
+}
+
+/**
  * Count the EFFECTIVE number of visible lines a string will render to in-game.
  *
  * The XC3 engine treats both literal `\n` and the cinematic markers

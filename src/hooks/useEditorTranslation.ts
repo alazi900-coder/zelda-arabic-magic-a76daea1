@@ -7,8 +7,9 @@ import {
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
-import { splitEvenlyByLines } from "@/lib/balance-lines";
+import { splitEvenlyByLines, normalizeBreakStyleToSource } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
+import { idbGet } from "@/lib/idb-storage";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
@@ -65,6 +66,16 @@ const PROVIDER_BATCH_DELAY_MS = {
   mymemory:   { free: 0,    paid: 0 },    // not AI; own char-budget logic
   google:     { free: 0,    paid: 0 },    // not AI
 } as const;
+
+/**
+ * Appended to the AI system prompt (via `extraInstructions`) ONLY for Risen
+ * sessions: Risen's in-game documents/letters use deliberate empty lines for
+ * page-layout spacing, which a naive translation would collapse or reflow.
+ */
+const RISEN_LINE_STRUCTURE_RULE =
+  "Line structure is part of the data. Reproduce the source's lines exactly: " +
+  "same total line count, empty lines in the same positions (including leading " +
+  "empty lines at the start of the text), one list item per line. Never merge lines.";
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
@@ -124,6 +135,32 @@ export function useEditorTranslation({
 
     return result;
   };
+  // Self-contained: detects a Risen session without touching useEditorState's
+  // shared prop signature (used by every game). Xenoblade/other sessions never
+  // set this idb key, so this stays false and nothing below changes for them.
+  const [isRisenSource, setIsRisenSource] = useState(false);
+  useEffect(() => {
+    idbGet<string>("editor-source-game").then((g) => setIsRisenSource(g === "risen")).catch(() => {});
+  }, []);
+
+  const buildExtraInstructions = (base: string): string | undefined => {
+    const parts = [base?.trim(), isRisenSource ? RISEN_LINE_STRUCTURE_RULE : ""].filter(Boolean);
+    return parts.length ? parts.join("\n\n") : undefined;
+  };
+
+  /** Silently restore each translated entry's break style (\r\n vs \n) to match
+   * its original — only does anything for Risen sessions (see isRisenSource). */
+  const normalizeRisenBreaks = (translations: Record<string, string>): Record<string, string> => {
+    if (!isRisenSource || !state?.entries?.length) return translations;
+    const byKey = new Map(state.entries.map((e) => [`${e.msbtFile}:${e.index}`, e]));
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(translations)) {
+      const entry = byKey.get(key);
+      out[key] = entry ? normalizeBreakStyleToSource(entry.original, value) : value;
+    }
+    return out;
+  };
+
   const [translating, setTranslating] = useState(false);
   const [translatingSingle, setTranslatingSingle] = useState<string | null>(null);
   const [tmStats, setTmStats] = useState<{ reused: number; sent: number } | null>(null);
@@ -195,7 +232,7 @@ export function useEditorTranslation({
         npcMaxLines,
         npcMode: npcMode || undefined,
         aiModel,
-        extraInstructions: customPromptInstructions || undefined,
+        extraInstructions: buildExtraInstructions(customPromptInstructions),
         routingMode: aiRoutingMode,
       }),
       fetcher: async (payload) => {
@@ -288,7 +325,7 @@ export function useEditorTranslation({
       }
     }
     const safeToApply = autoFixTags(toApply);
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...safeToApply } } : null);
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(safeToApply) } } : null);
     setPendingPageTranslations(null);
     setOldPageTranslations({});
     setPageTranslationOriginals({});
@@ -476,7 +513,7 @@ export function useEditorTranslation({
     const freeTranslations = { ...tmReused, ...glossaryReused };
     if (Object.keys(freeTranslations).length > 0) {
       const safeFreeTranslations = autoFixTags(freeTranslations);
-      setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...safeFreeTranslations } } : null);
+      setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(safeFreeTranslations) } } : null);
     }
     const tmCount = Object.keys(tmReused).length;
     const glossaryCount = Object.keys(glossaryReused).length;
@@ -519,7 +556,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode }),
         });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
@@ -711,7 +748,7 @@ export function useEditorTranslation({
             accepted[k] = v;
           }
           allTranslations = { ...allTranslations, ...accepted };
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...accepted } } : null);
+          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(accepted) } } : null);
         }
       }
       if (!abortControllerRef.current?.signal.aborted) {
@@ -780,7 +817,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -795,7 +832,7 @@ export function useEditorTranslation({
             if (ent && looksUntranslated(ent.original, v)) continue;
             accepted[k] = v;
           }
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...accepted } } : null);
+          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(accepted) } } : null);
         }
       }
       setTranslateProgress(`✅ تم إعادة ترجمة ${entriesToRetranslate.length} نص في هذه الصفحة`);
@@ -838,7 +875,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: customPromptInstructions || undefined, routingMode: aiRoutingMode }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -847,7 +884,7 @@ export function useEditorTranslation({
         if (data.translations) {
           const fixedTranslations = autoFixTags(data.translations);
           fixedCount += Object.keys(fixedTranslations).length;
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...fixedTranslations } } : null);
+          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(fixedTranslations) } } : null);
         }
       }
       setTranslateProgress(`✅ تم إصلاح ${fixedCount} نص تالف بنجاح`);
@@ -1000,7 +1037,7 @@ export function useEditorTranslation({
             myMemoryEmail: myMemoryEmail || undefined,
             npcMaxLines,
             aiModel,
-            extraInstructions: customPromptInstructions || undefined,
+            extraInstructions: buildExtraInstructions(customPromptInstructions),
               routingMode: aiRoutingMode,
           }),
         });
@@ -1198,7 +1235,7 @@ export function useEditorTranslation({
                 myMemoryEmail: myMemoryEmail || undefined,
                 npcMaxLines,
                 aiModel,
-                extraInstructions: customPromptInstructions || undefined,
+                extraInstructions: buildExtraInstructions(customPromptInstructions),
               routingMode: aiRoutingMode,
               }),
             });
@@ -1406,7 +1443,7 @@ export function useEditorTranslation({
       if (selectedKeys.has(key)) toApply[key] = val;
     }
     const safeTranslations = autoFixTags(toApply);
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...safeTranslations } } : null);
+    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(safeTranslations) } } : null);
     setShowGlossaryPreview(false);
     setGlossaryPreviewEntries([]);
     setPendingGlossaryTranslations({});
@@ -1451,7 +1488,7 @@ export function useEditorTranslation({
               rebalanceNewlines: rebalanceNewlines || undefined,
               npcMaxLines,
               aiModel,
-              extraInstructions: customPromptInstructions || undefined,
+              extraInstructions: buildExtraInstructions(customPromptInstructions),
               routingMode: aiRoutingMode,
             }),
           });
@@ -1462,7 +1499,7 @@ export function useEditorTranslation({
           if (data.translations?.[key]) {
             const fixedTranslations = autoFixTags({ [key]: data.translations[key] });
             recovered++;
-            setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...fixedTranslations } } : null);
+            setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(fixedTranslations) } } : null);
           } else {
             stillFailed.push(entry);
           }

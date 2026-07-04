@@ -27,6 +27,7 @@ import {
   buildSmartReorderUpdates,
   type RestoreReport,
 } from "@/lib/tag-restore";
+import { normalizeBreakStyleToSource } from "@/lib/balance-lines";
 export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();
@@ -806,6 +807,13 @@ export function useEditorState() {
           });
         }
       }
+    }
+
+    // Textareas normalize \r\n to \n on read — restore the entry's original
+    // break style so multi-line entries (e.g. Risen documents using \r\n)
+    // don't silently drift to \n on manual edits or AI translations.
+    if (entry) {
+      finalValue = normalizeBreakStyleToSource(entry.original, finalValue);
     }
 
     setState(prev => {

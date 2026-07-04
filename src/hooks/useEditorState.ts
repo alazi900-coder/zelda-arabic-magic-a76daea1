@@ -20,7 +20,7 @@ import { useEditorCleanup } from "@/hooks/useEditorCleanup";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
 import { deepDiagPredicates, matchesDeepDiagFilter } from "@/lib/deep-diagnostic-predicates";
 import { useAutoPilot } from "@/hooks/useAutoPilot";
-import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
+import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
 import {
   scanTranslationsForRestore,
   buildRestoreUpdates,

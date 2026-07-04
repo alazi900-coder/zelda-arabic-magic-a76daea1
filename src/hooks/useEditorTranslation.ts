@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
   ExtractedEntry, EditorState, PAGE_SIZE,
-  categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, isTechnicalText, hasTechnicalTags,
+  categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, isTechnicalText, hasTechnicalTags,
 } from "@/components/editor/types";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";

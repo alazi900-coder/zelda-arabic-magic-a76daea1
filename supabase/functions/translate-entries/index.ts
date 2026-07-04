@@ -140,6 +140,7 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
    - TAG_0, TAG_1, TAG_2, ... (technical tags)
    - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
    - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   - ⟦0⟧, ⟦1⟧, ... (Risen game tags — button prompts, variables, save-screen codes). Copy them EXACTLY as-is, in the same relative position as the input. Never translate what they might represent — you cannot see the real tag text, only its placeholder.
    Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
 4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it — never "ترجمة TAG_0 TAG_1" or "TAG_0 TAG_1 ترجمة". Tag position carries game meaning (icons, status, line markers).
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
@@ -231,9 +232,17 @@ const PROTECTED_ABBREVIATIONS = [
 ];
 const ABBREV_PATTERN = new RegExp(`\\b(${PROTECTED_ABBREVIATIONS.join('|')})\\b`, 'g');
 
+// Risen 1's own tag formats (confirmed from real extracted strings) — masked
+// proactively with a ⟦N⟧ marker distinct from TAG_N, only when _game ===
+// 'risen' (see protectTags below). Mirrors src/lib/risen-tag-guard.ts, the
+// client-side editor equivalent used for post-hoc repair; this is the
+// pre-emptive half — prevent the model from ever seeing the raw tag.
+const RISEN_TAG_REGEX = /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|\b(?:XXX|SGN|SGT|SGPT|SGL)\b|\bMM\b(?=\s*minutes)|\bHH\b(?=\s*hours)|\bDD\b(?=\s*days)/g;
+
 function protectTags(text: string): { cleaned: string; tags: Map<string, string> } {
   const tags = new Map<string, string>();
   let counter = 0;
+  let risenCounter = 0;
 
   // First: shield literal newlines as NEWLINE_N placeholders
   const nlParts = text.split('\n');
@@ -268,8 +277,17 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     ABBREV_PATTERN,                             // Game abbreviations
   ];
 
-  // Collect all matches
-  const matches: { start: number; end: number; original: string }[] = [];
+  // Collect all matches. Risen tags go first so they win any overlap against
+  // the generic Xenoblade patterns below (e.g. <Exit> would otherwise also
+  // match the generic HTML-like-tag pattern and get a TAG_N instead of ⟦N⟧).
+  const matches: { start: number; end: number; original: string; risen?: boolean }[] = [];
+  if (_game === 'risen') {
+    const risenRegex = new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags);
+    let rMatch: RegExpExecArray | null;
+    while ((rMatch = risenRegex.exec(shielded)) !== null) {
+      matches.push({ start: rMatch.index, end: rMatch.index + rMatch[0].length, original: rMatch[0], risen: true });
+    }
+  }
   for (const pattern of patterns) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let match: RegExpExecArray | null;
@@ -290,10 +308,9 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   let lastEnd = 0;
   for (const m of matches) {
     cleaned += shielded.slice(lastEnd, m.start);
-    const placeholder = `TAG_${counter}`;
+    const placeholder = m.risen ? `⟦${risenCounter++}⟧` : `TAG_${counter++}`;
     tags.set(placeholder, m.original);
     cleaned += placeholder;
-    counter++;
     lastEnd = m.end;
   }
   cleaned += shielded.slice(lastEnd);

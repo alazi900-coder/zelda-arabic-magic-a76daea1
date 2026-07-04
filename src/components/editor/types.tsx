@@ -11,6 +11,10 @@ export interface ExtractedEntry {
   label: string;
   original: string;
   maxBytes: number;
+  /** Risen 1: Role field for infos.tab rows (used for category classification). */
+  risenRole?: string;
+  /** Risen 1: Owner field (NPC name) for infos.tab rows. */
+  risenOwner?: string;
 }
 
 export interface EditorState {

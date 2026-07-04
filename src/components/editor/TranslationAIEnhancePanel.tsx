@@ -199,6 +199,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   onApplySuggestion,
   glossary,
 }) => {
+  // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
+  const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<EnhanceSuggestion[]>([]);
@@ -490,6 +492,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
               builtinOverrides: currentBuiltinOverrides,
               passes: SCAN_PASSES,
+              game: isRisen ? "risen" : "xenoblade",
             },
             signal: abortSignal,
           });
@@ -515,7 +518,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? "risen" : "xenoblade" },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;

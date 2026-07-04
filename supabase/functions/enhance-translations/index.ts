@@ -56,7 +56,7 @@ const RULES: RuleDef[] = [
   { id: 'detect_line_breaks', kind: 'detect', prompt: '**line_breaks** — فواصل الأسطر `\\n` و `[XENO:n]`:\n   • قارن **عدد ومواضع** فواصل الأسطر في الترجمة العربيّة بالنصّ الإنجليزي الأصلي:\n       – عدّ مرّات `[XENO:n]` (وسم تقنيّ) — يجب أن تتطابق عدداً وترتيباً مع الأصل\n       – عدّ مرّات `\\n` (حرف سطر جديد U+000A) — يجب أن تتطابق عدداً وترتيباً مع الأصل\n   • إذا فقدت الترجمة فاصلاً موجوداً في الأصل → أضِفه في موقعه الطبيعي (بين جملتَين متّسقتَين بنفس الموضع في الأصل)\n   • إذا أضافت الترجمة فاصلاً غير موجود في الأصل → احذفه\n   • لا تخلط بين `[XENO:n]` و `\\n` — كلٌّ منهما له موضعه ونوعه في الأصل، احتفظ بنفس النوع في نفس الموضع\n   • **مهم تقنيّاً:** `[XENO:n]` نصّ ASCII حرفيّ من 8 أحرف. `\\n` حرف Unicode واحد (U+000A). لا تخلط بينهما.\n   • لا تُغيّر معنى أو كلمات أو ترتيب النصّ — فقط أعِد ضبط فواصل الأسطر فقط لا غير.' },
   { id: 'detect_split_and_tags', kind: 'detect', prompt: '**split_and_tags** — التقسيم والوسوم التقنيّة:\n   • قارن طول الترجمة العربيّة بالنصّ الإنجليزي. إذا كانت أطول بكثير وتتجاوز سطر اللعبة، اختصرها قليلاً **مع الحفاظ على نفس المعنى تماماً** (ممنوع حذف معلومة أو تغيير القصد).\n   • أعِد التقسيم باستخدام `[XENO:n]` (الأساسي) أو `\\n` (نادر) بحيث تطابق مواضع التقسيم في النصّ الإنجليزي قدر الإمكان.\n   • أصلح الوسوم التقنيّة التالفة أو المفقودة: `[XENO:n]`, `[XENO:wait]`, `[Color:Red]`, `[Icon:*]`, `[System:PageBreak]` — استرجعها من الأصل بنفس العدد والترتيب. لا تُضِف وسماً غير موجود ولا تحذف وسماً موجوداً.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
-  { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 (${'${XC1_PROPER_NOUNS}'}) سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
+  { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'skip_preferences',    kind: 'protect', prompt: '🚫 لا تقترح تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة.' },
   { id: 'skip_hamza_only',     kind: 'protect', prompt: '🚫 لا تقترح تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ.' },
   { id: 'protect_tech_tags',   kind: 'protect', prompt: '⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.' },
@@ -278,7 +278,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -289,12 +289,20 @@ Deno.serve(async (req) => {
       customRules?: RuleDef[];
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
+      /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
+      game?: 'xenoblade' | 'risen';
     };
+    const isRisen = game === 'risen';
+    const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
     const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides);
-    // استبدل علامة ${XC1_PROPER_NOUNS} الحرفيّة في prompt قاعدة الأسماء.
-    ruleSections.protect = ruleSections.protect.replace(/\$\{XC1_PROPER_NOUNS\}/g, XC1_PROPER_NOUNS);
+    // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
+    // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
+    const properNounsSection = isRisen
+      ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
+      : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
+    ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
     if (ruleSections.detectCount === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -441,7 +449,7 @@ Deno.serve(async (req) => {
     // Grammar check mode — فحص قواعديّ صارم بدون تعديلات أسلوبيّة.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'grammar') {
-      const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ Xenoblade Chronicles 1. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط** (wrong / reorder / weak) بناءً على القواعد المُفعَّلة أدناه:
+      const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط** (wrong / reorder / weak) بناءً على القواعد المُفعَّلة أدناه:
 
 ${ruleSections.detect}
 
@@ -489,7 +497,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         passes || 1,
         () => callOnceParse(
           [
-            { role: 'system', content: 'أنت مدقّق لغويّ عربيّ متخصّص في ترجمة Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة. كن شاملاً — أعِد كل المشاكل الحقيقيّة في مرّة واحدة.' },
+            { role: 'system', content: `أنت مدقّق لغويّ عربيّ متخصّص في ترجمة ${gameLabel}. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة. كن شاملاً — أعِد كل المشاكل الحقيقيّة في مرّة واحدة.` },
             { role: 'user', content: grammarPrompt },
           ],
           'issues',
@@ -526,7 +534,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     // نهائيّاً واحداً لكلّ مدخل يجمع كلّ الإصلاحات معاً (بلا تصادم).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'combined') {
-      const combinedPrompt = `أنت مدقّق ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص فقط القواعد المُفعَّلة أدناه، ولا تُبلّغ عن أي نوع مشكلة غير مذكور في القواعد المُفعَّلة. أعِد **نصّاً نهائيّاً واحداً** يجمع الإصلاحات المسموح بها فقط في حقل suggested.
+      const combinedPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تُبلّغ عن أي نوع مشكلة غير مذكور في القواعد المُفعَّلة. أعِد **نصّاً نهائيّاً واحداً** يجمع الإصلاحات المسموح بها فقط في حقل suggested.
 
 صنّف الفئة الرئيسيّة (wrong/reorder/weak/style) بناءً على القواعد التالية:
 
@@ -586,7 +594,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         passes || 1,
         () => callOnceParse(
           [
-            { role: 'system', content: 'أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ Xenoblade Chronicles 1. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل. كن شاملاً — أعِد كل المشاكل دفعةً واحدةً.' },
+            { role: 'system', content: `أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل. كن شاملاً — أعِد كل المشاكل دفعةً واحدةً.` },
             { role: 'user', content: combinedPrompt },
           ],
           'results',
@@ -632,7 +640,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Enhance mode — تحسين صياغة + اقتراح بدائل (مع التزام صارم بالقاموس).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ Xenoblade Chronicles 1. افحص فقط القواعد المُفعَّلة أدناه، ولا تقترح أي تعديل خارجها.
+      const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تقترح أي تعديل خارجها.
 
 ${ruleSections.detect}
 
@@ -677,7 +685,9 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       passes || 1,
       () => callOnceParse(
         [
-          { role: 'system', content: 'أنت مترجم ومراجع محترف لـ Xenoblade Chronicles 1 (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.' },
+          { role: 'system', content: isRisen
+            ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
+            : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
           { role: 'user', content: enhancePrompt },
         ],
         'suggestions',

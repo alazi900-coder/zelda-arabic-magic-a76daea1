@@ -44,8 +44,33 @@ const GAME_LABELS: Record<string, string> = {
   risen: 'لعبة Risen 1 (محرك Genome — عالم RPG مفتوح بطابع قروسطي)',
 };
 
+// Risen 1's own tag formats (mirrors supabase/functions/translate-entries/index.ts
+// and src/lib/risen-tag-guard.ts) — masked with a ⟦N⟧ marker before the target
+// text reaches the model, so it never sees (and can't mistranslate) the raw tag.
+const RISEN_TAG_REGEX = /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|\b(?:XXX|SGN|SGT|SGPT|SGL)\b|\bMM\b(?=\s*minutes)|\bHH\b(?=\s*hours)|\bDD\b(?=\s*days)/g;
+
+function maskRisenTags(text: string): { masked: string; tags: string[] } {
+  const tags: string[] = [];
+  const masked = text.replace(new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags), (m) => {
+    tags.push(m);
+    return `⟦${tags.length - 1}⟧`;
+  });
+  return { masked, tags };
+}
+
+function unmaskRisenTags(text: string, tags: string[]): string {
+  let result = text;
+  tags.forEach((tag, i) => {
+    result = result.split(`⟦${i}⟧`).join(tag);
+  });
+  return result;
+}
+
 function buildSystemPrompt(game?: string): string {
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
+  const risenTagRule = game === 'risen'
+    ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'
+    : '';
   return `أنت مترجم ألعاب فيديو متخصص في ${gameLabel}.
 قدّم 3 اقتراحات مختلفة لترجمة النص المستهدف بأساليب متنوعة:
 - formal (رسمي): لغة فصحى مهذبة مناسبة للقصة الرئيسية والشخصيات الرسمية.
@@ -58,7 +83,7 @@ function buildSystemPrompt(game?: string): string {
 3. لا تخترع شخصيات أو معلومات. استخدم السياق المُعطى (وهوية المتحدث إن وُجدت) لفهم نبرة الحديث فقط.
 4. اشرح سبب كل اقتراح في جملة عربية موجزة (≤ 15 كلمة).
 5. confidence رقم بين 0 و 1 يعكس ثقتك في ملاءمة الاقتراح للسياق.
-6. contextNote: ملاحظة عربية قصيرة جداً (سطر واحد) عن السياق العام.`;
+6. contextNote: ملاحظة عربية قصيرة جداً (سطر واحد) عن السياق العام.${risenTagRule}`;
 }
 
 const SUGGESTIONS_JSON_SCHEMA_HINT = `أعد JSON بالشكل التالي بالضبط ولا تضف أي نص خارجه:
@@ -241,6 +266,15 @@ Deno.serve(async (req) => {
 
   const provider = body.provider || 'gemini';
 
+  // Risen-only proactive tag masking — the model never sees the raw tag, so it
+  // can't mistranslate it. Restored on every returned suggestion before responding.
+  let risenTags: string[] = [];
+  if (body.game === 'risen') {
+    const { masked, tags } = maskRisenTags(body.target.original);
+    body = { ...body, target: { ...body.target, original: masked } };
+    risenTags = tags;
+  }
+
   try {
     let parsed: any;
     if (provider === 'deepseek') {
@@ -254,6 +288,11 @@ Deno.serve(async (req) => {
       const apiKey = Deno.env.get('LOVABLE_API_KEY');
       if (!apiKey) return jsonResponse({ error: 'Missing LOVABLE_API_KEY' }, 500);
       parsed = await callLovable(body, apiKey, DEFAULT_LOVABLE_MODEL);
+    }
+    if (risenTags.length > 0 && Array.isArray(parsed?.suggestions)) {
+      for (const s of parsed.suggestions) {
+        if (typeof s?.translation === 'string') s.translation = unmaskRisenTags(s.translation, risenTags);
+      }
     }
     return jsonResponse(parsed);
   } catch (e) {

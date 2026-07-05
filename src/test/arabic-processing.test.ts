@@ -275,4 +275,25 @@ describe('Arabic Processing', () => {
       expect(result).toContain('1[ML]');
     });
   });
+
+  // Risen build path applies reshapeArabic (letter joining) WITHOUT reverseBidi
+  // (see src/lib/risen-extractor.ts) — confirm Risen's own tag formats survive
+  // reshaping untouched, same guarantee Xenoblade's [Tag] syntax has above.
+  describe('reshapeArabic preserves Risen tag formats (no reverseBidi applied)', () => {
+    it('preserves <Exit>-style button tags', () => {
+      const input = 'اضغط <Exit> للخروج';
+      expect(reshapeArabic(input)).toContain('<Exit>');
+    });
+
+    it('preserves $(name)-style variables', () => {
+      const input = 'مرحباً $(name)، كيف حالك؟';
+      expect(reshapeArabic(input)).toContain('$(name)');
+    });
+
+    it('joins disconnected Arabic letters into presentation forms', () => {
+      const input = 'متابعة';
+      const reshaped = reshapeArabic(input);
+      expect(hasArabicPresentationForms(reshaped)).toBe(true);
+    });
+  });
 });

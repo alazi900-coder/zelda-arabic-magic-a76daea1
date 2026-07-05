@@ -28,6 +28,7 @@ import {
 } from "./risen-p00";
 import { idbGet } from "./idb-storage";
 import { hasRisenTags, restoreRisenTags } from "./risen-tag-guard";
+import { hasArabicChars, reshapeArabic, stripDiacritics } from "./arabic-processing";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";
@@ -230,6 +231,16 @@ export async function buildRisenOutputFromState(
         value = repaired.text;
         tagRepairCount++;
       }
+    }
+
+    // Risen's Genome engine renders raw logical-order Arabic Unicode with
+    // disconnected letters (no contextual shaping) — reshape into joined
+    // presentation forms before writing, same font-limitation fix Xenoblade
+    // needs. Unlike Xenoblade this does NOT reverse BiDi order (unconfirmed
+    // whether Risen's engine needs that); reshapeArabic leaves non-Arabic
+    // characters (tags, digits, Latin) untouched.
+    if (hasArabicChars(value)) {
+      value = reshapeArabic(stripDiacritics(value));
     }
 
     const table = stripStageDirSuffix(msbtFile);

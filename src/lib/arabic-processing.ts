@@ -343,7 +343,7 @@ export function removeArabicPresentationForms(text: string): string {
 }
 
 /** Strip all Arabic diacritics/tashkeel */
-function stripDiacritics(text: string): string {
+export function stripDiacritics(text: string): string {
   return text.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '');
 }
 

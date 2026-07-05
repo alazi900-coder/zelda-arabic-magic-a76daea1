@@ -3,6 +3,7 @@ import { toast } from "@/hooks/use-toast";
 import type { EditorState, ExtractedEntry } from "@/components/editor/types";
 import { isTechnicalText } from "@/components/editor/types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 
 export interface AutoPilotLog {
   id: number;
@@ -167,7 +168,7 @@ export function useAutoPilot({
     }
     const addTranslations = (t: Record<string, string>) => {
       if (isPreview) { Object.assign(pendingAcc, t); }
-      else { setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...t } } : null); }
+      else { setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, t) } : null); }
     };
 
     const freeChoice = pickFreeProvider();
@@ -598,7 +599,7 @@ export function useAutoPilot({
       if (pendingTranslations[key] !== undefined) toApply[key] = pendingTranslations[key];
     }
     if (Object.keys(toApply).length > 0) {
-      setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...toApply } } : null);
+      setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, toApply) } : null);
     }
     setPendingTranslations(null);
   }, [pendingTranslations, setState]);

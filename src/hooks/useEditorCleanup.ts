@@ -5,6 +5,7 @@ import { scanAllTextFixes, scanLonelyLamFixes } from "@/lib/arabic-text-fixes";
 import { visualLength, splitEvenlyByLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { restoreTagsLocally, hasTechnicalTags } from "@/components/editor/types";
+import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import type { EditorState, ExtractedEntry } from "@/components/editor/types";
 import type { NewlineCleanResult } from "@/components/editor/NewlineCleanPanel";
 import type { DiacriticsCleanResult } from "@/components/editor/DiacriticsCleanPanel";
@@ -82,7 +83,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     if (!state || !diacriticsCleanResults) return;
     const item = diacriticsCleanResults.find((r) => r.key === key);
     if (!item) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setDiacriticsCleanResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, diacriticsCleanResults]);
 
@@ -93,9 +94,9 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllDiacriticsCleans = useCallback(() => {
     if (!state || !diacriticsCleanResults) return;
     const pending = diacriticsCleanResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
-    for (const item of pending) newTranslations[item.key] = item.after;
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    const updates: Record<string, string> = {};
+    for (const item of pending) updates[item.key] = item.after;
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setDiacriticsCleanResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم إزالة التشكيلات من ${pending.length} ترجمة`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -126,7 +127,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     if (!state || !newlineCleanResults) return;
     const item = newlineCleanResults.find((r) => r.key === key);
     if (!item) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setNewlineCleanResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, newlineCleanResults]);
 
@@ -137,9 +138,9 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllNewlineCleans = useCallback(() => {
     if (!state || !newlineCleanResults) return;
     const pending = newlineCleanResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
-    for (const item of pending) newTranslations[item.key] = item.after;
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    const updates: Record<string, string> = {};
+    for (const item of pending) updates[item.key] = item.after;
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setNewlineCleanResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم تنظيف ${pending.length} ترجمة من الرموز غير المرغوبة`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -189,7 +190,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     const item = newlineSplitResults.find((r) => r.key === key);
     if (!item) return;
     setPreviousTranslations(old => ({ ...old, [key]: state.translations[key] || '' }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setNewlineSplitResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, newlineSplitResults]);
 
@@ -200,11 +201,11 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllNewlineSplits = useCallback(() => {
     if (!state || !newlineSplitResults) return;
     const pending = newlineSplitResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
+    const updates: Record<string, string> = {};
     const prevTrans: Record<string, string> = {};
-    for (const item of pending) { prevTrans[item.key] = newTranslations[item.key] || ''; newTranslations[item.key] = item.after; }
+    for (const item of pending) { prevTrans[item.key] = state.translations[item.key] || ''; updates[item.key] = item.after; }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setNewlineSplitResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم تقسيم ${pending.length} نص مضغوط`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -268,7 +269,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     const item = npcSplitResults.find((r) => r.key === key);
     if (!item) return;
     setPreviousTranslations(old => ({ ...old, [key]: state.translations[key] || '' }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setNpcSplitResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, npcSplitResults]);
 
@@ -279,11 +280,11 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllNpcSplits = useCallback(() => {
     if (!state || !npcSplitResults) return;
     const pending = npcSplitResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
+    const updates: Record<string, string> = {};
     const prevTrans: Record<string, string> = {};
-    for (const item of pending) { prevTrans[item.key] = newTranslations[item.key] || ''; newTranslations[item.key] = item.after; }
+    for (const item of pending) { prevTrans[item.key] = state.translations[item.key] || ''; updates[item.key] = item.after; }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setNpcSplitResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم تقسيم ${pending.length} نص NPC`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -332,7 +333,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     const item = lineSyncResults.find((r) => r.key === key);
     if (!item) return;
     setPreviousTranslations(old => ({ ...old, [key]: state.translations[key] || '' }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setLineSyncResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, lineSyncResults]);
 
@@ -343,11 +344,11 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllLineSyncs = useCallback(() => {
     if (!state || !lineSyncResults) return;
     const pending = lineSyncResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
+    const updates: Record<string, string> = {};
     const prevTrans: Record<string, string> = {};
-    for (const item of pending) { prevTrans[item.key] = newTranslations[item.key] || ''; newTranslations[item.key] = item.after; }
+    for (const item of pending) { prevTrans[item.key] = state.translations[item.key] || ''; updates[item.key] = item.after; }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setLineSyncResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم مزامنة أسطر ${pending.length} ترجمة`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -503,7 +504,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     const item = unifiedSplitResults.find((r) => r.key === key);
     if (!item) return;
     setPreviousTranslations(old => ({ ...old, [key]: state.translations[key] || '' }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setUnifiedSplitResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, unifiedSplitResults]);
 
@@ -514,11 +515,11 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllUnifiedSplits = useCallback(() => {
     if (!state || !unifiedSplitResults) return;
     const pending = unifiedSplitResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
+    const updates: Record<string, string> = {};
     const prevTrans: Record<string, string> = {};
-    for (const item of pending) { prevTrans[item.key] = newTranslations[item.key] || ''; newTranslations[item.key] = item.after; }
+    for (const item of pending) { prevTrans[item.key] = state.translations[item.key] || ''; updates[item.key] = item.after; }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setUnifiedSplitResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم تقسيم ومزامنة ${pending.length} نص`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -532,7 +533,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     const after = splitAtWordBoundary(translation, newlineSplitCharLimit);
     if (after === translation) return;
     setPreviousTranslations(old => ({ ...old, [key]: translation }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: after }) } : null);
     setLastSaved("✅ تم تقسيم النص");
     setTimeout(() => setLastSaved(""), 3000);
   }, [state, splitAtWordBoundary]);
@@ -541,17 +542,17 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleFontTest = useCallback((testWord: string) => {
     if (!state || !testWord.trim()) return;
     const entriesToFill = isFilterActive ? filteredEntries : state.entries;
-    const newTranslations = { ...state.translations };
+    const updates: Record<string, string> = {};
     const prevTrans: Record<string, string> = {};
     let count = 0;
     for (const entry of entriesToFill) {
       const key = `${entry.msbtFile}:${entry.index}`;
-      prevTrans[key] = newTranslations[key] || '';
-      newTranslations[key] = testWord.trim();
+      prevTrans[key] = state.translations[key] || '';
+      updates[key] = testWord.trim();
       count++;
     }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setLastSaved(`🔤 تم ملء ${count} ترجمة بـ "${testWord.trim()}" لاختبار الخط`);
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, isFilterActive, filteredEntries]);
@@ -561,19 +562,19 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     if (!state) return;
     const entriesToFlatten = isFilterActive ? filteredEntries : state.entries;
     const keysToFlatten = new Set(entriesToFlatten.map(e => `${e.msbtFile}:${e.index}`));
-    const newTranslations = { ...state.translations };
+    const updates: Record<string, string> = {};
     const prevTrans: Record<string, string> = {};
     let count = 0;
     for (const key of keysToFlatten) {
-      const trans = newTranslations[key];
+      const trans = state.translations[key];
       if (!trans || !trans.includes('\n')) continue;
       prevTrans[key] = trans;
-      newTranslations[key] = trans.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      updates[key] = trans.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
       count++;
     }
     if (count === 0) { setLastSaved("✅ لا توجد ترجمات متعددة الأسطر"); setTimeout(() => setLastSaved(""), 3000); return; }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setLastSaved(`✅ تم دمج ${count} ترجمة إلى سطر واحد`);
     setTimeout(() => setLastSaved(""), 4000);
   }, [state, isFilterActive, filteredEntries]);
@@ -611,7 +612,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     if (!state || !mirrorCharsResults) return;
     const item = mirrorCharsResults.find((r) => r.key === key);
     if (!item) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setMirrorCharsResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, mirrorCharsResults]);
 
@@ -622,9 +623,9 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllMirrorCharsCleans = useCallback(() => {
     if (!state || !mirrorCharsResults) return;
     const pending = mirrorCharsResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
-    for (const item of pending) newTranslations[item.key] = item.after;
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    const updates: Record<string, string> = {};
+    for (const item of pending) updates[item.key] = item.after;
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setMirrorCharsResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم عكس ${pending.length} رمز`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -673,7 +674,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     if (!state || !tagBracketFixResults) return;
     const item = tagBracketFixResults.find((r) => r.key === key);
     if (!item) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setTagBracketFixResults((prev) => prev ? prev.map((r) => r.key === key ? { ...r, status: 'accepted' } : r) : null);
   }, [state, tagBracketFixResults]);
 
@@ -684,9 +685,9 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllTagBracketFixes = useCallback(() => {
     if (!state || !tagBracketFixResults) return;
     const pending = tagBracketFixResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
-    for (const item of pending) newTranslations[item.key] = item.after;
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    const updates: Record<string, string> = {};
+    for (const item of pending) updates[item.key] = item.after;
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setTagBracketFixResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم إصلاح أقواس ${pending.length} رمز تقني`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -713,7 +714,7 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
     if (!state || !arabicTextFixResults) return;
     const item = arabicTextFixResults.find((r) => r.key === key && r.fixType === fixType);
     if (!item) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: item.after } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: item.after }) } : null);
     setArabicTextFixResults((prev) => prev ? prev.map((r) => (r.key === key && r.fixType === fixType) ? { ...r, status: 'accepted' } : r) : null);
   }, [state, arabicTextFixResults]);
 
@@ -724,9 +725,9 @@ export function useEditorCleanup(params: UseEditorCleanupParams) {
   const handleApplyAllArabicTextFixes = useCallback(() => {
     if (!state || !arabicTextFixResults) return;
     const pending = arabicTextFixResults.filter((r) => r.status === 'pending');
-    const newTranslations = { ...state.translations };
-    for (const item of pending) newTranslations[item.key] = item.after;
-    setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+    const updates: Record<string, string> = {};
+    for (const item of pending) updates[item.key] = item.after;
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setArabicTextFixResults((prev) => prev ? prev.map((r) => r.status === 'pending' ? { ...r, status: 'accepted' } : r) : null);
     setLastSaved(`✅ تم تطبيق ${pending.length} إصلاح نصي`);
     setTimeout(() => setLastSaved(""), 4000);

@@ -7,7 +7,8 @@ import {
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
-import { splitEvenlyByLines, normalizeBreakStyleToSource } from "@/lib/balance-lines";
+import { splitEvenlyByLines } from "@/lib/balance-lines";
+import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { idbGet } from "@/lib/idb-storage";
 import { fixMixedBidi } from "@/lib/arabic-processing";
@@ -146,19 +147,6 @@ export function useEditorTranslation({
   const buildExtraInstructions = (base: string): string | undefined => {
     const parts = [base?.trim(), isRisenSource ? RISEN_LINE_STRUCTURE_RULE : ""].filter(Boolean);
     return parts.length ? parts.join("\n\n") : undefined;
-  };
-
-  /** Silently restore each translated entry's break style (\r\n vs \n) to match
-   * its original — only does anything for Risen sessions (see isRisenSource). */
-  const normalizeRisenBreaks = (translations: Record<string, string>): Record<string, string> => {
-    if (!isRisenSource || !state?.entries?.length) return translations;
-    const byKey = new Map(state.entries.map((e) => [`${e.msbtFile}:${e.index}`, e]));
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(translations)) {
-      const entry = byKey.get(key);
-      out[key] = entry ? normalizeBreakStyleToSource(entry.original, value) : value;
-    }
-    return out;
   };
 
   const [translating, setTranslating] = useState(false);
@@ -326,7 +314,7 @@ export function useEditorTranslation({
       }
     }
     const safeToApply = autoFixTags(toApply);
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(safeToApply) } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, safeToApply) } : null);
     setPendingPageTranslations(null);
     setOldPageTranslations({});
     setPageTranslationOriginals({});
@@ -515,7 +503,7 @@ export function useEditorTranslation({
     const freeTranslations = { ...tmReused, ...glossaryReused };
     if (Object.keys(freeTranslations).length > 0) {
       const safeFreeTranslations = autoFixTags(freeTranslations);
-      setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(safeFreeTranslations) } } : null);
+      setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, safeFreeTranslations) } : null);
     }
     const tmCount = Object.keys(tmReused).length;
     const glossaryCount = Object.keys(glossaryReused).length;
@@ -750,7 +738,7 @@ export function useEditorTranslation({
             accepted[k] = v;
           }
           allTranslations = { ...allTranslations, ...accepted };
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(accepted) } } : null);
+          setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, accepted) } : null);
         }
       }
       if (!abortControllerRef.current?.signal.aborted) {
@@ -834,7 +822,7 @@ export function useEditorTranslation({
             if (ent && looksUntranslated(ent.original, v)) continue;
             accepted[k] = v;
           }
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(accepted) } } : null);
+          setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, accepted) } : null);
         }
       }
       setTranslateProgress(`✅ تم إعادة ترجمة ${entriesToRetranslate.length} نص في هذه الصفحة`);
@@ -886,7 +874,7 @@ export function useEditorTranslation({
         if (data.translations) {
           const fixedTranslations = autoFixTags(data.translations);
           fixedCount += Object.keys(fixedTranslations).length;
-          setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(fixedTranslations) } } : null);
+          setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, fixedTranslations) } : null);
         }
       }
       setTranslateProgress(`✅ تم إصلاح ${fixedCount} نص تالف بنجاح`);
@@ -1447,7 +1435,7 @@ export function useEditorTranslation({
       if (selectedKeys.has(key)) toApply[key] = val;
     }
     const safeTranslations = autoFixTags(toApply);
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(safeTranslations) } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, safeTranslations) } : null);
     setShowGlossaryPreview(false);
     setGlossaryPreviewEntries([]);
     setPendingGlossaryTranslations({});
@@ -1504,7 +1492,7 @@ export function useEditorTranslation({
           if (data.translations?.[key]) {
             const fixedTranslations = autoFixTags({ [key]: data.translations[key] });
             recovered++;
-            setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...normalizeRisenBreaks(fixedTranslations) } } : null);
+            setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, fixedTranslations) } : null);
           } else {
             stillFailed.push(entry);
           }

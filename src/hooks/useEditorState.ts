@@ -29,6 +29,7 @@ import {
 } from "@/lib/tag-restore";
 import { normalizeBreakStyleToSource } from "@/lib/balance-lines";
 import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
+import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { NO_OWNER_LABEL, getItemIdPrefix } from "@/lib/risen/categories";
 export function useEditorState() {
   // === Extracted hooks ===
@@ -169,14 +170,14 @@ export function useEditorState() {
     newProtected.add(key);
     setState(prev => prev ? {
       ...prev,
-      translations: { ...prev.translations, [key]: corrected },
+      ...mergeGuardedTranslations(prev, { [key]: corrected }),
       protectedEntries: newProtected,
     } : null);
   };
 
   const handleFixAllReversed = () => {
     if (!state) return;
-    const newTranslations = { ...state.translations };
+    const updates: Record<string, string> = {};
     const newProtected = new Set(state.protectedEntries || []);
     let count = 0, skippedProtected = 0, skippedTranslated = 0, skippedSame = 0;
 
@@ -184,12 +185,12 @@ export function useEditorState() {
       const key = `${entry.msbtFile}:${entry.index}`;
       if (hasArabicChars(entry.original)) {
         if (newProtected.has(key)) { skippedProtected++; continue; }
-        const existing = newTranslations[key]?.trim();
+        const existing = state.translations[key]?.trim();
         const isAutoDetected = !existing || existing === entry.original || existing === entry.original.trim();
         if (isAutoDetected) {
           const corrected = unReverseBidi(entry.original);
           if (corrected !== entry.original) {
-            newTranslations[key] = corrected;
+            updates[key] = corrected;
             newProtected.add(key);
             count++;
           } else { skippedSame++; }
@@ -197,7 +198,7 @@ export function useEditorState() {
       }
     }
 
-    setState(prev => prev ? { ...prev, translations: newTranslations, protectedEntries: newProtected } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates), protectedEntries: newProtected } : null);
     const parts: string[] = [];
     if (count > 0) parts.push("تم تصحيح: " + count + " نص");
     if (skippedProtected > 0) parts.push("محمية: " + skippedProtected);
@@ -888,7 +889,7 @@ export function useEditorState() {
     setPreviousTranslations(old => ({ ...old, ...prevTranslationsBatch }));
     setState(prev => {
       if (!prev) return null;
-      const next: EditorState = { ...prev, translations: { ...prev.translations, ...nextUpdates } };
+      const next: EditorState = { ...prev, ...mergeGuardedTranslations(prev, nextUpdates) };
       if (prev.clearedKeys && prev.clearedKeys.size > 0) {
         let mutated = false;
         const newCleared = new Set(prev.clearedKeys);
@@ -954,7 +955,7 @@ export function useEditorState() {
     const fixed = restoreTagsLocally(entry.original, translation);
     if (fixed !== translation) {
       setPreviousTranslations(old => ({ ...old, [key]: translation }));
-      setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: fixed } } : null);
+      setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: fixed }) } : null);
     }
   }, [state, setState, setPreviousTranslations]);
 
@@ -980,7 +981,7 @@ export function useEditorState() {
       return;
     }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     toast({ title: "✅ تم الإصلاح المحلي", description: `تم استعادة الرموز في ${fixedCount} نص بدون ذكاء اصطناعي` });
     setLastSaved(`✅ تم إصلاح ${fixedCount} نص محلياً`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -1005,7 +1006,7 @@ export function useEditorState() {
     const fixedCount = Object.keys(updates).length;
     if (fixedCount === 0) return;
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     toast({ title: "✅ تم الإصلاح", description: `تم استعادة الرموز في ${fixedCount} نص` });
     setLastSaved(`✅ تم إصلاح ${fixedCount} نص`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -1053,7 +1054,7 @@ export function useEditorState() {
       return;
     }
     setPreviousTranslations(old => ({ ...old, ...previous }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setRestoreReport(null);
     toast({
       title: "✅ تمّ الإصلاح",
@@ -1077,7 +1078,7 @@ export function useEditorState() {
       return;
     }
     setPreviousTranslations(old => ({ ...old, ...previous }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     // أعد الفحص ليتحدّث التقرير ويختفي ما تم إصلاحه من «للمراجعة».
     const entriesForScan = state.entries.map(e => ({
       msbtFile: e.msbtFile,
@@ -1166,7 +1167,7 @@ export function useEditorState() {
       return;
     }
     setPreviousTranslations(old => ({ ...old, ...prevTrans }));
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     toast({ title: "✅ تم إعادة التوزيع", description: `تم إعادة توزيع الرموز في ${count} نص عند حدود الكلمات` });
     setLastSaved(`✅ إعادة توزيع ${count} نص`);
     setTimeout(() => setLastSaved(""), 4000);
@@ -1451,7 +1452,7 @@ export function useEditorState() {
     if (!glossaryComplianceResults || !state) return;
     const v = glossaryComplianceResults[index];
     if (!v) return;
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [v.key]: v.corrected } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [v.key]: v.corrected }) } : null);
     setGlossaryComplianceResults(prev => prev ? prev.filter((_, i) => i !== index) : null);
     setLastSaved(`✅ تم تصحيح ترجمة وفق القاموس`);
     setTimeout(() => setLastSaved(""), 3000);
@@ -1463,7 +1464,7 @@ export function useEditorState() {
     for (const v of glossaryComplianceResults) {
       updates[v.key] = v.corrected;
     }
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setGlossaryComplianceResults(null);
     setLastSaved(`✅ تم تصحيح ${glossaryComplianceResults.length} ترجمة وفق القاموس`);
     setTimeout(() => setLastSaved(""), 3000);
@@ -1494,7 +1495,7 @@ export function useEditorState() {
       if (error) throw error;
       if (!data) { setCloudStatus("لا توجد ترجمات محفوظة في السحابة"); setTimeout(() => setCloudStatus(""), 3000); return; }
       const cloudTranslations = data.translations as Record<string, string>;
-      setState(prev => { if (!prev) return null; return { ...prev, translations: { ...prev.translations, ...cloudTranslations } }; });
+      setState(prev => { if (!prev) return null; return { ...prev, ...mergeGuardedTranslations(prev, cloudTranslations) }; });
       setCloudStatus(`☁️ تم تحميل ${Object.keys(cloudTranslations).length} ترجمة من السحابة`);
     } catch (err) { setCloudStatus(`❌ ${err instanceof Error ? err.message : 'خطأ في التحميل'}`); }
     finally { setCloudSyncing(false); setTimeout(() => setCloudStatus(""), 4000); }
@@ -1592,7 +1593,7 @@ export function useEditorState() {
       prev[key] = state.translations[key] || '';
     }
     setPreviousTranslations(p => ({ ...p, ...prev }));
-    setState(s => s ? { ...s, translations: { ...s.translations, ...replacements } } : null);
+    setState(s => s ? { ...s, ...mergeGuardedTranslations(s, replacements) } : null);
     setLastSaved(`✅ تم استبدال ${Object.keys(replacements).length} نص`);
     setTimeout(() => setLastSaved(""), 3000);
   }, [state]);
@@ -1603,7 +1604,7 @@ export function useEditorState() {
     const savedOriginals = await idbGet<Record<string, string>>("originalTexts");
     if (!savedOriginals) return;
     setPreviousTranslations({ ...state.translations });
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...savedOriginals } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, savedOriginals) } : null);
     setHasStoredOriginals(false);
     toast({ title: "✅ تم استعادة النصوص الأصلية" });
   }, [state]);

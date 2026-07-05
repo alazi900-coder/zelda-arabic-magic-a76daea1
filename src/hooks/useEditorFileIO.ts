@@ -17,6 +17,7 @@ import { ExtractedEntry, hasArabicChars, unReverseBidi, isTechnicalText } from "
 import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
 import { fetchBundledTranslations, uploadBundledTranslations } from "@/lib/bundled-cloud";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 
 /** Parse a single JSON object chunk, repairing common issues */
 function repairSingleChunk(raw: string): Record<string, string> | null {
@@ -877,7 +878,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       });
     }
 
-    setState(prev => { if (!prev) return null; return { ...prev, translations: { ...prev.translations, ...safeImported } }; });
+    setState(prev => { if (!prev) return null; return { ...prev, ...mergeGuardedTranslations(prev, safeImported) }; });
 
     toast({ title: "✅ تم الاستيراد", description: msg });
     setLastSaved(msg);
@@ -886,7 +887,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     let capturedRepairCount = 0;
     setState(prevState => {
       if (!prevState) return null;
-      const newTranslations = { ...prevState.translations };
+      const updates: Record<string, string> = {};
       const newProtected = new Set(prevState.protectedEntries || []);
       let count = 0;
       const importedKeys = new Set(Object.keys(safeImported));
@@ -895,12 +896,12 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         if (importedKeys.has(key)) continue;
         if (hasArabicChars(entry.original)) {
           if (newProtected.has(key)) continue;
-          const existing = newTranslations[key]?.trim();
+          const existing = prevState.translations[key]?.trim();
           const isAutoDetected = !existing || existing === entry.original || existing === entry.original.trim();
           if (isAutoDetected) {
             const corrected = unReverseBidi(entry.original);
             if (corrected !== entry.original) {
-              newTranslations[key] = corrected;
+              updates[key] = corrected;
               newProtected.add(key);
               count++;
             }
@@ -908,7 +909,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         }
       }
       capturedRepairCount = count;
-      return { ...prevState, translations: newTranslations, protectedEntries: newProtected };
+      return { ...prevState, ...mergeGuardedTranslations(prevState, updates), protectedEntries: newProtected };
     });
     if (capturedRepairCount > 0) setLastSaved(prev => prev + ` + تصحيح ${capturedRepairCount} نص معكوس`);
   }, [state, setState, setLastSaved]);
@@ -1064,7 +1065,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         }
 
         if (imported === 0) { toast({ title: "لم يتم العثور على ترجمات في الملف", variant: "destructive" }); return; }
-        setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+        setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
         const msg = isFilterActive
           ? `✅ تم استيراد ${imported} ترجمة من CSV (${filterLabel})`
           : `✅ تم استيراد ${imported} ترجمة من CSV`;
@@ -1254,7 +1255,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         });
 
         if (Object.keys(updates).length === 0) { toast({ title: "لم يتم العثور على ترجمات في ملف XLIFF", variant: "destructive" }); return; }
-        setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+        setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
         setLastSaved(`✅ تم استيراد ${Object.keys(updates).length} ترجمة من XLIFF — ${file.name}`);
         setTimeout(() => setLastSaved(""), 4000);
       } catch (err) {
@@ -1413,7 +1414,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         setState(prev => {
           if (!prev) return null;
           const newFuzzy = { ...(prev.fuzzyScores || {}), ...fuzzyMatches };
-          return { ...prev, translations: { ...prev.translations, ...updates }, fuzzyScores: newFuzzy };
+          return { ...prev, ...mergeGuardedTranslations(prev, updates), fuzzyScores: newFuzzy };
         });
         const totalPairs = tuidToArabic.size + sourceToArabic.size;
         const fuzzyNote = fuzzyCount > 0 ? ` (${fuzzyCount} جزئية)` : '';
@@ -1504,7 +1505,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
         setState(prev => {
           if (!prev) return null;
-          return { ...prev, translations: { ...prev.translations, ...cleaned } };
+          return { ...prev, ...mergeGuardedTranslations(prev, cleaned) };
         });
 
         let msg = `✅ تم تحويل واستيراد ${convertedCount} ترجمة من التنسيق القديم — ${file.name}`;

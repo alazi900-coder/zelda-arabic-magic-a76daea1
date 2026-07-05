@@ -1,6 +1,7 @@
 import { toast } from "@/hooks/use-toast";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { hasArabicPresentationForms, removeArabicPresentationForms } from "@/lib/arabic-processing";
+import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import type {
   EditorState, ExtractedEntry,
   ReviewResults, ShortSuggestion, ImproveResult,
@@ -167,14 +168,14 @@ export function useEditorReview(params: UseEditorReviewParams) {
   };
 
   const handleApplyShorterTranslation = (key: string, suggested: string) => {
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: suggested } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: suggested }) } : null);
   };
 
   const handleApplyAllShorterTranslations = () => {
     if (!state || !shortSuggestions) return;
     const updates: Record<string, string> = {};
     shortSuggestions.forEach((s) => { updates[s.key] = s.suggested; });
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setShortSuggestions(null);
     setLastSaved(`✅ تم تطبيق ${Object.keys(updates).length} اقتراح قصير`);
     setTimeout(() => setLastSaved(""), 3000);
@@ -192,7 +193,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       }
     }
     if (fixedCount === 0) { setLastSaved("لا توجد ترجمات بها أحرف ملتصقة"); setTimeout(() => setLastSaved(""), 3000); return; }
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setLastSaved(`✅ تم إصلاح ${fixedCount} ترجمة من الأحرف الملتصقة`);
     setTimeout(() => setLastSaved(""), 3000);
   };
@@ -231,7 +232,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
         processed += batch.length;
       }
       const fixedCount = Object.keys(allUpdates).length;
-      if (fixedCount > 0) setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...allUpdates } } : null);
+      if (fixedCount > 0) setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, allUpdates) } : null);
       setTranslateProgress(`✅ تم إصلاح ${fixedCount} ترجمة مختلطة اللغة`);
       setTimeout(() => setTranslateProgress(""), 4000);
     } catch (err) {
@@ -270,7 +271,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
   };
 
   const handleApplySmartFix = (key: string, fix: string) => {
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: fix } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: fix }) } : null);
     setSmartReviewFindings((prev) => prev ? prev.filter((f) => f.key !== key) : null);
     addReviewedKeys([key]);
   };
@@ -279,7 +280,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
     if (!smartReviewFindings || !state) return;
     const updates: Record<string, string> = {};
     for (const f of smartReviewFindings) { if (f.fix) updates[f.key] = f.fix; }
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setSmartReviewFindings([]);
     addReviewedKeys(Object.keys(updates));
     toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} إصلاح` });
@@ -391,9 +392,9 @@ export function useEditorReview(params: UseEditorReviewParams) {
       if (allCorrections.length === 0) {
         setTranslateProgress("✅ جميع الترجمات سليمة إملائياً!");
       } else {
-        const newTranslations = { ...state.translations };
-        for (const c of allCorrections) newTranslations[c.key] = c.corrected;
-        setState(prev => prev ? { ...prev, translations: newTranslations } : null);
+        const updates: Record<string, string> = {};
+        for (const c of allCorrections) updates[c.key] = c.corrected;
+        setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
         setAutoCorrectResults(allCorrections);
         setAutoCorrectApplied(true);
         setTranslateProgress(`✏️ تم تصحيح ${allCorrections.length} ترجمة تلقائياً`);
@@ -455,7 +456,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
   };
 
   const handleApplyWeakFix = (key: string, suggestion: string) => {
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: suggestion } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: suggestion }) } : null);
     setWeakTranslations((prev) => prev ? prev.filter((w) => w.key !== key) : null);
   };
 
@@ -463,7 +464,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
     if (!weakTranslations || !state) return;
     const updates: Record<string, string> = {};
     for (const w of weakTranslations) { if (w.suggestion) updates[w.key] = w.suggestion; }
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setWeakTranslations([]);
     toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} تحسين` });
   };
@@ -555,7 +556,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
   };
 
   const handleApplyEnhanceSuggestion = (key: string, newTranslation: string) => {
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: newTranslation } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: newTranslation }) } : null);
     setEnhanceResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
     toast({ title: "✅ تم تطبيق الاقتراح" });
   };
@@ -568,7 +569,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       else if (r.suggestions?.[0]?.text) updates[r.key] = r.suggestions[0].text;
     }
     if (Object.keys(updates).length === 0) { toast({ title: "⚠️ لا توجد اقتراحات للتطبيق" }); return; }
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setEnhanceResults([]);
     toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} تحسين` });
   };
@@ -711,7 +712,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
   };
 
   const handleApplyAdvancedSuggestion = (key: string, newTranslation: string) => {
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: newTranslation } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: newTranslation }) } : null);
     setLiteralResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
     setStyleResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
     setAlternativeResults((prev) => prev ? prev.filter((r) => r.key !== key) : null);
@@ -727,7 +728,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
     else if (action === 'alternatives' && alternativeResults) { for (const r of alternativeResults) { const best = r.alternatives?.find((a) => a.style === r.recommended) || r.alternatives?.[0]; if (best) updates[r.key] = best.text; } setAlternativeResults([]); }
     else if (action === 'full-analysis' && fullAnalysisResults) { for (const r of fullAnalysisResults) { if (r.recommended) updates[r.key] = r.recommended; else if (r.alternatives?.[0]?.text) updates[r.key] = r.alternatives[0].text; } setFullAnalysisResults([]); }
     if (Object.keys(updates).length === 0) { toast({ title: "⚠️ لا توجد اقتراحات للتطبيق" }); return; }
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     toast({ title: `✅ تم تطبيق ${Object.keys(updates).length} تحسين` });
   };
 
@@ -764,14 +765,14 @@ export function useEditorReview(params: UseEditorReviewParams) {
   };
 
   const handleApplyImprovement = (key: string, improved: string) => {
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, [key]: improved } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: improved }) } : null);
   };
 
   const handleApplyAllImprovements = () => {
     if (!state || !improveResults) return;
     const updates: Record<string, string> = {};
     improveResults.forEach((item) => { if (item.improvedBytes <= item.maxBytes || item.maxBytes === 0) updates[item.key] = item.improved; });
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setImproveResults(null);
     setLastSaved(`✅ تم تطبيق ${Object.keys(updates).length} تحسين`);
     setTimeout(() => setLastSaved(""), 3000);
@@ -830,7 +831,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
     if (!group) return;
     const updates: Record<string, string> = {};
     for (const v of group.variants) { updates[v.key] = bestTranslation; }
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     const newGroups = consistencyResults.groups.filter((_, i) => i !== groupIndex);
     const newSuggestions = consistencyResults.aiSuggestions.filter((_, i) => i !== groupIndex);
     setConsistencyResults({ groups: newGroups, aiSuggestions: newSuggestions });
@@ -846,7 +847,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const best = consistencyResults.aiSuggestions[i]?.best;
       if (best) { for (const v of group.variants) { updates[v.key] = best; } count++; }
     });
-    setState(prev => prev ? { ...prev, translations: { ...prev.translations, ...updates } } : null);
+    setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setConsistencyResults(null);
     setLastSaved(`✅ تم توحيد ${count} مصطلح تلقائياً`);
     setTimeout(() => setLastSaved(""), 3000);

@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Key, Loader2, CheckCircle2, XCircle, Wifi } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROMPT_PRESETS } from "@/components/editor/promptPresets";
+import { CATEGORY_PROMPT_DEFAULTS, resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -44,11 +45,14 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
   activeCategory,
 }) => {
   const promptValue = activeCategory
-    ? (editor.categoryPromptTemplates[activeCategory.id] || '')
+    ? resolveCategoryPrompt(activeCategory.id, editor.categoryPromptTemplates)
     : editor.customPromptInstructions;
   const setPromptValue = activeCategory
     ? (v: string) => editor.setCategoryPromptTemplate(activeCategory.id, v)
     : editor.setCustomPromptInstructions;
+  const isShowingDefault = !!activeCategory
+    && !editor.categoryPromptTemplates[activeCategory.id]?.trim()
+    && !!CATEGORY_PROMPT_DEFAULTS[activeCategory.id];
 
   return (
   <Card className="mb-6 border-primary/20 bg-primary/5">
@@ -345,15 +349,24 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
             </span>
             <span className="text-xs text-muted-foreground font-body">
               {activeCategory
-                ? 'نصّ حرّ يُلحَق ببرومت AI لهذه الفئة فقط عند ترجمتها. اختر قالباً جاهزاً أو اكتب نصّك.'
+                ? 'نصّ يُلحَق ببرومت AI لهذه الفئة فقط عند ترجمتها. يمكنك تعديله.'
                 : 'نصّ حرّ يُلحَق بكل برومت AI (لكل الفئات). اختر قالباً جاهزاً أو اكتب نصّك.'}
             </span>
+            {isShowingDefault && (
+              <span className="text-[10px] text-emerald-500 font-body">✓ برومبت جاهز لهذه الفئة — معروض تلقائياً، وتعديله يحفظه كنسختك الخاصة.</span>
+            )}
           </div>
-          {promptValue && (
-            <Button variant="ghost" size="sm" onClick={() => setPromptValue('')} className="text-xs text-destructive shrink-0 h-7">
-              مسح
-            </Button>
-          )}
+          {activeCategory
+            ? (promptValue && !isShowingDefault && (
+                <Button variant="ghost" size="sm" onClick={() => setPromptValue('')} className="text-xs text-destructive shrink-0 h-7">
+                  استعادة الجاهز
+                </Button>
+              ))
+            : (promptValue && (
+                <Button variant="ghost" size="sm" onClick={() => setPromptValue('')} className="text-xs text-destructive shrink-0 h-7">
+                  مسح
+                </Button>
+              ))}
         </div>
 
         <Select

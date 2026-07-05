@@ -13,6 +13,7 @@ import {
 import { useEditorState } from "@/hooks/useEditorState";
 import { FILE_CATEGORIES, BDAT_CATEGORIES } from "@/components/editor/types";
 import { buildRisenCategories } from "@/lib/risen/categories";
+import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
 const BatchQualityModal = React.lazy(() => import("@/components/editor/BatchQualityModal"));
@@ -140,11 +141,10 @@ const Editor = () => {
     : null;
 
   // Same resolution as useEditorTranslation's buildExtraInstructions: the
-  // active category's dedicated prompt when exactly one card is selected and
-  // it has one saved, otherwise the general prompt.
-  const effectiveExtraInstructions = (activeCategory && editor.categoryPromptTemplates[activeCategory.id]?.trim())
-    ? editor.categoryPromptTemplates[activeCategory.id]
-    : editor.customPromptInstructions;
+  // active category's dedicated prompt (saved override or ready-made default)
+  // when exactly one card is selected, otherwise the general prompt.
+  const activeCategoryPrompt = activeCategory ? resolveCategoryPrompt(activeCategory.id, editor.categoryPromptTemplates) : '';
+  const effectiveExtraInstructions = activeCategoryPrompt.trim() ? activeCategoryPrompt : editor.customPromptInstructions;
 
   // Keyboard shortcuts
   useEditorKeyboard({

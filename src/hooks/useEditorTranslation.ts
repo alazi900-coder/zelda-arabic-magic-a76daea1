@@ -9,6 +9,7 @@ import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
 import { splitEvenlyByLines } from "@/lib/balance-lines";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
+import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
@@ -145,8 +146,8 @@ export function useEditorTranslation({
   // selected (and it has one saved); otherwise falls back to the general prompt.
   const buildExtraInstructions = (): string | undefined => {
     const activeCategoryId = filterCategory.length === 1 ? filterCategory[0] : null;
-    const categoryPrompt = activeCategoryId ? categoryPromptTemplates[activeCategoryId] : undefined;
-    const base = categoryPrompt?.trim() ? categoryPrompt : customPromptInstructions;
+    const categoryPrompt = activeCategoryId ? resolveCategoryPrompt(activeCategoryId, categoryPromptTemplates) : '';
+    const base = categoryPrompt.trim() ? categoryPrompt : customPromptInstructions;
     const parts = [base?.trim(), isRisenSource ? RISEN_LINE_STRUCTURE_RULE : ""].filter(Boolean);
     return parts.length ? parts.join("\n\n") : undefined;
   };

@@ -46,6 +46,7 @@ interface UseEditorTranslationProps {
   tmAutoReuse: boolean;
   aiThrottleEnabled: boolean;
   customPromptInstructions: string;
+  categoryPromptTemplates: Record<string, string>;
   aiRoutingMode: 'free' | 'paid' | 'auto';
   aiBatchSize: number;
   translationCacheEnabled: boolean;
@@ -79,7 +80,7 @@ const RISEN_LINE_STRUCTURE_RULE =
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled,
 }: UseEditorTranslationProps) {
 
   /**
@@ -140,7 +141,12 @@ export function useEditorTranslation({
   // sessions never have a `.tab` msbtFile, so this stays false for them.
   const isRisenSource = /\.tab$/i.test(state?.entries?.[0]?.msbtFile || "");
 
-  const buildExtraInstructions = (base: string): string | undefined => {
+  // Uses the single active filter card's dedicated prompt when exactly one is
+  // selected (and it has one saved); otherwise falls back to the general prompt.
+  const buildExtraInstructions = (): string | undefined => {
+    const activeCategoryId = filterCategory.length === 1 ? filterCategory[0] : null;
+    const categoryPrompt = activeCategoryId ? categoryPromptTemplates[activeCategoryId] : undefined;
+    const base = categoryPrompt?.trim() ? categoryPrompt : customPromptInstructions;
     const parts = [base?.trim(), isRisenSource ? RISEN_LINE_STRUCTURE_RULE : ""].filter(Boolean);
     return parts.length ? parts.join("\n\n") : undefined;
   };
@@ -216,7 +222,7 @@ export function useEditorTranslation({
         npcMaxLines,
         npcMode: npcMode || undefined,
         aiModel,
-        extraInstructions: buildExtraInstructions(customPromptInstructions),
+        extraInstructions: buildExtraInstructions(),
         routingMode: aiRoutingMode,
         game: isRisenSource ? "risen" : "xenoblade",
       }),
@@ -295,7 +301,7 @@ export function useEditorTranslation({
   }, [
     activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines,
-    npcMode, aiModel, customPromptInstructions, aiRoutingMode, aiBatchSize, translationCacheEnabled, isRisenSource,
+    npcMode, aiModel, customPromptInstructions, categoryPromptTemplates, filterCategory, aiRoutingMode, aiBatchSize, translationCacheEnabled, isRisenSource,
   ]);
 
   // عند unmount: نُفرغ ما تجمّع لتجنّب طلبات معلقة.
@@ -542,7 +548,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
         });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
@@ -803,7 +809,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -861,7 +867,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(customPromptInstructions), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? "risen" : "xenoblade" }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -1023,7 +1029,7 @@ export function useEditorTranslation({
             myMemoryEmail: myMemoryEmail || undefined,
             npcMaxLines,
             aiModel,
-            extraInstructions: buildExtraInstructions(customPromptInstructions),
+            extraInstructions: buildExtraInstructions(),
               routingMode: aiRoutingMode,
             game: isRisenSource ? "risen" : "xenoblade",
           }),
@@ -1222,7 +1228,7 @@ export function useEditorTranslation({
                 myMemoryEmail: myMemoryEmail || undefined,
                 npcMaxLines,
                 aiModel,
-                extraInstructions: buildExtraInstructions(customPromptInstructions),
+                extraInstructions: buildExtraInstructions(),
               routingMode: aiRoutingMode,
                 game: isRisenSource ? "risen" : "xenoblade",
               }),
@@ -1476,7 +1482,7 @@ export function useEditorTranslation({
               rebalanceNewlines: rebalanceNewlines || undefined,
               npcMaxLines,
               aiModel,
-              extraInstructions: buildExtraInstructions(customPromptInstructions),
+              extraInstructions: buildExtraInstructions(),
               routingMode: aiRoutingMode,
               game: isRisenSource ? "risen" : "xenoblade",
             }),

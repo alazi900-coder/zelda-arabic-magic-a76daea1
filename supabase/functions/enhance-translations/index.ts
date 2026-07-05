@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -339,9 +339,14 @@ Deno.serve(async (req) => {
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
       game?: 'xenoblade' | 'risen';
+      /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
+      extraInstructions?: string;
     };
     const isRisen = game === 'risen';
     const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+    const extraInstructionsBlock = extraInstructions?.trim()
+      ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
+      : '';
 
     // Mask Risen tags (<Exit>, $(name), ...) before ANY prompt text is built —
     // the model never sees them and so can't mistranslate/mangle them. Each
@@ -530,7 +535,7 @@ ${ruleSections.protect}
 - medium: خطأ واضح يحتاج إصلاح (reorder غالباً)
 - low: تحسين بسيط (weak خفيف)
 
-النصوص:
+${extraInstructionsBlock}النصوص:
 ${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
@@ -628,7 +633,7 @@ ${ruleSections.protect}
 
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
-**النصوص للفحص:**
+${extraInstructionsBlock}**النصوص للفحص:**
 ${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
@@ -726,7 +731,7 @@ ${ruleSections.protect}
 
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
-**النصوص للمراجعة:**
+${extraInstructionsBlock}**النصوص للمراجعة:**
 ${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:

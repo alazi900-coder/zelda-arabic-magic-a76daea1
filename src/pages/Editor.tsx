@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useEditorState } from "@/hooks/useEditorState";
+import { FILE_CATEGORIES, BDAT_CATEGORIES } from "@/components/editor/types";
+import { buildRisenCategories } from "@/lib/risen/categories";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
 const BatchQualityModal = React.lazy(() => import("@/components/editor/BatchQualityModal"));
@@ -118,6 +120,31 @@ const Editor = () => {
   // flag above, which is never reset and can go stale across projects) — used
   // wherever entries already exist, so it can't disagree with what's loaded.
   const isRisenEntries = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
+
+  // Which category list applies to the loaded file — mirrors the same
+  // resolution used by CategoryProgress/EditorProgressStatus for the filter
+  // cards, so "the selected card" and "its dedicated prompt" always agree.
+  const activeCategoryList = React.useMemo(() => {
+    const entries = editor.state?.entries;
+    if (!entries) return [];
+    if (isRisenEntries) return buildRisenCategories(entries);
+    if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
+    return FILE_CATEGORIES;
+  }, [editor.state?.entries, isRisenEntries, editor.bdatTableNames]);
+
+  const activeCategory = editor.filterCategory.length === 1
+    ? (() => {
+        const cat = activeCategoryList.find(c => c.id === editor.filterCategory[0]);
+        return cat ? { id: cat.id, label: cat.label } : null;
+      })()
+    : null;
+
+  // Same resolution as useEditorTranslation's buildExtraInstructions: the
+  // active category's dedicated prompt when exactly one card is selected and
+  // it has one saved, otherwise the general prompt.
+  const effectiveExtraInstructions = (activeCategory && editor.categoryPromptTemplates[activeCategory.id]?.trim())
+    ? editor.categoryPromptTemplates[activeCategory.id]
+    : editor.customPromptInstructions;
 
   // Keyboard shortcuts
   useEditorKeyboard({
@@ -390,6 +417,7 @@ const Editor = () => {
             testConnStatus={testConnStatus}
             testConnMsg={testConnMsg}
             handleTestConnection={handleTestConnection}
+            activeCategory={activeCategory}
           />
 
           <EditorProgressStatus
@@ -438,6 +466,7 @@ const Editor = () => {
               translations={editor.state?.translations || {}}
               onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
               glossary={editor.activeGlossary}
+              extraInstructions={effectiveExtraInstructions}
             />
           )}
 

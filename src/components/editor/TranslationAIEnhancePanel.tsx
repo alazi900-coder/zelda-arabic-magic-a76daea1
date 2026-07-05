@@ -38,6 +38,8 @@ interface TranslationAIEnhancePanelProps {
   translations: Record<string, string>;
   onApplySuggestion: (key: string, newText: string) => void;
   glossary?: string;
+  /** Extra prompt instructions — the active filter card's dedicated prompt, or the general one. */
+  extraInstructions?: string;
 }
 
 interface EnhanceSuggestion {
@@ -198,6 +200,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   translations,
   onApplySuggestion,
   glossary,
+  extraInstructions,
 }) => {
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
@@ -493,6 +496,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               builtinOverrides: currentBuiltinOverrides,
               passes: SCAN_PASSES,
               game: isRisen ? "risen" : "xenoblade",
+              extraInstructions: extraInstructions?.trim() || undefined,
             },
             signal: abortSignal,
           });
@@ -518,7 +522,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? "risen" : "xenoblade" },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? "risen" : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;

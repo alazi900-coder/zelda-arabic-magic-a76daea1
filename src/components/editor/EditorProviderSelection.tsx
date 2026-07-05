@@ -20,6 +20,7 @@ type EditorSubset = Pick<
   | "tmAutoReuse" | "setTmAutoReuse"
   | "aiThrottleEnabled" | "setAiThrottleEnabled"
   | "customPromptInstructions" | "setCustomPromptInstructions"
+  | "categoryPromptTemplates" | "setCategoryPromptTemplate"
   | "aiBatchSize" | "setAiBatchSize"
   | "translationCacheEnabled" | "setTranslationCacheEnabled"
 >;
@@ -31,6 +32,8 @@ interface EditorProviderSelectionProps {
   testConnStatus: Record<string, TestConnState>;
   testConnMsg: Record<string, string>;
   handleTestConnection: (provider: string) => void | Promise<void>;
+  /** The single filter card currently selected, if exactly one is — its dedicated prompt is edited here instead of the general one. */
+  activeCategory: { id: string; label: string } | null;
 }
 
 const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
@@ -38,7 +41,16 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
   testConnStatus,
   testConnMsg,
   handleTestConnection,
-}) => (
+  activeCategory,
+}) => {
+  const promptValue = activeCategory
+    ? (editor.categoryPromptTemplates[activeCategory.id] || '')
+    : editor.customPromptInstructions;
+  const setPromptValue = activeCategory
+    ? (v: string) => editor.setCategoryPromptTemplate(activeCategory.id, v)
+    : editor.setCustomPromptInstructions;
+
+  return (
   <Card className="mb-6 border-primary/20 bg-primary/5">
     <CardContent className="p-3 md:p-4">
       <div className="flex flex-col gap-3">
@@ -328,13 +340,17 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
       <div className="flex flex-col gap-2 border-t border-border/50 pt-3 mt-1">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex flex-col">
-            <span className="text-sm font-display">📝 تعليمات إضافية للمترجم</span>
+            <span className="text-sm font-display">
+              {activeCategory ? `📝 برومبت خاص بـ: ${activeCategory.label}` : '📝 تعليمات إضافية للمترجم'}
+            </span>
             <span className="text-xs text-muted-foreground font-body">
-              نصّ حرّ يُلحَق بكل برومت AI (لكل الفئات). اختر قالباً جاهزاً أو اكتب نصّك.
+              {activeCategory
+                ? 'نصّ حرّ يُلحَق ببرومت AI لهذه الفئة فقط عند ترجمتها. اختر قالباً جاهزاً أو اكتب نصّك.'
+                : 'نصّ حرّ يُلحَق بكل برومت AI (لكل الفئات). اختر قالباً جاهزاً أو اكتب نصّك.'}
             </span>
           </div>
-          {editor.customPromptInstructions && (
-            <Button variant="ghost" size="sm" onClick={() => editor.setCustomPromptInstructions('')} className="text-xs text-destructive shrink-0 h-7">
+          {promptValue && (
+            <Button variant="ghost" size="sm" onClick={() => setPromptValue('')} className="text-xs text-destructive shrink-0 h-7">
               مسح
             </Button>
           )}
@@ -344,7 +360,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
           value=""
           onValueChange={(id) => {
             const preset = PROMPT_PRESETS.find(p => p.id === id);
-            if (preset) editor.setCustomPromptInstructions(preset.text);
+            if (preset) setPromptValue(preset.text);
           }}
         >
           <SelectTrigger className="w-full text-sm font-body" dir="rtl">
@@ -360,21 +376,22 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         </Select>
 
         <textarea
-          value={editor.customPromptInstructions}
-          onChange={(e) => editor.setCustomPromptInstructions(e.target.value.slice(0, 4000))}
+          value={promptValue}
+          onChange={(e) => setPromptValue(e.target.value.slice(0, 4000))}
           placeholder="اكتب أي قواعد إضافية تريد أن يلتزم بها المترجم..."
           rows={3}
           className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm resize-y"
           dir="rtl"
         />
-        {editor.customPromptInstructions && (
+        {promptValue && (
           <p className="text-[10px] text-muted-foreground font-body text-left" dir="ltr">
-            {editor.customPromptInstructions.length} / 4000
+            {promptValue.length} / 4000
           </p>
         )}
       </div>
     </CardContent>
   </Card>
-);
+  );
+};
 
 export default EditorProviderSelection;

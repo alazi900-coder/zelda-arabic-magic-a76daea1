@@ -233,6 +233,25 @@ export function useEditorSettings() {
     } catch { /* ignore */ }
   }, []);
 
+  // === Per-category prompt instructions (one dedicated prompt per filter card id) ===
+  const [categoryPromptTemplates, _setCategoryPromptTemplates] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem('categoryPromptTemplates');
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+  const setCategoryPromptTemplate = useCallback((categoryId: string, v: string) => {
+    _setCategoryPromptTemplates(prev => {
+      const next = { ...prev };
+      if (v.trim()) next[categoryId] = v; else delete next[categoryId];
+      try {
+        if (Object.keys(next).length) localStorage.setItem('categoryPromptTemplates', JSON.stringify(next));
+        else localStorage.removeItem('categoryPromptTemplates');
+      } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
   // === AI Routing Mode: مثبت على "paid" دائماً ===
   // الترجمة تستخدم رصيد Lovable AI المدفوع. أي قيمة قديمة في localStorage تُمسح
   // حتى لا تبقى تجربة المستخدم عالقة على free/auto بعد إزالة زر التبديل.
@@ -342,6 +361,7 @@ export function useEditorSettings() {
     tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
+    categoryPromptTemplates, setCategoryPromptTemplate,
     aiRoutingMode, setAiRoutingMode,
     aiBatchSize, setAiBatchSize,
     translationCacheEnabled, setTranslationCacheEnabled,

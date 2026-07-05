@@ -19,12 +19,12 @@ function makeEditor(overrides: Partial<Parameters<typeof EditorBuildSection>[0][
   };
 }
 
-function renderSection(isRisen: boolean) {
+function renderSection(isRisen: boolean, unprocessedArabicCount = 0) {
   return render(
     <EditorBuildSection
       editor={makeEditor()}
       isRisen={isRisen}
-      unprocessedArabicCount={0}
+      unprocessedArabicCount={unprocessedArabicCount}
       showBuildSection={true}
       setShowBuildSection={vi.fn()}
       setShowArabicProcessConfirm={vi.fn()}
@@ -46,5 +46,17 @@ describe("EditorBuildSection — Arabic-processing button on Risen sessions", ()
     expect(btn).toBeDisabled();
     expect(btn.getAttribute("title")).toMatch(/Risen/);
     expect(btn.getAttribute("title")).toMatch(/Xenoblade/);
+  });
+});
+
+describe("EditorBuildSection — unprocessed-Arabic warning banner on Risen sessions", () => {
+  it("shows the banner for non-Risen sessions with unshaped Arabic", () => {
+    renderSection(false, 3);
+    expect(screen.getByText(/نص عربي لم يُعالَج/)).toBeInTheDocument();
+  });
+
+  it("hides the banner entirely for Risen sessions, even with unshaped Arabic present", () => {
+    renderSection(true, 3);
+    expect(screen.queryByText(/نص عربي لم يُعالَج/)).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasTechnicalTags } from "@/components/editor/types";
 import { checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
+import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 
 export interface QualityStats {
   tooLong: number;
@@ -62,7 +63,7 @@ const RE_ENGLISH_WORDS = /[a-zA-Z]{2,}/g;
 const RE_BDAT_LABEL = /^.+?\[\d+\]\./;
 const CHUNK_SIZE = 5000;
 
-function computeEntryResult(entry: ExtractedEntry, translation: string, cat: string): EntryCacheResult {
+export function computeEntryResult(entry: ExtractedEntry, translation: string, cat: string): EntryCacheResult {
   const trimmed = translation.trim();
   const isTranslated = trimmed !== '';
   let qTooLong = false, qNearLimit = false, qMissingTags = false, qPlaceholderMismatch = false;
@@ -77,12 +78,22 @@ function computeEntryResult(entry: ExtractedEntry, translation: string, cat: str
       else if (bytes / entry.maxBytes > 0.8) qNearLimit = true;
     }
 
-    RE_TAG.lastIndex = 0;
-    const origTags: string[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = RE_TAG.exec(entry.original)) !== null) origTags.push(m[0]);
-    for (const tag of origTags) {
-      if (!trimmed.includes(tag)) { qMissingTags = true; break; }
+    if (/\.tab$/i.test(entry.msbtFile)) {
+      // Risen 1 uses <Tag>/$(name) formats, not XC3's [Tag] brackets — this is
+      // the only detector that can surface tags already lost BEFORE the
+      // write-guard/masking protection existed (e.g. a historical <Exit> that
+      // got translated away to "خروج").
+      if (hasRisenTags(entry.original) && diffRisenTags(entry.original, trimmed).missingTags.length > 0) {
+        qMissingTags = true;
+      }
+    } else {
+      RE_TAG.lastIndex = 0;
+      const origTags: string[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = RE_TAG.exec(entry.original)) !== null) origTags.push(m[0]);
+      for (const tag of origTags) {
+        if (!trimmed.includes(tag)) { qMissingTags = true; break; }
+      }
     }
 
     RE_PLACEHOLDER.lastIndex = 0;

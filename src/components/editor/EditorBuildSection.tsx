@@ -97,8 +97,12 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         </CardContent>
       </Card>
 
-      {/* Arabic Unprocessed Warning Banner */}
-      {unprocessedArabicCount > 0 && (
+      {/* Arabic Unprocessed Warning Banner — meaningless for Risen: its Arabic
+          is expected to stay unshaped in the editor by design (shapeArabicForRisen
+          runs only at build time), so the warning itself would be wrong, not
+          just its "معالجة الآن" button (which is the same Xenoblade-only
+          processing already disabled above). */}
+      {!isRisen && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">

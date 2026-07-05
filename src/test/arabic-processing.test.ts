@@ -276,9 +276,16 @@ describe('Arabic Processing', () => {
     });
   });
 
-  // Risen build path applies reshapeArabic (letter joining) WITHOUT reverseBidi
-  // (see src/lib/risen-extractor.ts) — confirm Risen's own tag formats survive
-  // reshaping untouched, same guarantee Xenoblade's [Tag] syntax has above.
+  // ORPHANED: this locks in behavior from a superseded approach. Risen's build
+  // path no longer calls reshapeArabic at all — it now uses shapeArabicForRisen
+  // (src/lib/risen/arabic-shaper.ts), a fully independent shaper with visual
+  // reordering, since letter-joining alone wasn't sufficient (confirmed by
+  // in-game testing: text was connected but read backwards). reshapeArabic
+  // itself is still exported and used elsewhere for Xenoblade, so this test is
+  // technically correct and harmless — just no longer describing Risen's real
+  // build path. Kept intentionally (not deleted) per explicit instruction: a
+  // passing test guarding a still-existing function is not dead weight. Safe
+  // to delete only if reshapeArabic itself is ever removed.
   describe('reshapeArabic preserves Risen tag formats (no reverseBidi applied)', () => {
     it('preserves <Exit>-style button tags', () => {
       const input = 'اضغط <Exit> للخروج';

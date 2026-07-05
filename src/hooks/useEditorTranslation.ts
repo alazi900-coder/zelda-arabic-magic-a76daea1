@@ -10,7 +10,6 @@ import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
 import { splitEvenlyByLines } from "@/lib/balance-lines";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { countEffectiveLines } from "@/lib/text-tokens";
-import { idbGet } from "@/lib/idb-storage";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
@@ -136,13 +135,10 @@ export function useEditorTranslation({
 
     return result;
   };
-  // Self-contained: detects a Risen session without touching useEditorState's
-  // shared prop signature (used by every game). Xenoblade/other sessions never
-  // set this idb key, so this stays false and nothing below changes for them.
-  const [isRisenSource, setIsRisenSource] = useState(false);
-  useEffect(() => {
-    idbGet<string>("editor-source-game").then((g) => setIsRisenSource(g === "risen")).catch(() => {});
-  }, []);
+  // Derived from the loaded entries (not the "editor-source-game" idb flag,
+  // which is never reset and can go stale across projects) — Xenoblade/other
+  // sessions never have a `.tab` msbtFile, so this stays false for them.
+  const isRisenSource = /\.tab$/i.test(state?.entries?.[0]?.msbtFile || "");
 
   const buildExtraInstructions = (base: string): string | undefined => {
     const parts = [base?.trim(), isRisenSource ? RISEN_LINE_STRUCTURE_RULE : ""].filter(Boolean);

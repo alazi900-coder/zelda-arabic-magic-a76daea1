@@ -114,6 +114,10 @@ const Editor = () => {
 
   const isRisen = sourceGame === "risen";
   const processPath = isRisen ? "/risen/process" : "/process";
+  // Derived from the actually-loaded entries (not the "editor-source-game" idb
+  // flag above, which is never reset and can go stale across projects) — used
+  // wherever entries already exist, so it can't disagree with what's loaded.
+  const isRisenEntries = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
 
   // Keyboard shortcuts
   useEditorKeyboard({
@@ -575,7 +579,7 @@ const Editor = () => {
 
           <EditorBuildSection
             editor={editor}
-            isRisen={isRisen}
+            isRisen={isRisenEntries}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

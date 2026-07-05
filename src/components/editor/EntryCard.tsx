@@ -8,6 +8,7 @@ import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
+import { RISEN_TAG_REGEX, hasRisenTags, diffRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import {
   hasOrphanLines, visualLength, splitEvenlyByLines, splitByOriginalBreaks,
   hasEngineLineBreakTags, mapTranslationToLineSkeleton,
@@ -17,6 +18,13 @@ import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { computeConfidence, detectLiteralTranslation } from "./TranslationProgressDashboard";
+
+/** Format a tag list as "<Exit>×2، <Attack>" for display in the Risen tag-diff badge. */
+function formatTagCounts(tags: string[]): string {
+  const counts = new Map<string, number>();
+  for (const t of tags) counts.set(t, (counts.get(t) || 0) + 1);
+  return [...counts.entries()].map(([tag, n]) => (n > 1 ? `${tag}×${n}` : tag)).join('، ');
+}
 
 /** Classify a tag token for color-coding */
 function getTagDisplayInfo(tag: string): { label: string; color: string; title: string } {
@@ -31,6 +39,13 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
     const code = tag.charCodeAt(0);
     const name = names[code] || `U+${code.toString(16).toUpperCase()}`;
     return { label: `⚙ ${name}`, color: 'bg-sky-500/15 text-sky-400 border-sky-500/25', title: `رمز تحكم: ${name}` };
+  }
+  // Risen 1 tags: <Exit>, $(name), bare engine tokens (XXX/SGN/SGT/SGPT/SGL/MM/HH/DD).
+  // Matched without RISEN_TAG_REGEX's lookaheads — by the time tagPattern.split()
+  // hands us this isolated token, the surrounding context those lookaheads need
+  // ("MM minutes") is already gone, so re-checking with them would always fail.
+  if (/^<[A-Za-z][A-Za-z0-9_]{0,30}>$/.test(tag) || /^\$\([A-Za-z0-9_]{1,30}\)$/.test(tag) || /^(?:XXX|SGN|SGT|SGPT|SGL|MM|HH|DD)$/.test(tag)) {
+    return { label: tag, color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25', title: 'وسم Risen — لا تحذفه ولا تترجمه' };
   }
   // Brace tags {key} or {key:value}
   if (/^\{/.test(tag)) {
@@ -83,7 +98,10 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
 
 /** Renders text with technical tags highlighted visually */
 function HighlightedOriginal({ text }: { text: string }) {
-  const tagPattern = /(\[\s*\w+\s*:[^\]]*?\](?:\s*\([^)]{1,100}\))?|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:\s*[^}]*\}|\{[\w]+\}|\d+\s*\[[A-Z]{2,10}\]|\[[A-Z]{2,10}\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC])/g;
+  const tagPattern = new RegExp(
+    `(\\[\\s*\\w+\\s*:[^\\]]*?\\](?:\\s*\\([^)]{1,100}\\))?|\\[\\s*\\w+\\s*=\\s*[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*[^}]*\\}|\\{[\\w]+\\}|\\d+\\s*\\[[A-Z]{2,10}\\]|\\[[A-Z]{2,10}\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '\\/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC]|${RISEN_TAG_REGEX.source})`,
+    'g'
+  );
 
   const lines = text.split('\n');
 
@@ -202,6 +220,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   legacyCommaSplitEnabled, extraToolButtons,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
+  const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
   const isTech = isTechnicalText(entry.original);
   const isSingleLineOriginal = countEffectiveLines(entry.original) <= 1;
   const [backTranslation, setBackTranslation] = useState<string | null>(null);
@@ -218,11 +237,18 @@ const EntryCard: React.FC<EntryCardProps> = ({
   }, [isDamagedTag, entry.original, translation]);
 
   const technicalDiff = useMemo(() => {
-    if (!translation?.trim() || !hasTechnicalTags(entry.original)) return null;
+    if (!translation?.trim()) return null;
+    if (isRisenEntry) {
+      if (!hasRisenTags(entry.original)) return null;
+      const diff = diffRisenTags(entry.original, translation);
+      if (diff.exactTagMatch) return null;
+      return diff;
+    }
+    if (!hasTechnicalTags(entry.original)) return null;
     const diff = diffTechnicalTags(entry.original, translation);
     if (diff.exactTagMatch) return null;
     return diff;
-  }, [entry.original, translation]);
+  }, [entry.original, translation, isRisenEntry]);
 
   const handleCopyTags = () => {
     const charRegex = /[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
@@ -453,15 +479,32 @@ const EntryCard: React.FC<EntryCardProps> = ({
                 )}
                 {technicalDiff && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 font-semibold flex items-center gap-1">
-                    🧷 رموز تقنية مختلفة
-                    {technicalDiff.missingTags.length > 0 && ` (${technicalDiff.missingTags.length} مفقود)`}
-                    {technicalDiff.extraTags.length > 0 && ` (${technicalDiff.extraTags.length} زائد)`}
+                    🧷 {isRisenEntry ? "وسوم Risen مختلفة" : "رموز تقنية مختلفة"}
+                    {technicalDiff.missingTags.length > 0 && (
+                      isRisenEntry
+                        ? ` (مفقود: ${formatTagCounts(technicalDiff.missingTags)})`
+                        : ` (${technicalDiff.missingTags.length} مفقود)`
+                    )}
+                    {technicalDiff.extraTags.length > 0 && (
+                      isRisenEntry
+                        ? ` (زائد: ${formatTagCounts(technicalDiff.extraTags)})`
+                        : ` (${technicalDiff.extraTags.length} زائد)`
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-4 px-1 text-[10px] text-primary hover:bg-primary/10 ml-1"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isRisenEntry) {
+                          const repaired = restoreRisenTags(entry.original, translation);
+                          updateTranslation(key, repaired.text);
+                          toast({
+                            title: "🔧 إصلاح تلقائي",
+                            description: repaired.changed ? "أُلحق الوسم الناقص — راجع النص" : "لا يوجد وسم مفقود لإلحاقه",
+                          });
+                          return;
+                        }
                         const fixed = restoreTagsLocally(entry.original, translation);
                         if (fixed !== translation) {
                           updateTranslation(key, fixed);

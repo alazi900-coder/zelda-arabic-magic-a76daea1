@@ -12,7 +12,7 @@
 //   - Duration template:   "MM minutes, HH hours, DD days" — MM/HH/DD are
 //     only tags in that exact context; matched via lookahead on the unit
 //     word so ordinary dialogue never false-positives.
-const RISEN_TAG_REGEX =
+export const RISEN_TAG_REGEX =
   /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|\b(?:XXX|SGN|SGT|SGPT|SGL)\b|\bMM\b(?=\s*minutes)|\bHH\b(?=\s*hours)|\bDD\b(?=\s*days)/g;
 
 export function extractRisenTags(text: string): string[] {

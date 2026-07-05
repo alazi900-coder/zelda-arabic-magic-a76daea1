@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.10.1",
+    date: "2026-07-05",
+    changes: [
+      { kind: "added", text: "وسوم Risen 1 التقنية (<Exit>، $(name)، ورموز شاشة الحفظ XXX/SGN/SGT/SGPT/SGL) أصبحت تظهر الآن كشارة ملوّنة محمية في النص الأصلي بالمحرر — كانت تظهر كنص عادي بلا أي تمييز بصري، بعكس وسوم Xenoblade." },
+      { kind: "added", text: "عند اختلاف وسوم Risen بين الأصل والترجمة، أصبحت البطاقة تعرض أسماء الوسوم المفقودة/الزائدة تحديداً (مثلاً <Exit>) مع زر «إصلاح تلقائي» يُلحق الوسم الناقص مباشرة — بدل رسالة عامة بلا إجراء." },
+    ],
+  },
+  {
     version: "1.10.0",
     date: "2026-07-05",
     changes: [

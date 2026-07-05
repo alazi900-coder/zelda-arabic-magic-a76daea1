@@ -1,5 +1,6 @@
 import React from "react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { hasRisenTags } from "@/lib/risen-tag-guard";
 
 export type FilterStatus = "all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "no-tags" | "damaged-tags" | "missing-tags" | "fuzzy" | "byte-overflow" | "has-newlines" | "translation-has-newline" | "xeno-n-missing" | "excessive-lines" | "byte-budget" | "newline-diff" | "identical-original";
 
@@ -576,7 +577,8 @@ export function hasTechnicalTags(text: string): boolean {
     || /\[[A-Z]{2,10}\]\s*\d+/.test(text)
     || /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/.test(text)
     || /\[\s*\w+\s*=\s*\w[^\]]*\]/.test(text)
-    || /\{\s*\w+\s*:\s*\w[^}]*\}/.test(text);
+    || /\{\s*\w+\s*:\s*\w[^}]*\}/.test(text)
+    || hasRisenTags(text);
 }
 
 // Re-export from dedicated module for backward compatibility

@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.9.1",
+    date: "2026-07-04",
+    changes: [
+      { kind: "fixed", text: "حماية وسوم Risen 1 في لوحة الاقتراحات السياقية (context-suggest) — كانت تعتمد فقط على تعليمة عامة في البروميت بلا أي آلية تقنيع فعلية، بعكس أداة الترجمة الأساسية." },
+      { kind: "fixed", text: "النص العربي المبني لملفات Risen 1 كان يظهر داخل اللعبة بحروف منفصلة غير متصلة — أصبح يُشكَّل (تُربط الحروف) قبل الكتابة في الملف، بنفس الإصلاح المستخدم لـ Xenoblade." },
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-07-04",
     changes: [

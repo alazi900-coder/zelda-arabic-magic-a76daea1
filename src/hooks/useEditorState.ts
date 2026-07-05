@@ -124,7 +124,7 @@ export function useEditorState() {
 
   // Ref wired below to fileIO.handleExportTranslations so the build can auto-export after success
   const onBuildSuccessRef = useRef<(() => void) | null>(null);
-  const build = useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, gameType: "xenoblade", forceSaveRef, onBuildSuccessRef });
+  const build = useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, forceSaveRef, onBuildSuccessRef });
   const { building, buildProgress, dismissBuildProgress, applyingArabic, buildStats, setBuildStats, buildPreview, showBuildConfirm, setShowBuildConfirm, bdatFileStats, safetyRepairs, showSafetyReport, setShowSafetyReport, integrityResult, showIntegrityDialog, setShowIntegrityDialog, checkingIntegrity, handleApplyArabicProcessing, handleUndoArabicProcessing, handlePreBuild, handleBuild, handleCheckIntegrity } = build;
 
 

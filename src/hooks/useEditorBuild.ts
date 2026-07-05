@@ -7,6 +7,7 @@ import { EditorState, hasTechnicalTags } from "@/components/editor/types";
 import { BuildPreview } from "@/components/editor/BuildConfirmDialog";
 import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 
 // Yields to the browser event loop for one frame so React can flush state updates (progress messages).
 const yieldToUI = () => new Promise<void>(r => setTimeout(r, 16));
@@ -45,13 +46,22 @@ interface UseEditorBuildProps {
   setLastSaved: (msg: string) => void;
   arabicNumerals: boolean;
   mirrorPunctuation: boolean;
-  gameType?: string;
   forceSaveRef?: React.RefObject<() => Promise<void>>;
   /** Called after a successful build — used to auto-export translations as JSON. */
   onBuildSuccessRef?: React.RefObject<(() => void) | null>;
 }
 
-export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, gameType, forceSaveRef, onBuildSuccessRef }: UseEditorBuildProps) {
+/** Xenoblade/BDAT and Danganronpa entries all build via the same
+ * handleBuildXenoblade pipeline; Risen has its own dedicated `.p00`/`.pak`
+ * format. Detected from the loaded entries themselves (same `.tab` heuristic
+ * used everywhere else in the editor) rather than a passed-in flag, so this
+ * never drifts out of sync with what's actually loaded. */
+export function detectGameType(entries: EditorState["entries"]): "xenoblade" | "risen" | "unknown" {
+  if (entries.length === 0) return "unknown";
+  return /\.tab$/i.test(entries[0]?.msbtFile || "") ? "risen" : "xenoblade";
+}
+
+export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, forceSaveRef, onBuildSuccessRef }: UseEditorBuildProps) {
   // Use a ref to always access the LATEST state in async handlers
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -1268,113 +1278,36 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
     if (forceSaveRef?.current) {
       await forceSaveRef.current();
     }
-    const isXenoblade = gameType === "xenoblade";
-    
-    if (isXenoblade) {
+
+    const detected = detectGameType(currentState.entries);
+
+    if (detected === "xenoblade") {
       return handleBuildXenoblade();
     }
-    
-    const langBuf = await idbGet<ArrayBuffer>("editorLangFile");
-    const dictBuf = await idbGet<ArrayBuffer>("editorDictFile");
-    const langFileName = (await idbGet<string>("editorLangFileName")) || "output.zs";
-    if (!langBuf) { setBuildProgress("❌ ملف اللغة غير موجود. يرجى العودة لصفحة المعالجة وإعادة رفع الملفات."); return; }
-    setBuilding(true); setBuildProgress("تجهيز الترجمات...");
-    try {
-      const formData = new FormData();
-      formData.append("langFile", new File([new Uint8Array(langBuf)], langFileName));
-      if (dictBuf) formData.append("dictFile", new File([new Uint8Array(dictBuf)], (await idbGet<string>("editorDictFileName")) || "ZsDic.pack.zs"));
-      const nonEmptyTranslations: Record<string, string> = {};
-      for (const [k, v] of Object.entries(currentState.translations)) { if (v.trim()) nonEmptyTranslations[k] = v; }
 
-      // Auto-fix and validate technical tags before build
-      let tagFixCount = 0;
-      let tagSkipCount = 0;
-      let tagOkCount = 0;
-      for (const entry of currentState.entries) {
-        const key = `${entry.msbtFile}:${entry.index}`;
-        const trans = nonEmptyTranslations[key];
-        if (!trans) continue;
-
-        const tagRepair = repairTranslationTagsForBuild(entry.original, trans);
-        const fixed = tagRepair.text;
-
-        if (tagRepair.changed) {
-          nonEmptyTranslations[key] = fixed;
-          tagFixCount++;
-        }
-
-        if (!tagRepair.exactTagMatch || tagRepair.missingClosingTags || tagRepair.missingControlOrPua) {
-          // KEEP the translation — only count it as needing user attention.
-          tagSkipCount++;
-          console.warn(`[BUILD-TAGS] ${key} kept with tag warnings (no delete): exactTagMatch=${tagRepair.exactTagMatch}, missingClosing=${tagRepair.missingClosingTags}, missingControl=${tagRepair.missingControlOrPua}`);
-          continue;
-        }
-
-        tagOkCount++;
+    if (detected === "risen") {
+      setBuilding(true); setBuildProgress("جاري بناء ملف Risen...");
+      try {
+        const result = await buildRisenOutputFromState(currentState.translations, currentState.entries);
+        const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = result.filename;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+        setBuildProgress(`✅ تم البناء! ${result.translatedCount} ترجمة${result.tagRepairCount > 0 ? ` | ⚠️ ${result.tagRepairCount} وسم Risen أُلحق تلقائياً — راجعها` : ""}`);
+      } catch (err) {
+        setBuildProgress(`❌ ${err instanceof Error ? err.message : 'خطأ غير معروف'}`);
+      } finally {
+        setBuilding(false);
       }
-      console.log(`[BUILD-TAGS] Fixed: ${tagFixCount}, Safe: ${tagOkCount}, Skipped: ${tagSkipCount}`);
-      
-      // Validate translations size
-      const translationsJson = JSON.stringify(nonEmptyTranslations);
-      const translationsSizeKB = Math.round(translationsJson.length / 1024);
-      console.log(`[BUILD] Total translations being sent: ${Object.keys(nonEmptyTranslations).length}`);
-      console.log(`[BUILD] Translations JSON size: ${translationsSizeKB} KB`);
-      console.log('[BUILD] Protected entries:', Array.from(currentState.protectedEntries || []).length);
-      console.log('[BUILD] Sample keys:', Object.keys(nonEmptyTranslations).slice(0, 10));
-      
-      if (translationsSizeKB > 5000) {
-        console.warn(`[BUILD] ⚠️ Translations JSON is very large (${translationsSizeKB} KB). This may cause issues.`);
-      }
-      
-      formData.append("translations", JSON.stringify(nonEmptyTranslations));
-      formData.append("protectedEntries", JSON.stringify(Array.from(currentState.protectedEntries || [])));
-      if (arabicNumerals) formData.append("arabicNumerals", "true");
-      if (mirrorPunctuation) formData.append("mirrorPunctuation", "true");
-      setBuildProgress("إرسال للمعالجة...");
-      const response = await fetch(getEdgeFunctionUrl("arabize?mode=build"), {
-        method: 'POST',
-        headers: getSupabaseHeaders(),
-        body: formData,
-      });
-      if (!response.ok) {
-        const ct = response.headers.get('content-type') || '';
-        if (ct.includes('json')) { const err = await response.json(); throw new Error(err.error || `خطأ ${response.status}`); }
-        throw new Error(`خطأ ${response.status}`);
-      }
-      setBuildProgress("تحميل الملف...");
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const modifiedCount = parseInt(response.headers.get('X-Modified-Count') || '0');
-      const expandedCount = parseInt(response.headers.get('X-Expanded-Count') || '0');
-      const fileSize = parseInt(response.headers.get('X-File-Size') || '0');
-      const compressedSize = response.headers.get('X-Compressed-Size');
-      
-      console.log('[BUILD] Response headers - Modified:', response.headers.get('X-Modified-Count'), 'Expanded:', response.headers.get('X-Expanded-Count'));
-      
-      let buildStatsData: BuildStats | null = null;
-      try { buildStatsData = JSON.parse(decodeURIComponent(response.headers.get('X-Build-Stats') || '{}')); } catch { /* ignore */ }
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `arabized_${langFileName}`;
-      a.click();
-      const expandedMsg = expandedCount > 0 ? ` (${expandedCount} تم توسيعها 📐)` : '';
-      setBuildProgress(`✅ تم بنجاح! تم تعديل ${modifiedCount} نص${expandedMsg}`);
-      setBuildStats({
-        modifiedCount,
-        expandedCount,
-        fileSize,
-        compressedSize: compressedSize ? parseInt(compressedSize) : undefined,
-        avgBytePercent: buildStatsData?.avgBytePercent || 0,
-        maxBytePercent: buildStatsData?.maxBytePercent || 0,
-        longest: buildStatsData?.longest || null,
-        shortest: buildStatsData?.shortest || null,
-        categories: buildStatsData?.categories || {},
-      });
-      setBuilding(false);
-    } catch (err) {
-      setBuildProgress(`❌ ${err instanceof Error ? err.message : 'خطأ غير معروف'}`);
-      setBuilding(false);
+      return;
     }
+
+    // Unknown/undetectable game type — fail loudly instead of silently
+    // guessing a build format for entries this editor doesn't recognize.
+    setBuildProgress("❌ تعذّر تحديد نوع اللعبة لهذا الملف — لا يمكن تحديد مسار البناء الصحيح.");
   };
 
   const dismissBuildProgress = () => { setBuildProgress(""); };

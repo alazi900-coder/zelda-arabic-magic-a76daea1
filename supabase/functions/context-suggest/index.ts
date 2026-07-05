@@ -36,6 +36,10 @@ interface RequestBody {
   game?: 'xenoblade' | 'risen';
   /** Risen: the speaking NPC (Owner/Role fields from infos.tab), when known. */
   speaker?: Speaker;
+  /** Risen: the entry's raw id/key (e.g. "HUD2_Damage_Edge") — grounds the model instead of it guessing from a bare filename. */
+  entryKey?: string;
+  /** Risen: the entry's resolved category label (e.g. "القوائم والواجهة"), from the app's own table-based classification. */
+  category?: string;
 }
 
 const DEFAULT_LOVABLE_MODEL = 'google/gemini-3-flash-preview';
@@ -117,6 +121,8 @@ function buildUserPrompt(body: RequestBody): string {
   const speakerLine = (body.speaker?.owner || body.speaker?.role)
     ? `\nالمتحدث: ${[body.speaker.owner, body.speaker.role].filter(Boolean).join(' — ')}`
     : '';
+  const idLine = body.entryKey ? `\nالمعرّف: ${body.entryKey}` : '';
+  const categoryLine = body.category ? `\nتصنيف النص (مكانه الفعلي في اللعبة حسب بنية الملف — استخدمه بدل التخمين): ${body.category}` : '';
 
   // Translation Memory examples — help the model stay consistent with prior
   // translations of similar sentences across the project.
@@ -135,7 +141,7 @@ function buildUserPrompt(body: RequestBody): string {
   return `النص المستهدف:
 EN: ${body.target.original}
 AR الحالية: ${body.target.translation || '(لا توجد)'}
-${fileLine}${speakerLine}
+${fileLine}${idLine}${categoryLine}${speakerLine}
 
 السياق المحيط (${body.context.length} سطر):
 ${ctxLines || '(لا يوجد سياق)'}${tmBlock}${glossaryBlock}${byteLimitBlock}

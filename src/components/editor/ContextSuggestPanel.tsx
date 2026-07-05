@@ -7,6 +7,7 @@ import { Loader2, Brain, Copy, Check, Pencil, RefreshCcw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { idbGet, idbSet } from "@/lib/idb-storage";
+import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 import type { ExtractedEntry } from "./types";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 
@@ -170,6 +171,8 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           providerApiKey,
           game: isRisen ? "risen" : "xenoblade",
           speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined,
+          entryKey: isRisen ? entry.label : undefined,
+          category: isRisen ? categorizeRisenTable(risenTableFromMsbtFile(entry.msbtFile)).label : undefined,
         }),
       });
       const data = await res.json();

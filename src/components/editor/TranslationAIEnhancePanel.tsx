@@ -32,6 +32,7 @@ import {
 } from "@/lib/enhance-rules";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
+import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -459,7 +460,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     let allIssues: GrammarIssue[] = [];
     let processed = 0;
 
-    const batches: { textsToAnalyze: { key: string; original: string; translation: string }[] }[] = [];
+    const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
     for (let i = 0; i < translatedEntries.length; i += BATCH_SIZE) {
       const batch = translatedEntries.slice(i, i + BATCH_SIZE);
       batches.push({
@@ -467,6 +468,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           key: `${e.msbtFile}:${e.index}`,
           original: e.original,
           translation: translations[`${e.msbtFile}:${e.index}`],
+          category: isRisen ? categorizeRisenTable(risenTableFromMsbtFile(e.msbtFile)).label : undefined,
         })),
       });
     }

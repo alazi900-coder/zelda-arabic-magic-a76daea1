@@ -17,6 +17,8 @@ interface EnhanceEntry {
   translation: string;
   fileName?: string;
   tableName?: string;
+  /** Risen: resolved category label (e.g. "القوائم والواجهة") — grounds the model instead of it guessing from the raw text alone. */
+  category?: string;
 }
 
 // خطّ اللعبة لا يدعم علامات التنوين/الحركات/الشدّة/السكون. نُزيلها تلقائيّاً
@@ -536,7 +538,7 @@ ${ruleSections.protect}
 - low: تحسين بسيط (weak خفيف)
 
 ${extraInstructionsBlock}النصوص:
-${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -634,7 +636,7 @@ ${ruleSections.protect}
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 ${extraInstructionsBlock}**النصوص للفحص:**
-${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -732,7 +734,7 @@ ${ruleSections.protect}
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 ${extraInstructionsBlock}**النصوص للمراجعة:**
-${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {

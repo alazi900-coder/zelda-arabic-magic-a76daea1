@@ -27,8 +27,8 @@ import {
   type RisenFieldRaw,
 } from "./risen-p00";
 import { idbGet } from "./idb-storage";
-import { hasRisenTags, restoreRisenTags } from "./risen-tag-guard";
-import { hasArabicChars, reshapeArabic, stripDiacritics } from "./arabic-processing";
+import { hasRisenTags, restoreRisenTags, extractRisenTags } from "./risen-tag-guard";
+import { shapeArabicForRisen } from "./risen/arabic-shaper";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";
@@ -178,6 +178,13 @@ export interface RisenBuildResult {
   tagRepairCount: number;
 }
 
+export interface RisenBuildOptions {
+  /** Convert Arabic translations to shaped, visually-reordered presentation
+   * forms before writing — required for Risen's engine to render connected,
+   * correctly-ordered Arabic (confirmed by in-game test). Default true. */
+  shapeArabic?: boolean;
+}
+
 /**
  * Build the translated strings.p00/pak from the editor's saved translations —
  * the single build implementation shared by RisenProcess.tsx's dedicated build
@@ -191,12 +198,15 @@ export interface RisenBuildResult {
  * any translation missing a Risen tag present in its original (e.g. <Exit>,
  * $(name)) gets the tag safely appended before writing — the same repair the
  * editor applies live on manual edits, covering translations saved before
- * this protection existed or edited outside the normal flow.
+ * this protection existed or edited outside the normal flow. Tag-guard repair
+ * always runs BEFORE Arabic shaping (it compares logical text).
  */
 export async function buildRisenOutputFromState(
   translations: Record<string, string>,
   entries?: ExtractedEntry[],
+  options?: RisenBuildOptions,
 ): Promise<RisenBuildResult> {
+  const shapeArabic = options?.shapeArabic !== false;
   const buffer = await idbGet<ArrayBuffer>(RISEN_BUFFER_KEY);
   if (!buffer) {
     throw new Error("لا يوجد ملف مصدر — ارفع strings.p00 أو strings.pak من صفحة Risen أولاً");
@@ -233,14 +243,22 @@ export async function buildRisenOutputFromState(
       }
     }
 
-    // Risen's Genome engine renders raw logical-order Arabic Unicode with
-    // disconnected letters (no contextual shaping) — reshape into joined
-    // presentation forms before writing, same font-limitation fix Xenoblade
-    // needs. Unlike Xenoblade this does NOT reverse BiDi order (unconfirmed
-    // whether Risen's engine needs that); reshapeArabic leaves non-Arabic
-    // characters (tags, digits, Latin) untouched.
-    if (hasArabicChars(value)) {
-      value = reshapeArabic(stripDiacritics(value));
+    // Risen's Genome engine draws raw logical-order Arabic glyph-by-glyph,
+    // strictly left-to-right, with no shaping and no BiDi — confirmed in-game
+    // (disconnected, reversed-reading letters). Shape + visually reorder
+    // before writing, same font-limitation class of fix Xenoblade needs.
+    if (shapeArabic) {
+      // Tags may legitimately change ORDER (a line-wide reversal can flip
+      // which tag reads first), but the exact multiset of tokens must survive
+      // byte-identical — compare sorted, not positionally.
+      const beforeTags = extractRisenTags(value).slice().sort();
+      const shapedValue = shapeArabicForRisen(value);
+      const afterTags = extractRisenTags(shapedValue).slice().sort();
+      if (beforeTags.join(' ') !== afterTags.join(' ')) {
+        console.warn(`[risen-build] Arabic shaping altered protected tags for key ${key} — keeping unshaped value`);
+      } else {
+        value = shapedValue;
+      }
     }
 
     const table = stripStageDirSuffix(msbtFile);

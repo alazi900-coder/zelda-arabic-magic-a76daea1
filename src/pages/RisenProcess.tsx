@@ -29,6 +29,7 @@ const RisenProcess = () => {
   const [building, setBuilding] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [includeStageDir, setIncludeStageDir] = useState(false);
+  const [shapeArabic, setShapeArabic] = useState(true);
 
   const addLog = useCallback((msg: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString("ar-SA")}] ${msg}`]);
@@ -121,7 +122,7 @@ const RisenProcess = () => {
       }
 
       addLog("جاري تحليل الملف الأصلي وتطبيق الترجمات...");
-      const result = await buildRisenOutputFromState(editorState.translations, editorState.entries);
+      const result = await buildRisenOutputFromState(editorState.translations, editorState.entries, { shapeArabic });
       addLog(`تم جمع ${result.translatedCount} ترجمة وإعادة بناء الملف`);
       if (result.tagRepairCount > 0) {
         addLog(`⚠️ ${result.tagRepairCount} ترجمة كان ينقصها وسم Risen — أُلحق تلقائياً، يُنصح بمراجعتها`);
@@ -149,7 +150,7 @@ const RisenProcess = () => {
     } finally {
       setBuilding(false);
     }
-  }, [addLog]);
+  }, [addLog, shapeArabic]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
@@ -251,6 +252,16 @@ const RisenProcess = () => {
                 </p>
               </div>
             </div>
+            <label className="flex items-center gap-2 mb-3 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={shapeArabic}
+                onChange={(e) => setShapeArabic(e.target.checked)}
+                disabled={building}
+                className="rounded border-border"
+              />
+              تحويل النص العربي لأشكال العرض (مطلوب للعبة)
+            </label>
             <Button
               onClick={handleBuild}
               disabled={building}

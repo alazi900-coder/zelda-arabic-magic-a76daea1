@@ -37,11 +37,12 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   setShowDiagnostic,
 }) => {
   const [risenBuilding, setRisenBuilding] = useState(false);
+  const [shapeArabic, setShapeArabic] = useState(true);
 
   const handleRisenBuild = async () => {
     setRisenBuilding(true);
     try {
-      const result = await buildRisenOutputFromState(editor.state?.translations || {}, editor.state?.entries);
+      const result = await buildRisenOutputFromState(editor.state?.translations || {}, editor.state?.entries, { shapeArabic });
       const blob = new Blob([result.buffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -86,6 +87,12 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               <input type="checkbox" checked={editor.mirrorPunctuation} onChange={(e) => editor.setMirrorPunctuation(e.target.checked)} className="rounded border-border" />
               عكس علامات الترقيم (؟ ، ؛)
             </label>
+            {isRisen && (
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-body">
+                <input type="checkbox" checked={shapeArabic} onChange={(e) => setShapeArabic(e.target.checked)} disabled={risenBuilding} className="rounded border-border" />
+                تحويل النص العربي لأشكال العرض (مطلوب للعبة)
+              </label>
+            )}
           </div>
         </CardContent>
       </Card>

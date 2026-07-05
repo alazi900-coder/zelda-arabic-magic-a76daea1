@@ -3,6 +3,7 @@
 // يدعم: Lovable AI Gateway (Gemini/GPT)، Google Gemini API مباشر، Google Translate.
 // =============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,7 @@ interface ReqBody {
   model?: string;
   apiKey?: string;
   entries: ReqEntry[];
+  game?: "xenoblade" | "risen";
 }
 
 /** يبني توجيه AI صارم لإعادة التقسيم فقط بدون تغيير المحتوى. */
@@ -235,16 +237,30 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // Mask Risen tags before they reach an LLM — this function's own safeguard()
+    // would already reject a mistranslated tag (content no longer matches), so
+    // without masking, Risen entries just silently fail to get re-split at all.
+    // Google Translate never sees an LLM (word-weighting only) — no masking needed there.
+    const isRisen = body.game === "risen";
+    const risenTagsByKey = new Map<string, string[]>();
+    const promptEntries: ReqEntry[] = isRisen
+      ? body.entries.map((e) => {
+          const { maskedA, maskedB, tags } = maskRisenTagPair(e.originalEn, e.currentAr);
+          risenTagsByKey.set(e.key, tags);
+          return { ...e, originalEn: maskedA, currentAr: maskedB };
+        })
+      : body.entries;
+
     let raw: Record<string, string> = {};
     if (body.engine === "lovable") {
       try {
-        raw = await callLovable(body.entries, body.model || "google/gemini-3-flash-preview");
+        raw = await callLovable(promptEntries, body.model || "google/gemini-3-flash-preview");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // Fallback تلقائي إلى Gemini المباشر عند نفاد رصيد Lovable أو تجاوز الحد
         const geminiKey = Deno.env.get("GEMINI_API_KEY");
         if ((msg.startsWith("402:") || msg.startsWith("429:")) && geminiKey) {
-          raw = await callGeminiDirect(body.entries, geminiKey);
+          raw = await callGeminiDirect(promptEntries, geminiKey);
         } else {
           throw err;
         }
@@ -252,14 +268,14 @@ Deno.serve(async (req) => {
     } else if (body.engine === "gemini-direct") {
       const key = body.apiKey || Deno.env.get("GEMINI_API_KEY");
       if (!key) throw new Error("apiKey مطلوب");
-      raw = await callGeminiDirect(body.entries, key);
+      raw = await callGeminiDirect(promptEntries, key);
     } else if (body.engine === "google-translate") {
       if (!body.apiKey) throw new Error("apiKey مطلوب");
       raw = await callGoogleTranslate(body.entries, body.apiKey);
     } else if (body.engine === "deepseek") {
       const key = body.apiKey || Deno.env.get("DEEPSEEK_API_KEY");
       if (!key) throw new Error("مفتاح DeepSeek مطلوب");
-      raw = await callDeepSeek(body.entries, body.model || "deepseek-reasoner", key);
+      raw = await callDeepSeek(promptEntries, body.model || "deepseek-reasoner", key);
     } else {
       return new Response(JSON.stringify({ error: "محرّك غير مدعوم في هذه النقطة." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -267,8 +283,12 @@ Deno.serve(async (req) => {
     }
     const results: Record<string, string> = {};
     for (const e of body.entries) {
-      const cand = raw[e.key];
-      if (cand) results[e.key] = safeguard(e.currentAr, cand);
+      let cand = raw[e.key];
+      if (cand) {
+        const tags = risenTagsByKey.get(e.key);
+        if (tags) cand = unmaskRisenTags(cand, tags);
+        results[e.key] = safeguard(e.currentAr, cand);
+      }
     }
     return new Response(JSON.stringify({ results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

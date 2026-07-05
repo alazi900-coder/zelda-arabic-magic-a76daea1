@@ -2,6 +2,7 @@
 // game entry sent — see the `game` field on RequestBody).
 // Supports Lovable AI Gateway (Gemini/GPT) and DeepSeek (V4 Pro/Flash).
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { maskRisenTags, unmaskRisenTags } from '../_shared/risen-tag-mask.ts';
 
 interface ContextEntry {
   original: string;
@@ -43,28 +44,6 @@ const GAME_LABELS: Record<string, string> = {
   xenoblade: 'سلسلة Xenoblade Chronicles',
   risen: 'لعبة Risen 1 (محرك Genome — عالم RPG مفتوح بطابع قروسطي)',
 };
-
-// Risen 1's own tag formats (mirrors supabase/functions/translate-entries/index.ts
-// and src/lib/risen-tag-guard.ts) — masked with a ⟦N⟧ marker before the target
-// text reaches the model, so it never sees (and can't mistranslate) the raw tag.
-const RISEN_TAG_REGEX = /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|\b(?:XXX|SGN|SGT|SGPT|SGL)\b|\bMM\b(?=\s*minutes)|\bHH\b(?=\s*hours)|\bDD\b(?=\s*days)/g;
-
-function maskRisenTags(text: string): { masked: string; tags: string[] } {
-  const tags: string[] = [];
-  const masked = text.replace(new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags), (m) => {
-    tags.push(m);
-    return `⟦${tags.length - 1}⟧`;
-  });
-  return { masked, tags };
-}
-
-function unmaskRisenTags(text: string, tags: string[]): string {
-  let result = text;
-  tags.forEach((tag, i) => {
-    result = result.split(`⟦${i}⟧`).join(tag);
-  });
-  return result;
-}
 
 function buildSystemPrompt(game?: string): string {
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;

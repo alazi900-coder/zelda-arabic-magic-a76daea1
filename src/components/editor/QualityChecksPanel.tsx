@@ -275,6 +275,7 @@ const FIXABLE_TYPES = new Set(["extra_spaces_check", "punctuation_check", "gramm
 
 export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry, glossary }: QualityChecksPanelProps) {
   const isEnabled = (_id: string) => true;
+  const isRisen = /\.tab$/i.test(state.entries[0]?.msbtFile || "");
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
@@ -390,6 +391,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
               original: issue.original,
               translation: issue.translation,
               issues: issueDescriptions,
+              game: isRisen ? 'risen' : 'xenoblade',
             },
           });
           if (!error && data?.result) {
@@ -405,7 +407,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
 
     setAutoFixProgress('');
     setAutoFixRunning(false);
-  }, [results.issues, onApplyFix, isEnabled]);
+  }, [results.issues, onApplyFix, isEnabled, isRisen]);
 
   // === Feature 2: AI Fix suggestion ===
   const handleAiFix = useCallback(async (issue: QualityIssue) => {
@@ -418,6 +420,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
           original: issue.original,
           translation: issue.translation,
           issues: issueDescriptions,
+          game: isRisen ? 'risen' : 'xenoblade',
         },
       });
       if (error) throw error;
@@ -429,7 +432,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     } finally {
       setAiFixing(prev => ({ ...prev, [issue.key]: false }));
     }
-  }, []);
+  }, [isRisen]);
 
   // === Feature 3: Context check ===
   const handleContextCheck = useCallback(async () => {
@@ -444,7 +447,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
         translation: i.translation,
       }));
       const { data, error } = await supabase.functions.invoke('translation-tools', {
-        body: { style: 'context-check', entries, glossary: glossary?.slice(0, 3000) },
+        body: { style: 'context-check', entries, glossary: glossary?.slice(0, 3000), game: isRisen ? 'risen' : 'xenoblade' },
       });
       if (error) throw error;
       if (data?.result) {
@@ -461,7 +464,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     } finally {
       setContextChecking(false);
     }
-  }, [results.issues, activeFilter, glossary]);
+  }, [results.issues, activeFilter, glossary, isRisen]);
 
   // === Feature 4: Batch improve ===
   const handleBatchImprove = useCallback(async () => {
@@ -476,7 +479,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
         translation: i.translation,
       }));
       const { data, error } = await supabase.functions.invoke('translation-tools', {
-        body: { style: 'batch-improve', entries, improvementStyle, glossary: glossary?.slice(0, 3000) },
+        body: { style: 'batch-improve', entries, improvementStyle, glossary: glossary?.slice(0, 3000), game: isRisen ? 'risen' : 'xenoblade' },
       });
       if (error) throw error;
       if (data?.result) {
@@ -499,7 +502,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     } finally {
       setBatchImproving(false);
     }
-  }, [results.issues, activeFilter, improvementStyle, glossary]);
+  }, [results.issues, activeFilter, improvementStyle, glossary, isRisen]);
 
   const applyAllImproved = useCallback(() => {
     let count = 0;

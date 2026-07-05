@@ -271,7 +271,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
     setBackTranslation(null);
     try {
       const { data, error } = await supabase.functions.invoke('translation-tools', {
-        body: { text: translation, style: 'back-translate' },
+        body: { text: translation, style: 'back-translate', game: isRisenEntry ? 'risen' : 'xenoblade' },
       });
       if (error) throw error;
       setBackTranslation(data?.result || 'لم يتم الحصول على نتيجة');
@@ -294,6 +294,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
           entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }],
           glossary,
           action: 'quick-alternatives',
+          game: isRisenEntry ? 'risen' : 'xenoblade',
         }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);

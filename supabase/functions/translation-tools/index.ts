@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +13,14 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { text, style, entries, glossary } = body;
+    const { text, style, entries, glossary, game } = body;
+
+    // Mask Risen tags before ANY prompt text is built — the response here is a
+    // single combined string (per-entry masking isn't needed), so one shared
+    // masker for the whole request is enough; unmask the final result once.
+    const isRisen = game === 'risen';
+    const masker = isRisen ? createRisenMasker() : null;
+    const pt = (s: string): string => (masker && typeof s === 'string' ? masker.mask(s) : s);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -37,7 +45,7 @@ Translate the Arabic text back to English as accurately as possible.
 - Keep technical tags like [ML:...] and {variables} unchanged
 - Keep game terms in their English form
 - Return ONLY the English translation, no explanations`;
-      userPrompt = `Translate this Arabic text to English:\n\n${text}`;
+      userPrompt = `Translate this Arabic text to English:\n\n${pt(text)}`;
 
     } else if (style === 'ai-fix') {
       // AI Fix suggestion: given original + translation + issue description, suggest a fix
@@ -59,7 +67,7 @@ Rules:
 - If the issues mention extra spaces, remove them
 - If the issues mention punctuation, fix it
 - Do NOT change parts that have no issues`;
-      userPrompt = `English original: ${original}\n\nCurrent Arabic translation: ${trans}\n\nDetected issues:\n${issues}\n\nProvide the fixed Arabic translation:`;
+      userPrompt = `English original: ${pt(original)}\n\nCurrent Arabic translation: ${pt(trans)}\n\nDetected issues:\n${issues}\n\nProvide the fixed Arabic translation:`;
 
     } else if (style === 'context-check') {
       // Contextual check: verify translation makes sense in game context
@@ -83,7 +91,7 @@ Return a JSON array of objects. For each entry that has issues, include:
 
 Only include entries that have actual contextual issues. If an entry is fine, skip it.
 Return ONLY the JSON array, no other text.${glossaryContext}`;
-      userPrompt = `Review these translations:\n${entries.map((e: any) => `[${e.key}] EN: ${e.original}\nAR: ${e.translation}`).join('\n\n')}`;
+      userPrompt = `Review these translations:\n${entries.map((e: any) => `[${e.key}] EN: ${pt(e.original)}\nAR: ${pt(e.translation)}`).join('\n\n')}`;
 
     } else if (style === 'batch-improve') {
       // Batch improve: improve wording of multiple translations at once
@@ -110,7 +118,7 @@ Rules:
 - Only include entries where you actually made improvements
 - If a translation is already good, skip it
 - Return ONLY the JSON array${glossaryContext}`;
-      userPrompt = `Improve these translations:\n${entries.map((e: any) => `[${e.key}] EN: ${e.original}\nAR: ${e.translation}`).join('\n\n')}`;
+      userPrompt = `Improve these translations:\n${entries.map((e: any) => `[${e.key}] EN: ${pt(e.original)}\nAR: ${pt(e.translation)}`).join('\n\n')}`;
 
     } else if (style === 'mismatch-detect') {
       // Detect misplaced translations using AI
@@ -139,7 +147,7 @@ Return a JSON array of objects for ONLY the mismatched entries:
 
 If all translations match their originals, return an empty array [].
 Return ONLY the JSON array.`;
-      userPrompt = `Check these translation pairs for mismatches:\n${entries.map((e: any) => `[${e.key}] EN: ${e.original}\nAR: ${e.translation}`).join('\n\n')}`;
+      userPrompt = `Check these translation pairs for mismatches:\n${entries.map((e: any) => `[${e.key}] EN: ${pt(e.original)}\nAR: ${pt(e.translation)}`).join('\n\n')}`;
 
     } else {
       // Style translation
@@ -160,7 +168,7 @@ Translate the text to Arabic following this style guide:
 ${guide}
 - Preserve technical tags like [ML:...] and {variables} unchanged
 - Return ONLY the Arabic translation, no explanations`;
-      userPrompt = `Translate to Arabic:\n\n${text}`;
+      userPrompt = `Translate to Arabic:\n\n${pt(text)}`;
     }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -197,7 +205,8 @@ ${guide}
     }
 
     const data = await response.json();
-    const result = data.choices?.[0]?.message?.content?.trim() || '';
+    let result = data.choices?.[0]?.message?.content?.trim() || '';
+    if (masker) result = unmaskRisenTags(result, masker.tags);
 
     return new Response(JSON.stringify({ result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

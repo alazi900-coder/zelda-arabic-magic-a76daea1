@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,6 +37,12 @@ Deno.serve(async (req) => {
     for (let c = 0; c < entries.length; c += CHUNK_SIZE) {
       const chunk = entries.slice(c, c + CHUNK_SIZE);
 
+      // This pool is bundled across every game the tool supports, with no
+      // per-entry game/msbtFile field to gate on — mask unconditionally.
+      // RISEN_TAG_REGEX simply won't match non-Risen Arabic text, so this is
+      // a no-op for every other game.
+      const masker = createRisenMasker();
+
       const prompt = `أنت مدقق لغوي عربي متخصص في ترجمات ألعاب الفيديو. مهمتك تصحيح الأخطاء الإملائية والنحوية فقط دون تغيير المعنى أو الأسلوب.
 
 قواعد صارمة:
@@ -50,7 +57,7 @@ Deno.serve(async (req) => {
 - لا تضف تشكيلات أو حركات
 
 النصوص:
-${chunk.map((e, i) => `[${i}] "${e.arabic}"`).join('\n')}
+${chunk.map((e, i) => `[${i}] "${masker.mask(e.arabic)}"`).join('\n')}
 
 أخرج JSON array فقط بنفس الترتيب يحتوي النصوص المصححة. مثال: ["نص مصحح 1", "نص مصحح 2"]`;
 
@@ -103,7 +110,7 @@ ${chunk.map((e, i) => `[${i}] "${e.arabic}"`).join('\n')}
 
         for (let i = 0; i < Math.min(chunk.length, corrected.length); i++) {
           const orig = chunk[i].arabic.trim();
-          const fixed = corrected[i]?.trim();
+          const fixed = unmaskRisenTags(corrected[i] || '', masker.tags).trim();
           if (fixed && fixed !== orig) {
             allResults.push({
               key: chunk[i].key,

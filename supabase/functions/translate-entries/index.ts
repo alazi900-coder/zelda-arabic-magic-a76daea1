@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { RISEN_TAG_REGEX } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -234,10 +235,11 @@ const ABBREV_PATTERN = new RegExp(`\\b(${PROTECTED_ABBREVIATIONS.join('|')})\\b`
 
 // Risen 1's own tag formats (confirmed from real extracted strings) — masked
 // proactively with a ⟦N⟧ marker distinct from TAG_N, only when _game ===
-// 'risen' (see protectTags below). Mirrors src/lib/risen-tag-guard.ts, the
-// client-side editor equivalent used for post-hoc repair; this is the
-// pre-emptive half — prevent the model from ever seeing the raw tag.
-const RISEN_TAG_REGEX = /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|\b(?:XXX|SGN|SGT|SGPT|SGL)\b|\bMM\b(?=\s*minutes)|\bHH\b(?=\s*hours)|\bDD\b(?=\s*days)/g;
+// 'risen' (see protectTags below). RISEN_TAG_REGEX is shared with
+// supabase/functions/_shared/risen-tag-mask.ts (single source of truth) and
+// mirrors src/lib/risen-tag-guard.ts, the client-side editor equivalent used
+// for post-hoc repair; this is the pre-emptive half — prevent the model from
+// ever seeing the raw tag.
 
 function protectTags(text: string): { cleaned: string; tags: Map<string, string> } {
   const tags = new Map<string, string>();

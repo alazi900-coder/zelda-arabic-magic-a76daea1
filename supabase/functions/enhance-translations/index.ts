@@ -4,6 +4,7 @@
 // والمصطلحات الخاصّة بـ Xenoblade Chronicles 1 (Shulk, Reyn, Fiora, Monado، إلخ).
 // =============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -342,6 +343,26 @@ Deno.serve(async (req) => {
     const isRisen = game === 'risen';
     const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
+    // Mask Risen tags (<Exit>, $(name), ...) before ANY prompt text is built —
+    // the model never sees them and so can't mistranslate/mangle them. Each
+    // entry's original+translation share ONE tag list (maskRisenTagPair), so
+    // whichever field the model's response echoes a placeholder from, it can
+    // still be unmasked unambiguously. `entries` (raw) stays untouched for
+    // index/key/metadata lookups; `promptEntries` (masked) is used ONLY to
+    // build prompt text.
+    const risenTagsByKey = new Map<string, string[]>();
+    const promptEntries: EnhanceEntry[] = isRisen
+      ? entries.map((e) => {
+          const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
+          risenTagsByKey.set(e.key, tags);
+          return { ...e, original: maskedA, translation: maskedB };
+        })
+      : entries;
+    const unmaskSuggestion = (key: string, text: string): string => {
+      const tags = risenTagsByKey.get(key);
+      return tags ? unmaskRisenTags(text, tags) : text;
+    };
+
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
     const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
@@ -510,7 +531,7 @@ ${ruleSections.protect}
 - low: تحسين بسيط (weak خفيف)
 
 النصوص:
-${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -566,7 +587,7 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
           fixExplanation: i.fix_explanation || i.fixExplanation || '',
           // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
           // من رفض الاقتراح بالكامل، يكفي تنظيفه.
-          suggestion: stripGameUnsupportedMarks(i.suggestion || ''),
+          suggestion: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', i.suggestion || '')),
           severity: i.severity || 'medium',
         };
       }).filter((i) =>
@@ -608,7 +629,7 @@ ${ruleSections.protect}
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 **النصوص للفحص:**
-${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -659,10 +680,10 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
       const mappedResults = passResult.merged.map((r) => {
         const entry = entries[r.index ?? -1];
         // إزالة علامات التشكيل تلقائيّاً من الاقتراح والبدائل.
-        const cleanedSuggested = stripGameUnsupportedMarks(r.suggested || '');
+        const cleanedSuggested = stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', r.suggested || ''));
         const cleanedAlternatives = Array.isArray(r.alternatives)
           ? r.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-            .map((a) => stripGameUnsupportedMarks(a as string))
+            .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
           : [];
         return {
           key: entry?.key || '',
@@ -706,7 +727,7 @@ ${ruleSections.protect}
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 **النصوص للمراجعة:**
-${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -759,10 +780,10 @@ ${entries.map((e, i) => `[${i}] الأصل: ${e.original}\nالترجمة: ${e.t
         original: entry?.original || '',
         current: entry?.translation || '',
         // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
-        suggested: stripGameUnsupportedMarks(s.suggested || ''),
+        suggested: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', s.suggested || '')),
         alternatives: Array.isArray(s.alternatives)
           ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-            .map((a) => stripGameUnsupportedMarks(a as string))
+            .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
           : [],
         reason: s.reason,
         detail: s.detail || '',

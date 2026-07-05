@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,9 +12,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary } = await req.json() as {
+    const { entries, glossary, game } = await req.json() as {
       entries: { key: string; original: string; translation: string }[];
       glossary?: string;
+      game?: 'xenoblade' | 'risen';
     };
 
     if (!entries || entries.length === 0) {
@@ -22,7 +24,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const textsBlock = entries.map((e, i) => 
+    // Mask Risen tags (<Exit>, $(name), ...) before they reach the model —
+    // this function's whole job is "translate remaining English words", and
+    // without masking it would happily "translate" a bare tag too.
+    const isRisen = game === 'risen';
+    const risenTagsByIndex: string[][] = [];
+    const promptEntries = isRisen
+      ? entries.map((e) => {
+          const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
+          risenTagsByIndex.push(tags);
+          return { ...e, original: maskedA, translation: maskedB };
+        })
+      : entries;
+
+    const textsBlock = promptEntries.map((e, i) =>
       `[${i}]\nOriginal: ${e.original}\nCurrent translation (mixed): ${e.translation}`
     ).join('\n\n');
 
@@ -96,7 +111,8 @@ ${textsBlock}`;
     const result: Record<string, string> = {};
     for (let i = 0; i < Math.min(entries.length, translations.length); i++) {
       if (translations[i]?.trim()) {
-        result[entries[i].key] = translations[i];
+        const tags = risenTagsByIndex[i];
+        result[entries[i].key] = tags ? unmaskRisenTags(translations[i], tags) : translations[i];
       }
     }
 

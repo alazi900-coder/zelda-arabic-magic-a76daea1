@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,12 +42,37 @@ Deno.serve(async (req) => {
    }
 
    try {
-      const { entries, glossary, action, aiModel, contextEntries } = await req.json() as {
+      const { entries, glossary, action, aiModel, contextEntries, game } = await req.json() as {
         entries: ReviewEntry[];
         glossary?: string;
         action?: 'review' | 'suggest-short' | 'improve' | 'smart-review' | 'grammar-check' | 'context-review' | 'quick-alternatives' | 'auto-correct' | 'detect-weak' | 'context-retranslate';
         aiModel?: string;
         contextEntries?: { key: string; original: string; translation: string }[];
+        game?: 'xenoblade' | 'risen';
+      };
+
+      // Mask Risen tags before ANY prompt text is built, across every action
+      // below — the model never sees them and so can't mistranslate/mangle
+      // them. `entries`/`contextEntries` (raw) stay untouched for filtering,
+      // byte-length checks, and result metadata; `promptText(e)` gives the
+      // masked original/translation to embed in prompt strings only, and
+      // `unmaskFor(key, text)` restores a model-returned string afterward.
+      const isRisen = game === 'risen';
+      const risenTagsByKey = new Map<string, string[]>();
+      const maskedByKey = new Map<string, { original: string; translation: string }>();
+      if (isRisen) {
+        for (const e of [...entries, ...(contextEntries || [])]) {
+          if (maskedByKey.has(e.key)) continue;
+          const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
+          risenTagsByKey.set(e.key, tags);
+          maskedByKey.set(e.key, { original: maskedA, translation: maskedB });
+        }
+      }
+      const promptText = (e: { key: string; original: string; translation: string }) =>
+        isRisen ? (maskedByKey.get(e.key) || e) : e;
+      const unmaskFor = (key: string, text: string): string => {
+        const tags = risenTagsByKey.get(key);
+        return tags ? unmaskRisenTags(text, tags) : text;
       };
 
       // Map aiModel to gateway model name
@@ -94,8 +120,9 @@ Deno.serve(async (req) => {
 ${tooLongEntries.map((e, i) => {
           const currentBytes = getUtf16ByteLength(e.translation);
           const charsToRemove = Math.ceil((currentBytes - e.maxBytes) / 2);
-          return `[${i}] الأصلي: "${e.original}"
-الترجمة الحالية (${currentBytes} بايت): "${e.translation}"
+          const pt = promptText(e);
+          return `[${i}] الأصلي: "${pt.original}"
+الترجمة الحالية (${currentBytes} بايت): "${pt.translation}"
 الحد الأقصى: ${e.maxBytes} بايت — يجب حذف ${charsToRemove} حرف على الأقل`;
         }).join('\n\n')}
 
@@ -130,15 +157,18 @@ ${tooLongEntries.map((e, i) => {
        const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
        const suggestions: string[] = JSON.parse(sanitized);
 
-       const result = tooLongEntries.map((entry, i) => ({
-         key: entry.key,
-         original: entry.original,
-         current: entry.translation,
-         currentBytes: getUtf16ByteLength(entry.translation),
-         maxBytes: entry.maxBytes,
-         suggested: suggestions[i] || entry.translation,
-         suggestedBytes: getUtf16ByteLength(suggestions[i] || entry.translation),
-       }));
+       const result = tooLongEntries.map((entry, i) => {
+         const suggested = unmaskFor(entry.key, suggestions[i] || entry.translation);
+         return {
+           key: entry.key,
+           original: entry.original,
+           current: entry.translation,
+           currentBytes: getUtf16ByteLength(entry.translation),
+           maxBytes: entry.maxBytes,
+           suggested,
+           suggestedBytes: getUtf16ByteLength(suggested),
+         };
+       });
 
        return new Response(JSON.stringify({ suggestions: result }), {
          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -177,8 +207,8 @@ ${tooLongEntries.map((e, i) => {
 ${glossary ? `\nالقاموس المعتمد (التزم به):\n${glossary.slice(0, 3000)}\n` : ''}
 
 النصوص:
-${chunk.map((e, i) => `[${i}] EN: "${e.original}"
-AR: "${e.translation}"`).join('\n\n')}
+${chunk.map((e, i) => { const pt = promptText(e); return `[${i}] EN: "${pt.original}"
+AR: "${pt.translation}"`; }).join('\n\n')}
 
 أخرج JSON array فقط. كل عنصر:
 {"i": رقم_النص, "type": "literal"|"grammar"|"inconsistency"|"naturalness", "issue": "وصف المشكلة بالعربية", "fix": "الترجمة المقترحة"}
@@ -231,7 +261,7 @@ AR: "${e.translation}"`).join('\n\n')}
                   current: chunk[f.i].translation,
                   type: f.type || 'naturalness',
                   issue: f.issue || '',
-                  fix: f.fix || '',
+                  fix: unmaskFor(chunk[f.i].key, f.fix || ''),
                 });
               }
             }
@@ -281,8 +311,8 @@ AR: "${e.translation}"`).join('\n\n')}
 ${glossary ? `\nالقاموس المعتمد:\n${glossary.slice(0, 2000)}\n` : ''}
 
 النصوص:
-${chunk.map((e, i) => `[${i}] EN: "${e.original}"
-AR: "${e.translation}"`).join('\n\n')}
+${chunk.map((e, i) => { const pt = promptText(e); return `[${i}] EN: "${pt.original}"
+AR: "${pt.translation}"`; }).join('\n\n')}
 
 أخرج JSON array فقط. كل عنصر:
 {"i": رقم_النص, "type": "gender"|"conjugation"|"case"|"spelling"|"hamza"|"negation"|"preposition", "issue": "شرح الخطأ", "fix": "الترجمة المصحّحة"}
@@ -330,7 +360,7 @@ AR: "${e.translation}"`).join('\n\n')}
                   current: chunk[f.i].translation,
                   type: f.type || 'spelling',
                   issue: f.issue || '',
-                  fix: f.fix || '',
+                  fix: unmaskFor(chunk[f.i].key, f.fix || ''),
                 });
               }
             }
@@ -361,7 +391,7 @@ AR: "${e.translation}"`).join('\n\n')}
 
           // Build context: include surrounding entries for each chunk entry
           const contextBlock = contextEntries && contextEntries.length > 0
-            ? `\nسياق إضافي (نصوص مجاورة من نفس الملف):\n${contextEntries.slice(0, 30).map(ce => `  "${ce.original}" → "${ce.translation}"`).join('\n')}\n`
+            ? `\nسياق إضافي (نصوص مجاورة من نفس الملف):\n${contextEntries.slice(0, 30).map(ce => { const pt = promptText(ce); return `  "${pt.original}" → "${pt.translation}"`; }).join('\n')}\n`
             : '';
 
           const prompt = `أنت مراجع ترجمات ألعاب فيديو متخصص في السياق. مهمتك: تحليل كل ترجمة في سياقها (الجمل المحيطة والأحداث) وتحسينها.
@@ -377,8 +407,8 @@ ${glossary ? `\nالقاموس المعتمد:\n${glossary.slice(0, 2000)}\n` : 
 ${contextBlock}
 
 النصوص للمراجعة:
-${chunk.map((e, i) => `[${i}] EN: "${e.original}"
-AR: "${e.translation}"`).join('\n\n')}
+${chunk.map((e, i) => { const pt = promptText(e); return `[${i}] EN: "${pt.original}"
+AR: "${pt.translation}"`; }).join('\n\n')}
 
 أخرج JSON array فقط. كل عنصر:
 {"i": رقم_النص, "type": "context-mismatch"|"tone-mismatch"|"ambiguity"|"continuity"|"improvement", "issue": "وصف المشكلة بالعربية", "fix": "الترجمة المحسّنة بناءً على السياق"}
@@ -426,7 +456,7 @@ AR: "${e.translation}"`).join('\n\n')}
                   current: chunk[f.i].translation,
                   type: f.type || 'improvement',
                   issue: f.issue || '',
-                  fix: f.fix || '',
+                  fix: unmaskFor(chunk[f.i].key, f.fix || ''),
                 });
               }
             }
@@ -450,13 +480,14 @@ AR: "${e.translation}"`).join('\n\n')}
         }
 
         const contextBlock = contextEntries && contextEntries.length > 0
-          ? `\nسياق (نصوص مجاورة):\n${contextEntries.slice(0, 10).map(ce => `  "${ce.original}" → "${ce.translation}"`).join('\n')}\n`
+          ? `\nسياق (نصوص مجاورة):\n${contextEntries.slice(0, 10).map(ce => { const pt = promptText(ce); return `  "${pt.original}" → "${pt.translation}"`; }).join('\n')}\n`
           : '';
 
+        const entryPt = promptText(entry);
         const prompt = `أنت مترجم ألعاب فيديو محترف. أعطني 3 بدائل مختلفة للترجمة التالية بأساليب متنوعة:
 
-النص الأصلي: "${entry.original}"
-الترجمة الحالية: "${entry.translation}"
+النص الأصلي: "${entryPt.original}"
+الترجمة الحالية: "${entryPt.translation}"
 ${entry.maxBytes > 0 ? `الحد الأقصى: ${entry.maxBytes} بايت (كل حرف = 2 بايت)` : ''}
 
 ${glossary ? `القاموس:\n${glossary.slice(0, 1500)}\n` : ''}
@@ -501,7 +532,8 @@ ${contextBlock}
         if (!jsonMatch) throw new Error('Failed to parse AI response');
 
         const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
-        const alternatives = JSON.parse(sanitized);
+        let alternatives: { style?: string; text?: string; reason?: string }[] = JSON.parse(sanitized);
+        alternatives = alternatives.map((a) => ({ ...a, text: unmaskFor(entry.key, a.text || '') }));
 
         return new Response(JSON.stringify({ alternatives }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -532,7 +564,7 @@ ${contextBlock}
 - إذا كان النص سليماً أعد نفس النص بالضبط
 - صحّح: همزات خاطئة، تاء/هاء، ياء/ألف مقصورة، تذكير/تأنيث، "ل" → "لا"
 
-${chunk.map((e, i) => `[${i}] "${e.translation}"`).join('\n')}
+${chunk.map((e, i) => `[${i}] "${promptText(e).translation}"`).join('\n')}
 
 أخرج JSON array فقط بنفس الترتيب يحتوي النصوص المصححة. مثال: ["نص مصحح 1", "نص مصحح 2"]`;
 
@@ -572,7 +604,7 @@ ${chunk.map((e, i) => `[${i}] "${e.translation}"`).join('\n')}
             const corrected: string[] = JSON.parse(sanitized);
             for (let i = 0; i < Math.min(chunk.length, corrected.length); i++) {
               const entry = chunk[i];
-              const correctedText = corrected[i]?.trim();
+              const correctedText = unmaskFor(entry.key, corrected[i] || '').trim();
               if (correctedText && correctedText !== entry.translation) {
                 allCorrections.push({
                   key: entry.key,
@@ -615,8 +647,8 @@ ${chunk.map((e, i) => `[${i}] "${e.translation}"`).join('\n')}
 
 ${glossary ? `القاموس:\n${glossary.slice(0, 1500)}\n` : ''}
 
-${chunk.map((e, i) => `[${i}] EN: "${e.original}"
-AR: "${e.translation}"`).join('\n\n')}
+${chunk.map((e, i) => { const pt = promptText(e); return `[${i}] EN: "${pt.original}"
+AR: "${pt.translation}"`; }).join('\n\n')}
 
 أخرج JSON array فقط للترجمات بدرجة 7 أو أقل. كل عنصر:
 {"i": رقم, "score": درجة_1_10, "reason": "سبب الدرجة المنخفضة", "suggestion": "ترجمة مقترحة أفضل"}
@@ -664,7 +696,7 @@ AR: "${e.translation}"`).join('\n\n')}
                   current: chunk[f.i].translation,
                   score: f.score || 5,
                   reason: f.reason || '',
-                  suggestion: f.suggestion || '',
+                  suggestion: unmaskFor(chunk[f.i].key, f.suggestion || ''),
                 });
               }
             }
@@ -691,7 +723,7 @@ AR: "${e.translation}"`).join('\n\n')}
         }
 
         const contextBlock = contextEntries && contextEntries.length > 0
-          ? `\nسياق من نفس المشهد/الملف:\n${contextEntries.slice(0, 20).map(ce => `  EN: "${ce.original}" → AR: "${ce.translation}"`).join('\n')}\n`
+          ? `\nسياق من نفس المشهد/الملف:\n${contextEntries.slice(0, 20).map(ce => { const pt = promptText(ce); return `  EN: "${pt.original}" → AR: "${pt.translation}"`; }).join('\n')}\n`
           : '';
 
         const CHUNK_SIZE = 10;
@@ -711,9 +743,9 @@ ${contextBlock}
 - حافظ على جميع الوسوم [Tags] والرموز الخاصة
 - الترجمة الحالية قد تكون حرفية أو ركيكة — حسّنها
 
-${chunk.map((e, i) => `[${i}] EN: "${e.original}"
-الترجمة الحالية: "${e.translation}"
-${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`).join('\n\n')}
+${chunk.map((e, i) => { const pt = promptText(e); return `[${i}] EN: "${pt.original}"
+الترجمة الحالية: "${pt.translation}"
+${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`; }).join('\n\n')}
 
 أخرج JSON array فقط بنفس الترتيب. كل عنصر: {"text": "الترجمة الجديدة", "changes": "ملخص التغييرات"}`;
 
@@ -754,7 +786,7 @@ ${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`).join('\n\n')}
             for (let i = 0; i < Math.min(chunk.length, results.length); i++) {
               const entry = chunk[i];
               const result = results[i];
-              const newText = result?.text?.trim();
+              const newText = unmaskFor(entry.key, result?.text || '').trim();
               if (newText && newText !== entry.translation) {
                 allRetranslations.push({
                   key: entry.key,
@@ -808,9 +840,9 @@ ${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`).join('\n\n')}
 
 ${glossary ? `\nالقاموس:\n${glossary}\n` : ''}
 
-${chunk.map((e, i) => `[${i}] الأصلي: "${e.original}"
-الترجمة الحالية: "${e.translation}"
-الحد: ${e.maxBytes} بايت`).join('\n\n')}
+${chunk.map((e, i) => { const pt = promptText(e); return `[${i}] الأصلي: "${pt.original}"
+الترجمة الحالية: "${pt.translation}"
+الحد: ${e.maxBytes} بايت`; }).join('\n\n')}
 
 أخرج JSON array فقط بنفس الترتيب يحتوي الترجمات المحسّنة. مثال: ["ترجمة محسنة 1", "ترجمة محسنة 2"]`;
 
@@ -845,7 +877,7 @@ ${chunk.map((e, i) => `[${i}] الأصلي: "${e.original}"
 
           for (let i = 0; i < Math.min(chunk.length, improved.length); i++) {
             const entry = chunk[i];
-            const improvedText = improved[i]?.trim();
+            const improvedText = unmaskFor(entry.key, improved[i] || '').trim();
             if (improvedText && improvedText !== entry.translation) {
               allImprovements.push({
                 key: entry.key,

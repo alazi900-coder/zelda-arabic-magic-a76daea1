@@ -106,6 +106,7 @@ const renderInvisible = (text: string): React.ReactNode => {
 export const LineSplitFixPanel: React.FC<Props> = ({
   entries, translations, onUpdateTranslation, onJumpToEntry,
 }) => {
+  const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
   const [issues, setIssues] = useState<LineSplitIssue[]>([]);
   const [scanned, setScanned] = useState(0);
   const [resolvedKeys, setResolvedKeys] = useState<Set<string>>(loadResolved);
@@ -192,6 +193,7 @@ export const LineSplitFixPanel: React.FC<Props> = ({
             : isDeepseek ? deepseekKey
             : undefined,
       entries: items.map(it => ({ key: it.key, originalEn: it.original, currentAr: it.current })),
+      game: isRisen ? "risen" : "xenoblade",
     };
     const { data, error } = await supabase.functions.invoke("improve-line-splits", { body: payload });
     if (error) {

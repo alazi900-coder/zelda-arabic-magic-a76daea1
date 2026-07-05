@@ -540,6 +540,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
 
   const callSmartFix = useCallback(async (issues: RestoreIssue[]) => {
     if (!issues.length) return;
+    const isRisen = /\.tab$/i.test(issues[0]?.msbtFile || "");
     const [engine, model] = aiEngine.split(":") as ["lovable" | "deepseek", string];
     const deepseekKey = (() => {
       try { return localStorage.getItem("userDeepSeekKey") || ""; } catch { return ""; }
@@ -551,6 +552,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
           aiModel: model,
           providerApiKey: engine === "deepseek" ? (deepseekKey || undefined) : undefined,
           entries: issues.map(i => ({ key: i.key, original: i.original, translation: i.before })),
+          game: isRisen ? "risen" : "xenoblade",
         },
       });
       if (error) throw new Error(error.message || "تعذّر الاتصال بالخدمة");

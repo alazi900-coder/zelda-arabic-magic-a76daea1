@@ -4,6 +4,7 @@
 // يدعم Lovable AI Gateway (Gemini/GPT) و DeepSeek (V4 Pro/Flash).
 // =============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,7 @@ interface ReqBody {
   engine?: "lovable" | "deepseek";
   aiModel?: string;          // gemini-3-flash-preview | gpt-5 | deepseek-v4-pro | deepseek-v4-flash …
   providerApiKey?: string;   // DeepSeek key from UI settings (optional)
+  game?: "xenoblade" | "risen";
 }
 
 // PUA tags (U+E000..U+E0FF) و U+FFF9..U+FFFC + وسوم XC3 النصّية بين معقوفات.
@@ -274,6 +276,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Mask Risen tags before this function's own "rewrite the translation to fix
+    // tags/lines" prompt — this function's tagSignature() safety net only knows
+    // about XC3 PUA/bracket tags, not Risen's <Tag> format, so without masking
+    // an AI-mangled <Exit> would slip through unnoticed.
+    const isRisen = body.game === "risen";
+    const risenTagsByKey = new Map<string, string[]>();
+    const promptEntries: SmartFixEntry[] = isRisen
+      ? body.entries.map((e) => {
+          const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
+          risenTagsByKey.set(e.key, tags);
+          return { ...e, original: maskedA, translation: maskedB };
+        })
+      : body.entries;
+
     const engine = body.engine || "lovable";
     const DEEPSEEK_NAME_MAP: Record<string, string> = {
       "deepseek-chat": "deepseek-chat",
@@ -300,11 +316,11 @@ Deno.serve(async (req) => {
         });
       }
       const model = DEEPSEEK_NAME_MAP[body.aiModel || "deepseek-v4-pro"] || "deepseek-reasoner";
-      content = await callDeepSeek(buildPrompt(body.entries), model, apiKey);
+      content = await callDeepSeek(buildPrompt(promptEntries), model, apiKey);
     } else {
       const model = GATEWAY_MAP[body.aiModel || "gemini-3-flash-preview"] || "google/gemini-3-flash-preview";
       try {
-        content = await callLovable(buildPrompt(body.entries), model);
+        content = await callLovable(buildPrompt(promptEntries), model);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         // Auto-fallback to direct Gemini when Lovable AI is out of credits or rate-limited.
@@ -312,7 +328,7 @@ Deno.serve(async (req) => {
         const geminiKey = Deno.env.get("GEMINI_API_KEY");
         if (isQuota && geminiKey) {
           console.log(`[smart-tag-fix] Lovable AI ${msg.slice(0, 8)} — fallback to Gemini direct`);
-          content = await callGeminiDirect(buildPrompt(body.entries), geminiKey);
+          content = await callGeminiDirect(buildPrompt(promptEntries), geminiKey);
           usedFallback = "gemini-direct";
         } else {
           throw e;
@@ -327,7 +343,9 @@ Deno.serve(async (req) => {
     for (const r of parsed.results || []) {
       const src = byKey.get(r?.key);
       if (!src || typeof r.text !== "string" || !r.text.trim()) continue;
-      let cleaned = stripDiacritics(r.text);
+      const risenTags = risenTagsByKey.get(src.key);
+      const restoredText = risenTags ? unmaskRisenTags(r.text, risenTags) : r.text;
+      let cleaned = stripDiacritics(restoredText);
       let safe = tagSignature(src.original) === tagSignature(cleaned);
       let grafted = false;
       // إصلاح ذاتي: إذا اختلّ تسلسل الرموز، نحاول زرع رموز الأصل في الاقتراح.

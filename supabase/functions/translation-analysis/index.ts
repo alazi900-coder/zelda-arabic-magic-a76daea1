@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -197,18 +198,59 @@ function parseAIResponse(content: string): any {
   }
 }
 
+/** Unmask every Risen-tag-bearing field across the 4 possible result shapes
+ * this endpoint returns (results[]/inconsistencies[]), using each entry's
+ * own tag list (looked up via the `index` field the model echoes back). */
+function unmaskAnalysisResult(parsed: any, risenTagsByIndex: string[][]): any {
+  const unmaskWith = (tags: string[] | undefined, text: unknown): unknown =>
+    tags && typeof text === 'string' ? unmaskRisenTags(text, tags) : text;
+
+  if (Array.isArray(parsed?.results)) {
+    parsed.results = parsed.results.map((r: any) => {
+      const tags = typeof r?.index === 'number' ? risenTagsByIndex[r.index] : undefined;
+      if (!tags) return r;
+      const out = { ...r };
+      out.naturalVersion = unmaskWith(tags, out.naturalVersion);
+      out.unifiedVersion = unmaskWith(tags, out.unifiedVersion);
+      out.recommended = unmaskWith(tags, out.recommended);
+      if (Array.isArray(out.alternatives)) {
+        out.alternatives = out.alternatives.map((a: any) =>
+          a && typeof a.text === 'string' ? { ...a, text: unmaskRisenTags(a.text, tags) } : a);
+      }
+      return out;
+    });
+  }
+  if (Array.isArray(parsed?.inconsistencies)) {
+    parsed.inconsistencies = parsed.inconsistencies.map((g: any) => {
+      const out = { ...g };
+      if (Array.isArray(out.variants)) {
+        out.variants = out.variants.map((v: any) => {
+          const tags = typeof v?.index === 'number' ? risenTagsByIndex[v.index] : undefined;
+          return tags && typeof v.text === 'string' ? { ...v, text: unmaskRisenTags(v.text, tags) } : v;
+        });
+      }
+      // `recommended` has no index of its own — best-effort: reuse the first variant's tags.
+      const firstTags = typeof out.variants?.[0]?.index === 'number' ? risenTagsByIndex[out.variants[0].index] : undefined;
+      out.recommended = unmaskWith(firstTags, out.recommended);
+      return out;
+    });
+  }
+  return parsed;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { entries, action, glossary, aiModel, styleGuide } = await req.json() as {
+    const { entries, action, glossary, aiModel, styleGuide, game } = await req.json() as {
       entries: AnalysisEntry[];
       action: AnalysisAction;
       glossary?: string;
       aiModel?: string;
       styleGuide?: string;
+      game?: 'xenoblade' | 'risen';
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -222,7 +264,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const prompt = buildPrompt(action, entries, glossary, styleGuide);
+    // Mask Risen tags before ANY prompt text is built — one tag list per entry
+    // (index-aligned with `entries`, since the model echoes back an `index`
+    // field), used to unmask whichever result field references that index.
+    const isRisen = game === 'risen';
+    const risenTagsByIndex: string[][] = [];
+    const promptEntries: AnalysisEntry[] = isRisen
+      ? entries.map((e) => {
+          const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
+          risenTagsByIndex.push(tags);
+          return { ...e, original: maskedA, translation: maskedB };
+        })
+      : entries;
+
+    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -260,7 +315,8 @@ Deno.serve(async (req) => {
 
     const aiResult = await response.json();
     const content = aiResult.choices?.[0]?.message?.content || '';
-    const parsed = parseAIResponse(content);
+    let parsed = parseAIResponse(content);
+    if (isRisen) parsed = unmaskAnalysisResult(parsed, risenTagsByIndex);
 
     return new Response(JSON.stringify({ action, ...parsed }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

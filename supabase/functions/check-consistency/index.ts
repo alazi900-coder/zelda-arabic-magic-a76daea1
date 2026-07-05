@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,10 +24,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, glossary } = await req.json() as {
+    const { entries, glossary, game } = await req.json() as {
       entries: ConsistencyEntry[];
       glossary?: string;
+      game?: 'xenoblade' | 'risen';
     };
+    const isRisen = game === 'risen';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ groups: [], aiSuggestions: [] }), {
@@ -74,10 +77,23 @@ Deno.serve(async (req) => {
     // Limit to 50 groups to avoid token limits
     const groupsToCheck = inconsistentGroups.slice(0, 50);
 
+    // Mask Risen tags before the term/variant translations reach the model —
+    // one shared tag list per group (term + all its variants), so a returned
+    // "best" pick can be unmasked regardless of which variant it echoes.
+    const groupTagsByIndex: string[][] = [];
+    const promptGroups = isRisen
+      ? groupsToCheck.map((g) => {
+          const { mask, tags } = createRisenMasker();
+          const maskedGroup = { term: mask(g.term), variants: g.variants.map(v => ({ ...v, translation: mask(v.translation) })) };
+          groupTagsByIndex.push(tags);
+          return maskedGroup;
+        })
+      : groupsToCheck;
+
     const prompt = `أنت خبير في اتساق مصطلحات ترجمة ألعاب الفيديو. لكل مصطلح إنجليزي أدناه، هناك عدة ترجمات عربية مختلفة مستخدمة في الملفات. اختر أفضل ترجمة واحدة لكل مصطلح واشرح السبب بجملة واحدة.
 
 ${glossary ? `القاموس المرجعي:\n${glossary}\n\n` : ''}المصطلحات:
-${groupsToCheck.map((g, i) => `[${i}] "${g.term}" → الترجمات: ${[...new Set(g.variants.map(v => `"${v.translation}"`))].join(' | ')}`).join('\n')}
+${promptGroups.map((g, i) => `[${i}] "${g.term}" → الترجمات: ${[...new Set(g.variants.map(v => `"${v.translation}"`))].join(' | ')}`).join('\n')}
 
 أخرج JSON array بنفس الترتيب:
 [{"best": "أفضل ترجمة", "reason": "السبب"}, ...]`;
@@ -125,6 +141,12 @@ ${groupsToCheck.map((g, i) => `[${i}] "${g.term}" → الترجمات: ${[...ne
       try {
         const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
         aiSuggestions = JSON.parse(sanitized);
+        if (isRisen) {
+          aiSuggestions = aiSuggestions.map((s, i) => {
+            const tags = groupTagsByIndex[i];
+            return tags ? { best: unmaskRisenTags(s.best, tags), reason: unmaskRisenTags(s.reason, tags) } : s;
+          });
+        }
       } catch (e) {
         console.error('Failed to parse AI suggestions:', e);
       }

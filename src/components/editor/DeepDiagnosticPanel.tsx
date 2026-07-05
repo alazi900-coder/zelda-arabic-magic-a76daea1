@@ -8,6 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
+import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
@@ -95,6 +96,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "missing_rlm_isolation", label: "وسوم بدون عزل اتجاهي", icon: "🧭", severity: "warning", description: "وسوم تقنية ([XENO]/[System]/[ML]/[Event]/{var}/$N) غير محاطة بعلامة RLM — يخلط محرك اللعبة ترتيب الكلمات حولها" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
   { id: "bare_tag_remnant", label: "بقايا وسوم تقنية كنص", icon: "🏚️", severity: "critical", description: "كلمات وسوم تقنية (FAT/XENO/System/ML/Event…) تسرّبت كنص ظاهر بدون أقواس [ ] — تظهر للاعب بدل الأيقونة/الأمر" },
+  { id: "risen_tag_mismatch", label: "وسوم Risen ناقصة/زائدة", icon: "🏷️", severity: "critical", description: "وسم Risen (<Exit>، $(name)، XXX/SGN/SGT/SGPT/SGL) مفقود أو زائد مقارنة بالأصل — قد يكون تُرجم بالخطأ بدل الإبقاء عليه" },
 ];
 
 // Categories that belong to the NEW tag-remnant check — toggled by the
@@ -144,8 +146,13 @@ const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
 const RLM_ISOLATION_CATEGORIES = new Set(["missing_rlm_isolation"]);
 // Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
 const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines", "under_split"]);
+// Categories fixable by appending Risen's own missing <Tag>/$(name) tokens —
+// deliberately separate from RESTORE_ORIGINAL_CATEGORIES: that strategy wipes
+// the whole translation back to English, which would destroy an otherwise-good
+// Risen translation just to recover one tag. This only ever appends.
+const RISEN_TAG_FIXABLE_CATEGORIES = new Set(["risen_tag_mismatch"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -337,6 +344,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: entry.original, reason: '↩️ سيتم استعادة النص الأصلي الإنجليزي' };
     }
 
+    if (RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+      const repaired = restoreRisenTags(entry.original, trans);
+      return {
+        fixResult: repaired.text,
+        reason: repaired.changed
+          ? '🏷️ سيتم إلحاق وسم Risen الناقص دون حذف أي كلمة — راجع الترجمة يدوياً بعدها'
+          : '⚠️ لم يُعثر على وسم Risen ناقص لإلحاقه',
+      };
+    }
+
     if (issue.category === 'invisible_chars') {
       const cleaned = trans.replace(RE_INVISIBLE, '');
       return { fixResult: cleaned, reason: cleaned !== trans ? '🧹 سيتم إزالة الأحرف غير المرئية' : '⚠️ لم يُعثر على أحرف غير مرئية' };
@@ -481,6 +498,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const repaired = restoreRisenTags(entry.original, issue.translation);
+      if (repaired.changed) {
+        onApplyFix(issue.key, repaired.text);
+        toast({ title: '🏷️ إصلاح وسم Risen', description: 'تم إلحاق الوسم الناقص — راجع الترجمة يدوياً' });
+      } else {
+        toast({ title: '⚠️ لم يتغير النص', description: 'لم يُعثر على وسم Risen ناقص لإلحاقه' });
+      }
+      return;
+    }
 
     if (onApplyFix) {
       onApplyFix(issue.key, entry.original);
@@ -621,6 +648,21 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (RISEN_TAG_FIXABLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
+      for (const key of uniqueKeys) {
+        const entry = entryMap.get(key);
+        const trans = state.translations[key];
+        if (!entry || !trans) continue;
+        const repaired = restoreRisenTags(entry.original, trans);
+        if (repaired.changed) updates[key] = repaired.text;
+      }
+      const count = applyBatchUpdates(updates);
+      toast({ title: '🏷️ إصلاح جماعي', description: `تم إلحاق وسم Risen الناقص في ${count} نص — راجعها يدوياً` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
     if (activeFilter === 'empty_translation' && (onApplyFix || onApplyFixesBatch)) {
       const updates = Object.fromEntries(uniqueKeys.map((key) => [key, '']));
       const count = applyBatchUpdates(updates);
@@ -636,7 +678,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const processedKeys = new Set<string>();
     const tagFixKeys: string[] = [];
     const reportEntries: FixReportEntry[] = [];
-    const counters = { restore: 0, strip: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0, rlm: 0 };
+    const counters = { restore: 0, strip: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0, rlm: 0, risenTag: 0 };
 
     const totalToProcess = allFixableIssues.length;
     toast({
@@ -759,6 +801,23 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           continue;
         }
 
+        if (RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+          const entry = entryMap.get(issue.key);
+          const trans = state.translations[issue.key];
+          if (entry && trans) {
+            const repaired = restoreRisenTags(entry.original, trans);
+            if (repaired.changed) {
+              updates[issue.key] = repaired.text;
+              counters.risenTag++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🏷️ تم إلحاق وسم Risen الناقص — راجعها يدوياً', before: trans, after: repaired.text });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لم يُعثر على وسم Risen ناقص لإلحاقه', before: trans, after: trans });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
+
         if (issue.category === 'empty_translation') {
           const trans = state.translations[issue.key] || '';
           updates[issue.key] = '';
@@ -845,7 +904,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             });
           }
 
-          const totalFixed = counters.tagFixed + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN + counters.rlm;
+          const totalFixed = counters.tagFixed + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN + counters.rlm + counters.risenTag;
           const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
           const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
           const report: FixReport = {
@@ -1037,6 +1096,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                               ? `↩️ استعادة الأصل (${activeFilterKeys.size})`
                               : DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter)
                               ? `💲 إصلاح المتغيرات (${activeFilterKeys.size})`
+                              : RISEN_TAG_FIXABLE_CATEGORIES.has(activeFilter)
+                              ? `🏷️ إلحاق وسوم Risen (${activeFilterKeys.size})`
                               : activeFilter === "invisible_chars"
                               ? `🧹 تنظيف (${activeFilterKeys.size})`
                               : `🔧 إصلاح الكل محلياً (${activeFilterKeys.size})`
@@ -1085,10 +1146,12 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                     onClick={() => handleFixSingle(issue)}
                                     title={TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح الوسوم" :
                                            DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح المتغيرات" :
+                                           RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إلحاق وسم Risen" :
                                            RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "استعادة الأصل" :
                                            issue.category === "invisible_chars" ? "تنظيف" : "إصلاح"}>
                                     {TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🔧" :
                                      DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "💲" :
+                                     RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🏷️" :
                                      RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "↩️" :
                                      issue.category === "invisible_chars" ? "🧹" : "🔧"}
                                   </Button>

@@ -15,6 +15,7 @@
 
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { countEffectiveLines } from "@/lib/text-tokens";
+import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -393,6 +394,25 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       issues.push({
         ...base, severity: "critical", category: "bare_tag_remnant",
         message: `${bareTrans.length - bareOrig.length} بقايا وسم تقني ظاهرة كنص: ${sample}${bareTrans.length > 5 ? "..." : ""}`,
+      });
+    }
+  }
+
+  // 24. Risen 1 tag mismatch — <Tag>/$(name)/XXX-style tokens, a completely
+  // different format from every XC3 check above (all bracket/PUA-based), so
+  // none of those checks can ever catch a lost Risen tag. Separate category
+  // from `technical_mismatch` on purpose: that category's auto-fix restores
+  // the full English original, which would wipe an otherwise-good Risen
+  // translation just to recover one tag — Risen gets its own append-only fix.
+  if (/\.tab$/i.test(entry.msbtFile) && hasRisenTags(entry.original)) {
+    const risenDiff = diffRisenTags(entry.original, trimmed);
+    if (!risenDiff.exactTagMatch) {
+      const parts: string[] = [];
+      if (risenDiff.missingTags.length > 0) parts.push(`مفقود: ${risenDiff.missingTags.join("، ")}`);
+      if (risenDiff.extraTags.length > 0) parts.push(`زائد: ${risenDiff.extraTags.join("، ")}`);
+      issues.push({
+        ...base, severity: "critical", category: "risen_tag_mismatch",
+        message: parts.join(" — ") || "وسوم Risen لا تطابق الأصل",
       });
     }
   }

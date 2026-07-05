@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.15.0",
+    date: "2026-07-05",
+    changes: [
+      { kind: "added", text: "أداة «فحص عميق للمشاكل الحرجة» أصبحت تكتشف وسوم Risen 1 الناقصة/الزائدة (<Exit>، $(name)، XXX/SGN/SGT/SGPT/SGL) — كانت الأداة مبنية بالكامل على اصطلاحات Xenoblade ([Tag]، PUA، $N) ولا تكتشف صيغة Risen إطلاقاً رغم عملها على جلسات Risen. فئة تشخيص مستقلة جديدة (وسوم Risen ناقصة/زائدة) مع زر إصلاح تلقائي آمن (فردي وجماعي) يُلحق الوسم فقط دون حذف أي كلمة من الترجمة — لا يستخدم إصلاح «استعادة الأصل» الذي كان سيمحو الترجمة كاملة." },
+    ],
+  },
+  {
     version: "1.14.0",
     date: "2026-07-05",
     changes: [

@@ -144,11 +144,11 @@ export const BUILTIN_RULES: EnhanceRule[] = [
   {
     id: 'protect_proper_nouns',
     label: 'حماية أسماء الأعلام',
-    description: 'لا تقترح تغيير أسماء شخصيّات/أماكن XC1 (Shulk, Reyn, Monado…)',
+    description: 'لا تقترح تغيير أسماء الشخصيّات/الأماكن الخاصّة باللعبة (تُحدَّد تلقائياً حسب المشروع المحمَّل)',
     kind: 'protect',
     defaultEnabled: true,
     prompt:
-      '🚫 لا تقترح تغيير الأسماء الأعلام لـ Xenoblade Chronicles 1 سواء بقيت إنجليزيّة أو نُقلت صوتياً.',
+      '🚫 لا تقترح تغيير الأسماء الأعلام لأسماء الشخصيّات أو الأماكن أو العناصر الخاصّة باللعبة سواء بقيت إنجليزيّة أو نُقلت صوتياً.',
   },
   {
     id: 'protect_no_outside_franchise_lore',

@@ -541,7 +541,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("enhance-translations"), {
         method: 'POST',
         headers: { ...getSupabaseHeaders() },
-        body: JSON.stringify({ entries: translatedEntries, action: 'analyze', glossary: activeGlossary?.split('\n').slice(0, 200).join('\n'), aiModel }),
+        body: JSON.stringify({ entries: translatedEntries, action: 'analyze', glossary: activeGlossary?.split('\n').slice(0, 200).join('\n'), aiModel, game: isRisen ? 'risen' : 'xenoblade' }),
       });
       if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.error || `خطأ ${response.status}`); }
       const data = await response.json();

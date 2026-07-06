@@ -164,6 +164,20 @@ function isSafeSuggestion(original: string, previous: string, suggested: string)
   return !!suggested && !dropsOriginalTechnicalTags(original, suggested) && !isUnsafeEnglishReplacement(original, previous, suggested);
 }
 
+// دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
+// اقتراحها مصطلحاً معروفاً من فرنشايز آخر (Xenoblade/Ether/Monado/Zelda...)
+// أثناء العمل على Risen، إلا إذا ظهر ذلك المصطلح فعلاً في النصّ الأصلي أو
+// القاموس المُعطى — يمنع تسرّب معرفة النموذج عن لعبة أخرى حتى لو تجاهل
+// تعليمات البرومبت (حدث فعلياً: "Mana" ← "Ether" بحجّة Xenoblade).
+const OTHER_FRANCHISE_MARKERS_RE = /Xenoblade|Monado|\bEther\b|إيثر|مونادو|\bZelda\b|زيلدا|Hyrule|هايرول|\bShulk\b|\bReyn\b/gi;
+function mentionsUnrelatedFranchiseLore(text: string, original: string, glossary?: string): boolean {
+  if (!text) return false;
+  const markers = text.match(OTHER_FRANCHISE_MARKERS_RE);
+  if (!markers || markers.length === 0) return false;
+  const haystack = `${original}\n${glossary || ''}`.toLowerCase();
+  return markers.some(m => !haystack.includes(m.toLowerCase()));
+}
+
 function buildRuleSections(
   enabledIds: string[] | undefined,
   customRules: RuleDef[] | undefined,
@@ -174,9 +188,15 @@ function buildRuleSections(
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
   const builtinWithOverrides: RuleDef[] = RULES.map(r => {
     const o = builtinOverrides && builtinOverrides[r.id];
-    return (o && typeof o.prompt === 'string' && o.prompt.trim().length > 0)
-      ? { ...r, prompt: o.prompt }
-      : r;
+    if (!o || typeof o.prompt !== 'string' || o.prompt.trim().length === 0) return r;
+    // دفاعيّ: مستخدمون فتحوا محرّر القواعد قبل إضافة قالب {{PROPER_NOUNS_SECTION}}
+    // قد يكون عندهم override محفوظ في localStorage يجمّد نصّاً حرفيّاً قديماً
+    // يذكر Xenoblade — يبقى مُرسَلاً للأبد ويتجاوز تسمية اللعبة الصحيحة هنا.
+    // تجاهله في جلسات Risen تحديداً؛ الافتراضي الصحيح أدناه يطبَّق بدلاً منه.
+    if (r.id === 'protect_proper_nouns' && isRisen && !o.prompt.includes('{{PROPER_NOUNS_SECTION}}') && /Xenoblade/i.test(o.prompt)) {
+      return r;
+    }
+    return { ...r, prompt: o.prompt };
   });
   // اجمع المبنيّة (مع overrides) + المخصّصة معاً قبل الفرز.
   const all: RuleDef[] = [
@@ -605,7 +625,8 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
       }).filter((i) =>
         i.key && i.suggestion !== i.translation &&
         isSafeSuggestion(i.original, i.translation, i.suggestion) &&
-        isCategoryEnabled(i.category, ruleSections.enabledSet),
+        isCategoryEnabled(i.category, ruleSections.enabledSet) &&
+        (!isRisen || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
       );
 
       return new Response(JSON.stringify({ issues: mappedIssues }), {
@@ -718,7 +739,8 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
         .filter((r) =>
           r.key && r.suggested !== r.translation &&
           isSafeSuggestion(r.original, r.translation, r.suggested) &&
-          isTypeEnabled(r.type, ruleSections.enabledSet),
+          isTypeEnabled(r.type, ruleSections.enabledSet) &&
+          (!isRisen || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
         );
 
       return new Response(JSON.stringify({ results: mappedResults }), {
@@ -806,7 +828,8 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
     }).filter((s) =>
       s.key && s.suggested !== s.current &&
       isSafeSuggestion(s.original, s.current, s.suggested) &&
-      isTypeEnabled(s.type, ruleSections.enabledSet),
+      isTypeEnabled(s.type, ruleSections.enabledSet) &&
+      (!isRisen || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
     );
 
     return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {

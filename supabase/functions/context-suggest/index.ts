@@ -3,6 +3,7 @@
 // Supports Lovable AI Gateway (Gemini/GPT) and DeepSeek (V4 Pro/Flash).
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { maskRisenTags, unmaskRisenTags } from '../_shared/risen-tag-mask.ts';
+import { RISEN_FORGET_OTHER_GAME_RULE } from '../_shared/risen-persona-guard.ts';
 
 interface ContextEntry {
   original: string;
@@ -50,12 +51,14 @@ const GAME_LABELS: Record<string, string> = {
 };
 
 function buildSystemPrompt(game?: string): string {
+  const isRisen = game === 'risen';
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
-  const risenTagRule = game === 'risen'
+  const risenTagRule = isRisen
     ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'
     : '';
+  const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
   return `أنت مترجم ألعاب فيديو متخصص في ${gameLabel}.
-قدّم 3 اقتراحات مختلفة لترجمة النص المستهدف بأساليب متنوعة:
+${forgetOtherGame}قدّم 3 اقتراحات مختلفة لترجمة النص المستهدف بأساليب متنوعة:
 - formal (رسمي): لغة فصحى مهذبة مناسبة للقصة الرئيسية والشخصيات الرسمية.
 - natural (طبيعي): حوار يومي سلس يناسب معظم المواقف.
 - creative (إبداعي): صياغة حيوية أو شاعرية تناسب اللحظات الدرامية.

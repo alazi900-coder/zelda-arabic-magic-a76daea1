@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
+import { RISEN_FORGET_OTHER_GAME_RULE_EN } from "../_shared/risen-persona-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -77,8 +78,9 @@ Rules:
         });
       }
       const glossaryContext = glossary ? `\nGame glossary for reference:\n${glossary.slice(0, 3000)}` : '';
-      systemPrompt = `You are a professional video game localization QA reviewer for Xenoblade Chronicles 3 Arabic translation.
-Review each translation for contextual accuracy in the game's universe.
+      const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+      systemPrompt = `You are a professional video game localization QA reviewer for ${gameLabel} Arabic translation.
+${isRisen ? RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}Review each translation for contextual accuracy in the game's universe.
 Check for:
 1. Character names used correctly and consistently
 2. Game terminology matching the glossary

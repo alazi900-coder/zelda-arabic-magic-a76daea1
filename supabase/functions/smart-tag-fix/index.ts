@@ -5,6 +5,7 @@
 // =============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
+import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,7 +48,7 @@ function countEffectiveLines(text: string): number {
   return hard + real + 1;
 }
 
-function buildPrompt(entries: SmartFixEntry[]): string {
+function buildPrompt(entries: SmartFixEntry[], isRisen?: boolean): string {
   const items = entries.map((e, i) => {
     const oLines = countEffectiveLines(e.original);
     return `### ${i + 1} (key=${e.key}) — أسطر الأصل ≈ ${oLines}
@@ -57,7 +58,10 @@ ${e.original}
 ${e.translation}`;
   }).join("\n\n");
 
-  return `أنت مُصحِّح ترجمة عربية للعبة Xenoblade Chronicles 1. لكل عنصر، أعد كتابة الترجمة العربية بحيث:
+  const gameNameLabel = isRisen ? "Risen 1" : "Xenoblade Chronicles 1";
+  const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : "";
+  return `أنت مُصحِّح ترجمة عربية للعبة ${gameNameLabel}. لكل عنصر، أعد كتابة الترجمة العربية بحيث:
+${forgetOtherGame}
 
 1) تحتوي على **نفس مجموعة الرموز التقنية وبنفس الترتيب تماماً** مثل الأصل الإنجليزي. الرموز هي:
    - رموز PUA الخفية في النطاق U+E000..U+E0FF و U+FFF9..U+FFFC (انسخها كما هي).
@@ -130,7 +134,7 @@ async function callDeepSeek(prompt: string, model: string, apiKey: string): Prom
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "أنت مصحّح ترجمة عربية لـ Xenoblade Chronicles 1. أعِد JSON صالحاً فقط بالشكل المطلوب." },
+        { role: "system", content: "أنت مصحّح ترجمة عربية. أعِد JSON صالحاً فقط بالشكل المطلوب." },
         { role: "user", content: prompt },
       ],
     }),
@@ -316,11 +320,11 @@ Deno.serve(async (req) => {
         });
       }
       const model = DEEPSEEK_NAME_MAP[body.aiModel || "deepseek-v4-pro"] || "deepseek-reasoner";
-      content = await callDeepSeek(buildPrompt(promptEntries), model, apiKey);
+      content = await callDeepSeek(buildPrompt(promptEntries, isRisen), model, apiKey);
     } else {
       const model = GATEWAY_MAP[body.aiModel || "gemini-3-flash-preview"] || "google/gemini-3-flash-preview";
       try {
-        content = await callLovable(buildPrompt(promptEntries), model);
+        content = await callLovable(buildPrompt(promptEntries, isRisen), model);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         // Auto-fallback to direct Gemini when Lovable AI is out of credits or rate-limited.
@@ -328,7 +332,7 @@ Deno.serve(async (req) => {
         const geminiKey = Deno.env.get("GEMINI_API_KEY");
         if (isQuota && geminiKey) {
           console.log(`[smart-tag-fix] Lovable AI ${msg.slice(0, 8)} — fallback to Gemini direct`);
-          content = await callGeminiDirect(buildPrompt(promptEntries), geminiKey);
+          content = await callGeminiDirect(buildPrompt(promptEntries, isRisen), geminiKey);
           usedFallback = "gemini-direct";
         } else {
           throw e;

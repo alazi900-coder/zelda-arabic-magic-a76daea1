@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
+import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,12 +23,14 @@ const gatewayModelMap: Record<string, string> = {
   'gpt-5': 'openai/gpt-5',
 };
 
-function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string): string {
+function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean): string {
   const glossarySection = glossary ? `\nالقاموس المعتمد (التزم بهذه المصطلحات):\n${glossary.split('\n').slice(0, 100).join('\n')}` : '';
+  const gameNameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+  const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
 
   if (action === 'literal-detect') {
-    return `أنت خبير في كشف الترجمات الحرفية من الإنجليزية للعربية في ألعاب الفيديو (Xenoblade Chronicles 3).
-
+    return `أنت خبير في كشف الترجمات الحرفية من الإنجليزية للعربية في ألعاب الفيديو (${gameNameLabel}).
+${forgetOtherGame}
 مهمتك: فحص كل ترجمة وتحديد إن كانت حرفية (word-by-word) أو طبيعية.
 الترجمة الحرفية تتميز بـ:
 - اتباع ترتيب الكلمات الإنجليزي
@@ -55,8 +58,8 @@ ${entries.map((e, i) => `[${i}] EN: ${e.original}\nAR: ${e.translation}`).join('
   }
 
   if (action === 'style-unify') {
-    return `أنت خبير في توحيد أسلوب الترجمة للعربية في ألعاب الفيديو (Xenoblade Chronicles 3).
-
+    return `أنت خبير في توحيد أسلوب الترجمة للعربية في ألعاب الفيديو (${gameNameLabel}).
+${forgetOtherGame}
 مهمتك: مراجعة مجموعة الترجمات وتوحيد أسلوبها:
 - توحيد النبرة (رسمية/ودية) عبر كل النصوص
 - توحيد أسلوب المخاطبة (أنت/أنتم)
@@ -85,8 +88,8 @@ ${entries.map((e, i) => `[${i}] EN: ${e.original}\nAR: ${e.translation}\nملف:
   }
 
   if (action === 'consistency-check') {
-    return `أنت خبير في فحص اتساق الترجمة في ألعاب الفيديو (Xenoblade Chronicles 3).
-
+    return `أنت خبير في فحص اتساق الترجمة في ألعاب الفيديو (${gameNameLabel}).
+${forgetOtherGame}
 مهمتك: فحص الاتساق الشامل:
 1. المصطلحات: هل نفس الكلمة الإنجليزية مترجمة بنفس الطريقة دائماً؟
 2. الشخصيات: هل أسماء الشخصيات متسقة؟
@@ -114,8 +117,8 @@ ${entries.map((e, i) => `[${i}] EN: ${e.original}\nAR: ${e.translation}\nملف:
   }
 
   if (action === 'alternatives') {
-    return `أنت مترجم ألعاب محترف متخصص في Xenoblade Chronicles 3.
-
+    return `أنت مترجم ألعاب محترف متخصص في ${gameNameLabel}.
+${forgetOtherGame}
 مهمتك: تقديم 4 بدائل مختلفة الأسلوب لكل ترجمة:
 1. أدبي (literary): صياغة أدبية راقية
 2. طبيعي (natural): كما يتحدث العرب يومياً
@@ -145,8 +148,8 @@ ${entries.map((e, i) => `[${i}] EN: ${e.original}\nAR الحالي: ${e.translat
   }
 
   // full-analysis: combines everything
-  return `أنت خبير شامل في تحليل وتحسين ترجمات ألعاب الفيديو من الإنجليزية للعربية (Xenoblade Chronicles 3).
-
+  return `أنت خبير شامل في تحليل وتحسين ترجمات ألعاب الفيديو من الإنجليزية للعربية (${gameNameLabel}).
+${forgetOtherGame}
 أجرِ تحليلاً شاملاً لكل ترجمة يشمل:
 1. كشف الترجمة الحرفية (هل هي word-by-word؟)
 2. تحليل السياق (من المتحدث؟ ما نوع المشهد؟)
@@ -277,7 +280,7 @@ Deno.serve(async (req) => {
         })
       : entries;
 
-    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide);
+    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide, isRisen);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
+import { RISEN_FORGET_OTHER_GAME_RULE_EN } from "../_shared/risen-persona-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,13 +47,14 @@ Deno.serve(async (req) => {
       glossarySection = `\n\nUse this glossary for consistent terminology:\n${glossary}\n`;
     }
 
-    const prompt = `You are a professional Arabic game translator for The Legend of Zelda series.
-
+    const gameNameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles';
+    const prompt = `You are a professional Arabic game translator for ${gameNameLabel}.
+${isRisen ? '\n' + RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}
 The following translations contain a mix of Arabic and English text. Your job is to translate the remaining English words into Arabic while keeping the sentence natural and coherent.
 
 CRITICAL RULES:
 - Translate ALL English words to Arabic, except for:
-  - Proper nouns that are commonly kept in English in Arabic gaming (Link, Zelda, Ganon, Hyrule, etc.)
+  - Proper nouns (character/place names) that are commonly kept in English in Arabic gaming, per the glossary if provided
   - Technical gaming abbreviations: HP, MP, ATK, DEF, NPC, XP, DLC, HUD, FPS
   - Controller button names: A, B, X, Y, L, R, ZL, ZR
   - Tags like [Color:Red], [Icon:Heart], etc. must stay exactly as-is

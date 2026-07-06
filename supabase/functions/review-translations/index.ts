@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
+import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -190,7 +191,9 @@ ${tooLongEntries.map((e, i) => {
         for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
           const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
 
-          const prompt = `أنت مدقق لغوي متخصص في ترجمة ألعاب الفيديو (Xenoblade Chronicles 3). حلّل كل ترجمة وأبلغ عن المشاكل الواضحة فقط:
+          const gameNameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+          const prompt = `أنت مدقق لغوي متخصص في ترجمة ألعاب الفيديو (${gameNameLabel}). حلّل كل ترجمة وأبلغ عن المشاكل الواضحة فقط:
+${isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
 
 ⚠️ تعليمات حاسمة:
 - أبلغ فقط عن المشاكل الواضحة والمؤكدة — لا تقترح تغييرات ذوقية أو تفضيلات شخصية
@@ -824,18 +827,18 @@ ${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`; }).join('\n\n')}
         for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
           const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
 
-          const prompt = `أنت مترجم ألعاب فيديو محترف متخصص في سلسلة زيلدا. مهمتك: إعادة صياغة وتحسين كل ترجمة عربية بشكل ملحوظ.
-
+          const gameNameLabel2 = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+          const prompt = `أنت مترجم ألعاب فيديو محترف متخصص في ${gameNameLabel2}. مهمتك: إعادة صياغة وتحسين كل ترجمة عربية بشكل ملحوظ.
+${isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
 قواعد صارمة:
 - يجب أن تقدم صياغة مختلفة وأفضل لكل نص — لا تُعِد نفس النص أبداً
 - أعد صياغة الجملة بالكامل بأسلوب عربي طبيعي وسلس كأنها كُتبت بالعربية أصلاً
 - صحّح أي أخطاء نحوية أو إملائية أو ركاكة في الأسلوب
 - استخدم مفردات أغنى وأدق — تجنب الترجمة الحرفية
-- استخدم مصطلحات مجتمع الألعاب العربي المعروفة (مثل: تريفورس، سيف الماستر، هايرول)
 - حافظ على جميع الوسوم [Tags] و ￼ كما هي بدون أي تغيير
 - حافظ على طول الترجمة قريباً من الأصل لتناسب صناديق النص في اللعبة
 - الحد الأقصى بالبايت مذكور لكل نص — لا تتجاوزه (كل حرف عربي = 2 بايت)
-- لا تترجم الأسماء العلم المعروفة (Link, Zelda, Ganon) إلا إذا كان لها مقابل عربي شائع
+- لا تترجم أسماء الشخصيات أو الأماكن الخاصة باللعبة إلا إذا كان لها مقابل عربي شائع ضمن القاموس المعتمد
 - حتى لو كانت الترجمة جيدة، قدّم بديلاً أفضل أو مختلفاً في الأسلوب
 
 ${glossary ? `\nالقاموس:\n${glossary}\n` : ''}

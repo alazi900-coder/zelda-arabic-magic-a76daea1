@@ -5,6 +5,7 @@
 // =============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
+import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,6 +66,7 @@ const RULES: RuleDef[] = [
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
+  { id: 'no_invented_content', kind: 'protect', prompt: '🚫 لا تُضِف أي كلمة أو معلومة أو تفصيل غير موجود في النص الإنجليزي الأصلي لمجرد "تجميل" الصياغة أو جعلها تبدو أفضل. الإضافة المسموحة الوحيدة هي كلمات ربط عربية طبيعية يفرضها القواعد دون أي تغيير في المعنى. كل فكرة في اقتراحك يجب أن تقابلها فكرة موجودة فعلاً في الأصل — لا تُقحم تفاصيل من عندك.' },
   { id: 'skip_preferences',    kind: 'protect', prompt: '🚫 لا تقترح تعديلات تفضيليّة بحتة لو الجملة مفهومة وسليمة.' },
   { id: 'skip_hamza_only',     kind: 'protect', prompt: '🚫 لا تقترح تعديلات تتعلّق فقط بإضافة/حذف الهمزات (ء آ أ ؤ إ ئ) بدون تغيير قواعديّ/أسلوبيّ حقيقيّ.' },
   { id: 'protect_tech_tags',   kind: 'protect', prompt: '⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.' },
@@ -347,6 +349,7 @@ Deno.serve(async (req) => {
     };
     const isRisen = game === 'risen';
     const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+    const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
       : '';
@@ -526,6 +529,7 @@ Deno.serve(async (req) => {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'grammar') {
       const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط** (wrong / reorder / weak) بناءً على القواعد المُفعَّلة أدناه:
+${forgetOtherGame}
 
 ${ruleSections.detect}
 
@@ -615,6 +619,7 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'combined') {
       const combinedPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تُبلّغ عن أي نوع مشكلة غير مذكور في القواعد المُفعَّلة. أعِد **نصّاً نهائيّاً واحداً** يجمع الإصلاحات المسموح بها فقط في حقل suggested.
+${forgetOtherGame}
 
 صنّف الفئة الرئيسيّة (wrong/reorder/weak/style) بناءً على القواعد التالية:
 
@@ -725,6 +730,7 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
     // Enhance mode — تحسين صياغة + اقتراح بدائل (مع التزام صارم بالقاموس).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تقترح أي تعديل خارجها.
+${forgetOtherGame}
 
 ${ruleSections.detect}
 

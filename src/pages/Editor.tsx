@@ -485,6 +485,7 @@ const Editor = () => {
             isMobile={isMobile}
             showDiffView={showDiffView}
             setShowDiffView={setShowDiffView}
+            isRisen={isRisenEntries}
           />
 
           {/* Needs Improvement Badges */}

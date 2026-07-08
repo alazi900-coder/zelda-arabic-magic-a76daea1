@@ -31,6 +31,10 @@ import { normalizeBreakStyleToSource } from "@/lib/balance-lines";
 import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { NO_OWNER_LABEL, getItemIdPrefix } from "@/lib/risen/categories";
+import { getLongestLineLength } from "@/lib/risen-line-split";
+
+/** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
+const LONG_TEXT_LINE_THRESHOLD = 35;
 export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();
@@ -749,7 +753,8 @@ export function useEditorState() {
         (filterStatus === "excessive-lines" && matchesDeepDiagFilter("excessive-lines", e.original, translation)) ||
         (filterStatus === "byte-budget" && matchesDeepDiagFilter("byte-budget", e.original, translation)) ||
         (filterStatus === "newline-diff" && matchesDeepDiagFilter("newline-diff", e.original, translation)) ||
-        (filterStatus === "identical-original" && matchesDeepDiagFilter("identical-original", e.original, translation));
+        (filterStatus === "identical-original" && matchesDeepDiagFilter("identical-original", e.original, translation)) ||
+        (filterStatus === "long-texts" && isTranslated && getLongestLineLength(translation) >= LONG_TEXT_LINE_THRESHOLD);
       const matchTechnical = 
         filterTechnical === "all" ||
         (filterTechnical === "only" && isTechnical) ||

@@ -4,6 +4,7 @@ import { Filter, Eye, Replace, Columns, Wand2 } from "lucide-react";
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import TableFilterTree from "@/components/editor/TableFilterTree";
 import { type FilterStatus, type FilterTechnical } from "@/components/editor/types";
+import RisenLineSplitTool from "@/components/editor/RisenLineSplitTool";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 // تصنيف وتنقّل الجداول صار في `TableFilterTree` (شجرة قابلة للطي بدل قائمة مسطّحة).
@@ -55,12 +56,14 @@ interface EditorFiltersBarProps {
   isMobile: boolean;
   showDiffView: boolean;
   setShowDiffView: (v: boolean) => void;
+  isRisen?: boolean;
 }
 
 const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
   editor,
   isMobile,
   showDiffView,
+  isRisen = false,
   setShowDiffView,
 }) => {
   /** حذف ترجمات كل المدخلات التي تنتمي لقائمة جداول معيّنة. */
@@ -110,6 +113,13 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
       >
         📌
       </Button>
+      {isRisen && (
+        <RisenLineSplitTool
+          filteredEntries={editor.filteredEntries}
+          translations={editor.state?.translations || {}}
+          updateTranslationsBatch={editor.updateTranslationsBatch}
+        />
+      )}
       {isMobile ? (
         <Button variant={editor.filtersOpen ? "secondary" : "outline"} size="sm" onClick={() => editor.setFiltersOpen(!editor.filtersOpen)} className="font-body text-xs shrink-0">
           <Filter className="w-3 h-3" /> فلاتر
@@ -137,6 +147,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             {editor.deepDiagnosticCounts.byteBudget > 0 && <option value="byte-budget">💾 تجاوز ميزانية البايتات ({editor.deepDiagnosticCounts.byteBudget})</option>}
             {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر كبير ({editor.deepDiagnosticCounts.newlineDiff})</option>}
             {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 ترجمة مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
+            {isRisen && <option value="long-texts">📏 نصوص طويلة (35+)</option>}
           </select>
           <select value={editor.filterFile} onChange={e => editor.setFilterFile(e.target.value)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[200px]">
             <option value="all">كل الملفات</option>
@@ -196,6 +207,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           {editor.deepDiagnosticCounts.byteBudget > 0 && <option value="byte-budget">💾 تجاوز ميزانية ({editor.deepDiagnosticCounts.byteBudget})</option>}
           {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر ({editor.deepDiagnosticCounts.newlineDiff})</option>}
           {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
+          {isRisen && <option value="long-texts">📏 نصوص طويلة (35+)</option>}
         </select>
         <select value={editor.filterFile} onChange={e => editor.setFilterFile(e.target.value)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
           <option value="all">كل الملفات</option>

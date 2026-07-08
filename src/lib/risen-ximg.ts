@@ -294,6 +294,10 @@ export interface DecodedDdsImage {
   height: number;
   /** "" for uncompressed formats. */
   fourCC: string;
+  /** Bits per pixel for uncompressed formats; 0 for compressed. */
+  rgbBitCount: number;
+  /** Alpha bit mask for uncompressed formats; 0 when the source has no alpha channel. */
+  aMask: number;
 }
 
 export interface UnsupportedDdsFormat {
@@ -313,7 +317,7 @@ export function decodeDdsToRgba(ddsBytes: Uint8Array): DecodedDdsImage | Unsuppo
 
   if (isDxtFourCC(header.fourCC)) {
     const rgba = decodeDxt(header.fourCC, compressed, header.width, header.height);
-    return { supported: true, rgba, width: header.width, height: header.height, fourCC: header.fourCC };
+    return { supported: true, rgba, width: header.width, height: header.height, fourCC: header.fourCC, rgbBitCount: 0, aMask: 0 };
   }
 
   if (header.isRawRgb) {
@@ -322,7 +326,7 @@ export function decodeDdsToRgba(ddsBytes: Uint8Array): DecodedDdsImage | Unsuppo
       header.rMask, header.gMask, header.bMask, header.aMask,
       header.hasPitchFlag ? header.pitchOrLinearSize : undefined
     );
-    if (rgba) return { supported: true, rgba, width: header.width, height: header.height, fourCC: "" };
+    if (rgba) return { supported: true, rgba, width: header.width, height: header.height, fourCC: "", rgbBitCount: header.rgbBitCount, aMask: header.aMask };
   }
 
   return {

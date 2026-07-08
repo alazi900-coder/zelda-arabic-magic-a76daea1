@@ -125,12 +125,15 @@ async function callGeminiDirect(prompt: string, apiKey: string): Promise<string>
 }
 
 async function callDeepSeek(prompt: string, model: string, apiKey: string): Promise<string> {
+  // DeepSeek V4: thinking mode is a request field, not a model name — V4 Pro
+  // keeps the old "reasoner" (thinking) behavior, V4 Flash the old "chat" one.
   const resp = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     signal: AbortSignal.timeout(120_000),
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
+      thinking: { type: model === "deepseek-v4-pro" ? "enabled" : "disabled" },
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
@@ -295,11 +298,13 @@ Deno.serve(async (req) => {
       : body.entries;
 
     const engine = body.engine || "lovable";
+    // منذ V4 (2026-04-24) المعرّفان الحقيقيّان هما deepseek-v4-flash و
+    // deepseek-v4-pro؛ الاسمان القديمان يُحذَفان 2026-07-24.
     const DEEPSEEK_NAME_MAP: Record<string, string> = {
-      "deepseek-chat": "deepseek-chat",
-      "deepseek-reasoner": "deepseek-reasoner",
-      "deepseek-v4-flash": "deepseek-chat",
-      "deepseek-v4-pro": "deepseek-reasoner",
+      "deepseek-v4-flash": "deepseek-v4-flash",
+      "deepseek-v4-pro": "deepseek-v4-pro",
+      "deepseek-chat": "deepseek-v4-flash",
+      "deepseek-reasoner": "deepseek-v4-pro",
     };
     const GATEWAY_MAP: Record<string, string> = {
       "gemini-3-flash-preview": "google/gemini-3-flash-preview",
@@ -319,7 +324,7 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const model = DEEPSEEK_NAME_MAP[body.aiModel || "deepseek-v4-pro"] || "deepseek-reasoner";
+      const model = DEEPSEEK_NAME_MAP[body.aiModel || "deepseek-v4-pro"] || "deepseek-v4-pro";
       content = await callDeepSeek(buildPrompt(promptEntries, isRisen), model, apiKey);
     } else {
       const model = GATEWAY_MAP[body.aiModel || "gemini-3-flash-preview"] || "google/gemini-3-flash-preview";

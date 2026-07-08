@@ -72,8 +72,8 @@ function engineToBackend(eng: Engine): { engine: string; model?: string } {
   if (eng === "local") return { engine: "local" };
   if (eng === "gemini-direct") return { engine: "gemini-direct" };
   if (eng === "google-translate") return { engine: "google-translate" };
-  if (eng === "deepseek-v4-flash") return { engine: "deepseek", model: "deepseek-chat" };
-  if (eng === "deepseek-v4-pro") return { engine: "deepseek", model: "deepseek-reasoner" };
+  if (eng === "deepseek-v4-flash") return { engine: "deepseek", model: "deepseek-v4-flash" };
+  if (eng === "deepseek-v4-pro") return { engine: "deepseek", model: "deepseek-v4-pro" };
   const model = eng.replace("lovable-", "");
   return { engine: "lovable", model: `google/${model}`.replace("google/gpt", "openai/gpt") };
 }

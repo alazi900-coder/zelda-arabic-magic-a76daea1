@@ -166,12 +166,15 @@ async function callGoogleTranslate(entries: ReqEntry[], apiKey: string): Promise
 
 async function callDeepSeek(entries: ReqEntry[], model: string, apiKey: string): Promise<Record<string, string>> {
   const prompt = buildPrompt(entries) + `\n\nأعد JSON صالحاً فقط بالشكل: {"results":[{"key":"...","text":"..."}]}`;
+  // DeepSeek V4: thinking mode is a request field, not a model name — V4 Pro
+  // keeps the old "reasoner" (thinking) behavior, V4 Flash the old "chat" one.
   const resp = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     signal: AbortSignal.timeout(120_000),
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
+      thinking: { type: model === "deepseek-v4-pro" ? "enabled" : "disabled" },
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
@@ -275,7 +278,7 @@ Deno.serve(async (req) => {
     } else if (body.engine === "deepseek") {
       const key = body.apiKey || Deno.env.get("DEEPSEEK_API_KEY");
       if (!key) throw new Error("مفتاح DeepSeek مطلوب");
-      raw = await callDeepSeek(promptEntries, body.model || "deepseek-reasoner", key);
+      raw = await callDeepSeek(promptEntries, body.model || "deepseek-v4-pro", key);
     } else {
       return new Response(JSON.stringify({ error: "محرّك غير مدعوم في هذه النقطة." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

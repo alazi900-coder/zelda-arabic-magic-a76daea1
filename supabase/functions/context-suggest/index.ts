@@ -169,21 +169,30 @@ function parseLooseJson(content: string): any {
 }
 
 // ===== DeepSeek =====
+// V4 models (released 2026-04-24): deepseek-v4-flash / deepseek-v4-pro are the
+// only real model names now. Thinking mode is a REQUEST PARAMETER, not a
+// separate model name — the legacy deepseek-chat/deepseek-reasoner aliases
+// (deprecated 2026-07-24) actually both routed to deepseek-v4-flash (non-
+// thinking vs thinking); deepseek-reasoner was never deepseek-v4-pro. We keep
+// the same two-tier choice but make "V4 Pro" the real, bigger model.
 const DEEPSEEK_NAME_MAP: Record<string, string> = {
-  'deepseek-chat': 'deepseek-chat',
-  'deepseek-reasoner': 'deepseek-reasoner',
-  'deepseek-v4-flash': 'deepseek-chat',
-  'deepseek-v4-pro': 'deepseek-reasoner',
+  'deepseek-v4-flash': 'deepseek-v4-flash',
+  'deepseek-v4-pro': 'deepseek-v4-pro',
+  // Legacy aliases, in case a stale client still sends them.
+  'deepseek-chat': 'deepseek-v4-flash',
+  'deepseek-reasoner': 'deepseek-v4-pro',
 };
 
 async function callDeepSeek(body: RequestBody, apiKey: string, model: string): Promise<any> {
-  const dsModel = DEEPSEEK_NAME_MAP[model] || 'deepseek-chat';
+  const dsModel = DEEPSEEK_NAME_MAP[model] || 'deepseek-v4-flash';
+  const thinkingEnabled = dsModel === 'deepseek-v4-pro';
   const resp = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     signal: AbortSignal.timeout(120_000),
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: dsModel,
+      thinking: { type: thinkingEnabled ? 'enabled' : 'disabled' },
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
@@ -270,7 +279,7 @@ Deno.serve(async (req) => {
       if (!dsKey) {
         return jsonResponse({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات.' }, 400);
       }
-      parsed = await callDeepSeek(body, dsKey, body.aiModel || 'deepseek-chat');
+      parsed = await callDeepSeek(body, dsKey, body.aiModel || 'deepseek-v4-flash');
     } else {
       // Default: Lovable AI Gateway. mymemory/google don't expose chat — fall back to Lovable.
       const apiKey = Deno.env.get('LOVABLE_API_KEY');

@@ -429,23 +429,28 @@ Deno.serve(async (req) => {
     };
 
     // اختيار المسار: DeepSeek مباشر أو Lovable AI Gateway
-    // ملاحظة: DeepSeek API لا يقبل سوى اسمَين رسميَّين: deepseek-chat و deepseek-reasoner.
-    // أسماء V4 من واجهتنا تُحوَّل إلى الاسمَين الفعليَّين قبل الإرسال وإلّا يفشل الطلب
-    // بصمت (200 OK مع error داخلي) وتظهر "تجاوز كلّ النصوص" بلا اقتراحات.
+    // ملاحظة: منذ V4 (2026-04-24) المعرّفان الحقيقيّان الوحيدان هما
+    // deepseek-v4-flash و deepseek-v4-pro؛ deepseek-chat/deepseek-reasoner
+    // اسمان قديمان يُحذَفان 2026-07-24 وكانا أصلاً كلاهما يوجّهان إلى
+    // deepseek-v4-flash فقط (بلا تفكير / بتفكير) — deepseek-reasoner لم يكن
+    // أبداً deepseek-v4-pro. التفكير أصبح معامل طلب منفصل (thinking)، ليس اسم موديل.
     const DEEPSEEK_NAME_MAP: Record<string, string> = {
-      'deepseek-chat': 'deepseek-chat',
-      'deepseek-reasoner': 'deepseek-reasoner',
-      'deepseek-v4-flash': 'deepseek-chat',
-      'deepseek-v4-pro': 'deepseek-reasoner',
+      'deepseek-v4-flash': 'deepseek-v4-flash',
+      'deepseek-v4-pro': 'deepseek-v4-pro',
+      // اسمان قديمان احتياطاً لأي عميل لم يُحدَّث بعد.
+      'deepseek-chat': 'deepseek-v4-flash',
+      'deepseek-reasoner': 'deepseek-v4-pro',
     };
     const isDeepSeek = !!aiModel && aiModel in DEEPSEEK_NAME_MAP;
-    // إذا أرسلت الواجهة thinkingMode فإنّه يفرض تفعيل/إدراج التفكير العميق على جميع
-    // نماذج DeepSeek: enabled → deepseek-reasoner (تفكير)، disabled → deepseek-chat (سريع).
     const resolvedModel = isDeepSeek
-      ? (thinkingMode === 'enabled' ? 'deepseek-reasoner'
-        : thinkingMode === 'disabled' ? 'deepseek-chat'
-        : DEEPSEEK_NAME_MAP[aiModel as string])
+      ? DEEPSEEK_NAME_MAP[aiModel as string]
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
+    // إذا أرسلت الواجهة thinkingMode فإنّه يفرض تفعيل/تعطيل التفكير العميق صراحةً؛
+    // وإلّا الافتراضي حسب الموديل: V4 Pro بتفكير (يطابق سلوك reasoner القديم)،
+    // V4 Flash بلا تفكير (يطابق سلوك chat القديم — سريع).
+    const deepSeekThinkingEnabled = isDeepSeek
+      ? (thinkingMode === 'enabled' ? true : thinkingMode === 'disabled' ? false : resolvedModel === 'deepseek-v4-pro')
+      : false;
 
     if (isDeepSeek && !DEEPSEEK_API_KEY) {
       // 200 مع error field لـ supabase-js حتّى تصل رسالة الخطأ للواجهة.
@@ -455,7 +460,7 @@ Deno.serve(async (req) => {
     }
     if (!isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, thinkingMode: thinkingMode || 'default', entriesCount: entries?.length || 0 });
+    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0 });
 
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
     // DeepSeek يحتاج response_format=json_object صراحةً وإلّا يُرجع نصّاً
@@ -471,6 +476,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             model: resolvedModel,
+            thinking: { type: deepSeekThinkingEnabled ? 'enabled' : 'disabled' },
             temperature: 0.3,
             response_format: { type: 'json_object' },
             messages,

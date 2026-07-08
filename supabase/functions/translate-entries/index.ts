@@ -1283,11 +1283,16 @@ async function translateWithOpenAICompat(
     'Content-Type': 'application/json',
   };
 
+  // DeepSeek V4: thinking mode is a request field, not a model name — V4 Pro
+  // keeps the old "reasoner" (thinking) behavior, V4 Flash the old "chat" one.
+  const deepSeekThinking = providerName === 'DeepSeek' ? { thinking: { type: model === 'deepseek-v4-pro' ? 'enabled' : 'disabled' } } : {};
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
       model,
+      ...deepSeekThinking,
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
@@ -1947,23 +1952,26 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      // DeepSeek API الرسميّ لا يدعم سوى اسمَين: deepseek-chat / deepseek-reasoner.
-      // نحوّل أسماء V4 من الواجهة إلى الأسماء الفعليّة وإلّا تفشل الطلبات بصمت.
+      // منذ V4 (2026-04-24) المعرّفان الحقيقيّان هما deepseek-v4-flash و
+      // deepseek-v4-pro؛ deepseek-chat/deepseek-reasoner اسمان قديمان يُحذَفان
+      // 2026-07-24 وكانا كلاهما يوجّهان إلى deepseek-v4-flash فقط (بلا تفكير /
+      // بتفكير) — deepseek-reasoner لم يكن أبداً deepseek-v4-pro.
       const DEEPSEEK_NAME_MAP: Record<string, string> = {
-        'deepseek-chat': 'deepseek-chat',
-        'deepseek-reasoner': 'deepseek-reasoner',
-        'deepseek-v4-flash': 'deepseek-chat',
-        'deepseek-v4-pro': 'deepseek-reasoner',
+        'deepseek-v4-flash': 'deepseek-v4-flash',
+        'deepseek-v4-pro': 'deepseek-v4-pro',
+        // اسمان قديمان احتياطاً لأي عميل لم يُحدَّث بعد.
+        'deepseek-chat': 'deepseek-v4-flash',
+        'deepseek-reasoner': 'deepseek-v4-pro',
       };
-      const dsModel = (aiModel && DEEPSEEK_NAME_MAP[aiModel]) || 'deepseek-chat';
+      const dsModel = (aiModel && DEEPSEEK_NAME_MAP[aiModel]) || 'deepseek-v4-flash';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
 
-      // ====== تسريع deepseek-reasoner عبر التوازي ======
-      // reasoner بطيء لأنه يولّد تفكيراً طويلاً قبل الجواب. الحل: نقسّم الدفعة
-      // إلى قطع صغيرة (CHUNK) ونرسلها بالتوازي (CONCURRENCY) — كل قطعة تظل
-      // تستخدم reasoner الكامل، فالدقة محفوظة، والزمن الكلي ينخفض ~3-5×.
-      // deepseek-chat سريع أصلاً، فلا حاجة للتقسيم.
-      const isReasoner = dsModel === 'deepseek-reasoner';
+      // ====== تسريع deepseek-v4-pro (تفكير) عبر التوازي ======
+      // وضع التفكير بطيء لأنه يولّد تفكيراً طويلاً قبل الجواب. الحل: نقسّم
+      // الدفعة إلى قطع صغيرة (CHUNK) ونرسلها بالتوازي (CONCURRENCY) — كل قطعة
+      // تظل تستخدم V4 Pro الكامل، فالدقة محفوظة، والزمن الكلي ينخفض ~3-5×.
+      // V4 Flash (بلا تفكير) سريع أصلاً، فلا حاجة للتقسيم.
+      const isReasoner = dsModel === 'deepseek-v4-pro';
       const CHUNK = isReasoner ? 6 : entries.length;
       const CONCURRENCY = isReasoner ? 4 : 1;
 

@@ -41,6 +41,8 @@ export interface DdsHeaderInfo {
   fourCC: string;
   /** ddspf.dwFlags — kept for diagnostics on unsupported formats. */
   ddspfFlags: number;
+  /** DDPF_RGB set — an uncompressed pixel format described by the masks below. */
+  isRawRgb: boolean;
   rgbBitCount: number;
   rMask: number;
   gMask: number;
@@ -83,6 +85,7 @@ export function readDdsHeader(ddsBytes: Uint8Array): DdsHeaderInfo {
     height,
     fourCC: (ddspfFlags & DDPF_FOURCC) ? fourCCRaw : "",
     ddspfFlags,
+    isRawRgb: (ddspfFlags & DDPF_RGB) !== 0,
     rgbBitCount,
     rMask,
     gMask,
@@ -313,7 +316,7 @@ export function decodeDdsToRgba(ddsBytes: Uint8Array): DecodedDdsImage | Unsuppo
     return { supported: true, rgba, width: header.width, height: header.height, fourCC: header.fourCC };
   }
 
-  if (header.ddspfFlags & DDPF_RGB) {
+  if (header.isRawRgb) {
     const rgba = decodeRawRgbDds(
       compressed, header.width, header.height, header.rgbBitCount,
       header.rMask, header.gMask, header.bMask, header.aMask,
@@ -328,4 +331,104 @@ export function decodeDdsToRgba(ddsBytes: Uint8Array): DecodedDdsImage | Unsuppo
     ddspfFlags: header.ddspfFlags,
     rgbBitCount: header.rgbBitCount,
   };
+}
+
+// ============================================================================
+// Replace-flow encoding for uncompressed (DDPF_RGB) DDS — mirrors
+// decodeRawRgbDds exactly in reverse, so a PNG import can replace a raw-RGB
+// GUI image (not just DXT-compressed ones).
+// ============================================================================
+
+/** Inverse of extractChannel: packs an 8-bit value into its bit position/width in `mask`. */
+function packChannel(value8: number, mask: number): number {
+  if (mask === 0) return 0;
+  const shift = maskTrailingZeros(mask);
+  const bits = maskBitWidth(mask);
+  const maxVal = (1 << bits) - 1;
+  const scaled = bits >= 8 ? value8 >>> (8 - bits) : Math.round((value8 / 255) * maxVal);
+  return (scaled & maxVal) << shift;
+}
+
+/**
+ * Encodes RGBA pixel data into a raw (uncompressed) DDS pixel buffer using
+ * the target bit masks — the exact inverse of decodeRawRgbDds. `totalLength`
+ * is the exact byte length to produce (the original pixel data's size),
+ * which is what makes the same-size splice constraint hold by construction.
+ * Returns null if the bit count isn't a supported whole byte count (1-4).
+ */
+export function encodeRawRgbDds(
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+  bitCount: number,
+  rMask: number,
+  gMask: number,
+  bMask: number,
+  aMask: number,
+  totalLength: number,
+  explicitPitch?: number
+): Uint8Array | null {
+  const bytesPerPixel = bitCount / 8;
+  if (!Number.isInteger(bytesPerPixel) || bytesPerPixel < 1 || bytesPerPixel > 4) return null;
+  const stride = explicitPitch && explicitPitch > 0 ? explicitPitch : width * bytesPerPixel;
+  const out = new Uint8Array(totalLength);
+  const view = new DataView(out.buffer);
+
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * stride;
+    for (let x = 0; x < width; x++) {
+      const pxOffset = rowStart + x * bytesPerPixel;
+      if (pxOffset + bytesPerPixel > out.length) continue;
+      const o = (y * width + x) * 4;
+      let pixel = packChannel(rgba[o], rMask) | packChannel(rgba[o + 1], gMask) | packChannel(rgba[o + 2], bMask);
+      if (aMask) pixel |= packChannel(rgba[o + 3], aMask);
+      pixel = pixel >>> 0;
+
+      if (bytesPerPixel === 4) view.setUint32(pxOffset, pixel, true);
+      else if (bytesPerPixel === 3) {
+        out[pxOffset] = pixel & 0xff;
+        out[pxOffset + 1] = (pixel >>> 8) & 0xff;
+        out[pxOffset + 2] = (pixel >>> 16) & 0xff;
+      } else if (bytesPerPixel === 2) view.setUint16(pxOffset, pixel & 0xffff, true);
+      else out[pxOffset] = pixel & 0xff;
+    }
+  }
+  return out;
+}
+
+/** Builds a complete, standard 128-byte-header uncompressed (DDPF_RGB) DDS file.
+ * `hasPitchFlag`/`pitchOrLinearSize` should be copied from the original being
+ * replaced, to keep the rebuilt header internally consistent with its layout. */
+export function buildRawRgbDdsFile(
+  width: number,
+  height: number,
+  bitCount: number,
+  rMask: number,
+  gMask: number,
+  bMask: number,
+  aMask: number,
+  pixelData: Uint8Array,
+  hasPitchFlag: boolean,
+  pitchOrLinearSize: number
+): Uint8Array {
+  const out = new Uint8Array(DDS_HEADER_SIZE + pixelData.length);
+  const view = new DataView(out.buffer);
+  out.set([0x44, 0x44, 0x53, 0x20], 0); // "DDS "
+  view.setUint32(4, 124, true); // dwSize
+  view.setUint32(8, 0x1007 | (hasPitchFlag ? DDSD_PITCH : 0), true); // CAPS|HEIGHT|WIDTH|PIXELFORMAT[|PITCH]
+  view.setUint32(12, height, true);
+  view.setUint32(16, width, true);
+  view.setUint32(20, hasPitchFlag ? pitchOrLinearSize : pixelData.length, true); // pitchOrLinearSize
+  view.setUint32(24, 0, true); // depth
+  view.setUint32(28, 0, true); // mipMapCount
+  view.setUint32(76, 32, true); // ddspf.dwSize
+  view.setUint32(80, DDPF_RGB, true); // ddspf.dwFlags
+  view.setUint32(88, bitCount, true);
+  view.setUint32(92, rMask, true);
+  view.setUint32(96, gMask, true);
+  view.setUint32(100, bMask, true);
+  view.setUint32(104, aMask, true);
+  view.setUint32(108, 0x1000, true); // dwCaps = DDSCAPS_TEXTURE
+  out.set(pixelData, DDS_HEADER_SIZE);
+  return out;
 }

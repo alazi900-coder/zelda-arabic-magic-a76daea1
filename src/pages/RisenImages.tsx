@@ -9,7 +9,10 @@ import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
   type RisenPakHeader, type RisenPakFlatFile,
 } from "@/lib/risen-images-pak";
-import { extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba } from "@/lib/risen-ximg";
+import {
+  extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
+  encodeRawRgbDds, buildRawRgbDdsFile,
+} from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
 
@@ -373,11 +376,7 @@ export default function RisenImages() {
       const lowerName = importFile.name.toLowerCase();
       if (lowerName.endsWith(".dds")) {
         newDdsBytes = new Uint8Array(await importFile.arrayBuffer());
-      } else {
-        if (!isDxtFourCC(original.fourCC)) {
-          toast.error(`صيغة ضغط الصورة الأصلية (${original.fourCC}) غير مدعومة للترميز التلقائي — استورد ملف DDS جاهزاً بنفس الصيغة بدلاً من PNG`);
-          return;
-        }
+      } else if (isDxtFourCC(original.fourCC)) {
         const img = await loadImageElement(importFile);
         const canvas = document.createElement("canvas");
         canvas.width = original.width;
@@ -388,6 +387,32 @@ export default function RisenImages() {
         const imageData = ctx.getImageData(0, 0, original.width, original.height);
         const compressed = encodeDxt(original.fourCC, new Uint8Array(imageData.data), original.width, original.height);
         newDdsBytes = buildDdsFile(original.fourCC, original.width, original.height, compressed);
+      } else if (original.isRawRgb) {
+        const img = await loadImageElement(importFile);
+        const canvas = document.createElement("canvas");
+        canvas.width = original.width;
+        canvas.height = original.height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, original.width, original.height);
+        const imageData = ctx.getImageData(0, 0, original.width, original.height);
+        const pixelDataLength = original.ddsBytes.length - 128;
+        const pixelData = encodeRawRgbDds(
+          new Uint8Array(imageData.data), original.width, original.height, original.rgbBitCount,
+          original.rMask, original.gMask, original.bMask, original.aMask,
+          pixelDataLength, original.hasPitchFlag ? original.pitchOrLinearSize : undefined
+        );
+        if (!pixelData) {
+          toast.error(`صيغة البكسل غير المضغوطة (${original.rgbBitCount} بت) غير مدعومة للترميز — استورد ملف DDS جاهزاً بدلاً من PNG`);
+          return;
+        }
+        newDdsBytes = buildRawRgbDdsFile(
+          original.width, original.height, original.rgbBitCount,
+          original.rMask, original.gMask, original.bMask, original.aMask,
+          pixelData, original.hasPitchFlag, original.pitchOrLinearSize
+        );
+      } else {
+        toast.error(`صيغة ضغط الصورة الأصلية (${original.fourCC || "غير معروفة"}) غير مدعومة للترميز التلقائي — استورد ملف DDS جاهزاً بنفس الصيغة بدلاً من PNG`);
+        return;
       }
 
       const validation = validateReplacementDds(originalXimg, newDdsBytes);

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba } from "@/lib/risen-ximg";
+import {
+  extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
+  encodeRawRgbDds, buildRawRgbDdsFile,
+} from "@/lib/risen-ximg";
 import { decodeDxt, encodeDXT1, decodeDXT1, decodeDXT5 } from "@/lib/risen-dxt-codec";
 import { NUMBERS_XIMG_BASE64 } from "./fixtures/numbers-ximg-base64";
 
@@ -165,6 +168,30 @@ describe("risen-ximg", () => {
     expect(px(1)).toEqual([0, 255, 0, 128]);
     expect(px(2)).toEqual([0, 0, 255, 64]);
     expect(px(3)).toEqual([10, 20, 30, 255]);
+  });
+
+  it("encodeRawRgbDds + buildRawRgbDdsFile round-trips A8R8G8B8 exactly (byte-for-byte, 8-bit channels are lossless)", () => {
+    const width = 2, height = 2;
+    const rgba = new Uint8Array([
+      255, 0, 0, 255,
+      0, 255, 0, 128,
+      0, 0, 255, 64,
+      10, 20, 30, 255,
+    ]);
+    const rMask = 0x00ff0000, gMask = 0x0000ff00, bMask = 0x000000ff, aMask = 0xff000000;
+    const pixelDataLength = width * height * 4; // == the "original" pixel data size the splice must match
+
+    const pixelData = encodeRawRgbDds(rgba, width, height, 32, rMask, gMask, bMask, aMask, pixelDataLength);
+    expect(pixelData).not.toBeNull();
+    expect(pixelData!.length).toBe(pixelDataLength);
+
+    const dds = buildRawRgbDdsFile(width, height, 32, rMask, gMask, bMask, aMask, pixelData!, false, 0);
+    expect(dds.length).toBe(128 + pixelDataLength);
+
+    const result = decodeDdsToRgba(dds);
+    expect(result.supported).toBe(true);
+    if (!result.supported) return;
+    expect(Array.from(result.rgba)).toEqual(Array.from(rgba));
   });
 
   it("returns a diagnostic instead of throwing for an unrecognized format (e.g. DX10 fourCC)", () => {

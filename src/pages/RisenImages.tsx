@@ -691,11 +691,23 @@ export default function RisenImages() {
                   </div>
                 ) : null}
               </div>
-              {selectedDecoded?.kind === "ok" && (
-                <div className="text-xs text-muted-foreground text-center">
-                  {selectedDecoded.width}×{selectedDecoded.height} — {selectedDecoded.fourCC || "غير مضغوط"} — {formatBytes(selectedEntry.size)}
-                </div>
-              )}
+              {selectedDecoded?.kind === "ok" && (() => {
+                const d = selectedDecoded;
+                const formatLabel = d.fourCC
+                  ? d.fourCC
+                  : `غير مضغوط ${d.rgbBitCount}bpp`;
+                const alphaLabel = d.aMask === 0 && !d.fourCC
+                  ? "بلا قناة ألفا"
+                  : d.hasAnyAlpha
+                    ? "ألفا: نعم"
+                    : "ألفا: كلها معتمة";
+                return (
+                  <div className="text-xs text-muted-foreground text-center space-y-0.5">
+                    <div>{d.width}×{d.height} — {formatLabel} — {formatBytes(selectedEntry.size)}</div>
+                    <div className={d.hasAnyAlpha ? "text-emerald-600" : "text-amber-600"}>{alphaLabel}</div>
+                  </div>
+                );
+              })()}
 
               <div className="flex flex-col gap-2">
                 <Button size="sm" variant="outline" onClick={handleExportPng} disabled={selectedDecoded?.kind !== "ok"}>

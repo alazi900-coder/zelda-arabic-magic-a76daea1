@@ -317,7 +317,7 @@ export function decodeDdsToRgba(ddsBytes: Uint8Array): DecodedDdsImage | Unsuppo
 
   if (isDxtFourCC(header.fourCC)) {
     const rgba = decodeDxt(header.fourCC, compressed, header.width, header.height);
-    return { supported: true, rgba, width: header.width, height: header.height, fourCC: header.fourCC };
+    return { supported: true, rgba, width: header.width, height: header.height, fourCC: header.fourCC, rgbBitCount: 0, aMask: 0 };
   }
 
   if (header.isRawRgb) {
@@ -326,7 +326,7 @@ export function decodeDdsToRgba(ddsBytes: Uint8Array): DecodedDdsImage | Unsuppo
       header.rMask, header.gMask, header.bMask, header.aMask,
       header.hasPitchFlag ? header.pitchOrLinearSize : undefined
     );
-    if (rgba) return { supported: true, rgba, width: header.width, height: header.height, fourCC: "" };
+    if (rgba) return { supported: true, rgba, width: header.width, height: header.height, fourCC: "", rgbBitCount: header.rgbBitCount, aMask: header.aMask };
   }
 
   return {

@@ -102,7 +102,20 @@ async function decodeXimgEntry(bytes: Uint8Array): Promise<ThumbResult> {
     if (!ctx) throw new Error("تعذّر إنشاء سياق الرسم لفك الصورة");
     const imageData = new ImageData(new Uint8ClampedArray(decoded.rgba), decoded.width, decoded.height);
     ctx.putImageData(imageData, 0, 0);
-    return { kind: "ok", dataUrl: canvas.toDataURL("image/png"), width: decoded.width, height: decoded.height, fourCC: decoded.fourCC };
+    let hasAnyAlpha = false;
+    for (let i = 3; i < decoded.rgba.length; i += 4) {
+      if (decoded.rgba[i] !== 255) { hasAnyAlpha = true; break; }
+    }
+    return {
+      kind: "ok",
+      dataUrl: canvas.toDataURL("image/png"),
+      width: decoded.width,
+      height: decoded.height,
+      fourCC: decoded.fourCC,
+      rgbBitCount: decoded.rgbBitCount ?? 0,
+      aMask: decoded.aMask ?? 0,
+      hasAnyAlpha,
+    };
   } catch (e) {
     return { kind: "error", message: e instanceof Error ? e.message : String(e) };
   }

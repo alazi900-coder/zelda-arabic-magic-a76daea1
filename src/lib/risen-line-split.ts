@@ -4,6 +4,8 @@
 // Pre-splitting at word boundaries (~40 chars) renders correctly top-to-bottom
 // with no engine wrapping. Confirmed by in-game testing.
 import { RISEN_TAG_REGEX } from "./risen-tag-guard";
+import { detectBreakStyle } from "./balance-lines";
+import type { ExtractedEntry } from "@/components/editor/types";
 
 const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
@@ -50,6 +52,47 @@ export function splitLongLines(text: string, limit: number, breakStyle: "\r\n" |
     outLines.push(current);
   }
   return outLines.join(breakStyle);
+}
+
+export interface LineSplitPlan {
+  /** Keys of entries the tool would modify. */
+  targetKeys: string[];
+  /** key -> new (split) translation, only for targeted entries — pass to updateTranslationsBatch to apply. */
+  updates: Record<string, string>;
+  /** key -> original translation before splitting, only for targeted entries — pass to updateTranslationsBatch to undo. */
+  snapshot: Record<string, string>;
+}
+
+/**
+ * Pure planning step for the bulk line-split tool: given the entries
+ * currently visible (already filtered/searched by the caller — this
+ * function does no filtering of its own) and their translations, decides
+ * which entries need splitting and computes the split result + an undo
+ * snapshot. Kept separate from the React component so it can be tested
+ * without any UI.
+ */
+export function planLineSplit(
+  entries: Pick<ExtractedEntry, "msbtFile" | "index" | "original">[],
+  translations: Record<string, string>,
+  limit: number
+): LineSplitPlan {
+  const targetKeys: string[] = [];
+  const updates: Record<string, string> = {};
+  const snapshot: Record<string, string> = {};
+
+  for (const e of entries) {
+    const key = `${e.msbtFile}:${e.index}`;
+    const current = translations[key] || "";
+    if (!current.trim() || !hasArabicText(current)) continue;
+    if (!current.split(/\r\n|\n/).some((l) => l.length > limit)) continue;
+
+    const breakStyle = detectBreakStyle(e.original);
+    targetKeys.push(key);
+    snapshot[key] = current;
+    updates[key] = splitLongLines(current, limit, breakStyle);
+  }
+
+  return { targetKeys, updates, snapshot };
 }
 
 /** Re-exported so callers checking tag integrity don't need a second import. */

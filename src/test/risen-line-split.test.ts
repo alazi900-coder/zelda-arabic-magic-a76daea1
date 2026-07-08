@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitLongLines, getLongestLineLength, hasArabicText } from "@/lib/risen-line-split";
+import { splitLongLines, getLongestLineLength, hasArabicText, planLineSplit } from "@/lib/risen-line-split";
 
 describe("splitLongLines", () => {
   it("splits a long single-line Arabic text only at spaces, all lines <= limit", () => {
@@ -104,5 +104,68 @@ describe("hasArabicText", () => {
 
   it("detects mixed Arabic/Latin text", () => {
     expect(hasArabicText("Hello مرحبا")).toBe(true);
+  });
+});
+
+describe("planLineSplit", () => {
+  const longArabic = Array.from({ length: 20 }, (_, i) => `كلمة${i}`).join(" ");
+
+  it("scope: only touches entries in the given (already-filtered) list, not others with long text in translations", () => {
+    const inScope = { msbtFile: "infos.tab", index: 1, original: "In scope, long dialogue line." };
+    const outOfScopeKey = "infos.tab:2";
+    const translations: Record<string, string> = {
+      "infos.tab:1": longArabic,
+      [outOfScopeKey]: longArabic, // also long + Arabic — would qualify if it were passed in
+    };
+
+    // Simulates an active filter/search: only `inScope` is part of the
+    // currently-visible (filtered) entries passed to the planner.
+    const plan = planLineSplit([inScope], translations, 40);
+
+    expect(plan.targetKeys).toEqual(["infos.tab:1"]);
+    expect(plan.updates).toHaveProperty("infos.tab:1");
+    expect(plan.snapshot).toHaveProperty("infos.tab:1");
+    // The out-of-scope entry must be completely untouched.
+    expect(plan.updates).not.toHaveProperty(outOfScopeKey);
+    expect(plan.snapshot).not.toHaveProperty(outOfScopeKey);
+    expect(translations[outOfScopeKey]).toBe(longArabic);
+  });
+
+  it("undo: applying the snapshot restores the exact original values", () => {
+    const entries = [
+      { msbtFile: "infos.tab", index: 1, original: "First long dialogue line here." },
+      { msbtFile: "quests.tab", index: 5, original: "Second long quest description line." },
+    ];
+    const originalTranslations: Record<string, string> = {
+      "infos.tab:1": longArabic,
+      "quests.tab:5": Array.from({ length: 25 }, (_, i) => `مهمة${i}`).join(" "),
+    };
+
+    const plan = planLineSplit(entries, originalTranslations, 40);
+    expect(plan.targetKeys.length).toBe(2);
+
+    // Apply.
+    const afterApply: Record<string, string> = { ...originalTranslations, ...plan.updates };
+    expect(afterApply["infos.tab:1"]).not.toBe(originalTranslations["infos.tab:1"]);
+    expect(afterApply["quests.tab:5"]).not.toBe(originalTranslations["quests.tab:5"]);
+
+    // Undo via the snapshot.
+    const afterUndo: Record<string, string> = { ...afterApply, ...plan.snapshot };
+    expect(afterUndo["infos.tab:1"]).toBe(originalTranslations["infos.tab:1"]);
+    expect(afterUndo["quests.tab:5"]).toBe(originalTranslations["quests.tab:5"]);
+  });
+
+  it("skips entries that don't need splitting and pure-Latin translations", () => {
+    const entries = [
+      { msbtFile: "infos.tab", index: 1, original: "Short." },
+      { msbtFile: "infos.tab", index: 2, original: "Long English original." },
+    ];
+    const translations: Record<string, string> = {
+      "infos.tab:1": "قصير",
+      "infos.tab:2": Array.from({ length: 20 }, (_, i) => `word${i}`).join(" "), // long but pure-Latin
+    };
+
+    const plan = planLineSplit(entries, translations, 40);
+    expect(plan.targetKeys).toEqual([]);
   });
 });

@@ -1,8 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Scissors } from "lucide-react";
-import { splitLongLines, hasArabicText } from "@/lib/risen-line-split";
-import { detectBreakStyle } from "@/lib/balance-lines";
+import { planLineSplit } from "@/lib/risen-line-split";
 import type { ExtractedEntry } from "@/components/editor/types";
 
 const STORAGE_KEY = "risenLineSplitLimit";
@@ -37,36 +36,20 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
 
   const handleSplit = async () => {
     const { toast } = await import("sonner");
-    const keyOf = (e: ExtractedEntry) => `${e.msbtFile}:${e.index}`;
+    const plan = planLineSplit(filteredEntries, translations, limit);
 
-    const targets = filteredEntries.filter((e) => {
-      const t = translations[keyOf(e)] || "";
-      if (!t.trim() || !hasArabicText(t)) return false;
-      return t.split(/\r\n|\n/).some((l) => l.length > limit);
-    });
-
-    if (targets.length === 0) {
+    if (plan.targetKeys.length === 0) {
       toast.info("لا توجد نصوص تحتاج تقسيمًا ضمن العرض الحالي");
       return;
     }
 
     const ok = window.confirm(
-      `سيتم تقسيم أسطر ${targets.length} نصًا من أصل ${filteredEntries.length} المعروضة حاليًا. متابعة؟`
+      `سيتم تقسيم أسطر ${plan.targetKeys.length} نصًا من أصل ${filteredEntries.length} المعروضة حاليًا. متابعة؟`
     );
     if (!ok) return;
 
-    const snapshot: Record<string, string> = {};
-    const updates: Record<string, string> = {};
-    for (const e of targets) {
-      const k = keyOf(e);
-      const current = translations[k] || "";
-      snapshot[k] = current;
-      const breakStyle = detectBreakStyle(e.original);
-      updates[k] = splitLongLines(current, limit, breakStyle);
-    }
-
-    undoSnapshotRef.current = snapshot;
-    const count = updateTranslationsBatch(updates);
+    undoSnapshotRef.current = plan.snapshot;
+    const count = updateTranslationsBatch(plan.updates);
 
     toast.success(`تم تقسيم أسطر ${count} نصًا`, {
       action: {

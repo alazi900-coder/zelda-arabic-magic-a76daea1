@@ -22,7 +22,7 @@ const ACCENT = "#4a7c3f";
  * recognized-but-unsupported pixel format (with diagnostic fields instead of
  * a silent blank card), or a hard read/parse error (e.g. a stale file handle). */
 type ThumbResult =
-  | { kind: "ok"; dataUrl: string; width: number; height: number; fourCC: string }
+  | { kind: "ok"; dataUrl: string; width: number; height: number; fourCC: string; rgbBitCount: number; aMask: number; hasAnyAlpha: boolean }
   | { kind: "unsupported"; fourCC: string; ddspfFlags: number; rgbBitCount: number }
   | { kind: "error"; message: string };
 

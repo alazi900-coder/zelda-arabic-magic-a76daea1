@@ -294,6 +294,10 @@ export interface DecodedDdsImage {
   height: number;
   /** "" for uncompressed formats. */
   fourCC: string;
+  /** Bits per pixel for uncompressed formats; 0 for compressed. */
+  rgbBitCount: number;
+  /** Alpha bit mask for uncompressed formats; 0 when the source has no alpha channel. */
+  aMask: number;
 }
 
 export interface UnsupportedDdsFormat {

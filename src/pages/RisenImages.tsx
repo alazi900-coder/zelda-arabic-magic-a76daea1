@@ -9,21 +9,19 @@ import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
   type RisenPakHeader, type RisenPakFlatFile,
 } from "@/lib/risen-images-pak";
-import { extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile } from "@/lib/risen-ximg";
-import { decodeDxt, encodeDxt, type DxtFourCC } from "@/lib/risen-dxt-codec";
+import { extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba } from "@/lib/risen-ximg";
+import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
 
 const ACCENT = "#4a7c3f";
 
-const DXT_FOURCCS: readonly string[] = ["DXT1", "DXT3", "DXT5"];
-const isDxtFourCC = (v: string): v is DxtFourCC => (DXT_FOURCCS as string[]).includes(v);
-
-interface DecodedImage {
-  dataUrl: string;
-  width: number;
-  height: number;
-  fourCC: string;
-}
+/** Result of decoding one .ximg entry for preview: a rendered image, a
+ * recognized-but-unsupported pixel format (with diagnostic fields instead of
+ * a silent blank card), or a hard read/parse error (e.g. a stale file handle). */
+type ThumbResult =
+  | { kind: "ok"; dataUrl: string; width: number; height: number; fourCC: string }
+  | { kind: "unsupported"; fourCC: string; ddspfFlags: number; rgbBitCount: number }
+  | { kind: "error"; message: string };
 
 interface ModifiedRecord {
   /** The full original .ximg bytes, kept in memory for one-level undo. */
@@ -85,19 +83,26 @@ try {
 `;
 }
 
-async function decodeXimgEntry(bytes: Uint8Array): Promise<DecodedImage | null> {
-  const { ddsBytes, width, height, fourCC } = extractDdsFromXimg(bytes);
-  if (!isDxtFourCC(fourCC)) return null; // unsupported preview format — export-only
-  const compressed = ddsBytes.subarray(128);
-  const rgba = decodeDxt(fourCC, compressed, width, height);
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
-  ctx.putImageData(imageData, 0, 0);
-  return { dataUrl: canvas.toDataURL("image/png"), width, height, fourCC };
+/** Never throws — read/parse failures become a `{kind:"error"}` result so the
+ * UI can show a message instead of an uncaught rejection or a blank card. */
+async function decodeXimgEntry(bytes: Uint8Array): Promise<ThumbResult> {
+  try {
+    const { ddsBytes } = extractDdsFromXimg(bytes);
+    const decoded = decodeDdsToRgba(ddsBytes);
+    if (!decoded.supported) {
+      return { kind: "unsupported", fourCC: decoded.fourCC, ddspfFlags: decoded.ddspfFlags, rgbBitCount: decoded.rgbBitCount };
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = decoded.width;
+    canvas.height = decoded.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("تعذّر إنشاء سياق الرسم لفك الصورة");
+    const imageData = new ImageData(new Uint8ClampedArray(decoded.rgba), decoded.width, decoded.height);
+    ctx.putImageData(imageData, 0, 0);
+    return { kind: "ok", dataUrl: canvas.toDataURL("image/png"), width: decoded.width, height: decoded.height, fourCC: decoded.fourCC };
+  } catch (e) {
+    return { kind: "error", message: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 function loadImageElement(file: File): Promise<HTMLImageElement> {
@@ -114,6 +119,13 @@ function loadImageElement(file: File): Promise<HTMLImageElement> {
 // Lazy thumbnail cell — decodes only once its actually scrolled into view.
 // ============================================================================
 
+function diagnosticText(result: Exclude<ThumbResult, { kind: "ok" }>): string {
+  if (result.kind === "unsupported") {
+    return `صيغة غير مدعومة — fourCC: ${result.fourCC || "بدون fourCC"} — dwFlags: ${result.ddspfFlags} — dwRGBBitCount: ${result.rgbBitCount}`;
+  }
+  return result.message;
+}
+
 function LazyThumb({
   entry, file, selected, onSelect, onDecoded,
 }: {
@@ -121,11 +133,10 @@ function LazyThumb({
   file: File;
   selected: boolean;
   onSelect: () => void;
-  onDecoded: (path: string, img: DecodedImage | null) => void;
+  onDecoded: (path: string, result: ThumbResult) => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [result, setResult] = useState<ThumbResult | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -139,34 +150,30 @@ function LazyThumb({
     return () => observer.disconnect();
   }, []);
 
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
   const onDecodedRef = useRef(onDecoded);
   onDecodedRef.current = onDecoded;
 
   useEffect(() => {
-    if (!visible || dataUrl || failed) return;
+    if (!visible || result) return;
     let cancelled = false;
     (async () => {
+      let r: ThumbResult;
       try {
         const buf = await file.slice(entry.offset, entry.offset + entry.size).arrayBuffer();
-        const decoded = await decodeXimgEntry(new Uint8Array(buf));
-        if (cancelled) return;
-        if (decoded) {
-          setDataUrl(decoded.dataUrl);
-          onDecodedRef.current(entry.path, decoded);
-        } else {
-          setFailed(true);
-        }
-      } catch {
-        if (!cancelled) setFailed(true);
+        r = await decodeXimgEntry(new Uint8Array(buf));
+      } catch (e) {
+        r = { kind: "error", message: e instanceof Error ? e.message : String(e) };
       }
+      if (cancelled) return;
+      setResult(r);
+      onDecodedRef.current(entry.path, r);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, entry.path]);
 
   const name = entry.path.slice(entry.path.lastIndexOf("/") + 1);
+  const title = result && result.kind !== "ok" ? `${entry.path}\n${diagnosticText(result)}` : entry.path;
 
   return (
     <button
@@ -175,12 +182,12 @@ function LazyThumb({
       className={`flex flex-col gap-1 p-2 rounded border text-right transition-colors ${
         selected ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
       }`}
-      title={entry.path}
+      title={title}
     >
       <div className="w-full aspect-square rounded bg-muted/40 flex items-center justify-center overflow-hidden">
-        {dataUrl ? (
-          <img src={dataUrl} alt={name} className="max-w-full max-h-full object-contain" style={{ imageRendering: "pixelated" }} />
-        ) : failed ? (
+        {result?.kind === "ok" ? (
+          <img src={result.dataUrl} alt={name} className="max-w-full max-h-full object-contain" style={{ imageRendering: "pixelated" }} />
+        ) : result ? (
           <ImageOff className="w-5 h-5 text-muted-foreground" />
         ) : visible ? (
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -207,9 +214,9 @@ export default function RisenImages() {
   const [otherOpen, setOtherOpen] = useState(false);
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [selectedDecoded, setSelectedDecoded] = useState<DecodedImage | null>(null);
+  const [selectedDecoded, setSelectedDecoded] = useState<ThumbResult | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
-  const [decodedCache, setDecodedCache] = useState<Map<string, DecodedImage>>(new Map());
+  const [decodedCache, setDecodedCache] = useState<Map<string, ThumbResult>>(new Map());
 
   const [modifiedLog, setModifiedLog] = useState<Map<string, ModifiedRecord>>(new Map());
   const firstWriteConfirmedRef = useRef(false);
@@ -300,27 +307,31 @@ export default function RisenImages() {
     });
   }, [flatFiles, activeFilter, search]);
 
-  const handleThumbDecoded = useCallback((path: string, img: DecodedImage | null) => {
-    if (!img) return;
+  const handleThumbDecoded = useCallback((path: string, result: ThumbResult) => {
     setDecodedCache((prev) => {
       const next = new Map(prev);
-      next.set(path, img);
+      next.set(path, result);
       return next;
     });
   }, []);
 
-  const handleSelect = useCallback(async (entry: RisenPakFlatFile) => {
+  /** `fileOverride` lets a caller force a specific File (e.g. a just-refreshed
+   * snapshot right after a write) instead of the possibly-stale `file` in state. */
+  const handleSelect = useCallback(async (entry: RisenPakFlatFile, fileOverride?: File) => {
     setSelectedPath(entry.path);
-    const cached = decodedCache.get(entry.path);
+    const cached = fileOverride ? undefined : decodedCache.get(entry.path);
     if (cached) { setSelectedDecoded(cached); return; }
-    if (!file) return;
+    const activeFile = fileOverride || file;
+    if (!activeFile) return;
     setSelectedLoading(true);
     setSelectedDecoded(null);
     try {
-      const buf = await file.slice(entry.offset, entry.offset + entry.size).arrayBuffer();
-      const decoded = await decodeXimgEntry(new Uint8Array(buf));
-      setSelectedDecoded(decoded);
-      if (decoded) handleThumbDecoded(entry.path, decoded);
+      const buf = await activeFile.slice(entry.offset, entry.offset + entry.size).arrayBuffer();
+      const result = await decodeXimgEntry(new Uint8Array(buf));
+      setSelectedDecoded(result);
+      handleThumbDecoded(entry.path, result);
+    } catch (e) {
+      setSelectedDecoded({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     } finally {
       setSelectedLoading(false);
     }
@@ -395,10 +406,16 @@ export default function RisenImages() {
         return next;
       });
 
+      let freshFile: File | null = null;
       if (fileHandle) {
         const writable = await fileHandle.createWritable({ keepExistingData: true });
         await writable.write({ type: "write", position: selectedEntry.offset, data: rebuiltXimg });
         await writable.close();
+        // Chrome invalidates previously-obtained File snapshots for a handle once it's
+        // been written to — re-acquire a fresh one or every subsequent read (including
+        // the re-preview below) throws NotReadableError ("تعذر قراءة الملف المطلوب...").
+        freshFile = await fileHandle.getFile();
+        setFile(freshFile);
         toast.success(`تم حقن الصورة الجديدة مباشرة في images.pak (${selectedEntry.path})`);
       } else {
         const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1);
@@ -409,7 +426,7 @@ export default function RisenImages() {
       }
 
       invalidateEntry(selectedEntry.path);
-      await handleSelect(selectedEntry);
+      await handleSelect(selectedEntry, freshFile || undefined);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -427,13 +444,16 @@ export default function RisenImages() {
       const writable = await fileHandle.createWritable({ keepExistingData: true });
       await writable.write({ type: "write", position: entry.offset, data: record.originalXimgBytes });
       await writable.close();
+      // Same stale-snapshot issue as the replace path above — refresh after writing.
+      const freshFile = await fileHandle.getFile();
+      setFile(freshFile);
       setModifiedLog((prev) => {
         const next = new Map(prev);
         next.delete(path);
         return next;
       });
       invalidateEntry(path);
-      if (selectedPath === path) await handleSelect(entry);
+      if (selectedPath === path) await handleSelect(entry, freshFile);
       toast.success("تم التراجع عن التعديل");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -443,7 +463,7 @@ export default function RisenImages() {
   }, [modifiedLog, flatFiles, fileHandle, invalidateEntry, selectedPath, handleSelect]);
 
   const handleExportPng = useCallback(() => {
-    if (!selectedDecoded || !selectedEntry) return;
+    if (!selectedDecoded || selectedDecoded.kind !== "ok" || !selectedEntry) return;
     const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
     const a = document.createElement("a");
     a.href = selectedDecoded.dataUrl;
@@ -613,23 +633,34 @@ export default function RisenImages() {
               <div className="w-full aspect-square rounded bg-muted/40 flex items-center justify-center overflow-hidden">
                 {selectedLoading ? (
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                ) : selectedDecoded ? (
+                ) : selectedDecoded?.kind === "ok" ? (
                   <img src={selectedDecoded.dataUrl} alt="" className="max-w-full max-h-full object-contain" style={{ imageRendering: "pixelated" }} />
-                ) : (
-                  <div className="text-center text-xs text-muted-foreground p-4">
-                    <ImageOff className="w-6 h-6 mx-auto mb-2" />
-                    تعذّرت معاينة هذه الصورة (صيغة غير مدعومة للعرض) — يمكنك تصدير DDS الخام
+                ) : selectedDecoded?.kind === "unsupported" ? (
+                  <div className="text-center text-xs text-muted-foreground p-3 space-y-1.5">
+                    <ImageOff className="w-6 h-6 mx-auto" />
+                    <div>صيغة ضغط غير مدعومة للعرض حالياً</div>
+                    <div className="font-mono text-[10px] leading-relaxed">
+                      fourCC: {selectedDecoded.fourCC || "بدون fourCC"}<br />
+                      dwFlags: {selectedDecoded.ddspfFlags}<br />
+                      dwRGBBitCount: {selectedDecoded.rgbBitCount}
+                    </div>
+                    <div>يمكنك تصدير DDS الخام لفتحه ببرنامج خارجي</div>
                   </div>
-                )}
+                ) : selectedDecoded?.kind === "error" ? (
+                  <div className="text-center text-xs text-destructive p-3 flex flex-col items-center gap-1.5">
+                    <AlertTriangle className="w-6 h-6" />
+                    {selectedDecoded.message}
+                  </div>
+                ) : null}
               </div>
-              {selectedDecoded && (
+              {selectedDecoded?.kind === "ok" && (
                 <div className="text-xs text-muted-foreground text-center">
-                  {selectedDecoded.width}×{selectedDecoded.height} — {selectedDecoded.fourCC} — {formatBytes(selectedEntry.size)}
+                  {selectedDecoded.width}×{selectedDecoded.height} — {selectedDecoded.fourCC || "غير مضغوط"} — {formatBytes(selectedEntry.size)}
                 </div>
               )}
 
               <div className="flex flex-col gap-2">
-                <Button size="sm" variant="outline" onClick={handleExportPng} disabled={!selectedDecoded}>
+                <Button size="sm" variant="outline" onClick={handleExportPng} disabled={selectedDecoded?.kind !== "ok"}>
                   <ImageDown className="w-3.5 h-3.5 ml-1" /> تنزيل PNG
                 </Button>
                 <Button size="sm" variant="outline" onClick={handleExportRawDds}>

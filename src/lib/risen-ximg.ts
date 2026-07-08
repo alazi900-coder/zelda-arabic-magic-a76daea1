@@ -22,38 +22,75 @@
  *                extending to the end of the .ximg file.
  */
 
-import { type DxtFourCC } from "./risen-dxt-codec";
+import { type DxtFourCC, isDxtFourCC, decodeDxt } from "./risen-dxt-codec";
 
 const MAGIC = "GR01IM04";
 const DDS_OFFSET_FIELD = 0x10;
 const DDS_SIZE_FIELD = 0x14;
 const DDS_HEADER_SIZE = 128; // "DDS " (4) + DDS_HEADER struct (124)
 
-export interface XimgDds {
+const DDSD_PITCH = 0x8;
+const DDPF_FOURCC = 0x4;
+const DDPF_RGB = 0x40;
+
+export interface DdsHeaderInfo {
+  width: number;
+  height: number;
+  /** Raw 4-char fourCC read from the DDS header when DDPF_FOURCC is set — "" otherwise
+   * (uncompressed RGB DDS files leave this field zeroed/meaningless). */
+  fourCC: string;
+  /** ddspf.dwFlags — kept for diagnostics on unsupported formats. */
+  ddspfFlags: number;
+  rgbBitCount: number;
+  rMask: number;
+  gMask: number;
+  bMask: number;
+  aMask: number;
+  /** Row stride in bytes, only meaningful for uncompressed data when hasPitchFlag is true. */
+  pitchOrLinearSize: number;
+  hasPitchFlag: boolean;
+}
+
+export interface XimgDds extends DdsHeaderInfo {
   /** Absolute byte offset of the embedded DDS blob's start within the .ximg file. */
   ddsOffset: number;
   ddsBytes: Uint8Array;
-  width: number;
-  height: number;
-  /** Raw 4-char fourCC read from the DDS header — usually DXT1/DXT3/DXT5, but
-   * kept as a plain string so an unrecognized format can still be surfaced
-   * to the user instead of throwing. */
-  fourCC: string;
 }
 
 function readAscii(bytes: Uint8Array, offset: number, len: number): string {
   return new TextDecoder("ascii").decode(bytes.subarray(offset, offset + len));
 }
 
-/** Reads width/height/fourCC out of a standalone DDS blob (magic "DDS " at offset 0). */
-export function readDdsHeader(ddsBytes: Uint8Array): { width: number; height: number; fourCC: string } {
+/** Reads the full DDS_HEADER out of a standalone DDS blob (magic "DDS " at offset 0). */
+export function readDdsHeader(ddsBytes: Uint8Array): DdsHeaderInfo {
   if (ddsBytes.length < DDS_HEADER_SIZE) throw new Error("ملف DDS غير مكتمل (أقل من ترويسة 128 بايت)");
   if (readAscii(ddsBytes, 0, 4) !== "DDS ") throw new Error('توقيع DDS غير صالح — يجب أن يبدأ بـ "DDS "');
   const view = new DataView(ddsBytes.buffer, ddsBytes.byteOffset, ddsBytes.byteLength);
+  const headerFlags = view.getUint32(8, true);
   const height = view.getUint32(12, true);
   const width = view.getUint32(16, true);
-  const fourCC = readAscii(ddsBytes, 84, 4);
-  return { width, height, fourCC };
+  const pitchOrLinearSize = view.getUint32(20, true);
+  const ddspfFlags = view.getUint32(80, true);
+  const fourCCRaw = readAscii(ddsBytes, 84, 4);
+  const rgbBitCount = view.getUint32(88, true);
+  const rMask = view.getUint32(92, true);
+  const gMask = view.getUint32(96, true);
+  const bMask = view.getUint32(100, true);
+  const aMask = view.getUint32(104, true);
+
+  return {
+    width,
+    height,
+    fourCC: (ddspfFlags & DDPF_FOURCC) ? fourCCRaw : "",
+    ddspfFlags,
+    rgbBitCount,
+    rMask,
+    gMask,
+    bMask,
+    aMask,
+    pitchOrLinearSize,
+    hasPitchFlag: (headerFlags & DDSD_PITCH) !== 0,
+  };
 }
 
 /** Locates and parses the embedded DDS blob inside a full .ximg file buffer. */
@@ -78,9 +115,9 @@ export function extractDdsFromXimg(ximgBytes: Uint8Array): XimgDds {
   }
 
   const ddsBytes = ximgBytes.subarray(ddsOffset, ddsOffset + ddsSize);
-  const { width, height, fourCC } = readDdsHeader(ddsBytes);
+  const headerInfo = readDdsHeader(ddsBytes);
 
-  return { ddsOffset, ddsBytes, width, height, fourCC };
+  return { ddsOffset, ddsBytes, ...headerInfo };
 }
 
 function indexOfBytes(haystack: Uint8Array, needle: number[]): number {
@@ -126,7 +163,7 @@ export function validateReplacementDds(originalXimgBytes: Uint8Array, candidateD
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
-  let candidate: { width: number; height: number; fourCC: string };
+  let candidate: DdsHeaderInfo;
   try {
     candidate = readDdsHeader(candidateDdsBytes);
   } catch (e) {
@@ -171,4 +208,124 @@ export function buildDdsFile(fourCC: DxtFourCC, width: number, height: number, c
   // dwCaps2/3/4, dwReserved2 (112..127) left zeroed
   out.set(compressedData, DDS_HEADER_SIZE);
   return out;
+}
+
+// ============================================================================
+// Viewer decode dispatch — DXT1/3/5 or uncompressed RGB, with a diagnostic
+// result (never a throw) for anything else, e.g. a DX10-extended-header FourCC.
+// ============================================================================
+
+function maskBitWidth(mask: number): number {
+  let n = 0;
+  let m = mask >>> 0;
+  while (m) { n += m & 1; m >>>= 1; }
+  return n;
+}
+
+function maskTrailingZeros(mask: number): number {
+  if (mask === 0) return 0;
+  let n = 0;
+  let m = mask >>> 0;
+  while ((m & 1) === 0) { m >>>= 1; n++; }
+  return n;
+}
+
+function extractChannel(pixel: number, mask: number): number {
+  if (mask === 0) return 255; // channel absent (e.g. no alpha mask) -> fully opaque
+  const shift = maskTrailingZeros(mask);
+  const bits = maskBitWidth(mask);
+  const raw = (pixel & mask) >>> shift;
+  if (bits >= 8) return raw >>> (bits - 8);
+  const maxVal = (1 << bits) - 1;
+  return Math.round((raw / maxVal) * 255);
+}
+
+/**
+ * Decodes an uncompressed (DDPF_RGB) DDS pixel buffer to RGBA, using the
+ * file's own bit masks — works for any channel order/width (32-bit with
+ * alpha, 24-bit without, 16-bit 565, etc.), not just a hardcoded A8R8G8B8.
+ * Returns null if the bit count isn't a supported whole byte count (1-4).
+ */
+export function decodeRawRgbDds(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  bitCount: number,
+  rMask: number,
+  gMask: number,
+  bMask: number,
+  aMask: number,
+  explicitPitch?: number
+): Uint8Array | null {
+  const bytesPerPixel = bitCount / 8;
+  if (!Number.isInteger(bytesPerPixel) || bytesPerPixel < 1 || bytesPerPixel > 4) return null;
+  const stride = explicitPitch && explicitPitch > 0 ? explicitPitch : width * bytesPerPixel;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const out = new Uint8Array(width * height * 4);
+
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * stride;
+    for (let x = 0; x < width; x++) {
+      const pxOffset = rowStart + x * bytesPerPixel;
+      if (pxOffset + bytesPerPixel > data.length) continue;
+      let pixel: number;
+      if (bytesPerPixel === 4) pixel = view.getUint32(pxOffset, true);
+      else if (bytesPerPixel === 3) pixel = data[pxOffset] | (data[pxOffset + 1] << 8) | (data[pxOffset + 2] << 16);
+      else if (bytesPerPixel === 2) pixel = view.getUint16(pxOffset, true);
+      else pixel = data[pxOffset];
+
+      const o = (y * width + x) * 4;
+      out[o] = extractChannel(pixel, rMask);
+      out[o + 1] = extractChannel(pixel, gMask);
+      out[o + 2] = extractChannel(pixel, bMask);
+      out[o + 3] = aMask ? extractChannel(pixel, aMask) : 255;
+    }
+  }
+  return out;
+}
+
+export interface DecodedDdsImage {
+  supported: true;
+  rgba: Uint8Array;
+  width: number;
+  height: number;
+  /** "" for uncompressed formats. */
+  fourCC: string;
+}
+
+export interface UnsupportedDdsFormat {
+  supported: false;
+  /** "" when the file has no FourCC (e.g. it's flagged DDPF_RGB but with an
+   * unsupported bit count), shown to the user as "بدون fourCC". */
+  fourCC: string;
+  ddspfFlags: number;
+  rgbBitCount: number;
+}
+
+/** Decodes a full DDS blob (with its 128-byte header) to RGBA, or returns a
+ * diagnostic instead of throwing when the format isn't one this tool decodes. */
+export function decodeDdsToRgba(ddsBytes: Uint8Array): DecodedDdsImage | UnsupportedDdsFormat {
+  const header = readDdsHeader(ddsBytes);
+  const compressed = ddsBytes.subarray(DDS_HEADER_SIZE);
+
+  if (isDxtFourCC(header.fourCC)) {
+    const rgba = decodeDxt(header.fourCC, compressed, header.width, header.height);
+    return { supported: true, rgba, width: header.width, height: header.height, fourCC: header.fourCC };
+  }
+
+  if (header.ddspfFlags & DDPF_RGB) {
+    const rgba = decodeRawRgbDds(
+      compressed, header.width, header.height, header.rgbBitCount,
+      header.rMask, header.gMask, header.bMask, header.aMask,
+      header.hasPitchFlag ? header.pitchOrLinearSize : undefined
+    );
+    if (rgba) return { supported: true, rgba, width: header.width, height: header.height, fourCC: "" };
+  }
+
+  return {
+    supported: false,
+    fourCC: header.fourCC,
+    ddspfFlags: header.ddspfFlags,
+    rgbBitCount: header.rgbBitCount,
+  };
 }

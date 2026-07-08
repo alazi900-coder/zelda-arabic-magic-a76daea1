@@ -15,6 +15,11 @@
 
 export type DxtFourCC = "DXT1" | "DXT3" | "DXT5";
 
+const DXT_FOURCCS: readonly string[] = ["DXT1", "DXT3", "DXT5"];
+export function isDxtFourCC(v: string): v is DxtFourCC {
+  return DXT_FOURCCS.includes(v);
+}
+
 function rgb565ToRgb(c: number): [number, number, number] {
   const r = (c >> 11) & 0x1f;
   const g = (c >> 5) & 0x3f;

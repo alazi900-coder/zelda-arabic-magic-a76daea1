@@ -23,6 +23,8 @@ import {
   loadReviewMemory, markReviewed, exportReviewMemory,
   importReviewMemory, clearReviewMemory, isReviewedSync, type ReviewMemory,
 } from "@/lib/enhance-memory";
+import { recordFeedback, getRecentFeedbackForPrompt } from "@/lib/enhance-feedback-memory";
+import { makeEnhanceCacheKey, enhanceCacheLookup, enhanceCacheStore } from "@/lib/enhance-cache";
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import type { ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
@@ -249,6 +251,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const abortRef = useRef(false);
   /** Aborts in-flight Supabase function calls when the user clicks Stop. */
   const abortControllerRef = useRef<AbortController | null>(null);
+  /** يمنع تكرار تنبيه التحويل التلقائي لـ Gemini أكثر من مرة واحدة لكل عملية فحص. */
+  const fallbackNoticeShownRef = useRef(false);
   /** Maps key → translation text at the time of last scan. */
   const processedKeysRef = useRef<Map<string, string>>(new Map());
 
@@ -278,6 +282,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   }, [scope, reviewMem]);
 
   const analyzeTranslations = async (mode: "enhance" | "grammar" | "combined") => {
+    fallbackNoticeShownRef.current = false;
     const currentEnabledRules = loadEnabledRules();
     const currentCustomRules = loadCustomRules();
     const currentBuiltinOverrides = loadBuiltinOverrides();
@@ -460,24 +465,136 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     let allIssues: GrammarIssue[] = [];
     let processed = 0;
 
-    const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
-    for (let i = 0; i < translatedEntries.length; i += BATCH_SIZE) {
-      const batch = translatedEntries.slice(i, i + BATCH_SIZE);
-      batches.push({
-        textsToAnalyze: batch.map(e => ({
-          key: `${e.msbtFile}:${e.index}`,
-          original: e.original,
-          translation: translations[`${e.msbtFile}:${e.index}`],
-          category: isRisen ? categorizeRisenTable(risenTableFromMsbtFile(e.msbtFile)).label : undefined,
-        })),
-      });
-    }
+    // يدمج ردّ الـ AI (حقيقيّاً من الشبكة أو مُصطنَعاً من الكاش) في نتائج
+    // اللوحة — مستخدَمة من مسارَين: الردود الحقيقيّة القادمة من enhance-translations،
+    // ونتائج الكاش المحلّي (تفادياً لتكرار هذا المنطق مرّتين).
+    const applyResponseData = (data: { suggestions?: EnhanceSuggestion[]; issues?: GrammarIssue[]; results?: Array<Record<string, unknown>> } | null | undefined) => {
+      if (!data) return;
+      if (mode === "enhance" && data.suggestions) {
+        const fresh = data.suggestions.filter(
+          (s) => !allSuggestions.some(x => x.key === s.key)
+        );
+        if (fresh.length > 0) {
+          allSuggestions = [...allSuggestions, ...fresh];
+          setSuggestions(prev => [...prev, ...fresh]);
+        }
+      } else if (mode === "grammar" && data.issues) {
+        const fresh = data.issues.filter(
+          (g) => !allIssues.some(x => x.key === g.key)
+        );
+        if (fresh.length > 0) {
+          allIssues = [...allIssues, ...fresh];
+          setGrammarIssues(prev => [...prev, ...fresh]);
+        }
+      } else if (mode === "combined" && Array.isArray(data.results)) {
+        // تقسيم نتائج الفحص الشامل بين التبويبين حسب الفئة:
+        // style → لوحة تحسين الصياغة • wrong/reorder/weak → لوحة فحص القواعد.
+        const newSuggestions: EnhanceSuggestion[] = [];
+        const newIssues: GrammarIssue[] = [];
+        for (const r of data.results as Array<Record<string, string>>) {
+          if (r.category === "style") {
+            if (allSuggestions.some(x => x.key === r.key) || newSuggestions.some(x => x.key === r.key)) continue;
+            newSuggestions.push({
+              key: r.key,
+              original: r.original,
+              current: r.current,
+              suggested: r.suggested,
+              alternatives: (r as unknown as { alternatives?: string[] }).alternatives || [],
+              reason: r.issue || r.reason || "تحسين صياغة",
+              detail: r.detail || "",
+              fixExplanation: r.fixExplanation || "",
+              type: (r.type as EnhanceSuggestion["type"]) || "style",
+            });
+          } else {
+            if (allIssues.some(x => x.key === r.key) || newIssues.some(x => x.key === r.key)) continue;
+            newIssues.push({
+              key: r.key,
+              original: r.original,
+              translation: r.translation,
+              issue: r.issue || "إصلاح قواعديّ + صياغة",
+              suggestion: r.suggested,
+              severity: r.severity as GrammarIssue["severity"],
+              detail: r.detail || "",
+              fixExplanation: r.fixExplanation || "",
+              category: r.category as GrammarIssue["category"],
+            });
+          }
+        }
+        if (newSuggestions.length > 0) {
+          allSuggestions = [...allSuggestions, ...newSuggestions];
+          setSuggestions(prev => [...prev, ...newSuggestions]);
+        }
+        if (newIssues.length > 0) {
+          allIssues = [...allIssues, ...newIssues];
+          setGrammarIssues(prev => [...prev, ...newIssues]);
+        }
+      }
+    };
 
     // مفتاح DeepSeek مخزَّن في إعدادات المحرّر؛ نمرّره للدالّة عند اختيار نموذج DeepSeek.
     const deepseekKey = (() => {
       try { return localStorage.getItem('userDeepSeekKey') || ''; } catch { return ''; }
     })();
     const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined) : undefined;
+    // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب
+    // تكرار نفس نمط الخطأ. نجلبها مرّة واحدة قبل كل الدفعات (نفس القائمة لكلّها).
+    const learnedFeedback = await getRecentFeedbackForPrompt().catch(() => "");
+
+    // توقيع سياق الفحص — أي تغيير فيه (موديل/وضع/قواعد/تعليمات) يُبطل الكاش تلقائياً.
+    const cacheContextSignature = [
+      mode, model,
+      Array.from(currentEnabledRules).sort().join(","),
+      JSON.stringify(currentCustomRules),
+      JSON.stringify(currentBuiltinOverrides),
+      extraInstructions?.trim() || "",
+    ].join("~");
+
+    // مرّ على الكاش المحلّي أولاً — تخطَّ أي نصّ سبق فحصه بنفس السياق ولم يتغيّر
+    // (يشمل حالة "لا توجد مشكلة" أيضاً، لا فقط الاقتراحات الموجَبة).
+    const cacheMissEntries: { key: string; original: string; translation: string; category?: string }[] = [];
+    for (const e of translatedEntries) {
+      const key = `${e.msbtFile}:${e.index}`;
+      const translation = translations[key];
+      const cacheKey = makeEnhanceCacheKey(e.original, translation, cacheContextSignature);
+      const cached = await enhanceCacheLookup(cacheKey);
+      if (cached) {
+        if (cached.payload) {
+          const synthetic = mode === "enhance" ? { suggestions: [cached.payload as EnhanceSuggestion] }
+            : mode === "grammar" ? { issues: [cached.payload as GrammarIssue] }
+            : { results: [cached.payload as Record<string, unknown>] };
+          applyResponseData(synthetic);
+        }
+        processedKeysRef.current.set(key, translation);
+        processed++;
+        continue;
+      }
+      cacheMissEntries.push({
+        key,
+        original: e.original,
+        translation,
+        category: isRisen ? categorizeRisenTable(risenTableFromMsbtFile(e.msbtFile)).label : undefined,
+      });
+    }
+    setProcessedCount(processedKeysRef.current.size);
+    setProgress({ current: processed, total: translatedEntries.length });
+
+    const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
+    for (let i = 0; i < cacheMissEntries.length; i += BATCH_SIZE) {
+      batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + BATCH_SIZE) });
+    }
+
+    // خزّن نتيجة كلّ نصّ من دفعة حقيقيّة في الكاش (موجَبة أو null="لا مشكلة") —
+    // مشتركة بين مسار النجاح الأوّل ومسار إعادة المحاولة بعد 429.
+    const storeCacheForBatch = async (texts: { key: string; original: string; translation: string }[], data: { suggestions?: EnhanceSuggestion[]; issues?: GrammarIssue[]; results?: Array<Record<string, unknown>> } | null | undefined) => {
+      if (!data) return;
+      const rawList: Array<Record<string, unknown>> =
+        (mode === "enhance" ? data.suggestions : mode === "grammar" ? data.issues : data.results) as Array<Record<string, unknown>> || [];
+      const byKey = new Map(rawList.map((r) => [r.key as string, r]));
+      await Promise.all(texts.map(t => {
+        const cacheKey = makeEnhanceCacheKey(t.original, t.translation, cacheContextSignature);
+        return enhanceCacheStore(cacheKey, byKey.get(t.key) || null);
+      }));
+    };
 
     for (let i = 0; i < batches.length; i += PARALLEL_REQUESTS) {
       if (abortRef.current) break;
@@ -499,6 +616,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               passes: SCAN_PASSES,
               game: isRisen ? "risen" : "xenoblade",
               extraInstructions: extraInstructions?.trim() || undefined,
+              learnedFeedback: learnedFeedback || undefined,
             },
             signal: abortSignal,
           });
@@ -509,8 +627,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             toast({ title: data.error, variant: "destructive" });
             return { data: null, count: textsToAnalyze.length };
           }
+          if (data?._meta?.providerFallback && !fallbackNoticeShownRef.current) {
+            fallbackNoticeShownRef.current = true;
+            toast({ title: "🔄 تم التحويل تلقائياً إلى Gemini", description: "DeepSeek كان مشغولاً أو غير متاح، فأُكمل الفحص عبر Gemini بدلاً منه." });
+          }
           for (const t of textsToAnalyze) processedKeysRef.current.set(t.key, t.translation);
           setProcessedCount(processedKeysRef.current.size);
+          await storeCacheForBatch(textsToAnalyze, data);
           return { data, count: textsToAnalyze.length };
         } catch (err) {
           const errStr = String(err);
@@ -524,7 +647,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? "risen" : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? "risen" : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;
@@ -535,6 +658,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               }
               for (const t of textsToAnalyze) processedKeysRef.current.set(t.key, t.translation);
               setProcessedCount(processedKeysRef.current.size);
+              await storeCacheForBatch(textsToAnalyze, data);
               return { data, count: textsToAnalyze.length };
             } catch (retryErr) {
               const msg = `فشل بعد إعادة المحاولة: ${String(retryErr).slice(0, 200)}`;
@@ -563,66 +687,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
       for (const { data, count } of results) {
         processed += count;
-        if (!data) continue;
-        if (mode === "enhance" && data.suggestions) {
-          const fresh = (data.suggestions as EnhanceSuggestion[]).filter(
-            (s) => !allSuggestions.some(x => x.key === s.key)
-          );
-          if (fresh.length > 0) {
-            allSuggestions = [...allSuggestions, ...fresh];
-            setSuggestions(prev => [...prev, ...fresh]);
-          }
-        } else if (mode === "grammar" && data.issues) {
-          const fresh = (data.issues as GrammarIssue[]).filter(
-            (g) => !allIssues.some(x => x.key === g.key)
-          );
-          if (fresh.length > 0) {
-            allIssues = [...allIssues, ...fresh];
-            setGrammarIssues(prev => [...prev, ...fresh]);
-          }
-        } else if (mode === "combined" && Array.isArray(data.results)) {
-          // تقسيم نتائج الفحص الشامل بين التبويبين حسب الفئة:
-          // style → لوحة تحسين الصياغة • wrong/reorder/weak → لوحة فحص القواعد.
-          const newSuggestions: EnhanceSuggestion[] = [];
-          const newIssues: GrammarIssue[] = [];
-          for (const r of data.results) {
-            if (r.category === "style") {
-              if (allSuggestions.some(x => x.key === r.key) || newSuggestions.some(x => x.key === r.key)) continue;
-              newSuggestions.push({
-                key: r.key,
-                original: r.original,
-                current: r.current,
-                suggested: r.suggested,
-                alternatives: r.alternatives || [],
-                reason: r.issue || r.reason || "تحسين صياغة",
-                detail: r.detail || "",
-                fixExplanation: r.fixExplanation || "",
-                type: r.type || "style",
-              });
-            } else {
-              if (allIssues.some(x => x.key === r.key) || newIssues.some(x => x.key === r.key)) continue;
-              newIssues.push({
-                key: r.key,
-                original: r.original,
-                translation: r.translation,
-                issue: r.issue || "إصلاح قواعديّ + صياغة",
-                suggestion: r.suggested,
-                severity: r.severity,
-                detail: r.detail || "",
-                fixExplanation: r.fixExplanation || "",
-                category: r.category,
-              });
-            }
-          }
-          if (newSuggestions.length > 0) {
-            allSuggestions = [...allSuggestions, ...newSuggestions];
-            setSuggestions(prev => [...prev, ...newSuggestions]);
-          }
-          if (newIssues.length > 0) {
-            allIssues = [...allIssues, ...newIssues];
-            setGrammarIssues(prev => [...prev, ...newIssues]);
-          }
-        }
+        applyResponseData(data);
       }
 
       setProgress({ current: Math.min(processed, translatedEntries.length), total: translatedEntries.length });
@@ -728,6 +793,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   };
 
   const saveEdit = (item: EnhanceSuggestion | GrammarIssue) => {
+    const aiSuggested = 'suggested' in item ? item.suggested : item.suggestion;
+    const type = 'suggested' in item ? item.type : (item.category || 'wrong');
+    if (editingText.trim() !== aiSuggested.trim()) {
+      recordFeedback({ type, original: item.original, aiSuggested, userAction: "edited", userFinal: editingText });
+    }
     applyOne(item.key, editingText);
     setEditingKey(null);
     setEditingText("");
@@ -764,9 +834,27 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     }
   };
 
-  const dismissSuggestion = (key: string) => {
+  /** تطبيق سريع لكل أخطاء severity="high" فقط (بمعزل عن severityFilter الظاهر في الواجهة، لكن يحترم categoryFilter). */
+  const applyHighConfidenceIssues = () => {
+    const list = grammarIssues.filter(g => g.severity === 'high' && (!categoryFilter || (g.category ?? 'wrong') === categoryFilter));
+    const safe = list.filter(g => !isUnsafeEnglishReplacement(g.original, g.translation, g.suggestion));
+    for (const g of safe) applyOne(g.key, g.suggestion);
+    const skipped = list.length - safe.length;
+    toast({
+      title: `✅ تم تطبيق ${safe.length} إصلاح بثقة عالية`,
+      description: skipped > 0 ? `تم منع ${skipped} إصلاح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+    });
+    const keys = new Set(safe.map(g => g.key));
+    setGrammarIssues(prev => prev.filter(g => !keys.has(g.key)));
+  };
+
+  const dismissSuggestion = (item: EnhanceSuggestion | GrammarIssue) => {
+    const key = item.key;
     const cur = translations[key];
     if (cur) markReviewed(key, cur, "dismissed").then(() => loadReviewMemory().then(setReviewMem));
+    const aiSuggested = 'suggested' in item ? item.suggested : item.suggestion;
+    const type = 'suggested' in item ? item.type : (item.category || 'wrong');
+    recordFeedback({ type, original: item.original, aiSuggested, userAction: "dismissed" });
     setSuggestions(prev => prev.filter(s => s.key !== key));
     setGrammarIssues(prev => prev.filter(g => g.key !== key));
   };
@@ -914,6 +1002,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grammarIssues, severityFilter, categoryFilter]);
 
+  const highConfidenceIssuesCount = useMemo(() => {
+    return grammarIssues.filter(g => g.severity === 'high' && (!categoryFilter || (g.category ?? 'wrong') === categoryFilter)).length;
+  }, [grammarIssues, categoryFilter]);
+
   // ---- Group results by MSBT file ----
   const extractFile = (key: string) => key.replace(/:\d+$/, '') || key;
 
@@ -1001,7 +1093,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-green-500/40 text-green-600 hover:bg-green-500/10" onClick={() => applySuggestion(g)} title="تطبيق">
             <Check className="w-4 h-4" /> <span className="sm:hidden">قبول</span>
           </Button>
-          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-destructive/30 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(g.key)} title="تجاهل">
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-destructive/30 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(g)} title="تجاهل">
             <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
           </Button>
         </div>
@@ -1085,7 +1177,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-green-500/40 text-green-600 hover:bg-green-500/10" onClick={() => applySuggestion(s)} title="تطبيق">
             <Check className="w-4 h-4" /> <span className="sm:hidden">قبول</span>
           </Button>
-          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-destructive/30 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(s.key)} title="تجاهل">
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs gap-1 border-destructive/30 text-muted-foreground hover:bg-destructive/10" onClick={() => dismissSuggestion(s)} title="تجاهل">
             <X className="w-4 h-4" /> <span className="sm:hidden">رفض</span>
           </Button>
         </div>
@@ -1408,6 +1500,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               <Button size="sm" variant="ghost" onClick={dismissAll} className="gap-1.5 text-muted-foreground" title="تجاهل المعروض">
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
+              {activeTab !== "enhance" && highConfidenceIssuesCount > 0 && (
+                <Button size="sm" variant="outline" onClick={applyHighConfidenceIssues} className="gap-1.5 border-primary/40 text-primary" title="طبّق فقط الأخطاء عالية الثقة (severity=high)">
+                  <Zap className="w-3.5 h-3.5" />
+                  ثقة عالية فقط ({highConfidenceIssuesCount})
+                </Button>
+              )}
               <Button size="sm" variant="default" onClick={applyAll} className="gap-1.5 mr-auto">
                 <Zap className="w-4 h-4" />
                 تطبيق المحدد ({activeTab === "enhance" ? bulkSuggestions.length : bulkIssues.length})

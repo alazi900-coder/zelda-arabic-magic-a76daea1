@@ -386,7 +386,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions, learnedFeedback } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -401,12 +401,17 @@ Deno.serve(async (req) => {
       game?: 'xenoblade' | 'risen';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
+      /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
+      learnedFeedback?: string;
     };
     const isRisen = game === 'risen';
     const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
+      : '';
+    const learnedFeedbackBlock = learnedFeedback?.trim()
+      ? `${learnedFeedback.trim().slice(0, 3000)}\n\n`
       : '';
 
     // Mask Risen tags (<Exit>, $(name), ...) before ANY prompt text is built —
@@ -462,6 +467,9 @@ Deno.serve(async (req) => {
       'gpt-5-mini': 'openai/gpt-5-mini',
       'gpt-5-nano': 'openai/gpt-5-nano',
     };
+    // موديل الـ fallback عند فشل DeepSeek (ضغط طلبات/رصيد/شبكة) — Gemini سريع
+    // ورخيص، مناسب كبديل طارئ بغضّ النظر عن الموديل الأصلي المطلوب.
+    const PROVIDER_FALLBACK_MODEL = 'google/gemini-2.5-flash';
 
     // اختيار المسار: DeepSeek مباشر أو Lovable AI Gateway
     // ملاحظة: منذ V4 (2026-04-24) المعرّفان الحقيقيّان الوحيدان هما
@@ -503,26 +511,57 @@ Deno.serve(async (req) => {
 
     console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0 });
 
+    // يُرفَع لـ true إن اضطُررنا للتحويل من DeepSeek إلى Gemini بسبب فشل مؤقّت —
+    // نُضمّنه في الردّ النهائي (_meta.providerFallback) ليعرف المستخدم أنّ
+    // النتائج جاءت من موديل غير الذي اختاره، بدل رسالة خطأ عامة.
+    let usedProviderFallback = false;
+    const callGemini = (messages: Array<{ role: string; content: string }>) => fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model: PROVIDER_FALLBACK_MODEL, messages }),
+    });
+
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
     // DeepSeek يحتاج response_format=json_object صراحةً وإلّا يُرجع نصّاً
     // داخل markdown fences لا يلتقطه parser الـ JSON دائماً (نفس تكوين
     // translate-entries الذي يعمل مع جميع نماذج DeepSeek).
-    const callAI = async (messages: Array<{ role: string; content: string }>) => {
+    // موثوقيّة: عند فشل DeepSeek بشكل مؤقّت (ضغط طلبات/رصيد/خطأ خادم/شبكة)
+    // وتوفّر LOVABLE_API_KEY، نُحوّل تلقائياً لنفس الطلب عبر Gemini بدل إرجاع
+    // خطأ للمستخدم — الدفعة تكتمل بموديل بديل بدل الفشل الكامل.
+    const FALLBACK_STATUSES = new Set([429, 402, 500, 502, 503, 504]);
+    const callAI = async (messages: Array<{ role: string; content: string }>): Promise<Response> => {
       if (isDeepSeek) {
-        return await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: resolvedModel,
-            thinking: { type: deepSeekThinkingEnabled ? 'enabled' : 'disabled' },
-            temperature: 0.3,
-            response_format: { type: 'json_object' },
-            messages,
-          }),
-        });
+        let dsResponse: Response;
+        try {
+          dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: resolvedModel,
+              thinking: { type: deepSeekThinkingEnabled ? 'enabled' : 'disabled' },
+              temperature: 0.3,
+              response_format: { type: 'json_object' },
+              messages,
+            }),
+          });
+        } catch (networkErr) {
+          if (!LOVABLE_API_KEY) throw networkErr;
+          console.warn('[enhance] DeepSeek network error — falling back to Gemini:', networkErr);
+          usedProviderFallback = true;
+          return await callGemini(messages);
+        }
+        if (!dsResponse.ok && FALLBACK_STATUSES.has(dsResponse.status) && LOVABLE_API_KEY) {
+          console.warn(`[enhance] DeepSeek HTTP ${dsResponse.status} — falling back to Gemini`);
+          usedProviderFallback = true;
+          return await callGemini(messages);
+        }
+        return dsResponse;
       }
       return await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
@@ -610,7 +649,7 @@ ${ruleSections.protect}
 - medium: خطأ واضح يحتاج إصلاح (reorder غالباً)
 - low: تحسين بسيط (weak خفيف)
 
-${extraInstructionsBlock}النصوص:
+${learnedFeedbackBlock}${extraInstructionsBlock}النصوص:
 ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
@@ -679,9 +718,9 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
       });
       if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-      console.log('[enhance] grammar mode parsed', { issuesCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK });
+      console.log('[enhance] grammar mode parsed', { issuesCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback });
 
-      return new Response(JSON.stringify({ issues: chunkResult.items }), {
+      return new Response(JSON.stringify({ issues: chunkResult.items, ...(usedProviderFallback ? { _meta: { providerFallback: 'gemini' } } : {}) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -715,7 +754,7 @@ ${ruleSections.protect}
 
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
-${extraInstructionsBlock}**النصوص للفحص:**
+${learnedFeedbackBlock}${extraInstructionsBlock}**النصوص للفحص:**
 ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
@@ -798,9 +837,9 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
       });
       if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-      console.log('[enhance] combined mode parsed', { resultsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK });
+      console.log('[enhance] combined mode parsed', { resultsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback });
 
-      return new Response(JSON.stringify({ results: chunkResult.items }), {
+      return new Response(JSON.stringify({ results: chunkResult.items, ...(usedProviderFallback ? { _meta: { providerFallback: 'gemini' } } : {}) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -820,7 +859,7 @@ ${ruleSections.protect}
 
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
-${extraInstructionsBlock}**النصوص للمراجعة:**
+${learnedFeedbackBlock}${extraInstructionsBlock}**النصوص للمراجعة:**
 ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
@@ -892,9 +931,9 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
     });
     if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-    console.log('[enhance] enhance mode parsed', { suggestionsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK });
+    console.log('[enhance] enhance mode parsed', { suggestionsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback });
 
-    return new Response(JSON.stringify({ suggestions: chunkResult.items }), {
+    return new Response(JSON.stringify({ suggestions: chunkResult.items, ...(usedProviderFallback ? { _meta: { providerFallback: 'gemini' } } : {}) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

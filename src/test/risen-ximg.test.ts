@@ -96,6 +96,60 @@ describe("risen-ximg", () => {
     expect(maxDiff).toBeLessThan(80);
   });
 
+  it("DXT1 encode preserves punch-through alpha instead of forcing everything opaque", () => {
+    // One 4x4 block: left half opaque red, right half fully transparent
+    // (RGB left as 0 like a typical PNG cutout) — the classic "logo pasted
+    // onto a transparent background" case that used to turn solid black.
+    const width = 4, height = 4;
+    const rgba = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const o = (y * width + x) * 4;
+        const transparent = x >= 2;
+        rgba[o] = transparent ? 0 : 220;
+        rgba[o + 1] = 0;
+        rgba[o + 2] = 0;
+        rgba[o + 3] = transparent ? 0 : 255;
+      }
+    }
+    const compressed = encodeDXT1(rgba, width, height);
+    const decoded = decodeDXT1(compressed, width, height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const o = (y * width + x) * 4;
+        if (x >= 2) {
+          expect(decoded[o + 3]).toBe(0); // stayed transparent, not forced opaque black.
+        } else {
+          expect(decoded[o + 3]).toBe(255);
+          expect(decoded[o]).toBeGreaterThan(150); // still visibly red, not corrupted.
+        }
+      }
+    }
+  });
+
+  it("DXT1 encode handles a fully-transparent block without NaN/garbage", () => {
+    const width = 4, height = 4;
+    const rgba = new Uint8Array(width * height * 4); // all zero -> alpha 0 everywhere.
+    const compressed = encodeDXT1(rgba, width, height);
+    expect(compressed.some(b => Number.isNaN(b))).toBe(false);
+    const decoded = decodeDXT1(compressed, width, height);
+    for (let i = 3; i < decoded.length; i += 4) expect(decoded[i]).toBe(0);
+  });
+
+  it("DXT1 encode does not corrupt images whose dimensions aren't a multiple of 4", () => {
+    // 6x6 forces a partial block on both the right and bottom edges.
+    const width = 6, height = 6;
+    const rgba = new Uint8Array(width * height * 4);
+    for (let i = 0; i < width * height; i++) {
+      rgba[i * 4] = 100; rgba[i * 4 + 1] = 150; rgba[i * 4 + 2] = 200; rgba[i * 4 + 3] = 255;
+    }
+    const compressed = encodeDXT1(rgba, width, height);
+    expect(compressed.some(b => Number.isNaN(b))).toBe(false);
+    const decoded = decodeDXT1(compressed, width, height);
+    expect(decoded.length).toBe(rgba.length);
+    for (let i = 0; i < decoded.length; i++) expect(Number.isFinite(decoded[i])).toBe(true);
+  });
+
   it("decodes a hand-built DXT5 block to the correct RGBA values", () => {
     // alpha0=255, alpha1=0 (8-level interpolation), all 16 alpha indices = 0 -> alpha=255 everywhere.
     // color0 = pure red (RGB565 0xF800), color1 = pure blue (0x001F), all 16 color indices = 0 -> red everywhere.

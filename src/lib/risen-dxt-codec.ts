@@ -183,19 +183,31 @@ export function decodeDxt(fourCC: DxtFourCC, data: Uint8Array, width: number, he
 // Encoding — naive min/max endpoint quantizers, matching WILAY's "Simple" bar
 // ============================================================================
 
+/** Reads the 16 RGBA pixels for a block. Images whose width/height aren't an
+ * exact multiple of 4 have partial edge blocks — out-of-bounds slots are
+ * clamped to the nearest real edge pixel instead of reading past the buffer
+ * (which previously produced garbage/undefined-driven NaN colors on edge
+ * blocks of such images). */
+function extractBlockPixels(rgba: Uint8Array, width: number, height: number, bx: number, by: number): [number, number, number, number][] {
+  const pixels: [number, number, number, number][] = [];
+  for (let i = 0; i < 16; i++) {
+    const px = Math.min(bx * 4 + (i % 4), width - 1);
+    const py = Math.min(by * 4 + Math.floor(i / 4), height - 1);
+    const o = (py * width + px) * 4;
+    pixels.push([rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]]);
+  }
+  return pixels;
+}
+
 /** Picks block endpoints from the bounding box of the 16 pixels, forces
  * color0 != color1 (numerically ordered so the four-color branch is taken
  * consistently regardless of decoder mode) and assigns each pixel to its
- * nearest of the 4 interpolated colors. Returns the 8-byte color block. */
-function encodeColorBlock(rgba: Uint8Array, width: number, bx: number, by: number): Uint8Array {
+ * nearest of the 4 interpolated colors. Returns the 8-byte color block.
+ * Always-opaque mode — used directly by DXT3/DXT5 (whose alpha is stored
+ * separately) and by DXT1 blocks that contain no transparent pixels. */
+function encodeColorBlockFromPixels(pixels: [number, number, number][]): Uint8Array {
   let minR = 255, minG = 255, minB = 255, maxR = 0, maxG = 0, maxB = 0;
-  const pixels: [number, number, number][] = [];
-  for (let i = 0; i < 16; i++) {
-    const px = bx * 4 + (i % 4);
-    const py = by * 4 + Math.floor(i / 4);
-    const o = (py * width + px) * 4;
-    const r = rgba[o], g = rgba[o + 1], b = rgba[o + 2];
-    pixels.push([r, g, b]);
+  for (const [r, g, b] of pixels) {
     minR = Math.min(minR, r); minG = Math.min(minG, g); minB = Math.min(minB, b);
     maxR = Math.max(maxR, r); maxG = Math.max(maxG, g); maxB = Math.max(maxB, b);
   }
@@ -243,6 +255,75 @@ function encodeColorBlock(rgba: Uint8Array, width: number, bx: number, by: numbe
   return block;
 }
 
+// Below this alpha value a pixel is treated as fully transparent for DXT1's
+// 1-bit punch-through mode (matches the common encoder convention).
+const DXT1_ALPHA_THRESHOLD = 128;
+
+/** DXT1 supports an optional 1-bit "punch-through" alpha: when color0 <= color1
+ * (as a raw RGB565 value), index 3 means fully transparent instead of a 4th
+ * interpolated color. A block with no transparent pixels uses the normal
+ * 4-color opaque mode for best quality; a block with any transparent pixel
+ * must use the 3-color + transparent mode for ALL 16 of its pixels, since a
+ * single 2-bit index per pixel can't mix both modes within one block. */
+function encodeDXT1Block(rgba: Uint8Array, width: number, height: number, bx: number, by: number): Uint8Array {
+  const px16 = extractBlockPixels(rgba, width, height, bx, by);
+  const opaque = px16.map(p => p[3] >= DXT1_ALPHA_THRESHOLD);
+
+  if (!opaque.includes(false)) {
+    return encodeColorBlockFromPixels(px16.map(p => [p[0], p[1], p[2]] as [number, number, number]));
+  }
+
+  const opaquePixels = px16.filter((_, i) => opaque[i]);
+  if (opaquePixels.length === 0) {
+    // Fully-transparent block — colors are irrelevant; every index is 3 (transparent),
+    // with c0<=c1 (both 0) so the decoder takes the punch-through branch.
+    return new Uint8Array([0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff]);
+  }
+
+  let minR = 255, minG = 255, minB = 255, maxR = 0, maxG = 0, maxB = 0;
+  for (const [r, g, b] of opaquePixels) {
+    minR = Math.min(minR, r); minG = Math.min(minG, g); minB = Math.min(minB, b);
+    maxR = Math.max(maxR, r); maxG = Math.max(maxG, g); maxB = Math.max(maxB, b);
+  }
+  let c0 = rgbToRgb565(minR, minG, minB);
+  let c1 = rgbToRgb565(maxR, maxG, maxB);
+  if (c0 > c1) { const t = c0; c0 = c1; c1 = t; } // keep c0 <= c1 -> punch-through branch on decode.
+
+  const rgb0 = rgb565ToRgb(c0);
+  const rgb1 = rgb565ToRgb(c1);
+  const rgb2: [number, number, number] = [
+    Math.round((rgb0[0] + rgb1[0]) / 2),
+    Math.round((rgb0[1] + rgb1[1]) / 2),
+    Math.round((rgb0[2] + rgb1[2]) / 2),
+  ];
+  const refs = [rgb0, rgb1, rgb2];
+
+  let indexBits = 0;
+  for (let i = 0; i < 16; i++) {
+    if (!opaque[i]) {
+      indexBits |= 3 << (i * 2);
+      continue;
+    }
+    const [r, g, b] = px16[i];
+    let best = 0, bestDist = Infinity;
+    for (let k = 0; k < 3; k++) {
+      const dr = r - refs[k][0], dg = g - refs[k][1], db = b - refs[k][2];
+      const dist = dr * dr + dg * dg + db * db;
+      if (dist < bestDist) { bestDist = dist; best = k; }
+    }
+    indexBits |= best << (i * 2);
+  }
+
+  const block = new Uint8Array(8);
+  block[0] = c0 & 0xff; block[1] = (c0 >> 8) & 0xff;
+  block[2] = c1 & 0xff; block[3] = (c1 >> 8) & 0xff;
+  block[4] = indexBits & 0xff;
+  block[5] = (indexBits >> 8) & 0xff;
+  block[6] = (indexBits >> 16) & 0xff;
+  block[7] = (indexBits >> 24) & 0xff;
+  return block;
+}
+
 export function encodeDXT1(rgba: Uint8Array, width: number, height: number): Uint8Array {
   const blocksX = Math.ceil(width / 4);
   const blocksY = Math.ceil(height / 4);
@@ -250,7 +331,7 @@ export function encodeDXT1(rgba: Uint8Array, width: number, height: number): Uin
   let o = 0;
   for (let by = 0; by < blocksY; by++) {
     for (let bx = 0; bx < blocksX; bx++) {
-      out.set(encodeColorBlock(rgba, width, bx, by), o);
+      out.set(encodeDXT1Block(rgba, width, height, bx, by), o);
       o += 8;
     }
   }
@@ -264,16 +345,14 @@ export function encodeDXT3(rgba: Uint8Array, width: number, height: number): Uin
   let o = 0;
   for (let by = 0; by < blocksY; by++) {
     for (let bx = 0; bx < blocksX; bx++) {
+      const px16 = extractBlockPixels(rgba, width, height, bx, by);
       const alphaBytes = new Uint8Array(8);
       for (let i = 0; i < 16; i++) {
-        const px = bx * 4 + (i % 4);
-        const py = by * 4 + Math.floor(i / 4);
-        const alpha = rgba[(py * width + px) * 4 + 3];
-        const nibble = alpha >> 4;
+        const nibble = px16[i][3] >> 4;
         alphaBytes[Math.floor(i / 2)] |= nibble << ((i % 2) * 4);
       }
       out.set(alphaBytes, o);
-      out.set(encodeColorBlock(rgba, width, bx, by), o + 8);
+      out.set(encodeColorBlockFromPixels(px16.map(p => [p[0], p[1], p[2]] as [number, number, number])), o + 8);
       o += 16;
     }
   }
@@ -287,15 +366,10 @@ export function encodeDXT5(rgba: Uint8Array, width: number, height: number): Uin
   let o = 0;
   for (let by = 0; by < blocksY; by++) {
     for (let bx = 0; bx < blocksX; bx++) {
+      const px16 = extractBlockPixels(rgba, width, height, bx, by);
+      const alphas = px16.map(p => p[3]);
       let minA = 255, maxA = 0;
-      const alphas: number[] = [];
-      for (let i = 0; i < 16; i++) {
-        const px = bx * 4 + (i % 4);
-        const py = by * 4 + Math.floor(i / 4);
-        const a = rgba[(py * width + px) * 4 + 3];
-        alphas.push(a);
-        minA = Math.min(minA, a); maxA = Math.max(maxA, a);
-      }
+      for (const a of alphas) { minA = Math.min(minA, a); maxA = Math.max(maxA, a); }
       const a0 = maxA, a1 = minA; // a0 > a1 (or equal) -> 8-level interpolation mode
       const table = [a0, a1];
       for (let i = 1; i <= 6; i++) table.push(Math.round(((7 - i) * a0 + i * a1) / 7));
@@ -314,7 +388,7 @@ export function encodeDXT5(rgba: Uint8Array, width: number, height: number): Uin
       for (let i = 0; i < 6; i++) alphaBytes[2 + i] = Number((bits >> BigInt(i * 8)) & 0xffn);
 
       out.set(alphaBytes, o);
-      out.set(encodeColorBlock(rgba, width, bx, by), o + 8);
+      out.set(encodeColorBlockFromPixels(px16.map(p => [p[0], p[1], p[2]] as [number, number, number])), o + 8);
       o += 16;
     }
   }

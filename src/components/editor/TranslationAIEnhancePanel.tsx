@@ -24,7 +24,7 @@ import {
   importReviewMemory, clearReviewMemory, isReviewedSync, type ReviewMemory,
 } from "@/lib/enhance-memory";
 import { recordFeedback, getRecentFeedbackForPrompt } from "@/lib/enhance-feedback-memory";
-import { makeEnhanceCacheKey, enhanceCacheLookup, enhanceCacheStore } from "@/lib/enhance-cache";
+import { makeEnhanceCacheKey, enhanceCacheLookup, enhanceCacheStore, enhanceCacheClear } from "@/lib/enhance-cache";
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import type { ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
@@ -1483,7 +1483,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             </Button>
           )}
           {!isAnalyzing && processedCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); setSeverityFilter(null); }} className="gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); setSeverityFilter(null); void enhanceCacheClear(); }} className="gap-1.5" title="فحص كامل من جديد (يتجاهل نتائج الفحص المخزَّنة سابقاً)">
               <RotateCcw className="w-3.5 h-3.5" /> إعادة فحص
             </Button>
           )}

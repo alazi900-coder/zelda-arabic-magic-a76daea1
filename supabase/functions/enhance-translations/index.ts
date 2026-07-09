@@ -345,6 +345,41 @@ async function runPasses<T extends { index?: number }>(
   return { merged: [...byIndex.values()] };
 }
 
+// ─── Chunk runner لتسريع وضع تفكير DeepSeek (نفس نمط translate-entries) ────
+// وضع التفكير في DeepSeek بطيء جداً على دفعة كبيرة، وأيضاً كثيراً ما يقطع
+// الردّ (JSON غير مكتمل) فيُفقد الباتش كاملاً بصمت. الحلّ: نقسّم الدفعة إلى
+// قطع صغيرة (chunkSize) تُعالَج كلٌّ منها بشكل مستقل عبر fn (نفس منطق
+// البرومبت/الفلترة الحالي لكل وضع) وتُرسَل بالتوازي (concurrency)، ثمّ تُدمَج
+// نتائجها النهائيّة بتجميع بسيط — لا حاجة لدمج حسب index لأنّ كل قطعة تُرجع
+// عناصر نهائية محلولة القيم بالفعل عبر entriesChunk الخاصّ بها.
+async function processInChunks<E, R>(
+  entries: E[],
+  promptEntries: E[],
+  chunkSize: number,
+  concurrency: number,
+  fn: (entriesChunk: E[], promptEntriesChunk: E[]) => Promise<{ items: R[]; errorResponse?: Response }>,
+): Promise<{ items: R[]; errorResponse?: Response }> {
+  if (entries.length <= chunkSize) return fn(entries, promptEntries);
+  const ranges: { start: number; count: number }[] = [];
+  for (let i = 0; i < entries.length; i += chunkSize) {
+    ranges.push({ start: i, count: Math.min(chunkSize, entries.length - i) });
+  }
+  const allItems: R[] = [];
+  let firstError: Response | undefined;
+  for (let i = 0; i < ranges.length; i += concurrency) {
+    const slice = ranges.slice(i, i + concurrency);
+    const results = await Promise.all(slice.map(r =>
+      fn(entries.slice(r.start, r.start + r.count), promptEntries.slice(r.start, r.start + r.count)),
+    ));
+    for (const r of results) {
+      if (r.errorResponse) { if (!firstError) firstError = r.errorResponse; continue; }
+      allItems.push(...r.items);
+    }
+  }
+  if (allItems.length === 0 && firstError) return { items: [], errorResponse: firstError };
+  return { items: allItems };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -451,6 +486,12 @@ Deno.serve(async (req) => {
     const deepSeekThinkingEnabled = isDeepSeek
       ? (thinkingMode === 'enabled' ? true : thinkingMode === 'disabled' ? false : resolvedModel === 'deepseek-v4-pro')
       : false;
+    // تفعيل التفكير هو سبب البطء الفعليّ (وليس اسم الموديل بحدّ ذاته) —
+    // نُقسّم الدفعة فقط عندما يكون التفكير فعليّاً مفعَّلاً (translate-entries
+    // يعتمد على اسم الموديل فقط لأنّه لا يملك toggle تفكير منفصلاً؛ هنا
+    // deepSeekThinkingEnabled أدقّ لأنّه يعكس القيمة الفعليّة المُرسَلة للـ API).
+    const CHUNK = deepSeekThinkingEnabled ? 6 : Infinity;
+    const CONCURRENCY = deepSeekThinkingEnabled ? 4 : 1;
 
     if (isDeepSeek && !DEEPSEEK_API_KEY) {
       // 200 مع error field لـ supabase-js حتّى تصل رسالة الخطأ للواجهة.
@@ -554,7 +595,8 @@ Deno.serve(async (req) => {
     // Grammar check mode — فحص قواعديّ صارم بدون تعديلات أسلوبيّة.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'grammar') {
-      const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط** (wrong / reorder / weak) بناءً على القواعد المُفعَّلة أدناه:
+      const chunkResult = await processInChunks(entries, promptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
+        const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط** (wrong / reorder / weak) بناءً على القواعد المُفعَّلة أدناه:
 ${forgetOtherGame}
 
 ${ruleSections.detect}
@@ -569,7 +611,7 @@ ${ruleSections.protect}
 - low: تحسين بسيط (weak خفيف)
 
 ${extraInstructionsBlock}النصوص:
-${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -599,43 +641,47 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
 4. **Multi-Issue:** يُسمح بإصدار عدّة سجلّات لنفس index كلٌّ بفئة مختلفة (wrong / reorder / weak)، شرط أن يكون suggestion في كلٍّ منها نصّاً عربيّاً نهائيّاً كاملاً يصلح المشكلة المعنيّة. النظام يدمجها تلقائيّاً.
 5. سجّل الترجمات السليمة فعلاً فقط بحذفها من الإخراج (لا تُعِدها بدون تغيير).`;
 
-      const passResult = await runPasses<{ index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string }>(
-        passes || 1,
-        () => callOnceParse(
-          [
-            { role: 'system', content: `أنت مدقّق لغويّ عربيّ متخصّص في ترجمة ${gameLabel}. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة. كن شاملاً — أعِد كل المشاكل الحقيقيّة في مرّة واحدة.` },
-            { role: 'user', content: grammarPrompt },
-          ],
-          'issues',
-          'grammar',
-        ),
-      );
-      if (passResult.errorResponse) return passResult.errorResponse;
+        const passResult = await runPasses<{ index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string }>(
+          passes || 1,
+          () => callOnceParse(
+            [
+              { role: 'system', content: `أنت مدقّق لغويّ عربيّ متخصّص في ترجمة ${gameLabel}. أجب بـ JSON صالح فقط. لا تقترح تعديلات أسلوبيّة — فقط أخطاء موضوعيّة. كن شاملاً — أعِد كل المشاكل الحقيقيّة في مرّة واحدة.` },
+              { role: 'user', content: grammarPrompt },
+            ],
+            'issues',
+            'grammar',
+          ),
+        );
+        if (passResult.errorResponse) return { items: [], errorResponse: passResult.errorResponse };
 
-      console.log('[enhance] grammar mode parsed', { issuesCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
-      const mappedIssues = passResult.merged.map((i) => {
-        const entry = entries[i.index ?? -1];
-        return {
-          key: entry?.key || '',
-          original: entry?.original || '',
-          translation: entry?.translation || '',
-          category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
-          issue: i.issue,
-          detail: i.detail || '',
-          fixExplanation: i.fix_explanation || i.fixExplanation || '',
-          // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
-          // من رفض الاقتراح بالكامل، يكفي تنظيفه.
-          suggestion: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', i.suggestion || '')),
-          severity: i.severity || 'medium',
-        };
-      }).filter((i) =>
-        i.key && i.suggestion !== i.translation &&
-        isSafeSuggestion(i.original, i.translation, i.suggestion) &&
-        isCategoryEnabled(i.category, ruleSections.enabledSet) &&
-        (!isRisen || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
-      );
+        const mappedIssues = passResult.merged.map((i) => {
+          const entry = entriesChunk[i.index ?? -1];
+          return {
+            key: entry?.key || '',
+            original: entry?.original || '',
+            translation: entry?.translation || '',
+            category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
+            issue: i.issue,
+            detail: i.detail || '',
+            fixExplanation: i.fix_explanation || i.fixExplanation || '',
+            // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
+            // من رفض الاقتراح بالكامل، يكفي تنظيفه.
+            suggestion: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', i.suggestion || '')),
+            severity: i.severity || 'medium',
+          };
+        }).filter((i) =>
+          i.key && i.suggestion !== i.translation &&
+          isSafeSuggestion(i.original, i.translation, i.suggestion) &&
+          isCategoryEnabled(i.category, ruleSections.enabledSet) &&
+          (!isRisen || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
+        );
+        return { items: mappedIssues };
+      });
+      if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-      return new Response(JSON.stringify({ issues: mappedIssues }), {
+      console.log('[enhance] grammar mode parsed', { issuesCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK });
+
+      return new Response(JSON.stringify({ issues: chunkResult.items }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -645,7 +691,8 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
     // نهائيّاً واحداً لكلّ مدخل يجمع كلّ الإصلاحات معاً (بلا تصادم).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'combined') {
-      const combinedPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تُبلّغ عن أي نوع مشكلة غير مذكور في القواعد المُفعَّلة. أعِد **نصّاً نهائيّاً واحداً** يجمع الإصلاحات المسموح بها فقط في حقل suggested.
+      const chunkResult = await processInChunks(entries, promptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
+        const combinedPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تُبلّغ عن أي نوع مشكلة غير مذكور في القواعد المُفعَّلة. أعِد **نصّاً نهائيّاً واحداً** يجمع الإصلاحات المسموح بها فقط في حقل suggested.
 ${forgetOtherGame}
 
 صنّف الفئة الرئيسيّة (wrong/reorder/weak/style) بناءً على القواعد التالية:
@@ -669,7 +716,7 @@ ${ruleSections.protect}
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 ${extraInstructionsBlock}**النصوص للفحص:**
-${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -702,54 +749,58 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
 5. اختر فئة واحدة لكلّ سجلّ، الأخطر إن كانت المشكلة الواحدة قابلة للتصنيف بأكثر من فئة (wrong > reorder > weak > style).
 6. الترجمات السليمة فعلاً: لا تُدرجها في النتائج.`;
 
-      const passResult = await runPasses<{ index?: number; category?: string; type?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggested?: string; alternatives?: unknown; severity?: string }>(
-        passes || 1,
-        () => callOnceParse(
-          [
-            { role: 'system', content: `أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل. كن شاملاً — أعِد كل المشاكل دفعةً واحدةً.` },
-            { role: 'user', content: combinedPrompt },
-          ],
-          'results',
-          'combined',
-        ),
-      );
-      if (passResult.errorResponse) return passResult.errorResponse;
-
-      console.log('[enhance] combined mode parsed', { resultsCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
-      // تنسيق موحَّد: كلّ نتيجة تحوي الحقول اللازمة لكلا اللوحَتين (issues + suggestions).
-      const mappedResults = passResult.merged.map((r) => {
-        const entry = entries[r.index ?? -1];
-        // إزالة علامات التشكيل تلقائيّاً من الاقتراح والبدائل.
-        const cleanedSuggested = stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', r.suggested || ''));
-        const cleanedAlternatives = Array.isArray(r.alternatives)
-          ? r.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-            .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
-          : [];
-        return {
-          key: entry?.key || '',
-          original: entry?.original || '',
-          translation: entry?.translation || '',
-          current: entry?.translation || '',
-          suggested: cleanedSuggested,
-          suggestion: cleanedSuggested,
-          alternatives: cleanedAlternatives,
-          category: r.category && ['wrong', 'reorder', 'weak', 'style'].includes(r.category) ? r.category : 'style',
-          type: r.type || 'style',
-          issue: r.issue || '',
-          reason: r.issue || '',
-          detail: r.detail || '',
-          fixExplanation: r.fix_explanation || r.fixExplanation || '',
-          severity: r.severity || 'medium',
-        };
-      })
-        .filter((r) =>
-          r.key && r.suggested !== r.translation &&
-          isSafeSuggestion(r.original, r.translation, r.suggested) &&
-          isTypeEnabled(r.type, ruleSections.enabledSet) &&
-          (!isRisen || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
+        const passResult = await runPasses<{ index?: number; category?: string; type?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggested?: string; alternatives?: unknown; severity?: string }>(
+          passes || 1,
+          () => callOnceParse(
+            [
+              { role: 'system', content: `أنت مدقّق ومحسّن ترجمة عربيّة محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. اجمع إصلاحات القواعد والصياغة في نصّ واحد لكلّ مدخل. كن شاملاً — أعِد كل المشاكل دفعةً واحدةً.` },
+              { role: 'user', content: combinedPrompt },
+            ],
+            'results',
+            'combined',
+          ),
         );
+        if (passResult.errorResponse) return { items: [], errorResponse: passResult.errorResponse };
 
-      return new Response(JSON.stringify({ results: mappedResults }), {
+        // تنسيق موحَّد: كلّ نتيجة تحوي الحقول اللازمة لكلا اللوحَتين (issues + suggestions).
+        const mappedResults = passResult.merged.map((r) => {
+          const entry = entriesChunk[r.index ?? -1];
+          // إزالة علامات التشكيل تلقائيّاً من الاقتراح والبدائل.
+          const cleanedSuggested = stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', r.suggested || ''));
+          const cleanedAlternatives = Array.isArray(r.alternatives)
+            ? r.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
+              .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
+            : [];
+          return {
+            key: entry?.key || '',
+            original: entry?.original || '',
+            translation: entry?.translation || '',
+            current: entry?.translation || '',
+            suggested: cleanedSuggested,
+            suggestion: cleanedSuggested,
+            alternatives: cleanedAlternatives,
+            category: r.category && ['wrong', 'reorder', 'weak', 'style'].includes(r.category) ? r.category : 'style',
+            type: r.type || 'style',
+            issue: r.issue || '',
+            reason: r.issue || '',
+            detail: r.detail || '',
+            fixExplanation: r.fix_explanation || r.fixExplanation || '',
+            severity: r.severity || 'medium',
+          };
+        })
+          .filter((r) =>
+            r.key && r.suggested !== r.translation &&
+            isSafeSuggestion(r.original, r.translation, r.suggested) &&
+            isTypeEnabled(r.type, ruleSections.enabledSet) &&
+            (!isRisen || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
+          );
+        return { items: mappedResults };
+      });
+      if (chunkResult.errorResponse) return chunkResult.errorResponse;
+
+      console.log('[enhance] combined mode parsed', { resultsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK });
+
+      return new Response(JSON.stringify({ results: chunkResult.items }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -757,6 +808,7 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Enhance mode — تحسين صياغة + اقتراح بدائل (مع التزام صارم بالقاموس).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const chunkResult = await processInChunks(entries, promptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
       const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تقترح أي تعديل خارجها.
 ${forgetOtherGame}
 
@@ -769,7 +821,7 @@ ${ruleSections.protect}
 ${filteredGlossary ? `**القاموس المعتمد (التزم بهذه المصطلحات):**\n${filteredGlossary}` : ''}
 
 ${extraInstructionsBlock}**النصوص للمراجعة:**
-${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
+${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.category})` : ''} الأصل: ${e.original}\nالترجمة: ${e.translation}`).join('\n\n')}
 
 أجب بـ JSON فقط:
 {
@@ -799,46 +851,50 @@ ${promptEntries.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص: ${e.
 2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-5 اقتراحات.
 3. **Multi-Issue:** يُسمح بإصدار عدّة سجلّات لنفس index لمشاكل من فئات/أنواع مختلفة، شرط أن يكون suggested في كلٍّ منها نصّاً عربيّاً نهائيّاً كاملاً. النظام يدمجها تلقائيّاً.`;
 
-    const passResult = await runPasses<{ index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string }>(
-      passes || 1,
-      () => callOnceParse(
-        [
-          { role: 'system', content: isRisen
-            ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
-            : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
-          { role: 'user', content: enhancePrompt },
-        ],
-        'suggestions',
-        'enhance',
-      ),
-    );
-    if (passResult.errorResponse) return passResult.errorResponse;
+      const passResult = await runPasses<{ index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string }>(
+        passes || 1,
+        () => callOnceParse(
+          [
+            { role: 'system', content: isRisen
+              ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
+              : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
+            { role: 'user', content: enhancePrompt },
+          ],
+          'suggestions',
+          'enhance',
+        ),
+      );
+      if (passResult.errorResponse) return { items: [], errorResponse: passResult.errorResponse };
 
-    console.log('[enhance] enhance mode parsed', { suggestionsCount: passResult.merged.length, model: resolvedModel, passes: passes || 1 });
-    const mappedSuggestions = passResult.merged.map((s) => {
-      const entry = entries[s.index ?? -1];
-      return {
-        key: entry?.key || '',
-        original: entry?.original || '',
-        current: entry?.translation || '',
-        // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
-        suggested: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', s.suggested || '')),
-        alternatives: Array.isArray(s.alternatives)
-          ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-            .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
-          : [],
-        reason: s.reason,
-        detail: s.detail || '',
-        type: s.type || 'style',
-      };
-    }).filter((s) =>
-      s.key && s.suggested !== s.current &&
-      isSafeSuggestion(s.original, s.current, s.suggested) &&
-      isTypeEnabled(s.type, ruleSections.enabledSet) &&
-      (!isRisen || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
-    );
+      const mappedSuggestions = passResult.merged.map((s) => {
+        const entry = entriesChunk[s.index ?? -1];
+        return {
+          key: entry?.key || '',
+          original: entry?.original || '',
+          current: entry?.translation || '',
+          // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
+          suggested: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', s.suggested || '')),
+          alternatives: Array.isArray(s.alternatives)
+            ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
+              .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
+            : [],
+          reason: s.reason,
+          detail: s.detail || '',
+          type: s.type || 'style',
+        };
+      }).filter((s) =>
+        s.key && s.suggested !== s.current &&
+        isSafeSuggestion(s.original, s.current, s.suggested) &&
+        isTypeEnabled(s.type, ruleSections.enabledSet) &&
+        (!isRisen || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
+      );
+      return { items: mappedSuggestions };
+    });
+    if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-    return new Response(JSON.stringify({ suggestions: mappedSuggestions }), {
+    console.log('[enhance] enhance mode parsed', { suggestionsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK });
+
+    return new Response(JSON.stringify({ suggestions: chunkResult.items }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

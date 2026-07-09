@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, ImageDown,
   Replace, Undo2, Search, ChevronDown, ChevronUp, ImageOff, Crop, X,
+  ZoomIn, ZoomOut, Maximize,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
@@ -15,7 +16,7 @@ import {
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
-import { compositeIntoRegion, type CompositeRect } from "@/lib/risen-image-composite";
+import { compositeIntoRegion, detectRegionBounds, type CompositeRect } from "@/lib/risen-image-composite";
 
 const ACCENT = "#4a7c3f";
 
@@ -137,12 +138,22 @@ function loadImageElement(file: File): Promise<HTMLImageElement> {
 }
 
 /** Draws `img` scaled to exactly w×h on a throwaway canvas and reads back its RGBA. */
+/** Scales `img` to fit inside a w×h canvas WITHOUT distorting its aspect
+ * ratio — centered, with transparent padding on whichever axis is shorter.
+ * That padding is what makes the composite correctly erase everything in
+ * the selection rect that the (correctly-proportioned) overlay doesn't
+ * cover, instead of stretching the overlay to fill the rect exactly. */
 function getScaledImageRgba(img: HTMLImageElement, w: number, h: number): Uint8ClampedArray {
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(img, 0, 0, w, h);
+  const naturalW = img.naturalWidth || w;
+  const naturalH = img.naturalHeight || h;
+  const scale = Math.min(w / naturalW, h / naturalH);
+  const drawW = naturalW * scale;
+  const drawH = naturalH * scale;
+  ctx.drawImage(img, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
   return ctx.getImageData(0, 0, w, h).data;
 }
 
@@ -265,6 +276,12 @@ export default function RisenImages() {
   const [compositeOverlayImg, setCompositeOverlayImg] = useState<HTMLImageElement | null>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeOverlayInputRef = useRef<HTMLInputElement>(null);
+  /** 1 = actual pixel size. The canvas's internal drawing buffer always stays
+   * at the image's native resolution — only its CSS display size scales with
+   * this, so getImagePixelCoords' getBoundingClientRect-based math keeps
+   * working unchanged at any zoom level. */
+  const [compositeZoom, setCompositeZoom] = useState(1);
+  const compositeScrollRef = useRef<HTMLDivElement>(null);
 
   const fsaSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
@@ -571,6 +588,7 @@ export default function RisenImages() {
     setDragStart(null);
     setCompositeOverlayFile(null);
     setCompositeOverlayImg(null);
+    setCompositeZoom(1);
   }, []);
 
   const handleCompositeOverlayChosen = useCallback(async (f: File) => {
@@ -660,7 +678,54 @@ export default function RisenImages() {
     });
   }, [dragStart, getImagePixelCoords]);
 
-  const handleCanvasMouseUp = useCallback(() => setDragStart(null), []);
+  /** Mouse-up ends a drag; but if the pointer barely moved since mouse-down,
+   * treat it as a plain click and auto-detect the region under it instead of
+   * leaving the degenerate near-zero-size rect the drag would have produced.
+   * Leaving the canvas mid-drag (onMouseLeave) must NOT trigger detection —
+   * that's just an aborted drag, handled by the separate handler below. */
+  const handleCanvasMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const start = dragStart;
+    setDragStart(null);
+    if (!start || !compositeBaseImageData || selectedDecoded?.kind !== "ok") return;
+    const p = getImagePixelCoords(e);
+    if (!p) return;
+    const movedFarEnoughToBeADrag = Math.abs(p.x - start.x) > 3 || Math.abs(p.y - start.y) > 3;
+    if (movedFarEnoughToBeADrag) return; // selectionRect was already set live by mousemove.
+    const detected = detectRegionBounds(compositeBaseImageData.data, selectedDecoded.width, selectedDecoded.height, start.x, start.y);
+    setSelectionRect(detected);
+  }, [dragStart, getImagePixelCoords, compositeBaseImageData, selectedDecoded]);
+
+  const handleCanvasMouseLeave = useCallback(() => setDragStart(null), []);
+
+  const ZOOM_MIN = 0.1;
+  const ZOOM_MAX = 8;
+
+  /** Ctrl/Cmd+wheel zooms; plain wheel is left alone so the scroll container's
+   * native scrollbars still pan normally. */
+  const handleCompositeWheelZoom = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setCompositeZoom((z) => {
+      const next = e.deltaY < 0 ? z * 1.2 : z / 1.2;
+      return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+    });
+  }, []);
+
+  const fitCompositeZoomToContainer = useCallback(() => {
+    if (selectedDecoded?.kind !== "ok") return;
+    const container = compositeScrollRef.current;
+    if (!container) return;
+    const fit = Math.min(container.clientWidth / selectedDecoded.width, container.clientHeight / selectedDecoded.height);
+    if (Number.isFinite(fit) && fit > 0) setCompositeZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, fit)));
+  }, [selectedDecoded]);
+
+  // Auto-fit once on entering composite mode, after the large editor layout
+  // has actually mounted and the scroll container has its final size.
+  useEffect(() => {
+    if (!compositeMode) return;
+    const raf = requestAnimationFrame(() => fitCompositeZoomToContainer());
+    return () => cancelAnimationFrame(raf);
+  }, [compositeMode, fitCompositeZoomToContainer]);
 
   /** Manual fine-tune of the drag-selected rect via numeric inputs. Clamps so
    * the rect never extends past the image bounds regardless of which field changed. */
@@ -778,6 +843,107 @@ export default function RisenImages() {
         </div>
       )}
 
+      {compositeMode && selectedEntry && selectedDecoded?.kind === "ok" ? (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="p-3 border-b border-border flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={exitCompositeMode} className="gap-1.5">
+              <ArrowLeft className="w-3.5 h-3.5" /> رجوع
+            </Button>
+            <div className="font-mono text-xs text-muted-foreground truncate flex-1 min-w-[140px]">{selectedEntry.path}</div>
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setCompositeZoom((z) => Math.max(ZOOM_MIN, z / 1.25))} title="تصغير">
+                <ZoomOut className="w-3.5 h-3.5" />
+              </Button>
+              <span className="text-xs font-mono w-12 text-center">{Math.round(compositeZoom * 100)}%</span>
+              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setCompositeZoom((z) => Math.min(ZOOM_MAX, z * 1.25))} title="تكبير">
+                <ZoomIn className="w-3.5 h-3.5" />
+              </Button>
+              <Button size="sm" variant="outline" onClick={fitCompositeZoomToContainer} className="gap-1.5" title="ملائمة الشاشة">
+                <Maximize className="w-3.5 h-3.5" /> ملائمة
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCompositeZoom(1)}>100%</Button>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground px-3 pt-2">
+            انقر على الشعار/العنصر لاكتشاف حدوده تلقائياً — أو اسحب لتحديد يدوي. Ctrl/⌘ + عجلة الفأرة للتكبير، والتمرير العادي للتنقل.
+          </div>
+          <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-3 p-3">
+            <div
+              ref={compositeScrollRef}
+              className="flex-1 min-h-[320px] md:min-h-0 overflow-auto rounded border border-border"
+              style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}
+              onWheel={handleCompositeWheelZoom}
+            >
+              <canvas
+                ref={compositeCanvasRef}
+                style={{
+                  width: selectedDecoded.width * compositeZoom,
+                  height: selectedDecoded.height * compositeZoom,
+                  display: "block", cursor: "crosshair", imageRendering: "pixelated",
+                }}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseUp={handleCanvasMouseUp}
+                onMouseLeave={handleCanvasMouseLeave}
+              />
+            </div>
+            <div className="w-full md:w-72 shrink-0 flex flex-col gap-3">
+              <div className="grid grid-cols-4 gap-1.5">
+                {([
+                  ["x", "X"], ["y", "Y"], ["w", "العرض"], ["h", "الارتفاع"],
+                ] as const).map(([field, label]) => (
+                  <div key={field} className="flex flex-col items-center gap-0.5">
+                    <label className="text-[10px] text-muted-foreground">{label}</label>
+                    <input
+                      type="number"
+                      value={selectionRect ? selectionRect[field] : 0}
+                      onChange={(e) => handleSelectionFieldChange(field, parseInt(e.target.value, 10))}
+                      min={0}
+                      className="w-full px-1 py-1 rounded bg-background border border-border text-xs text-center font-mono"
+                    />
+                  </div>
+                ))}
+              </div>
+              <input
+                ref={compositeOverlayInputRef}
+                type="file"
+                accept=".png"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void handleCompositeOverlayChosen(f);
+                }}
+              />
+              <Button size="sm" variant="outline" onClick={() => compositeOverlayInputRef.current?.click()}>
+                <ImageDown className="w-3.5 h-3.5 ml-1" /> {compositeOverlayFile ? "تغيير صورة التركيب" : "اختر صورة التركيب (PNG)"}
+              </Button>
+              {compositeOverlayFile && (
+                <div className="text-[11px] text-muted-foreground text-center truncate">{compositeOverlayFile.name}</div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={handleCompositeConfirm}
+                  disabled={!compositeOverlayImg || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || busyPath === selectedEntry.path}
+                  style={{ backgroundColor: ACCENT, color: "white" }}
+                >
+                  {busyPath === selectedEntry.path ? (
+                    <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" />
+                  ) : (
+                    <Crop className="w-3.5 h-3.5 ml-1" />
+                  )}
+                  تركيب
+                </Button>
+                <Button size="sm" variant="ghost" onClick={exitCompositeMode}>
+                  <X className="w-3.5 h-3.5 ml-1" /> إلغاء
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* Sidebar: filters + thumbnail grid */}
         <div className="flex-1 min-w-0 flex flex-col">
@@ -857,79 +1023,6 @@ export default function RisenImages() {
         <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-r border-border p-4 flex flex-col gap-3">
           {!selectedEntry ? (
             <p className="text-sm text-muted-foreground text-center mt-8">اختر صورة من القائمة للمعاينة</p>
-          ) : compositeMode && selectedDecoded?.kind === "ok" ? (
-            <>
-              <div className="font-mono text-xs text-muted-foreground break-all">{selectedEntry.path}</div>
-              <div className="text-xs text-muted-foreground">اسحب مربعاً على الصورة لتحديد منطقة التركيب</div>
-              <div
-                className="w-full rounded overflow-hidden border border-border"
-                style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}
-              >
-                <canvas
-                  ref={compositeCanvasRef}
-                  style={{
-                    width: "100%", height: "auto", display: "block", cursor: "crosshair",
-                    aspectRatio: `${selectedDecoded.width} / ${selectedDecoded.height}`,
-                  }}
-                  onMouseDown={handleCanvasMouseDown}
-                  onMouseMove={handleCanvasMouseMove}
-                  onMouseUp={handleCanvasMouseUp}
-                  onMouseLeave={handleCanvasMouseUp}
-                />
-              </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {([
-                  ["x", "X"], ["y", "Y"], ["w", "العرض"], ["h", "الارتفاع"],
-                ] as const).map(([field, label]) => (
-                  <div key={field} className="flex flex-col items-center gap-0.5">
-                    <label className="text-[10px] text-muted-foreground">{label}</label>
-                    <input
-                      type="number"
-                      value={selectionRect ? selectionRect[field] : 0}
-                      onChange={(e) => handleSelectionFieldChange(field, parseInt(e.target.value, 10))}
-                      min={0}
-                      className="w-full px-1 py-1 rounded bg-background border border-border text-xs text-center font-mono"
-                    />
-                  </div>
-                ))}
-              </div>
-              <input
-                ref={compositeOverlayInputRef}
-                type="file"
-                accept=".png"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = "";
-                  if (f) void handleCompositeOverlayChosen(f);
-                }}
-              />
-              <Button size="sm" variant="outline" onClick={() => compositeOverlayInputRef.current?.click()}>
-                <ImageDown className="w-3.5 h-3.5 ml-1" /> {compositeOverlayFile ? "تغيير صورة التركيب" : "اختر صورة التركيب (PNG)"}
-              </Button>
-              {compositeOverlayFile && (
-                <div className="text-[11px] text-muted-foreground text-center truncate">{compositeOverlayFile.name}</div>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  className="flex-1"
-                  onClick={handleCompositeConfirm}
-                  disabled={!compositeOverlayImg || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || busyPath === selectedEntry.path}
-                  style={{ backgroundColor: ACCENT, color: "white" }}
-                >
-                  {busyPath === selectedEntry.path ? (
-                    <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" />
-                  ) : (
-                    <Crop className="w-3.5 h-3.5 ml-1" />
-                  )}
-                  تركيب
-                </Button>
-                <Button size="sm" variant="ghost" onClick={exitCompositeMode}>
-                  <X className="w-3.5 h-3.5 ml-1" /> إلغاء
-                </Button>
-              </div>
-            </>
           ) : (
             <>
               <div className="font-mono text-xs text-muted-foreground break-all">{selectedEntry.path}</div>
@@ -1046,6 +1139,7 @@ export default function RisenImages() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

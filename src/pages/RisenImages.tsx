@@ -250,6 +250,7 @@ export default function RisenImages() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [treeSizeWarning, setTreeSizeWarning] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -339,6 +340,19 @@ export default function RisenImages() {
     setFileHandle(null);
     void loadPakFromFile(f);
   }, [loadPakFromFile]);
+
+  // Drag-and-drop can't hand us a FileSystemFileHandle (only the FSA picker
+  // can), so a dropped file always goes through the same download-based
+  // replace flow as the non-Chrome/Edge fallback button below.
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (loading) return;
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    setFileHandle(null);
+    void loadPakFromFile(f);
+  }, [loading, loadPakFromFile]);
 
   const handleClose = useCallback(() => {
     setFileHandle(null);
@@ -778,7 +792,13 @@ export default function RisenImages() {
 
   if (!file || !header) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center" dir="rtl">
+      <div
+        className={`min-h-screen flex flex-col items-center justify-center px-4 text-center transition-colors ${dragOver ? "bg-primary/5" : ""}`}
+        dir="rtl"
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
         <Link to="/risen" className="absolute top-4 right-4">
           <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 ml-1" /> رجوع</Button>
         </Link>
@@ -788,7 +808,7 @@ export default function RisenImages() {
         <h1 className="text-2xl md:text-3xl font-display font-bold mb-3">أداة صور Risen 1</h1>
         <p className="text-muted-foreground mb-8 max-w-lg font-body">
           افتح ملف <code className="font-mono text-sm px-1.5 py-0.5 rounded bg-muted">images.pak</code> لعرض واستخراج وتعديل صوره
-          (شاشات التحميل، صور الواجهة، أيقونات الإنجازات) — بدون تحميل الملف كاملاً للذاكرة.
+          (شاشات التحميل، صور الواجهة، أيقونات الإنجازات) — بدون تحميل الملف كاملاً للذاكرة، أو اسحب الملف وأفلته هنا.
         </p>
 
         {loading ? (

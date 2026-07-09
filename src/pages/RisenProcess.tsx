@@ -30,6 +30,7 @@ const RisenProcess = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [includeStageDir, setIncludeStageDir] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
 
   const addLog = useCallback((msg: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString("ar-SA")}] ${msg}`]);
@@ -108,6 +109,14 @@ const RisenProcess = () => {
       setBusy(false);
     }
   }, [navigate, addLog, includeStageDir]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (busy) return;
+    const f = e.dataTransfer.files?.[0];
+    if (f) void handleFile(f);
+  }, [busy, handleFile]);
 
   const handleBuild = useCallback(async () => {
     setBuilding(true);
@@ -194,7 +203,12 @@ const RisenProcess = () => {
                 if (f) handleFile(f);
               }}
             />
-            <div className={`border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+            <div
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${busy ? "opacity-50 pointer-events-none border-border" : dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
               {busy ? (
                 <>
                   <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-primary" />
@@ -203,7 +217,7 @@ const RisenProcess = () => {
               ) : (
                 <>
                   <FileArchive className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm">اضغط لاختيار strings.p00 أو strings.pak</p>
+                  <p className="text-sm">اضغط لاختيار strings.p00 أو strings.pak، أو اسحب الملف وأفلته هنا</p>
                 </>
               )}
             </div>

@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.27.1",
+    date: "2026-07-09",
+    changes: [
+      { kind: "added", text: "دعم السحب والإفلات (Drag & Drop) في أداتي Risen 1: اسحب ملف images.pak أو strings.p00/pak من جهازك وأفلته مباشرة في صندوق الأداة بدل الضغط على زر الاختيار — يعمل في أداة الصور وأداة معالجة ملفات الترجمة." },
+    ],
+  },
+  {
     version: "1.27.0",
     date: "2026-07-09",
     changes: [

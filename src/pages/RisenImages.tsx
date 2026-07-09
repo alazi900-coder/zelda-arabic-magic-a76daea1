@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, ImageDown,
-  Replace, Undo2, Search, ChevronDown, ChevronUp, ImageOff,
+  Replace, Undo2, Search, ChevronDown, ChevronUp, ImageOff, Crop, X,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
+import { compositeIntoRegion, type CompositeRect } from "@/lib/risen-image-composite";
 
 const ACCENT = "#4a7c3f";
 
@@ -121,14 +122,28 @@ async function decodeXimgEntry(bytes: Uint8Array): Promise<ThumbResult> {
   }
 }
 
-function loadImageElement(file: File): Promise<HTMLImageElement> {
+function loadImageFromSrc(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("تعذّرت قراءة ملف الصورة")); };
-    img.src = url;
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("تعذّرت قراءة ملف الصورة"));
+    img.src = src;
   });
+}
+
+function loadImageElement(file: File): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(file);
+  return loadImageFromSrc(url).finally(() => URL.revokeObjectURL(url));
+}
+
+/** Draws `img` scaled to exactly w×h on a throwaway canvas and reads back its RGBA. */
+function getScaledImageRgba(img: HTMLImageElement, w: number, h: number): Uint8ClampedArray {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, 0, 0, w, h);
+  return ctx.getImageData(0, 0, w, h).data;
 }
 
 // ============================================================================
@@ -240,6 +255,16 @@ export default function RisenImages() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  // Region-composite mode: drag-select a rectangle on the current image, then
+  // paste a replacement image (e.g. a translated logo) into just that region.
+  const [compositeMode, setCompositeMode] = useState(false);
+  const [selectionRect, setSelectionRect] = useState<CompositeRect | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [compositeOverlayFile, setCompositeOverlayFile] = useState<File | null>(null);
+  const [compositeOverlayImg, setCompositeOverlayImg] = useState<HTMLImageElement | null>(null);
+  const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const compositeOverlayInputRef = useRef<HTMLInputElement>(null);
 
   const fsaSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
@@ -376,6 +401,83 @@ export default function RisenImages() {
     return ok;
   }, []);
 
+  /** Given the original DDS header info and a full-size ImageData (same width/height
+   * as the original), encodes it back to the original's exact pixel format. Shared by
+   * the whole-image PNG replace path and the region-composite path below. */
+  const encodeToOriginalFormat = useCallback(
+    (original: ReturnType<typeof extractDdsFromXimg>, imageData: ImageData): { bytes: Uint8Array } | { error: string } => {
+      if (isDxtFourCC(original.fourCC)) {
+        const compressed = encodeDxt(original.fourCC, new Uint8Array(imageData.data), original.width, original.height);
+        return { bytes: buildDdsFile(original.fourCC, original.width, original.height, compressed) };
+      }
+      if (original.isRawRgb) {
+        const pixelDataLength = original.ddsBytes.length - 128;
+        const pixelData = encodeRawRgbDds(
+          new Uint8Array(imageData.data), original.width, original.height, original.rgbBitCount,
+          original.rMask, original.gMask, original.bMask, original.aMask,
+          pixelDataLength, original.hasPitchFlag ? original.pitchOrLinearSize : undefined
+        );
+        if (!pixelData) {
+          return { error: `صيغة البكسل غير المضغوطة (${original.rgbBitCount} بت) غير مدعومة للترميز — استورد ملف DDS جاهزاً بدلاً من PNG` };
+        }
+        return {
+          bytes: buildRawRgbDdsFile(
+            original.width, original.height, original.rgbBitCount,
+            original.rMask, original.gMask, original.bMask, original.aMask,
+            pixelData, original.hasPitchFlag, original.pitchOrLinearSize
+          ),
+        };
+      }
+      return { error: `صيغة ضغط الصورة الأصلية (${original.fourCC || "غير معروفة"}) غير مدعومة للترميز التلقائي — استورد ملف DDS جاهزاً بنفس الصيغة بدلاً من PNG` };
+    },
+    []
+  );
+
+  /** Validates, confirms, writes/downloads, and refreshes preview — the common tail
+   * shared by both the whole-image replace and the region-composite flows. */
+  const applyReplacementDds = useCallback(async (originalXimg: Uint8Array, newDdsBytes: Uint8Array) => {
+    const { toast } = await import("sonner");
+    if (!selectedEntry) return;
+
+    const validation = validateReplacementDds(originalXimg, newDdsBytes);
+    if (!validation.ok) {
+      toast.error(validation.reason);
+      return;
+    }
+
+    const rebuiltXimg = spliceReplacementDds(originalXimg, newDdsBytes);
+
+    if (!confirmFirstWriteIfNeeded()) return;
+
+    setModifiedLog((prev) => {
+      const next = new Map(prev);
+      if (!next.has(selectedEntry.path)) next.set(selectedEntry.path, { originalXimgBytes: originalXimg });
+      return next;
+    });
+
+    let freshFile: File | null = null;
+    if (fileHandle) {
+      const writable = await fileHandle.createWritable({ keepExistingData: true });
+      await writable.write({ type: "write", position: selectedEntry.offset, data: rebuiltXimg });
+      await writable.close();
+      // Chrome invalidates previously-obtained File snapshots for a handle once it's
+      // been written to — re-acquire a fresh one or every subsequent read (including
+      // the re-preview below) throws NotReadableError ("تعذر قراءة الملف المطلوب...").
+      freshFile = await fileHandle.getFile();
+      setFile(freshFile);
+      toast.success(`تم حقن الصورة الجديدة مباشرة في images.pak (${selectedEntry.path})`);
+    } else {
+      const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1);
+      downloadBlob(rebuiltXimg, shortName);
+      const script = buildPowerShellPatchScript(selectedEntry.offset, rebuiltXimg.length, shortName);
+      downloadText(script, `inject-${shortName}.ps1`);
+      toast.info("متصفحك لا يدعم الكتابة المباشرة — تم تنزيل الملف المعدّل + سكربت PowerShell لحقنه يدوياً");
+    }
+
+    invalidateEntry(selectedEntry.path);
+    await handleSelect(selectedEntry, freshFile || undefined);
+  }, [selectedEntry, fileHandle, confirmFirstWriteIfNeeded, invalidateEntry, handleSelect]);
+
   const handleReplaceSelected = useCallback(async (importFile: File) => {
     if (!selectedEntry || !file) return;
     const { toast } = await import("sonner");
@@ -389,7 +491,7 @@ export default function RisenImages() {
       const lowerName = importFile.name.toLowerCase();
       if (lowerName.endsWith(".dds")) {
         newDdsBytes = new Uint8Array(await importFile.arrayBuffer());
-      } else if (isDxtFourCC(original.fourCC)) {
+      } else {
         const img = await loadImageElement(importFile);
         const canvas = document.createElement("canvas");
         canvas.width = original.width;
@@ -398,79 +500,21 @@ export default function RisenImages() {
         // Forced resize to match the original exactly, same convention as the WILAY tool.
         ctx.drawImage(img, 0, 0, original.width, original.height);
         const imageData = ctx.getImageData(0, 0, original.width, original.height);
-        const compressed = encodeDxt(original.fourCC, new Uint8Array(imageData.data), original.width, original.height);
-        newDdsBytes = buildDdsFile(original.fourCC, original.width, original.height, compressed);
-      } else if (original.isRawRgb) {
-        const img = await loadImageElement(importFile);
-        const canvas = document.createElement("canvas");
-        canvas.width = original.width;
-        canvas.height = original.height;
-        const ctx = canvas.getContext("2d")!;
-        ctx.drawImage(img, 0, 0, original.width, original.height);
-        const imageData = ctx.getImageData(0, 0, original.width, original.height);
-        const pixelDataLength = original.ddsBytes.length - 128;
-        const pixelData = encodeRawRgbDds(
-          new Uint8Array(imageData.data), original.width, original.height, original.rgbBitCount,
-          original.rMask, original.gMask, original.bMask, original.aMask,
-          pixelDataLength, original.hasPitchFlag ? original.pitchOrLinearSize : undefined
-        );
-        if (!pixelData) {
-          toast.error(`صيغة البكسل غير المضغوطة (${original.rgbBitCount} بت) غير مدعومة للترميز — استورد ملف DDS جاهزاً بدلاً من PNG`);
+        const encoded = encodeToOriginalFormat(original, imageData);
+        if ("error" in encoded) {
+          toast.error(encoded.error);
           return;
         }
-        newDdsBytes = buildRawRgbDdsFile(
-          original.width, original.height, original.rgbBitCount,
-          original.rMask, original.gMask, original.bMask, original.aMask,
-          pixelData, original.hasPitchFlag, original.pitchOrLinearSize
-        );
-      } else {
-        toast.error(`صيغة ضغط الصورة الأصلية (${original.fourCC || "غير معروفة"}) غير مدعومة للترميز التلقائي — استورد ملف DDS جاهزاً بنفس الصيغة بدلاً من PNG`);
-        return;
+        newDdsBytes = encoded.bytes;
       }
 
-      const validation = validateReplacementDds(originalXimg, newDdsBytes);
-      if (!validation.ok) {
-        toast.error(validation.reason);
-        return;
-      }
-
-      const rebuiltXimg = spliceReplacementDds(originalXimg, newDdsBytes);
-
-      if (!confirmFirstWriteIfNeeded()) return;
-
-      setModifiedLog((prev) => {
-        const next = new Map(prev);
-        if (!next.has(selectedEntry.path)) next.set(selectedEntry.path, { originalXimgBytes: originalXimg });
-        return next;
-      });
-
-      let freshFile: File | null = null;
-      if (fileHandle) {
-        const writable = await fileHandle.createWritable({ keepExistingData: true });
-        await writable.write({ type: "write", position: selectedEntry.offset, data: rebuiltXimg });
-        await writable.close();
-        // Chrome invalidates previously-obtained File snapshots for a handle once it's
-        // been written to — re-acquire a fresh one or every subsequent read (including
-        // the re-preview below) throws NotReadableError ("تعذر قراءة الملف المطلوب...").
-        freshFile = await fileHandle.getFile();
-        setFile(freshFile);
-        toast.success(`تم حقن الصورة الجديدة مباشرة في images.pak (${selectedEntry.path})`);
-      } else {
-        const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1);
-        downloadBlob(rebuiltXimg, shortName);
-        const script = buildPowerShellPatchScript(selectedEntry.offset, rebuiltXimg.length, shortName);
-        downloadText(script, `inject-${shortName}.ps1`);
-        toast.info("متصفحك لا يدعم الكتابة المباشرة — تم تنزيل الملف المعدّل + سكربت PowerShell لحقنه يدوياً");
-      }
-
-      invalidateEntry(selectedEntry.path);
-      await handleSelect(selectedEntry, freshFile || undefined);
+      await applyReplacementDds(originalXimg, newDdsBytes);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setBusyPath(null);
     }
-  }, [selectedEntry, file, fileHandle, confirmFirstWriteIfNeeded, invalidateEntry, handleSelect]);
+  }, [selectedEntry, file, encodeToOriginalFormat, applyReplacementDds]);
 
   const handleUndo = useCallback(async (path: string) => {
     const record = modifiedLog.get(path);
@@ -516,6 +560,139 @@ export default function RisenImages() {
     const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
     downloadBlob(ddsBytes, `${shortName}.dds`);
   }, [selectedEntry, file]);
+
+  // ==========================================================================
+  // Region-composite mode
+  // ==========================================================================
+
+  const exitCompositeMode = useCallback(() => {
+    setCompositeMode(false);
+    setSelectionRect(null);
+    setDragStart(null);
+    setCompositeOverlayFile(null);
+    setCompositeOverlayImg(null);
+  }, []);
+
+  const handleCompositeOverlayChosen = useCallback(async (f: File) => {
+    setCompositeOverlayFile(f);
+    try {
+      setCompositeOverlayImg(await loadImageElement(f));
+    } catch {
+      setCompositeOverlayImg(null);
+    }
+  }, []);
+
+  // Decodes the original DDS directly (once, on entering composite mode) rather than
+  // reusing the cached PNG preview: reloading a PNG-re-encoded image via <img> + drawImage
+  // runs it through the canvas's premultiplied-alpha compositing path, which rounds
+  // semi-transparent pixels by ±1 — putImageData below writes raw pixels with no such loss.
+  const [compositeBaseImageData, setCompositeBaseImageData] = useState<ImageData | null>(null);
+  useEffect(() => {
+    if (!compositeMode || !selectedEntry || !file) {
+      setCompositeBaseImageData(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const buf = await file.slice(selectedEntry.offset, selectedEntry.offset + selectedEntry.size).arrayBuffer();
+        const { ddsBytes } = extractDdsFromXimg(new Uint8Array(buf));
+        const decoded = decodeDdsToRgba(ddsBytes);
+        if (cancelled || !decoded.supported) return;
+        setCompositeBaseImageData(new ImageData(new Uint8ClampedArray(decoded.rgba), decoded.width, decoded.height));
+      } catch { /* composite tool surfaces its own error when the user hits confirm */ }
+    })();
+    return () => { cancelled = true; };
+  }, [compositeMode, selectedEntry, file]);
+
+  // Redraws the composite canvas: base image (exact, via putImageData) + (if selected)
+  // the overlay scaled into the current rect, with a rectangle outline — a live preview.
+  useEffect(() => {
+    if (!compositeMode || selectedDecoded?.kind !== "ok" || !compositeBaseImageData) return;
+    const canvas = compositeCanvasRef.current;
+    if (!canvas) return;
+    canvas.width = selectedDecoded.width;
+    canvas.height = selectedDecoded.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.putImageData(compositeBaseImageData, 0, 0);
+    if (selectionRect && selectionRect.w > 0 && selectionRect.h > 0) {
+      if (compositeOverlayImg) {
+        ctx.drawImage(compositeOverlayImg, selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
+      }
+      ctx.strokeStyle = "#22c55e";
+      ctx.lineWidth = Math.max(1, Math.round(selectedDecoded.width / 250));
+      ctx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
+    }
+  }, [compositeMode, selectedDecoded, selectionRect, compositeOverlayImg, compositeBaseImageData]);
+
+  const getImagePixelCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
+    const canvas = compositeCanvasRef.current;
+    if (!canvas || selectedDecoded?.kind !== "ok") return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const scaleX = selectedDecoded.width / rect.width;
+    const scaleY = selectedDecoded.height / rect.height;
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+    return {
+      x: Math.max(0, Math.min(selectedDecoded.width, x)),
+      y: Math.max(0, Math.min(selectedDecoded.height, y)),
+    };
+  }, [selectedDecoded]);
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const p = getImagePixelCoords(e);
+    if (!p) return;
+    setDragStart(p);
+    setSelectionRect({ x: p.x, y: p.y, w: 0, h: 0 });
+  }, [getImagePixelCoords]);
+
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!dragStart) return;
+    const p = getImagePixelCoords(e);
+    if (!p) return;
+    setSelectionRect({
+      x: Math.min(dragStart.x, p.x),
+      y: Math.min(dragStart.y, p.y),
+      w: Math.abs(p.x - dragStart.x),
+      h: Math.abs(p.y - dragStart.y),
+    });
+  }, [dragStart, getImagePixelCoords]);
+
+  const handleCanvasMouseUp = useCallback(() => setDragStart(null), []);
+
+  const handleCompositeConfirm = useCallback(async () => {
+    if (!selectedEntry || !file || !compositeOverlayImg || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || !compositeBaseImageData) return;
+    const { toast } = await import("sonner");
+    setBusyPath(selectedEntry.path);
+    try {
+      const originalBuf = await file.slice(selectedEntry.offset, selectedEntry.offset + selectedEntry.size).arrayBuffer();
+      const originalXimg = new Uint8Array(originalBuf);
+      const original = extractDdsFromXimg(originalXimg);
+
+      // Pure array splice (see risen-image-composite.ts) instead of a second
+      // canvas draw+getImageData round-trip — that path was found (via browser
+      // testing) to round semi-transparent pixels by ±1 across the WHOLE image,
+      // not just the edited region, due to Canvas2D's premultiplied-alpha storage.
+      const overlayData = getScaledImageRgba(compositeOverlayImg, selectionRect.w, selectionRect.h);
+      const composited = compositeIntoRegion(compositeBaseImageData.data, original.width, original.height, overlayData, selectionRect);
+      const imageData = new ImageData(composited, original.width, original.height);
+
+      const encoded = encodeToOriginalFormat(original, imageData);
+      if ("error" in encoded) {
+        toast.error(encoded.error);
+        return;
+      }
+
+      await applyReplacementDds(originalXimg, encoded.bytes);
+      exitCompositeMode();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyPath(null);
+    }
+  }, [selectedEntry, file, compositeOverlayImg, selectionRect, compositeBaseImageData, encodeToOriginalFormat, applyReplacementDds, exitCompositeMode]);
 
   // ==========================================================================
 
@@ -665,6 +842,68 @@ export default function RisenImages() {
         <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-r border-border p-4 flex flex-col gap-3">
           {!selectedEntry ? (
             <p className="text-sm text-muted-foreground text-center mt-8">اختر صورة من القائمة للمعاينة</p>
+          ) : compositeMode && selectedDecoded?.kind === "ok" ? (
+            <>
+              <div className="font-mono text-xs text-muted-foreground break-all">{selectedEntry.path}</div>
+              <div className="text-xs text-muted-foreground">اسحب مربعاً على الصورة لتحديد منطقة التركيب</div>
+              <div
+                className="w-full rounded overflow-hidden border border-border"
+                style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}
+              >
+                <canvas
+                  ref={compositeCanvasRef}
+                  style={{
+                    width: "100%", height: "auto", display: "block", cursor: "crosshair",
+                    aspectRatio: `${selectedDecoded.width} / ${selectedDecoded.height}`,
+                  }}
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseUp={handleCanvasMouseUp}
+                  onMouseLeave={handleCanvasMouseUp}
+                />
+              </div>
+              {selectionRect && selectionRect.w > 0 && selectionRect.h > 0 && (
+                <div className="text-[11px] text-muted-foreground font-mono text-center">
+                  X:{selectionRect.x} Y:{selectionRect.y} — {selectionRect.w}×{selectionRect.h}
+                </div>
+              )}
+              <input
+                ref={compositeOverlayInputRef}
+                type="file"
+                accept=".png"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void handleCompositeOverlayChosen(f);
+                }}
+              />
+              <Button size="sm" variant="outline" onClick={() => compositeOverlayInputRef.current?.click()}>
+                <ImageDown className="w-3.5 h-3.5 ml-1" /> {compositeOverlayFile ? "تغيير صورة التركيب" : "اختر صورة التركيب (PNG)"}
+              </Button>
+              {compositeOverlayFile && (
+                <div className="text-[11px] text-muted-foreground text-center truncate">{compositeOverlayFile.name}</div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={handleCompositeConfirm}
+                  disabled={!compositeOverlayImg || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || busyPath === selectedEntry.path}
+                  style={{ backgroundColor: ACCENT, color: "white" }}
+                >
+                  {busyPath === selectedEntry.path ? (
+                    <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" />
+                  ) : (
+                    <Crop className="w-3.5 h-3.5 ml-1" />
+                  )}
+                  تركيب
+                </Button>
+                <Button size="sm" variant="ghost" onClick={exitCompositeMode}>
+                  <X className="w-3.5 h-3.5 ml-1" /> إلغاء
+                </Button>
+              </div>
+            </>
           ) : (
             <>
               <div className="font-mono text-xs text-muted-foreground break-all">{selectedEntry.path}</div>
@@ -742,6 +981,17 @@ export default function RisenImages() {
                 />
                 <p className="text-[11px] text-muted-foreground">
                   PNG بنفس أبعاد الصورة الأصلية يُرمَّز تلقائياً؛ أو ملف DDS جاهز بنفس الأبعاد والصيغة والحجم بالضبط.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCompositeMode(true)}
+                  disabled={selectedDecoded?.kind !== "ok"}
+                >
+                  <Crop className="w-3.5 h-3.5 ml-1" /> تركيب صورة داخل منطقة محددة
+                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  لصور تحوي عدة عناصر مجمّعة (مثل شعار داخل أطلس) — حدّد منطقة الشعار بالسحب واستبدلها فقط، بلا تغيير بقية الصورة أو شفافيتها.
                 </p>
               </div>
 

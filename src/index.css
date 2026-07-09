@@ -86,6 +86,128 @@
   }
 }
 
+/* Light-mode contrast fixes for the ~110 hardcoded Tailwind status/badge colors
+ * used across the editor (text-*-400/500, and *-500/N opacity tints for
+ * bg-/border-). These were tuned to pop against the dark palette's near-black
+ * background; the same shades/alphas read as pale/washed-out on the light
+ * palette's near-white background, so each is remapped here to a darker
+ * shade (400->600, 500->700) or boosted alpha, scoped to `.light` only —
+ * the dark theme's own colors above are untouched. Generated from the exact
+ * set of color classes found in src/components/editor + src/pages/Editor.tsx;
+ * very light/dark shades (50-300, 700-950) and solid vivid fills were left
+ * alone as they're typically paired badge colors already tuned for light
+ * backgrounds (e.g. bg-amber-100 + text-amber-900), not the washed-out case. */
+.light .bg-amber-500\/10 { background-color: #f59e0b4c !important; }
+.light .bg-amber-500\/15 { background-color: #f59e0b59 !important; }
+.light .bg-amber-500\/20 { background-color: #f59e0b66 !important; }
+.light .bg-amber-500\/25 { background-color: #f59e0b73 !important; }
+.light .bg-amber-500\/30 { background-color: #f59e0b80 !important; }
+.light .bg-amber-500\/5 { background-color: #f59e0b26 !important; }
+.light .bg-blue-500\/10 { background-color: #3b82f64c !important; }
+.light .bg-blue-500\/15 { background-color: #3b82f659 !important; }
+.light .bg-blue-500\/20 { background-color: #3b82f666 !important; }
+.light .bg-blue-500\/5 { background-color: #3b82f626 !important; }
+.light .bg-cyan-500\/10 { background-color: #06b6d44c !important; }
+.light .bg-cyan-500\/15 { background-color: #06b6d459 !important; }
+.light .bg-cyan-500\/20 { background-color: #06b6d466 !important; }
+.light .bg-emerald-500\/10 { background-color: #10b9814c !important; }
+.light .bg-emerald-500\/15 { background-color: #10b98159 !important; }
+.light .bg-emerald-500\/20 { background-color: #10b98166 !important; }
+.light .bg-emerald-500\/5 { background-color: #10b98126 !important; }
+.light .bg-green-500\/10 { background-color: #22c55e4c !important; }
+.light .bg-green-500\/20 { background-color: #22c55e66 !important; }
+.light .bg-green-500\/5 { background-color: #22c55e26 !important; }
+.light .bg-green-500\/50 { background-color: #22c55e99 !important; }
+.light .bg-orange-500\/10 { background-color: #f973164c !important; }
+.light .bg-orange-500\/15 { background-color: #f9731659 !important; }
+.light .bg-orange-500\/20 { background-color: #f9731666 !important; }
+.light .bg-pink-500\/10 { background-color: #ec48994c !important; }
+.light .bg-pink-500\/20 { background-color: #ec489966 !important; }
+.light .bg-purple-500\/10 { background-color: #a855f74c !important; }
+.light .bg-purple-500\/15 { background-color: #a855f759 !important; }
+.light .bg-purple-500\/20 { background-color: #a855f766 !important; }
+.light .bg-purple-500\/5 { background-color: #a855f726 !important; }
+.light .bg-red-500\/10 { background-color: #ef44444c !important; }
+.light .bg-red-500\/15 { background-color: #ef444459 !important; }
+.light .bg-red-500\/20 { background-color: #ef444466 !important; }
+.light .bg-red-500\/5 { background-color: #ef444426 !important; }
+.light .bg-teal-500\/10 { background-color: #14b8a64c !important; }
+.light .bg-teal-500\/15 { background-color: #14b8a659 !important; }
+.light .bg-teal-500\/20 { background-color: #14b8a666 !important; }
+.light .bg-yellow-500\/10 { background-color: #eab3084c !important; }
+.light .bg-yellow-500\/15 { background-color: #eab30859 !important; }
+.light .bg-yellow-500\/20 { background-color: #eab30866 !important; }
+.light .bg-yellow-500\/5 { background-color: #eab30826 !important; }
+.light .border-amber-400 { border-color: #d97706 !important; }
+.light .border-amber-500 { border-color: #b45309 !important; }
+.light .border-amber-500\/15 { border-color: #f59e0b59 !important; }
+.light .border-amber-500\/20 { border-color: #f59e0b66 !important; }
+.light .border-amber-500\/25 { border-color: #f59e0b73 !important; }
+.light .border-amber-500\/30 { border-color: #f59e0b80 !important; }
+.light .border-amber-500\/40 { border-color: #f59e0b8c !important; }
+.light .border-amber-500\/50 { border-color: #f59e0b99 !important; }
+.light .border-blue-500\/10 { border-color: #3b82f64c !important; }
+.light .border-blue-500\/20 { border-color: #3b82f666 !important; }
+.light .border-blue-500\/25 { border-color: #3b82f673 !important; }
+.light .border-blue-500\/30 { border-color: #3b82f680 !important; }
+.light .border-blue-500\/40 { border-color: #3b82f68c !important; }
+.light .border-cyan-500\/25 { border-color: #06b6d473 !important; }
+.light .border-cyan-500\/30 { border-color: #06b6d480 !important; }
+.light .border-emerald-500 { border-color: #047857 !important; }
+.light .border-emerald-500\/10 { border-color: #10b9814c !important; }
+.light .border-emerald-500\/15 { border-color: #10b98159 !important; }
+.light .border-emerald-500\/20 { border-color: #10b98166 !important; }
+.light .border-emerald-500\/25 { border-color: #10b98173 !important; }
+.light .border-emerald-500\/30 { border-color: #10b98180 !important; }
+.light .border-emerald-500\/40 { border-color: #10b9818c !important; }
+.light .border-emerald-500\/50 { border-color: #10b98199 !important; }
+.light .border-green-500 { border-color: #15803d !important; }
+.light .border-green-500\/20 { border-color: #22c55e66 !important; }
+.light .border-green-500\/30 { border-color: #22c55e80 !important; }
+.light .border-green-500\/40 { border-color: #22c55e8c !important; }
+.light .border-green-500\/50 { border-color: #22c55e99 !important; }
+.light .border-orange-400 { border-color: #ea580c !important; }
+.light .border-orange-500 { border-color: #c2410c !important; }
+.light .border-orange-500\/20 { border-color: #f9731666 !important; }
+.light .border-orange-500\/25 { border-color: #f9731673 !important; }
+.light .border-orange-500\/30 { border-color: #f9731680 !important; }
+.light .border-orange-500\/40 { border-color: #f973168c !important; }
+.light .border-pink-500\/20 { border-color: #ec489966 !important; }
+.light .border-pink-500\/30 { border-color: #ec489980 !important; }
+.light .border-purple-500\/20 { border-color: #a855f766 !important; }
+.light .border-purple-500\/25 { border-color: #a855f773 !important; }
+.light .border-purple-500\/30 { border-color: #a855f780 !important; }
+.light .border-purple-500\/40 { border-color: #a855f78c !important; }
+.light .border-red-500\/10 { border-color: #ef44444c !important; }
+.light .border-red-500\/20 { border-color: #ef444466 !important; }
+.light .border-red-500\/30 { border-color: #ef444480 !important; }
+.light .border-teal-500\/20 { border-color: #14b8a666 !important; }
+.light .border-teal-500\/25 { border-color: #14b8a673 !important; }
+.light .border-teal-500\/30 { border-color: #14b8a680 !important; }
+.light .border-yellow-500 { border-color: #a16207 !important; }
+.light .border-yellow-500\/30 { border-color: #eab30880 !important; }
+.light .text-amber-400 { color: #d97706 !important; }
+.light .text-amber-500 { color: #b45309 !important; }
+.light .text-blue-400 { color: #2563eb !important; }
+.light .text-blue-500 { color: #1d4ed8 !important; }
+.light .text-cyan-400 { color: #0891b2 !important; }
+.light .text-cyan-500 { color: #0e7490 !important; }
+.light .text-emerald-400 { color: #059669 !important; }
+.light .text-emerald-500 { color: #047857 !important; }
+.light .text-green-400 { color: #16a34a !important; }
+.light .text-green-500 { color: #15803d !important; }
+.light .text-orange-400 { color: #ea580c !important; }
+.light .text-orange-500 { color: #c2410c !important; }
+.light .text-pink-400 { color: #db2777 !important; }
+.light .text-purple-400 { color: #9333ea !important; }
+.light .text-purple-500 { color: #7e22ce !important; }
+.light .text-red-400 { color: #dc2626 !important; }
+.light .text-red-500 { color: #b91c1c !important; }
+.light .text-teal-400 { color: #0d9488 !important; }
+.light .text-teal-500 { color: #0f766e !important; }
+.light .text-yellow-400 { color: #ca8a04 !important; }
+.light .text-yellow-500 { color: #a16207 !important; }
+
 @layer base {
   * {
     @apply border-border;

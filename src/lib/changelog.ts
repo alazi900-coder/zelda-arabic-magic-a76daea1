@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.24.0",
+    date: "2026-07-08",
+    changes: [
+      { kind: "added", text: "زر تبديل الوضع الداكن/المشرق في رأس المحرر — لوحة ألوان فاتحة جديدة مصمَّمة بنفس هوية الألوان الحالية (أخضر/ذهبي) بإضاءة معكوسة. الاختيار يُحفظ تلقائياً ويبقى ثابتاً عند التنقل بين الصفحات." },
+    ],
+  },
+  {
     version: "1.23.1",
     date: "2026-07-08",
     changes: [

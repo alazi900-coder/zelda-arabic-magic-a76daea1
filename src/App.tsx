@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import UpdateBanner from "@/components/UpdateBanner";
@@ -49,36 +50,38 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <Toaster />
-        <Sonner />
-        <UpdateBanner />
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} themes={["dark", "light"]}>
+      <TooltipProvider>
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <UpdateBanner />
 
-        <BrowserRouter>
-          <ErrorBoundary fallbackTitle="حدث خطأ في التطبيق">
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/xenoblade" element={<Xenoblade />} />
-                <Route path="/process" element={<ErrorBoundary fallbackTitle="خطأ في المعالجة"><XenobladeProcess /></ErrorBoundary>} />
-                <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/install" element={<Install />} />
-                <Route path="/mod-packager" element={<ModPackager />} />
-                <Route path="/wilay" element={<WilayViewer />} />
-                <Route path="/lagp-packer" element={<ErrorBoundary fallbackTitle="خطأ في أداة LAGP"><LagpPacker /></ErrorBoundary>} />
-                <Route path="/pwa-status" element={<PwaStatus />} />
-                <Route path="/risen" element={<Risen />} />
-                <Route path="/risen/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Risen"><RisenProcess /></ErrorBoundary>} />
-                <Route path="/risen/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Risen"><RisenImages /></ErrorBoundary>} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </ErrorBoundary>
-        </BrowserRouter>
-      </AuthProvider>
-    </TooltipProvider>
+          <BrowserRouter>
+            <ErrorBoundary fallbackTitle="حدث خطأ في التطبيق">
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/xenoblade" element={<Xenoblade />} />
+                  <Route path="/process" element={<ErrorBoundary fallbackTitle="خطأ في المعالجة"><XenobladeProcess /></ErrorBoundary>} />
+                  <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/install" element={<Install />} />
+                  <Route path="/mod-packager" element={<ModPackager />} />
+                  <Route path="/wilay" element={<WilayViewer />} />
+                  <Route path="/lagp-packer" element={<ErrorBoundary fallbackTitle="خطأ في أداة LAGP"><LagpPacker /></ErrorBoundary>} />
+                  <Route path="/pwa-status" element={<PwaStatus />} />
+                  <Route path="/risen" element={<Risen />} />
+                  <Route path="/risen/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Risen"><RisenProcess /></ErrorBoundary>} />
+                  <Route path="/risen/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Risen"><RisenImages /></ErrorBoundary>} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
+          </BrowserRouter>
+        </AuthProvider>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

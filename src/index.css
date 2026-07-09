@@ -43,6 +43,47 @@
     --sidebar-border: 140 15% 18%;
     --sidebar-ring: 145 60% 40%;
   }
+
+  /* Light theme — same green/gold hue families as the dark palette above,
+     inverted lightness. Applied via next-themes (attribute="class"). */
+  .light {
+    --background: 45 30% 97%;
+    --foreground: 140 25% 10%;
+
+    --card: 45 25% 99%;
+    --card-foreground: 140 25% 10%;
+
+    --popover: 45 25% 99%;
+    --popover-foreground: 140 25% 10%;
+
+    --primary: 145 55% 32%;
+    --primary-foreground: 45 30% 97%;
+
+    --secondary: 45 65% 45%;
+    --secondary-foreground: 140 25% 10%;
+
+    --muted: 45 20% 92%;
+    --muted-foreground: 140 10% 35%;
+
+    --accent: 45 65% 45%;
+    --accent-foreground: 140 25% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 45 20% 85%;
+    --input: 45 20% 85%;
+    --ring: 145 55% 32%;
+
+    --sidebar-background: 45 25% 95%;
+    --sidebar-foreground: 140 25% 10%;
+    --sidebar-primary: 145 55% 32%;
+    --sidebar-primary-foreground: 45 30% 97%;
+    --sidebar-accent: 45 20% 90%;
+    --sidebar-accent-foreground: 140 25% 10%;
+    --sidebar-border: 45 20% 85%;
+    --sidebar-ring: 145 55% 32%;
+  }
 }
 
 @layer base {

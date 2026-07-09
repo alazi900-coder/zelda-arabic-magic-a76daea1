@@ -662,6 +662,21 @@ export default function RisenImages() {
 
   const handleCanvasMouseUp = useCallback(() => setDragStart(null), []);
 
+  /** Manual fine-tune of the drag-selected rect via numeric inputs. Clamps so
+   * the rect never extends past the image bounds regardless of which field changed. */
+  const handleSelectionFieldChange = useCallback((field: keyof CompositeRect, value: number) => {
+    if (selectedDecoded?.kind !== "ok") return;
+    const v = Number.isFinite(value) ? Math.max(0, value) : 0;
+    setSelectionRect((prev) => {
+      const next: CompositeRect = { ...(prev || { x: 0, y: 0, w: 0, h: 0 }), [field]: v };
+      next.x = Math.min(next.x, selectedDecoded.width);
+      next.y = Math.min(next.y, selectedDecoded.height);
+      next.w = Math.min(next.w, selectedDecoded.width - next.x);
+      next.h = Math.min(next.h, selectedDecoded.height - next.y);
+      return next;
+    });
+  }, [selectedDecoded]);
+
   const handleCompositeConfirm = useCallback(async () => {
     if (!selectedEntry || !file || !compositeOverlayImg || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || !compositeBaseImageData) return;
     const { toast } = await import("sonner");
@@ -862,11 +877,22 @@ export default function RisenImages() {
                   onMouseLeave={handleCanvasMouseUp}
                 />
               </div>
-              {selectionRect && selectionRect.w > 0 && selectionRect.h > 0 && (
-                <div className="text-[11px] text-muted-foreground font-mono text-center">
-                  X:{selectionRect.x} Y:{selectionRect.y} — {selectionRect.w}×{selectionRect.h}
-                </div>
-              )}
+              <div className="grid grid-cols-4 gap-1.5">
+                {([
+                  ["x", "X"], ["y", "Y"], ["w", "العرض"], ["h", "الارتفاع"],
+                ] as const).map(([field, label]) => (
+                  <div key={field} className="flex flex-col items-center gap-0.5">
+                    <label className="text-[10px] text-muted-foreground">{label}</label>
+                    <input
+                      type="number"
+                      value={selectionRect ? selectionRect[field] : 0}
+                      onChange={(e) => handleSelectionFieldChange(field, parseInt(e.target.value, 10))}
+                      min={0}
+                      className="w-full px-1 py-1 rounded bg-background border border-border text-xs text-center font-mono"
+                    />
+                  </div>
+                ))}
+              </div>
               <input
                 ref={compositeOverlayInputRef}
                 type="file"

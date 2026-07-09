@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.23.1",
+    date: "2026-07-08",
+    changes: [
+      { kind: "added", text: "أداة صور Risen 1: تعديل يدوي دقيق لمنطقة التركيب (X/Y/العرض/الارتفاع) بحقول رقمية بجانب السحب بالماوس — تعمل بشكل مستقل تماماً عن السحب، مفيدة للضبط بدقة بكسل واحد أو لتحديد منطقة كاملة بدون سحب إطلاقاً." },
+    ],
+  },
+  {
     version: "1.23.0",
     date: "2026-07-08",
     changes: [

@@ -54,6 +54,13 @@ export function splitLongLines(text: string, limit: number, breakStyle: "\r\n" |
   return outLines.join(breakStyle);
 }
 
+/** Joins every logical line back into one, replacing each break with a single
+ * space. Since splitLongLines only ever breaks at a word boundary (a space),
+ * this is its exact inverse — no two words end up glued together. */
+export function joinLines(text: string): string {
+  return (text || "").split(/\r\n|\n/).join(" ");
+}
+
 export interface LineSplitPlan {
   /** Keys of entries the tool would modify. */
   targetKeys: string[];
@@ -90,6 +97,33 @@ export function planLineSplit(
     targetKeys.push(key);
     snapshot[key] = current;
     updates[key] = splitLongLines(current, limit, breakStyle);
+  }
+
+  return { targetKeys, updates, snapshot };
+}
+
+/**
+ * Pure planning step for joining multi-line translations back into one line.
+ * Targets any entry (within the caller-filtered `entries`) whose current
+ * translation has more than one line, regardless of length or origin —
+ * mirrors planLineSplit's shape so the same undo/apply flow works for both.
+ */
+export function planLineJoin(
+  entries: Pick<ExtractedEntry, "msbtFile" | "index">[],
+  translations: Record<string, string>
+): LineSplitPlan {
+  const targetKeys: string[] = [];
+  const updates: Record<string, string> = {};
+  const snapshot: Record<string, string> = {};
+
+  for (const e of entries) {
+    const key = `${e.msbtFile}:${e.index}`;
+    const current = translations[key] || "";
+    if (!current.trim() || !/\r\n|\n/.test(current)) continue;
+
+    targetKeys.push(key);
+    snapshot[key] = current;
+    updates[key] = joinLines(current);
   }
 
   return { targetKeys, updates, snapshot };

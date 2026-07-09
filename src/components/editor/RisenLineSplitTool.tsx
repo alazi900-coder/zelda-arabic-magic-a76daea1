@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Scissors } from "lucide-react";
-import { planLineSplit } from "@/lib/risen-line-split";
+import { Scissors, RotateCcw } from "lucide-react";
+import { planLineSplit, planLineJoin } from "@/lib/risen-line-split";
 import type { ExtractedEntry } from "@/components/editor/types";
 
 const STORAGE_KEY = "risenLineSplitLimit";
@@ -25,7 +25,7 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
       return saved >= MIN_LIMIT && saved <= MAX_LIMIT ? saved : DEFAULT_LIMIT;
     } catch { return DEFAULT_LIMIT; }
   });
-  // One undo level is enough — a later bulk split invalidates the previous snapshot.
+  // One undo level is enough — a later bulk split/join invalidates the previous snapshot.
   const undoSnapshotRef = React.useRef<Record<string, string> | null>(null);
 
   const setLimitPersisted = (v: number) => {
@@ -64,6 +64,36 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
     });
   };
 
+  const handleJoin = async () => {
+    const { toast } = await import("sonner");
+    const plan = planLineJoin(filteredEntries, translations);
+
+    if (plan.targetKeys.length === 0) {
+      toast.info("لا توجد نصوص متعددة الأسطر ضمن العرض الحالي");
+      return;
+    }
+
+    const ok = window.confirm(
+      `سيتم دمج أسطر ${plan.targetKeys.length} نصًا (متعددة الأسطر) إلى سطر واحد لكل نص، من أصل ${filteredEntries.length} المعروضة حاليًا. متابعة؟`
+    );
+    if (!ok) return;
+
+    undoSnapshotRef.current = plan.snapshot;
+    const count = updateTranslationsBatch(plan.updates);
+
+    toast.success(`تم دمج أسطر ${count} نصًا إلى سطر واحد`, {
+      action: {
+        label: "تراجع",
+        onClick: () => {
+          if (undoSnapshotRef.current) {
+            updateTranslationsBatch(undoSnapshotRef.current);
+            undoSnapshotRef.current = null;
+          }
+        },
+      },
+    });
+  };
+
   return (
     <div className="flex items-center gap-1.5 shrink-0">
       <span className="text-xs text-muted-foreground font-body hidden md:inline">الحد الأقصى للسطر</span>
@@ -84,6 +114,15 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
         title="تقسيم أسطر الترجمات الطويلة عند المسافات"
       >
         <Scissors className="w-3.5 h-3.5" /> تقسيم الأسطر
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleJoin}
+        className="font-body text-xs shrink-0 gap-1"
+        title="دمج النصوص متعددة الأسطر إلى سطر واحد"
+      >
+        <RotateCcw className="w-3.5 h-3.5" /> دمج الأسطر
       </Button>
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitLongLines, getLongestLineLength, hasArabicText, planLineSplit } from "@/lib/risen-line-split";
+import { splitLongLines, getLongestLineLength, hasArabicText, planLineSplit, joinLines, planLineJoin } from "@/lib/risen-line-split";
 
 describe("splitLongLines", () => {
   it("splits a long single-line Arabic text only at spaces, all lines <= limit", () => {
@@ -167,5 +167,81 @@ describe("planLineSplit", () => {
 
     const plan = planLineSplit(entries, translations, 40);
     expect(plan.targetKeys).toEqual([]);
+  });
+});
+
+describe("joinLines", () => {
+  it("is the exact inverse of splitLongLines — round-trips back to the original text", () => {
+    const words = Array.from({ length: 30 }, (_, i) => `كلمة${i}`);
+    const text = words.join(" ");
+    const split = splitLongLines(text, 40, "\r\n");
+    expect(split).not.toBe(text); // sanity: it actually did split into multiple lines
+    expect(joinLines(split)).toBe(text);
+  });
+
+  it("never glues two words together — always inserts exactly one space at each break", () => {
+    const joined = joinLines("الكلمة الأولى\r\nالكلمة الثانية\nالكلمة الثالثة");
+    expect(joined).toBe("الكلمة الأولى الكلمة الثانية الكلمة الثالثة");
+  });
+
+  it("leaves an already-single-line text unchanged", () => {
+    expect(joinLines("نص بلا فواصل أسطر")).toBe("نص بلا فواصل أسطر");
+  });
+});
+
+describe("planLineJoin", () => {
+  it("scope: only touches entries in the given (already-filtered) list, not others with multi-line text in translations", () => {
+    const inScope = { msbtFile: "infos.tab", index: 1 };
+    const outOfScopeKey = "infos.tab:2";
+    const translations: Record<string, string> = {
+      "infos.tab:1": "سطر أول\r\nسطر ثاني",
+      [outOfScopeKey]: "سطر أول\r\nسطر ثاني", // also multi-line — would qualify if it were passed in
+    };
+
+    const plan = planLineJoin([inScope], translations);
+
+    expect(plan.targetKeys).toEqual(["infos.tab:1"]);
+    expect(plan.updates["infos.tab:1"]).toBe("سطر أول سطر ثاني");
+    expect(plan.updates).not.toHaveProperty(outOfScopeKey);
+    expect(plan.snapshot).not.toHaveProperty(outOfScopeKey);
+    expect(translations[outOfScopeKey]).toBe("سطر أول\r\nسطر ثاني");
+  });
+
+  it("skips single-line and untranslated entries", () => {
+    const entries = [
+      { msbtFile: "infos.tab", index: 1 },
+      { msbtFile: "infos.tab", index: 2 },
+      { msbtFile: "infos.tab", index: 3 },
+    ];
+    const translations: Record<string, string> = {
+      "infos.tab:1": "نص بسطر واحد فقط",
+      "infos.tab:2": "", // untranslated
+      "infos.tab:3": "سطر أول\r\nسطر ثاني", // the only one that should match
+    };
+
+    const plan = planLineJoin(entries, translations);
+    expect(plan.targetKeys).toEqual(["infos.tab:3"]);
+  });
+
+  it("undo: applying the snapshot restores the exact original (multi-line) values", () => {
+    const entries = [
+      { msbtFile: "infos.tab", index: 1 },
+      { msbtFile: "quests.tab", index: 5 },
+    ];
+    const originalTranslations: Record<string, string> = {
+      "infos.tab:1": "أول سطر\r\nثاني سطر\r\nثالث سطر",
+      "quests.tab:5": "وصف المهمة\nسطر إضافي",
+    };
+
+    const plan = planLineJoin(entries, originalTranslations);
+    expect(plan.targetKeys.length).toBe(2);
+
+    const afterApply: Record<string, string> = { ...originalTranslations, ...plan.updates };
+    expect(afterApply["infos.tab:1"]).toBe("أول سطر ثاني سطر ثالث سطر");
+    expect(afterApply["quests.tab:5"]).toBe("وصف المهمة سطر إضافي");
+
+    const afterUndo: Record<string, string> = { ...afterApply, ...plan.snapshot };
+    expect(afterUndo["infos.tab:1"]).toBe(originalTranslations["infos.tab:1"]);
+    expect(afterUndo["quests.tab:5"]).toBe(originalTranslations["quests.tab:5"]);
   });
 });

@@ -12,7 +12,7 @@ import {
 } from "@/lib/risen-images-pak";
 import {
   extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
-  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader, describeDdsHeaderFlags,
+  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader, describeDdsHeaderFlags, findFirstByteMismatch,
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
@@ -498,8 +498,34 @@ export default function RisenImages() {
       // been written to — re-acquire a fresh one or every subsequent read (including
       // the re-preview below) throws NotReadableError ("تعذر قراءة الملف المطلوب...").
       freshFile = await fileHandle.getFile();
+
+      // Safety net: read back exactly what landed on disk and confirm it's
+      // byte-identical to what we intended to write — catches any future write
+      // bug (wrong offset, truncation, partial write) immediately instead of
+      // only discovering it later in-game. Independent of *why* it might fail.
+      const verifyBuf = await freshFile.slice(selectedEntry.offset, selectedEntry.offset + rebuiltXimg.length).arrayBuffer();
+      const mismatchAt = findFirstByteMismatch(new Uint8Array(verifyBuf), rebuiltXimg);
+      if (mismatchAt !== -1) {
+        toast.error(`فشل التحقق بعد الكتابة — الملف على القرص لا يطابق ما كان يُفترض كتابته (أول اختلاف عند البايت ${mismatchAt} من ${rebuiltXimg.length}).`, {
+          action: {
+            label: "استعادة فورية",
+            onClick: async () => {
+              const restoreWritable = await fileHandle.createWritable({ keepExistingData: true });
+              await restoreWritable.write({ type: "write", position: selectedEntry.offset, data: originalXimg });
+              await restoreWritable.close();
+              const restoredFile = await fileHandle.getFile();
+              setFile(restoredFile);
+              invalidateEntry(selectedEntry.path);
+              await handleSelect(selectedEntry, restoredFile);
+              toast.success("تمت استعادة الصورة الأصلية بنجاح");
+            },
+          },
+        });
+        return;
+      }
+
       setFile(freshFile);
-      toast.success(`تم حقن الصورة الجديدة مباشرة في images.pak (${selectedEntry.path})`);
+      toast.success(`تم حقن الصورة الجديدة مباشرة في images.pak (${selectedEntry.path}) — تحقَّق التطابق بعد الكتابة`);
     } else {
       const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1);
       downloadBlob(rebuiltXimg, shortName);

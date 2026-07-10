@@ -175,6 +175,18 @@ export function spliceReplacementDds(originalXimgBytes: Uint8Array, newDdsBytes:
   return out;
 }
 
+/** Returns the index of the first byte where `a` and `b` differ, or `-1` if
+ * they're identical (including matching length). Used as a post-write safety
+ * check — read back what actually landed on disk and confirm it's exactly
+ * what was intended, independent of *why* a future write might go wrong. */
+export function findFirstByteMismatch(a: Uint8Array, b: Uint8Array): number {
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    if (a[i] !== b[i]) return i;
+  }
+  return a.length === b.length ? -1 : len;
+}
+
 export interface DdsValidationResult {
   ok: boolean;
   reason?: string;

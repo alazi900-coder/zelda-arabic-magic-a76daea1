@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
-  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader,
+  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader, findFirstByteMismatch,
 } from "@/lib/risen-ximg";
 import { decodeDxt, encodeDXT1, decodeDXT1, decodeDXT5 } from "@/lib/risen-dxt-codec";
 import { NUMBERS_XIMG_BASE64 } from "./fixtures/numbers-ximg-base64";
@@ -321,5 +321,23 @@ describe("risen-ximg", () => {
     const result = decodeDdsToRgba(dds);
     expect(result.supported).toBe(false);
     if (!result.supported) expect(result.fourCC).toBe("");
+  });
+});
+
+describe("findFirstByteMismatch", () => {
+  it("returns -1 for identical arrays", () => {
+    expect(findFirstByteMismatch(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 3]))).toBe(-1);
+  });
+
+  it("returns the index of the first differing byte", () => {
+    expect(findFirstByteMismatch(new Uint8Array([1, 2, 3, 4]), new Uint8Array([1, 2, 9, 4]))).toBe(2);
+  });
+
+  it("returns the shared length when one array is a truncated prefix of the other", () => {
+    expect(findFirstByteMismatch(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 3, 4]))).toBe(3);
+  });
+
+  it("returns -1 for two empty arrays", () => {
+    expect(findFirstByteMismatch(new Uint8Array(0), new Uint8Array(0))).toBe(-1);
   });
 });

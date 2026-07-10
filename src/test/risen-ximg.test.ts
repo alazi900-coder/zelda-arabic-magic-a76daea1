@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
-  encodeRawRgbDds, buildRawRgbDdsFile,
+  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader,
 } from "@/lib/risen-ximg";
 import { decodeDxt, encodeDXT1, decodeDXT1, decodeDXT5 } from "@/lib/risen-dxt-codec";
 import { NUMBERS_XIMG_BASE64 } from "./fixtures/numbers-ximg-base64";
@@ -246,6 +246,46 @@ describe("risen-ximg", () => {
     expect(result.supported).toBe(true);
     if (!result.supported) return;
     expect(Array.from(result.rgba)).toEqual(Array.from(rgba));
+  });
+
+  it("buildRawRgbDdsFile preserves the original DDPF_ALPHAPIXELS flag and dwCaps instead of hardcoding them", () => {
+    // Regression test for a real corrupted-in-game asset: the rebuilt header used to
+    // always write DDPF_RGB alone (dropping DDPF_ALPHAPIXELS) and a hardcoded dwCaps,
+    // even when the original declared alpha and a genuinely meaningful alpha channel
+    // was present — a reader can use the missing flag to ignore alpha entirely.
+    const width = 2, height = 2;
+    const rMask = 0x00ff0000, gMask = 0x0000ff00, bMask = 0x000000ff, aMask = 0xff000000;
+    const DDPF_RGB = 0x40, DDPF_ALPHAPIXELS = 0x1;
+    const originalDdspfFlags = DDPF_RGB | DDPF_ALPHAPIXELS;
+    const originalCaps = 0x1002; // DDSCAPS_TEXTURE | legacy DDSCAPS_ALPHA
+    const pixelData = new Uint8Array(width * height * 4).fill(0x80);
+
+    const dds = buildRawRgbDdsFile(
+      width, height, 32, rMask, gMask, bMask, aMask, pixelData,
+      false, 0, originalDdspfFlags, originalCaps
+    );
+    const header = readDdsHeader(dds);
+    expect(header.ddspfFlags).toBe(originalDdspfFlags);
+    expect(header.ddspfFlags & DDPF_ALPHAPIXELS).toBe(DDPF_ALPHAPIXELS);
+    expect(header.caps).toBe(originalCaps);
+  });
+
+  it("buildRawRgbDdsFile writes pitchOrLinearSize=0 (not a fabricated value) when hasPitchFlag is false", () => {
+    // Previously fell back to pixelData.length, producing a header where the pitch
+    // VALUE looked meaningful even though the FLAG says the field isn't valid —
+    // an internally inconsistent header.
+    const width = 4, height = 4;
+    const pixelData = new Uint8Array(width * height * 4);
+    const dds = buildRawRgbDdsFile(width, height, 32, 0xff0000, 0xff00, 0xff, 0xff000000, pixelData, false, 0);
+    const header = readDdsHeader(dds);
+    expect(header.hasPitchFlag).toBe(false);
+    expect(header.pitchOrLinearSize).toBe(0);
+  });
+
+  it("buildDdsFile preserves an explicit caps value instead of always hardcoding DDSCAPS_TEXTURE", () => {
+    const dds = buildDdsFile("DXT1", 4, 4, new Uint8Array(8), 0x1008);
+    const header = readDdsHeader(dds);
+    expect(header.caps).toBe(0x1008);
   });
 
   it("returns a diagnostic instead of throwing for an unrecognized format (e.g. DX10 fourCC)", () => {

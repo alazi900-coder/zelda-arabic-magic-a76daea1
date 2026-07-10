@@ -51,6 +51,9 @@ export interface DdsHeaderInfo {
   /** Row stride in bytes, only meaningful for uncompressed data when hasPitchFlag is true. */
   pitchOrLinearSize: number;
   hasPitchFlag: boolean;
+  /** dwCaps — some writers set legacy bits here (e.g. DDSCAPS_ALPHA = 0x2) that a
+   * strict reader may check alongside ddspf.dwFlags. Preserved verbatim on rebuild. */
+  caps: number;
 }
 
 export interface XimgDds extends DdsHeaderInfo {
@@ -79,6 +82,7 @@ export function readDdsHeader(ddsBytes: Uint8Array): DdsHeaderInfo {
   const gMask = view.getUint32(96, true);
   const bMask = view.getUint32(100, true);
   const aMask = view.getUint32(104, true);
+  const caps = view.getUint32(108, true);
 
   return {
     width,
@@ -93,6 +97,7 @@ export function readDdsHeader(ddsBytes: Uint8Array): DdsHeaderInfo {
     aMask,
     pitchOrLinearSize,
     hasPitchFlag: (headerFlags & DDSD_PITCH) !== 0,
+    caps,
   };
 }
 
@@ -190,8 +195,11 @@ export function validateReplacementDds(originalXimgBytes: Uint8Array, candidateD
   return { ok: true };
 }
 
-/** Builds a complete, standard 128-byte-header DDS file from raw compressed block data. */
-export function buildDdsFile(fourCC: DxtFourCC, width: number, height: number, compressedData: Uint8Array): Uint8Array {
+/** Builds a complete, standard 128-byte-header DDS file from raw compressed block data.
+ * `caps` should be copied from the original being replaced when available — some writers
+ * set legacy bits here (e.g. DDSCAPS_ALPHA) that a strict reader may check; defaults to
+ * plain DDSCAPS_TEXTURE for callers (mainly tests) that don't have an original to match. */
+export function buildDdsFile(fourCC: DxtFourCC, width: number, height: number, compressedData: Uint8Array, caps = 0x1000): Uint8Array {
   const out = new Uint8Array(DDS_HEADER_SIZE + compressedData.length);
   const view = new DataView(out.buffer);
   out.set([0x44, 0x44, 0x53, 0x20], 0); // "DDS "
@@ -207,7 +215,7 @@ export function buildDdsFile(fourCC: DxtFourCC, width: number, height: number, c
   view.setUint32(80, 0x4, true); // ddspf.dwFlags = DDPF_FOURCC
   out.set(new TextEncoder().encode(fourCC), 84); // ddspf.dwFourCC
   // ddspf.dwRGBBitCount / masks (88..107) left zeroed
-  view.setUint32(108, 0x1000, true); // dwCaps = DDSCAPS_TEXTURE
+  view.setUint32(108, caps, true); // dwCaps
   // dwCaps2/3/4, dwReserved2 (112..127) left zeroed
   out.set(compressedData, DDS_HEADER_SIZE);
   return out;
@@ -401,8 +409,17 @@ export function encodeRawRgbDds(
 }
 
 /** Builds a complete, standard 128-byte-header uncompressed (DDPF_RGB) DDS file.
- * `hasPitchFlag`/`pitchOrLinearSize` should be copied from the original being
- * replaced, to keep the rebuilt header internally consistent with its layout. */
+ * `hasPitchFlag`/`pitchOrLinearSize`/`ddspfFlags`/`caps` should be copied from the
+ * original being replaced, to keep the rebuilt header internally consistent with
+ * its layout. Previously `ddspfFlags` was hardcoded to DDPF_RGB alone, silently
+ * dropping DDPF_ALPHAPIXELS (and `caps` was hardcoded, dropping legacy bits like
+ * DDSCAPS_ALPHA) even when the original declared them and the image genuinely had
+ * a meaningful alpha channel — confirmed by a real corrupted-in-game asset where
+ * the rebuilt header claimed "no alpha" while its own aMask/pixel data still had
+ * real per-pixel transparency, which a strict reader can use to just ignore alpha
+ * entirely. Also fixed: `pitchOrLinearSize` used to fall back to `pixelData.length`
+ * when `hasPitchFlag` was false, writing a nonzero value into a field the flags
+ * declare as unused/invalid instead of the `0` the original actually had. */
 export function buildRawRgbDdsFile(
   width: number,
   height: number,
@@ -413,7 +430,9 @@ export function buildRawRgbDdsFile(
   aMask: number,
   pixelData: Uint8Array,
   hasPitchFlag: boolean,
-  pitchOrLinearSize: number
+  pitchOrLinearSize: number,
+  ddspfFlags = DDPF_RGB,
+  caps = 0x1000
 ): Uint8Array {
   const out = new Uint8Array(DDS_HEADER_SIZE + pixelData.length);
   const view = new DataView(out.buffer);
@@ -422,17 +441,17 @@ export function buildRawRgbDdsFile(
   view.setUint32(8, 0x1007 | (hasPitchFlag ? DDSD_PITCH : 0), true); // CAPS|HEIGHT|WIDTH|PIXELFORMAT[|PITCH]
   view.setUint32(12, height, true);
   view.setUint32(16, width, true);
-  view.setUint32(20, hasPitchFlag ? pitchOrLinearSize : pixelData.length, true); // pitchOrLinearSize
+  view.setUint32(20, hasPitchFlag ? pitchOrLinearSize : 0, true); // pitchOrLinearSize
   view.setUint32(24, 0, true); // depth
   view.setUint32(28, 0, true); // mipMapCount
   view.setUint32(76, 32, true); // ddspf.dwSize
-  view.setUint32(80, DDPF_RGB, true); // ddspf.dwFlags
+  view.setUint32(80, ddspfFlags, true); // ddspf.dwFlags
   view.setUint32(88, bitCount, true);
   view.setUint32(92, rMask, true);
   view.setUint32(96, gMask, true);
   view.setUint32(100, bMask, true);
   view.setUint32(104, aMask, true);
-  view.setUint32(108, 0x1000, true); // dwCaps = DDSCAPS_TEXTURE
+  view.setUint32(108, caps, true); // dwCaps
   out.set(pixelData, DDS_HEADER_SIZE);
   return out;
 }

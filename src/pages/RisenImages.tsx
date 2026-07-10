@@ -17,6 +17,7 @@ import {
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
 import { compositeIntoRegion, detectRegionBounds, type CompositeRect } from "@/lib/risen-image-composite";
+import { decodePngRawNoCanvas } from "@/lib/png-decode";
 
 const ACCENT = "#4a7c3f";
 
@@ -439,7 +440,7 @@ export default function RisenImages() {
     (original: ReturnType<typeof extractDdsFromXimg>, imageData: ImageData): { bytes: Uint8Array } | { error: string } => {
       if (isDxtFourCC(original.fourCC)) {
         const compressed = encodeDxt(original.fourCC, new Uint8Array(imageData.data), original.width, original.height);
-        return { bytes: buildDdsFile(original.fourCC, original.width, original.height, compressed) };
+        return { bytes: buildDdsFile(original.fourCC, original.width, original.height, compressed, original.caps) };
       }
       if (original.isRawRgb) {
         const pixelDataLength = original.ddsBytes.length - 128;
@@ -455,7 +456,8 @@ export default function RisenImages() {
           bytes: buildRawRgbDdsFile(
             original.width, original.height, original.rgbBitCount,
             original.rMask, original.gMask, original.bMask, original.aMask,
-            pixelData, original.hasPitchFlag, original.pitchOrLinearSize
+            pixelData, original.hasPitchFlag, original.pitchOrLinearSize,
+            original.ddspfFlags, original.caps
           ),
         };
       }
@@ -523,14 +525,27 @@ export default function RisenImages() {
       if (lowerName.endsWith(".dds")) {
         newDdsBytes = new Uint8Array(await importFile.arrayBuffer());
       } else {
-        const img = await loadImageElement(importFile);
-        const canvas = document.createElement("canvas");
-        canvas.width = original.width;
-        canvas.height = original.height;
-        const ctx = canvas.getContext("2d")!;
-        // Forced resize to match the original exactly, same convention as the WILAY tool.
-        ctx.drawImage(img, 0, 0, original.width, original.height);
-        const imageData = ctx.getImageData(0, 0, original.width, original.height);
+        const pngBytes = new Uint8Array(await importFile.arrayBuffer());
+        // Decode the PNG's own compressed pixel data directly when its size already
+        // matches the original exactly (the common "re-import the exported PNG"
+        // case) — avoids Canvas2D's drawImage+getImageData premultiplied-alpha
+        // rounding, confirmed (via a real corrupted game asset) to erode soft/
+        // antialiased alpha edges on every round-trip through canvas. Falls back to
+        // canvas below for actual resizes or PNG variants the decoder doesn't cover.
+        const directDecode = await decodePngRawNoCanvas(pngBytes);
+        let imageData: ImageData;
+        if (directDecode && directDecode.width === original.width && directDecode.height === original.height) {
+          imageData = new ImageData(directDecode.rgba, directDecode.width, directDecode.height);
+        } else {
+          const img = await loadImageElement(importFile);
+          const canvas = document.createElement("canvas");
+          canvas.width = original.width;
+          canvas.height = original.height;
+          const ctx = canvas.getContext("2d")!;
+          // Forced resize to match the original exactly, same convention as the WILAY tool.
+          ctx.drawImage(img, 0, 0, original.width, original.height);
+          imageData = ctx.getImageData(0, 0, original.width, original.height);
+        }
         const encoded = encodeToOriginalFormat(original, imageData);
         if ("error" in encoded) {
           toast.error(encoded.error);

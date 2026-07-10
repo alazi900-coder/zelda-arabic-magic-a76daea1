@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.28.2",
+    date: "2026-07-10",
+    changes: [
+      { kind: "added", text: "أداة صور Risen 1: يُنزَّل تلقائياً «تقرير تشخيصي» (ملف نصي) مع كل عملية استبدال ناجحة — يحتوي ترويسة DDS الأصلية والجديدة كاملةً (بما فيها علم DDPF_ALPHAPIXELS وdwCaps) وطريقة الاستيراد المستخدَمة، لتسهيل تشخيص أي فساد يظهر في اللعبة لاحقاً دون الحاجة لأدوات المطوّر في المتصفح." },
+    ],
+  },
+  {
     version: "1.28.1",
     date: "2026-07-10",
     changes: [

@@ -12,7 +12,7 @@ import {
 } from "@/lib/risen-images-pak";
 import {
   extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
-  encodeRawRgbDds, buildRawRgbDdsFile,
+  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader, describeDdsHeaderFlags,
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
@@ -521,9 +521,11 @@ export default function RisenImages() {
       const original = extractDdsFromXimg(originalXimg);
 
       let newDdsBytes: Uint8Array;
+      let importMethod: string;
       const lowerName = importFile.name.toLowerCase();
       if (lowerName.endsWith(".dds")) {
         newDdsBytes = new Uint8Array(await importFile.arrayBuffer());
+        importMethod = "استيراد DDS مباشر (بلا أي معالجة من الأداة)";
       } else {
         const pngBytes = new Uint8Array(await importFile.arrayBuffer());
         // Decode the PNG's own compressed pixel data directly when its size already
@@ -536,6 +538,7 @@ export default function RisenImages() {
         let imageData: ImageData;
         if (directDecode && directDecode.width === original.width && directDecode.height === original.height) {
           imageData = new ImageData(directDecode.rgba, directDecode.width, directDecode.height);
+          importMethod = "PNG — فك مباشر بدون Canvas (الأبعاد مطابقة)";
         } else {
           const img = await loadImageElement(importFile);
           const canvas = document.createElement("canvas");
@@ -545,6 +548,9 @@ export default function RisenImages() {
           // Forced resize to match the original exactly, same convention as the WILAY tool.
           ctx.drawImage(img, 0, 0, original.width, original.height);
           imageData = ctx.getImageData(0, 0, original.width, original.height);
+          importMethod = directDecode
+            ? `PNG — مرّ عبر Canvas (أبعاد PNG ${directDecode.width}x${directDecode.height} لا تطابق الأصل ${original.width}x${original.height})`
+            : "PNG — مرّ عبر Canvas (فشل الفك المباشر لصيغة PNG هذه)";
         }
         const encoded = encodeToOriginalFormat(original, imageData);
         if ("error" in encoded) {
@@ -553,6 +559,27 @@ export default function RisenImages() {
         }
         newDdsBytes = encoded.bytes;
       }
+
+      const newHeader = readDdsHeader(newDdsBytes);
+      const report = [
+        `تقرير تشخيصي — استبدال صورة Risen`,
+        `المسار: ${selectedEntry.path}`,
+        `الإزاحة داخل images.pak: ${selectedEntry.offset}   الحجم: ${selectedEntry.size}`,
+        `طريقة الاستيراد: ${importMethod}`,
+        ``,
+        `== الترويسة الأصلية (قبل الاستبدال) ==`,
+        describeDdsHeaderFlags(original),
+        ``,
+        `== الترويسة الجديدة (بعد الاستبدال) ==`,
+        describeDdsHeaderFlags(newHeader),
+        ``,
+        `== ملخص ==`,
+        `تطابق ddspf.dwFlags: ${original.ddspfFlags === newHeader.ddspfFlags ? "نعم" : `لا — تغيّر من 0x${original.ddspfFlags.toString(16)} إلى 0x${newHeader.ddspfFlags.toString(16)}`}`,
+        `تطابق dwCaps: ${original.caps === newHeader.caps ? "نعم" : `لا — تغيّر من 0x${original.caps.toString(16)} إلى 0x${newHeader.caps.toString(16)}`}`,
+        `طول بيانات DDS: أصلي=${original.ddsBytes.length} جديد=${newDdsBytes.length} (${original.ddsBytes.length === newDdsBytes.length ? "متطابق" : "غير متطابق!"})`,
+      ].join("\n");
+      const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
+      downloadText(report, `${shortName}-تقرير-تشخيصي.txt`);
 
       await applyReplacementDds(originalXimg, newDdsBytes);
     } catch (e) {

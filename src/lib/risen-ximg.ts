@@ -30,6 +30,7 @@ const DDS_SIZE_FIELD = 0x14;
 const DDS_HEADER_SIZE = 128; // "DDS " (4) + DDS_HEADER struct (124)
 
 const DDSD_PITCH = 0x8;
+const DDPF_ALPHAPIXELS = 0x1;
 const DDPF_FOURCC = 0x4;
 const DDPF_RGB = 0x40;
 
@@ -99,6 +100,22 @@ export function readDdsHeader(ddsBytes: Uint8Array): DdsHeaderInfo {
     hasPitchFlag: (headerFlags & DDSD_PITCH) !== 0,
     caps,
   };
+}
+
+/** Human-readable dump of the fields relevant to the alpha-flag corruption bug —
+ * used for the replace-diagnostic report so a user can share exact runtime values
+ * without needing browser devtools. */
+export function describeDdsHeaderFlags(h: DdsHeaderInfo): string {
+  const hasAlpha = (h.ddspfFlags & DDPF_ALPHAPIXELS) !== 0;
+  const hasRgb = (h.ddspfFlags & DDPF_RGB) !== 0;
+  return [
+    `الأبعاد: ${h.width}x${h.height}`,
+    `fourCC: ${h.fourCC || "(بدون)"}   rgbBitCount: ${h.rgbBitCount}`,
+    `ddspf.dwFlags: 0x${h.ddspfFlags.toString(16)}  (DDPF_ALPHAPIXELS: ${hasAlpha ? "موجود" : "غائب"}, DDPF_RGB: ${hasRgb ? "موجود" : "غائب"})`,
+    `dwCaps: 0x${h.caps.toString(16)}`,
+    `hasPitchFlag: ${h.hasPitchFlag}   pitchOrLinearSize: ${h.pitchOrLinearSize}`,
+    `الأقنعة (masks): R=0x${h.rMask.toString(16)} G=0x${h.gMask.toString(16)} B=0x${h.bMask.toString(16)} A=0x${h.aMask.toString(16)}`,
+  ].join("\n");
 }
 
 /** Locates and parses the embedded DDS blob inside a full .ximg file buffer. */

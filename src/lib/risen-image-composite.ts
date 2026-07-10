@@ -216,45 +216,57 @@ export function scaleRgbaContainFit(
 }
 
 /**
- * "Clone stamp": copies a `targetRect.w`×`targetRect.h` block from elsewhere
- * in the same image into `targetRect` — for erasing old text/art by covering
- * it with a clean, texture-matching patch from a nearby area, rather than
- * clearing to a flat color or full transparency (which risks showing the
- * wrong thing once the game composites its own layers underneath). The
- * source block is centered on `(sourceX, sourceY)` and clamped to stay fully
- * inside the image bounds, so a source point picked near an edge doesn't
- * sample outside the image. Pure typed-array copy — no Canvas involved, so
- * no premultiplied-alpha rounding. Returns a new array; `baseData` is never
- * mutated.
+ * Scales `src` to fill exactly `dstWidth`×`dstHeight` — stretching, not
+ * preserving aspect ratio (unlike `scaleRgbaContainFit`). Used for the erase
+ * tool: covering an old-text region with a same-shaped patch of clean
+ * background texture from *anywhere* in the image (any size/aspect ratio),
+ * where leaving letterbox padding would defeat the point — the whole target
+ * area must be covered. Same premultiplied-space bilinear interpolation as
+ * `scaleRgbaContainFit` (single rounding pass, no fully-transparent
+ * neighbor's arbitrary RGB bleeding into an edge pixel), just without the
+ * aspect-preserving offset/scale-clamping.
  */
-export function cloneStampRegion(
-  baseData: Uint8ClampedArray,
-  baseWidth: number,
-  baseHeight: number,
-  targetRect: CompositeRect,
-  sourceX: number,
-  sourceY: number
+export function scaleRgbaStretch(
+  src: Uint8ClampedArray,
+  srcWidth: number,
+  srcHeight: number,
+  dstWidth: number,
+  dstHeight: number
 ): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(baseData);
-  const srcX = Math.max(0, Math.min(baseWidth - targetRect.w, Math.round(sourceX - targetRect.w / 2)));
-  const srcY = Math.max(0, Math.min(baseHeight - targetRect.h, Math.round(sourceY - targetRect.h / 2)));
+  const out = new Uint8ClampedArray(dstWidth * dstHeight * 4);
+  if (srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0) return out;
 
-  for (let y = 0; y < targetRect.h; y++) {
-    const destY = targetRect.y + y;
-    if (destY < 0 || destY >= baseHeight) continue;
-    const srcRowY = srcY + y;
-    if (srcRowY < 0 || srcRowY >= baseHeight) continue;
-    for (let x = 0; x < targetRect.w; x++) {
-      const destX = targetRect.x + x;
-      if (destX < 0 || destX >= baseWidth) continue;
-      const srcRowX = srcX + x;
-      if (srcRowX < 0 || srcRowX >= baseWidth) continue;
-      const srcOff = (srcRowY * baseWidth + srcRowX) * 4;
-      const dstOff = (destY * baseWidth + destX) * 4;
-      out[dstOff] = baseData[srcOff];
-      out[dstOff + 1] = baseData[srcOff + 1];
-      out[dstOff + 2] = baseData[srcOff + 2];
-      out[dstOff + 3] = baseData[srcOff + 3];
+  const scaleX = dstWidth / srcWidth;
+  const scaleY = dstHeight / srcHeight;
+  const srcIdx = (x: number, y: number) => (y * srcWidth + x) * 4;
+
+  for (let dy = 0; dy < dstHeight; dy++) {
+    const sy = (dy + 0.5) / scaleY - 0.5;
+    const cy = Math.max(0, Math.min(srcHeight - 1, sy));
+    const y0 = Math.floor(cy), y1 = Math.min(y0 + 1, srcHeight - 1), fy = cy - y0;
+    for (let dx = 0; dx < dstWidth; dx++) {
+      const sx = (dx + 0.5) / scaleX - 0.5;
+      const cx = Math.max(0, Math.min(srcWidth - 1, sx));
+      const x0 = Math.floor(cx), x1 = Math.min(x0 + 1, srcWidth - 1), fx = cx - x0;
+
+      const p00 = srcIdx(x0, y0), p10 = srcIdx(x1, y0), p01 = srcIdx(x0, y1), p11 = srcIdx(x1, y1);
+      let pr = 0, pg = 0, pb = 0, pa = 0;
+      for (const [p, weight] of [
+        [p00, (1 - fx) * (1 - fy)], [p10, fx * (1 - fy)], [p01, (1 - fx) * fy], [p11, fx * fy],
+      ] as [number, number][]) {
+        const a = src[p + 3];
+        pa += a * weight;
+        pr += src[p] * a * weight;
+        pg += src[p + 1] * a * weight;
+        pb += src[p + 2] * a * weight;
+      }
+
+      const o = (dy * dstWidth + dx) * 4;
+      if (pa <= 0) continue; // stays transparent
+      out[o] = pr / pa;
+      out[o + 1] = pg / pa;
+      out[o + 2] = pb / pa;
+      out[o + 3] = pa;
     }
   }
   return out;

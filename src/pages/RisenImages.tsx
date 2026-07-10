@@ -18,7 +18,7 @@ import {
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
 import {
-  compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, cropRegion,
+  compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, scaleRgbaStretch, cropRegion,
   simulateNaiveBilinearPreview, findSuspiciousTransparentPixels, type CompositeRect,
 } from "@/lib/risen-image-composite";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
@@ -292,12 +292,19 @@ export default function RisenImages() {
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [compositeOverlayFile, setCompositeOverlayFile] = useState<File | null>(null);
   const [compositeOverlayImg, setCompositeOverlayImg] = useState<HTMLImageElement | null>(null);
-  // "Erase" step: clone-stamp a clean patch from elsewhere in the same image over
-  // selectionRect (e.g. the old English name) *before* pasting the new overlay —
-  // safer than clearing to a flat color or full transparency, since it's unknown
-  // what the game would composite underneath a fully transparent region.
+  // "Erase" step: covers selectionRect (e.g. the old English name) with a
+  // scaled copy of a clean patch dragged from ANY size/position elsewhere in
+  // the same image, *before* pasting the new overlay — safer than clearing to
+  // a flat color or full transparency, since it's unknown what the game
+  // would composite underneath a fully transparent region. The source rect
+  // does NOT need to match selectionRect's size — it's scaled to fit.
   const [pickingEraseSource, setPickingEraseSource] = useState(false);
-  const [eraseSourcePoint, setEraseSourcePoint] = useState<{ x: number; y: number } | null>(null);
+  const [eraseSourceRect, setEraseSourceRect] = useState<CompositeRect | null>(null);
+  // Lets an already-defined selectionRect be dragged to a new position (from
+  // a mousedown *inside* its bounds) instead of always starting a fresh
+  // selection — so the same spot can be reused for pasting the new overlay
+  // after erasing without having to re-detect/re-drag it from scratch.
+  const [movingSelectionOffset, setMovingSelectionOffset] = useState<{ dx: number; dy: number } | null>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeOverlayInputRef = useRef<HTMLInputElement>(null);
   /** 1 = actual pixel size. The canvas's internal drawing buffer always stays
@@ -835,7 +842,8 @@ export default function RisenImages() {
     setCompositeOverlayImg(null);
     setCompositeZoom(1);
     setPickingEraseSource(false);
-    setEraseSourcePoint(null);
+    setEraseSourceRect(null);
+    setMovingSelectionOffset(null);
   }, []);
 
   const handleCompositeOverlayChosen = useCallback(async (f: File) => {
@@ -889,19 +897,17 @@ export default function RisenImages() {
       ctx.lineWidth = Math.max(1, Math.round(selectedDecoded.width / 250));
       ctx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
     }
-    if (eraseSourcePoint && selectionRect && selectionRect.w > 0 && selectionRect.h > 0) {
-      // Show the *exact* block that will be sampled (same size as the target rect,
-      // centered on the picked/dragged point) — lets the user see and avoid
-      // overlapping a neighboring atlas element before committing the erase.
-      const srcX = Math.max(0, Math.min(selectedDecoded.width - selectionRect.w, Math.round(eraseSourcePoint.x - selectionRect.w / 2)));
-      const srcY = Math.max(0, Math.min(selectedDecoded.height - selectionRect.h, Math.round(eraseSourcePoint.y - selectionRect.h / 2)));
+    if (eraseSourceRect && eraseSourceRect.w > 0 && eraseSourceRect.h > 0) {
+      // Show the exact block being dragged out as the erase source — any
+      // size, scaled to fit selectionRect when applied — so the user can see
+      // and avoid overlapping a neighboring atlas element before committing.
       ctx.strokeStyle = "#f97316";
       ctx.lineWidth = Math.max(1, Math.round(selectedDecoded.width / 250));
       ctx.setLineDash([4, 3]);
-      ctx.strokeRect(srcX, srcY, selectionRect.w, selectionRect.h);
+      ctx.strokeRect(eraseSourceRect.x, eraseSourceRect.y, eraseSourceRect.w, eraseSourceRect.h);
       ctx.setLineDash([]);
     }
-  }, [compositeMode, selectedDecoded, selectionRect, compositeOverlayImg, compositeBaseImageData, eraseSourcePoint]);
+  }, [compositeMode, selectedDecoded, selectionRect, compositeOverlayImg, compositeBaseImageData, eraseSourceRect]);
 
   const getImagePixelCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
     const canvas = compositeCanvasRef.current;
@@ -923,25 +929,50 @@ export default function RisenImages() {
     if (!p) return;
     if (pickingEraseSource) {
       // Reuses `dragStart` purely as an "is dragging" flag here — mutually
-      // exclusive with the normal selection-drag path below (gated on
-      // `pickingEraseSource`), so there's no interference between the two.
-      setEraseSourcePoint(p);
+      // exclusive with the other drag paths below (gated on `pickingEraseSource`).
+      setDragStart(p);
+      setEraseSourceRect({ x: p.x, y: p.y, w: 0, h: 0 });
+      return;
+    }
+    // A mousedown *inside* the existing selection moves it as a whole (same
+    // size, new position) instead of starting a fresh selection — lets the
+    // same target spot be repositioned without re-detecting/re-dragging it.
+    if (
+      selectionRect && selectionRect.w > 0 && selectionRect.h > 0 &&
+      p.x >= selectionRect.x && p.x <= selectionRect.x + selectionRect.w &&
+      p.y >= selectionRect.y && p.y <= selectionRect.y + selectionRect.h
+    ) {
+      setMovingSelectionOffset({ dx: p.x - selectionRect.x, dy: p.y - selectionRect.y });
       setDragStart(p);
       return;
     }
     setDragStart(p);
     setSelectionRect({ x: p.x, y: p.y, w: 0, h: 0 });
-  }, [getImagePixelCoords, pickingEraseSource]);
+  }, [getImagePixelCoords, pickingEraseSource, selectionRect]);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!dragStart) return;
     const p = getImagePixelCoords(e);
     if (!p) return;
     if (pickingEraseSource) {
-      // Live-follows the cursor while dragging — the redraw effect shows the
-      // exact block that would be sampled, so the user can dodge a neighboring
-      // atlas element before releasing instead of guessing from a single click.
-      setEraseSourcePoint(p);
+      // Free-size drag (any size, not forced to match the target rect) — the
+      // redraw effect shows the exact block, scaled to fit on apply.
+      setEraseSourceRect({
+        x: Math.min(dragStart.x, p.x),
+        y: Math.min(dragStart.y, p.y),
+        w: Math.abs(p.x - dragStart.x),
+        h: Math.abs(p.y - dragStart.y),
+      });
+      return;
+    }
+    if (movingSelectionOffset && selectionRect && selectedDecoded?.kind === "ok") {
+      const maxX = Math.max(0, selectedDecoded.width - selectionRect.w);
+      const maxY = Math.max(0, selectedDecoded.height - selectionRect.h);
+      setSelectionRect({
+        ...selectionRect,
+        x: Math.max(0, Math.min(maxX, p.x - movingSelectionOffset.dx)),
+        y: Math.max(0, Math.min(maxY, p.y - movingSelectionOffset.dy)),
+      });
       return;
     }
     setSelectionRect({
@@ -950,7 +981,7 @@ export default function RisenImages() {
       w: Math.abs(p.x - dragStart.x),
       h: Math.abs(p.y - dragStart.y),
     });
-  }, [dragStart, getImagePixelCoords, pickingEraseSource]);
+  }, [dragStart, getImagePixelCoords, pickingEraseSource, movingSelectionOffset, selectionRect, selectedDecoded]);
 
   /** Mouse-up ends a drag; but if the pointer barely moved since mouse-down,
    * treat it as a plain click and auto-detect the region under it instead of
@@ -959,11 +990,14 @@ export default function RisenImages() {
    * that's just an aborted drag, handled by the separate handler below. */
   const handleCanvasMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const start = dragStart;
+    const wasMovingSelection = !!movingSelectionOffset;
     setDragStart(null);
+    setMovingSelectionOffset(null);
     if (pickingEraseSource) {
-      setPickingEraseSource(false); // eraseSourcePoint already reflects the final drag position.
+      setPickingEraseSource(false); // eraseSourceRect already reflects the final drag.
       return;
     }
+    if (wasMovingSelection) return; // just repositioned the existing rect — nothing more to do.
     if (!start || !compositeBaseImageData || selectedDecoded?.kind !== "ok") return;
     const p = getImagePixelCoords(e);
     if (!p) return;
@@ -971,22 +1005,26 @@ export default function RisenImages() {
     if (movedFarEnoughToBeADrag) return; // selectionRect was already set live by mousemove.
     const detected = detectRegionBounds(compositeBaseImageData.data, selectedDecoded.width, selectedDecoded.height, start.x, start.y);
     setSelectionRect(detected);
-  }, [dragStart, getImagePixelCoords, compositeBaseImageData, selectedDecoded, pickingEraseSource]);
+  }, [dragStart, movingSelectionOffset, getImagePixelCoords, compositeBaseImageData, selectedDecoded, pickingEraseSource]);
 
-  const handleCanvasMouseLeave = useCallback(() => setDragStart(null), []);
+  const handleCanvasMouseLeave = useCallback(() => { setDragStart(null); setMovingSelectionOffset(null); }, []);
 
-  /** Clone-stamps a clean patch from `eraseSourcePoint` over `selectionRect` —
-   * bakes the erase directly into `compositeBaseImageData` so it becomes the
-   * new base for the overlay paste step that follows. */
+  /** Samples `eraseSourceRect` (any size/position), scales it to fit
+   * `selectionRect` exactly (stretch-fill, no letterbox padding — the whole
+   * target must be covered), and bakes the result directly into
+   * `compositeBaseImageData` so it becomes the new base for the overlay
+   * paste step that follows. */
   const handleApplyErase = useCallback(() => {
-    if (!compositeBaseImageData || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || !eraseSourcePoint) return;
-    const erased = cloneStampRegion(
-      compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height,
-      selectionRect, eraseSourcePoint.x, eraseSourcePoint.y
-    );
+    if (
+      !compositeBaseImageData || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 ||
+      !eraseSourceRect || eraseSourceRect.w <= 0 || eraseSourceRect.h <= 0
+    ) return;
+    const cropped = cropRegion(compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height, eraseSourceRect);
+    const scaled = scaleRgbaStretch(cropped, eraseSourceRect.w, eraseSourceRect.h, selectionRect.w, selectionRect.h);
+    const erased = compositeIntoRegion(compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height, scaled, selectionRect);
     setCompositeBaseImageData(new ImageData(erased, compositeBaseImageData.width, compositeBaseImageData.height));
-    setEraseSourcePoint(null);
-  }, [compositeBaseImageData, selectionRect, eraseSourcePoint]);
+    setEraseSourceRect(null);
+  }, [compositeBaseImageData, selectionRect, eraseSourceRect]);
 
   /** Exports just the currently selected rect as its own small PNG (full
    * quality/transparency, no Canvas) — for editing a single atlas element
@@ -1232,7 +1270,7 @@ export default function RisenImages() {
             </div>
           </div>
           <div className="text-xs text-muted-foreground px-3 pt-2">
-            انقر على الشعار/العنصر لاكتشاف حدوده تلقائياً — أو اسحب لتحديد يدوي. Ctrl/⌘ + عجلة الفأرة للتكبير، والتمرير العادي للتنقل.
+            انقر على الشعار/العنصر لاكتشاف حدوده تلقائياً — أو اسحب لتحديد يدوي، أو اسحب من داخل التحديد الحالي لتحريكه. Ctrl/⌘ + عجلة الفأرة للتكبير، والتمرير العادي للتنقل.
           </div>
           <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-3 p-3">
             <div
@@ -1274,7 +1312,7 @@ export default function RisenImages() {
               <div className="flex flex-col gap-1.5 p-2 rounded border border-border bg-muted/30">
                 <div className="text-[11px] font-medium">🧹 مسح المحتوى القديم من هذه المنطقة (اختياري)</div>
                 <p className="text-[10px] text-muted-foreground">
-                  بعد تحديد منطقة الاسم/النص القديم أعلاه، اسحب مربعاً بنفس حجمها فوق منطقة نظيفة من نفس الصورة (سترى المربع يتحرك مباشرة قبل الإفلات) لنسخ نسيجها فوق المنطقة القديمة قبل لصق الاسم الجديد.
+                  بعد تحديد منطقة الاسم/النص القديم أعلاه، اسحب مربعاً بأي حجم فوق منطقة نظيفة من نفس الصورة (مفيد للصور الكبيرة كالخرائط حيث لا تتوفر مساحة فارغة بنفس حجم الهدف) — تُحجَّم تلقائياً وباحتراف لتغطية المنطقة القديمة بالكامل. يمكنك أيضاً السحب من داخل المربع الأخضر نفسه لتحريكه لمكان آخر قبل المسح أو اللصق.
                 </p>
                 <Button
                   size="sm"
@@ -1283,16 +1321,16 @@ export default function RisenImages() {
                   disabled={!selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0}
                 >
                   <Target className="w-3.5 h-3.5 ml-1" />
-                  {pickingEraseSource ? "اسحب الآن مربعاً فوق منطقة نظيفة…" : "اسحب لتحديد نقطة مصدر نظيفة"}
+                  {pickingEraseSource ? "اسحب الآن مربعاً (أي حجم) فوق منطقة نظيفة…" : "اسحب لتحديد منطقة مصدر نظيفة"}
                 </Button>
-                {eraseSourcePoint && (
-                  <div className="text-[10px] text-muted-foreground text-center font-mono">نقطة المصدر: {eraseSourcePoint.x}, {eraseSourcePoint.y}</div>
+                {eraseSourceRect && eraseSourceRect.w > 0 && eraseSourceRect.h > 0 && (
+                  <div className="text-[10px] text-muted-foreground text-center font-mono">منطقة المصدر: {eraseSourceRect.w}×{eraseSourceRect.h} عند ({eraseSourceRect.x}, {eraseSourceRect.y})</div>
                 )}
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={handleApplyErase}
-                  disabled={!eraseSourcePoint || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0}
+                  disabled={!eraseSourceRect || eraseSourceRect.w <= 0 || eraseSourceRect.h <= 0 || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0}
                 >
                   <Eraser className="w-3.5 h-3.5 ml-1" /> تطبيق المسح
                 </Button>

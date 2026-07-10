@@ -3,7 +3,7 @@ import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import ChangelogCard from "@/components/ChangelogCard";
 import xc3Bg from "@/assets/xc3-hero-bg.jpg";
-import risenBg from "@/assets/risen-hero-bg.svg";
+import risenBg from "@/assets/risen-hero-bg.jpg";
 
 const games = [
   {

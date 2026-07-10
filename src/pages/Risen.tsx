@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sparkles, ArrowRight, AlertTriangle } from "lucide-react";
 import GameInfoSection from "@/components/GameInfoSection";
+import risenBg from "@/assets/risen-hero-bg.jpg";
 
 const ACCENT = "#4a7c3f";
 const SECONDARY = "#c9a24d";
@@ -13,11 +14,24 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
       {/* Hero */}
       <header
         className="relative flex flex-col items-center justify-center min-h-[70vh] px-4 text-center overflow-hidden"
-        style={{
-          background:
-            "radial-gradient(ellipse at top, rgba(74,124,63,0.25), transparent 60%), linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)))",
-        }}
       >
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: `url(${risenBg})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            background:
+              "linear-gradient(to bottom, hsl(var(--background)/0.55), hsl(var(--background)/0.85) 70%, hsl(var(--background)))",
+          }}
+          aria-hidden
+        />
         <div className="relative z-10 max-w-2xl mx-auto">
           <div
             className="inline-flex items-center gap-2 mb-6 px-4 py-2 rounded-full bg-background/60 backdrop-blur-md border"

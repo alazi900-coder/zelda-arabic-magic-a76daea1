@@ -73,7 +73,7 @@ async function deflateZlib(data: Uint8Array): Promise<Uint8Array | null> {
         controller.close();
       },
     });
-    const stream = readable.pipeThrough(cs);
+    const stream = readable.pipeThrough(cs as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
     const buf = await new Response(stream).arrayBuffer();
     return new Uint8Array(buf);
   } catch {

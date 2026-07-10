@@ -76,7 +76,7 @@ async function inflateZlib(data: Uint8Array): Promise<Uint8Array | null> {
         controller.close();
       },
     });
-    const stream = readable.pipeThrough(ds);
+    const stream = readable.pipeThrough(ds as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
     const buf = await new Response(stream).arrayBuffer();
     return new Uint8Array(buf);
   } catch {

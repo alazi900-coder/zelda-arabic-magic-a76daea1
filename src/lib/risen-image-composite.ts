@@ -25,7 +25,7 @@ export interface CompositeRect {
 /**
  * `baseData` is the full base image's RGBA bytes (baseWidth*baseHeight*4).
  * `overlayData` must be exactly `rect.w*rect.h*4` bytes (already scaled to
- * fit the rect — scaling itself still needs a canvas, done by the caller).
+ * fit the rect — see `scaleRgbaContainFit` below for a canvas-free scaler).
  * Returns a new array; `baseData` is never mutated. Any part of `rect` that
  * falls outside the base image bounds is silently clipped.
  */
@@ -141,4 +141,76 @@ export function detectRegionBounds(
   const h = maxY - minY + 1;
   if (w > width * 0.9 && h > height * 0.9) return null; // near-whole-image flood — background mistaken for foreground.
   return { x: minX, y: minY, w, h };
+}
+
+/**
+ * Scales `src` to fit inside a `dstWidth`×`dstHeight` box without distorting
+ * its aspect ratio (centered, transparent padding on the shorter axis) —
+ * same "contain fit" behavior the composite tool needs, but computed with
+ * plain typed-array math instead of `ctx.drawImage()` + `ctx.getImageData()`.
+ *
+ * Confirmed via a real in-game screenshot that the canvas path corrupts
+ * pixels here too (irregular black blobs on a shared UI texture, appearing
+ * even when compositing the *unmodified* overlay) — the same premultiplied-
+ * alpha rounding already fixed for the plain-replace PNG path. Interpolates
+ * in premultiplied space (so a fully-transparent neighbor's arbitrary RGB
+ * never bleeds into a semi-transparent edge pixel) but does it in one
+ * floating-point pass with a single rounding step at the end, avoiding the
+ * repeated 8-bit round-trips Canvas2D's internal backing store does.
+ */
+export function scaleRgbaContainFit(
+  src: Uint8ClampedArray,
+  srcWidth: number,
+  srcHeight: number,
+  dstWidth: number,
+  dstHeight: number
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(dstWidth * dstHeight * 4); // zero-filled = transparent padding
+  if (srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0) return out;
+
+  const scale = Math.min(dstWidth / srcWidth, dstHeight / srcHeight);
+  const drawW = srcWidth * scale;
+  const drawH = srcHeight * scale;
+  const offsetX = (dstWidth - drawW) / 2;
+  const offsetY = (dstHeight - drawH) / 2;
+
+  const srcIdx = (x: number, y: number) => (y * srcWidth + x) * 4;
+
+  for (let dy = 0; dy < dstHeight; dy++) {
+    const sy = (dy + 0.5 - offsetY) / scale - 0.5;
+    if (sy < -0.5 || sy > srcHeight - 0.5) continue;
+    const cy = Math.max(0, Math.min(srcHeight - 1, sy));
+    const y0 = Math.floor(cy);
+    const y1 = Math.min(y0 + 1, srcHeight - 1);
+    const fy = cy - y0;
+
+    for (let dx = 0; dx < dstWidth; dx++) {
+      const sx = (dx + 0.5 - offsetX) / scale - 0.5;
+      if (sx < -0.5 || sx > srcWidth - 0.5) continue;
+      const cx = Math.max(0, Math.min(srcWidth - 1, sx));
+      const x0 = Math.floor(cx);
+      const x1 = Math.min(x0 + 1, srcWidth - 1);
+      const fx = cx - x0;
+
+      const p00 = srcIdx(x0, y0), p10 = srcIdx(x1, y0), p01 = srcIdx(x0, y1), p11 = srcIdx(x1, y1);
+      let pr = 0, pg = 0, pb = 0, pa = 0;
+      for (const [p, weight] of [
+        [p00, (1 - fx) * (1 - fy)], [p10, fx * (1 - fy)], [p01, (1 - fx) * fy], [p11, fx * fy],
+      ] as [number, number][]) {
+        const a = src[p + 3];
+        pa += a * weight;
+        pr += src[p] * a * weight;
+        pg += src[p + 1] * a * weight;
+        pb += src[p + 2] * a * weight;
+      }
+
+      const o = (dy * dstWidth + dx) * 4;
+      if (pa <= 0) continue; // stays transparent
+      out[o] = pr / pa;
+      out[o + 1] = pg / pa;
+      out[o + 2] = pb / pa;
+      out[o + 3] = pa;
+    }
+  }
+  return out;
 }

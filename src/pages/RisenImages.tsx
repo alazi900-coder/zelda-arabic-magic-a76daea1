@@ -16,7 +16,7 @@ import {
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
-import { compositeIntoRegion, detectRegionBounds, type CompositeRect } from "@/lib/risen-image-composite";
+import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, type CompositeRect } from "@/lib/risen-image-composite";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
 
 const ACCENT = "#4a7c3f";
@@ -799,7 +799,7 @@ export default function RisenImages() {
   }, [selectedDecoded]);
 
   const handleCompositeConfirm = useCallback(async () => {
-    if (!selectedEntry || !file || !compositeOverlayImg || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || !compositeBaseImageData) return;
+    if (!selectedEntry || !file || !compositeOverlayImg || !compositeOverlayFile || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || !compositeBaseImageData) return;
     const { toast } = await import("sonner");
     setBusyPath(selectedEntry.path);
     try {
@@ -807,11 +807,32 @@ export default function RisenImages() {
       const originalXimg = new Uint8Array(originalBuf);
       const original = extractDdsFromXimg(originalXimg);
 
+      // Scale the overlay without Canvas2D when possible — confirmed via a real
+      // in-game screenshot that ctx.drawImage()+getImageData() (the old
+      // getScaledImageRgba path) corrupts pixels here too (irregular black
+      // blobs on a shared UI texture, appearing even with the *unmodified*
+      // overlay), the same premultiplied-alpha rounding already fixed for the
+      // plain-replace PNG path. Falls back to canvas for overlay formats
+      // decodePngRawNoCanvas doesn't cover.
+      const overlayBytes = new Uint8Array(await compositeOverlayFile.arrayBuffer());
+      const overlayDirectDecode = await decodePngRawNoCanvas(overlayBytes);
+      let overlayScaleMethod: string;
+      let overlayData: Uint8ClampedArray;
+      if (overlayDirectDecode) {
+        overlayData = scaleRgbaContainFit(
+          overlayDirectDecode.rgba, overlayDirectDecode.width, overlayDirectDecode.height,
+          selectionRect.w, selectionRect.h
+        );
+        overlayScaleMethod = "تحجيم مباشر بدون Canvas";
+      } else {
+        overlayData = getScaledImageRgba(compositeOverlayImg, selectionRect.w, selectionRect.h);
+        overlayScaleMethod = "تحجيم عبر Canvas (فشل الفك المباشر لصيغة صورة التركيب هذه)";
+      }
+
       // Pure array splice (see risen-image-composite.ts) instead of a second
       // canvas draw+getImageData round-trip — that path was found (via browser
       // testing) to round semi-transparent pixels by ±1 across the WHOLE image,
       // not just the edited region, due to Canvas2D's premultiplied-alpha storage.
-      const overlayData = getScaledImageRgba(compositeOverlayImg, selectionRect.w, selectionRect.h);
       const composited = compositeIntoRegion(compositeBaseImageData.data, original.width, original.height, overlayData, selectionRect);
       const imageData = new ImageData(composited, original.width, original.height);
 
@@ -821,6 +842,28 @@ export default function RisenImages() {
         return;
       }
 
+      const newHeader = readDdsHeader(encoded.bytes);
+      const report = [
+        `تقرير تشخيصي — تركيب صورة Risen`,
+        `المسار: ${selectedEntry.path}`,
+        `الإزاحة داخل images.pak: ${selectedEntry.offset}   الحجم: ${selectedEntry.size}`,
+        `منطقة التركيب: x=${selectionRect.x} y=${selectionRect.y} w=${selectionRect.w} h=${selectionRect.h}`,
+        `طريقة تحجيم صورة التركيب: ${overlayScaleMethod}`,
+        ``,
+        `== الترويسة الأصلية (قبل التركيب) ==`,
+        describeDdsHeaderFlags(original),
+        ``,
+        `== الترويسة الجديدة (بعد التركيب) ==`,
+        describeDdsHeaderFlags(newHeader),
+        ``,
+        `== ملخص ==`,
+        `تطابق ddspf.dwFlags: ${original.ddspfFlags === newHeader.ddspfFlags ? "نعم" : `لا — تغيّر من 0x${original.ddspfFlags.toString(16)} إلى 0x${newHeader.ddspfFlags.toString(16)}`}`,
+        `تطابق dwCaps: ${original.caps === newHeader.caps ? "نعم" : `لا — تغيّر من 0x${original.caps.toString(16)} إلى 0x${newHeader.caps.toString(16)}`}`,
+        `طول بيانات DDS: أصلي=${original.ddsBytes.length} جديد=${encoded.bytes.length} (${original.ddsBytes.length === encoded.bytes.length ? "متطابق" : "غير متطابق!"})`,
+      ].join("\n");
+      const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
+      downloadText(report, `${shortName}-تركيب-تقرير-تشخيصي.txt`);
+
       await applyReplacementDds(originalXimg, encoded.bytes);
       exitCompositeMode();
     } catch (e) {
@@ -828,7 +871,7 @@ export default function RisenImages() {
     } finally {
       setBusyPath(null);
     }
-  }, [selectedEntry, file, compositeOverlayImg, selectionRect, compositeBaseImageData, encodeToOriginalFormat, applyReplacementDds, exitCompositeMode]);
+  }, [selectedEntry, file, compositeOverlayImg, compositeOverlayFile, selectionRect, compositeBaseImageData, encodeToOriginalFormat, applyReplacementDds, exitCompositeMode]);
 
   // ==========================================================================
 

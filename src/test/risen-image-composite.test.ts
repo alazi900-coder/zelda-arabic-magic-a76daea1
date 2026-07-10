@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compositeIntoRegion, detectRegionBounds } from "@/lib/risen-image-composite";
+import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit } from "@/lib/risen-image-composite";
 
 /** Builds a 4-byte-per-pixel RGBA buffer where each pixel is `(x, y, x+y, alpha)`
  * — a value distinct enough per position to catch any off-by-one/misindexing bug. */
@@ -152,5 +152,50 @@ describe("detectRegionBounds", () => {
     const img = buildBlobImage(10, 10, [0, 0, 0, 0], { x: 2, y: 2, w: 2, h: 2 }, [255, 0, 0, 255]);
     expect(detectRegionBounds(img, 10, 10, -1, 5)).toBeNull();
     expect(detectRegionBounds(img, 10, 10, 5, 10)).toBeNull();
+  });
+});
+
+describe("scaleRgbaContainFit", () => {
+  it("copies a same-size opaque image through unchanged (identity scale)", () => {
+    const src = buildTestImage(4, 4, 255);
+    const out = scaleRgbaContainFit(src, 4, 4, 4, 4);
+    expect(Array.from(out)).toEqual(Array.from(src));
+  });
+
+  it("letterboxes with fully-transparent padding when the aspect ratio doesn't match the target box", () => {
+    // 2x2 opaque source into a 4x2 box — scale=1, centered horizontally, 1px transparent padding each side.
+    const src = new Uint8ClampedArray(2 * 2 * 4).map((_, i) => (i % 4 === 3 ? 255 : 200));
+    const out = scaleRgbaContainFit(src, 2, 2, 4, 2);
+    for (const [x, y] of [[0, 0], [0, 1], [3, 0], [3, 1]]) {
+      const o = (y * 4 + x) * 4;
+      expect(out[o + 3]).toBe(0); // padding column is fully transparent
+    }
+    for (const [x, y] of [[1, 0], [1, 1], [2, 0], [2, 1]]) {
+      const o = (y * 4 + x) * 4;
+      expect(out[o + 3]).toBe(255); // source content column is opaque
+    }
+  });
+
+  it("never leaks a fully-transparent neighbor's arbitrary RGB into a semi-transparent edge pixel", () => {
+    // Left pixel: alpha=0 with garbage/"wrong" RGB (255,255,255) — a common PNG export
+    // quirk. Right pixel: alpha=255, RGB=(0,0,0). Upscaling 2x1 -> 4x1 must not blend
+    // the garbage white into the semi-transparent interpolated pixel's color.
+    const src = new Uint8ClampedArray([255, 255, 255, 0, 0, 0, 0, 255]);
+    const out = scaleRgbaContainFit(src, 2, 1, 4, 1);
+    for (let x = 0; x < 4; x++) {
+      const o = x * 4;
+      if (out[o + 3] > 0 && out[o + 3] < 255) {
+        // Premultiplied-space interpolation: color must stay near the opaque
+        // pixel's own (0,0,0), never pulled toward the transparent pixel's (255,255,255).
+        expect(out[o]).toBeLessThan(50);
+        expect(out[o + 1]).toBeLessThan(50);
+        expect(out[o + 2]).toBeLessThan(50);
+      }
+    }
+  });
+
+  it("returns an all-transparent buffer for degenerate (zero) dimensions instead of throwing", () => {
+    const out = scaleRgbaContainFit(new Uint8ClampedArray(4), 1, 1, 0, 5);
+    expect(out.length).toBe(0);
   });
 });

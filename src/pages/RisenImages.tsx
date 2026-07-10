@@ -17,7 +17,10 @@ import {
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
-import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, cropRegion, type CompositeRect } from "@/lib/risen-image-composite";
+import {
+  compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, cropRegion,
+  simulateNaiveBilinearPreview, findSuspiciousTransparentPixels, type CompositeRect,
+} from "@/lib/risen-image-composite";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
 import { encodePngRawNoCanvas } from "@/lib/png-encode";
 
@@ -267,6 +270,12 @@ export default function RisenImages() {
   const [selectedDecoded, setSelectedDecoded] = useState<ThumbResult | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
   const [decodedCache, setDecodedCache] = useState<Map<string, ThumbResult>>(new Map());
+  // "In-game-like" approximation preview toggles (see risen-image-composite.ts docblocks) —
+  // deliberately targets the exact corruption class confirmed this session, not a
+  // real emulation of Risen's renderer.
+  const [previewNaiveFilter, setPreviewNaiveFilter] = useState(false);
+  const [previewSuspicious, setPreviewSuspicious] = useState(false);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [modifiedLog, setModifiedLog] = useState<Map<string, ModifiedRecord>>(new Map());
   const firstWriteConfirmedRef = useRef(false);
@@ -428,6 +437,48 @@ export default function RisenImages() {
     () => flatFiles.find((f) => f.path === selectedPath) || null,
     [flatFiles, selectedPath]
   );
+
+  // Renders the "in-game-like" approximation preview into previewCanvasRef when
+  // either toggle is active — decodes fresh (canvas-free) rather than reusing the
+  // cached dataUrl, since these transforms need raw RGBA access.
+  useEffect(() => {
+    if (!previewNaiveFilter && !previewSuspicious) return;
+    if (!selectedEntry || !file || selectedDecoded?.kind !== "ok") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const buf = await file.slice(selectedEntry.offset, selectedEntry.offset + selectedEntry.size).arrayBuffer();
+        const { ddsBytes } = extractDdsFromXimg(new Uint8Array(buf));
+        const decoded = decodeDdsToRgba(ddsBytes);
+        if (cancelled || !decoded.supported) return;
+
+        let rgba = new Uint8ClampedArray(decoded.rgba);
+        let width = decoded.width;
+        let height = decoded.height;
+        if (previewNaiveFilter) {
+          const filtered = simulateNaiveBilinearPreview(rgba, width, height, 0.5);
+          rgba = filtered.rgba;
+          width = filtered.width;
+          height = filtered.height;
+        }
+        if (previewSuspicious) {
+          for (const { x, y } of findSuspiciousTransparentPixels(rgba, width, height)) {
+            const o = (y * width + x) * 4;
+            rgba[o] = 255; rgba[o + 1] = 0; rgba[o + 2] = 255; rgba[o + 3] = 255; // warning magenta
+          }
+        }
+
+        const canvas = previewCanvasRef.current;
+        if (!canvas || cancelled) return;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.putImageData(new ImageData(rgba, width, height), 0, 0);
+      } catch { /* non-critical preview feature — leave canvas blank on failure */ }
+    })();
+    return () => { cancelled = true; };
+  }, [previewNaiveFilter, previewSuspicious, selectedEntry, file, selectedDecoded]);
 
   /** Opens a single loose .dds file directly — no images.pak needed. Wraps it
    * in a minimal synthetic .ximg (wrapRawDdsAsXimg) and registers it as the
@@ -1378,11 +1429,18 @@ export default function RisenImages() {
           ) : (
             <>
               <div className="font-mono text-xs text-muted-foreground break-all">{selectedEntry.path}</div>
-              <div className="w-full aspect-square rounded bg-muted/40 flex items-center justify-center overflow-hidden">
+              <div
+                className="w-full aspect-square rounded flex items-center justify-center overflow-hidden"
+                style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}
+              >
                 {selectedLoading ? (
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 ) : selectedDecoded?.kind === "ok" ? (
-                  <img src={selectedDecoded.dataUrl} alt="" className="max-w-full max-h-full object-contain" style={{ imageRendering: "pixelated" }} />
+                  previewNaiveFilter || previewSuspicious ? (
+                    <canvas ref={previewCanvasRef} className="max-w-full max-h-full object-contain" style={{ imageRendering: "pixelated" }} />
+                  ) : (
+                    <img src={selectedDecoded.dataUrl} alt="" className="max-w-full max-h-full object-contain" style={{ imageRendering: "pixelated" }} />
+                  )
                 ) : selectedDecoded?.kind === "unsupported" ? (
                   <div className="text-center text-xs text-muted-foreground p-3 space-y-1.5">
                     <ImageOff className="w-6 h-6 mx-auto" />
@@ -1418,6 +1476,29 @@ export default function RisenImages() {
                   </div>
                 );
               })()}
+
+              {selectedDecoded?.kind === "ok" && (
+                <div className="flex flex-col gap-1.5 p-2 rounded border border-border bg-muted/30">
+                  <div className="text-[11px] font-medium">🎮 معاينة تقريبية (ليست اللعبة الحقيقية)</div>
+                  <Button
+                    size="sm"
+                    variant={previewNaiveFilter ? "default" : "outline"}
+                    onClick={() => setPreviewNaiveFilter((v) => !v)}
+                  >
+                    🔍 محاكاة تنعيم كرت الشاشة
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={previewSuspicious ? "default" : "outline"}
+                    onClick={() => setPreviewSuspicious((v) => !v)}
+                  >
+                    ⚠️ تمييز البكسلات المشبوهة
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">
+                    تقريب يستهدف نفس نوع الخلل الذي واجهناه (تسرّب لون أسود عند الحواف) — وليس ضماناً بمطابقة اللعبة الحقيقية.
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2">
                 <Button size="sm" variant="outline" onClick={handleExportPng} disabled={selectedDecoded?.kind !== "ok"}>

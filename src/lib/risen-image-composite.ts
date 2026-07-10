@@ -291,3 +291,104 @@ export function cropRegion(
   }
   return out;
 }
+
+/**
+ * "In-game-like" approximation preview #1: resizes with plain per-channel
+ * bilinear interpolation — deliberately WITHOUT the premultiplied-alpha-safe
+ * handling `scaleRgbaContainFit` uses. This is the opposite of that function
+ * on purpose: it simulates what a naive (non-premultiplied-aware) GPU texture
+ * sampler would show, so a "safe" border color hidden behind alpha=0 that got
+ * zeroed out by a lossy tool becomes visibly wrong (black fringing) here
+ * *before* injecting into the game, instead of only being discoverable by
+ * actually launching Risen. This does NOT reproduce Risen's real renderer —
+ * it targets specifically the corruption class already confirmed this
+ * session (canvas.toDataURL zeroing transparent-pixel RGB).
+ */
+export function simulateNaiveBilinearPreview(
+  src: Uint8ClampedArray,
+  srcWidth: number,
+  srcHeight: number,
+  scale: number
+): { rgba: Uint8ClampedArray; width: number; height: number } {
+  const dstWidth = Math.max(1, Math.round(srcWidth * scale));
+  const dstHeight = Math.max(1, Math.round(srcHeight * scale));
+  const out = new Uint8ClampedArray(dstWidth * dstHeight * 4);
+  if (srcWidth <= 0 || srcHeight <= 0) return { rgba: out, width: dstWidth, height: dstHeight };
+
+  const srcIdx = (x: number, y: number) => (y * srcWidth + x) * 4;
+
+  for (let dy = 0; dy < dstHeight; dy++) {
+    const sy = (dy + 0.5) / scale - 0.5;
+    const cy = Math.max(0, Math.min(srcHeight - 1, sy));
+    const y0 = Math.floor(cy), y1 = Math.min(y0 + 1, srcHeight - 1), fy = cy - y0;
+    for (let dx = 0; dx < dstWidth; dx++) {
+      const sx = (dx + 0.5) / scale - 0.5;
+      const cx = Math.max(0, Math.min(srcWidth - 1, sx));
+      const x0 = Math.floor(cx), x1 = Math.min(x0 + 1, srcWidth - 1), fx = cx - x0;
+      const p00 = srcIdx(x0, y0), p10 = srcIdx(x1, y0), p01 = srcIdx(x0, y1), p11 = srcIdx(x1, y1);
+      const o = (dy * dstWidth + dx) * 4;
+      for (let c = 0; c < 4; c++) {
+        // Straight per-channel blend — NOT weighted by alpha. This is what
+        // lets a fully-transparent neighbor's RGB bleed into the result.
+        const top = src[p00 + c] + (src[p10 + c] - src[p00 + c]) * fx;
+        const bottom = src[p01 + c] + (src[p11 + c] - src[p01 + c]) * fx;
+        out[o + c] = top + (bottom - top) * fy;
+      }
+    }
+  }
+  return { rgba: out, width: dstWidth, height: dstHeight };
+}
+
+export interface SuspiciousPixel {
+  x: number;
+  y: number;
+}
+
+/**
+ * "In-game-like" approximation preview #2: deterministically flags pixels
+ * matching the exact corruption signature confirmed this session — a
+ * transparent/near-transparent pixel whose RGB is near-black, sitting right
+ * next to an opaque pixel with a clearly different (non-black) color. A
+ * legitimate transparent pixel's RGB doesn't matter for rendering on its
+ * own, but *this specific pattern* (near-black next to bright/colored) is
+ * what a lossy export (Chrome's premultiplied canvas backing store zeroing
+ * out "safe" border colors) produces, and is exactly what caused visible
+ * black fringing once the game's GPU sampled across that edge. Purely
+ * deterministic byte comparison — no AI/heuristic guessing involved.
+ */
+export function findSuspiciousTransparentPixels(
+  rgba: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: { alphaThreshold?: number; nearBlackThreshold?: number; neighborContrastThreshold?: number }
+): SuspiciousPixel[] {
+  const alphaThreshold = options?.alphaThreshold ?? 200;
+  const nearBlackThreshold = options?.nearBlackThreshold ?? 20;
+  const neighborContrastThreshold = options?.neighborContrastThreshold ?? 60;
+
+  const idx = (x: number, y: number) => (y * width + x) * 4;
+  const isNearBlack = (o: number) =>
+    rgba[o] <= nearBlackThreshold && rgba[o + 1] <= nearBlackThreshold && rgba[o + 2] <= nearBlackThreshold;
+
+  const result: SuspiciousPixel[] = [];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const o = idx(x, y);
+      if (rgba[o + 3] >= alphaThreshold) continue; // opaque-ish — not a candidate
+      if (!isNearBlack(o)) continue; // only the specific "zeroed" signature
+
+      const neighbors: [number, number][] = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]];
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+        const no = idx(nx, ny);
+        if (rgba[no + 3] < alphaThreshold) continue; // neighbor must itself be opaque-ish
+        const dist = Math.abs(rgba[no] - rgba[o]) + Math.abs(rgba[no + 1] - rgba[o + 1]) + Math.abs(rgba[no + 2] - rgba[o + 2]);
+        if (dist >= neighborContrastThreshold) {
+          result.push({ x, y });
+          break;
+        }
+      }
+    }
+  }
+  return result;
+}

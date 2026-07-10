@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, cropRegion } from "@/lib/risen-image-composite";
+import {
+  compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, cropRegion,
+  simulateNaiveBilinearPreview, findSuspiciousTransparentPixels,
+} from "@/lib/risen-image-composite";
 
 /** Builds a 4-byte-per-pixel RGBA buffer where each pixel is `(x, y, x+y, alpha)`
  * — a value distinct enough per position to catch any off-by-one/misindexing bug. */
@@ -291,5 +294,64 @@ describe("cropRegion", () => {
     const copy = new Uint8ClampedArray(base);
     cropRegion(base, 6, 6, { x: 1, y: 1, w: 2, h: 2 });
     expect(Array.from(base)).toEqual(Array.from(copy));
+  });
+});
+
+describe("simulateNaiveBilinearPreview", () => {
+  it("produces output at the requested scale", () => {
+    const src = buildTestImage(10, 10, 255);
+    const { rgba, width, height } = simulateNaiveBilinearPreview(src, 10, 10, 0.5);
+    expect(width).toBe(5);
+    expect(height).toBe(5);
+    expect(rgba.length).toBe(5 * 5 * 4);
+  });
+
+  it("is deliberately NOT alpha-safe: a black transparent neighbor bleeds into a downsampled edge pixel (unlike scaleRgbaContainFit)", () => {
+    // Left pixel: alpha=0, RGB=(0,0,0) — the exact "zeroed transparent" corruption
+    // signature. Right pixel: alpha=255, RGB=(255,255,255). Downsampling 2x1 -> 1x1
+    // must blend straight RGB (naive), producing a visibly gray/dark result — proving
+    // this function does NOT protect against the bleed the way scaleRgbaContainFit does.
+    const src = new Uint8ClampedArray([0, 0, 0, 0, 255, 255, 255, 255]);
+    const { rgba } = simulateNaiveBilinearPreview(src, 2, 1, 0.5);
+    // Straight blend of 0 and 255 is ~127 — clearly darker than the opaque source (255).
+    expect(rgba[0]).toBeLessThan(200);
+  });
+
+  it("returns a degenerate (1x1) buffer for zero source dimensions instead of throwing", () => {
+    const { rgba, width, height } = simulateNaiveBilinearPreview(new Uint8ClampedArray(0), 0, 0, 0.5);
+    expect(width).toBeGreaterThanOrEqual(1);
+    expect(height).toBeGreaterThanOrEqual(1);
+    expect(rgba.length).toBe(width * height * 4);
+  });
+});
+
+describe("findSuspiciousTransparentPixels", () => {
+  it("flags a near-black transparent pixel sitting next to a clearly different opaque pixel", () => {
+    // 2x1: left = near-black + transparent (the corruption signature), right = bright opaque.
+    const rgba = new Uint8ClampedArray([2, 1, 0, 0, 226, 211, 172, 255]);
+    const flagged = findSuspiciousTransparentPixels(rgba, 2, 1);
+    expect(flagged).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it("does not flag a near-black transparent pixel with no opaque neighbor", () => {
+    const rgba = new Uint8ClampedArray([2, 1, 0, 0, 3, 2, 1, 0]); // both transparent
+    expect(findSuspiciousTransparentPixels(rgba, 2, 1)).toEqual([]);
+  });
+
+  it("does not flag a legitimately dark but OPAQUE pixel", () => {
+    const rgba = new Uint8ClampedArray([2, 1, 0, 255, 226, 211, 172, 255]);
+    expect(findSuspiciousTransparentPixels(rgba, 2, 1)).toEqual([]);
+  });
+
+  it("does not flag a transparent pixel whose neighbor is a similar (not contrasting) color", () => {
+    const rgba = new Uint8ClampedArray([2, 1, 0, 0, 10, 8, 5, 255]); // both near-black
+    expect(findSuspiciousTransparentPixels(rgba, 2, 1)).toEqual([]);
+  });
+
+  it("reproduces the real confirmed defect: (226,211,172,0) corrupted to (0,0,0,0) next to opaque content is flagged, the original is not", () => {
+    const corrupted = new Uint8ClampedArray([0, 0, 0, 0, 240, 230, 200, 255]);
+    const original = new Uint8ClampedArray([226, 211, 172, 0, 240, 230, 200, 255]);
+    expect(findSuspiciousTransparentPixels(corrupted, 2, 1)).toEqual([{ x: 0, y: 0 }]);
+    expect(findSuspiciousTransparentPixels(original, 2, 1)).toEqual([]);
   });
 });

@@ -18,6 +18,7 @@ import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
 import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, type CompositeRect } from "@/lib/risen-image-composite";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
+import { encodePngRawNoCanvas } from "@/lib/png-encode";
 
 const ACCENT = "#4a7c3f";
 
@@ -617,14 +618,37 @@ export default function RisenImages() {
     }
   }, [modifiedLog, flatFiles, fileHandle, invalidateEntry, selectedPath, handleSelect]);
 
-  const handleExportPng = useCallback(() => {
-    if (!selectedDecoded || selectedDecoded.kind !== "ok" || !selectedEntry) return;
+  const handleExportPng = useCallback(async () => {
+    if (!selectedDecoded || selectedDecoded.kind !== "ok" || !selectedEntry || !file) return;
     const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
+
+    // Re-decode fresh and encode without Canvas2D when possible — confirmed via
+    // a real browser test that canvas.toDataURL() after putImageData() zeroes
+    // the RGB channels of every fully-transparent pixel (Chrome's premultiplied
+    // backing store can't recover straight RGB at alpha=0). Many UI atlases keep
+    // a deliberate "safe" border color in those pixels so GPU bilinear filtering
+    // blends toward it instead of black; zeroing it reintroduces black fringing
+    // at semi-transparent edges once the exported PNG is re-imported. The cached
+    // `selectedDecoded.dataUrl` (used for the on-screen preview) already went
+    // through that lossy canvas path, so it's not reused here.
+    try {
+      const buf = await file.slice(selectedEntry.offset, selectedEntry.offset + selectedEntry.size).arrayBuffer();
+      const { ddsBytes } = extractDdsFromXimg(new Uint8Array(buf));
+      const decoded = decodeDdsToRgba(ddsBytes);
+      if (decoded.supported) {
+        const pngBytes = await encodePngRawNoCanvas(decoded.rgba, decoded.width, decoded.height);
+        if (pngBytes) {
+          downloadBlob(pngBytes, `${shortName}.png`);
+          return;
+        }
+      }
+    } catch { /* falls through to the canvas-based dataUrl below */ }
+
     const a = document.createElement("a");
     a.href = selectedDecoded.dataUrl;
     a.download = `${shortName}.png`;
     a.click();
-  }, [selectedDecoded, selectedEntry]);
+  }, [selectedDecoded, selectedEntry, file]);
 
   const handleExportRawDds = useCallback(async () => {
     if (!selectedEntry || !file) return;

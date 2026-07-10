@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit } from "@/lib/risen-image-composite";
+import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion } from "@/lib/risen-image-composite";
 
 /** Builds a 4-byte-per-pixel RGBA buffer where each pixel is `(x, y, x+y, alpha)`
  * — a value distinct enough per position to catch any off-by-one/misindexing bug. */
@@ -197,5 +197,58 @@ describe("scaleRgbaContainFit", () => {
   it("returns an all-transparent buffer for degenerate (zero) dimensions instead of throwing", () => {
     const out = scaleRgbaContainFit(new Uint8ClampedArray(4), 1, 1, 0, 5);
     expect(out.length).toBe(0);
+  });
+});
+
+describe("cloneStampRegion", () => {
+  it("copies a clean source block into the target rect, matching the source pixels exactly", () => {
+    const base = buildTestImage(10, 10, 255); // pixel (x,y) = (x, y, x+y, 255)
+    // Target: old "text" at (1,1) 2x2. Source: clean area centered at (7,7).
+    const out = cloneStampRegion(base, 10, 10, { x: 1, y: 1, w: 2, h: 2 }, 7, 7);
+    // Source rect for a 2x2 target centered at (7,7) is (6,6)-(7,7).
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) {
+        const destO = ((1 + y) * 10 + (1 + x)) * 4;
+        const srcO = ((6 + y) * 10 + (6 + x)) * 4;
+        expect([out[destO], out[destO + 1], out[destO + 2], out[destO + 3]]).toEqual(
+          [base[srcO], base[srcO + 1], base[srcO + 2], base[srcO + 3]]
+        );
+      }
+    }
+  });
+
+  it("leaves every pixel outside the target rect byte-identical to the base", () => {
+    const base = buildTestImage(10, 10, 200);
+    const out = cloneStampRegion(base, 10, 10, { x: 2, y: 2, w: 3, h: 3 }, 8, 8);
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 10; x++) {
+        if (x >= 2 && x < 5 && y >= 2 && y < 5) continue; // inside target rect
+        const o = (y * 10 + x) * 4;
+        expect([out[o], out[o + 1], out[o + 2], out[o + 3]]).toEqual([base[o], base[o + 1], base[o + 2], base[o + 3]]);
+      }
+    }
+  });
+
+  it("clamps the source rect to stay inside the image when the source point is near an edge", () => {
+    const base = buildTestImage(10, 10, 255);
+    // Source point right at the top-left corner — a naive centered source rect would go negative.
+    const out = cloneStampRegion(base, 10, 10, { x: 5, y: 5, w: 4, h: 4 }, 0, 0);
+    // Clamped source rect must be (0,0)-(3,3).
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const destO = ((5 + y) * 10 + (5 + x)) * 4;
+        const srcO = (y * 10 + x) * 4;
+        expect([out[destO], out[destO + 1], out[destO + 2], out[destO + 3]]).toEqual(
+          [base[srcO], base[srcO + 1], base[srcO + 2], base[srcO + 3]]
+        );
+      }
+    }
+  });
+
+  it("does not mutate the input baseData array", () => {
+    const base = buildTestImage(6, 6, 255);
+    const copy = new Uint8ClampedArray(base);
+    cloneStampRegion(base, 6, 6, { x: 0, y: 0, w: 2, h: 2 }, 4, 4);
+    expect(Array.from(base)).toEqual(Array.from(copy));
   });
 });

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, ImageDown,
   Replace, Undo2, Search, ChevronDown, ChevronUp, ImageOff, Crop, X,
-  ZoomIn, ZoomOut, Maximize,
+  ZoomIn, ZoomOut, Maximize, Eraser, Target,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
@@ -16,7 +16,7 @@ import {
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
-import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, type CompositeRect } from "@/lib/risen-image-composite";
+import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, type CompositeRect } from "@/lib/risen-image-composite";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
 import { encodePngRawNoCanvas } from "@/lib/png-encode";
 
@@ -277,6 +277,12 @@ export default function RisenImages() {
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [compositeOverlayFile, setCompositeOverlayFile] = useState<File | null>(null);
   const [compositeOverlayImg, setCompositeOverlayImg] = useState<HTMLImageElement | null>(null);
+  // "Erase" step: clone-stamp a clean patch from elsewhere in the same image over
+  // selectionRect (e.g. the old English name) *before* pasting the new overlay —
+  // safer than clearing to a flat color or full transparency, since it's unknown
+  // what the game would composite underneath a fully transparent region.
+  const [pickingEraseSource, setPickingEraseSource] = useState(false);
+  const [eraseSourcePoint, setEraseSourcePoint] = useState<{ x: number; y: number } | null>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeOverlayInputRef = useRef<HTMLInputElement>(null);
   /** 1 = actual pixel size. The canvas's internal drawing buffer always stays
@@ -695,6 +701,8 @@ export default function RisenImages() {
     setCompositeOverlayFile(null);
     setCompositeOverlayImg(null);
     setCompositeZoom(1);
+    setPickingEraseSource(false);
+    setEraseSourcePoint(null);
   }, []);
 
   const handleCompositeOverlayChosen = useCallback(async (f: File) => {
@@ -748,7 +756,18 @@ export default function RisenImages() {
       ctx.lineWidth = Math.max(1, Math.round(selectedDecoded.width / 250));
       ctx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
     }
-  }, [compositeMode, selectedDecoded, selectionRect, compositeOverlayImg, compositeBaseImageData]);
+    if (eraseSourcePoint) {
+      const r = Math.max(4, Math.round(selectedDecoded.width / 80));
+      ctx.strokeStyle = "#f97316";
+      ctx.lineWidth = Math.max(1, Math.round(selectedDecoded.width / 250));
+      ctx.beginPath();
+      ctx.moveTo(eraseSourcePoint.x - r, eraseSourcePoint.y);
+      ctx.lineTo(eraseSourcePoint.x + r, eraseSourcePoint.y);
+      ctx.moveTo(eraseSourcePoint.x, eraseSourcePoint.y - r);
+      ctx.lineTo(eraseSourcePoint.x, eraseSourcePoint.y + r);
+      ctx.stroke();
+    }
+  }, [compositeMode, selectedDecoded, selectionRect, compositeOverlayImg, compositeBaseImageData, eraseSourcePoint]);
 
   const getImagePixelCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
     const canvas = compositeCanvasRef.current;
@@ -768,9 +787,14 @@ export default function RisenImages() {
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const p = getImagePixelCoords(e);
     if (!p) return;
+    if (pickingEraseSource) {
+      setEraseSourcePoint(p);
+      setPickingEraseSource(false);
+      return;
+    }
     setDragStart(p);
     setSelectionRect({ x: p.x, y: p.y, w: 0, h: 0 });
-  }, [getImagePixelCoords]);
+  }, [getImagePixelCoords, pickingEraseSource]);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!dragStart) return;
@@ -802,6 +826,19 @@ export default function RisenImages() {
   }, [dragStart, getImagePixelCoords, compositeBaseImageData, selectedDecoded]);
 
   const handleCanvasMouseLeave = useCallback(() => setDragStart(null), []);
+
+  /** Clone-stamps a clean patch from `eraseSourcePoint` over `selectionRect` —
+   * bakes the erase directly into `compositeBaseImageData` so it becomes the
+   * new base for the overlay paste step that follows. */
+  const handleApplyErase = useCallback(() => {
+    if (!compositeBaseImageData || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || !eraseSourcePoint) return;
+    const erased = cloneStampRegion(
+      compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height,
+      selectionRect, eraseSourcePoint.x, eraseSourcePoint.y
+    );
+    setCompositeBaseImageData(new ImageData(erased, compositeBaseImageData.width, compositeBaseImageData.height));
+    setEraseSourcePoint(null);
+  }, [compositeBaseImageData, selectionRect, eraseSourcePoint]);
 
   const ZOOM_MIN = 0.1;
   const ZOOM_MAX = 8;
@@ -1058,6 +1095,32 @@ export default function RisenImages() {
                     />
                   </div>
                 ))}
+              </div>
+              <div className="flex flex-col gap-1.5 p-2 rounded border border-border bg-muted/30">
+                <div className="text-[11px] font-medium">🧹 مسح المحتوى القديم من هذه المنطقة (اختياري)</div>
+                <p className="text-[10px] text-muted-foreground">
+                  بعد تحديد منطقة الاسم/النص القديم أعلاه، اختر نقطة نظيفة قريبة من نفس الصورة لنسخ نسيجها فوق المنطقة القديمة قبل لصق الاسم الجديد.
+                </p>
+                <Button
+                  size="sm"
+                  variant={pickingEraseSource ? "default" : "outline"}
+                  onClick={() => setPickingEraseSource((v) => !v)}
+                  disabled={!selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0}
+                >
+                  <Target className="w-3.5 h-3.5 ml-1" />
+                  {pickingEraseSource ? "انقر الآن على نقطة نظيفة في الصورة…" : "اختر نقطة مصدر نظيفة"}
+                </Button>
+                {eraseSourcePoint && (
+                  <div className="text-[10px] text-muted-foreground text-center font-mono">نقطة المصدر: {eraseSourcePoint.x}, {eraseSourcePoint.y}</div>
+                )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleApplyErase}
+                  disabled={!eraseSourcePoint || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0}
+                >
+                  <Eraser className="w-3.5 h-3.5 ml-1" /> تطبيق المسح
+                </Button>
               </div>
               <input
                 ref={compositeOverlayInputRef}

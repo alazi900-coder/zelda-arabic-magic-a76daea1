@@ -214,3 +214,48 @@ export function scaleRgbaContainFit(
   }
   return out;
 }
+
+/**
+ * "Clone stamp": copies a `targetRect.w`×`targetRect.h` block from elsewhere
+ * in the same image into `targetRect` — for erasing old text/art by covering
+ * it with a clean, texture-matching patch from a nearby area, rather than
+ * clearing to a flat color or full transparency (which risks showing the
+ * wrong thing once the game composites its own layers underneath). The
+ * source block is centered on `(sourceX, sourceY)` and clamped to stay fully
+ * inside the image bounds, so a source point picked near an edge doesn't
+ * sample outside the image. Pure typed-array copy — no Canvas involved, so
+ * no premultiplied-alpha rounding. Returns a new array; `baseData` is never
+ * mutated.
+ */
+export function cloneStampRegion(
+  baseData: Uint8ClampedArray,
+  baseWidth: number,
+  baseHeight: number,
+  targetRect: CompositeRect,
+  sourceX: number,
+  sourceY: number
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(baseData);
+  const srcX = Math.max(0, Math.min(baseWidth - targetRect.w, Math.round(sourceX - targetRect.w / 2)));
+  const srcY = Math.max(0, Math.min(baseHeight - targetRect.h, Math.round(sourceY - targetRect.h / 2)));
+
+  for (let y = 0; y < targetRect.h; y++) {
+    const destY = targetRect.y + y;
+    if (destY < 0 || destY >= baseHeight) continue;
+    const srcRowY = srcY + y;
+    if (srcRowY < 0 || srcRowY >= baseHeight) continue;
+    for (let x = 0; x < targetRect.w; x++) {
+      const destX = targetRect.x + x;
+      if (destX < 0 || destX >= baseWidth) continue;
+      const srcRowX = srcX + x;
+      if (srcRowX < 0 || srcRowX >= baseWidth) continue;
+      const srcOff = (srcRowY * baseWidth + srcRowX) * 4;
+      const dstOff = (destY * baseWidth + destX) * 4;
+      out[dstOff] = baseData[srcOff];
+      out[dstOff + 1] = baseData[srcOff + 1];
+      out[dstOff + 2] = baseData[srcOff + 2];
+      out[dstOff + 3] = baseData[srcOff + 3];
+    }
+  }
+  return out;
+}

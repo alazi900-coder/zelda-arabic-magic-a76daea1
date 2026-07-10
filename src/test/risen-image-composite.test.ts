@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion } from "@/lib/risen-image-composite";
+import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, cropRegion } from "@/lib/risen-image-composite";
 
 /** Builds a 4-byte-per-pixel RGBA buffer where each pixel is `(x, y, x+y, alpha)`
  * — a value distinct enough per position to catch any off-by-one/misindexing bug. */
@@ -249,6 +249,47 @@ describe("cloneStampRegion", () => {
     const base = buildTestImage(6, 6, 255);
     const copy = new Uint8ClampedArray(base);
     cloneStampRegion(base, 6, 6, { x: 0, y: 0, w: 2, h: 2 }, 4, 4);
+    expect(Array.from(base)).toEqual(Array.from(copy));
+  });
+});
+
+describe("cropRegion", () => {
+  it("extracts exactly the requested rect's pixels", () => {
+    const base = buildTestImage(10, 10, 255); // pixel (x,y) = (x, y, x+y, 255)
+    const out = cropRegion(base, 10, 10, { x: 3, y: 4, w: 2, h: 2 });
+    expect(out.length).toBe(2 * 2 * 4);
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) {
+        const dstO = (y * 2 + x) * 4;
+        const srcO = ((4 + y) * 10 + (3 + x)) * 4;
+        expect([out[dstO], out[dstO + 1], out[dstO + 2], out[dstO + 3]]).toEqual(
+          [base[srcO], base[srcO + 1], base[srcO + 2], base[srcO + 3]]
+        );
+      }
+    }
+  });
+
+  it("fills with fully-transparent pixels for any part of rect outside the base image", () => {
+    const base = buildTestImage(4, 4, 255);
+    const out = cropRegion(base, 4, 4, { x: 2, y: 2, w: 4, h: 4 }); // extends past both edges
+    // Bottom-right 2x2 quadrant of the crop is inside bounds (x:2-3,y:2-3 of base).
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const o = (y * 4 + x) * 4;
+        if (x < 2 && y < 2) {
+          const srcO = ((2 + y) * 4 + (2 + x)) * 4;
+          expect([out[o], out[o + 1], out[o + 2], out[o + 3]]).toEqual([base[srcO], base[srcO + 1], base[srcO + 2], base[srcO + 3]]);
+        } else {
+          expect(out[o + 3]).toBe(0); // out of bounds -> transparent
+        }
+      }
+    }
+  });
+
+  it("does not mutate the input baseData array", () => {
+    const base = buildTestImage(6, 6, 255);
+    const copy = new Uint8ClampedArray(base);
+    cropRegion(base, 6, 6, { x: 1, y: 1, w: 2, h: 2 });
     expect(Array.from(base)).toEqual(Array.from(copy));
   });
 });

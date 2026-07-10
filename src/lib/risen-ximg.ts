@@ -118,6 +118,29 @@ export function describeDdsHeaderFlags(h: DdsHeaderInfo): string {
   ].join("\n");
 }
 
+/** Minimal synthetic .ximg wrapper size — just the magic plus the two offset/size
+ * fields extractDdsFromXimg reads; no property block, since nothing ever parses it. */
+const SYNTHETIC_WRAPPER_SIZE = DDS_SIZE_FIELD + 4; // 0x18
+
+/**
+ * Wraps a raw, loose DDS file's bytes in a minimal synthetic .ximg container —
+ * just enough for `extractDdsFromXimg` to locate the DDS blob through its
+ * normal header fields (not the magic-scan fallback). Lets the "open a single
+ * .dds file directly" mode (no images.pak needed) reuse every existing
+ * entry-based tool — replace/composite/erase/export — completely unchanged,
+ * since they all operate on ".ximg entry bytes" without caring where those
+ * bytes came from. Use `extractDdsFromXimg(wrapped).ddsBytes` to unwrap.
+ */
+export function wrapRawDdsAsXimg(ddsBytes: Uint8Array): Uint8Array {
+  const out = new Uint8Array(SYNTHETIC_WRAPPER_SIZE + ddsBytes.length);
+  const view = new DataView(out.buffer);
+  out.set(new TextEncoder().encode(MAGIC), 0);
+  view.setUint32(DDS_OFFSET_FIELD, SYNTHETIC_WRAPPER_SIZE, true);
+  view.setUint32(DDS_SIZE_FIELD, ddsBytes.length, true);
+  out.set(ddsBytes, SYNTHETIC_WRAPPER_SIZE);
+  return out;
+}
+
 /** Locates and parses the embedded DDS blob inside a full .ximg file buffer. */
 export function extractDdsFromXimg(ximgBytes: Uint8Array): XimgDds {
   if (ximgBytes.length < 0x18) throw new Error("ملف .ximg غير مكتمل");

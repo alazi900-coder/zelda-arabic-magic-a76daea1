@@ -259,3 +259,35 @@ export function cloneStampRegion(
   }
   return out;
 }
+
+/**
+ * Extracts just `rect` out of a larger image's RGBA bytes — for exporting a
+ * single atlas element (e.g. one icon inside a shared UI texture) as its own
+ * small PNG at full quality/transparency, to edit externally and paste back
+ * with the existing overlay tool instead of round-tripping the whole atlas.
+ * Any part of `rect` outside the base image bounds comes back fully
+ * transparent (alpha 0) rather than throwing. Pure typed-array copy.
+ */
+export function cropRegion(
+  baseData: Uint8ClampedArray,
+  baseWidth: number,
+  baseHeight: number,
+  rect: CompositeRect
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(rect.w * rect.h * 4);
+  for (let y = 0; y < rect.h; y++) {
+    const srcY = rect.y + y;
+    if (srcY < 0 || srcY >= baseHeight) continue;
+    for (let x = 0; x < rect.w; x++) {
+      const srcX = rect.x + x;
+      if (srcX < 0 || srcX >= baseWidth) continue;
+      const srcOff = (srcY * baseWidth + srcX) * 4;
+      const dstOff = (y * rect.w + x) * 4;
+      out[dstOff] = baseData[srcOff];
+      out[dstOff + 1] = baseData[srcOff + 1];
+      out[dstOff + 2] = baseData[srcOff + 2];
+      out[dstOff + 3] = baseData[srcOff + 3];
+    }
+  }
+  return out;
+}

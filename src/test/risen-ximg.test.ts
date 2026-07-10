@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
-  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader, findFirstByteMismatch,
+  encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader, findFirstByteMismatch, wrapRawDdsAsXimg,
 } from "@/lib/risen-ximg";
 import { decodeDxt, encodeDXT1, decodeDXT1, decodeDXT5 } from "@/lib/risen-dxt-codec";
 import { NUMBERS_XIMG_BASE64 } from "./fixtures/numbers-ximg-base64";
@@ -339,5 +339,24 @@ describe("findFirstByteMismatch", () => {
 
   it("returns -1 for two empty arrays", () => {
     expect(findFirstByteMismatch(new Uint8Array(0), new Uint8Array(0))).toBe(-1);
+  });
+});
+
+describe("wrapRawDdsAsXimg", () => {
+  it("wraps raw DDS bytes so extractDdsFromXimg recovers them byte-identical", () => {
+    const realDds = extractDdsFromXimg(numbersXimg).ddsBytes;
+    const wrapped = wrapRawDdsAsXimg(realDds);
+    const unwrapped = extractDdsFromXimg(wrapped);
+    expect(Array.from(unwrapped.ddsBytes)).toEqual(Array.from(realDds));
+    expect(unwrapped.width).toBe(128);
+    expect(unwrapped.height).toBe(16);
+  });
+
+  it("round-trips through spliceReplacementDds like a normal .ximg entry", () => {
+    const realDds = extractDdsFromXimg(numbersXimg).ddsBytes;
+    const wrapped = wrapRawDdsAsXimg(realDds);
+    // Same-size "replacement" (the DDS itself, unchanged) must splice cleanly.
+    const rebuilt = spliceReplacementDds(wrapped, realDds);
+    expect(Array.from(extractDdsFromXimg(rebuilt).ddsBytes)).toEqual(Array.from(realDds));
   });
 });

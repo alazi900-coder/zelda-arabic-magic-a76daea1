@@ -13,10 +13,11 @@ import {
 import {
   extractDdsFromXimg, spliceReplacementDds, validateReplacementDds, buildDdsFile, decodeDdsToRgba,
   encodeRawRgbDds, buildRawRgbDdsFile, readDdsHeader, describeDdsHeaderFlags, findFirstByteMismatch,
+  wrapRawDdsAsXimg,
 } from "@/lib/risen-ximg";
 import { encodeDxt, isDxtFourCC } from "@/lib/risen-dxt-codec";
 import { classifyImagePath, buildImageSections, type ImageSectionCount } from "@/lib/risen/image-categories";
-import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, type CompositeRect } from "@/lib/risen-image-composite";
+import { compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, cloneStampRegion, cropRegion, type CompositeRect } from "@/lib/risen-image-composite";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
 import { encodePngRawNoCanvas } from "@/lib/png-encode";
 
@@ -249,6 +250,10 @@ export default function RisenImages() {
   const [file, setFile] = useState<File | null>(null);
   const [header, setHeader] = useState<RisenPakHeader | null>(null);
   const [flatFiles, setFlatFiles] = useState<RisenPakFlatFile[]>([]);
+  /** True when a single loose .dds file was opened directly (no images.pak).
+   * `file` still holds a synthetic-wrapped copy (see wrapRawDdsAsXimg) so every
+   * existing entry-based tool works unchanged; only opening/saving differ. */
+  const [standaloneDdsMode, setStandaloneDdsMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [treeSizeWarning, setTreeSizeWarning] = useState<string | null>(null);
@@ -269,6 +274,7 @@ export default function RisenImages() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
+  const standaloneDdsInputRef = useRef<HTMLInputElement>(null);
 
   // Region-composite mode: drag-select a rectangle on the current image, then
   // paste a replacement image (e.g. a translated logo) into just that region.
@@ -367,6 +373,7 @@ export default function RisenImages() {
     setFile(null);
     setHeader(null);
     setFlatFiles([]);
+    setStandaloneDdsMode(false);
     setSelectedPath(null);
     setSelectedDecoded(null);
     setDecodedCache(new Map());
@@ -422,6 +429,57 @@ export default function RisenImages() {
     [flatFiles, selectedPath]
   );
 
+  /** Opens a single loose .dds file directly — no images.pak needed. Wraps it
+   * in a minimal synthetic .ximg (wrapRawDdsAsXimg) and registers it as the
+   * sole entry, so every existing tool (replace/composite/erase/export) works
+   * completely unchanged against it. */
+  const loadStandaloneDdsFromFile = useCallback(async (f: File, handle?: FileSystemFileHandle) => {
+    setLoading(true);
+    setLoadError(null);
+    setTreeSizeWarning(null);
+    try {
+      const ddsBytes = new Uint8Array(await f.arrayBuffer());
+      if (new TextDecoder("ascii").decode(ddsBytes.subarray(0, 4)) !== "DDS ") {
+        throw new Error('توقيع DDS غير صالح — يجب أن يبدأ الملف بـ"DDS "');
+      }
+      const wrapped = wrapRawDdsAsXimg(ddsBytes);
+      const entry: RisenPakFlatFile = { path: f.name.replace(/\.dds$/i, ""), offset: 0, size: wrapped.length };
+      const wrappedFile = new File([wrapped], f.name);
+      setFileHandle(handle || null);
+      setHeader(null);
+      setFlatFiles([entry]);
+      setStandaloneDdsMode(true);
+      setFile(wrappedFile);
+      await handleSelect(entry, wrappedFile);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+      setFile(null);
+      setFlatFiles([]);
+      setStandaloneDdsMode(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [handleSelect]);
+
+  const handleOpenStandaloneDdsFsa = useCallback(async () => {
+    if (!window.showOpenFilePicker) return;
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: "ملف DDS", accept: { "application/octet-stream": [".dds"] } }],
+      });
+      const f = await handle.getFile();
+      await loadStandaloneDdsFromFile(f, handle);
+    } catch (e) {
+      if (e instanceof Error && e.name !== "AbortError") setLoadError(e.message);
+    }
+  }, [loadStandaloneDdsFromFile]);
+
+  const handlePlainStandaloneDdsInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    void loadStandaloneDdsFromFile(f);
+  }, [loadStandaloneDdsFromFile]);
+
   const invalidateEntry = useCallback((path: string) => {
     setDecodedCache((prev) => {
       const next = new Map(prev);
@@ -434,11 +492,13 @@ export default function RisenImages() {
   const confirmFirstWriteIfNeeded = useCallback((): boolean => {
     if (firstWriteConfirmedRef.current) return true;
     const ok = window.confirm(
-      "أنت على وشك تعديل ملف images.pak مباشرة. يُنصح بعمل نسخة احتياطية من الملف قبل المتابعة.\n\nهل تريد الاستمرار؟"
+      standaloneDdsMode
+        ? "أنت على وشك تعديل ملف DDS مباشرة. يُنصح بعمل نسخة احتياطية من الملف قبل المتابعة.\n\nهل تريد الاستمرار؟"
+        : "أنت على وشك تعديل ملف images.pak مباشرة. يُنصح بعمل نسخة احتياطية من الملف قبل المتابعة.\n\nهل تريد الاستمرار؟"
     );
     if (ok) firstWriteConfirmedRef.current = true;
     return ok;
-  }, []);
+  }, [standaloneDdsMode]);
 
   /** Given the original DDS header info and a full-size ImageData (same width/height
    * as the original), encodes it back to the original's exact pixel format. Shared by
@@ -495,31 +555,42 @@ export default function RisenImages() {
       return next;
     });
 
+    // Standalone .dds mode: the real on-disk file (or the download) is the raw
+    // DDS blob with no synthetic .ximg wrapper — only `rebuiltXimg`'s DDS portion
+    // gets written/downloaded. `file` state stays re-wrapped afterward so every
+    // other tool keeps working against consistent "wrapped .ximg entry" bytes.
+    const onDiskBytes = standaloneDdsMode ? extractDdsFromXimg(rebuiltXimg).ddsBytes : rebuiltXimg;
+    const onDiskOriginalBytes = standaloneDdsMode ? extractDdsFromXimg(originalXimg).ddsBytes : originalXimg;
+    const writePosition = standaloneDdsMode ? 0 : selectedEntry.offset;
+
     let freshFile: File | null = null;
     if (fileHandle) {
       const writable = await fileHandle.createWritable({ keepExistingData: true });
-      await writable.write({ type: "write", position: selectedEntry.offset, data: rebuiltXimg });
+      await writable.write({ type: "write", position: writePosition, data: onDiskBytes });
       await writable.close();
       // Chrome invalidates previously-obtained File snapshots for a handle once it's
       // been written to — re-acquire a fresh one or every subsequent read (including
       // the re-preview below) throws NotReadableError ("تعذر قراءة الملف المطلوب...").
-      freshFile = await fileHandle.getFile();
+      const rawFreshFile = await fileHandle.getFile();
 
       // Safety net: read back exactly what landed on disk and confirm it's
       // byte-identical to what we intended to write — catches any future write
       // bug (wrong offset, truncation, partial write) immediately instead of
       // only discovering it later in-game. Independent of *why* it might fail.
-      const verifyBuf = await freshFile.slice(selectedEntry.offset, selectedEntry.offset + rebuiltXimg.length).arrayBuffer();
-      const mismatchAt = findFirstByteMismatch(new Uint8Array(verifyBuf), rebuiltXimg);
+      const verifyBuf = await rawFreshFile.slice(writePosition, writePosition + onDiskBytes.length).arrayBuffer();
+      const mismatchAt = findFirstByteMismatch(new Uint8Array(verifyBuf), onDiskBytes);
       if (mismatchAt !== -1) {
-        toast.error(`فشل التحقق بعد الكتابة — الملف على القرص لا يطابق ما كان يُفترض كتابته (أول اختلاف عند البايت ${mismatchAt} من ${rebuiltXimg.length}).`, {
+        toast.error(`فشل التحقق بعد الكتابة — الملف على القرص لا يطابق ما كان يُفترض كتابته (أول اختلاف عند البايت ${mismatchAt} من ${onDiskBytes.length}).`, {
           action: {
             label: "استعادة فورية",
             onClick: async () => {
               const restoreWritable = await fileHandle.createWritable({ keepExistingData: true });
-              await restoreWritable.write({ type: "write", position: selectedEntry.offset, data: originalXimg });
+              await restoreWritable.write({ type: "write", position: writePosition, data: onDiskOriginalBytes });
               await restoreWritable.close();
-              const restoredFile = await fileHandle.getFile();
+              const restoredRaw = await fileHandle.getFile();
+              const restoredFile = standaloneDdsMode
+                ? new File([wrapRawDdsAsXimg(new Uint8Array(await restoredRaw.arrayBuffer()))], restoredRaw.name)
+                : restoredRaw;
               setFile(restoredFile);
               invalidateEntry(selectedEntry.path);
               await handleSelect(selectedEntry, restoredFile);
@@ -530,8 +601,19 @@ export default function RisenImages() {
         return;
       }
 
+      freshFile = standaloneDdsMode
+        ? new File([wrapRawDdsAsXimg(new Uint8Array(await rawFreshFile.arrayBuffer()))], rawFreshFile.name)
+        : rawFreshFile;
       setFile(freshFile);
-      toast.success(`تم حقن الصورة الجديدة مباشرة في images.pak (${selectedEntry.path}) — تحقَّق التطابق بعد الكتابة`);
+      toast.success(
+        standaloneDdsMode
+          ? `تم حفظ الصورة المعدَّلة مباشرة في ${rawFreshFile.name} — تحقَّق التطابق بعد الكتابة`
+          : `تم حقن الصورة الجديدة مباشرة في images.pak (${selectedEntry.path}) — تحقَّق التطابق بعد الكتابة`
+      );
+    } else if (standaloneDdsMode) {
+      const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1);
+      downloadBlob(onDiskBytes, `${shortName}.dds`);
+      toast.info("متصفحك لا يدعم الكتابة المباشرة — تم تنزيل ملف DDS المعدَّل");
     } else {
       const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1);
       downloadBlob(rebuiltXimg, shortName);
@@ -542,7 +624,7 @@ export default function RisenImages() {
 
     invalidateEntry(selectedEntry.path);
     await handleSelect(selectedEntry, freshFile || undefined);
-  }, [selectedEntry, fileHandle, confirmFirstWriteIfNeeded, invalidateEntry, handleSelect]);
+  }, [selectedEntry, fileHandle, confirmFirstWriteIfNeeded, invalidateEntry, handleSelect, standaloneDdsMode]);
 
   const handleReplaceSelected = useCallback(async (importFile: File) => {
     if (!selectedEntry || !file) return;
@@ -756,16 +838,17 @@ export default function RisenImages() {
       ctx.lineWidth = Math.max(1, Math.round(selectedDecoded.width / 250));
       ctx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
     }
-    if (eraseSourcePoint) {
-      const r = Math.max(4, Math.round(selectedDecoded.width / 80));
+    if (eraseSourcePoint && selectionRect && selectionRect.w > 0 && selectionRect.h > 0) {
+      // Show the *exact* block that will be sampled (same size as the target rect,
+      // centered on the picked/dragged point) — lets the user see and avoid
+      // overlapping a neighboring atlas element before committing the erase.
+      const srcX = Math.max(0, Math.min(selectedDecoded.width - selectionRect.w, Math.round(eraseSourcePoint.x - selectionRect.w / 2)));
+      const srcY = Math.max(0, Math.min(selectedDecoded.height - selectionRect.h, Math.round(eraseSourcePoint.y - selectionRect.h / 2)));
       ctx.strokeStyle = "#f97316";
       ctx.lineWidth = Math.max(1, Math.round(selectedDecoded.width / 250));
-      ctx.beginPath();
-      ctx.moveTo(eraseSourcePoint.x - r, eraseSourcePoint.y);
-      ctx.lineTo(eraseSourcePoint.x + r, eraseSourcePoint.y);
-      ctx.moveTo(eraseSourcePoint.x, eraseSourcePoint.y - r);
-      ctx.lineTo(eraseSourcePoint.x, eraseSourcePoint.y + r);
-      ctx.stroke();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(srcX, srcY, selectionRect.w, selectionRect.h);
+      ctx.setLineDash([]);
     }
   }, [compositeMode, selectedDecoded, selectionRect, compositeOverlayImg, compositeBaseImageData, eraseSourcePoint]);
 
@@ -788,8 +871,11 @@ export default function RisenImages() {
     const p = getImagePixelCoords(e);
     if (!p) return;
     if (pickingEraseSource) {
+      // Reuses `dragStart` purely as an "is dragging" flag here — mutually
+      // exclusive with the normal selection-drag path below (gated on
+      // `pickingEraseSource`), so there's no interference between the two.
       setEraseSourcePoint(p);
-      setPickingEraseSource(false);
+      setDragStart(p);
       return;
     }
     setDragStart(p);
@@ -800,13 +886,20 @@ export default function RisenImages() {
     if (!dragStart) return;
     const p = getImagePixelCoords(e);
     if (!p) return;
+    if (pickingEraseSource) {
+      // Live-follows the cursor while dragging — the redraw effect shows the
+      // exact block that would be sampled, so the user can dodge a neighboring
+      // atlas element before releasing instead of guessing from a single click.
+      setEraseSourcePoint(p);
+      return;
+    }
     setSelectionRect({
       x: Math.min(dragStart.x, p.x),
       y: Math.min(dragStart.y, p.y),
       w: Math.abs(p.x - dragStart.x),
       h: Math.abs(p.y - dragStart.y),
     });
-  }, [dragStart, getImagePixelCoords]);
+  }, [dragStart, getImagePixelCoords, pickingEraseSource]);
 
   /** Mouse-up ends a drag; but if the pointer barely moved since mouse-down,
    * treat it as a plain click and auto-detect the region under it instead of
@@ -816,6 +909,10 @@ export default function RisenImages() {
   const handleCanvasMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const start = dragStart;
     setDragStart(null);
+    if (pickingEraseSource) {
+      setPickingEraseSource(false); // eraseSourcePoint already reflects the final drag position.
+      return;
+    }
     if (!start || !compositeBaseImageData || selectedDecoded?.kind !== "ok") return;
     const p = getImagePixelCoords(e);
     if (!p) return;
@@ -823,7 +920,7 @@ export default function RisenImages() {
     if (movedFarEnoughToBeADrag) return; // selectionRect was already set live by mousemove.
     const detected = detectRegionBounds(compositeBaseImageData.data, selectedDecoded.width, selectedDecoded.height, start.x, start.y);
     setSelectionRect(detected);
-  }, [dragStart, getImagePixelCoords, compositeBaseImageData, selectedDecoded]);
+  }, [dragStart, getImagePixelCoords, compositeBaseImageData, selectedDecoded, pickingEraseSource]);
 
   const handleCanvasMouseLeave = useCallback(() => setDragStart(null), []);
 
@@ -839,6 +936,19 @@ export default function RisenImages() {
     setCompositeBaseImageData(new ImageData(erased, compositeBaseImageData.width, compositeBaseImageData.height));
     setEraseSourcePoint(null);
   }, [compositeBaseImageData, selectionRect, eraseSourcePoint]);
+
+  /** Exports just the currently selected rect as its own small PNG (full
+   * quality/transparency, no Canvas) — for editing a single atlas element
+   * externally at full resolution instead of round-tripping the whole image.
+   * Bring the edited PNG back with the normal overlay picker + "تركيب". */
+  const handleExportSelectedRegionPng = useCallback(async () => {
+    if (!compositeBaseImageData || !selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0 || !selectedEntry) return;
+    const cropped = cropRegion(compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height, selectionRect);
+    const pngBytes = await encodePngRawNoCanvas(cropped, selectionRect.w, selectionRect.h);
+    if (!pngBytes) return;
+    const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
+    downloadBlob(pngBytes, `${shortName}-منطقة-${selectionRect.x}x${selectionRect.y}.png`);
+  }, [compositeBaseImageData, selectionRect, selectedEntry]);
 
   const ZOOM_MIN = 0.1;
   const ZOOM_MAX = 8;
@@ -962,7 +1072,7 @@ export default function RisenImages() {
 
   // ==========================================================================
 
-  if (!file || !header) {
+  if (!file || (!header && !standaloneDdsMode)) {
     return (
       <div
         className={`min-h-screen flex flex-col items-center justify-center px-4 text-center transition-colors ${dragOver ? "bg-primary/5" : ""}`}
@@ -990,21 +1100,35 @@ export default function RisenImages() {
         ) : (
           <>
             {fsaSupported ? (
-              <Button size="lg" onClick={handleOpenFsa} className="font-display font-bold text-lg px-10 py-6" style={{ backgroundColor: ACCENT, color: "white" }}>
-                <FolderOpen className="w-5 h-5 ml-2" /> افتح images.pak
-              </Button>
-            ) : (
-              <>
-                <Button size="lg" onClick={() => fileInputRef.current?.click()} className="font-display font-bold text-lg px-10 py-6" style={{ backgroundColor: ACCENT, color: "white" }}>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button size="lg" onClick={handleOpenFsa} className="font-display font-bold text-lg px-10 py-6" style={{ backgroundColor: ACCENT, color: "white" }}>
                   <FolderOpen className="w-5 h-5 ml-2" /> افتح images.pak
                 </Button>
+                <Button size="lg" variant="outline" onClick={handleOpenStandaloneDdsFsa} className="font-display font-bold text-lg px-10 py-6">
+                  <FolderOpen className="w-5 h-5 ml-2" /> افتح ملف DDS مباشرة
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button size="lg" onClick={() => fileInputRef.current?.click()} className="font-display font-bold text-lg px-10 py-6" style={{ backgroundColor: ACCENT, color: "white" }}>
+                    <FolderOpen className="w-5 h-5 ml-2" /> افتح images.pak
+                  </Button>
+                  <Button size="lg" variant="outline" onClick={() => standaloneDdsInputRef.current?.click()} className="font-display font-bold text-lg px-10 py-6">
+                    <FolderOpen className="w-5 h-5 ml-2" /> افتح ملف DDS مباشرة
+                  </Button>
+                </div>
                 <input ref={fileInputRef} type="file" accept=".pak" className="hidden" onChange={handlePlainInput} />
+                <input ref={standaloneDdsInputRef} type="file" accept=".dds" className="hidden" onChange={handlePlainStandaloneDdsInput} />
                 <p className="text-xs text-muted-foreground mt-4 max-w-md">
                   متصفحك لا يدعم الكتابة المباشرة بالملف (متاحة في Chrome/Edge). يمكنك التصفح والمعاينة والتصدير هنا بلا مشاكل،
                   لكن استبدال صورة سيُنزّل الملف المعدّل + سكربت PowerShell لحقنه يدوياً بدل الكتابة المباشرة.
                 </p>
               </>
             )}
+            <p className="text-xs text-muted-foreground mt-4 max-w-md">
+              "افتح ملف DDS مباشرة" يفتح صورة واحدة مصدَّرة مسبقاً بدون الحاجة لملف images.pak الكامل — مفيد للتعديل من جهاز آخر أو الهاتف. تتوفر كل الأدوات (استبدال/تركيب/مسح) بنفس الشكل.
+            </p>
           </>
         )}
 
@@ -1099,7 +1223,7 @@ export default function RisenImages() {
               <div className="flex flex-col gap-1.5 p-2 rounded border border-border bg-muted/30">
                 <div className="text-[11px] font-medium">🧹 مسح المحتوى القديم من هذه المنطقة (اختياري)</div>
                 <p className="text-[10px] text-muted-foreground">
-                  بعد تحديد منطقة الاسم/النص القديم أعلاه، اختر نقطة نظيفة قريبة من نفس الصورة لنسخ نسيجها فوق المنطقة القديمة قبل لصق الاسم الجديد.
+                  بعد تحديد منطقة الاسم/النص القديم أعلاه، اسحب مربعاً بنفس حجمها فوق منطقة نظيفة من نفس الصورة (سترى المربع يتحرك مباشرة قبل الإفلات) لنسخ نسيجها فوق المنطقة القديمة قبل لصق الاسم الجديد.
                 </p>
                 <Button
                   size="sm"
@@ -1108,7 +1232,7 @@ export default function RisenImages() {
                   disabled={!selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0}
                 >
                   <Target className="w-3.5 h-3.5 ml-1" />
-                  {pickingEraseSource ? "انقر الآن على نقطة نظيفة في الصورة…" : "اختر نقطة مصدر نظيفة"}
+                  {pickingEraseSource ? "اسحب الآن مربعاً فوق منطقة نظيفة…" : "اسحب لتحديد نقطة مصدر نظيفة"}
                 </Button>
                 {eraseSourcePoint && (
                   <div className="text-[10px] text-muted-foreground text-center font-mono">نقطة المصدر: {eraseSourcePoint.x}, {eraseSourcePoint.y}</div>
@@ -1122,6 +1246,14 @@ export default function RisenImages() {
                   <Eraser className="w-3.5 h-3.5 ml-1" /> تطبيق المسح
                 </Button>
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportSelectedRegionPng}
+                disabled={!selectionRect || selectionRect.w <= 0 || selectionRect.h <= 0}
+              >
+                <Download className="w-3.5 h-3.5 ml-1" /> تصدير المنطقة كـPNG (للتعديل الخارجي)
+              </Button>
               <input
                 ref={compositeOverlayInputRef}
                 type="file"
@@ -1163,7 +1295,8 @@ export default function RisenImages() {
         </div>
       ) : (
       <div className="flex flex-col md:flex-row flex-1 min-h-0">
-        {/* Sidebar: filters + thumbnail grid */}
+        {/* Sidebar: filters + thumbnail grid — not shown in standalone .dds mode (only one image) */}
+        {!standaloneDdsMode && (
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="p-3 border-b border-border flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -1236,9 +1369,10 @@ export default function RisenImages() {
             )}
           </div>
         </div>
+        )}
 
         {/* Preview pane */}
-        <div className="w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-r border-border p-4 flex flex-col gap-3">
+        <div className={standaloneDdsMode ? "w-full max-w-md mx-auto p-4 flex flex-col gap-3" : "w-full md:w-80 shrink-0 border-t md:border-t-0 md:border-r border-border p-4 flex flex-col gap-3"}>
           {!selectedEntry ? (
             <p className="text-sm text-muted-foreground text-center mt-8">اختر صورة من القائمة للمعاينة</p>
           ) : (

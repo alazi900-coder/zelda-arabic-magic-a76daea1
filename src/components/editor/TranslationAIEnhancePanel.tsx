@@ -464,6 +464,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     let allSuggestions: EnhanceSuggestion[] = [];
     let allIssues: GrammarIssue[] = [];
     let processed = 0;
+    // نصوص فشل الخادم فعلياً بتحليل ردّ الـAI الخاص بها (رد مبتور/غير صالح) —
+    // لا تُعلَّم كـ"مفحوصة" فتبقى مؤهّلة تلقائياً للفحص القادم بدل ضياعها بصمت.
+    const failedKeysTotal = new Set<string>();
 
     // يدمج ردّ الـ AI (حقيقيّاً من الشبكة أو مُصطنَعاً من الكاش) في نتائج
     // اللوحة — مستخدَمة من مسارَين: الردود الحقيقيّة القادمة من enhance-translations،
@@ -631,9 +634,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             fallbackNoticeShownRef.current = true;
             toast({ title: "🔄 تم التحويل تلقائياً إلى Gemini", description: "DeepSeek كان مشغولاً أو غير متاح، فأُكمل الفحص عبر Gemini بدلاً منه." });
           }
-          for (const t of textsToAnalyze) processedKeysRef.current.set(t.key, t.translation);
+          const failedKeys: string[] = Array.isArray(data?._meta?.failedKeys) ? data._meta.failedKeys : [];
+          const failedKeySet = new Set(failedKeys);
+          for (const k of failedKeys) failedKeysTotal.add(k);
+          for (const t of textsToAnalyze) {
+            if (failedKeySet.has(t.key)) continue; // لم يُفحص فعلياً — لا تُعلَّم كمفحوص.
+            processedKeysRef.current.set(t.key, t.translation);
+          }
           setProcessedCount(processedKeysRef.current.size);
-          await storeCacheForBatch(textsToAnalyze, data);
+          await storeCacheForBatch(textsToAnalyze.filter(t => !failedKeySet.has(t.key)), data);
           return { data, count: textsToAnalyze.length };
         } catch (err) {
           const errStr = String(err);
@@ -656,9 +665,17 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 toast({ title: data.error, variant: "destructive" });
                 return { data: null, count: textsToAnalyze.length };
               }
-              for (const t of textsToAnalyze) processedKeysRef.current.set(t.key, t.translation);
-              setProcessedCount(processedKeysRef.current.size);
-              await storeCacheForBatch(textsToAnalyze, data);
+              {
+                const failedKeys: string[] = Array.isArray(data?._meta?.failedKeys) ? data._meta.failedKeys : [];
+                const failedKeySet = new Set(failedKeys);
+                for (const k of failedKeys) failedKeysTotal.add(k);
+                for (const t of textsToAnalyze) {
+                  if (failedKeySet.has(t.key)) continue;
+                  processedKeysRef.current.set(t.key, t.translation);
+                }
+                setProcessedCount(processedKeysRef.current.size);
+                await storeCacheForBatch(textsToAnalyze.filter(t => !failedKeySet.has(t.key)), data);
+              }
               return { data, count: textsToAnalyze.length };
             } catch (retryErr) {
               const msg = `فشل بعد إعادة المحاولة: ${String(retryErr).slice(0, 200)}`;
@@ -699,13 +716,16 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const enhanceCount = allSuggestions.length;
     const grammarCount = allIssues.length;
     const total = mode === "enhance" ? enhanceCount : mode === "grammar" ? grammarCount : enhanceCount + grammarCount;
+    const failedNote = failedKeysTotal.size > 0
+      ? ` — تعذّر تحليل ${failedKeysTotal.size} نص (رد الذكاء الاصطناعي انقطع)، سيُعاد فحصها تلقائياً في المحاولة القادمة`
+      : "";
     if (total === 0 && !abortRef.current) {
       const emptyTitle = mode === "enhance" ? "✅ الترجمات جيدة" : mode === "grammar" ? "✅ لا توجد أخطاء" : "✅ الترجمات سليمة قواعديّاً وأسلوبيّاً";
-      toast({ title: emptyTitle });
+      toast({ title: emptyTitle, description: failedNote || undefined });
     } else if (mode === "combined") {
-      toast({ title: `تم العثور على ${grammarCount} خطأ + ${enhanceCount} اقتراح` });
+      toast({ title: `تم العثور على ${grammarCount} خطأ + ${enhanceCount} اقتراح`, description: failedNote || undefined });
     } else {
-      toast({ title: `تم العثور على ${total} ${mode === "enhance" ? "اقتراح" : "خطأ"}` });
+      toast({ title: `تم العثور على ${total} ${mode === "enhance" ? "اقتراح" : "خطأ"}`, description: failedNote || undefined });
     }
   };
 

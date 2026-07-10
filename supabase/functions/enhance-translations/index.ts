@@ -358,26 +358,38 @@ async function processInChunks<E, R>(
   chunkSize: number,
   concurrency: number,
   fn: (entriesChunk: E[], promptEntriesChunk: E[]) => Promise<{ items: R[]; errorResponse?: Response }>,
-): Promise<{ items: R[]; errorResponse?: Response }> {
-  if (entries.length <= chunkSize) return fn(entries, promptEntries);
+): Promise<{ items: R[]; errorResponse?: Response; failedEntries: E[] }> {
+  if (entries.length <= chunkSize) {
+    const result = await fn(entries, promptEntries);
+    return { ...result, failedEntries: result.errorResponse ? entries : [] };
+  }
   const ranges: { start: number; count: number }[] = [];
   for (let i = 0; i < entries.length; i += chunkSize) {
     ranges.push({ start: i, count: Math.min(chunkSize, entries.length - i) });
   }
   const allItems: R[] = [];
+  // قطع فشلت (خطأ شبكة/تحليل JSON) — عناصرها لم تُفحَص فعلياً، يجب ألّا
+  // تُعامَل الواجهة نصوصها كـ"مفحوصة" وإلّا تُفقد للأبد بصمت.
+  const failedEntries: E[] = [];
   let firstError: Response | undefined;
   for (let i = 0; i < ranges.length; i += concurrency) {
     const slice = ranges.slice(i, i + concurrency);
     const results = await Promise.all(slice.map(r =>
       fn(entries.slice(r.start, r.start + r.count), promptEntries.slice(r.start, r.start + r.count)),
     ));
-    for (const r of results) {
-      if (r.errorResponse) { if (!firstError) firstError = r.errorResponse; continue; }
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j];
+      const range = slice[j];
+      if (r.errorResponse) {
+        if (!firstError) firstError = r.errorResponse;
+        failedEntries.push(...entries.slice(range.start, range.start + range.count));
+        continue;
+      }
       allItems.push(...r.items);
     }
   }
-  if (allItems.length === 0 && firstError) return { items: [], errorResponse: firstError };
-  return { items: allItems };
+  if (allItems.length === 0 && firstError) return { items: [], errorResponse: firstError, failedEntries };
+  return { items: allItems, failedEntries };
 }
 
 Deno.serve(async (req) => {
@@ -524,6 +536,16 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ model: PROVIDER_FALLBACK_MODEL, messages }),
     });
 
+    // يبني حقل _meta الموحَّد للردّ النهائي (تحويل المزوّد + مفاتيح النصوص التي
+    // فشل تحليلها فعلياً ولم تُفحَص) — الواجهة تستخدم failedKeys لتجنّب تعليم
+    // هذه النصوص كـ"مفحوصة" حتى تُعاد تلقائياً في المحاولة القادمة.
+    const buildMetaField = (failedEntries: EnhanceEntry[]): { _meta?: { providerFallback?: string; failedKeys?: string[] } } => {
+      const meta: { providerFallback?: string; failedKeys?: string[] } = {};
+      if (usedProviderFallback) meta.providerFallback = 'gemini';
+      if (failedEntries.length > 0) meta.failedKeys = failedEntries.map(e => e.key);
+      return Object.keys(meta).length > 0 ? { _meta: meta } : {};
+    };
+
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
     // DeepSeek يحتاج response_format=json_object صراحةً وإلّا يُرجع نصّاً
     // داخل markdown fences لا يلتقطه parser الـ JSON دائماً (نفس تكوين
@@ -609,18 +631,45 @@ Deno.serve(async (req) => {
         return { items: [], errorResponse: new Response(JSON.stringify({ error: `الـ AI لم يُرجع أيّ جواب — تحقّق من اسم النموذج (${resolvedModel})` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
       }
       const content = aiResult.choices[0]?.message?.content || '';
-      let parsed: Record<string, unknown> = {};
+      // دفاعيّ حاسم: فشل تحليل الرد (رد مبتور/JSON غير صالح) كان سابقاً يُرجَع
+      // كـ"لا مشاكل" ناجحة بصمت — يعني الواجهة تُعلّم كل نصوص الدفعة "مفحوصة"
+      // رغم أنها لم تُفحص فعلياً، فتُفقد للأبد. الآن أي فشل تحليل حقيقي = خطأ
+      // يُرجَع صراحةً، حتى تُعاد هذه النصوص تلقائياً في المحاولة القادمة بدل
+      // ضياعها. لا يؤثر على الحالة الطبيعية (رد صالح بمصفوفة فارغة = لا مشاكل).
+      let parsed: Record<string, unknown> | null = null;
+      let parseFailReason = '';
       try {
         const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
         const raw = (jsonMatch[1] || content).trim();
         const objMatch = raw.match(/\{[\s\S]*\}/);
-        if (objMatch) parsed = JSON.parse(objMatch[0]);
-        else console.error(`[enhance] ${modeLabel}: no JSON object`, content.slice(0, 500));
+        if (objMatch) {
+          parsed = JSON.parse(objMatch[0]);
+        } else {
+          parseFailReason = 'لم يُعثر على كائن JSON صالح في الرد (على الأرجح انقطع الرد قبل اكتماله)';
+        }
       } catch (e) {
-        console.error(`[enhance] ${modeLabel} JSON parse error:`, e, content.slice(0, 500));
+        parseFailReason = `فشل تحليل JSON: ${String(e).slice(0, 150)}`;
+      }
+      if (parsed === null) {
+        console.error(`[enhance] ${modeLabel}: ${parseFailReason}`, content.slice(0, 500));
+        return {
+          items: [],
+          errorResponse: new Response(JSON.stringify({
+            error: `تعذّر تحليل ردّ ${isDeepSeek ? 'DeepSeek' : 'AI'} — ${parseFailReason} (سيُعاد فحص هذه النصوص تلقائياً في المحاولة القادمة)`,
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }),
+        };
       }
       const arr = parsed[arrayField];
-      return { items: Array.isArray(arr) ? arr as T[] : [] };
+      if (!Array.isArray(arr)) {
+        console.error(`[enhance] ${modeLabel}: response JSON missing expected array field "${arrayField}"`, JSON.stringify(parsed).slice(0, 500));
+        return {
+          items: [],
+          errorResponse: new Response(JSON.stringify({
+            error: `ردّ ${isDeepSeek ? 'DeepSeek' : 'AI'} لم يحتوِ الحقل المتوقَّع (${arrayField}) — سيُعاد فحص هذه النصوص تلقائياً في المحاولة القادمة`,
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }),
+        };
+      }
+      return { items: arr as T[] };
     }
 
 
@@ -718,9 +767,9 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
       });
       if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-      console.log('[enhance] grammar mode parsed', { issuesCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback });
+      console.log('[enhance] grammar mode parsed', { issuesCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback, failedCount: chunkResult.failedEntries.length });
 
-      return new Response(JSON.stringify({ issues: chunkResult.items, ...(usedProviderFallback ? { _meta: { providerFallback: 'gemini' } } : {}) }), {
+      return new Response(JSON.stringify({ issues: chunkResult.items, ...buildMetaField(chunkResult.failedEntries) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -837,9 +886,9 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
       });
       if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-      console.log('[enhance] combined mode parsed', { resultsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback });
+      console.log('[enhance] combined mode parsed', { resultsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback, failedCount: chunkResult.failedEntries.length });
 
-      return new Response(JSON.stringify({ results: chunkResult.items, ...(usedProviderFallback ? { _meta: { providerFallback: 'gemini' } } : {}) }), {
+      return new Response(JSON.stringify({ results: chunkResult.items, ...buildMetaField(chunkResult.failedEntries) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -931,9 +980,9 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
     });
     if (chunkResult.errorResponse) return chunkResult.errorResponse;
 
-    console.log('[enhance] enhance mode parsed', { suggestionsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback });
+    console.log('[enhance] enhance mode parsed', { suggestionsCount: chunkResult.items.length, model: resolvedModel, passes: passes || 1, chunked: entries.length > CHUNK, usedProviderFallback, failedCount: chunkResult.failedEntries.length });
 
-    return new Response(JSON.stringify({ suggestions: chunkResult.items, ...(usedProviderFallback ? { _meta: { providerFallback: 'gemini' } } : {}) }), {
+    return new Response(JSON.stringify({ suggestions: chunkResult.items, ...buildMetaField(chunkResult.failedEntries) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

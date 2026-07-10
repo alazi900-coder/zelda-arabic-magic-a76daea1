@@ -46,7 +46,7 @@ function formatBytes(n: number): string {
 }
 
 function downloadBlob(bytes: Uint8Array, filename: string): void {
-  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -464,7 +464,7 @@ export default function RisenImages() {
         let height = decoded.height;
         if (previewNaiveFilter) {
           const filtered = simulateNaiveBilinearPreview(rgba, width, height, 0.5);
-          rgba = filtered.rgba;
+          rgba = filtered.rgba as Uint8ClampedArray<ArrayBuffer>;
           width = filtered.width;
           height = filtered.height;
         }
@@ -502,7 +502,7 @@ export default function RisenImages() {
       }
       const wrapped = wrapRawDdsAsXimg(ddsBytes);
       const entry: RisenPakFlatFile = { path: f.name.replace(/\.dds$/i, ""), offset: 0, size: wrapped.length };
-      const wrappedFile = new File([wrapped], f.name);
+      const wrappedFile = new File([wrapped as BlobPart], f.name);
       setFileHandle(handle || null);
       setHeader(null);
       setFlatFiles([entry]);
@@ -624,7 +624,7 @@ export default function RisenImages() {
     let freshFile: File | null = null;
     if (fileHandle) {
       const writable = await fileHandle.createWritable({ keepExistingData: true });
-      await writable.write({ type: "write", position: writePosition, data: onDiskBytes });
+      await writable.write({ type: "write", position: writePosition, data: onDiskBytes as BufferSource });
       await writable.close();
       // Chrome invalidates previously-obtained File snapshots for a handle once it's
       // been written to — re-acquire a fresh one or every subsequent read (including
@@ -643,11 +643,11 @@ export default function RisenImages() {
             label: "استعادة فورية",
             onClick: async () => {
               const restoreWritable = await fileHandle.createWritable({ keepExistingData: true });
-              await restoreWritable.write({ type: "write", position: writePosition, data: onDiskOriginalBytes });
+              await restoreWritable.write({ type: "write", position: writePosition, data: onDiskOriginalBytes as BufferSource });
               await restoreWritable.close();
               const restoredRaw = await fileHandle.getFile();
               const restoredFile = standaloneDdsMode
-                ? new File([wrapRawDdsAsXimg(new Uint8Array(await restoredRaw.arrayBuffer()))], restoredRaw.name)
+                ? new File([wrapRawDdsAsXimg(new Uint8Array(await restoredRaw.arrayBuffer())) as BlobPart], restoredRaw.name)
                 : restoredRaw;
               setFile(restoredFile);
               invalidateEntry(selectedEntry.path);
@@ -660,7 +660,7 @@ export default function RisenImages() {
       }
 
       freshFile = standaloneDdsMode
-        ? new File([wrapRawDdsAsXimg(new Uint8Array(await rawFreshFile.arrayBuffer()))], rawFreshFile.name)
+        ? new File([wrapRawDdsAsXimg(new Uint8Array(await rawFreshFile.arrayBuffer())) as BlobPart], rawFreshFile.name)
         : rawFreshFile;
       setFile(freshFile);
       toast.success(
@@ -710,7 +710,7 @@ export default function RisenImages() {
         const directDecode = await decodePngRawNoCanvas(pngBytes);
         let imageData: ImageData;
         if (directDecode && directDecode.width === original.width && directDecode.height === original.height) {
-          imageData = new ImageData(directDecode.rgba, directDecode.width, directDecode.height);
+          imageData = new ImageData(directDecode.rgba as Uint8ClampedArray<ArrayBuffer>, directDecode.width, directDecode.height);
           importMethod = "PNG — فك مباشر بدون Canvas (الأبعاد مطابقة)";
         } else {
           const img = await loadImageElement(importFile);
@@ -770,7 +770,7 @@ export default function RisenImages() {
     setBusyPath(path);
     try {
       const writable = await fileHandle.createWritable({ keepExistingData: true });
-      await writable.write({ type: "write", position: entry.offset, data: record.originalXimgBytes });
+      await writable.write({ type: "write", position: entry.offset, data: record.originalXimgBytes as BufferSource });
       await writable.close();
       // Same stale-snapshot issue as the replace path above — refresh after writing.
       const freshFile = await fileHandle.getFile();
@@ -1022,7 +1022,7 @@ export default function RisenImages() {
     const cropped = cropRegion(compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height, eraseSourceRect);
     const scaled = scaleRgbaStretch(cropped, eraseSourceRect.w, eraseSourceRect.h, selectionRect.w, selectionRect.h);
     const erased = compositeIntoRegion(compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height, scaled, selectionRect);
-    setCompositeBaseImageData(new ImageData(erased, compositeBaseImageData.width, compositeBaseImageData.height));
+    setCompositeBaseImageData(new ImageData(erased as Uint8ClampedArray<ArrayBuffer>, compositeBaseImageData.width, compositeBaseImageData.height));
     setEraseSourceRect(null);
   }, [compositeBaseImageData, selectionRect, eraseSourceRect]);
 
@@ -1120,7 +1120,7 @@ export default function RisenImages() {
       // testing) to round semi-transparent pixels by ±1 across the WHOLE image,
       // not just the edited region, due to Canvas2D's premultiplied-alpha storage.
       const composited = compositeIntoRegion(compositeBaseImageData.data, original.width, original.height, overlayData, selectionRect);
-      const imageData = new ImageData(composited, original.width, original.height);
+      const imageData = new ImageData(composited as Uint8ClampedArray<ArrayBuffer>, original.width, original.height);
 
       const encoded = encodeToOriginalFormat(original, imageData);
       if ("error" in encoded) {

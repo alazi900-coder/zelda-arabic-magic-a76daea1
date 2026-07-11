@@ -1063,6 +1063,7 @@ const RisenFileManager: React.FC = () => {
       return name.toLowerCase().includes(q) || label.toLowerCase().includes(q);
     };
     const movementProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "movement" && matchesSearch(p.name));
+    const physicsFloatProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "physics" && matchesSearch(p.name));
     const physicsProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "physics" && matchesSearch(p.name));
     const otherFloatProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
     const otherBoolProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
@@ -1070,7 +1071,7 @@ const RisenFileManager: React.FC = () => {
     const totalPropCount = tpleProps.length + tpleBoolProps.length + tpleIntProps.length;
     const hasEdits = edits.size > 0 || boolEdits.size > 0 || intEdits.size > 0;
     const nothingFound = totalPropCount === 0;
-    const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0 && intProps.length === 0;
+    const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsFloatProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0 && intProps.length === 0;
     const singlePendingChanges: PendingChange[] = [
       ...tpleProps
         .filter((p) => edits.has(p.valueOffset) && edits.get(p.valueOffset) !== p.value)
@@ -1154,10 +1155,19 @@ const RisenFileManager: React.FC = () => {
                   </div>
                 </div>
               )}
-              {physicsProps.length > 0 && (
+              {(physicsFloatProps.length > 0 || physicsProps.length > 0) && (
                 <div>
                   <div className="font-display font-bold mb-2 flex items-center gap-1.5">⚙️ فيزياء وتصادم</div>
                   <div className="space-y-2">
+                    {physicsFloatProps.map((p) => (
+                      <PropertyRow
+                        key={`${p.valueOffset}-${resetToken}`}
+                        prop={p}
+                        currentValue={edits.get(p.valueOffset) ?? p.value}
+                        onChange={updateEditValue}
+                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "float" })}
+                      />
+                    ))}
                     {physicsProps.map((p) => (
                       <BoolPropertyRow
                         key={`${p.valueOffset}-${resetToken}`}

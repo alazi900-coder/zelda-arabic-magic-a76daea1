@@ -175,6 +175,199 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     category: "movement",
   },
 
+  // ما يلي أيضاً من نفس فئة gCCharacterMovement_PS (تأكّدنا من ذلك من ترتيب
+  // مجمّع الأسماء داخل الملف نفسه، وليس تخميناً) — معظمها إعدادات سقوط/قفز/تسلق.
+  FallVelocity: {
+    label: "سرعة السقوط",
+    description: "سرعة السقوط الحالية أثناء الهبوط الحر. تُستخدم داخلياً لحساب تسارع السقوط؛ قد تكون قيمة حالة تشغيل لحظية أكثر من كونها إعداداً ثابتاً.",
+    category: "movement",
+  },
+  QuadrupedSlopeInertia: {
+    label: "قصور الرباعي على المنحدر",
+    description: "قصور ذاتي إضافي عند حركة الكيانات رباعية الأرجل على المنحدرات — يؤثر فقط إن كانت IsQuadruped مفعَّلة لهذا الكيان.",
+    category: "movement",
+  },
+  StepHeight: {
+    label: "ارتفاع الدرجة",
+    description: "أقصى ارتفاع لعتبة أو درجة يمكن للشخصية صعودها تلقائياً أثناء المشي دون الحاجة للقفز. رفعها يسمح بتجاوز عوائق أعلى بسلاسة.",
+    category: "movement",
+  },
+  FallDownMinGroundDist: {
+    label: "أدنى مسافة لبدء السقوط",
+    description: "أقل مسافة عن الأرض تُعتبر بعدها الشخصية «في حالة سقوط» بدل واقفة على الأرض.",
+    category: "movement",
+  },
+  LevitationModifier: {
+    label: "معامل التحليق",
+    description: "معامل يُضرب في سرعة الحركة أثناء التحليق/الطفو (Levitation) إن كانت اللعبة تُفعِّل هذه الحالة لهذا الكيان.",
+    category: "movement",
+  },
+  SteepGroundAngleMin: {
+    label: "أدنى زاوية منحدر شديد",
+    description: "أدنى زاوية ميل للأرض تبدأ عندها اللعبة معاملة السطح كمنحدر شديد (يؤثر على الحركة/الانزلاق عليه).",
+    category: "movement",
+  },
+  SteepGroundAngleMax: {
+    label: "أقصى زاوية للوقوف",
+    description: "أقصى زاوية ميل قبل اعتبار السطح غير قابل للوقوف عليه إطلاقاً (تنزلق عنه الشخصية حتماً).",
+    category: "movement",
+  },
+  WalkDownSpeedScale: {
+    label: "معامل سرعة النزول",
+    description: "معامل يُضرب في السرعة عند النزول على منحدر (عادة أقل من 1 لإبطاء الهبوط والحفاظ على التوازن).",
+    category: "movement",
+  },
+  SensorAdvanceDuration: {
+    label: "مدة استشعار الأرضية المسبق",
+    description: "المدة التي يستشعر بها محرك الحركة تضاريس الأرض أمام الشخصية مسبقاً، لتوقّع التغيّرات القادمة وتنعيم الحركة عليها.",
+    category: "movement",
+  },
+  SensorMinSlideAngle: {
+    label: "أدنى زاوية انزلاق",
+    description: "أدنى زاوية ميل تبدأ عندها الشخصية بالانزلاق تلقائياً بدل الثبات في مكانها.",
+    category: "movement",
+  },
+  SensorInertia: {
+    label: "قصور مستشعر الأرضية",
+    description: "مدى تأخّر استجابة مستشعر الأرضية للتغيرات المفاجئة في التضاريس — قيمة أعلى تعني حركة أكثر نعومة لكن استجابة أبطأ.",
+    category: "movement",
+  },
+  GroundSlopeTransInertia: {
+    label: "قصور الانتقال بين الميول",
+    description: "قصور ذاتي عند الانتقال بين درجات ميل أرضية مختلفة — يمنع تغيّرات حادة مفاجئة في زاوية وقوف الشخصية.",
+    category: "movement",
+  },
+  FallSteerScaleFactor: {
+    label: "معامل التوجيه أثناء السقوط",
+    description: "مدى قدرة اللاعب على التحكم في اتجاه الشخصية أثناء السقوط الحر. صفر = بلا تحكم إطلاقاً في الهواء.",
+    category: "movement",
+  },
+  FallXZDecceleration: {
+    label: "تباطؤ أفقي أثناء السقوط",
+    description: "تباطؤ الحركة الأفقية (يميناً/يساراً وأماماً/خلفاً) أثناء السقوط — يبطئ اندفاع الشخصية أفقياً وهي تسقط بدل الاستمرار بنفس الزخم.",
+    category: "movement",
+  },
+  FallXZDeccelerationWarmUpTime: {
+    label: "مهلة قبل تباطؤ السقوط الأفقي",
+    description: "الوقت قبل أن يبدأ تباطؤ الحركة الأفقية أثناء السقوط (FallXZDecceleration) بالتأثير فعلياً بعد بدء السقوط.",
+    category: "movement",
+  },
+  DontStopFallAngleMin: {
+    label: "أدنى زاوية لعدم إيقاف السقوط",
+    description: "أدنى زاوية سقوط لا تتوقف عندها حركة السقوط تلقائياً — تمنع «التعليق» غير الطبيعي عند حواف بسيطة أو انحدارات طفيفة.",
+    category: "movement",
+  },
+  WaterWadeDepth: {
+    label: "عمق بداية الخوض بالماء",
+    description: "عمق الماء الذي تبدأ عنده الشخصية «الخوض» (حركة مختلفة عن المشي العادي) بدل السير الطبيعي.",
+    category: "movement",
+  },
+  WaterDeathDepth: {
+    label: "عمق الغمر الكامل",
+    description: "عمق الماء الذي يُعتبر الكيان عنده مغموراً بالكامل — قد يرتبط بمخاطر الغرق لكيانات لا تملك حركة سباحة.",
+    category: "movement",
+  },
+  LastFallVelocity: {
+    label: "آخر سرعة سقوط",
+    description: "آخر سرعة سقوط مسجَّلة — على الأرجح حالة تشغيل محفوظة من آخر مرة سقطت فيها الشخصية، وليست إعداداً تصممه أنت.",
+    category: "movement",
+  },
+  ClimbHeightMin: {
+    label: "أدنى ارتفاع تسلّق",
+    description: "أدنى ارتفاع عائق تعتبره اللعبة قابلاً للتسلق (أقل من هذا يُعامَل كدرجة عادية تُصعَد بلا حركة تسلّق خاصة).",
+    category: "movement",
+  },
+  ClimbHeightLow: {
+    label: "ارتفاع تسلّق منخفض",
+    description: "حد ارتفاع يستخدمه محرك اللعبة لاختيار نوع حركة تسلّق «قصيرة» مناسبة لعوائق منخفضة نسبياً.",
+    category: "movement",
+  },
+  ClimbHeightMid: {
+    label: "ارتفاع تسلّق متوسط",
+    description: "حد ارتفاع يستخدمه محرك اللعبة لاختيار نوع حركة تسلّق «متوسطة» لعوائق بارتفاع متوسط.",
+    category: "movement",
+  },
+  ClimbHeightHigh: {
+    label: "ارتفاع تسلّق عالٍ",
+    description: "حد ارتفاع يستخدمه محرك اللعبة لاختيار حركة تسلّق «كاملة» لعوائق عالية نسبياً.",
+    category: "movement",
+  },
+  ClimbFrontDepth1: {
+    label: "عمق أمامي للتسلّق (1)",
+    description: "المسافة الأمامية المطلوبة (المرحلة الأولى) قبل أن تبدأ اللعبة حركة تسلّق سليمة عند مواجهة عائق.",
+    category: "movement",
+  },
+  ClimbFrontDepth2: {
+    label: "عمق أمامي للتسلّق (2)",
+    description: "نفس مبدأ العمق الأمامي للتسلّق، لكن للمرحلة الثانية من الحركة.",
+    category: "movement",
+  },
+  ClimbFrontDepth3: {
+    label: "عمق أمامي للتسلّق (3)",
+    description: "نفس مبدأ العمق الأمامي للتسلّق، لكن للمرحلة الثالثة (الأعمق/الأخيرة) من الحركة.",
+    category: "movement",
+  },
+  ClimbTargetGroundAngleMax: {
+    label: "أقصى زاوية هبوط بعد التسلّق",
+    description: "أقصى زاوية ميل للأرض المستهدفة يمكن أن تهبط عندها حركة التسلّق بنجاح دون فشل الحركة.",
+    category: "movement",
+  },
+  ClimbFlightGravity: {
+    label: "جاذبية أثناء التسلّق",
+    description: "قوة الجاذبية المطبَّقة أثناء المرحلة الانتقالية («الطيران») بين بداية حركة التسلّق ونهايتها.",
+    category: "movement",
+  },
+  ClimbFlightForwardTime: {
+    label: "مدة الاندفاع أثناء التسلّق",
+    description: "مدة الاندفاع الأمامي أثناء تنفيذ حركة التسلّق — تؤثر على مدى واقعية/سلاسة حركة اليدين والجسم أثناء الصعود.",
+    category: "movement",
+  },
+  JumpHeight: {
+    label: "ارتفاع القفز",
+    description: "أقصى ارتفاع تصل إليه الشخصية عند القفز. زيادتها = قفز أعلى؛ تخفيضها = قفز أقصر.",
+    category: "movement",
+  },
+  JumpFrontSpeedFactor: {
+    label: "معامل الاندفاع الأمامي بالقفز",
+    description: "معامل يُضرب في السرعة الأمامية أثناء القفز — يحدد مدى اندفاع الشخصية للأمام وهي في الهواء.",
+    category: "movement",
+  },
+  JumpFlightGravity: {
+    label: "جاذبية القفزة",
+    description: "قوة الجاذبية المطبَّقة أثناء مرحلة الطيران في القفزة — تحدد شكل منحنى القفزة (قفزة عالية بطيئة الهبوط مقابل قفزة قصيرة سريعة السقوط).",
+    category: "movement",
+  },
+  JumpTranslationCtrlFactor: {
+    label: "تحكّم بالموضع أثناء القفز",
+    description: "مدى تحكم اللاعب في تعديل موضع/مسار الشخصية أثناء وجودها في الهواء بعد القفز.",
+    category: "movement",
+  },
+  JumpRotationCtrlFactor: {
+    label: "تحكّم بالدوران أثناء القفز",
+    description: "مدى تحكم اللاعب في تدوير اتجاه الشخصية أثناء القفز.",
+    category: "movement",
+  },
+  SlideSpeed: {
+    label: "سرعة الانزلاق",
+    description: "سرعة حركة الانزلاق — كالانزلاق على منحدر حاد أو أثناء حركة انزلاقية مخصصة في اللعبة.",
+    category: "movement",
+  },
+  LevitationFallVelo: {
+    label: "سرعة سقوط أثناء التحليق",
+    description: "سرعة السقوط أثناء حالة التحليق/الطفو تحديداً، منفصلة عن FallVelocity العادية أثناء السقوط الحر الطبيعي.",
+    category: "movement",
+  },
+  LevitationUpVelo: {
+    label: "سرعة صعود أثناء التحليق",
+    description: "سرعة الصعود لأعلى أثناء حالة التحليق/الطفو.",
+    category: "movement",
+  },
+  LevitationMaxUpwardMove: {
+    label: "أقصى صعود بالتحليق",
+    description: "أقصى مسافة صعود يمكن قطعها خلال حالة واحدة من التحليق/الطفو.",
+    category: "movement",
+  },
+
   PhysicsEnabled: {
     label: "تفعيل الفيزياء",
     description: "هل يتأثر الكيان بمحرك الفيزياء (الجاذبية والتصادم) عموماً. تعطيلها (لا) يجعله يتجاهل الجاذبية والتصادم تماماً — قد يُعلَّق في الهواء أو يمر خلال الجدران. غيّرها بحذر شديد؛ للشخصيات تبقى «نعم» عادة.",
@@ -281,15 +474,317 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     category: "physics",
   },
 
-  // Integer (short/int/long) properties — only a handful of names are
-  // confidently understood; most others found by the generic scan look like
-  // transient runtime/save state (timestamps, internal counters, currently
-  // 0 in the one sample checked), not designer-authored settings, so they're
-  // intentionally left uncurated rather than guessing at their purpose.
+  // ما يلي من فئات gCDynamicCollisionCircle_PS، eCRigidBody_PS، eCCollisionShape_PS
+  // (فيزياء تصادم/جسم صلب متقدمة، تأكّدنا من انتمائها من ترتيب مجمّع الأسماء).
+  Radius: {
+    label: "نصف قطر دائرة التصادم",
+    description: "نصف قطر دائرة التصادم الديناميكية المستخدمة لهذا الكيان — تُستخدم غالباً لحساب الازدحام/التنافر بين الشخصيات القريبة من بعضها.",
+    category: "physics",
+  },
+  TotalMass: {
+    label: "الكتلة الكلية",
+    description: "الكتلة الفيزيائية الكلية للجسم — تؤثر على قوة الدفع/الاصطدام المطلوبة لتحريكه إن كانت الفيزياء الكاملة مفعَّلة له (PhysicsEnabled = نعم).",
+    category: "physics",
+  },
+  WakeUpCounter: {
+    label: "عدّاد الاستيقاظ الفيزيائي",
+    description: "عدّاد/عتبة داخلية تحدد متى «يستيقظ» الجسم فيزيائياً من حالة السكون لإعادة حساب الفيزياء عليه — إعداد تحسين أداء داخلي.",
+    category: "physics",
+  },
+  LinearDamping: {
+    label: "تخميد الحركة الخطية",
+    description: "تخميد (احتكاك افتراضي) يُبطئ توقف الحركة الخطية تدريجياً بعد أي قوة فيزيائية مؤثرة على الجسم. قيمة أعلى = توقف أسرع.",
+    category: "physics",
+  },
+  AngularDamping: {
+    label: "تخميد الدوران",
+    description: "نفس مبدأ تخميد الحركة الخطية لكن للدوران — يُبطئ توقف الدوران الفيزيائي للجسم بعد أي قوة تُحدث دوراناً.",
+    category: "physics",
+  },
+  MaxAngularVelocity: {
+    label: "أقصى سرعة دوران فيزيائية",
+    description: "أقصى سرعة دوران فيزيائية مسموحة للجسم — يمنع دورانه بسرعة غير واقعية بعد تصادم قوي.",
+    category: "physics",
+  },
+  CCDMotionTreshold: {
+    label: "عتبة كشف التصادم المستمر",
+    description: "الحد الأدنى لسرعة الحركة التي يُفعَّل عندها كشف التصادم المستمر (CCD) تلقائياً، لمنع اختراق الأجسام السريعة الحركة لبعضها.",
+    category: "physics",
+  },
+  SkinWidth: {
+    label: "هامش سطح التصادم",
+    description: "هامش رقيق حول سطح شكل التصادم يُستخدم لتحسين استقرار حسابات الفيزياء (يمنع «الارتعاش» عند التلامس الدقيق بين الأسطح).",
+    category: "physics",
+  },
+
+  // الخصائص التالية (نعم/لا وعشرية) تنتمي لأنظمة أخرى — تأكّدنا من فئة كل
+  // واحدة من اسم الفئة البرمجية (مثل gCDialog_PS أو gCEffect_PS) الظاهر في
+  // مجمّع الأسماء داخل الملف مباشرة قبل كل مجموعة خصائصها، وليس تخميناً.
+  // تبقى مصنَّفة "other" لعدم وجود قسم واجهة مخصَّص لها بعد.
+
+  // gCNPC_PS — حالة الشخصية غير القابلة للعب (NPC) تجاه اللاعب.
+  LastFightTimestamp: {
+    label: "توقيت آخر قتال",
+    description: "الطابع الزمني لآخر قتال خاضته هذه الشخصية — حالة تشغيل/ذاكرة محفوظة، وليست إعداداً تصممه.",
+    category: "other",
+  },
+  PlayerWeaponTimestamp: {
+    label: "توقيت إشهار سلاح اللاعب",
+    description: "الطابع الزمني لآخر مرة أشهر فيها اللاعب سلاحه أمام هذه الشخصية — يُستخدم غالباً لتذكّر سلوك عدائي محتمل من الشخصية.",
+    category: "other",
+  },
+  LastDistToTarget: {
+    label: "آخر مسافة للهدف",
+    description: "آخر مسافة مُسجَّلة بين هذه الشخصية وهدفها الحالي — حالة تشغيل داخلية لنظام الذكاء الاصطناعي.",
+    category: "other",
+  },
+  LastDistToGuardPoint: {
+    label: "آخر مسافة لنقطة الحراسة",
+    description: "آخر مسافة مُسجَّلة بين الشخصية ونقطة حراستها (GuardPoint) — تُستخدم في منطق الدورية/الحراسة.",
+    category: "other",
+  },
+  DefeatedByPlayer: {
+    label: "هُزم على يد اللاعب",
+    description: "هل هُزمت هذه الشخصية على يد اللاعب من قبل — حالة تُسجَّل بعد المعركة، وليست إعداد بداية.",
+    category: "other",
+  },
+  Ransacked: {
+    label: "نُهب من قبل",
+    description: "هل نُهب/فُتِّش هذا الكيان (كصندوق أو جثة) من قبل اللاعب مسبقاً.",
+    category: "other",
+  },
+  Discovered: {
+    label: "اكتُشف من قبل",
+    description: "هل اكتشف اللاعب هذا الكيان/الشخصية من قبل — يؤثر مثلاً على ظهوره على الخريطة أو سجل المعرفة.",
+    category: "other",
+  },
+
+  // gCScriptRoutine_PS — حالة تنفيذ الروتين السلوكي والذكاء الاصطناعي.
+  TaskTime: {
+    label: "وقت المهمة الحالية",
+    description: "الوقت المنقضي في المهمة/الروتين الحالي الذي تنفذه الشخصية — حالة تشغيل داخلية لنظام الذكاء الاصطناعي (AI).",
+    category: "other",
+  },
+  StateTime: {
+    label: "وقت الحالة السلوكية",
+    description: "الوقت المنقضي في الحالة (State) السلوكية الحالية للشخصية ضمن آلة الحالات الخاصة بالذكاء الاصطناعي.",
+    category: "other",
+  },
+  EndAttackTimestamp: {
+    label: "توقيت انتهاء الهجوم",
+    description: "الطابع الزمني لانتهاء آخر هجوم نفّذته الشخصية — يُستخدم لحساب فترات التهدئة (cooldown) بين الهجمات.",
+    category: "other",
+  },
+  LockAIInterrupt: {
+    label: "قفل مقاطعة الذكاء الاصطناعي",
+    description: "هل الذكاء الاصطناعي للشخصية مُقفَل حالياً ضد المقاطعة (لا يمكن مقاطعة روتينه الحالي بحدث خارجي).",
+    category: "other",
+  },
+  LockAIResult: {
+    label: "قفل نتيجة الذكاء الاصطناعي",
+    description: "هل نتيجة قرار الذكاء الاصطناعي الحالية مُثبَّتة (لا تُعاد حسابها) — إعداد تحكّم داخلي بمحرك السلوك.",
+    category: "other",
+  },
+  RoutineChanged: {
+    label: "تغيّر الروتين",
+    description: "علامة داخلية تشير إلى أن روتين/مهمة الشخصية تغيّر مؤخراً — يستخدمها النظام ليعرف متى يُعيد تهيئة السلوك الجديد.",
+    category: "other",
+  },
+
+  // gCDamage_PS — حساب الضرر العام (منفصلة عن DamageBonus/DamageAmount أدناه).
+  DamageMultiplier: {
+    label: "معامل الضرر",
+    description: "معامل عام يُضرب في كل الضرر الذي يتلقاه هذا الكيان. أقل من 1.0 = مقاومة/تخفيف ضرر، أكبر من 1.0 = ضعف وضرر إضافي.",
+    category: "other",
+  },
+
+  // gCDialog_PS — التجارة والحوار والتفاعل الاجتماعي مع الشخصية.
+  EndDialogTimestamp: {
+    label: "توقيت انتهاء المحادثة",
+    description: "الطابع الزمني لانتهاء آخر محادثة مع هذه الشخصية — حالة تشغيل.",
+    category: "other",
+  },
+  SaleModifier: {
+    label: "معامل سعر البيع",
+    description: "معامل يُضرب في أسعار بيع هذه الشخصية (كتاجر) للاعب. أقل من 1.0 = بيع أرخص، أكبر من 1.0 = أغلى.",
+    category: "other",
+  },
+  PurchaseModifier: {
+    label: "معامل سعر الشراء",
+    description: "معامل يُضرب في السعر الذي تدفعه هذه الشخصية عند شراء أغراض اللاعب منه. أعلى = تدفع الشخصية أكثر مقابل أغراضك.",
+    category: "other",
+  },
+  TradeEnabled: {
+    label: "التجارة مفعَّلة",
+    description: "هل تفتح هذه الشخصية واجهة التجارة عند التفاعل معها (تاجر فعّال أم لا).",
+    category: "other",
+  },
+  TeachEnabled: {
+    label: "التعليم مفعَّل",
+    description: "هل يمكن لهذه الشخصية تعليم اللاعب مهارات (كمدرّب/معلّم) عند التفاعل معها.",
+    category: "other",
+  },
+  TalkedToPlayer: {
+    label: "تحدّث مع اللاعب",
+    description: "هل تحدّثت هذه الشخصية مع اللاعب من قبل — حالة تُسجَّل بعد أول محادثة معها.",
+    category: "other",
+  },
+  PartyEnabled: {
+    label: "الانضمام كرفيق مفعَّل",
+    description: "هل يمكن للاعب دعوة هذه الشخصية للانضمام كرفيق في فريقه.",
+    category: "other",
+  },
+  MobEnabled: {
+    label: "الانضمام كعصابة مفعَّل",
+    description: "هل يمكن للاعب الانضمام لهذه الشخصية كعصابة/فصيل (Mob) ضمن آليات معيّنة في اللعبة.",
+    category: "other",
+  },
+  SlaveryEnabled: {
+    label: "الاسترقاق مفعَّل",
+    description: "هل يمكن استرقاق/تجنيد هذه الشخصية قسراً ضمن آليات معيّنة في اللعبة (إن وُجدت).",
+    category: "other",
+  },
+  PickedPocket: {
+    label: "نُشل جيبه من قبل",
+    description: "هل سبق للاعب أن نشل جيب هذه الشخصية (سرقة خفية) من قبل.",
+    category: "other",
+  },
+
+  // eCAnimation_PS — الحركة والرسوم المتحركة والدُّمية الفيزيائية.
+  RagDollMass: {
+    label: "كتلة الدُّمية المترهّلة",
+    description: "الكتلة الفيزيائية المستخدَمة عند تفعيل جسم الدُّمية المترهّلة (Ragdoll) — كعند سقوط الشخصية ميتة. تؤثر على واقعية سقوط الجثة.",
+    category: "other",
+  },
+  EnableRepositioning: {
+    label: "إعادة الضبط الآلي للموضع",
+    description: "هل يُسمح لنظام الرسوم المتحركة بإعادة ضبط موضع الشخصية تلقائياً أثناء الحركة (Root motion) بدل الاعتماد فقط على أوامر التحكم المباشرة.",
+    category: "other",
+  },
+
+  // gCNavigation_PS — تخطيط المسارات والملاحة.
+  LastUseableNavigationZoneIsPath: {
+    label: "آخر منطقة ملاحة هي مسار",
+    description: "هل آخر منطقة ملاحة صالحة مسجَّلة للشخصية هي «مسار» (Path) تحديداً وليست منطقة عامة — تفصيل داخلي لنظام تخطيط المسارات.",
+    category: "other",
+  },
+
+  // gCInventory_PS — توليد الغنيمة والمخزون التجاري.
+  GeneratedPlunder: {
+    label: "وُلِّدت الغنيمة",
+    description: "هل وُلِّدت غنيمة/نهب عشوائي لهذا الكيان مسبقاً — يمنع إعادة توليدها في كل مرة يُفتَّش فيها.",
+    category: "other",
+  },
+  GeneratedTrade: {
+    label: "وُلِّد المخزون التجاري",
+    description: "هل وُلِّد مخزون تجاري عشوائي لهذا الكيان مسبقاً (لتجّار عشوائيي المخزون).",
+    category: "other",
+  },
+
+  // gCScriptProxyAIState — حالة سلوك مساعدة إضافية.
+  GroundBias: {
+    label: "انحياز الأرضية",
+    description: "انحياز/تعديل ارتفاع افتراضي يُضاف عند حساب موضع الشخصية بالنسبة للأرض ضمن منطق الذكاء الاصطناعي (مثلاً لمنع أخطاء استهداف بصرية بسيطة).",
+    category: "other",
+  },
+
+  // eCIlluminated_PS — الإضاءة والظلال.
+  CastDirLightShadows: {
+    label: "ظلال من الإضاءة الاتجاهية",
+    description: "هل يُلقي هذا الكيان ظلالاً من الإضاءة الاتجاهية (كضوء الشمس). تعطيلها يحسّن الأداء قليلاً على حساب الواقعية البصرية.",
+    category: "other",
+  },
+  CastPntLightShadows: {
+    label: "ظلال من الإضاءة النقطية",
+    description: "نفس مبدأ ظلال الإضاءة الاتجاهية، لكن من مصادر الإضاءة النقطية (كالمصابيح والشعلات).",
+    category: "other",
+  },
+  CastStaticShadows: {
+    label: "ظلال ثابتة محسوبة مسبقاً",
+    description: "هل تُحسَب ظلال هذا الكيان ضمن الإضاءة الثابتة المُعدَّة مسبقاً (Baked lighting) بدل حسابها الفوري في كل إطار.",
+    category: "other",
+  },
+
+  // gCParty_PS — الرفاق والفريق.
+  Waiting: {
+    label: "في وضع الانتظار",
+    description: "هل هذا العضو في الفريق حالياً في وضع «الانتظار» — لا يتبع اللاعب بنشاط، بل يبقى في مكانه.",
+    category: "other",
+  },
+  AutoRejoin: {
+    label: "الانضمام التلقائي من جديد",
+    description: "هل ينضم عضو الفريق تلقائياً للاعب من جديد بعد الانفصال عنه (كالتخلف عن الركب أو الخروج من منطقة).",
+    category: "other",
+  },
+
+  // gCEffect_PS — التأثيرات البصرية المرتبطة بالكيان.
+  Static: {
+    label: "التأثير ثابت الموضع",
+    description: "هل التأثير البصري المرتبط بهذا الكيان ثابت الموضع (لا يتبع حركة الكيان نفسه بعد تفعيله).",
+    category: "other",
+  },
+  Enabled: {
+    label: "التأثير مفعَّل",
+    description: "هل التأثير البصري (كتوهّج أو جسيمات) المرتبط بهذا الكيان مفعَّل ويعمل حالياً.",
+    category: "other",
+  },
+  UseMaxRepeats: {
+    label: "استخدام حد أقصى للتكرار",
+    description: "هل يُطبَّق حد أقصى لعدد مرات تكرار التأثير البصري (يعمل مع MaxNumRepeats القريبة منها في الملف) بدل تكراره إلى ما لا نهاية.",
+    category: "other",
+  },
+
+  // gCMapInfo_PS — أيقونة الكيان على خريطة اللعبة.
+  CalcRotation: {
+    label: "حساب دوران أيقونة الخريطة",
+    description: "هل يُحسَب دوران أيقونة هذا الكيان على خريطة اللعبة لتعكس اتجاه توجّهه الفعلي، بدل أيقونة ثابتة الاتجاه.",
+    category: "other",
+  },
+
+  // Integer (short/int/long) properties. Confidently attributed to their
+  // owning class from the file's own name-pool ordering (see comments
+  // above) — most currently hold 0 in the one sample checked and look like
+  // transient runtime/save state (timestamps, internal counters) rather
+  // than designer-authored settings, which is noted honestly below.
   InteractionCounter: { label: "عداد التفاعل", description: "عدد مرات التفاعل مع هذا الكيان.", category: "other" },
-  MaterialSwitch: { label: "نوع المادة", description: "مؤشر لنوع المادة المستخدمة (قد يؤثر مثلاً على صوت الخطى).", category: "other" },
-  DamageBonus: { label: "إضافة على الضرر", description: "قيمة تُضاف عند حساب الضرر.", category: "other" },
-  DamageAmount: { label: "مقدار الضرر", description: "القيمة الأساسية للضرر.", category: "other" },
+  MaterialSwitch: { label: "نوع المادة", description: "مؤشر لنوع المادة المستخدمة (قد يؤثر مثلاً على صوت الخطى) — من فئة eCAnimation_PS.", category: "other" },
+  DamageBonus: { label: "إضافة على الضرر", description: "قيمة تُضاف عند حساب الضرر — من فئة gCDamage_PS.", category: "other" },
+  DamageAmount: { label: "مقدار الضرر", description: "القيمة الأساسية للضرر — من فئة gCDamage_PS.", category: "other" },
+  FileVersion: {
+    label: "إصدار بنية الملف",
+    description: "رقم إصدار بنية شكل التصادم (eCCollisionShape_PS) لهذا القالب — يستخدمه محرك اللعبة داخلياً للتوافق بين إصدارات أدوات التطوير، وليس إعداداً يُفترض تعديله. تغييره لا يُحدث أثراً في اللعبة عادة، وقد يجعل بعض أدوات المعاينة الرسمية تسيء تفسير الملف.",
+    category: "other",
+  },
+  CurrentRoutine: {
+    label: "الروتين الحالي (ملاحة)",
+    description: "مؤشر/فهرس الروتين السلوكي الحالي الذي تتبعه الشخصية ضمن نظام الملاحة والحركة المبرمجة (gCNavigation_PS) — حالة تشغيل، غالباً صفر عند عدم وجود روتين نشط.",
+    category: "other",
+  },
+  TaskPosition: {
+    label: "موضع المهمة",
+    description: "مؤشر/فهرس موضع المهمة الحالية ضمن قائمة مهام الشخصية المبرمجة (gCScriptRoutine_PS) — حالة تشغيل، غالباً صفر عند عدم وجود مهمة نشطة.",
+    category: "other",
+  },
+  StatePosition: {
+    label: "موضع الحالة السلوكية",
+    description: "مؤشر/فهرس الحالة السلوكية الحالية ضمن آلة الحالات (state machine) الخاصة بالذكاء الاصطناعي (gCScriptRoutine_PS).",
+    category: "other",
+  },
+  CommandTime: {
+    label: "توقيت الأمر السلوكي",
+    description: "طابع زمني داخلي مرتبط بآخر أمر سلوكي نُفِّذ ضمن نظام الروتين (gCScriptRoutine_PS).",
+    category: "other",
+  },
+  AIDelay: {
+    label: "تأخير الذكاء الاصطناعي",
+    description: "تأخير مجدوَل قبل أن يتخذ الذكاء الاصطناعي قراره التالي (gCScriptRoutine_PS) — قد يبدو صفراً إن لم يكن هناك تأخير معلَّق حالياً.",
+    category: "other",
+  },
+  CurrentBreakBlock: {
+    label: "نقطة توقف التنفيذ الحالية",
+    description: "مؤشر لنقطة توقف/تجزئة حالية داخل تنفيذ الروتين البرمجي للشخصية (gCScriptRoutine_PS) — حالة تنفيذ داخلية.",
+    category: "other",
+  },
 };
 
 function findSentinelOffset(bytes: Uint8Array): number {

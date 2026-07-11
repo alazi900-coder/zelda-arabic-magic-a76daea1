@@ -206,7 +206,10 @@ const PropertyRow: React.FC<PropertyRowProps> = ({ prop, currentValue, onChange,
         <div className="text-xs text-muted-foreground">
           {info?.description ?? "خاصية رقمية اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر."}
         </div>
-        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{prop.name}</div>
+        <div className="text-[11px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5">
+          <span>{prop.name}</span>
+          <span className="px-1.5 py-0.5 rounded bg-muted shrink-0">Float</span>
+        </div>
       </div>
       <input
         type="number"
@@ -241,7 +244,10 @@ const BoolPropertyRow: React.FC<BoolPropertyRowProps> = ({ prop, currentValue, o
         <div className="text-xs text-muted-foreground">
           {info?.description ?? "خاصية نعم/لا اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر."}
         </div>
-        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{prop.name}</div>
+        <div className="text-[11px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5">
+          <span>{prop.name}</span>
+          <span className="px-1.5 py-0.5 rounded bg-muted shrink-0">نعم/لا</span>
+        </div>
       </div>
       <button
         onClick={() => onChange(prop.valueOffset, !currentValue)}
@@ -274,7 +280,10 @@ const IntPropertyRow: React.FC<IntPropertyRowProps> = ({ prop, currentValue, onC
         <div className="text-xs text-muted-foreground">
           {info?.description ?? `عدد صحيح (${prop.typeName}) اكتُشف تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.`}
         </div>
-        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{prop.name}</div>
+        <div className="text-[11px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5">
+          <span>{prop.name}</span>
+          <span className="px-1.5 py-0.5 rounded bg-muted shrink-0">{prop.typeName}</span>
+        </div>
       </div>
       <input
         type="number"
@@ -310,6 +319,7 @@ const PropertyInfoModal: React.FC<PropertyInfoModalProps> = ({ name, kind, typeN
       : kind === "int"
       ? `عدد صحيح (${typeName}) اكتُشف تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.`
       : "خاصية رقمية اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.";
+  const typeLabel = kind === "bool" ? "نعم/لا" : kind === "int" ? typeName ?? "عدد صحيح" : "Float";
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
@@ -320,7 +330,10 @@ const PropertyInfoModal: React.FC<PropertyInfoModalProps> = ({ name, kind, typeN
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="font-display font-bold text-lg">{info?.label ?? name}</div>
-            <div className="text-xs text-muted-foreground font-mono">{name}</div>
+            <div className="text-xs text-muted-foreground font-mono flex items-center gap-1.5 mt-0.5">
+              <span>{name}</span>
+              <span className="px-1.5 py-0.5 rounded bg-muted shrink-0">{typeLabel}</span>
+            </div>
           </div>
           <button onClick={onClose} className="shrink-0 p-1.5 rounded border border-border/50 hover:border-primary/50" title="إغلاق">
             <X className="w-4 h-4" />

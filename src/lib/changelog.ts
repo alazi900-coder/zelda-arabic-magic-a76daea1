@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.44.1",
+    date: "2026-07-11",
+    changes: [
+      { kind: "added", text: "مدير ملفات Risen 1: بجانب اسم كل خاصية الآن وسم صريح لنوع بياناتها الفعلي (Float، نعم/لا، أو short/int/long) — في قائمة الخصائص وفي نافذة المعلومات. لا وحدات أو نطاقات مقترحة مضافة عمداً: لا يوجد توثيق رسمي لمحرك اللعبة يؤكدها، واختراعها قد يُضلِّل أكثر مما يفيد." },
+    ],
+  },
+  {
     version: "1.44.0",
     date: "2026-07-11",
     changes: [

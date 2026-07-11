@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   parseTpleStringPool, findTpleFloatProperties, applyTpleFloatEdits,
-  findTpleBoolProperties, applyTpleBoolEdits, spliceFileIntoArchive,
+  findTpleBoolProperties, applyTpleBoolEdits, spliceFileIntoArchive, spliceMultipleFilesIntoArchive,
+  buildTpleBatchIndex,
 } from "@/lib/risen-tple";
 
 function u16(n: number): number[] {
@@ -48,6 +49,18 @@ describe("parseTpleStringPool", () => {
   it("throws when no DEADBEEF sentinel is present", () => {
     expect(() => parseTpleStringPool(new Uint8Array([1, 2, 3, 4]))).toThrow();
   });
+
+  it("treats a zero-length entry as a legitimate empty string, not end-of-pool (regression: a real file's default-empty bCString value was silently truncating the pool at 142/338 names)", () => {
+    const bytes = buildTple([], ["Voice", "bCString", "Player", "RoleDescription", "", "Gender"]);
+    expect(parseTpleStringPool(bytes)).toEqual(["Voice", "bCString", "Player", "RoleDescription", "", "Gender"]);
+  });
+
+  it("still stops on a genuinely corrupt/oversized length", () => {
+    const bytes = buildTple([], ["Foo"]);
+    // Append a trailing oversized length prefix past the real pool — must not be read as a valid entry.
+    const withGarbage = new Uint8Array([...bytes, 0xff, 0xff]);
+    expect(parseTpleStringPool(withGarbage)).toEqual(["Foo"]);
+  });
 });
 
 describe("findTpleFloatProperties", () => {
@@ -62,6 +75,21 @@ describe("findTpleFloatProperties", () => {
     expect(props[0].value).toBeCloseTo(400);
     expect(props[1].name).toBe("TurnSpeedMax");
     expect(props[1].value).toBeCloseTo(200);
+  });
+
+  it("regression: resolves a property whose pool index comes AFTER an empty-string entry (previously silently dropped)", () => {
+    const bytes = buildTple(
+      record(4, 999),
+      ["Voice", "bCString", "Player", "RoleDescription", "", "SaleModifier"],
+    );
+    const props = findTpleFloatProperties(bytes);
+    expect(props).toHaveLength(1);
+    expect(props[0].name).toBe("");
+    // Also confirm a property named AFTER the empty entry resolves correctly.
+    const bytes2 = buildTple(record(5, 0.2), ["Voice", "bCString", "Player", "RoleDescription", "", "SaleModifier"]);
+    const props2 = findTpleFloatProperties(bytes2);
+    expect(props2[0].name).toBe("SaleModifier");
+    expect(props2[0].value).toBeCloseTo(0.2);
   });
 
   it("matches the real confirmed byte pattern for ForwardSpeedMax (idx 0, value 400.0)", () => {
@@ -193,5 +221,89 @@ describe("spliceFileIntoArchive", () => {
   it("throws when the entry would run past the end of the archive", () => {
     const archive = new Uint8Array([1, 2, 3, 4]);
     expect(() => spliceFileIntoArchive(archive, 3, 5, new Uint8Array(5))).toThrow();
+  });
+});
+
+describe("spliceMultipleFilesIntoArchive", () => {
+  it("applies several non-overlapping replacements in one pass", () => {
+    const archive = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    const result = spliceMultipleFilesIntoArchive(archive, [
+      { offset: 1, size: 2, bytes: new Uint8Array([11, 12]) },
+      { offset: 7, size: 3, bytes: new Uint8Array([13, 14, 15]) },
+    ]);
+    expect(Array.from(result)).toEqual([1, 11, 12, 4, 5, 6, 7, 13, 14, 15]);
+  });
+
+  it("does not mutate the original archive", () => {
+    const archive = new Uint8Array([1, 2, 3, 4]);
+    spliceMultipleFilesIntoArchive(archive, [{ offset: 0, size: 2, bytes: new Uint8Array([9, 9]) }]);
+    expect(Array.from(archive)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("returns an unmodified copy when given an empty replacement list", () => {
+    const archive = new Uint8Array([1, 2, 3]);
+    expect(Array.from(spliceMultipleFilesIntoArchive(archive, []))).toEqual([1, 2, 3]);
+  });
+
+  it("throws without applying ANY replacement if one of several is invalid (all-or-nothing)", () => {
+    const archive = new Uint8Array([1, 2, 3, 4, 5, 6]);
+    expect(() => spliceMultipleFilesIntoArchive(archive, [
+      { offset: 0, size: 2, bytes: new Uint8Array([9, 9]) },
+      { offset: 4, size: 2, bytes: new Uint8Array([9, 9, 9]) }, // wrong size
+    ])).toThrow();
+    // The archive itself is untouched (spliceMultipleFilesIntoArchive never
+    // mutates its input), and since it throws, no copy is even returned.
+    expect(Array.from(archive)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("spliceFileIntoArchive (single-replacement) still behaves identically after refactor", () => {
+    const archive = new Uint8Array([1, 2, 3, 4, 5]);
+    const result = spliceFileIntoArchive(archive, 1, 2, new Uint8Array([8, 8]));
+    expect(Array.from(result)).toEqual([1, 8, 8, 4, 5]);
+  });
+});
+
+describe("buildTpleBatchIndex", () => {
+  it("groups a property's occurrences across multiple files by name", () => {
+    const fileA = buildTple(record(0, 400), ["ForwardSpeedMax"]);
+    const fileB = buildTple(record(0, 600), ["ForwardSpeedMax"]);
+    const index = buildTpleBatchIndex([
+      { path: "NPC/A.tple", bytes: fileA },
+      { path: "NPC/B.tple", bytes: fileB },
+    ]);
+    const occ = index.get("ForwardSpeedMax");
+    expect(occ).toHaveLength(2);
+    expect(occ?.[0]).toMatchObject({ path: "NPC/A.tple", kind: "float", value: 400 });
+    expect(occ?.[1]).toMatchObject({ path: "NPC/B.tple", kind: "float", value: 600 });
+  });
+
+  it("groups both float and bool properties, keyed separately by name", () => {
+    const fileA = buildTple([...record(0, 400), ...boolRecord(1, true)], ["ForwardSpeedMax", "PhysicsEnabled"]);
+    const [floatProp] = findTpleFloatProperties(fileA);
+    const [boolProp] = findTpleBoolProperties(fileA);
+    const index = buildTpleBatchIndex([{ path: "A.tple", bytes: fileA }]);
+    expect(index.get("ForwardSpeedMax")).toEqual([{ path: "A.tple", kind: "float", valueOffset: floatProp.valueOffset, value: 400 }]);
+    expect(index.get("PhysicsEnabled")).toEqual([{ path: "A.tple", kind: "bool", valueOffset: boolProp.valueOffset, value: true }]);
+  });
+
+  it("only lists a property under files that actually contain it", () => {
+    const fileA = buildTple(record(0, 400), ["ForwardSpeedMax"]);
+    const fileB = buildTple([], ["SomethingElse"]);
+    const index = buildTpleBatchIndex([
+      { path: "A.tple", bytes: fileA },
+      { path: "B.tple", bytes: fileB },
+    ]);
+    expect(index.get("ForwardSpeedMax")).toHaveLength(1);
+    expect(index.has("SomethingElse")).toBe(false);
+  });
+
+  it("returns an empty map for an empty file list", () => {
+    expect(buildTpleBatchIndex([]).size).toBe(0);
+  });
+
+  it("ignores files with no recognized properties without throwing", () => {
+    const notATple = new Uint8Array([1, 2, 3]);
+    expect(() => buildTpleBatchIndex([{ path: "bad.tple", bytes: notATple }])).not.toThrow();
+    expect(buildTpleBatchIndex([{ path: "bad.tple", bytes: notATple }]).size).toBe(0);
   });
 });

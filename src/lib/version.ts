@@ -1,2 +1,2 @@
 /** App version — bump with every release */
-export const APP_VERSION = "1.38.1";
+export const APP_VERSION = "1.39.0";

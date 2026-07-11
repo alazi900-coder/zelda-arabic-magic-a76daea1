@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
@@ -16,8 +16,8 @@ import {
 } from "@/lib/risen-archive-selection";
 import {
   findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
-  spliceFileIntoArchive, TPLE_PROPERTY_INFO,
-  type TpleFloatProperty, type TpleBoolProperty,
+  spliceFileIntoArchive, spliceMultipleFilesIntoArchive, buildTpleBatchIndex, TPLE_PROPERTY_INFO,
+  type TpleFloatProperty, type TpleBoolProperty, type TpleBatchOccurrence, type ArchiveReplacement,
 } from "@/lib/risen-tple";
 
 const ACCENT = "#4a7c3f";
@@ -68,9 +68,10 @@ interface TreeRowProps {
   selected: Set<string>;
   toggleSelected: (path: string) => void;
   onOpenFile: (path: string, offset: number, size: number) => void;
+  onDownloadFile: (path: string, offset: number, size: number) => void;
 }
 
-const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleExpanded, selected, toggleSelected, onOpenFile }) => {
+const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleExpanded, selected, toggleSelected, onOpenFile, onDownloadFile }) => {
   const isFolder = node.type === "folder";
   const isExpanded = expanded.has(path);
   const isChecked = selected.has(path);
@@ -100,6 +101,13 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleEx
           <>
             <span className="text-xs text-muted-foreground shrink-0">{formatBytes(node.size)}</span>
             <button
+              onClick={() => onDownloadFile(path, node.offset, node.size)}
+              className="shrink-0 text-xs p-1 rounded border border-border/50 hover:border-primary/50 hover:text-primary"
+              title="تنزيل هذا الملف مباشرة"
+            >
+              <FileDown className="w-3 h-3" />
+            </button>
+            <button
               onClick={() => onOpenFile(path, node.offset, node.size)}
               className="shrink-0 text-xs px-1.5 py-0.5 rounded border border-border/50 hover:border-primary/50 hover:text-primary flex items-center gap-1"
               title="فتح ومعاينة/تعديل"
@@ -122,6 +130,7 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleEx
               selected={selected}
               toggleSelected={toggleSelected}
               onOpenFile={onOpenFile}
+              onDownloadFile={onDownloadFile}
             />
           ))}
         </div>
@@ -201,6 +210,75 @@ const BoolPropertyRow: React.FC<BoolPropertyRowProps> = ({ prop, currentValue, o
   );
 };
 
+interface PendingChange {
+  fileLabel: string;
+  propertyName: string;
+  oldValue: string;
+  newValue: string;
+}
+
+/** Compact "what will actually change" list, shown before any build/download
+ * action — lets the user review every edit at a glance. */
+const PendingChangesSummary: React.FC<{ changes: PendingChange[] }> = ({ changes }) => {
+  if (changes.length === 0) return null;
+  return (
+    <div className="mx-3 mb-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+      <div className="font-display font-bold mb-1.5 flex items-center gap-1.5">
+        <ClipboardList className="w-4 h-4" /> التغييرات المعلَّقة ({changes.length})
+      </div>
+      <div className="space-y-1 max-h-32 overflow-y-auto">
+        {changes.map((c, i) => (
+          <div key={i} className="text-xs flex items-center gap-1.5 flex-wrap">
+            {c.fileLabel && <span className="text-muted-foreground font-mono">{c.fileLabel}:</span>}
+            <span className="font-display">{c.propertyName}</span>
+            <span className="text-muted-foreground">{c.oldValue} ← {c.newValue}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+interface BatchOccurrenceRowProps {
+  occurrence: TpleBatchOccurrence;
+  currentValue: number | boolean;
+  onChangeFloat: (path: string, valueOffset: number, newValue: number) => void;
+  onChangeBool: (path: string, valueOffset: number, newValue: boolean) => void;
+}
+
+const BatchOccurrenceRow: React.FC<BatchOccurrenceRowProps> = ({ occurrence, currentValue, onChangeFloat, onChangeBool }) => {
+  const [text, setText] = useState(String(currentValue));
+  return (
+    <div className="flex items-center gap-3 p-2 rounded-lg border border-border/50 bg-background">
+      <div className="flex-1 min-w-0 text-xs font-mono text-muted-foreground truncate" title={occurrence.path}>
+        {occurrence.path}
+      </div>
+      {occurrence.kind === "float" ? (
+        <input
+          type="number"
+          step="any"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            const v = parseFloat(e.target.value);
+            if (!Number.isNaN(v)) onChangeFloat(occurrence.path, occurrence.valueOffset, v);
+          }}
+          className="w-28 shrink-0 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
+        />
+      ) : (
+        <button
+          onClick={() => onChangeBool(occurrence.path, occurrence.valueOffset, !currentValue)}
+          className={`shrink-0 w-16 px-2 py-1.5 text-sm rounded border font-display font-bold transition-colors ${
+            currentValue ? "border-primary bg-primary/10" : "border-border/50 bg-background"
+          }`}
+        >
+          {currentValue ? "نعم" : "لا"}
+        </button>
+      )}
+    </div>
+  );
+};
+
 const RisenFileManager: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [header, setHeader] = useState<RisenPakHeader | null>(null);
@@ -233,6 +311,20 @@ const RisenFileManager: React.FC = () => {
   const [treeSortBy, setTreeSortBy] = useState<TreeSortBy>("name");
   const [treeSortDir, setTreeSortDir] = useState<TreeSortDir>("asc");
 
+  // Batch mode: edit one property across every .tple file in the open archive at once.
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchScanning, setBatchScanning] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchFileBytes, setBatchFileBytes] = useState<Map<string, Uint8Array>>(new Map());
+  const [batchIndex, setBatchIndex] = useState<Map<string, TpleBatchOccurrence[]>>(new Map());
+  const [batchPropSearch, setBatchPropSearch] = useState("");
+  const [batchSelectedProperty, setBatchSelectedProperty] = useState<string | null>(null);
+  const [batchFloatEdits, setBatchFloatEdits] = useState<Map<string, Map<number, number>>>(new Map());
+  const [batchBoolEdits, setBatchBoolEdits] = useState<Map<string, Map<number, boolean>>>(new Map());
+  const [batchResetToken, setBatchResetToken] = useState(0);
+  const [batchBuilding, setBatchBuilding] = useState(false);
+  const [applyAllText, setApplyAllText] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsaSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
@@ -258,6 +350,18 @@ const RisenFileManager: React.FC = () => {
     setPropSearch("");
   }, []);
 
+  const exitBatchMode = useCallback(() => {
+    setBatchMode(false);
+    setBatchError(null);
+    setBatchFileBytes(new Map());
+    setBatchIndex(new Map());
+    setBatchPropSearch("");
+    setBatchSelectedProperty(null);
+    setBatchFloatEdits(new Map());
+    setBatchBoolEdits(new Map());
+    setApplyAllText("");
+  }, []);
+
   const loadArchive = useCallback(async (f: File) => {
     setLoading(true);
     setLoadError(null);
@@ -265,6 +369,7 @@ const RisenFileManager: React.FC = () => {
     setSelected(new Set());
     setExpanded(new Set());
     closeEntry();
+    exitBatchMode();
     try {
       const headBuf = await f.slice(0, 48).arrayBuffer();
       let hdr: RisenPakHeader;
@@ -315,7 +420,7 @@ const RisenFileManager: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [closeEntry]);
+  }, [closeEntry, exitBatchMode]);
 
   const handleOpenFsa = useCallback(async () => {
     if (!window.showOpenFilePicker) return;
@@ -354,7 +459,8 @@ const RisenFileManager: React.FC = () => {
     setLoadError(null);
     setTreeSizeWarning(null);
     closeEntry();
-  }, [closeEntry]);
+    exitBatchMode();
+  }, [closeEntry, exitBatchMode]);
 
   const toggleExpanded = useCallback((path: string) => {
     setExpanded((prev) => {
@@ -482,6 +588,275 @@ const RisenFileManager: React.FC = () => {
     }
   }, [file, patchedEntryBytes, viewingEntry]);
 
+  const downloadFileDirect = useCallback(async (path: string, offset: number, size: number) => {
+    if (!file) return;
+    const bytes = await file.slice(offset, offset + size).arrayBuffer();
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    downloadBlob(new Blob([bytes]), name);
+  }, [file]);
+
+  const startBatchScan = useCallback(async () => {
+    if (!file) return;
+    setBatchScanning(true);
+    setBatchError(null);
+    try {
+      const tpleEntries = flattenPakTree(tree).filter((f) => /\.tple$/i.test(f.path));
+      const filesRead: Array<{ path: string; bytes: Uint8Array }> = [];
+      const bytesMap = new Map<string, Uint8Array>();
+      for (const entry of tpleEntries) {
+        const bytes = new Uint8Array(await file.slice(entry.offset, entry.offset + entry.size).arrayBuffer());
+        filesRead.push({ path: entry.path, bytes });
+        bytesMap.set(entry.path, bytes);
+      }
+      setBatchFileBytes(bytesMap);
+      setBatchIndex(buildTpleBatchIndex(filesRead));
+      setBatchFloatEdits(new Map());
+      setBatchBoolEdits(new Map());
+      setBatchSelectedProperty(null);
+      setBatchMode(true);
+    } catch (e) {
+      setBatchError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBatchScanning(false);
+    }
+  }, [file, tree]);
+
+  const updateBatchFloatValue = useCallback((path: string, valueOffset: number, newValue: number) => {
+    setBatchFloatEdits((prev) => {
+      const next = new Map(prev);
+      const fileMap = new Map(next.get(path));
+      fileMap.set(valueOffset, newValue);
+      next.set(path, fileMap);
+      return next;
+    });
+  }, []);
+
+  const updateBatchBoolValue = useCallback((path: string, valueOffset: number, newValue: boolean) => {
+    setBatchBoolEdits((prev) => {
+      const next = new Map(prev);
+      const fileMap = new Map(next.get(path));
+      fileMap.set(valueOffset, newValue);
+      next.set(path, fileMap);
+      return next;
+    });
+  }, []);
+
+  const applySameValueToAll = useCallback((occurrences: TpleBatchOccurrence[], value: number | boolean) => {
+    for (const occ of occurrences) {
+      if (occ.kind === "float" && typeof value === "number") updateBatchFloatValue(occ.path, occ.valueOffset, value);
+      else if (occ.kind === "bool" && typeof value === "boolean") updateBatchBoolValue(occ.path, occ.valueOffset, value);
+    }
+  }, [updateBatchFloatValue, updateBatchBoolValue]);
+
+  const resetBatchEdits = useCallback(() => {
+    setBatchFloatEdits(new Map());
+    setBatchBoolEdits(new Map());
+    setBatchResetToken((t) => t + 1);
+  }, []);
+
+  const batchPendingChanges = useMemo((): PendingChange[] => {
+    const changes: PendingChange[] = [];
+    for (const [name, occurrences] of batchIndex) {
+      for (const occ of occurrences) {
+        const shortPath = occ.path.slice(occ.path.lastIndexOf("/") + 1);
+        if (occ.kind === "float") {
+          const edited = batchFloatEdits.get(occ.path)?.get(occ.valueOffset);
+          if (edited !== undefined && edited !== occ.value) {
+            changes.push({ fileLabel: shortPath, propertyName: name, oldValue: String(occ.value), newValue: String(edited) });
+          }
+        } else {
+          const edited = batchBoolEdits.get(occ.path)?.get(occ.valueOffset);
+          if (edited !== undefined && edited !== occ.value) {
+            changes.push({ fileLabel: shortPath, propertyName: name, oldValue: occ.value ? "نعم" : "لا", newValue: edited ? "نعم" : "لا" });
+          }
+        }
+      }
+    }
+    return changes;
+  }, [batchIndex, batchFloatEdits, batchBoolEdits]);
+
+  const buildAndDownloadBatchArchive = useCallback(async () => {
+    if (!file) return;
+    setBatchBuilding(true);
+    setBatchError(null);
+    try {
+      const changedPaths = new Set([...batchFloatEdits.keys(), ...batchBoolEdits.keys()]);
+      const replacements: ArchiveReplacement[] = [];
+      for (const path of changedPaths) {
+        const original = batchFileBytes.get(path);
+        if (!original) continue;
+        const floatMap = batchFloatEdits.get(path) ?? new Map();
+        const boolMap = batchBoolEdits.get(path) ?? new Map();
+        const patched = applyTpleBoolEdits(applyTpleFloatEdits(original, floatMap), boolMap);
+        const entry = flattenPakTree(tree).find((f) => f.path === path);
+        if (!entry) continue;
+        replacements.push({ offset: entry.offset, size: entry.size, bytes: patched });
+      }
+      const archiveBytes = new Uint8Array(await file.arrayBuffer());
+      const rebuilt = spliceMultipleFilesIntoArchive(archiveBytes, replacements);
+      downloadBlob(new Blob([rebuilt as BlobPart]), withModifiedSuffix(file.name));
+    } catch (e) {
+      setBatchError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBatchBuilding(false);
+    }
+  }, [file, tree, batchFileBytes, batchFloatEdits, batchBoolEdits]);
+
+  if (batchMode) {
+    const q = batchPropSearch.trim().toLowerCase();
+    const propertyNames = Array.from(batchIndex.keys())
+      .filter((name) => !q || name.toLowerCase().includes(q) || (TPLE_PROPERTY_INFO[name]?.label ?? "").toLowerCase().includes(q))
+      .sort((a, b) => (batchIndex.get(b)?.length ?? 0) - (batchIndex.get(a)?.length ?? 0));
+    const selectedOccurrences = batchSelectedProperty ? batchIndex.get(batchSelectedProperty) ?? [] : [];
+    const selectedKind = selectedOccurrences[0]?.kind;
+    const hasBatchEdits = batchPendingChanges.length > 0;
+
+    return (
+      <div className="min-h-screen flex flex-col" dir="rtl">
+        <div className="border-b p-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <Button variant="ghost" size="sm" onClick={exitBatchMode}>
+              <ArrowLeft className="w-4 h-4 ml-1" /> رجوع للقائمة
+            </Button>
+            <div className="min-w-0">
+              <div className="font-display font-bold truncate">تعديل جماعي عبر الأرشيف</div>
+              <div className="text-xs text-muted-foreground">{batchFileBytes.size} ملف .tple تم فحصه — {batchIndex.size} خاصية مختلفة</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="m-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm flex gap-2 items-start">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+          <div>
+            <strong className="block mb-1">⚠️ تجريبي</strong>
+            احتفظ بنسخة من الأرشيف الأصلي قبل التعديل، وراجع "التغييرات المعلَّقة" أدناه بعناية قبل البناء.
+          </div>
+        </div>
+
+        {batchError && (
+          <div className="mx-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive flex gap-2 items-start">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{batchError}</span>
+          </div>
+        )}
+
+        <PendingChangesSummary changes={batchPendingChanges} />
+
+        <div className="flex-1 overflow-y-auto p-3 grid md:grid-cols-2 gap-3">
+          <div>
+            <div className="relative mb-2">
+              <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={batchPropSearch}
+                onChange={(e) => setBatchPropSearch(e.target.value)}
+                placeholder={`ابحث بين ${batchIndex.size} خاصية...`}
+                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-border bg-background"
+              />
+            </div>
+            <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+              {propertyNames.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-4 text-center">
+                  {batchIndex.size === 0 ? "لم يُعثر على أي خصائص في ملفات .tple بالأرشيف." : "لا توجد خصائص مطابقة للبحث."}
+                </div>
+              ) : (
+                propertyNames.map((name) => {
+                  const info = TPLE_PROPERTY_INFO[name];
+                  const count = batchIndex.get(name)?.length ?? 0;
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => { setBatchSelectedProperty(name); setApplyAllText(""); }}
+                      className={`w-full text-right p-2 rounded-lg border text-sm flex items-center justify-between gap-2 ${
+                        batchSelectedProperty === name ? "border-primary bg-primary/10" : "border-border/50 bg-background hover:border-primary/30"
+                      }`}
+                    >
+                      <span className="truncate">{info?.label ?? name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">({count})</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div>
+            {!batchSelectedProperty ? (
+              <div className="text-sm text-muted-foreground p-4 text-center">اختر خاصية من القائمة لتعديلها عبر كل الملفات.</div>
+            ) : (
+              <div className="space-y-2">
+                <div className="font-display font-bold">{TPLE_PROPERTY_INFO[batchSelectedProperty]?.label ?? batchSelectedProperty}</div>
+                <div className="flex items-center gap-2 p-2 rounded-lg border border-border/50 bg-card/30">
+                  <span className="text-xs text-muted-foreground shrink-0">قيمة جديدة للجميع:</span>
+                  {selectedKind === "bool" ? (
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => applySameValueToAll(selectedOccurrences, true)}>نعم للكل</Button>
+                      <Button size="sm" variant="outline" onClick={() => applySameValueToAll(selectedOccurrences, false)}>لا للكل</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="number"
+                        step="any"
+                        value={applyAllText}
+                        onChange={(e) => setApplyAllText(e.target.value)}
+                        className="w-28 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const v = parseFloat(applyAllText);
+                          if (!Number.isNaN(v)) applySameValueToAll(selectedOccurrences, v);
+                        }}
+                      >
+                        تطبيق على الكل
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <div className="space-y-1.5 max-h-[55vh] overflow-y-auto">
+                  {selectedOccurrences.map((occ) => (
+                    <BatchOccurrenceRow
+                      key={`${occ.path}-${occ.valueOffset}-${batchResetToken}`}
+                      occurrence={occ}
+                      currentValue={
+                        occ.kind === "float"
+                          ? batchFloatEdits.get(occ.path)?.get(occ.valueOffset) ?? occ.value
+                          : batchBoolEdits.get(occ.path)?.get(occ.valueOffset) ?? occ.value
+                      }
+                      onChangeFloat={updateBatchFloatValue}
+                      onChangeBool={updateBatchBoolValue}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-3 border-t flex items-center gap-3 flex-wrap">
+          <Button variant="outline" size="sm" onClick={resetBatchEdits} disabled={!hasBatchEdits}>
+            <RotateCcw className="w-4 h-4 ml-1" /> استعادة الكل
+          </Button>
+          <div className="flex-1" />
+          <Button
+            onClick={() => void buildAndDownloadBatchArchive()}
+            disabled={batchBuilding || !hasBatchEdits}
+            className="font-display font-bold"
+            style={{ backgroundColor: ACCENT, color: "white" }}
+          >
+            {batchBuilding ? (
+              <><Loader2 className="w-4 h-4 ml-2 animate-spin" /> جارٍ البناء...</>
+            ) : (
+              <><PackageCheck className="w-4 h-4 ml-2" /> بناء وتنزيل الأرشيف كاملاً</>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (viewingEntry) {
     const shortName = viewingEntry.path.slice(viewingEntry.path.lastIndexOf("/") + 1);
     const q = propSearch.trim().toLowerCase();
@@ -498,6 +873,14 @@ const RisenFileManager: React.FC = () => {
     const hasEdits = edits.size > 0 || boolEdits.size > 0;
     const nothingFound = totalPropCount === 0;
     const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0;
+    const singlePendingChanges: PendingChange[] = [
+      ...tpleProps
+        .filter((p) => edits.has(p.valueOffset) && edits.get(p.valueOffset) !== p.value)
+        .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: String(p.value), newValue: String(edits.get(p.valueOffset)) })),
+      ...tpleBoolProps
+        .filter((p) => boolEdits.has(p.valueOffset) && boolEdits.get(p.valueOffset) !== p.value)
+        .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: p.value ? "نعم" : "لا", newValue: boolEdits.get(p.valueOffset) ? "نعم" : "لا" })),
+    ];
 
     return (
       <div className="min-h-screen flex flex-col" dir="rtl">
@@ -527,6 +910,8 @@ const RisenFileManager: React.FC = () => {
             <span>{entryError}</span>
           </div>
         )}
+
+        <PendingChangesSummary changes={singlePendingChanges} />
 
         {totalPropCount > 0 && (
           <div className="mx-3 mb-1 relative">
@@ -721,6 +1106,10 @@ const RisenFileManager: React.FC = () => {
         <span className="text-sm text-muted-foreground">
           {selected.size === 0 ? "لا يوجد تحديد" : `${selectedFiles.length} ملف محدد — ${formatBytes(selectedSize)}`}
         </span>
+        <Button variant="outline" size="sm" onClick={() => void startBatchScan()} disabled={batchScanning}>
+          {batchScanning ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <Layers3 className="w-4 h-4 ml-1" />}
+          تعديل جماعي عبر الأرشيف
+        </Button>
         <div className="flex-1" />
         <Button
           onClick={handleDownloadZip}
@@ -796,6 +1185,7 @@ const RisenFileManager: React.FC = () => {
             selected={selected}
             toggleSelected={toggleSelected}
             onOpenFile={(p, o, s) => void openEntry(p, o, s)}
+            onDownloadFile={(p, o, s) => void downloadFileDirect(p, o, s)}
           />
         ))}
       </div>

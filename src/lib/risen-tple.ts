@@ -145,8 +145,11 @@ export function parseTpleStringPool(bytes: Uint8Array): string[] {
   while (p + 2 <= bytes.length) {
     const len = view.getUint16(p, true);
     p += 2;
-    if (len === 0 || len > MAX_POOL_STRING_LEN || p + len > bytes.length) break;
-    names.push(decoder.decode(bytes.subarray(p, p + len)));
+    // A length of 0 is a legitimate empty string (e.g. a bCString property's
+    // blank default value) — NOT the end of the pool. Only bail out on a
+    // clearly-corrupt length or running past the end of the file.
+    if (len > MAX_POOL_STRING_LEN || p + len > bytes.length) break;
+    names.push(len === 0 ? "" : decoder.decode(bytes.subarray(p, p + len)));
     p += len;
   }
   return names;
@@ -221,6 +224,30 @@ export function applyTpleBoolEdits(bytes: Uint8Array, edits: Map<number, boolean
   return out;
 }
 
+export interface ArchiveReplacement {
+  offset: number;
+  size: number;
+  bytes: Uint8Array;
+}
+
+/** Splices same-size replacements for any number of entries back into one full
+ * copy of the archive they came from. Validates every replacement BEFORE
+ * touching the output buffer, so it either applies all of them or throws
+ * without producing a partially-patched result. */
+export function spliceMultipleFilesIntoArchive(archiveBytes: Uint8Array, replacements: ArchiveReplacement[]): Uint8Array {
+  for (const r of replacements) {
+    if (r.bytes.length !== r.size) {
+      throw new Error(`حجم الملف المعدَّل (${r.bytes.length}) لا يطابق حجمه الأصلي (${r.size}) عند الموضع ${r.offset} — لا يمكن إدخاله بنفس المكان بأمان`);
+    }
+    if (r.offset + r.size > archiveBytes.length) {
+      throw new Error(`موضع الملف عند ${r.offset} خارج حدود الأرشيف`);
+    }
+  }
+  const out = new Uint8Array(archiveBytes);
+  for (const r of replacements) out.set(r.bytes, r.offset);
+  return out;
+}
+
 /** Splices a same-size replacement for one entry back into a full copy of the archive it came from. */
 export function spliceFileIntoArchive(
   archiveBytes: Uint8Array,
@@ -228,13 +255,34 @@ export function spliceFileIntoArchive(
   entrySize: number,
   newEntryBytes: Uint8Array,
 ): Uint8Array {
-  if (newEntryBytes.length !== entrySize) {
-    throw new Error(`حجم الملف المعدَّل (${newEntryBytes.length}) لا يطابق حجمه الأصلي (${entrySize}) — لا يمكن إدخاله بنفس المكان بأمان`);
+  return spliceMultipleFilesIntoArchive(archiveBytes, [{ offset: entryOffset, size: entrySize, bytes: newEntryBytes }]);
+}
+
+export interface TpleBatchOccurrence {
+  path: string;
+  kind: "float" | "bool";
+  valueOffset: number;
+  value: number | boolean;
+}
+
+/** Scans multiple already-read .tple files and groups every recognized
+ * property by name, across all of them — the basis for bulk-editing one
+ * property (e.g. ForwardSpeedMax) across every template in an archive at
+ * once. Files with no recognized properties simply contribute nothing. */
+export function buildTpleBatchIndex(files: Array<{ path: string; bytes: Uint8Array }>): Map<string, TpleBatchOccurrence[]> {
+  const index = new Map<string, TpleBatchOccurrence[]>();
+  const add = (name: string, occurrence: TpleBatchOccurrence) => {
+    const list = index.get(name);
+    if (list) list.push(occurrence);
+    else index.set(name, [occurrence]);
+  };
+  for (const { path, bytes } of files) {
+    for (const p of findTpleFloatProperties(bytes)) {
+      add(p.name, { path, kind: "float", valueOffset: p.valueOffset, value: p.value });
+    }
+    for (const p of findTpleBoolProperties(bytes)) {
+      add(p.name, { path, kind: "bool", valueOffset: p.valueOffset, value: p.value });
+    }
   }
-  if (entryOffset + entrySize > archiveBytes.length) {
-    throw new Error("موضع الملف داخل الأرشيف خارج الحدود");
-  }
-  const out = new Uint8Array(archiveBytes);
-  out.set(newEntryBytes, entryOffset);
-  return out;
+  return index;
 }

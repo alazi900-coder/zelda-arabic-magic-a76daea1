@@ -208,6 +208,81 @@
 .light .text-yellow-400 { color: #ca8a04 !important; }
 .light .text-yellow-500 { color: #a16207 !important; }
 
+/* ==========================================================================
+ * Risen 1 editor theme — activated by `.theme-risen` on the Editor root when
+ * a Risen (.tab) file is loaded. Palette: aged parchment gold + weathered
+ * wood brown + deep jungle green, inspired by Faranga island's dark-fantasy
+ * medieval look. Scoped ONLY under .theme-risen — never leaks into Xenoblade
+ * or Danganronpa editing sessions.
+ * ========================================================================== */
+.theme-risen {
+  --background: 28 25% 7%;              /* deep aged wood */
+  --foreground: 40 55% 88%;             /* parchment cream */
+
+  --card: 26 22% 11%;                    /* darker wood plank */
+  --card-foreground: 40 55% 88%;
+
+  --popover: 26 22% 11%;
+  --popover-foreground: 40 55% 88%;
+
+  --primary: 35 78% 52%;                 /* burnished bronze / torch gold */
+  --primary-foreground: 28 25% 7%;
+
+  --secondary: 90 30% 32%;               /* jungle olive */
+  --secondary-foreground: 40 55% 92%;
+
+  --muted: 26 18% 15%;
+  --muted-foreground: 35 20% 65%;
+
+  --accent: 25 65% 45%;                  /* rust copper */
+  --accent-foreground: 40 55% 92%;
+
+  --destructive: 5 72% 48%;              /* blood red */
+  --destructive-foreground: 40 55% 92%;
+
+  --border: 30 25% 20%;                  /* wood grain edge */
+  --input: 30 25% 18%;
+  --ring: 35 78% 52%;
+
+  --sidebar-background: 26 22% 9%;
+  --sidebar-foreground: 40 55% 88%;
+  --sidebar-primary: 35 78% 52%;
+  --sidebar-primary-foreground: 28 25% 7%;
+  --sidebar-accent: 26 18% 15%;
+  --sidebar-accent-foreground: 40 55% 88%;
+  --sidebar-border: 30 25% 20%;
+  --sidebar-ring: 35 78% 52%;
+}
+
+/* Subtle parchment/wood atmosphere over the whole editor surface. */
+.theme-risen {
+  background-image:
+    radial-gradient(ellipse at top, hsl(35 60% 20% / 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse at bottom, hsl(90 30% 12% / 0.22) 0%, transparent 60%);
+}
+
+/* Cards look like weathered parchment cards on wood. */
+.theme-risen [class*="rounded-lg"].border,
+.theme-risen .bg-card {
+  background-image: linear-gradient(180deg, hsl(35 30% 14% / 0.6), hsl(26 22% 10% / 0.6));
+  box-shadow: 0 1px 0 hsl(35 60% 40% / 0.08) inset, 0 8px 20px -12px hsl(0 0% 0% / 0.6);
+}
+
+/* Display headings feel more chiseled / medieval. */
+.theme-risen h1,
+.theme-risen h2,
+.theme-risen .font-display {
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 hsl(0 0% 0% / 0.5);
+}
+
+/* Primary buttons glow like torchlit bronze. */
+.theme-risen .bg-primary {
+  background-image: linear-gradient(180deg, hsl(38 82% 58%), hsl(32 75% 44%));
+  box-shadow: 0 0 0 1px hsl(30 60% 30%) inset, 0 6px 14px -8px hsl(35 78% 52% / 0.7);
+}
+
+
 @layer base {
   * {
     @apply border-border;

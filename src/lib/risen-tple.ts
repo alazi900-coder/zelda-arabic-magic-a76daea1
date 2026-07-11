@@ -1,9 +1,9 @@
 /**
- * Risen 1 `.tple` entity-template files (Genome Engine) — read-only-safe
- * float-property patcher. This is NOT a full parser of the format (that
- * would require documentation we don't have); it recognizes and edits
- * ONLY numeric (float32) property records that match one exact, verified
- * byte signature, and ignores everything else untouched.
+ * Risen 1 `.tple` entity-template files (Genome Engine) — a same-size-only,
+ * read-only-safe property patcher. This is NOT a full parser of the format
+ * (that would require documentation we don't have); it recognizes and edits
+ * ONLY float/bool/int property records that match one of three exact,
+ * verified byte signatures, and ignores everything else untouched.
  *
  * Format (reverse-engineered from a single real sample, `PC_Hero.tple`,
  * cross-validated against 12 independent property records that all matched
@@ -36,12 +36,24 @@
  *   0x08  uint16  0x0000      — constant (reserved/padding)
  *   0x0A  uint8   value       — 0 or 1
  *
- * A third kind (16-bit integer, seen on the "short"-typed FileVersion
- * property) was investigated but no reliable signature could be confirmed
- * from a single sample — it is intentionally NOT supported here to avoid
- * guessing at an unverified byte layout.
+ * A third kind, integers, was re-investigated after fixing the string-pool
+ * bug above (the earlier "no reliable signature" conclusion was simply
+ * looking in the wrong place) — confirmed against 11 independent records
+ * spanning 3 distinct integer type names ("short"/"int"/"long"), each with
+ * the byte width its type name implies:
+ *   0x00  uint16  poolIndex        — the property's own name
+ *   0x02  uint16  typeNameIndex    — points into the SAME string pool, at a
+ *                                    name that must resolve to "short"
+ *                                    (2 bytes), "int", or "long" (4 bytes
+ *                                    each) — unlike float/bool, the type
+ *                                    isn't a fixed constant here
+ *   0x04  uint16  0x001e           — the same "value slot" marker as float/bool
+ *   0x06  uint16  size             — must match the width implied by the
+ *                                    resolved type name exactly (2 or 4)
+ *   0x08  uint16  0x0000           — constant (reserved/padding)
+ *   0x0A  intN    value            — signed little-endian, N = size bytes
  *
- * Because only records matching one of these two exact signatures are
+ * Because only records matching one of these three exact signatures are
  * touched, editing never changes the file's length — a patched file can be
  * spliced back into its original archive at the exact same offset.
  */
@@ -58,6 +70,11 @@ const BOOL_MAGIC_1 = 0x0018;
 const BOOL_MAGIC_2 = 0x001e;
 const BOOL_MAGIC_3 = 0x0001;
 const BOOL_MAGIC_4 = 0x0000;
+const INT_RECORD_HEADER_SIZE = 10;
+const INT_MAGIC_SLOT = 0x001e;
+const INT_MAGIC_RESERVED = 0x0000;
+/** Confirmed integer type names and their exact byte width — any other type-name reference is left untouched. */
+const INT_TYPE_SIZES: Record<string, number> = { short: 2, int: 4, long: 4 };
 const MAX_POOL_STRING_LEN = 500;
 
 export interface TpleFloatProperty {
@@ -74,6 +91,16 @@ export interface TpleBoolProperty {
   recordOffset: number;
   valueOffset: number;
   value: boolean;
+}
+
+export interface TpleIntProperty {
+  name: string;
+  poolIndex: number;
+  typeName: string;
+  recordOffset: number;
+  valueOffset: number;
+  size: number;
+  value: number;
 }
 
 export interface TplePropertyInfo {
@@ -121,6 +148,16 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   TreatWaterAsSolid: { label: "معاملة الماء كسطح صلب", description: "يمنع الشخصية من دخول الماء ويعامله كأرضية.", category: "physics" },
   DisableTranslation: { label: "تعطيل الانتقال المكاني", description: "منع تغيّر موضع الكيان بالكامل.", category: "physics" },
   DisableRotation: { label: "تعطيل الدوران", description: "منع دوران الكيان بالكامل.", category: "physics" },
+
+  // Integer (short/int/long) properties — only a handful of names are
+  // confidently understood; most others found by the generic scan look like
+  // transient runtime/save state (timestamps, internal counters, currently
+  // 0 in the one sample checked), not designer-authored settings, so they're
+  // intentionally left uncurated rather than guessing at their purpose.
+  InteractionCounter: { label: "عداد التفاعل", description: "عدد مرات التفاعل مع هذا الكيان.", category: "other" },
+  MaterialSwitch: { label: "نوع المادة", description: "مؤشر لنوع المادة المستخدمة (قد يؤثر مثلاً على صوت الخطى).", category: "other" },
+  DamageBonus: { label: "إضافة على الضرر", description: "قيمة تُضاف عند حساب الضرر.", category: "other" },
+  DamageAmount: { label: "مقدار الضرر", description: "القيمة الأساسية للضرر.", category: "other" },
 };
 
 function findSentinelOffset(bytes: Uint8Array): number {
@@ -205,6 +242,32 @@ export function findTpleBoolProperties(bytes: Uint8Array): TpleBoolProperty[] {
   return results;
 }
 
+/** Scans the whole file for integer-property records matching the exact verified signature (type resolved via a pool-index reference, not a fixed constant). Returns [] if the file isn't a recognized .tple (no sentinel found). */
+export function findTpleIntProperties(bytes: Uint8Array): TpleIntProperty[] {
+  const sentinel = findSentinelOffset(bytes);
+  if (sentinel < 0) return [];
+  const names = parseTpleStringPool(bytes);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const results: TpleIntProperty[] = [];
+  for (let off = 0; off + INT_RECORD_HEADER_SIZE <= sentinel; off++) {
+    const propIdx = view.getUint16(off, true);
+    if (propIdx >= names.length) continue;
+    const typeIdx = view.getUint16(off + 2, true);
+    if (typeIdx >= names.length) continue;
+    const typeName = names[typeIdx];
+    const expectedSize = INT_TYPE_SIZES[typeName];
+    if (expectedSize === undefined) continue;
+    if (view.getUint16(off + 4, true) !== INT_MAGIC_SLOT) continue;
+    const size = view.getUint16(off + 6, true);
+    if (size !== expectedSize) continue;
+    if (view.getUint16(off + 8, true) !== INT_MAGIC_RESERVED) continue;
+    if (off + INT_RECORD_HEADER_SIZE + size > sentinel) continue;
+    const value = size === 2 ? view.getInt16(off + 10, true) : view.getInt32(off + 10, true);
+    results.push({ name: names[propIdx], poolIndex: propIdx, typeName, recordOffset: off, valueOffset: off + 10, size, value });
+  }
+  return results;
+}
+
 /** Patches float values in place (by valueOffset) — never changes the file's length. */
 export function applyTpleFloatEdits(bytes: Uint8Array, edits: Map<number, number>): Uint8Array {
   const out = new Uint8Array(bytes);
@@ -220,6 +283,19 @@ export function applyTpleBoolEdits(bytes: Uint8Array, edits: Map<number, boolean
   const out = new Uint8Array(bytes);
   for (const [valueOffset, value] of edits) {
     out[valueOffset] = value ? 1 : 0;
+  }
+  return out;
+}
+
+/** Patches integer values in place (by valueOffset) — each edit carries its
+ * own byte width (2 or 4, from the matching TpleIntProperty.size) since it
+ * varies per property; never changes the file's length. */
+export function applyTpleIntEdits(bytes: Uint8Array, edits: Map<number, { value: number; size: number }>): Uint8Array {
+  const out = new Uint8Array(bytes);
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+  for (const [valueOffset, { value, size }] of edits) {
+    if (size === 2) view.setInt16(valueOffset, value, true);
+    else view.setInt32(valueOffset, value, true);
   }
   return out;
 }
@@ -260,9 +336,11 @@ export function spliceFileIntoArchive(
 
 export interface TpleBatchOccurrence {
   path: string;
-  kind: "float" | "bool";
+  kind: "float" | "bool" | "int";
   valueOffset: number;
   value: number | boolean;
+  /** Only set (and only meaningful) for kind "int" — the byte width to write back (2 or 4). */
+  size?: number;
 }
 
 /** Scans multiple already-read .tple files and groups every recognized
@@ -282,6 +360,9 @@ export function buildTpleBatchIndex(files: Array<{ path: string; bytes: Uint8Arr
     }
     for (const p of findTpleBoolProperties(bytes)) {
       add(p.name, { path, kind: "bool", valueOffset: p.valueOffset, value: p.value });
+    }
+    for (const p of findTpleIntProperties(bytes)) {
+      add(p.name, { path, kind: "int", valueOffset: p.valueOffset, value: p.value, size: p.size });
     }
   }
   return index;

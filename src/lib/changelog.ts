@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.40.0",
+    date: "2026-07-11",
+    changes: [
+      { kind: "added", text: "مدير ملفات Risen 1: دعم خصائص الأعداد الصحيحة (short/int/long) — نمط ترميز جديد ومختلف عن العائم والمنطقي تم اكتشافه والتحقق منه على 11 خاصية حقيقية (منها FileVersion وInteractionCounter وDamageBonus)، ضمن قسم جديد «أرقام صحيحة»، متاح في التعديل الفردي والجماعي عبر الأرشيف. ملاحظة: أغلب القيم المكتشَفة صفر حالياً وتبدو حالة تشغيل داخلية (مثل تقدّم مهمة) وليست إعدادات ثابتة — التعديل بحذر شديد." },
+    ],
+  },
+  {
     version: "1.39.0",
     date: "2026-07-11",
     changes: [

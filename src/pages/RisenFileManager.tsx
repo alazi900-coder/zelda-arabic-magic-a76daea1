@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
@@ -16,8 +16,9 @@ import {
 } from "@/lib/risen-archive-selection";
 import {
   findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
+  findTpleIntProperties, applyTpleIntEdits,
   spliceFileIntoArchive, spliceMultipleFilesIntoArchive, buildTpleBatchIndex, TPLE_PROPERTY_INFO,
-  type TpleFloatProperty, type TpleBoolProperty, type TpleBatchOccurrence, type ArchiveReplacement,
+  type TpleFloatProperty, type TpleBoolProperty, type TpleIntProperty, type TpleBatchOccurrence, type ArchiveReplacement,
 } from "@/lib/risen-tple";
 
 const ACCENT = "#4a7c3f";
@@ -210,6 +211,43 @@ const BoolPropertyRow: React.FC<BoolPropertyRowProps> = ({ prop, currentValue, o
   );
 };
 
+interface IntPropertyRowProps {
+  prop: TpleIntProperty;
+  currentValue: number;
+  onChange: (valueOffset: number, newValue: number, size: number) => void;
+}
+
+const IntPropertyRow: React.FC<IntPropertyRowProps> = ({ prop, currentValue, onChange }) => {
+  const info = TPLE_PROPERTY_INFO[prop.name];
+  const [text, setText] = useState(String(currentValue));
+
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-background">
+      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${ACCENT}1a` }}>
+        <Hash className="w-4 h-4" style={{ color: ACCENT }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-display font-bold text-sm">{info?.label ?? prop.name}</div>
+        <div className="text-xs text-muted-foreground">
+          {info?.description ?? `عدد صحيح (${prop.typeName}) اكتُشف تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.`}
+        </div>
+        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{prop.name}</div>
+      </div>
+      <input
+        type="number"
+        step="1"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const v = parseInt(e.target.value, 10);
+          if (!Number.isNaN(v)) onChange(prop.valueOffset, v, prop.size);
+        }}
+        className="w-28 shrink-0 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
+      />
+    </div>
+  );
+};
+
 interface PendingChange {
   fileLabel: string;
   propertyName: string;
@@ -244,9 +282,10 @@ interface BatchOccurrenceRowProps {
   currentValue: number | boolean;
   onChangeFloat: (path: string, valueOffset: number, newValue: number) => void;
   onChangeBool: (path: string, valueOffset: number, newValue: boolean) => void;
+  onChangeInt: (path: string, valueOffset: number, newValue: number, size: number) => void;
 }
 
-const BatchOccurrenceRow: React.FC<BatchOccurrenceRowProps> = ({ occurrence, currentValue, onChangeFloat, onChangeBool }) => {
+const BatchOccurrenceRow: React.FC<BatchOccurrenceRowProps> = ({ occurrence, currentValue, onChangeFloat, onChangeBool, onChangeInt }) => {
   const [text, setText] = useState(String(currentValue));
   return (
     <div className="flex items-center gap-3 p-2 rounded-lg border border-border/50 bg-background">
@@ -262,6 +301,18 @@ const BatchOccurrenceRow: React.FC<BatchOccurrenceRowProps> = ({ occurrence, cur
             setText(e.target.value);
             const v = parseFloat(e.target.value);
             if (!Number.isNaN(v)) onChangeFloat(occurrence.path, occurrence.valueOffset, v);
+          }}
+          className="w-28 shrink-0 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
+        />
+      ) : occurrence.kind === "int" ? (
+        <input
+          type="number"
+          step="1"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            const v = parseInt(e.target.value, 10);
+            if (!Number.isNaN(v)) onChangeInt(occurrence.path, occurrence.valueOffset, v, occurrence.size ?? 4);
           }}
           className="w-28 shrink-0 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
         />
@@ -298,8 +349,10 @@ const RisenFileManager: React.FC = () => {
   const [entryBytes, setEntryBytes] = useState<Uint8Array | null>(null);
   const [tpleProps, setTpleProps] = useState<TpleFloatProperty[]>([]);
   const [tpleBoolProps, setTpleBoolProps] = useState<TpleBoolProperty[]>([]);
+  const [tpleIntProps, setTpleIntProps] = useState<TpleIntProperty[]>([]);
   const [edits, setEdits] = useState<Map<number, number>>(new Map());
   const [boolEdits, setBoolEdits] = useState<Map<number, boolean>>(new Map());
+  const [intEdits, setIntEdits] = useState<Map<number, { value: number; size: number }>>(new Map());
   const [resetToken, setResetToken] = useState(0);
   const [entryLoading, setEntryLoading] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
@@ -321,6 +374,7 @@ const RisenFileManager: React.FC = () => {
   const [batchSelectedProperty, setBatchSelectedProperty] = useState<string | null>(null);
   const [batchFloatEdits, setBatchFloatEdits] = useState<Map<string, Map<number, number>>>(new Map());
   const [batchBoolEdits, setBatchBoolEdits] = useState<Map<string, Map<number, boolean>>>(new Map());
+  const [batchIntEdits, setBatchIntEdits] = useState<Map<string, Map<number, { value: number; size: number }>>>(new Map());
   const [batchResetToken, setBatchResetToken] = useState(0);
   const [batchBuilding, setBatchBuilding] = useState(false);
   const [applyAllText, setApplyAllText] = useState("");
@@ -344,8 +398,10 @@ const RisenFileManager: React.FC = () => {
     setEntryBytes(null);
     setTpleProps([]);
     setTpleBoolProps([]);
+    setTpleIntProps([]);
     setEdits(new Map());
     setBoolEdits(new Map());
+    setIntEdits(new Map());
     setEntryError(null);
     setPropSearch("");
   }, []);
@@ -359,6 +415,7 @@ const RisenFileManager: React.FC = () => {
     setBatchSelectedProperty(null);
     setBatchFloatEdits(new Map());
     setBatchBoolEdits(new Map());
+    setBatchIntEdits(new Map());
     setApplyAllText("");
   }, []);
 
@@ -381,13 +438,16 @@ const RisenFileManager: React.FC = () => {
         const wholeBytes = new Uint8Array(await f.arrayBuffer());
         const props = findTpleFloatProperties(wholeBytes);
         const boolProps = findTpleBoolProperties(wholeBytes);
-        if (props.length === 0 && boolProps.length === 0) throw g3v0Err;
+        const intProps = findTpleIntProperties(wholeBytes);
+        if (props.length === 0 && boolProps.length === 0 && intProps.length === 0) throw g3v0Err;
         setFile(f);
         setEntryBytes(wholeBytes);
         setTpleProps(props);
         setTpleBoolProps(boolProps);
+        setTpleIntProps(intProps);
         setEdits(new Map());
         setBoolEdits(new Map());
+        setIntEdits(new Map());
         setViewingEntry({ path: f.name, offset: 0, size: wholeBytes.length });
         setStandaloneMode(true);
         return;
@@ -522,15 +582,18 @@ const RisenFileManager: React.FC = () => {
     setEntryError(null);
     setEdits(new Map());
     setBoolEdits(new Map());
+    setIntEdits(new Map());
     setPropSearch("");
     setResetToken((t) => t + 1);
     try {
       const bytes = new Uint8Array(await file.slice(offset, offset + size).arrayBuffer());
       const props = findTpleFloatProperties(bytes);
       const boolProps = findTpleBoolProperties(bytes);
+      const intProps = findTpleIntProperties(bytes);
       setEntryBytes(bytes);
       setTpleProps(props);
       setTpleBoolProps(boolProps);
+      setTpleIntProps(intProps);
       setViewingEntry({ path, offset, size });
       setStandaloneMode(false);
     } catch (e) {
@@ -556,16 +619,25 @@ const RisenFileManager: React.FC = () => {
     });
   }, []);
 
+  const updateIntEditValue = useCallback((valueOffset: number, newValue: number, size: number) => {
+    setIntEdits((prev) => {
+      const next = new Map(prev);
+      next.set(valueOffset, { value: newValue, size });
+      return next;
+    });
+  }, []);
+
   const resetEdits = useCallback(() => {
     setEdits(new Map());
     setBoolEdits(new Map());
+    setIntEdits(new Map());
     setResetToken((t) => t + 1);
   }, []);
 
   const patchedEntryBytes = useMemo(() => {
     if (!entryBytes) return null;
-    return applyTpleBoolEdits(applyTpleFloatEdits(entryBytes, edits), boolEdits);
-  }, [entryBytes, edits, boolEdits]);
+    return applyTpleIntEdits(applyTpleBoolEdits(applyTpleFloatEdits(entryBytes, edits), boolEdits), intEdits);
+  }, [entryBytes, edits, boolEdits, intEdits]);
 
   const downloadEditedFileOnly = useCallback(() => {
     if (!patchedEntryBytes || !viewingEntry) return;
@@ -641,16 +713,28 @@ const RisenFileManager: React.FC = () => {
     });
   }, []);
 
+  const updateBatchIntValue = useCallback((path: string, valueOffset: number, newValue: number, size: number) => {
+    setBatchIntEdits((prev) => {
+      const next = new Map(prev);
+      const fileMap = new Map(next.get(path));
+      fileMap.set(valueOffset, { value: newValue, size });
+      next.set(path, fileMap);
+      return next;
+    });
+  }, []);
+
   const applySameValueToAll = useCallback((occurrences: TpleBatchOccurrence[], value: number | boolean) => {
     for (const occ of occurrences) {
       if (occ.kind === "float" && typeof value === "number") updateBatchFloatValue(occ.path, occ.valueOffset, value);
       else if (occ.kind === "bool" && typeof value === "boolean") updateBatchBoolValue(occ.path, occ.valueOffset, value);
+      else if (occ.kind === "int" && typeof value === "number") updateBatchIntValue(occ.path, occ.valueOffset, value, occ.size ?? 4);
     }
-  }, [updateBatchFloatValue, updateBatchBoolValue]);
+  }, [updateBatchFloatValue, updateBatchBoolValue, updateBatchIntValue]);
 
   const resetBatchEdits = useCallback(() => {
     setBatchFloatEdits(new Map());
     setBatchBoolEdits(new Map());
+    setBatchIntEdits(new Map());
     setBatchResetToken((t) => t + 1);
   }, []);
 
@@ -664,30 +748,36 @@ const RisenFileManager: React.FC = () => {
           if (edited !== undefined && edited !== occ.value) {
             changes.push({ fileLabel: shortPath, propertyName: name, oldValue: String(occ.value), newValue: String(edited) });
           }
-        } else {
+        } else if (occ.kind === "bool") {
           const edited = batchBoolEdits.get(occ.path)?.get(occ.valueOffset);
           if (edited !== undefined && edited !== occ.value) {
             changes.push({ fileLabel: shortPath, propertyName: name, oldValue: occ.value ? "نعم" : "لا", newValue: edited ? "نعم" : "لا" });
+          }
+        } else {
+          const edited = batchIntEdits.get(occ.path)?.get(occ.valueOffset);
+          if (edited !== undefined && edited.value !== occ.value) {
+            changes.push({ fileLabel: shortPath, propertyName: name, oldValue: String(occ.value), newValue: String(edited.value) });
           }
         }
       }
     }
     return changes;
-  }, [batchIndex, batchFloatEdits, batchBoolEdits]);
+  }, [batchIndex, batchFloatEdits, batchBoolEdits, batchIntEdits]);
 
   const buildAndDownloadBatchArchive = useCallback(async () => {
     if (!file) return;
     setBatchBuilding(true);
     setBatchError(null);
     try {
-      const changedPaths = new Set([...batchFloatEdits.keys(), ...batchBoolEdits.keys()]);
+      const changedPaths = new Set([...batchFloatEdits.keys(), ...batchBoolEdits.keys(), ...batchIntEdits.keys()]);
       const replacements: ArchiveReplacement[] = [];
       for (const path of changedPaths) {
         const original = batchFileBytes.get(path);
         if (!original) continue;
         const floatMap = batchFloatEdits.get(path) ?? new Map();
         const boolMap = batchBoolEdits.get(path) ?? new Map();
-        const patched = applyTpleBoolEdits(applyTpleFloatEdits(original, floatMap), boolMap);
+        const intMap = batchIntEdits.get(path) ?? new Map();
+        const patched = applyTpleIntEdits(applyTpleBoolEdits(applyTpleFloatEdits(original, floatMap), boolMap), intMap);
         const entry = flattenPakTree(tree).find((f) => f.path === path);
         if (!entry) continue;
         replacements.push({ offset: entry.offset, size: entry.size, bytes: patched });
@@ -700,7 +790,7 @@ const RisenFileManager: React.FC = () => {
     } finally {
       setBatchBuilding(false);
     }
-  }, [file, tree, batchFileBytes, batchFloatEdits, batchBoolEdits]);
+  }, [file, tree, batchFileBytes, batchFloatEdits, batchBoolEdits, batchIntEdits]);
 
   if (batchMode) {
     const q = batchPropSearch.trim().toLowerCase();
@@ -797,7 +887,7 @@ const RisenFileManager: React.FC = () => {
                     <>
                       <input
                         type="number"
-                        step="any"
+                        step={selectedKind === "int" ? "1" : "any"}
                         value={applyAllText}
                         onChange={(e) => setApplyAllText(e.target.value)}
                         className="w-28 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
@@ -806,7 +896,7 @@ const RisenFileManager: React.FC = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          const v = parseFloat(applyAllText);
+                          const v = selectedKind === "int" ? parseInt(applyAllText, 10) : parseFloat(applyAllText);
                           if (!Number.isNaN(v)) applySameValueToAll(selectedOccurrences, v);
                         }}
                       >
@@ -823,10 +913,13 @@ const RisenFileManager: React.FC = () => {
                       currentValue={
                         occ.kind === "float"
                           ? batchFloatEdits.get(occ.path)?.get(occ.valueOffset) ?? occ.value
+                          : occ.kind === "int"
+                          ? batchIntEdits.get(occ.path)?.get(occ.valueOffset)?.value ?? occ.value
                           : batchBoolEdits.get(occ.path)?.get(occ.valueOffset) ?? occ.value
                       }
                       onChangeFloat={updateBatchFloatValue}
                       onChangeBool={updateBatchBoolValue}
+                      onChangeInt={updateBatchIntValue}
                     />
                   ))}
                 </div>
@@ -869,10 +962,11 @@ const RisenFileManager: React.FC = () => {
     const physicsProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "physics" && matchesSearch(p.name));
     const otherFloatProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
     const otherBoolProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
-    const totalPropCount = tpleProps.length + tpleBoolProps.length;
-    const hasEdits = edits.size > 0 || boolEdits.size > 0;
+    const intProps = tpleIntProps.filter((p) => matchesSearch(p.name));
+    const totalPropCount = tpleProps.length + tpleBoolProps.length + tpleIntProps.length;
+    const hasEdits = edits.size > 0 || boolEdits.size > 0 || intEdits.size > 0;
     const nothingFound = totalPropCount === 0;
-    const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0;
+    const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0 && intProps.length === 0;
     const singlePendingChanges: PendingChange[] = [
       ...tpleProps
         .filter((p) => edits.has(p.valueOffset) && edits.get(p.valueOffset) !== p.value)
@@ -880,6 +974,9 @@ const RisenFileManager: React.FC = () => {
       ...tpleBoolProps
         .filter((p) => boolEdits.has(p.valueOffset) && boolEdits.get(p.valueOffset) !== p.value)
         .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: p.value ? "نعم" : "لا", newValue: boolEdits.get(p.valueOffset) ? "نعم" : "لا" })),
+      ...tpleIntProps
+        .filter((p) => intEdits.has(p.valueOffset) && intEdits.get(p.valueOffset)!.value !== p.value)
+        .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: String(p.value), newValue: String(intEdits.get(p.valueOffset)!.value) })),
     ];
 
     return (
@@ -985,6 +1082,24 @@ const RisenFileManager: React.FC = () => {
                         prop={p}
                         currentValue={boolEdits.get(p.valueOffset) ?? p.value}
                         onChange={updateBoolEditValue}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {intProps.length > 0 && (
+                <div>
+                  <div className="font-display font-bold mb-2 flex items-center gap-1.5">🔢 أرقام صحيحة (مكتشَفة تلقائياً)</div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    غالب هذه القيم حالة تشغيل داخلية (مثل تقدّم مهمة أو مؤقّت) وليست إعدادات — عدّل بحذر شديد.
+                  </div>
+                  <div className="space-y-2">
+                    {intProps.map((p) => (
+                      <IntPropertyRow
+                        key={`${p.valueOffset}-${resetToken}`}
+                        prop={p}
+                        currentValue={intEdits.get(p.valueOffset)?.value ?? p.value}
+                        onChange={updateIntEditValue}
                       />
                     ))}
                   </div>

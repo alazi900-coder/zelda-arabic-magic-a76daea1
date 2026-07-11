@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   parseTpleStringPool, findTpleFloatProperties, applyTpleFloatEdits,
-  findTpleBoolProperties, applyTpleBoolEdits, spliceFileIntoArchive, spliceMultipleFilesIntoArchive,
+  findTpleBoolProperties, applyTpleBoolEdits, findTpleIntProperties, applyTpleIntEdits,
+  spliceFileIntoArchive, spliceMultipleFilesIntoArchive,
   buildTpleBatchIndex,
 } from "@/lib/risen-tple";
 
@@ -31,6 +32,26 @@ function record(poolIndex: number, value: number): number[] {
  * records in a real PC_Hero.tple. */
 function boolRecord(poolIndex: number, value: boolean): number[] {
   return [...u16(poolIndex), ...u16(0x0018), ...u16(0x001e), ...u16(0x0001), ...u16(0x0000), value ? 1 : 0];
+}
+
+function i16(v: number): number[] {
+  const buf = new ArrayBuffer(2);
+  new DataView(buf).setInt16(0, v, true);
+  return Array.from(new Uint8Array(buf));
+}
+
+function i32(v: number): number[] {
+  const buf = new ArrayBuffer(4);
+  new DataView(buf).setInt32(0, v, true);
+  return Array.from(new Uint8Array(buf));
+}
+
+/** [propIdx][typeIdx][0x001e][size][0x0000][intN value] — the exact verified
+ * int record layout (type resolved via a pool-index reference to "short"/
+ * "int"/"long", not a fixed constant), confirmed against 11 independent
+ * records in a real PC_Hero.tple. */
+function intRecord(propIdx: number, typeIdx: number, size: 2 | 4, value: number): number[] {
+  return [...u16(propIdx), ...u16(typeIdx), ...u16(0x001e), ...u16(size), ...u16(0x0000), ...(size === 2 ? i16(value) : i32(value))];
 }
 
 function buildTple(records: number[], names: string[], headerPadding = 20): Uint8Array {
@@ -180,6 +201,89 @@ describe("applyTpleBoolEdits", () => {
   });
 });
 
+describe("findTpleIntProperties", () => {
+  it("finds a 'short' (2-byte) property and resolves its name and type", () => {
+    const bytes = buildTple(intRecord(0, 1, 2, 74), ["FileVersion", "short"]);
+    const props = findTpleIntProperties(bytes);
+    expect(props).toHaveLength(1);
+    expect(props[0]).toMatchObject({ name: "FileVersion", typeName: "short", size: 2, value: 74 });
+  });
+
+  it("matches the real confirmed byte pattern for FileVersion (idx 0/1, value 74)", () => {
+    // Literal bytes captured from the real PC_Hero.tple record (indices
+    // rewritten to 0/1 for a minimal fixture): 4c 00 4d 00 1e 00 02 00 00 00 4a 00
+    const realRecordBytes = [0x00, 0x00, 0x01, 0x00, 0x1e, 0x00, 0x02, 0x00, 0x00, 0x00, 0x4a, 0x00];
+    const bytes = buildTple(realRecordBytes, ["FileVersion", "short"]);
+    const props = findTpleIntProperties(bytes);
+    expect(props).toHaveLength(1);
+    expect(props[0]).toMatchObject({ name: "FileVersion", value: 74 });
+  });
+
+  it("finds 4-byte 'int' and 'long' properties with correct width and value", () => {
+    const bytes = buildTple(
+      [...intRecord(0, 1, 4, 42), ...intRecord(2, 3, 4, -5)],
+      ["InteractionCounter", "int", "CurrentRoutine", "long"],
+    );
+    const props = findTpleIntProperties(bytes);
+    expect(props).toHaveLength(2);
+    expect(props[0]).toMatchObject({ name: "InteractionCounter", typeName: "int", size: 4, value: 42 });
+    expect(props[1]).toMatchObject({ name: "CurrentRoutine", typeName: "long", size: 4, value: -5 });
+  });
+
+  it("rejects a record whose type index does NOT resolve to a known integer type name", () => {
+    const bytes = buildTple(intRecord(0, 1, 2, 74), ["FileVersion", "NotARealType"]);
+    expect(findTpleIntProperties(bytes)).toEqual([]);
+  });
+
+  it("rejects a record whose size doesn't match the width its type name implies", () => {
+    // Claims type "short" (should be 2 bytes) but declares size=4 — inconsistent, must be rejected.
+    const bad = [...u16(0), ...u16(1), ...u16(0x001e), ...u16(4), ...u16(0), ...i32(74)];
+    const bytes = buildTple(bad, ["FileVersion", "short"]);
+    expect(findTpleIntProperties(bytes)).toEqual([]);
+  });
+
+  it("does not confuse int records with float/bool records (independent signatures, no collision)", () => {
+    const bytes = buildTple(
+      [...record(0, 400), ...boolRecord(1, true), ...intRecord(2, 3, 2, 74)],
+      ["ForwardSpeedMax", "PhysicsEnabled", "FileVersion", "short"],
+    );
+    expect(findTpleFloatProperties(bytes)).toHaveLength(1);
+    expect(findTpleBoolProperties(bytes)).toHaveLength(1);
+    expect(findTpleIntProperties(bytes)).toHaveLength(1);
+  });
+
+  it("returns an empty array (not a throw) for a file with no sentinel at all", () => {
+    expect(findTpleIntProperties(new Uint8Array([1, 2, 3]))).toEqual([]);
+  });
+});
+
+describe("applyTpleIntEdits", () => {
+  it("patches a 2-byte ('short') value in place without changing the file length", () => {
+    const bytes = buildTple(intRecord(0, 1, 2, 74), ["FileVersion", "short"]);
+    const [prop] = findTpleIntProperties(bytes);
+    const patched = applyTpleIntEdits(bytes, new Map([[prop.valueOffset, { value: 99, size: 2 }]]));
+    expect(patched.length).toBe(bytes.length);
+    const [patchedProp] = findTpleIntProperties(patched);
+    expect(patchedProp.value).toBe(99);
+  });
+
+  it("patches a 4-byte ('int'/'long') value in place, including negative numbers", () => {
+    const bytes = buildTple(intRecord(0, 1, 4, 42), ["InteractionCounter", "int"]);
+    const [prop] = findTpleIntProperties(bytes);
+    const patched = applyTpleIntEdits(bytes, new Map([[prop.valueOffset, { value: -12345, size: 4 }]]));
+    const [patchedProp] = findTpleIntProperties(patched);
+    expect(patchedProp.value).toBe(-12345);
+  });
+
+  it("does not mutate the original array", () => {
+    const bytes = buildTple(intRecord(0, 1, 2, 74), ["FileVersion", "short"]);
+    const [prop] = findTpleIntProperties(bytes);
+    applyTpleIntEdits(bytes, new Map([[prop.valueOffset, { value: 1, size: 2 }]]));
+    const [origProp] = findTpleIntProperties(bytes);
+    expect(origProp.value).toBe(74);
+  });
+});
+
 describe("applyTpleFloatEdits", () => {
   it("patches the value in place without changing the file length", () => {
     const bytes = buildTple(record(0, 400), ["ForwardSpeedMax"]);
@@ -284,6 +388,13 @@ describe("buildTpleBatchIndex", () => {
     const index = buildTpleBatchIndex([{ path: "A.tple", bytes: fileA }]);
     expect(index.get("ForwardSpeedMax")).toEqual([{ path: "A.tple", kind: "float", valueOffset: floatProp.valueOffset, value: 400 }]);
     expect(index.get("PhysicsEnabled")).toEqual([{ path: "A.tple", kind: "bool", valueOffset: boolProp.valueOffset, value: true }]);
+  });
+
+  it("includes int properties, carrying their byte width for later edits", () => {
+    const fileA = buildTple(intRecord(0, 1, 2, 74), ["FileVersion", "short"]);
+    const [intProp] = findTpleIntProperties(fileA);
+    const index = buildTpleBatchIndex([{ path: "A.tple", bytes: fileA }]);
+    expect(index.get("FileVersion")).toEqual([{ path: "A.tple", kind: "int", valueOffset: intProp.valueOffset, value: 74, size: 2 }]);
   });
 
   it("only lists a property under files that actually contain it", () => {

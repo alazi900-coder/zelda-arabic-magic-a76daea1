@@ -55,8 +55,12 @@ const EditorHeroHeader: React.FC<EditorHeroHeaderProps> = ({
           </Button>
         </div>
       </div>
-      <h1 className="text-2xl md:text-3xl font-display font-black mb-1 drop-shadow-lg">محرر الترجمة ✍️</h1>
-      <p className="text-sm text-muted-foreground font-body">عدّل النصوص العربية يدوياً أو استخدم الترجمة التلقائية</p>
+      <h1 className="text-2xl md:text-3xl font-display font-black mb-1 drop-shadow-lg">
+        {isRisen ? "مخطوطة Risen 📜" : "محرر الترجمة ✍️"}
+      </h1>
+      <p className="text-sm text-muted-foreground font-body">
+        {isRisen ? "دوّن ترجمة نصوص جزيرة فارانغا يدوياً أو بالذكاء الاصطناعي" : "عدّل النصوص العربية يدوياً أو استخدم الترجمة التلقائية"}
+      </p>
     </div>
   </header>
 );

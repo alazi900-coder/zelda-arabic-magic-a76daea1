@@ -752,7 +752,9 @@ export default function RisenImages() {
         `طول بيانات DDS: أصلي=${original.ddsBytes.length} جديد=${newDdsBytes.length} (${original.ddsBytes.length === newDdsBytes.length ? "متطابق" : "غير متطابق!"})`,
       ].join("\n");
       const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
-      downloadText(report, `${shortName}-تقرير-تشخيصي.txt`);
+      // ASCII-only suffix: an Arabic download filename gets silently dropped by
+      // Chromium (falls back to a generic, extension-less "download") — confirmed via real-browser testing.
+      downloadText(report, `${shortName}-diagnostic-report.txt`);
 
       await applyReplacementDds(originalXimg, newDdsBytes);
     } catch (e) {
@@ -1036,7 +1038,9 @@ export default function RisenImages() {
     const pngBytes = await encodePngRawNoCanvas(cropped, selectionRect.w, selectionRect.h);
     if (!pngBytes) return;
     const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
-    downloadBlob(pngBytes, `${shortName}-منطقة-${selectionRect.x}x${selectionRect.y}.png`);
+    // ASCII-only suffix: an Arabic download filename gets silently dropped by
+    // Chromium (falls back to a generic, extension-less "download") — confirmed via real-browser testing.
+    downloadBlob(pngBytes, `${shortName}-region-${selectionRect.x}x${selectionRect.y}.png`);
   }, [compositeBaseImageData, selectionRect, selectedEntry]);
 
   const ZOOM_MIN = 0.1;
@@ -1148,7 +1152,9 @@ export default function RisenImages() {
         `طول بيانات DDS: أصلي=${original.ddsBytes.length} جديد=${encoded.bytes.length} (${original.ddsBytes.length === encoded.bytes.length ? "متطابق" : "غير متطابق!"})`,
       ].join("\n");
       const shortName = selectedEntry.path.slice(selectedEntry.path.lastIndexOf("/") + 1).replace(/\.ximg$/i, "");
-      downloadText(report, `${shortName}-تركيب-تقرير-تشخيصي.txt`);
+      // ASCII-only suffix: an Arabic download filename gets silently dropped by
+      // Chromium (falls back to a generic, extension-less "download") — confirmed via real-browser testing.
+      downloadText(report, `${shortName}-composite-diagnostic-report.txt`);
 
       await applyReplacementDds(originalXimg, encoded.bytes);
       exitCompositeMode();

@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.38.1",
+    date: "2026-07-11",
+    changes: [
+      { kind: "fixed", text: "أداة صور Risen 1: نفس إصلاح أسماء الملفات المُنزَّلة الذي طُبِّق على مدير الملفات — تقارير التشخيص وتصدير المنطقة المحدَّدة كانت تحمل كلمات عربية ضمن اسم الملف، ما كان يجعل Chromium يُسقط الاسم بالكامل ويستبدله بـ\"download\" بلا امتداد. الآن تحمل أسماءً إنجليزية آمنة." },
+    ],
+  },
+  {
     version: "1.38.0",
     date: "2026-07-11",
     changes: [

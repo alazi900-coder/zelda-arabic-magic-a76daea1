@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
@@ -140,22 +140,34 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleEx
   );
 };
 
+/** Small round icon-button shown at the start of every property row — opens
+ * the info modal explaining what the property does and how to edit it. */
+const PropertyIconButton: React.FC<{ Icon: typeof Info; onInfoClick: () => void }> = ({ Icon, onInfoClick }) => (
+  <button
+    onClick={onInfoClick}
+    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+    style={{ backgroundColor: `${ACCENT}1a` }}
+    title="معلومات عن هذه الخاصية"
+  >
+    <Icon className="w-4 h-4" style={{ color: ACCENT }} />
+  </button>
+);
+
 interface PropertyRowProps {
   prop: TpleFloatProperty;
   currentValue: number;
   onChange: (valueOffset: number, newValue: number) => void;
+  onInfoClick: () => void;
 }
 
-const PropertyRow: React.FC<PropertyRowProps> = ({ prop, currentValue, onChange }) => {
+const PropertyRow: React.FC<PropertyRowProps> = ({ prop, currentValue, onChange, onInfoClick }) => {
   const info = TPLE_PROPERTY_INFO[prop.name];
   const Icon = iconForProperty(prop.name);
   const [text, setText] = useState(String(currentValue));
 
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-background">
-      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${ACCENT}1a` }}>
-        <Icon className="w-4 h-4" style={{ color: ACCENT }} />
-      </div>
+      <PropertyIconButton Icon={Icon} onInfoClick={onInfoClick} />
       <div className="flex-1 min-w-0">
         <div className="font-display font-bold text-sm">{info?.label ?? prop.name}</div>
         <div className="text-xs text-muted-foreground">
@@ -182,16 +194,15 @@ interface BoolPropertyRowProps {
   prop: TpleBoolProperty;
   currentValue: boolean;
   onChange: (valueOffset: number, newValue: boolean) => void;
+  onInfoClick: () => void;
 }
 
-const BoolPropertyRow: React.FC<BoolPropertyRowProps> = ({ prop, currentValue, onChange }) => {
+const BoolPropertyRow: React.FC<BoolPropertyRowProps> = ({ prop, currentValue, onChange, onInfoClick }) => {
   const info = TPLE_PROPERTY_INFO[prop.name];
 
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-background">
-      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${ACCENT}1a` }}>
-        <Wrench className="w-4 h-4" style={{ color: ACCENT }} />
-      </div>
+      <PropertyIconButton Icon={Wrench} onInfoClick={onInfoClick} />
       <div className="flex-1 min-w-0">
         <div className="font-display font-bold text-sm">{info?.label ?? prop.name}</div>
         <div className="text-xs text-muted-foreground">
@@ -215,17 +226,16 @@ interface IntPropertyRowProps {
   prop: TpleIntProperty;
   currentValue: number;
   onChange: (valueOffset: number, newValue: number, size: number) => void;
+  onInfoClick: () => void;
 }
 
-const IntPropertyRow: React.FC<IntPropertyRowProps> = ({ prop, currentValue, onChange }) => {
+const IntPropertyRow: React.FC<IntPropertyRowProps> = ({ prop, currentValue, onChange, onInfoClick }) => {
   const info = TPLE_PROPERTY_INFO[prop.name];
   const [text, setText] = useState(String(currentValue));
 
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-background">
-      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${ACCENT}1a` }}>
-        <Hash className="w-4 h-4" style={{ color: ACCENT }} />
-      </div>
+      <PropertyIconButton Icon={Hash} onInfoClick={onInfoClick} />
       <div className="flex-1 min-w-0">
         <div className="font-display font-bold text-sm">{info?.label ?? prop.name}</div>
         <div className="text-xs text-muted-foreground">
@@ -244,6 +254,82 @@ const IntPropertyRow: React.FC<IntPropertyRowProps> = ({ prop, currentValue, onC
         }}
         className="w-28 shrink-0 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
       />
+    </div>
+  );
+};
+
+interface PropertyInfoModalProps {
+  name: string;
+  kind: "float" | "bool" | "int";
+  typeName?: string;
+  onClose: () => void;
+}
+
+/** Explains what a property does and how to edit/apply it. Closes via the X
+ * button or a click on the dark backdrop — both work identically with touch
+ * (phone) and mouse (PC), no platform-specific handling needed. */
+const PropertyInfoModal: React.FC<PropertyInfoModalProps> = ({ name, kind, typeName, onClose }) => {
+  const info = TPLE_PROPERTY_INFO[name];
+  const isMovement = (info?.category ?? "other") === "movement";
+  const fallbackDescription =
+    kind === "bool"
+      ? "خاصية نعم/لا اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر."
+      : kind === "int"
+      ? `عدد صحيح (${typeName}) اكتُشف تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.`
+      : "خاصية رقمية اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.";
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-background border border-border rounded-lg max-w-md w-full p-4 space-y-3 max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-display font-bold text-lg">{info?.label ?? name}</div>
+            <div className="text-xs text-muted-foreground font-mono">{name}</div>
+          </div>
+          <button onClick={onClose} className="shrink-0 p-1.5 rounded border border-border/50 hover:border-primary/50" title="إغلاق">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="text-sm">{info?.description ?? fallbackDescription}</div>
+
+        <div className="text-sm space-y-1 border-t border-border/50 pt-3">
+          <div className="font-display font-bold text-xs text-muted-foreground">كيف تُعدّل؟</div>
+          <div>{kind === "bool" ? "اضغط الزر (نعم/لا) بجانب الخاصية لتبديل القيمة." : "اكتب رقماً جديداً في الحقل بجانب الخاصية."}</div>
+        </div>
+
+        <div className="text-sm space-y-1 border-t border-border/50 pt-3">
+          <div className="font-display font-bold text-xs text-muted-foreground">كيف يُطبَّق التعديل؟</div>
+          <div>
+            اضغط "تنزيل الملف المعدَّل فقط" لحفظ هذا الملف وحده، أو "بناء وتنزيل الأرشيف كاملاً" لدمج كل التعديلات
+            داخل الأرشيف الأصلي بنفس مكانه بالضبط.
+          </div>
+        </div>
+
+        {isMovement && (
+          <div className="text-sm space-y-1 border-t border-amber-500/30 pt-3">
+            <div className="font-display font-bold text-xs text-amber-600">ملاحظة</div>
+            <div>
+              بعض خصائص السرعة تُطبَّق فقط في حالة حركة معيّنة (مشي بطيء/جري/تسلل) حسب قوة تحريك العصا التناظرية. إن لم
+              تلاحظ تغييراً واضحاً، جرّب تعديل عدة خصائص سرعة معاً (مثل ForwardSpeedMax وFastModifier وSlowModifier
+              وSneakModifier) عبر "تعديل جماعي عبر الأرشيف".
+            </div>
+          </div>
+        )}
+
+        {kind === "int" && (
+          <div className="text-sm space-y-1 border-t border-amber-500/30 pt-3">
+            <div className="font-display font-bold text-xs text-amber-600">تحذير</div>
+            <div>
+              أغلب الأعداد الصحيحة المكتشَفة قيمتها صفر وتبدو حالة تشغيل داخلية (كتقدّم مهمة أو مؤقّت) وليست إعداداً
+              ثابتاً — عدّل بحذر شديد.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -358,6 +444,7 @@ const RisenFileManager: React.FC = () => {
   const [entryError, setEntryError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [propSearch, setPropSearch] = useState("");
+  const [infoModalProp, setInfoModalProp] = useState<{ name: string; kind: "float" | "bool" | "int"; typeName?: string } | null>(null);
 
   // Tree browsing (search/sort).
   const [treeSearch, setTreeSearch] = useState("");
@@ -404,6 +491,7 @@ const RisenFileManager: React.FC = () => {
     setIntEdits(new Map());
     setEntryError(null);
     setPropSearch("");
+    setInfoModalProp(null);
   }, []);
 
   const exitBatchMode = useCallback(() => {
@@ -1052,6 +1140,7 @@ const RisenFileManager: React.FC = () => {
                         prop={p}
                         currentValue={edits.get(p.valueOffset) ?? p.value}
                         onChange={updateEditValue}
+                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "float" })}
                       />
                     ))}
                   </div>
@@ -1067,6 +1156,7 @@ const RisenFileManager: React.FC = () => {
                         prop={p}
                         currentValue={boolEdits.get(p.valueOffset) ?? p.value}
                         onChange={updateBoolEditValue}
+                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "bool" })}
                       />
                     ))}
                   </div>
@@ -1082,6 +1172,7 @@ const RisenFileManager: React.FC = () => {
                         prop={p}
                         currentValue={edits.get(p.valueOffset) ?? p.value}
                         onChange={updateEditValue}
+                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "float" })}
                       />
                     ))}
                     {otherBoolProps.map((p) => (
@@ -1090,6 +1181,7 @@ const RisenFileManager: React.FC = () => {
                         prop={p}
                         currentValue={boolEdits.get(p.valueOffset) ?? p.value}
                         onChange={updateBoolEditValue}
+                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "bool" })}
                       />
                     ))}
                   </div>
@@ -1108,6 +1200,7 @@ const RisenFileManager: React.FC = () => {
                         prop={p}
                         currentValue={intEdits.get(p.valueOffset)?.value ?? p.value}
                         onChange={updateIntEditValue}
+                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "int", typeName: p.typeName })}
                       />
                     ))}
                   </div>
@@ -1141,6 +1234,15 @@ const RisenFileManager: React.FC = () => {
               </Button>
             )}
           </div>
+        )}
+
+        {infoModalProp && (
+          <PropertyInfoModal
+            name={infoModalProp.name}
+            kind={infoModalProp.kind}
+            typeName={infoModalProp.typeName}
+            onClose={() => setInfoModalProp(null)}
+          />
         )}
       </div>
     );

@@ -4,16 +4,20 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
   type RisenPakHeader, type RisenPakNode,
 } from "@/lib/risen-images-pak";
-import { collectSelectedFiles, totalSelectionSize, allTopLevelPaths } from "@/lib/risen-archive-selection";
 import {
-  findTpleFloatProperties, applyTpleFloatEdits, spliceFileIntoArchive, TPLE_PROPERTY_INFO,
-  type TpleFloatProperty,
+  collectSelectedFiles, totalSelectionSize, allTopLevelPaths,
+  filterTreeByQuery, sortTree, allFolderPaths, type TreeSortBy, type TreeSortDir,
+} from "@/lib/risen-archive-selection";
+import {
+  findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
+  spliceFileIntoArchive, TPLE_PROPERTY_INFO,
+  type TpleFloatProperty, type TpleBoolProperty,
 } from "@/lib/risen-tple";
 
 const ACCENT = "#4a7c3f";
@@ -33,6 +37,17 @@ function downloadBlob(blob: Blob, filename: string): void {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Never reuses the original filename for a downloaded/rebuilt file — avoids
+ * accidentally overwriting the user's original if saved to the same folder.
+ * Uses an ASCII-only suffix: Chromium silently drops the whole filename
+ * (falling back to a generic, extension-less "download") when the
+ * `download` attribute contains Arabic text — confirmed via real-browser
+ * testing, not just a style choice. */
+function withModifiedSuffix(filename: string): string {
+  const dotIdx = filename.lastIndexOf(".");
+  return dotIdx > 0 ? `${filename.slice(0, dotIdx)}-modified${filename.slice(dotIdx)}` : `${filename}-modified`;
 }
 
 /** Picks a representative icon per property based on its (self-descriptive) name. */
@@ -153,6 +168,39 @@ const PropertyRow: React.FC<PropertyRowProps> = ({ prop, currentValue, onChange 
   );
 };
 
+interface BoolPropertyRowProps {
+  prop: TpleBoolProperty;
+  currentValue: boolean;
+  onChange: (valueOffset: number, newValue: boolean) => void;
+}
+
+const BoolPropertyRow: React.FC<BoolPropertyRowProps> = ({ prop, currentValue, onChange }) => {
+  const info = TPLE_PROPERTY_INFO[prop.name];
+
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-background">
+      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${ACCENT}1a` }}>
+        <Wrench className="w-4 h-4" style={{ color: ACCENT }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-display font-bold text-sm">{info?.label ?? prop.name}</div>
+        <div className="text-xs text-muted-foreground">
+          {info?.description ?? "خاصية نعم/لا اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر."}
+        </div>
+        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{prop.name}</div>
+      </div>
+      <button
+        onClick={() => onChange(prop.valueOffset, !currentValue)}
+        className={`shrink-0 w-16 px-2 py-1.5 text-sm rounded border font-display font-bold transition-colors ${
+          currentValue ? "border-primary bg-primary/10" : "border-border/50 bg-background"
+        }`}
+      >
+        {currentValue ? "نعم" : "لا"}
+      </button>
+    </div>
+  );
+};
+
 const RisenFileManager: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [header, setHeader] = useState<RisenPakHeader | null>(null);
@@ -171,24 +219,43 @@ const RisenFileManager: React.FC = () => {
   const [standaloneMode, setStandaloneMode] = useState(false);
   const [entryBytes, setEntryBytes] = useState<Uint8Array | null>(null);
   const [tpleProps, setTpleProps] = useState<TpleFloatProperty[]>([]);
+  const [tpleBoolProps, setTpleBoolProps] = useState<TpleBoolProperty[]>([]);
   const [edits, setEdits] = useState<Map<number, number>>(new Map());
+  const [boolEdits, setBoolEdits] = useState<Map<number, boolean>>(new Map());
   const [resetToken, setResetToken] = useState(0);
   const [entryLoading, setEntryLoading] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
+  const [propSearch, setPropSearch] = useState("");
+
+  // Tree browsing (search/sort).
+  const [treeSearch, setTreeSearch] = useState("");
+  const [treeSortBy, setTreeSortBy] = useState<TreeSortBy>("name");
+  const [treeSortDir, setTreeSortDir] = useState<TreeSortDir>("asc");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsaSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
   const flatFileCount = useMemo(() => flattenPakTree(tree).length, [tree]);
+  const displayedTree = useMemo(
+    () => sortTree(filterTreeByQuery(tree, treeSearch), treeSortBy, treeSortDir),
+    [tree, treeSearch, treeSortBy, treeSortDir]
+  );
+  const effectiveExpanded = useMemo(() => {
+    if (!treeSearch.trim()) return expanded;
+    return new Set(allFolderPaths(displayedTree));
+  }, [treeSearch, expanded, displayedTree]);
 
   const closeEntry = useCallback(() => {
     setViewingEntry(null);
     setStandaloneMode(false);
     setEntryBytes(null);
     setTpleProps([]);
+    setTpleBoolProps([]);
     setEdits(new Map());
+    setBoolEdits(new Map());
     setEntryError(null);
+    setPropSearch("");
   }, []);
 
   const loadArchive = useCallback(async (f: File) => {
@@ -208,11 +275,14 @@ const RisenFileManager: React.FC = () => {
         // already extracted from an archive) before giving up entirely.
         const wholeBytes = new Uint8Array(await f.arrayBuffer());
         const props = findTpleFloatProperties(wholeBytes);
-        if (props.length === 0) throw g3v0Err;
+        const boolProps = findTpleBoolProperties(wholeBytes);
+        if (props.length === 0 && boolProps.length === 0) throw g3v0Err;
         setFile(f);
         setEntryBytes(wholeBytes);
         setTpleProps(props);
+        setTpleBoolProps(boolProps);
         setEdits(new Map());
+        setBoolEdits(new Map());
         setViewingEntry({ path: f.name, offset: 0, size: wholeBytes.length });
         setStandaloneMode(true);
         return;
@@ -329,7 +399,9 @@ const RisenFileManager: React.FC = () => {
       }
       const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
       const baseName = file.name.replace(/\.[^.]+$/, "");
-      downloadBlob(blob, `${baseName}-ملفات-محددة.zip`);
+      // ASCII-only suffix: an Arabic download filename gets silently dropped by
+      // Chromium (falls back to a generic, extension-less "download") — confirmed via real-browser testing.
+      downloadBlob(blob, `${baseName}-selected-files.zip`);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -343,12 +415,16 @@ const RisenFileManager: React.FC = () => {
     setEntryLoading(true);
     setEntryError(null);
     setEdits(new Map());
+    setBoolEdits(new Map());
+    setPropSearch("");
     setResetToken((t) => t + 1);
     try {
       const bytes = new Uint8Array(await file.slice(offset, offset + size).arrayBuffer());
       const props = findTpleFloatProperties(bytes);
+      const boolProps = findTpleBoolProperties(bytes);
       setEntryBytes(bytes);
       setTpleProps(props);
+      setTpleBoolProps(boolProps);
       setViewingEntry({ path, offset, size });
       setStandaloneMode(false);
     } catch (e) {
@@ -366,20 +442,29 @@ const RisenFileManager: React.FC = () => {
     });
   }, []);
 
+  const updateBoolEditValue = useCallback((valueOffset: number, newValue: boolean) => {
+    setBoolEdits((prev) => {
+      const next = new Map(prev);
+      next.set(valueOffset, newValue);
+      return next;
+    });
+  }, []);
+
   const resetEdits = useCallback(() => {
     setEdits(new Map());
+    setBoolEdits(new Map());
     setResetToken((t) => t + 1);
   }, []);
 
   const patchedEntryBytes = useMemo(() => {
     if (!entryBytes) return null;
-    return applyTpleFloatEdits(entryBytes, edits);
-  }, [entryBytes, edits]);
+    return applyTpleBoolEdits(applyTpleFloatEdits(entryBytes, edits), boolEdits);
+  }, [entryBytes, edits, boolEdits]);
 
   const downloadEditedFileOnly = useCallback(() => {
     if (!patchedEntryBytes || !viewingEntry) return;
     const name = viewingEntry.path.slice(viewingEntry.path.lastIndexOf("/") + 1);
-    downloadBlob(new Blob([patchedEntryBytes as BlobPart]), name);
+    downloadBlob(new Blob([patchedEntryBytes as BlobPart]), withModifiedSuffix(name));
   }, [patchedEntryBytes, viewingEntry]);
 
   const buildAndDownloadArchive = useCallback(async () => {
@@ -389,7 +474,7 @@ const RisenFileManager: React.FC = () => {
     try {
       const archiveBytes = new Uint8Array(await file.arrayBuffer());
       const rebuilt = spliceFileIntoArchive(archiveBytes, viewingEntry.offset, viewingEntry.size, patchedEntryBytes);
-      downloadBlob(new Blob([rebuilt as BlobPart]), file.name);
+      downloadBlob(new Blob([rebuilt as BlobPart]), withModifiedSuffix(file.name));
     } catch (e) {
       setEntryError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -399,9 +484,20 @@ const RisenFileManager: React.FC = () => {
 
   if (viewingEntry) {
     const shortName = viewingEntry.path.slice(viewingEntry.path.lastIndexOf("/") + 1);
-    const movementProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "movement");
-    const otherProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other");
-    const hasEdits = edits.size > 0;
+    const q = propSearch.trim().toLowerCase();
+    const matchesSearch = (name: string) => {
+      if (!q) return true;
+      const label = TPLE_PROPERTY_INFO[name]?.label ?? "";
+      return name.toLowerCase().includes(q) || label.toLowerCase().includes(q);
+    };
+    const movementProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "movement" && matchesSearch(p.name));
+    const physicsProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "physics" && matchesSearch(p.name));
+    const otherFloatProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
+    const otherBoolProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
+    const totalPropCount = tpleProps.length + tpleBoolProps.length;
+    const hasEdits = edits.size > 0 || boolEdits.size > 0;
+    const nothingFound = totalPropCount === 0;
+    const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0;
 
     return (
       <div className="min-h-screen flex flex-col" dir="rtl">
@@ -412,7 +508,7 @@ const RisenFileManager: React.FC = () => {
             </Button>
             <div className="min-w-0">
               <div className="font-display font-bold truncate">{shortName}</div>
-              <div className="text-xs text-muted-foreground">{formatBytes(viewingEntry.size)} — {tpleProps.length} خاصية رقمية مكتشَفة</div>
+              <div className="text-xs text-muted-foreground">{formatBytes(viewingEntry.size)} — {totalPropCount} خاصية مكتشَفة</div>
             </div>
           </div>
         </div>
@@ -432,10 +528,27 @@ const RisenFileManager: React.FC = () => {
           </div>
         )}
 
+        {totalPropCount > 0 && (
+          <div className="mx-3 mb-1 relative">
+            <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={propSearch}
+              onChange={(e) => setPropSearch(e.target.value)}
+              placeholder={`ابحث بين ${totalPropCount} خاصية...`}
+              className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-border bg-background"
+            />
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-3 space-y-4">
-          {tpleProps.length === 0 ? (
+          {nothingFound ? (
             <div className="text-sm text-muted-foreground p-4 text-center">
-              لم يُعثر على خصائص رقمية معروفة قابلة للتعديل في هذا الملف.
+              لم يُعثر على خصائص معروفة قابلة للتعديل في هذا الملف.
+            </div>
+          ) : nothingMatchesSearch ? (
+            <div className="text-sm text-muted-foreground p-4 text-center">
+              لا توجد خصائص مطابقة للبحث.
             </div>
           ) : (
             <>
@@ -454,16 +567,39 @@ const RisenFileManager: React.FC = () => {
                   </div>
                 </div>
               )}
-              {otherProps.length > 0 && (
+              {physicsProps.length > 0 && (
+                <div>
+                  <div className="font-display font-bold mb-2 flex items-center gap-1.5">⚙️ فيزياء وتصادم</div>
+                  <div className="space-y-2">
+                    {physicsProps.map((p) => (
+                      <BoolPropertyRow
+                        key={`${p.valueOffset}-${resetToken}`}
+                        prop={p}
+                        currentValue={boolEdits.get(p.valueOffset) ?? p.value}
+                        onChange={updateBoolEditValue}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(otherFloatProps.length > 0 || otherBoolProps.length > 0) && (
                 <div>
                   <div className="font-display font-bold mb-2 flex items-center gap-1.5">🔧 خصائص أخرى (مكتشَفة تلقائياً)</div>
                   <div className="space-y-2">
-                    {otherProps.map((p) => (
+                    {otherFloatProps.map((p) => (
                       <PropertyRow
                         key={`${p.valueOffset}-${resetToken}`}
                         prop={p}
                         currentValue={edits.get(p.valueOffset) ?? p.value}
                         onChange={updateEditValue}
+                      />
+                    ))}
+                    {otherBoolProps.map((p) => (
+                      <BoolPropertyRow
+                        key={`${p.valueOffset}-${resetToken}`}
+                        prop={p}
+                        currentValue={boolEdits.get(p.valueOffset) ?? p.value}
+                        onChange={updateBoolEditValue}
                       />
                     ))}
                   </div>
@@ -473,7 +609,7 @@ const RisenFileManager: React.FC = () => {
           )}
         </div>
 
-        {tpleProps.length > 0 && (
+        {totalPropCount > 0 && (
           <div className="p-3 border-t flex items-center gap-3 flex-wrap">
             <Button variant="outline" size="sm" onClick={resetEdits} disabled={!hasEdits}>
               <RotateCcw className="w-4 h-4 ml-1" /> استعادة الأصل
@@ -605,6 +741,34 @@ const RisenFileManager: React.FC = () => {
         </Button>
       </div>
 
+      <div className="px-3 pt-3 flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={treeSearch}
+            onChange={(e) => setTreeSearch(e.target.value)}
+            placeholder={`ابحث بين ${flatFileCount} ملف...`}
+            className="w-full pr-9 pl-3 py-1.5 text-sm rounded-lg border border-border bg-background"
+          />
+        </div>
+        <select
+          value={treeSortBy}
+          onChange={(e) => setTreeSortBy(e.target.value as TreeSortBy)}
+          className="px-2 py-1.5 text-sm rounded-lg border border-border bg-background"
+        >
+          <option value="name">ترتيب بالاسم</option>
+          <option value="size">ترتيب بالحجم</option>
+        </select>
+        <button
+          onClick={() => setTreeSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+          className="p-1.5 rounded-lg border border-border bg-background text-muted-foreground hover:text-foreground"
+          title={treeSortDir === "asc" ? "تصاعدي" : "تنازلي"}
+        >
+          <ArrowUpDown className="w-4 h-4" />
+        </button>
+      </div>
+
       {entryLoading && (
         <div className="mx-3 mb-2 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin" /> جارٍ فتح الملف...
@@ -618,13 +782,16 @@ const RisenFileManager: React.FC = () => {
       )}
 
       <div className="flex-1 overflow-y-auto p-3">
-        {tree.map((node) => (
+        {displayedTree.length === 0 && treeSearch.trim() && (
+          <div className="text-sm text-muted-foreground p-4 text-center">لا توجد ملفات مطابقة للبحث.</div>
+        )}
+        {displayedTree.map((node) => (
           <TreeRow
             key={node.name}
             node={node}
             path={node.name}
             depth={0}
-            expanded={expanded}
+            expanded={effectiveExpanded}
             toggleExpanded={toggleExpanded}
             selected={selected}
             toggleSelected={toggleSelected}

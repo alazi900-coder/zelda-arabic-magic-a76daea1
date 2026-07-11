@@ -36,3 +36,48 @@ export function totalSelectionSize(files: RisenPakFlatFile[]): number {
 export function allTopLevelPaths(tree: RisenPakNode[]): string[] {
   return tree.map((n) => n.name);
 }
+
+/** Keeps only files whose name matches the query, plus their ancestor folders
+ * (a folder whose own name matches is kept whole, including every descendant). */
+export function filterTreeByQuery(tree: RisenPakNode[], query: string): RisenPakNode[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return tree;
+  const filterNode = (node: RisenPakNode): RisenPakNode | null => {
+    if (node.type === "file") {
+      return node.name.toLowerCase().includes(q) ? node : null;
+    }
+    if (node.name.toLowerCase().includes(q)) return node;
+    const children = node.children.map(filterNode).filter((n): n is RisenPakNode => n !== null);
+    return children.length > 0 ? { ...node, children } : null;
+  };
+  return tree.map(filterNode).filter((n): n is RisenPakNode => n !== null);
+}
+
+export type TreeSortBy = "name" | "size";
+export type TreeSortDir = "asc" | "desc";
+
+function nodeSize(node: RisenPakNode): number {
+  return node.type === "file" ? node.size : node.children.reduce((sum, c) => sum + nodeSize(c), 0);
+}
+
+/** Sorts a tree (and every folder's children, recursively) by name or total size. */
+export function sortTree(tree: RisenPakNode[], by: TreeSortBy, dir: TreeSortDir): RisenPakNode[] {
+  const factor = dir === "asc" ? 1 : -1;
+  const cmp = (a: RisenPakNode, b: RisenPakNode) =>
+    by === "name" ? factor * a.name.localeCompare(b.name) : factor * (nodeSize(a) - nodeSize(b));
+  const sortNode = (node: RisenPakNode): RisenPakNode =>
+    node.type === "file" ? node : { ...node, children: [...node.children].sort(cmp).map(sortNode) };
+  return [...tree].sort(cmp).map(sortNode);
+}
+
+/** Every folder path present in a tree — used to force-expand search results. */
+export function allFolderPaths(tree: RisenPakNode[], prefix = ""): string[] {
+  const out: string[] = [];
+  for (const node of tree) {
+    if (node.type === "folder") {
+      const path = prefix ? `${prefix}/${node.name}` : node.name;
+      out.push(path, ...allFolderPaths(node.children, path));
+    }
+  }
+  return out;
+}

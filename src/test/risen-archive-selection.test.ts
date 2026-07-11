@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { collectSelectedFiles, totalSelectionSize, allTopLevelPaths } from "@/lib/risen-archive-selection";
+import {
+  collectSelectedFiles, totalSelectionSize, allTopLevelPaths,
+  filterTreeByQuery, sortTree, allFolderPaths,
+} from "@/lib/risen-archive-selection";
 import type { RisenPakNode } from "@/lib/risen-images-pak";
 
 /** Mirrors the real templates.P00 tree confirmed against an actual game file:
@@ -71,5 +74,80 @@ describe("totalSelectionSize", () => {
 describe("allTopLevelPaths", () => {
   it("returns the name of each top-level node", () => {
     expect(allTopLevelPaths(TREE)).toEqual(["NPC", "Readme.txt"]);
+  });
+});
+
+describe("filterTreeByQuery", () => {
+  it("returns the tree unchanged for an empty query", () => {
+    expect(filterTreeByQuery(TREE, "")).toEqual(TREE);
+    expect(filterTreeByQuery(TREE, "   ")).toEqual(TREE);
+  });
+
+  it("keeps a matching file and prunes its non-matching siblings", () => {
+    const result = filterTreeByQuery(TREE, "readme");
+    expect(result).toEqual([{ type: "file", name: "Readme.txt", offset: 11957, size: 50 }]);
+  });
+
+  it("keeps ancestor folders of a deeply nested match", () => {
+    const result = filterTreeByQuery(TREE, "PC_Hero");
+    expect(result).toEqual([
+      { type: "folder", name: "NPC", children: [
+        { type: "folder", name: "World", children: [{ type: "file", name: "PC_Hero.tple", offset: 48, size: 11709 }] },
+      ] },
+    ]);
+  });
+
+  it("keeps a whole subtree when a folder's own name matches", () => {
+    const result = filterTreeByQuery(TREE, "world");
+    expect(result).toEqual([
+      { type: "folder", name: "NPC", children: [
+        { type: "folder", name: "World", children: [{ type: "file", name: "PC_Hero.tple", offset: 48, size: 11709 }] },
+      ] },
+    ]);
+  });
+
+  it("returns an empty array when nothing matches", () => {
+    expect(filterTreeByQuery(TREE, "nonexistent")).toEqual([]);
+  });
+
+  it("matches case-insensitively", () => {
+    expect(filterTreeByQuery(TREE, "readme")).toHaveLength(1);
+    expect(filterTreeByQuery(TREE, "README")).toHaveLength(1);
+  });
+});
+
+describe("sortTree", () => {
+  it("sorts top-level and nested children by name ascending", () => {
+    const result = sortTree(TREE, "name", "asc");
+    expect(result.map((n) => n.name)).toEqual(["NPC", "Readme.txt"]);
+    const npc = result[0] as Extract<RisenPakNode, { type: "folder" }>;
+    expect(npc.children.map((n) => n.name)).toEqual(["Sidekick.tple", "World"]);
+  });
+
+  it("sorts by name descending", () => {
+    const result = sortTree(TREE, "name", "desc");
+    expect(result.map((n) => n.name)).toEqual(["Readme.txt", "NPC"]);
+  });
+
+  it("sorts by total size (folders use the sum of their descendants)", () => {
+    // NPC total size = 11709 + 200 = 11909, Readme.txt = 50 — NPC is larger.
+    const result = sortTree(TREE, "size", "asc");
+    expect(result.map((n) => n.name)).toEqual(["Readme.txt", "NPC"]);
+  });
+
+  it("does not mutate the original tree", () => {
+    const before = JSON.stringify(TREE);
+    sortTree(TREE, "name", "desc");
+    expect(JSON.stringify(TREE)).toBe(before);
+  });
+});
+
+describe("allFolderPaths", () => {
+  it("returns every folder path, nested included", () => {
+    expect(allFolderPaths(TREE)).toEqual(["NPC", "NPC/World"]);
+  });
+
+  it("returns an empty array for a tree with no folders", () => {
+    expect(allFolderPaths([{ type: "file", name: "a.txt", offset: 0, size: 1 }])).toEqual([]);
   });
 });

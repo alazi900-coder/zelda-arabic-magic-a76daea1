@@ -26,18 +26,38 @@
  *   entries running to the end of the file. Property/class names are
  *   looked up by their 0-based position in this sequence.
  *
- * Because only float properties matching the exact signature above are
+ * A second property kind, boolean, uses the same overall shape with
+ * different constants and is likewise cross-validated — 25 independent
+ * records in the same sample file, all matching with zero deviation:
+ *   0x00  uint16  poolIndex
+ *   0x02  uint16  0x0018      — constant (bool type-container marker)
+ *   0x04  uint16  0x001e      — constant (same "value slot" marker as float)
+ *   0x06  uint16  0x0001      — constant (value size = 1 byte)
+ *   0x08  uint16  0x0000      — constant (reserved/padding)
+ *   0x0A  uint8   value       — 0 or 1
+ *
+ * A third kind (16-bit integer, seen on the "short"-typed FileVersion
+ * property) was investigated but no reliable signature could be confirmed
+ * from a single sample — it is intentionally NOT supported here to avoid
+ * guessing at an unverified byte layout.
+ *
+ * Because only records matching one of these two exact signatures are
  * touched, editing never changes the file's length — a patched file can be
  * spliced back into its original archive at the exact same offset.
  */
 
 const SENTINEL = [0xef, 0xbe, 0xad, 0xde];
 const POOL_HEADER_SIZE = 9; // bytes between the sentinel and the first pool entry
-const RECORD_SIZE = 14;
-const RECORD_MAGIC_1 = 0x0021;
-const RECORD_MAGIC_2 = 0x001e;
-const RECORD_MAGIC_3 = 0x0004;
-const RECORD_MAGIC_4 = 0x0000;
+const FLOAT_RECORD_SIZE = 14;
+const FLOAT_MAGIC_1 = 0x0021;
+const FLOAT_MAGIC_2 = 0x001e;
+const FLOAT_MAGIC_3 = 0x0004;
+const FLOAT_MAGIC_4 = 0x0000;
+const BOOL_RECORD_SIZE = 11;
+const BOOL_MAGIC_1 = 0x0018;
+const BOOL_MAGIC_2 = 0x001e;
+const BOOL_MAGIC_3 = 0x0001;
+const BOOL_MAGIC_4 = 0x0000;
 const MAX_POOL_STRING_LEN = 500;
 
 export interface TpleFloatProperty {
@@ -48,10 +68,18 @@ export interface TpleFloatProperty {
   value: number;
 }
 
+export interface TpleBoolProperty {
+  name: string;
+  poolIndex: number;
+  recordOffset: number;
+  valueOffset: number;
+  value: boolean;
+}
+
 export interface TplePropertyInfo {
   label: string;
   description: string;
-  category: "movement" | "other";
+  category: "movement" | "physics" | "other";
 }
 
 /** Curated, verified explanations — only for properties whose meaning is
@@ -71,6 +99,28 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   SlowModifier: { label: "معامل السرعة البطيئة", description: "معامل يُضرب في سرعة الحركة أثناء المشي البطيء.", category: "movement" },
   FastModifier: { label: "معامل السرعة السريعة", description: "معامل يُضرب في سرعة الحركة أثناء الجري/السرعة القصوى.", category: "movement" },
   SneakModifier: { label: "معامل التسلل", description: "معامل يُضرب في سرعة الحركة أثناء التسلل.", category: "movement" },
+
+  PhysicsEnabled: { label: "تفعيل الفيزياء", description: "هل يتأثر الكيان بمحرك الفيزياء (الجاذبية والتصادم).", category: "physics" },
+  IsQuadruped: { label: "كائن رباعي الأرجل", description: "هل يتحرك الكيان كحيوان رباعي الأرجل بدل ثنائي.", category: "physics" },
+  DoHeightCorrection: { label: "تصحيح الارتفاع", description: "تصحيح تلقائي لارتفاع الكيان فوق سطح الأرض.", category: "physics" },
+  DisableCollision: { label: "تعطيل التصادم", description: "تجاهل التصادم مع هذا الشكل.", category: "physics" },
+  DisableResponse: { label: "تعطيل استجابة التصادم", description: "عدم الاستجابة الفيزيائية عند التصادم (يبقى الاكتشاف فقط).", category: "physics" },
+  IsClimbable: { label: "قابل للتسلق", description: "هل يمكن للاعب تسلّق هذا الشكل.", category: "physics" },
+  HitByProjectile: { label: "يُصاب بالمقذوفات", description: "هل يمكن أن تصيبه مقذوفات (سهام وغيرها).", category: "physics" },
+  IgnoredByTraceRay: { label: "يُتجاهل عند فحص خط الرؤية", description: "يُستثنى من فحوصات الرؤية/الاصطدام الشعاعية (Raycast).", category: "physics" },
+  IsUnique: { label: "شكل فريد", description: "شكل غير مكرَّر (لا يُشارَك بين كيانات أخرى).", category: "physics" },
+  EnableCCD: { label: "كشف تصادم مستمر", description: "يمنع اختراق الأجسام السريعة الحركة لبعضها (Continuous Collision Detection).", category: "physics" },
+  OverrideEntityAABB: { label: "تجاوز الصندوق المحيط", description: "استخدام صندوق تصادم مخصَّص بدل الافتراضي.", category: "physics" },
+  TriggersOnTouch: { label: "يُفعَّل عند اللمس", description: "يُطلق حدثاً عند بدء التلامس مع الشكل.", category: "physics" },
+  TriggersOnUntouch: { label: "يُفعَّل عند مغادرة اللمس", description: "يُطلق حدثاً عند انتهاء التلامس مع الشكل.", category: "physics" },
+  TriggersOnIntersect: { label: "يُفعَّل عند التقاطع", description: "يُطلق حدثاً عند تقاطع الشكل مع شكل آخر.", category: "physics" },
+  IsLazyGenerated: { label: "يُولَّد عند الحاجة فقط", description: "لا يُنشأ الشكل الفيزيائي إلا عند الحاجة الفعلية له.", category: "physics" },
+  SensorAffectsDirection: { label: "المستشعر يؤثر على الاتجاه", description: "هل يؤثر مستشعر الأرضية على اتجاه حركة الشخصية.", category: "physics" },
+  ForceGroundAlignment: { label: "إجبار محاذاة الأرضية", description: "إجبار محاذاة الشخصية مع ميل سطح الأرض.", category: "physics" },
+  CanBePushedWhileIdle: { label: "يمكن دفعه أثناء الثبات", description: "هل يمكن دفع الشخصية أثناء وقوفها ساكنة.", category: "physics" },
+  TreatWaterAsSolid: { label: "معاملة الماء كسطح صلب", description: "يمنع الشخصية من دخول الماء ويعامله كأرضية.", category: "physics" },
+  DisableTranslation: { label: "تعطيل الانتقال المكاني", description: "منع تغيّر موضع الكيان بالكامل.", category: "physics" },
+  DisableRotation: { label: "تعطيل الدوران", description: "منع دوران الكيان بالكامل.", category: "physics" },
 };
 
 function findSentinelOffset(bytes: Uint8Array): number {
@@ -109,13 +159,13 @@ export function findTpleFloatProperties(bytes: Uint8Array): TpleFloatProperty[] 
   const names = parseTpleStringPool(bytes);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const results: TpleFloatProperty[] = [];
-  for (let off = 0; off + RECORD_SIZE <= sentinel; off++) {
+  for (let off = 0; off + FLOAT_RECORD_SIZE <= sentinel; off++) {
     const idx = view.getUint16(off, true);
     if (idx >= names.length) continue;
-    if (view.getUint16(off + 2, true) !== RECORD_MAGIC_1) continue;
-    if (view.getUint16(off + 4, true) !== RECORD_MAGIC_2) continue;
-    if (view.getUint16(off + 6, true) !== RECORD_MAGIC_3) continue;
-    if (view.getUint16(off + 8, true) !== RECORD_MAGIC_4) continue;
+    if (view.getUint16(off + 2, true) !== FLOAT_MAGIC_1) continue;
+    if (view.getUint16(off + 4, true) !== FLOAT_MAGIC_2) continue;
+    if (view.getUint16(off + 6, true) !== FLOAT_MAGIC_3) continue;
+    if (view.getUint16(off + 8, true) !== FLOAT_MAGIC_4) continue;
     results.push({
       name: names[idx],
       poolIndex: idx,
@@ -127,12 +177,46 @@ export function findTpleFloatProperties(bytes: Uint8Array): TpleFloatProperty[] 
   return results;
 }
 
+/** Scans the whole file for bool-property records matching the exact verified signature. Returns [] if the file isn't a recognized .tple (no sentinel found). */
+export function findTpleBoolProperties(bytes: Uint8Array): TpleBoolProperty[] {
+  const sentinel = findSentinelOffset(bytes);
+  if (sentinel < 0) return [];
+  const names = parseTpleStringPool(bytes);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const results: TpleBoolProperty[] = [];
+  for (let off = 0; off + BOOL_RECORD_SIZE <= sentinel; off++) {
+    const idx = view.getUint16(off, true);
+    if (idx >= names.length) continue;
+    if (view.getUint16(off + 2, true) !== BOOL_MAGIC_1) continue;
+    if (view.getUint16(off + 4, true) !== BOOL_MAGIC_2) continue;
+    if (view.getUint16(off + 6, true) !== BOOL_MAGIC_3) continue;
+    if (view.getUint16(off + 8, true) !== BOOL_MAGIC_4) continue;
+    results.push({
+      name: names[idx],
+      poolIndex: idx,
+      recordOffset: off,
+      valueOffset: off + 10,
+      value: bytes[off + 10] !== 0,
+    });
+  }
+  return results;
+}
+
 /** Patches float values in place (by valueOffset) — never changes the file's length. */
 export function applyTpleFloatEdits(bytes: Uint8Array, edits: Map<number, number>): Uint8Array {
   const out = new Uint8Array(bytes);
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
   for (const [valueOffset, value] of edits) {
     view.setFloat32(valueOffset, value, true);
+  }
+  return out;
+}
+
+/** Patches bool values in place (by valueOffset) — never changes the file's length. */
+export function applyTpleBoolEdits(bytes: Uint8Array, edits: Map<number, boolean>): Uint8Array {
+  const out = new Uint8Array(bytes);
+  for (const [valueOffset, value] of edits) {
+    out[valueOffset] = value ? 1 : 0;
   }
   return out;
 }

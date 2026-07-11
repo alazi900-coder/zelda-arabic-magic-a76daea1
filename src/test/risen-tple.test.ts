@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseTpleStringPool, findTpleFloatProperties, applyTpleFloatEdits, spliceFileIntoArchive,
+  parseTpleStringPool, findTpleFloatProperties, applyTpleFloatEdits,
+  findTpleBoolProperties, applyTpleBoolEdits, spliceFileIntoArchive,
 } from "@/lib/risen-tple";
 
 function u16(n: number): number[] {
@@ -22,6 +23,13 @@ function poolEntry(name: string): number[] {
  * verified 14-byte record layout confirmed against a real PC_Hero.tple. */
 function record(poolIndex: number, value: number): number[] {
   return [...u16(poolIndex), ...u16(0x0021), ...u16(0x001e), ...u16(0x0004), ...u16(0x0000), ...f32(value)];
+}
+
+/** [poolIndex][0x0018][0x001e][0x0001][0x0000][uint8 value] — the exact
+ * verified 11-byte bool record layout, confirmed against 25 independent
+ * records in a real PC_Hero.tple. */
+function boolRecord(poolIndex: number, value: boolean): number[] {
+  return [...u16(poolIndex), ...u16(0x0018), ...u16(0x001e), ...u16(0x0001), ...u16(0x0000), value ? 1 : 0];
 }
 
 function buildTple(records: number[], names: string[], headerPadding = 20): Uint8Array {
@@ -81,6 +89,66 @@ describe("findTpleFloatProperties", () => {
 
   it("returns an empty array (not a throw) for a file with no sentinel at all", () => {
     expect(findTpleFloatProperties(new Uint8Array([1, 2, 3]))).toEqual([]);
+  });
+});
+
+describe("findTpleBoolProperties", () => {
+  it("finds properties matching the exact real bool signature and resolves their names", () => {
+    const bytes = buildTple(
+      [...boolRecord(2, true), ...boolRecord(3, false)],
+      ["Foo", "Bar", "PhysicsEnabled", "IsClimbable"],
+    );
+    const props = findTpleBoolProperties(bytes);
+    expect(props).toHaveLength(2);
+    expect(props[0]).toMatchObject({ name: "PhysicsEnabled", value: true });
+    expect(props[1]).toMatchObject({ name: "IsClimbable", value: false });
+  });
+
+  it("matches the real confirmed byte pattern for PhysicsEnabled (idx 0, value true)", () => {
+    // Literal bytes captured from the real PC_Hero.tple record (index
+    // rewritten to 0 for a minimal fixture): 31 00 18 00 1e 00 01 00 00 00 01
+    const realRecordBytes = [0x00, 0x00, 0x18, 0x00, 0x1e, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01];
+    const bytes = buildTple(realRecordBytes, ["PhysicsEnabled"]);
+    const props = findTpleBoolProperties(bytes);
+    expect(props).toHaveLength(1);
+    expect(props[0]).toMatchObject({ name: "PhysicsEnabled", value: true });
+  });
+
+  it("does not confuse bool records with float records (different signatures, no collision)", () => {
+    const bytes = buildTple(
+      [...record(0, 400), ...boolRecord(1, true)],
+      ["ForwardSpeedMax", "PhysicsEnabled"],
+    );
+    expect(findTpleFloatProperties(bytes)).toHaveLength(1);
+    expect(findTpleBoolProperties(bytes)).toHaveLength(1);
+  });
+
+  it("ignores records whose pool index is out of range", () => {
+    const bytes = buildTple(boolRecord(99, true), ["OnlyOne"]);
+    expect(findTpleBoolProperties(bytes)).toEqual([]);
+  });
+
+  it("returns an empty array (not a throw) for a file with no sentinel at all", () => {
+    expect(findTpleBoolProperties(new Uint8Array([1, 2, 3]))).toEqual([]);
+  });
+});
+
+describe("applyTpleBoolEdits", () => {
+  it("patches the value in place without changing the file length", () => {
+    const bytes = buildTple(boolRecord(0, false), ["PhysicsEnabled"]);
+    const [prop] = findTpleBoolProperties(bytes);
+    const patched = applyTpleBoolEdits(bytes, new Map([[prop.valueOffset, true]]));
+    expect(patched.length).toBe(bytes.length);
+    const [patchedProp] = findTpleBoolProperties(patched);
+    expect(patchedProp.value).toBe(true);
+  });
+
+  it("does not mutate the original array", () => {
+    const bytes = buildTple(boolRecord(0, false), ["PhysicsEnabled"]);
+    const [prop] = findTpleBoolProperties(bytes);
+    applyTpleBoolEdits(bytes, new Map([[prop.valueOffset, true]]));
+    const [origProp] = findTpleBoolProperties(bytes);
+    expect(origProp.value).toBe(false);
   });
 });
 

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree } from "@/lib/risen-images-pak";
+import {
+  parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree, buildPakArchive,
+  type RisenPakNode,
+} from "@/lib/risen-images-pak";
+import { excludeTreeByPaths } from "@/lib/risen-archive-selection";
 
 /**
  * Synthetic images.pak-shaped FileInfo tree builder, matching the confirmed
@@ -158,5 +162,81 @@ describe("risen-images-pak", () => {
     const header = parseImagesPakHeader(bytes.subarray(0, 48));
     const truncatedTail = bytes.subarray(header.fileInfoOffset, header.fileInfoOffset + 5);
     expect(() => parseImagesPakFileInfoTree(truncatedTail, header)).toThrow();
+  });
+});
+
+/** Builds a full synthetic archive WITH real data bytes at each file's
+ * offset (unlike buildSyntheticImagesPak above, which has no data section)
+ * — needed to verify buildPakArchive never moves or alters payload bytes. */
+function buildSyntheticPakWithData(files: { path: string; offset: number; size: number; data: Uint8Array }[], tree: SyntheticNode[]): Uint8Array {
+  const HEADER_SIZE = 48;
+  const dataEnd = Math.max(...files.map((f) => f.offset + f.size));
+  const fileInfoOffset = dataEnd;
+
+  const treeWriter = new ByteWriter();
+  treeWriter.u32(tree.length);
+  writeEntries(treeWriter, tree);
+  const treeBytes = treeWriter.build();
+
+  const totalFileSize = fileInfoOffset + treeBytes.length;
+  const out = new Uint8Array(totalFileSize);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, 1, true);
+  out.set(new TextEncoder().encode("G3V0"), 4);
+  dv.setBigInt64(0x08, 0n, true);
+  dv.setBigInt64(0x10, 0n, true);
+  dv.setBigInt64(0x18, BigInt(HEADER_SIZE), true);
+  dv.setBigInt64(0x20, BigInt(fileInfoOffset - 0x20), true);
+  dv.setBigInt64(0x28, BigInt(totalFileSize), true);
+
+  for (const f of files) out.set(f.data, f.offset);
+  out.set(treeBytes, fileInfoOffset);
+  return out;
+}
+
+describe("buildPakArchive", () => {
+  it("keeps surviving files' data byte-identical and drops removed files entirely", () => {
+    const files = [
+      { path: "GUI/icon.ximg", offset: 48, size: 4, data: new TextEncoder().encode("ICON") },
+      { path: "NoMip/hint.ximg", offset: 52, size: 4, data: new TextEncoder().encode("HINT") },
+      { path: "NoMip/keep.ximg", offset: 56, size: 4, data: new TextEncoder().encode("KEEP") },
+    ];
+    const tree: SyntheticNode[] = [
+      { type: "folder", name: "GUI", children: [{ type: "file", name: "icon.ximg", offset: 48, size: 4 }] },
+      {
+        type: "folder", name: "NoMip", children: [
+          { type: "file", name: "hint.ximg", offset: 52, size: 4 },
+          { type: "file", name: "keep.ximg", offset: 56, size: 4 },
+        ],
+      },
+    ];
+    const original = buildSyntheticPakWithData(files, tree);
+    const header = parseImagesPakHeader(original.subarray(0, 48));
+    const { tree: parsedTree } = parseImagesPakFileInfoTree(original.subarray(header.fileInfoOffset), header);
+
+    // Remove the whole GUI folder and NoMip/hint.ximg, keeping only NoMip/keep.ximg
+    // — via the same excludeTreeByPaths function the real app uses, so this
+    // also exercises that markerBytes/tailBytes survive the real filtering path.
+    const filteredTree = excludeTreeByPaths(parsedTree, new Set(["GUI", "NoMip/hint.ximg"]));
+
+    const rebuilt = buildPakArchive(original, header, filteredTree);
+    expect(rebuilt.length).toBeLessThan(original.length);
+
+    const rebuiltHeader = parseImagesPakHeader(rebuilt.subarray(0, 48));
+    const { tree: rebuiltTree, endOffset } = parseImagesPakFileInfoTree(rebuilt.subarray(rebuiltHeader.fileInfoOffset), rebuiltHeader);
+    expect(endOffset).toBe(rebuilt.length);
+
+    const flat = flattenPakTree(rebuiltTree);
+    expect(flat).toEqual([{ path: "NoMip/keep.ximg", offset: 56, size: 4 }]);
+
+    // Surviving file's data bytes are untouched — same offset, same content.
+    const keptData = rebuilt.subarray(56, 60);
+    expect(new TextDecoder().decode(keptData)).toBe("KEEP");
+  });
+
+  it("throws instead of silently producing a broken archive if a node lacks markerBytes/tailBytes", () => {
+    const header = parseImagesPakHeader(new Uint8Array(buildSyntheticImagesPak([{ type: "file", name: "a.ximg", offset: 48, size: 1 }])).subarray(0, 48));
+    const handBuiltNode: RisenPakNode = { type: "file", name: "hand-built.ximg", offset: 48, size: 1 };
+    expect(() => buildPakArchive(new Uint8Array(48), header, [handBuiltNode])).toThrow();
   });
 });

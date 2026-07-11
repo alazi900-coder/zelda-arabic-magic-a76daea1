@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   collectSelectedFiles, totalSelectionSize, allTopLevelPaths,
-  filterTreeByQuery, filterTreeByPaths, sortTree, allFolderPaths,
+  filterTreeByQuery, filterTreeByPaths, excludeTreeByPaths, sortTree, allFolderPaths,
 } from "@/lib/risen-archive-selection";
 import type { RisenPakNode } from "@/lib/risen-images-pak";
 
@@ -141,6 +141,35 @@ describe("filterTreeByPaths", () => {
     expect(result).toEqual([
       { type: "folder", name: "NPC", children: [{ type: "file", name: "Sidekick.tple", offset: 11757, size: 200 }] },
     ]);
+  });
+});
+
+describe("excludeTreeByPaths", () => {
+  it("removes a single excluded file, keeping its siblings", () => {
+    const result = excludeTreeByPaths(TREE, new Set(["Readme.txt"]));
+    expect(result).toEqual([TREE[0]]);
+  });
+
+  it("removes a whole folder subtree when the folder itself is excluded", () => {
+    const result = excludeTreeByPaths(TREE, new Set(["NPC"]));
+    expect(result).toEqual([{ type: "file", name: "Readme.txt", offset: 11957, size: 50 }]);
+  });
+
+  it("removes only a deeply nested file, keeping its ancestor folders with remaining siblings", () => {
+    const result = excludeTreeByPaths(TREE, new Set(["NPC/World/PC_Hero.tple"]));
+    expect(result).toEqual([
+      { type: "folder", name: "NPC", children: [{ type: "file", name: "Sidekick.tple", offset: 11757, size: 200 }] },
+      { type: "file", name: "Readme.txt", offset: 11957, size: 50 },
+    ]);
+  });
+
+  it("drops a folder entirely once all its children are excluded", () => {
+    const result = excludeTreeByPaths(TREE, new Set(["NPC/World/PC_Hero.tple", "NPC/Sidekick.tple"]));
+    expect(result).toEqual([{ type: "file", name: "Readme.txt", offset: 11957, size: 50 }]);
+  });
+
+  it("returns the tree unchanged when the excluded set is empty", () => {
+    expect(excludeTreeByPaths(TREE, new Set())).toEqual(TREE);
   });
 });
 

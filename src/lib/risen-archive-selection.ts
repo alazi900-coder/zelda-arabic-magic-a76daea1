@@ -70,6 +70,26 @@ export function filterTreeByPaths(tree: RisenPakNode[], allowedPaths: Set<string
     .filter((n): n is RisenPakNode => n !== null);
 }
 
+/** Drops a file/folder if its own full path is in `excludedPaths` (a folder
+ * match removes it and every descendant at once, mirroring how selecting a
+ * folder elsewhere in this module implies its whole subtree). A folder that
+ * ends up with no surviving children is dropped too, since keeping an empty
+ * folder serves no purpose. */
+export function excludeTreeByPaths(tree: RisenPakNode[], excludedPaths: Set<string>, prefix = ""): RisenPakNode[] {
+  const out: RisenPakNode[] = [];
+  for (const node of tree) {
+    const path = prefix ? `${prefix}/${node.name}` : node.name;
+    if (excludedPaths.has(path)) continue;
+    if (node.type === "file") {
+      out.push(node);
+    } else {
+      const children = excludeTreeByPaths(node.children, excludedPaths, path);
+      if (children.length > 0) out.push({ ...node, children });
+    }
+  }
+  return out;
+}
+
 export type TreeSortBy = "name" | "size";
 export type TreeSortDir = "asc" | "desc";
 

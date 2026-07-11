@@ -4,15 +4,15 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info, BadgeCheck,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info, BadgeCheck, Trash2,
 } from "lucide-react";
 import {
-  parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
+  parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree, buildPakArchive,
   type RisenPakHeader, type RisenPakNode,
 } from "@/lib/risen-images-pak";
 import {
   collectSelectedFiles, totalSelectionSize, allTopLevelPaths,
-  filterTreeByQuery, filterTreeByPaths, sortTree, allFolderPaths, type TreeSortBy, type TreeSortDir,
+  filterTreeByQuery, filterTreeByPaths, excludeTreeByPaths, sortTree, allFolderPaths, type TreeSortBy, type TreeSortDir,
 } from "@/lib/risen-archive-selection";
 import {
   findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
@@ -475,6 +475,13 @@ const RisenFileManager: React.FC = () => {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ current: number; total: number } | null>(null);
 
+  // Marking files/folders for removal from a rebuilt archive — view-only
+  // until "بناء أرشيف جديد بالباقي" is pressed; the loaded File itself is
+  // never modified. See buildPakArchive in risen-images-pak.ts.
+  const [excludedPaths, setExcludedPaths] = useState<Set<string>>(new Set());
+  const [buildingTrimmedArchive, setBuildingTrimmedArchive] = useState(false);
+  const [trimmedArchiveError, setTrimmedArchiveError] = useState<string | null>(null);
+
   // Property editor (opened either from inside an archive, or as a standalone loose file).
   const [viewingEntry, setViewingEntry] = useState<{ path: string; offset: number; size: number } | null>(null);
   const [standaloneMode, setStandaloneMode] = useState(false);
@@ -523,12 +530,15 @@ const RisenFileManager: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsaSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
-  const flatFileCount = useMemo(() => flattenPakTree(tree).length, [tree]);
+  // The tree with any "حذف المحدَّد" exclusions applied — a pure display-time
+  // filter until a new archive is actually built; the loaded File is untouched.
+  const workingTree = useMemo(() => excludeTreeByPaths(tree, excludedPaths), [tree, excludedPaths]);
+  const flatFileCount = useMemo(() => flattenPakTree(workingTree).length, [workingTree]);
   const displayedTree = useMemo(() => {
-    let t = filterTreeByQuery(tree, treeSearch);
+    let t = filterTreeByQuery(workingTree, treeSearch);
     if (showDocumentedOnly && documentedPaths) t = filterTreeByPaths(t, documentedPaths);
     return sortTree(t, treeSortBy, treeSortDir);
-  }, [tree, treeSearch, treeSortBy, treeSortDir, showDocumentedOnly, documentedPaths]);
+  }, [workingTree, treeSearch, treeSortBy, treeSortDir, showDocumentedOnly, documentedPaths]);
   const effectiveExpanded = useMemo(() => {
     if (!treeSearch.trim() && !(showDocumentedOnly && documentedPaths)) return expanded;
     return new Set(allFolderPaths(displayedTree));
@@ -580,6 +590,8 @@ const RisenFileManager: React.FC = () => {
     setShowDocumentedOnly(false);
     setDocumentedPaths(null);
     setDocumentedError(null);
+    setExcludedPaths(new Set());
+    setTrimmedArchiveError(null);
     closeEntry();
     exitBatchMode();
     try {
@@ -684,6 +696,8 @@ const RisenFileManager: React.FC = () => {
     setShowDocumentedOnly(false);
     setDocumentedPaths(null);
     setDocumentedError(null);
+    setExcludedPaths(new Set());
+    setTrimmedArchiveError(null);
     closeEntry();
     exitBatchMode();
   }, [closeEntry, exitBatchMode]);
@@ -704,10 +718,10 @@ const RisenFileManager: React.FC = () => {
     });
   }, []);
 
-  const selectAll = useCallback(() => setSelected(new Set(allTopLevelPaths(tree))), [tree]);
+  const selectAll = useCallback(() => setSelected(new Set(allTopLevelPaths(workingTree))), [workingTree]);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
-  const selectedFiles = useMemo(() => collectSelectedFiles(tree, selected), [tree, selected]);
+  const selectedFiles = useMemo(() => collectSelectedFiles(workingTree, selected), [workingTree, selected]);
   const selectedSize = useMemo(() => totalSelectionSize(selectedFiles), [selectedFiles]);
 
   const handleDownloadZip = useCallback(async () => {
@@ -741,6 +755,44 @@ const RisenFileManager: React.FC = () => {
       setZipProgress(null);
     }
   }, [file, selectedFiles, selectedSize]);
+
+  /** Marks the currently checked files/folders for removal from a rebuilt
+   * archive — a pure in-memory list, the loaded File is never touched. */
+  const deleteSelected = useCallback(() => {
+    if (selected.size === 0) return;
+    setExcludedPaths((prev) => new Set([...prev, ...selected]));
+    setSelected(new Set());
+    setTrimmedArchiveError(null);
+  }, [selected]);
+
+  const restoreExcluded = useCallback(() => {
+    setExcludedPaths(new Set());
+    setTrimmedArchiveError(null);
+  }, []);
+
+  /** Builds a new G3V0 archive containing everything except the marked-for-
+   * deletion files/folders (see buildPakArchive's docblock for how this stays
+   * safe: kept files' data is never moved, only a fresh index is written). */
+  const buildAndDownloadTrimmedArchive = useCallback(async () => {
+    if (!file || !header || excludedPaths.size === 0) return;
+    if (header.totalFileSize > LARGE_SELECTION_BYTES) {
+      const ok = window.confirm(
+        `الأرشيف ${formatBytes(header.totalFileSize)} — قراءته بالكامل لبناء نسخة جديدة قد يستغرق وقتاً طويلاً ويستهلك ذاكرة كبيرة. هل تريد المتابعة؟`
+      );
+      if (!ok) return;
+    }
+    setBuildingTrimmedArchive(true);
+    setTrimmedArchiveError(null);
+    try {
+      const originalBytes = new Uint8Array(await file.arrayBuffer());
+      const rebuilt = buildPakArchive(originalBytes, header, workingTree);
+      downloadBlob(new Blob([rebuilt as BlobPart]), withModifiedSuffix(file.name));
+    } catch (e) {
+      setTrimmedArchiveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBuildingTrimmedArchive(false);
+    }
+  }, [file, header, excludedPaths, workingTree]);
 
   const openEntry = useCallback(async (path: string, offset: number, size: number) => {
     if (!file) return;
@@ -838,7 +890,7 @@ const RisenFileManager: React.FC = () => {
     setBatchScanning(true);
     setBatchError(null);
     try {
-      const tpleEntries = flattenPakTree(tree).filter((f) => /\.tple$/i.test(f.path));
+      const tpleEntries = flattenPakTree(workingTree).filter((f) => /\.tple$/i.test(f.path));
       const filesRead: Array<{ path: string; bytes: Uint8Array }> = [];
       const bytesMap = new Map<string, Uint8Array>();
       for (const entry of tpleEntries) {
@@ -858,7 +910,7 @@ const RisenFileManager: React.FC = () => {
     } finally {
       setBatchScanning(false);
     }
-  }, [file, tree]);
+  }, [file, workingTree]);
 
   /** Scans every .tple in the archive once and remembers which ones contain
    * at least one property with a curated Arabic description — a pure
@@ -868,7 +920,7 @@ const RisenFileManager: React.FC = () => {
     setDocumentedScanning(true);
     setDocumentedError(null);
     try {
-      const tpleEntries = flattenPakTree(tree).filter((f) => /\.tple$/i.test(f.path));
+      const tpleEntries = flattenPakTree(workingTree).filter((f) => /\.tple$/i.test(f.path));
       const documented = new Set<string>();
       for (const entry of tpleEntries) {
         const bytes = new Uint8Array(await file.slice(entry.offset, entry.offset + entry.size).arrayBuffer());
@@ -885,7 +937,7 @@ const RisenFileManager: React.FC = () => {
     } finally {
       setDocumentedScanning(false);
     }
-  }, [file, tree]);
+  }, [file, workingTree]);
 
   const toggleShowDocumentedOnly = useCallback(() => {
     setShowDocumentedOnly((prev) => {
@@ -980,7 +1032,7 @@ const RisenFileManager: React.FC = () => {
         const boolMap = batchBoolEdits.get(path) ?? new Map();
         const intMap = batchIntEdits.get(path) ?? new Map();
         const patched = applyTpleIntEdits(applyTpleBoolEdits(applyTpleFloatEdits(original, floatMap), boolMap), intMap);
-        const entry = flattenPakTree(tree).find((f) => f.path === path);
+        const entry = flattenPakTree(workingTree).find((f) => f.path === path);
         if (!entry) continue;
         replacements.push({ offset: entry.offset, size: entry.size, bytes: patched });
       }
@@ -992,7 +1044,7 @@ const RisenFileManager: React.FC = () => {
     } finally {
       setBatchBuilding(false);
     }
-  }, [file, tree, batchFileBytes, batchFloatEdits, batchBoolEdits, batchIntEdits]);
+  }, [file, workingTree, batchFileBytes, batchFloatEdits, batchBoolEdits, batchIntEdits]);
 
   if (batchMode) {
     const q = batchPropSearch.trim().toLowerCase();
@@ -1466,6 +1518,9 @@ const RisenFileManager: React.FC = () => {
       <div className="p-3 flex items-center gap-3 flex-wrap border-b">
         <Button variant="outline" size="sm" onClick={selectAll}>تحديد الكل</Button>
         <Button variant="outline" size="sm" onClick={clearSelection}>إلغاء التحديد</Button>
+        <Button variant="outline" size="sm" onClick={deleteSelected} disabled={selected.size === 0}>
+          <Trash2 className="w-4 h-4 ml-1" /> حذف المحدَّد
+        </Button>
         <span className="text-sm text-muted-foreground">
           {selected.size === 0 ? "لا يوجد تحديد" : `${selectedFiles.length} ملف محدد — ${formatBytes(selectedSize)}`}
         </span>
@@ -1492,6 +1547,41 @@ const RisenFileManager: React.FC = () => {
           )}
         </Button>
       </div>
+
+      {excludedPaths.size > 0 && (
+        <div className="m-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm flex flex-col gap-2">
+          <div className="flex gap-2 items-start">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-destructive" />
+            <div>
+              <strong className="block mb-1">⚠️ ميزة تجريبية جداً — غير مجرَّبة داخل اللعبة الفعلية</strong>
+              {excludedPaths.size} عنصر محذوف من العرض (لم يُحذف من الملف الأصلي إطلاقاً — لا يزال محفوظاً كما هو). عند
+              الضغط على "بناء أرشيف جديد بالباقي" يُنشأ ملف منفصل جديد لا يمس ملفك الأصلي بتاتاً. احتفظ بنسخة احتياطية،
+              واختبر النتيجة في اللعبة بحذر.
+            </div>
+          </div>
+          {trimmedArchiveError && (
+            <div className="text-destructive text-xs">{trimmedArchiveError}</div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={restoreExcluded}>
+              <RotateCcw className="w-4 h-4 ml-1" /> استعادة الكل
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void buildAndDownloadTrimmedArchive()}
+              disabled={buildingTrimmedArchive}
+              className="font-display font-bold"
+              style={{ backgroundColor: ACCENT, color: "white" }}
+            >
+              {buildingTrimmedArchive ? (
+                <><Loader2 className="w-4 h-4 ml-2 animate-spin" /> جارٍ البناء...</>
+              ) : (
+                <><PackageCheck className="w-4 h-4 ml-2" /> بناء أرشيف جديد بالباقي</>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="px-3 pt-3 flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">

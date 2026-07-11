@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.46.0",
+    date: "2026-07-11",
+    changes: [
+      { kind: "added", text: "مدير ملفات Risen 1: شرح 7 خصائص إضافية من ملفات الأغراض (Items)، مستخرَجة من فحص 100 ملف متنوع عبر كل مجلدات Items — ItemAmount، ResultAmount (وصفات الصناعة)، EnableSweepTest، EnableSpining (فيزياء المقذوفات السحرية، مؤكَّدة بقيم true/false حقيقية من تعويذتَي Fireball، Frost)، MaxSegmentCount (أثر حركة بصري خلف الأسلحة)، ManaCost (تكلفة مانا الأغراض السحرية)، Priority (أولوية عرض علامات الخريطة — أقل يقيناً، مذكور بوضوح في وصفها)." },
+    ],
+  },
+  {
     version: "1.45.0",
     date: "2026-07-11",
     changes: [

@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.45.0",
+    date: "2026-07-11",
+    changes: [
+      { kind: "added", text: "مدير ملفات Risen 1: شرح 4 خصائص خاصة بملفات الأغراض (Items) — Amount (الكمية)، GoldValue (القيمة بالذهب)، SortValue (ترتيب العرض)، MaxSubMeshTriangles (إعداد أداء رسومي بحت) — استُخرجت من تحليل ملف سلاح حقيقي (It_Sword_Hot.tple) من فئتَي gCItem_PS وeCMesh_PS الحقيقيتين." },
+      { kind: "fixed", text: "مدير ملفات Risen 1: وصف خاصية MaterialSwitch كان يّدَّعي انتماءها لفئة eCAnimation_PS فقط — تبيّن من فحص ملف غرض حقيقي أنها تُستخدم أيضاً في eCMesh_PS بنفس الاسم، فعُدِّل الوصف ليعكس ذلك بدقة." },
+    ],
+  },
+  {
     version: "1.44.1",
     date: "2026-07-11",
     changes: [

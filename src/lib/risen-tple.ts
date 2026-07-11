@@ -751,9 +751,40 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   // transient runtime/save state (timestamps, internal counters) rather
   // than designer-authored settings, which is noted honestly below.
   InteractionCounter: { label: "عداد التفاعل", description: "عدد مرات التفاعل مع هذا الكيان.", category: "other" },
-  MaterialSwitch: { label: "نوع المادة", description: "مؤشر لنوع المادة المستخدمة (قد يؤثر مثلاً على صوت الخطى) — من فئة eCAnimation_PS.", category: "other" },
+  MaterialSwitch: {
+    label: "نوع المادة",
+    description: "مؤشر لنوع المادة المستخدمة (قد يؤثر مثلاً على صوت الخطى أو خامة السطح). ملاحظة: هذا الحقل مُعاد استخدامه في أكثر من فئة برمجية (eCAnimation_PS للشخصيات، eCMesh_PS للأغراض) بنفس الاسم — المعنى العام واحد لكن السياق يختلف حسب نوع الملف.",
+    category: "other",
+  },
   DamageBonus: { label: "إضافة على الضرر", description: "قيمة تُضاف عند حساب الضرر — من فئة gCDamage_PS.", category: "other" },
   DamageAmount: { label: "مقدار الضرر", description: "القيمة الأساسية للضرر — من فئة gCDamage_PS.", category: "other" },
+
+  // ما يلي من ملفات الأغراض (Items) — تأكّدنا من فئتها الحقيقية (gCItem_PS،
+  // eCMesh_PS) من تحليل ملف سلاح حقيقي (It_Sword_Hot.tple)، وليس تخميناً.
+  Amount: {
+    label: "الكمية",
+    description: "عدد القطع التي يمثّلها هذا الغرض عند الحصول عليه دفعة واحدة (حجم الرزمة الافتراضي) — مثلاً كمية السهام في حزمة واحدة. للأغراض المفردة غير القابلة للتكديس تكون عادة 1. من فئة gCItem_PS.",
+    category: "other",
+    system: "الأغراض (Item)",
+  },
+  GoldValue: {
+    label: "القيمة بالذهب",
+    description: "القيمة الأساسية للغرض بالذهب — الأساس الذي يُحسَب عليه سعر البيع والشراء عند التجار (يُضرب عادة بمعامل التاجر SaleModifier/PurchaseModifier الخاص بكل شخصية على حدة). من فئة gCItem_PS.",
+    category: "other",
+    system: "الأغراض (Item)",
+  },
+  SortValue: {
+    label: "قيمة الترتيب",
+    description: "قيمة تقنية تحدد مكان ظهور الغرض ضمن قائمة الجرد (Inventory) بالنسبة لأغراض أخرى من نفس الفئة — لا تؤثر على أي قيمة لعب فعلية (سعر، ضرر...)، فقط ترتيب العرض في الواجهة. من فئة gCItem_PS.",
+    category: "other",
+    system: "الأغراض (Item)",
+  },
+  MaxSubMeshTriangles: {
+    label: "أقصى عدد مثلثات للشكل",
+    description: "الحد الأقصى لعدد المثلثات (Triangles) المسموح بها في كل جزء فرعي من نموذج هذا الغرض ثلاثي الأبعاد — إعداد أداء/عرض رسومي بحت (من فئة eCMesh_PS)، لا علاقة له بالضرر أو القيمة أو أي تأثير على اللعب. تغييره يؤثر فقط على كيفية تقسيم اللعبة للنموذج داخلياً للعرض، ونادراً ما يستحق التعديل.",
+    category: "other",
+    system: "الشبكة ثلاثية الأبعاد (Mesh)",
+  },
   FileVersion: {
     label: "إصدار بنية الملف",
     description: "رقم إصدار بنية شكل التصادم (eCCollisionShape_PS) لهذا القالب — يستخدمه محرك اللعبة داخلياً للتوافق بين إصدارات أدوات التطوير، وليس إعداداً يُفترض تعديله. تغييره لا يُحدث أثراً في اللعبة عادة، وقد يجعل بعض أدوات المعاينة الرسمية تسيء تفسير الملف.",

@@ -58,6 +58,32 @@ function formatFloatDisplay(v: number): string {
   return String(Math.round(v * 1e6) / 1e6);
 }
 
+const UNGROUPED_SYSTEM_LABEL = "أخرى غير مصنَّفة";
+
+interface OtherPropertyGroup {
+  system: string;
+  floats: TpleFloatProperty[];
+  bools: TpleBoolProperty[];
+}
+
+/** Groups "other"-category properties by their real owning game-engine class
+ * (TPLE_PROPERTY_INFO.system) so the UI can show them as collapsible
+ * sections instead of one long flat list. Sorted by group size, largest first. */
+function groupOtherProperties(floats: TpleFloatProperty[], bools: TpleBoolProperty[]): OtherPropertyGroup[] {
+  const groups = new Map<string, OtherPropertyGroup>();
+  const getGroup = (system: string) => {
+    let g = groups.get(system);
+    if (!g) {
+      g = { system, floats: [], bools: [] };
+      groups.set(system, g);
+    }
+    return g;
+  };
+  for (const p of floats) getGroup(TPLE_PROPERTY_INFO[p.name]?.system ?? UNGROUPED_SYSTEM_LABEL).floats.push(p);
+  for (const p of bools) getGroup(TPLE_PROPERTY_INFO[p.name]?.system ?? UNGROUPED_SYSTEM_LABEL).bools.push(p);
+  return Array.from(groups.values()).sort((a, b) => (b.floats.length + b.bools.length) - (a.floats.length + a.bools.length));
+}
+
 /** Picks a representative icon per property based on its (self-descriptive) name. */
 function iconForProperty(name: string) {
   if (/deccel|decel/i.test(name)) return TrendingDown;
@@ -452,6 +478,7 @@ const RisenFileManager: React.FC = () => {
   const [building, setBuilding] = useState(false);
   const [propSearch, setPropSearch] = useState("");
   const [infoModalProp, setInfoModalProp] = useState<{ name: string; kind: "float" | "bool" | "int"; typeName?: string } | null>(null);
+  const [collapsedOtherGroups, setCollapsedOtherGroups] = useState<Set<string>>(new Set());
 
   // Tree browsing (search/sort).
   const [treeSearch, setTreeSearch] = useState("");
@@ -499,6 +526,15 @@ const RisenFileManager: React.FC = () => {
     setEntryError(null);
     setPropSearch("");
     setInfoModalProp(null);
+    setCollapsedOtherGroups(new Set());
+  }, []);
+
+  const toggleOtherGroup = useCallback((system: string) => {
+    setCollapsedOtherGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(system)) next.delete(system); else next.add(system);
+      return next;
+    });
   }, []);
 
   const exitBatchMode = useCallback(() => {
@@ -1067,6 +1103,7 @@ const RisenFileManager: React.FC = () => {
     const physicsProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "physics" && matchesSearch(p.name));
     const otherFloatProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
     const otherBoolProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
+    const otherGroups = groupOtherProperties(otherFloatProps, otherBoolProps);
     const intProps = tpleIntProps.filter((p) => matchesSearch(p.name));
     const totalPropCount = tpleProps.length + tpleBoolProps.length + tpleIntProps.length;
     const hasEdits = edits.size > 0 || boolEdits.size > 0 || intEdits.size > 0;
@@ -1180,28 +1217,48 @@ const RisenFileManager: React.FC = () => {
                   </div>
                 </div>
               )}
-              {(otherFloatProps.length > 0 || otherBoolProps.length > 0) && (
+              {otherGroups.length > 0 && (
                 <div>
-                  <div className="font-display font-bold mb-2 flex items-center gap-1.5">🔧 خصائص أخرى (مكتشَفة تلقائياً)</div>
+                  <div className="font-display font-bold mb-2 flex items-center gap-1.5">🔧 خصائص أخرى (مكتشَفة تلقائياً، مجمَّعة حسب نظام اللعبة الحقيقي)</div>
                   <div className="space-y-2">
-                    {otherFloatProps.map((p) => (
-                      <PropertyRow
-                        key={`${p.valueOffset}-${resetToken}`}
-                        prop={p}
-                        currentValue={edits.get(p.valueOffset) ?? p.value}
-                        onChange={updateEditValue}
-                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "float" })}
-                      />
-                    ))}
-                    {otherBoolProps.map((p) => (
-                      <BoolPropertyRow
-                        key={`${p.valueOffset}-${resetToken}`}
-                        prop={p}
-                        currentValue={boolEdits.get(p.valueOffset) ?? p.value}
-                        onChange={updateBoolEditValue}
-                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "bool" })}
-                      />
-                    ))}
+                    {otherGroups.map((g) => {
+                      const groupCount = g.floats.length + g.bools.length;
+                      const isCollapsed = collapsedOtherGroups.has(g.system);
+                      return (
+                        <div key={g.system} className="rounded-lg border border-border/50 overflow-hidden">
+                          <button
+                            onClick={() => toggleOtherGroup(g.system)}
+                            className="w-full flex items-center gap-1.5 p-2.5 text-sm hover:bg-muted/30"
+                          >
+                            {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
+                            <span className="font-display font-bold flex-1 text-right">{g.system}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">({groupCount})</span>
+                          </button>
+                          {!isCollapsed && (
+                            <div className="space-y-2 p-2 pt-0">
+                              {g.floats.map((p) => (
+                                <PropertyRow
+                                  key={`${p.valueOffset}-${resetToken}`}
+                                  prop={p}
+                                  currentValue={edits.get(p.valueOffset) ?? p.value}
+                                  onChange={updateEditValue}
+                                  onInfoClick={() => setInfoModalProp({ name: p.name, kind: "float" })}
+                                />
+                              ))}
+                              {g.bools.map((p) => (
+                                <BoolPropertyRow
+                                  key={`${p.valueOffset}-${resetToken}`}
+                                  prop={p}
+                                  currentValue={boolEdits.get(p.valueOffset) ?? p.value}
+                                  onChange={updateBoolEditValue}
+                                  onInfoClick={() => setInfoModalProp({ name: p.name, kind: "bool" })}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

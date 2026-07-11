@@ -107,6 +107,10 @@ export interface TplePropertyInfo {
   label: string;
   description: string;
   category: "movement" | "physics" | "other";
+  /** Real owning game-engine class (e.g. "الفريق" for gCParty_PS), used only
+   * to group "other"-category properties into collapsible sections in the
+   * file manager UI — does not affect movement/physics section placement. */
+  system?: string;
 }
 
 /** Curated, verified explanations — only for properties whose meaning is
@@ -526,219 +530,219 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   LastFightTimestamp: {
     label: "توقيت آخر قتال",
     description: "الطابع الزمني لآخر قتال خاضته هذه الشخصية — حالة تشغيل/ذاكرة محفوظة، وليست إعداداً تصممه.",
-    category: "other",
+    category: "other", system: "الشخصية (NPC)",
   },
   PlayerWeaponTimestamp: {
     label: "توقيت إشهار سلاح اللاعب",
     description: "الطابع الزمني لآخر مرة أشهر فيها اللاعب سلاحه أمام هذه الشخصية — يُستخدم غالباً لتذكّر سلوك عدائي محتمل من الشخصية.",
-    category: "other",
+    category: "other", system: "الشخصية (NPC)",
   },
   LastDistToTarget: {
     label: "آخر مسافة للهدف",
     description: "آخر مسافة مُسجَّلة بين هذه الشخصية وهدفها الحالي — حالة تشغيل داخلية لنظام الذكاء الاصطناعي.",
-    category: "other",
+    category: "other", system: "الشخصية (NPC)",
   },
   LastDistToGuardPoint: {
     label: "آخر مسافة لنقطة الحراسة",
     description: "آخر مسافة مُسجَّلة بين الشخصية ونقطة حراستها (GuardPoint) — تُستخدم في منطق الدورية/الحراسة.",
-    category: "other",
+    category: "other", system: "الشخصية (NPC)",
   },
   DefeatedByPlayer: {
     label: "هُزم على يد اللاعب",
     description: "هل هُزمت هذه الشخصية على يد اللاعب من قبل — حالة تُسجَّل بعد المعركة، وليست إعداد بداية.",
-    category: "other",
+    category: "other", system: "الشخصية (NPC)",
   },
   Ransacked: {
     label: "نُهب من قبل",
     description: "هل نُهب/فُتِّش هذا الكيان (كصندوق أو جثة) من قبل اللاعب مسبقاً.",
-    category: "other",
+    category: "other", system: "الشخصية (NPC)",
   },
   Discovered: {
     label: "اكتُشف من قبل",
     description: "هل اكتشف اللاعب هذا الكيان/الشخصية من قبل — يؤثر مثلاً على ظهوره على الخريطة أو سجل المعرفة.",
-    category: "other",
+    category: "other", system: "الشخصية (NPC)",
   },
 
   // gCScriptRoutine_PS — حالة تنفيذ الروتين السلوكي والذكاء الاصطناعي.
   TaskTime: {
     label: "وقت المهمة الحالية",
     description: "الوقت المنقضي في المهمة/الروتين الحالي الذي تنفذه الشخصية — حالة تشغيل داخلية لنظام الذكاء الاصطناعي (AI).",
-    category: "other",
+    category: "other", system: "الذكاء الاصطناعي والروتين",
   },
   StateTime: {
     label: "وقت الحالة السلوكية",
     description: "الوقت المنقضي في الحالة (State) السلوكية الحالية للشخصية ضمن آلة الحالات الخاصة بالذكاء الاصطناعي.",
-    category: "other",
+    category: "other", system: "الذكاء الاصطناعي والروتين",
   },
   EndAttackTimestamp: {
     label: "توقيت انتهاء الهجوم",
     description: "الطابع الزمني لانتهاء آخر هجوم نفّذته الشخصية — يُستخدم لحساب فترات التهدئة (cooldown) بين الهجمات.",
-    category: "other",
+    category: "other", system: "الذكاء الاصطناعي والروتين",
   },
   LockAIInterrupt: {
     label: "قفل مقاطعة الذكاء الاصطناعي",
     description: "هل الذكاء الاصطناعي للشخصية مُقفَل حالياً ضد المقاطعة (لا يمكن مقاطعة روتينه الحالي بحدث خارجي).",
-    category: "other",
+    category: "other", system: "الذكاء الاصطناعي والروتين",
   },
   LockAIResult: {
     label: "قفل نتيجة الذكاء الاصطناعي",
     description: "هل نتيجة قرار الذكاء الاصطناعي الحالية مُثبَّتة (لا تُعاد حسابها) — إعداد تحكّم داخلي بمحرك السلوك.",
-    category: "other",
+    category: "other", system: "الذكاء الاصطناعي والروتين",
   },
   RoutineChanged: {
     label: "تغيّر الروتين",
     description: "علامة داخلية تشير إلى أن روتين/مهمة الشخصية تغيّر مؤخراً — يستخدمها النظام ليعرف متى يُعيد تهيئة السلوك الجديد.",
-    category: "other",
+    category: "other", system: "الذكاء الاصطناعي والروتين",
   },
 
   // gCDamage_PS — حساب الضرر العام (منفصلة عن DamageBonus/DamageAmount أدناه).
   DamageMultiplier: {
     label: "معامل الضرر",
     description: "معامل عام يُضرب في كل الضرر الذي يتلقاه هذا الكيان. أقل من 1.0 = مقاومة/تخفيف ضرر، أكبر من 1.0 = ضعف وضرر إضافي.",
-    category: "other",
+    category: "other", system: "الضرر",
   },
 
   // gCDialog_PS — التجارة والحوار والتفاعل الاجتماعي مع الشخصية.
   EndDialogTimestamp: {
     label: "توقيت انتهاء المحادثة",
     description: "الطابع الزمني لانتهاء آخر محادثة مع هذه الشخصية — حالة تشغيل.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   SaleModifier: {
     label: "معامل سعر البيع",
     description: "معامل يُضرب في أسعار بيع هذه الشخصية (كتاجر) للاعب. أقل من 1.0 = بيع أرخص، أكبر من 1.0 = أغلى.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   PurchaseModifier: {
     label: "معامل سعر الشراء",
     description: "معامل يُضرب في السعر الذي تدفعه هذه الشخصية عند شراء أغراض اللاعب منه. أعلى = تدفع الشخصية أكثر مقابل أغراضك.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   TradeEnabled: {
     label: "التجارة مفعَّلة",
     description: "هل تفتح هذه الشخصية واجهة التجارة عند التفاعل معها (تاجر فعّال أم لا).",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   TeachEnabled: {
     label: "التعليم مفعَّل",
     description: "هل يمكن لهذه الشخصية تعليم اللاعب مهارات (كمدرّب/معلّم) عند التفاعل معها.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   TalkedToPlayer: {
     label: "تحدّث مع اللاعب",
     description: "هل تحدّثت هذه الشخصية مع اللاعب من قبل — حالة تُسجَّل بعد أول محادثة معها.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   PartyEnabled: {
     label: "الانضمام كرفيق مفعَّل",
     description: "هل يمكن للاعب دعوة هذه الشخصية للانضمام كرفيق في فريقه.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   MobEnabled: {
     label: "الانضمام كعصابة مفعَّل",
     description: "هل يمكن للاعب الانضمام لهذه الشخصية كعصابة/فصيل (Mob) ضمن آليات معيّنة في اللعبة.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   SlaveryEnabled: {
     label: "الاسترقاق مفعَّل",
     description: "هل يمكن استرقاق/تجنيد هذه الشخصية قسراً ضمن آليات معيّنة في اللعبة (إن وُجدت).",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
   PickedPocket: {
     label: "نُشل جيبه من قبل",
     description: "هل سبق للاعب أن نشل جيب هذه الشخصية (سرقة خفية) من قبل.",
-    category: "other",
+    category: "other", system: "الحوار والتجارة",
   },
 
   // eCAnimation_PS — الحركة والرسوم المتحركة والدُّمية الفيزيائية.
   RagDollMass: {
     label: "كتلة الدُّمية المترهّلة",
     description: "الكتلة الفيزيائية المستخدَمة عند تفعيل جسم الدُّمية المترهّلة (Ragdoll) — كعند سقوط الشخصية ميتة. تؤثر على واقعية سقوط الجثة.",
-    category: "other",
+    category: "other", system: "الحركة والرسوم المتحركة",
   },
   EnableRepositioning: {
     label: "إعادة الضبط الآلي للموضع",
     description: "هل يُسمح لنظام الرسوم المتحركة بإعادة ضبط موضع الشخصية تلقائياً أثناء الحركة (Root motion) بدل الاعتماد فقط على أوامر التحكم المباشرة.",
-    category: "other",
+    category: "other", system: "الحركة والرسوم المتحركة",
   },
 
   // gCNavigation_PS — تخطيط المسارات والملاحة.
   LastUseableNavigationZoneIsPath: {
     label: "آخر منطقة ملاحة هي مسار",
     description: "هل آخر منطقة ملاحة صالحة مسجَّلة للشخصية هي «مسار» (Path) تحديداً وليست منطقة عامة — تفصيل داخلي لنظام تخطيط المسارات.",
-    category: "other",
+    category: "other", system: "الملاحة",
   },
 
   // gCInventory_PS — توليد الغنيمة والمخزون التجاري.
   GeneratedPlunder: {
     label: "وُلِّدت الغنيمة",
     description: "هل وُلِّدت غنيمة/نهب عشوائي لهذا الكيان مسبقاً — يمنع إعادة توليدها في كل مرة يُفتَّش فيها.",
-    category: "other",
+    category: "other", system: "المخزون والغنيمة",
   },
   GeneratedTrade: {
     label: "وُلِّد المخزون التجاري",
     description: "هل وُلِّد مخزون تجاري عشوائي لهذا الكيان مسبقاً (لتجّار عشوائيي المخزون).",
-    category: "other",
+    category: "other", system: "المخزون والغنيمة",
   },
 
   // gCScriptProxyAIState — حالة سلوك مساعدة إضافية.
   GroundBias: {
     label: "انحياز الأرضية",
     description: "انحياز/تعديل ارتفاع افتراضي يُضاف عند حساب موضع الشخصية بالنسبة للأرض ضمن منطق الذكاء الاصطناعي (مثلاً لمنع أخطاء استهداف بصرية بسيطة).",
-    category: "other",
+    category: "other", system: "الذكاء الاصطناعي والروتين",
   },
 
   // eCIlluminated_PS — الإضاءة والظلال.
   CastDirLightShadows: {
     label: "ظلال من الإضاءة الاتجاهية",
     description: "هل يُلقي هذا الكيان ظلالاً من الإضاءة الاتجاهية (كضوء الشمس). تعطيلها يحسّن الأداء قليلاً على حساب الواقعية البصرية.",
-    category: "other",
+    category: "other", system: "الإضاءة والظلال",
   },
   CastPntLightShadows: {
     label: "ظلال من الإضاءة النقطية",
     description: "نفس مبدأ ظلال الإضاءة الاتجاهية، لكن من مصادر الإضاءة النقطية (كالمصابيح والشعلات).",
-    category: "other",
+    category: "other", system: "الإضاءة والظلال",
   },
   CastStaticShadows: {
     label: "ظلال ثابتة محسوبة مسبقاً",
     description: "هل تُحسَب ظلال هذا الكيان ضمن الإضاءة الثابتة المُعدَّة مسبقاً (Baked lighting) بدل حسابها الفوري في كل إطار.",
-    category: "other",
+    category: "other", system: "الإضاءة والظلال",
   },
 
   // gCParty_PS — الرفاق والفريق.
   Waiting: {
     label: "في وضع الانتظار",
     description: "هل هذا العضو في الفريق حالياً في وضع «الانتظار» — لا يتبع اللاعب بنشاط، بل يبقى في مكانه.",
-    category: "other",
+    category: "other", system: "الفريق",
   },
   AutoRejoin: {
     label: "الانضمام التلقائي من جديد",
     description: "هل ينضم عضو الفريق تلقائياً للاعب من جديد بعد الانفصال عنه (كالتخلف عن الركب أو الخروج من منطقة).",
-    category: "other",
+    category: "other", system: "الفريق",
   },
 
   // gCEffect_PS — التأثيرات البصرية المرتبطة بالكيان.
   Static: {
     label: "التأثير ثابت الموضع",
     description: "هل التأثير البصري المرتبط بهذا الكيان ثابت الموضع (لا يتبع حركة الكيان نفسه بعد تفعيله).",
-    category: "other",
+    category: "other", system: "التأثيرات البصرية",
   },
   Enabled: {
     label: "التأثير مفعَّل",
     description: "هل التأثير البصري (كتوهّج أو جسيمات) المرتبط بهذا الكيان مفعَّل ويعمل حالياً.",
-    category: "other",
+    category: "other", system: "التأثيرات البصرية",
   },
   UseMaxRepeats: {
     label: "استخدام حد أقصى للتكرار",
     description: "هل يُطبَّق حد أقصى لعدد مرات تكرار التأثير البصري (يعمل مع MaxNumRepeats القريبة منها في الملف) بدل تكراره إلى ما لا نهاية.",
-    category: "other",
+    category: "other", system: "التأثيرات البصرية",
   },
 
   // gCMapInfo_PS — أيقونة الكيان على خريطة اللعبة.
   CalcRotation: {
     label: "حساب دوران أيقونة الخريطة",
     description: "هل يُحسَب دوران أيقونة هذا الكيان على خريطة اللعبة لتعكس اتجاه توجّهه الفعلي، بدل أيقونة ثابتة الاتجاه.",
-    category: "other",
+    category: "other", system: "معلومات الخريطة",
   },
 
   // Integer (short/int/long) properties. Confidently attributed to their

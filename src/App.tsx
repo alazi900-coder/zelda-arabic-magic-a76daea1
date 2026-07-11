@@ -37,6 +37,7 @@ const PwaStatus = lazyWithIgnoredRef(() => import("./pages/PwaStatus"));
 const Risen = lazyWithIgnoredRef(() => import("./pages/Risen"));
 const RisenProcess = lazyWithIgnoredRef(() => import("./pages/RisenProcess"));
 const RisenImages = lazyWithIgnoredRef(() => import("./pages/RisenImages"));
+const RisenFileManager = lazyWithIgnoredRef(() => import("./pages/RisenFileManager"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <div ref={ref} className="min-h-screen flex items-center justify-center bg-background" {...props}>
@@ -74,6 +75,7 @@ const App = () => (
                   <Route path="/risen" element={<Risen />} />
                   <Route path="/risen/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Risen"><RisenProcess /></ErrorBoundary>} />
                   <Route path="/risen/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Risen"><RisenImages /></ErrorBoundary>} />
+                  <Route path="/risen/files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Risen"><RisenFileManager /></ErrorBoundary>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

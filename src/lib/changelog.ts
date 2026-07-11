@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.36.0",
+    date: "2026-07-11",
+    changes: [
+      { kind: "added", text: "أداة جديدة «مدير ملفات Risen 1» — تفتح أي أرشيف .pak أو .p00/.p01 وما شابه (نفس بنية images.pak)، وتعرض شجرة الملفات والمجلدات الداخلية للتصفح فقط بدون تحميل الأرشيف كاملاً للذاكرة، مع إمكانية تحديد ملف أو أكثر أو مجلد كامل وتنزيله كملف ZIP واحد." },
+    ],
+  },
+  {
     version: "1.35.0",
     date: "2026-07-11",
     changes: [

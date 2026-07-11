@@ -3,22 +3,25 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Lock, Unlock, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
-import heroBg from "@/assets/xc3-hero-bg.jpg";
+import xc3HeroBg from "@/assets/xc3-hero-bg.jpg";
+import risenHeroBg from "@/assets/risen-editor-bg.jpg";
 
 interface EditorHeroHeaderProps {
   processPath: string;
   pageLocked: boolean;
   setPageLocked: (v: boolean) => void;
+  isRisen?: boolean;
 }
 
 const EditorHeroHeader: React.FC<EditorHeroHeaderProps> = ({
   processPath,
   pageLocked,
   setPageLocked,
+  isRisen = false,
 }) => (
   <header className="relative flex flex-col items-center justify-center py-8 md:py-12 px-4 text-center overflow-hidden">
     <div className="absolute inset-0">
-      <img src={heroBg} alt="" className="w-full h-full object-cover" fetchPriority="high" />
+      <img src={isRisen ? risenHeroBg : xc3HeroBg} alt="" className="w-full h-full object-cover" fetchPriority="high" />
       <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/70 to-background" />
     </div>
     <div className="relative z-10 w-full max-w-6xl mx-auto">
@@ -52,8 +55,12 @@ const EditorHeroHeader: React.FC<EditorHeroHeaderProps> = ({
           </Button>
         </div>
       </div>
-      <h1 className="text-2xl md:text-3xl font-display font-black mb-1 drop-shadow-lg">محرر الترجمة ✍️</h1>
-      <p className="text-sm text-muted-foreground font-body">عدّل النصوص العربية يدوياً أو استخدم الترجمة التلقائية</p>
+      <h1 className="text-2xl md:text-3xl font-display font-black mb-1 drop-shadow-lg">
+        {isRisen ? "مخطوطة Risen 📜" : "محرر الترجمة ✍️"}
+      </h1>
+      <p className="text-sm text-muted-foreground font-body">
+        {isRisen ? "دوّن ترجمة نصوص جزيرة فارانغا يدوياً أو بالذكاء الاصطناعي" : "عدّل النصوص العربية يدوياً أو استخدم الترجمة التلقائية"}
+      </p>
     </div>
   </header>
 );

@@ -114,40 +114,172 @@ export interface TplePropertyInfo {
  * gCCharacterMovement_PS context they were found in. Anything else found
  * by the generic scan is shown with its raw name and no invented meaning. */
 export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
-  ForwardSpeedMax: { label: "أقصى سرعة للأمام", description: "السرعة القصوى عند التحرك للأمام.", category: "movement" },
-  StrafeSpeedMax: { label: "أقصى سرعة جانبية", description: "السرعة القصوى عند التحرك يميناً/يساراً.", category: "movement" },
-  BackwardSpeedMax: { label: "أقصى سرعة للخلف", description: "السرعة القصوى عند التحرك للخلف.", category: "movement" },
-  TurnSpeedMax: { label: "أقصى سرعة دوران", description: "أقصى سرعة دوران الشخصية حول نفسها.", category: "movement" },
-  TurnSpeedModifier: { label: "معامل سرعة الدوران", description: "معامل يُضرب في سرعة الدوران الأساسية.", category: "movement" },
-  MoveAcceleration: { label: "تسارع الحركة", description: "مدى سرعة الوصول لأقصى سرعة عند بدء الحركة.", category: "movement" },
-  MoveDecceleration: { label: "تباطؤ الحركة", description: "مدى سرعة التوقف عند إيقاف الحركة.", category: "movement" },
-  TurnAcceleration: { label: "تسارع الدوران", description: "مدى سرعة الوصول لأقصى سرعة دوران.", category: "movement" },
-  TurnDecceleration: { label: "تباطؤ الدوران", description: "مدى سرعة توقف الدوران.", category: "movement" },
-  SlowModifier: { label: "معامل السرعة البطيئة", description: "معامل يُضرب في سرعة الحركة أثناء المشي البطيء.", category: "movement" },
-  FastModifier: { label: "معامل السرعة السريعة", description: "معامل يُضرب في سرعة الحركة أثناء الجري/السرعة القصوى.", category: "movement" },
-  SneakModifier: { label: "معامل التسلل", description: "معامل يُضرب في سرعة الحركة أثناء التسلل.", category: "movement" },
+  ForwardSpeedMax: {
+    label: "أقصى سرعة للأمام",
+    description: "السرعة القصوى عند الجري للأمام. زيادتها = جري أسرع للأمام، تخفيضها = أبطأ. تُضرب أحياناً بمعامل إضافي (SlowModifier عند المشي الخفيف، FastModifier عند الجري القوي) — إن لم يظهر أثر تعديلها وحدها، عدّلها مع تلك المعاملات معاً عبر «تعديل جماعي عبر الأرشيف».",
+    category: "movement",
+  },
+  StrafeSpeedMax: {
+    label: "أقصى سرعة جانبية",
+    description: "السرعة القصوى عند التحرك يميناً/يساراً بلا دوران. مستقلة عن السرعة الأمامية — عدّلها وحدها لو أردت حركة جانبية أسرع/أبطأ تحديداً دون التأثير على الجري للأمام.",
+    category: "movement",
+  },
+  BackwardSpeedMax: {
+    label: "أقصى سرعة للخلف",
+    description: "السرعة القصوى عند التحرك للخلف. عادة أبطأ من الأمامية بتصميم الألعاب — رفعها بشدة قد يجعل التراجع للخلف يبدو غير طبيعي بصرياً.",
+    category: "movement",
+  },
+  TurnSpeedMax: {
+    label: "أقصى سرعة دوران",
+    description: "أقصى سرعة يمكن أن تلتفت بها الشخصية حول نفسها. رفعها = التفاف أسرع (شبه فوري عند قيم كبيرة جداً)، خفضها = التفاف بطيء وثقيل الحس.",
+    category: "movement",
+  },
+  TurnSpeedModifier: {
+    label: "معامل سرعة الدوران",
+    description: "معامل يُضرب في TurnSpeedMax — طريقة سريعة لتكبير أو تصغير سرعة الدوران كلها بضربة واحدة، بدل تعديل كل خاصية دوران على حدة. مثال: 1.0 = بلا تغيير، 2.0 = ضعف السرعة.",
+    category: "movement",
+  },
+  MoveAcceleration: {
+    label: "تسارع الحركة",
+    description: "مدى سرعة وصول الشخصية من السكون إلى أقصى سرعتها عند بدء الحركة. رفعها = انطلاق شبه فوري (استجابة أسرع للتحكم)، خفضها = تسارع تدريجي ملحوظ قبل بلوغ السرعة القصوى.",
+    category: "movement",
+  },
+  MoveDecceleration: {
+    label: "تباطؤ الحركة",
+    description: "مدى سرعة توقف الشخصية عند إيقاف الحركة. رفعها = توقف شبه فوري وحاد، خفضها (أو قيمة سالبة كبيرة كـ-1000) = «انزلاق» لمسافة قبل التوقف الكامل.",
+    category: "movement",
+  },
+  TurnAcceleration: {
+    label: "تسارع الدوران",
+    description: "مدى سرعة وصول دوران الشخصية لأقصى سرعته — نفس مبدأ MoveAcceleration لكن للالتفاف بدل الانتقال المكاني.",
+    category: "movement",
+  },
+  TurnDecceleration: {
+    label: "تباطؤ الدوران",
+    description: "مدى سرعة توقف دوران الشخصية عن الالتفاف — نفس مبدأ MoveDecceleration لكن للدوران.",
+    category: "movement",
+  },
+  SlowModifier: {
+    label: "معامل السرعة البطيئة",
+    description: "معامل يُضرب في السرعة الأساسية (مثل ForwardSpeedMax) أثناء المشي الخفيف (تحريك العصا التناظرية بقوة قليلة). مثال: 1.0 = بلا تغيير، 0.5 = نصف السرعة، 1.5 = أسرع بنسبة 50%. لتغيير سرعة المشي البطيء فقط دون الجري، عدّل هذه وحدها؛ ولتغيير السرعة في كل الحالات، عدّلها مع خاصيتَي FastModifier و ForwardSpeedMax معاً.",
+    category: "movement",
+  },
+  FastModifier: {
+    label: "معامل السرعة السريعة",
+    description: "نفس مبدأ SlowModifier لكن أثناء الجري القوي (تحريك العصا للأقصى) — هذا هو المعامل الذي يحدد سرعة الجري الفعلية. عدّله تحديداً لو أردت تسريع/تبطئة الجري دون التأثير على المشي البطيء.",
+    category: "movement",
+  },
+  SneakModifier: {
+    label: "معامل التسلل",
+    description: "نفس المبدأ لكن أثناء التسلل (وضعية الاختباء/القرفصاء). عدّله لجعل التسلل أسرع أو أبطأ دون التأثير على المشي أو الجري العاديين.",
+    category: "movement",
+  },
 
-  PhysicsEnabled: { label: "تفعيل الفيزياء", description: "هل يتأثر الكيان بمحرك الفيزياء (الجاذبية والتصادم).", category: "physics" },
-  IsQuadruped: { label: "كائن رباعي الأرجل", description: "هل يتحرك الكيان كحيوان رباعي الأرجل بدل ثنائي.", category: "physics" },
-  DoHeightCorrection: { label: "تصحيح الارتفاع", description: "تصحيح تلقائي لارتفاع الكيان فوق سطح الأرض.", category: "physics" },
-  DisableCollision: { label: "تعطيل التصادم", description: "تجاهل التصادم مع هذا الشكل.", category: "physics" },
-  DisableResponse: { label: "تعطيل استجابة التصادم", description: "عدم الاستجابة الفيزيائية عند التصادم (يبقى الاكتشاف فقط).", category: "physics" },
-  IsClimbable: { label: "قابل للتسلق", description: "هل يمكن للاعب تسلّق هذا الشكل.", category: "physics" },
-  HitByProjectile: { label: "يُصاب بالمقذوفات", description: "هل يمكن أن تصيبه مقذوفات (سهام وغيرها).", category: "physics" },
-  IgnoredByTraceRay: { label: "يُتجاهل عند فحص خط الرؤية", description: "يُستثنى من فحوصات الرؤية/الاصطدام الشعاعية (Raycast).", category: "physics" },
-  IsUnique: { label: "شكل فريد", description: "شكل غير مكرَّر (لا يُشارَك بين كيانات أخرى).", category: "physics" },
-  EnableCCD: { label: "كشف تصادم مستمر", description: "يمنع اختراق الأجسام السريعة الحركة لبعضها (Continuous Collision Detection).", category: "physics" },
-  OverrideEntityAABB: { label: "تجاوز الصندوق المحيط", description: "استخدام صندوق تصادم مخصَّص بدل الافتراضي.", category: "physics" },
-  TriggersOnTouch: { label: "يُفعَّل عند اللمس", description: "يُطلق حدثاً عند بدء التلامس مع الشكل.", category: "physics" },
-  TriggersOnUntouch: { label: "يُفعَّل عند مغادرة اللمس", description: "يُطلق حدثاً عند انتهاء التلامس مع الشكل.", category: "physics" },
-  TriggersOnIntersect: { label: "يُفعَّل عند التقاطع", description: "يُطلق حدثاً عند تقاطع الشكل مع شكل آخر.", category: "physics" },
-  IsLazyGenerated: { label: "يُولَّد عند الحاجة فقط", description: "لا يُنشأ الشكل الفيزيائي إلا عند الحاجة الفعلية له.", category: "physics" },
-  SensorAffectsDirection: { label: "المستشعر يؤثر على الاتجاه", description: "هل يؤثر مستشعر الأرضية على اتجاه حركة الشخصية.", category: "physics" },
-  ForceGroundAlignment: { label: "إجبار محاذاة الأرضية", description: "إجبار محاذاة الشخصية مع ميل سطح الأرض.", category: "physics" },
-  CanBePushedWhileIdle: { label: "يمكن دفعه أثناء الثبات", description: "هل يمكن دفع الشخصية أثناء وقوفها ساكنة.", category: "physics" },
-  TreatWaterAsSolid: { label: "معاملة الماء كسطح صلب", description: "يمنع الشخصية من دخول الماء ويعامله كأرضية.", category: "physics" },
-  DisableTranslation: { label: "تعطيل الانتقال المكاني", description: "منع تغيّر موضع الكيان بالكامل.", category: "physics" },
-  DisableRotation: { label: "تعطيل الدوران", description: "منع دوران الكيان بالكامل.", category: "physics" },
+  PhysicsEnabled: {
+    label: "تفعيل الفيزياء",
+    description: "هل يتأثر الكيان بمحرك الفيزياء (الجاذبية والتصادم) عموماً. تعطيلها (لا) يجعله يتجاهل الجاذبية والتصادم تماماً — قد يُعلَّق في الهواء أو يمر خلال الجدران. غيّرها بحذر شديد؛ للشخصيات تبقى «نعم» عادة.",
+    category: "physics",
+  },
+  IsQuadruped: {
+    label: "كائن رباعي الأرجل",
+    description: "هل تُعالَج حركة الكيان كحيوان رباعي الأرجل بدل ثنائي القدمين. لا تغيّر النموذج ثلاثي الأبعاد أو الحركات الفعلية (تلك في ملفات أخرى)، فقط طريقة حساب الحركة داخلياً — تفعيلها لكيان بنموذج ثنائي القدمين قد يسبب سلوكاً غريباً.",
+    category: "physics",
+  },
+  DoHeightCorrection: {
+    label: "تصحيح الارتفاع",
+    description: "تصحيح تلقائي لارتفاع الكيان فوق سطح الأرض (يمنع «الغرق» في الأرض أو «التحليق» فوقها بشكل طفيف على تضاريس غير مستوية). تعطيلها قد يجعل الكيان يبدو منخفضاً أو مرتفعاً قليلاً حسب المكان.",
+    category: "physics",
+  },
+  DisableCollision: {
+    label: "تعطيل التصادم",
+    description: "تجاهل التصادم مع هذا الشكل بالكامل — يصبح قابلاً للمرور خلاله (لا يوقف اللاعب أو غيره). فعّلها (نعم) للأشكال الزخرفية التي لا تحتاج تصادماً حقيقياً.",
+    category: "physics",
+  },
+  DisableResponse: {
+    label: "تعطيل استجابة التصادم",
+    description: "يبقى اكتشاف التلامس يعمل (لتفعيل أحداث كاللمس) لكن دون استجابة فيزيائية فعلية (لا دفع ولا إيقاف). مفيد لمناطق «حساسة» غير مرئية تحتاج فقط معرفة أن شيئاً دخلها.",
+    category: "physics",
+  },
+  IsClimbable: {
+    label: "قابل للتسلق",
+    description: "هل يمكن للاعب تسلّق هذا الشكل (كجدار أو صخرة). تفعيلها يسمح باستخدام حركة التسلّق عليه إن كانت اللعبة تدعم هذا النوع من الأسطح في مكان الكيان.",
+    category: "physics",
+  },
+  HitByProjectile: {
+    label: "يُصاب بالمقذوفات",
+    description: "هل يمكن أن يُصاب هذا الكيان بمقذوفات (سهام، رماح، إلخ). تعطيلها يجعل المقذوفات تمر عبره دون إصابته أو إيقافها.",
+    category: "physics",
+  },
+  IgnoredByTraceRay: {
+    label: "يُتجاهل عند فحص خط الرؤية",
+    description: "يُستثنى هذا الشكل من فحوصات الرؤية/الاصطدام الشعاعية (Raycast) — تُستخدم مثلاً لتحديد هل يرى عدوٌّ اللاعبَ أم يحجبه جدار. تفعيلها يجعل الشكل «شفافاً» لهذه الفحوصات تحديداً، حتى لو بقي صلباً فيزيائياً.",
+    category: "physics",
+  },
+  IsUnique: {
+    label: "شكل فريد",
+    description: "شكل تصادم مخصَّص لهذا الكيان فقط، غير مشترَك مع كيانات أخرى بنفس القالب. إعداد بنيوي/أداء داخلي غالباً — تعديله دون فهم دقيق قد لا يُحدث أثراً مرئياً في اللعبة.",
+    category: "physics",
+  },
+  EnableCCD: {
+    label: "كشف تصادم مستمر",
+    description: "يمنع الأجسام سريعة الحركة جداً (مقذوف أو كيان يتحرك بسرعة كبيرة) من «اختراق» أجسام أخرى بدل الاصطدام بها. فعّلها فقط للكيانات سريعة الحركة (تكلفتها الحسابية أعلى من الفحص العادي).",
+    category: "physics",
+  },
+  OverrideEntityAABB: {
+    label: "تجاوز الصندوق المحيط",
+    description: "استخدام صندوق تصادم مخصَّص (bounding box) بدل المُحسَب تلقائياً من الشكل. يُستخدم لضبط دقيق؛ تعديله دون بيانات الصندوق الفعلية غالباً بلا فائدة عملية.",
+    category: "physics",
+  },
+  TriggersOnTouch: {
+    label: "يُفعَّل عند اللمس",
+    description: "يُطلق حدثاً برمجياً (سكربت) عند بدء تلامس اللاعب أو كيان آخر مع هذا الشكل — أساس آليات كالفخاخ ومناطق التفعيل. تعطيلها يوقف الحدث دون حذف الشكل نفسه.",
+    category: "physics",
+  },
+  TriggersOnUntouch: {
+    label: "يُفعَّل عند مغادرة اللمس",
+    description: "نفس مبدأ «يُفعَّل عند اللمس» لكن عند انتهاء التلامس (مغادرة المنطقة) بدل بدايته.",
+    category: "physics",
+  },
+  TriggersOnIntersect: {
+    label: "يُفعَّل عند التقاطع",
+    description: "يُطلق حدثاً عند تقاطع هذا الشكل مع شكل آخر، وليس بالضرورة تلامساً مباشراً مع اللاعب — يُستخدم لتفاعلات بين كيانات وأشكال أخرى في المشهد.",
+    category: "physics",
+  },
+  IsLazyGenerated: {
+    label: "يُولَّد عند الحاجة فقط",
+    description: "لا يُنشأ الشكل الفيزيائي فعلياً في الذاكرة إلا عند الحاجة الفعلية له (تحسين أداء). إعداد داخلي، أثره على السلوك المرئي في اللعبة غالباً معدوم.",
+    category: "physics",
+  },
+  SensorAffectsDirection: {
+    label: "المستشعر يؤثر على الاتجاه",
+    description: "هل يؤثر مستشعر ملامسة الأرضية على اتجاه حركة الشخصية (كمحاذاة الحركة مع انحدار سطح غير مستوٍ). تعطيلها يجعل الحركة على المنحدرات أقل واقعية لكن أكثر قابلية للتنبؤ.",
+    category: "physics",
+  },
+  ForceGroundAlignment: {
+    label: "إجبار محاذاة الأرضية",
+    description: "إجبار محاذاة جسم الشخصية بالكامل مع ميل سطح الأرض تحتها (كالوقوف مائلاً على منحدر). تعطيلها يُبقيها عمودية دوماً بغض النظر عن ميل الأرض.",
+    category: "physics",
+  },
+  CanBePushedWhileIdle: {
+    label: "يمكن دفعه أثناء الثبات",
+    description: "هل يمكن دفع الشخصية بواسطة كيانات أخرى أو اللاعب أثناء وقوفها ساكنة دون حركة. تعطيلها يجعلها «ثابتة» فيزيائياً حتى لو صدمها شيء.",
+    category: "physics",
+  },
+  TreatWaterAsSolid: {
+    label: "معاملة الماء كسطح صلب",
+    description: "يمنع الشخصية من الغوص فعلياً في الماء ويعامل سطحه كأرضية صلبة يمكن السير عليها بدل السباحة فيه — يُستخدم غالباً لكيانات لا تملك حركة سباحة.",
+    category: "physics",
+  },
+  DisableTranslation: {
+    label: "تعطيل الانتقال المكاني",
+    description: "تعطيل كامل لأي تغيّر في موضع الكيان (لا يمكنه التحرك من مكانه إطلاقاً بعد التفعيل، حتى لو حاول). فعّلها فقط لكيانات ثابتة تماماً بتصميم اللعبة.",
+    category: "physics",
+  },
+  DisableRotation: {
+    label: "تعطيل الدوران",
+    description: "تعطيل كامل لدوران الكيان حول نفسه — يبقى موجَّهاً بنفس الزاوية دوماً. مفيد لكيانات لا يجب أن تلتفت أبداً.",
+    category: "physics",
+  },
 
   // Integer (short/int/long) properties — only a handful of names are
   // confidently understood; most others found by the generic scan look like

@@ -51,6 +51,13 @@ function withModifiedSuffix(filename: string): string {
   return dotIdx > 0 ? `${filename.slice(0, dotIdx)}-modified${filename.slice(dotIdx)}` : `${filename}-modified`;
 }
 
+/** float32 values round-trip through JS numbers with binary-representation
+ * noise (e.g. 1.6 becomes 1.600000023841858) — round for display only, the
+ * actual stored/edited value is untouched. */
+function formatFloatDisplay(v: number): string {
+  return String(Math.round(v * 1e6) / 1e6);
+}
+
 /** Picks a representative icon per property based on its (self-descriptive) name. */
 function iconForProperty(name: string) {
   if (/deccel|decel/i.test(name)) return TrendingDown;
@@ -163,7 +170,7 @@ interface PropertyRowProps {
 const PropertyRow: React.FC<PropertyRowProps> = ({ prop, currentValue, onChange, onInfoClick }) => {
   const info = TPLE_PROPERTY_INFO[prop.name];
   const Icon = iconForProperty(prop.name);
-  const [text, setText] = useState(String(currentValue));
+  const [text, setText] = useState(formatFloatDisplay(currentValue));
 
   return (
     <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-background">
@@ -314,8 +321,8 @@ const PropertyInfoModal: React.FC<PropertyInfoModalProps> = ({ name, kind, typeN
             <div className="font-display font-bold text-xs text-amber-600">ملاحظة</div>
             <div>
               بعض خصائص السرعة تُطبَّق فقط في حالة حركة معيّنة (مشي بطيء/جري/تسلل) حسب قوة تحريك العصا التناظرية. إن لم
-              تلاحظ تغييراً واضحاً، جرّب تعديل عدة خصائص سرعة معاً (مثل ForwardSpeedMax وFastModifier وSlowModifier
-              وSneakModifier) عبر "تعديل جماعي عبر الأرشيف".
+              تلاحظ تغييراً واضحاً، جرّب تعديل عدة خصائص سرعة معاً — مثل: ForwardSpeedMax، FastModifier، SlowModifier،
+              SneakModifier — عبر "تعديل جماعي عبر الأرشيف".
             </div>
           </div>
         )}
@@ -372,7 +379,7 @@ interface BatchOccurrenceRowProps {
 }
 
 const BatchOccurrenceRow: React.FC<BatchOccurrenceRowProps> = ({ occurrence, currentValue, onChangeFloat, onChangeBool, onChangeInt }) => {
-  const [text, setText] = useState(String(currentValue));
+  const [text, setText] = useState(occurrence.kind === "float" ? formatFloatDisplay(currentValue as number) : String(currentValue));
   return (
     <div className="flex items-center gap-3 p-2 rounded-lg border border-border/50 bg-background">
       <div className="flex-1 min-w-0 text-xs font-mono text-muted-foreground truncate" title={occurrence.path}>
@@ -780,6 +787,7 @@ const RisenFileManager: React.FC = () => {
       setBatchIndex(buildTpleBatchIndex(filesRead));
       setBatchFloatEdits(new Map());
       setBatchBoolEdits(new Map());
+      setBatchIntEdits(new Map());
       setBatchSelectedProperty(null);
       setBatchMode(true);
     } catch (e) {
@@ -842,7 +850,7 @@ const RisenFileManager: React.FC = () => {
         if (occ.kind === "float") {
           const edited = batchFloatEdits.get(occ.path)?.get(occ.valueOffset);
           if (edited !== undefined && edited !== occ.value) {
-            changes.push({ fileLabel: shortPath, propertyName: name, oldValue: String(occ.value), newValue: String(edited) });
+            changes.push({ fileLabel: shortPath, propertyName: name, oldValue: formatFloatDisplay(occ.value as number), newValue: formatFloatDisplay(edited) });
           }
         } else if (occ.kind === "bool") {
           const edited = batchBoolEdits.get(occ.path)?.get(occ.valueOffset);
@@ -1066,7 +1074,7 @@ const RisenFileManager: React.FC = () => {
     const singlePendingChanges: PendingChange[] = [
       ...tpleProps
         .filter((p) => edits.has(p.valueOffset) && edits.get(p.valueOffset) !== p.value)
-        .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: String(p.value), newValue: String(edits.get(p.valueOffset)) })),
+        .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: formatFloatDisplay(p.value), newValue: formatFloatDisplay(edits.get(p.valueOffset)!) })),
       ...tpleBoolProps
         .filter((p) => boolEdits.has(p.valueOffset) && boolEdits.get(p.valueOffset) !== p.value)
         .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: p.value ? "نعم" : "لا", newValue: boolEdits.get(p.valueOffset) ? "نعم" : "لا" })),

@@ -149,3 +149,30 @@ export function buildItemPrefixIndex(entries: Array<RisenCategoryEntry & { label
     .map(([prefix, count]) => ({ prefix, label: labelForItemPrefix(prefix), count }))
     .sort((a, b) => b.count - a.count || a.prefix.localeCompare(b.prefix));
 }
+
+// ============================================================================
+// Level 2c — Info "section" sub-filter (within الحوارات / infos.tab)
+// ============================================================================
+
+/** The info ID up to its 2nd "_"-separated segment, e.g. "INFO_QATEST_00000266" -> "INFO_QATEST". */
+export function getInfoIdPrefix(id: string): string {
+  return id.split("_").slice(0, 2).join("_");
+}
+
+export interface InfoPrefixCount {
+  prefix: string;
+  count: number;
+}
+
+/** Build a descending-by-count list of ID-prefix "sections" among dialogue (infos.tab) entries. */
+export function buildInfoPrefixIndex(entries: Array<RisenCategoryEntry & { label: string }>): InfoPrefixCount[] {
+  const counts = new Map<string, number>();
+  for (const e of entries) {
+    if (categorizeRisenEntry(e) !== "risen-dialogue") continue;
+    const prefix = getInfoIdPrefix(e.label);
+    counts.set(prefix, (counts.get(prefix) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([prefix, count]) => ({ prefix, count }))
+    .sort((a, b) => b.count - a.count || a.prefix.localeCompare(b.prefix));
+}

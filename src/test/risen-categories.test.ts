@@ -7,6 +7,8 @@ import {
   getItemIdPrefix,
   labelForItemPrefix,
   buildItemPrefixIndex,
+  getInfoIdPrefix,
+  buildInfoPrefixIndex,
   NO_OWNER_LABEL,
 } from "@/lib/risen/categories";
 
@@ -141,5 +143,34 @@ describe("getItemIdPrefix / buildItemPrefixIndex (Level 2b)", () => {
     expect(labelForItemPrefix("ITEMDESC_It_1H")).toBe("أسلحة يد واحدة");
     expect(labelForItemPrefix("ITEMDESC_It_Armor")).toBe("دروع وملابس");
     expect(labelForItemPrefix("ITEMDESC_It_Weird")).toBe("ITEMDESC_It_Weird");
+  });
+});
+
+describe("getInfoIdPrefix / buildInfoPrefixIndex (Level 2c — infos.tab sections)", () => {
+  it("extracts the ID up to the 2nd underscore segment", () => {
+    expect(getInfoIdPrefix("INFO_QATEST_00000266")).toBe("INFO_QATEST");
+    expect(getInfoIdPrefix("INFO_QAMAIN_00000042")).toBe("INFO_QAMAIN");
+  });
+
+  it("groups entries into sections sorted by count descending", () => {
+    const entries = [
+      { msbtFile: "infos.tab", label: "INFO_QATEST_00000266" },
+      { msbtFile: "infos.tab", label: "INFO_QATEST_00000267" },
+      { msbtFile: "infos.tab", label: "INFO_QAMAIN_00000001" },
+    ];
+    const index = buildInfoPrefixIndex(entries);
+    expect(index).toEqual([
+      { prefix: "INFO_QATEST", count: 2 },
+      { prefix: "INFO_QAMAIN", count: 1 },
+    ]);
+  });
+
+  it("only counts entries whose table categorizes as risen-dialogue", () => {
+    const entries = [
+      { msbtFile: "infos.tab", label: "INFO_QATEST_00000266" },
+      { msbtFile: "items.tab", label: "INFO_SHOULDBEIGNORED_1" },
+    ];
+    const index = buildInfoPrefixIndex(entries);
+    expect(index).toEqual([{ prefix: "INFO_QATEST", count: 1 }]);
   });
 });

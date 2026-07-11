@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.34.0",
+    date: "2026-07-11",
+    changes: [
+      { kind: "added", text: "قسم «الحوارات» (Risen 1): لوحة فلترة فرعية جديدة «تصفح أقسام الحوارات (infos.tab)» تعرض كل قسم (مثل INFO_QATEST) كزر قابل للضغط بجانب عدد نصوصه — لتصفح محادثات المهام الجانبية وغيرها من الأقسام داخل الحوارات دون الخلط بينها وبين 15 ألف نص الحوار العام." },
+    ],
+  },
+  {
     version: "1.33.0",
     date: "2026-07-10",
     changes: [

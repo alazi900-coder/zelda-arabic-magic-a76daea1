@@ -30,7 +30,7 @@ import {
 import { normalizeBreakStyleToSource } from "@/lib/balance-lines";
 import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
-import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix } from "@/lib/risen/categories";
+import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix, type RisenSectionFilterValue } from "@/lib/risen/categories";
 import { getLongestLineLength } from "@/lib/risen-line-split";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
@@ -93,10 +93,11 @@ export function useEditorState() {
   const [filterTable, setFilterTable] = useState<string>("all");
   const [filterColumn, setFilterColumn] = useState<string>("all");
   // Risen 1 sub-filters (Level 2): Owner within the dialogue category, ID-prefix within items,
-  // ID-prefix "sections" within dialogue (infos.tab). No-op for other games.
+  // and a generic ID-prefix "section" browser usable within any single active category.
+  // No-op for other games.
   const [filterRisenOwner, setFilterRisenOwner] = useState<string | null>(null);
   const [filterRisenItemPrefix, setFilterRisenItemPrefix] = useState<string | null>(null);
-  const [filterRisenInfoPrefix, setFilterRisenInfoPrefix] = useState<string | null>(null);
+  const [filterRisenSection, setFilterRisenSection] = useState<RisenSectionFilterValue | null>(null);
   const [translateProgress, setTranslateProgress] = useState("");
   const [lastSaved, setLastSaved] = useState<string>("");
   const [cloudSyncing, setCloudSyncing] = useState(false);
@@ -731,8 +732,8 @@ export function useEditorState() {
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||
         getItemIdPrefix(e.label) === filterRisenItemPrefix;
-      const matchRisenInfoPrefix = !isRisen || !filterRisenInfoPrefix || risenCat !== "risen-dialogue" ||
-        getInfoIdPrefix(e.label) === filterRisenInfoPrefix;
+      const matchRisenSection = !isRisen || !filterRisenSection || risenCat !== filterRisenSection.category ||
+        getInfoIdPrefix(e.label) === filterRisenSection.prefix;
       const matchStatus = 
         filterStatus === "all" || 
         (filterStatus === "translated" && isTranslated) ||
@@ -767,11 +768,11 @@ export function useEditorState() {
       const labelMatch = e.label.match(/^(.+?)\[(\d+)\]\.(.+)$/);
       const matchTable = filterTable === "all" || (labelMatch && labelMatch[1] === filterTable);
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
-      return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenInfoPrefix;
+      return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenSection;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenInfoPrefix, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys]);
 
-  useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenInfoPrefix]);
+  useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection]);
 
   const totalPages = Math.ceil(filteredEntries.length / PAGE_SIZE);
   const paginatedEntries = useMemo(() => {
@@ -1633,7 +1634,7 @@ export function useEditorState() {
   return {
     // State
     state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, showFindReplace,
-    filterRisenOwner, filterRisenItemPrefix, filterRisenInfoPrefix,
+    filterRisenOwner, filterRisenItemPrefix, filterRisenSection,
     pendingRecovery, handleRecoverSession, handleStartFresh,
     hasStoredOriginals, originalsDetectedAsPreviousBuild,
     building, buildProgress, dismissBuildProgress, translating, translateProgress,
@@ -1664,7 +1665,7 @@ export function useEditorState() {
 
     // Setters
     setSearch, setFilterFile, setFilterCategory, setFilterStatus, setFilterTechnical, setFilterTable, setFilterColumn,
-    setFilterRisenOwner, setFilterRisenItemPrefix, setFilterRisenInfoPrefix,
+    setFilterRisenOwner, setFilterRisenItemPrefix, setFilterRisenSection,
     setFiltersOpen, setShowQualityStats, setQuickReviewMode, setQuickReviewIndex, setShowFindReplace,
     setCurrentPage, setShowRetranslateConfirm,
     ...settings,

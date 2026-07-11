@@ -8,7 +8,7 @@ import {
   labelForItemPrefix,
   buildItemPrefixIndex,
   getInfoIdPrefix,
-  buildInfoPrefixIndex,
+  buildSectionPrefixIndex,
   NO_OWNER_LABEL,
 } from "@/lib/risen/categories";
 
@@ -146,7 +146,7 @@ describe("getItemIdPrefix / buildItemPrefixIndex (Level 2b)", () => {
   });
 });
 
-describe("getInfoIdPrefix / buildInfoPrefixIndex (Level 2c — infos.tab sections)", () => {
+describe("getInfoIdPrefix / buildSectionPrefixIndex (Level 2c — generic sections, any category)", () => {
   it("extracts the ID up to the 2nd underscore segment", () => {
     expect(getInfoIdPrefix("INFO_QATEST_00000266")).toBe("INFO_QATEST");
     expect(getInfoIdPrefix("INFO_QAMAIN_00000042")).toBe("INFO_QAMAIN");
@@ -158,19 +158,33 @@ describe("getInfoIdPrefix / buildInfoPrefixIndex (Level 2c — infos.tab section
       { msbtFile: "infos.tab", label: "INFO_QATEST_00000267" },
       { msbtFile: "infos.tab", label: "INFO_QAMAIN_00000001" },
     ];
-    const index = buildInfoPrefixIndex(entries);
+    const index = buildSectionPrefixIndex(entries, "risen-dialogue");
     expect(index).toEqual([
       { prefix: "INFO_QATEST", count: 2 },
       { prefix: "INFO_QAMAIN", count: 1 },
     ]);
   });
 
-  it("only counts entries whose table categorizes as risen-dialogue", () => {
+  it("only counts entries whose table categorizes as the requested category", () => {
     const entries = [
       { msbtFile: "infos.tab", label: "INFO_QATEST_00000266" },
       { msbtFile: "items.tab", label: "INFO_SHOULDBEIGNORED_1" },
     ];
-    const index = buildInfoPrefixIndex(entries);
+    const index = buildSectionPrefixIndex(entries, "risen-dialogue");
     expect(index).toEqual([{ prefix: "INFO_QATEST", count: 1 }]);
+  });
+
+  it("works generically for other categories, e.g. quests.tab", () => {
+    const entries = [
+      { msbtFile: "quests.tab", label: "QUEST_MAIN_00000001" },
+      { msbtFile: "quests.tab", label: "QUEST_MAIN_00000002" },
+      { msbtFile: "quests.tab", label: "QUEST_SIDE_00000001" },
+      { msbtFile: "infos.tab", label: "QUEST_SHOULDBEIGNORED_1" },
+    ];
+    const index = buildSectionPrefixIndex(entries, "risen-quests");
+    expect(index).toEqual([
+      { prefix: "QUEST_MAIN", count: 2 },
+      { prefix: "QUEST_SIDE", count: 1 },
+    ]);
   });
 });

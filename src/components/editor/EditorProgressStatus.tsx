@@ -20,7 +20,7 @@ type EditorSubset = Pick<
   | "filterCategory" | "setFilterCategory"
   | "filterRisenOwner" | "setFilterRisenOwner"
   | "filterRisenItemPrefix" | "setFilterRisenItemPrefix"
-  | "filterRisenInfoPrefix" | "setFilterRisenInfoPrefix"
+  | "filterRisenSection" | "setFilterRisenSection"
   | "qualityStats" | "filterStatus" | "setFilterStatus"
   | "handleFixDamagedTags" | "translating"
   | "handleRedistributeTags" | "tagsCount"
@@ -89,8 +89,9 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
           setFilterRisenOwner={editor.setFilterRisenOwner}
           filterRisenItemPrefix={editor.filterRisenItemPrefix}
           setFilterRisenItemPrefix={editor.setFilterRisenItemPrefix}
-          filterRisenInfoPrefix={editor.filterRisenInfoPrefix}
-          setFilterRisenInfoPrefix={editor.setFilterRisenInfoPrefix}
+          filterRisenSection={editor.filterRisenSection}
+          setFilterRisenSection={editor.setFilterRisenSection}
+          risenCategories={risenCategories}
         />
       )}
 

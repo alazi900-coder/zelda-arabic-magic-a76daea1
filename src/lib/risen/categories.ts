@@ -151,24 +151,34 @@ export function buildItemPrefixIndex(entries: Array<RisenCategoryEntry & { label
 }
 
 // ============================================================================
-// Level 2c — Info "section" sub-filter (within الحوارات / infos.tab)
+// Level 2c — generic ID-prefix "section" sub-filter, usable for any category
+// (except items, which uses its own richer 3-segment + friendly-label rule above).
 // ============================================================================
 
-/** The info ID up to its 2nd "_"-separated segment, e.g. "INFO_QATEST_00000266" -> "INFO_QATEST". */
+/** An entry ID up to its 2nd "_"-separated segment, e.g. "INFO_QATEST_00000266" -> "INFO_QATEST". */
 export function getInfoIdPrefix(id: string): string {
   return id.split("_").slice(0, 2).join("_");
 }
 
-export interface InfoPrefixCount {
+export interface SectionPrefixCount {
   prefix: string;
   count: number;
 }
 
-/** Build a descending-by-count list of ID-prefix "sections" among dialogue (infos.tab) entries. */
-export function buildInfoPrefixIndex(entries: Array<RisenCategoryEntry & { label: string }>): InfoPrefixCount[] {
+/** Which category's section-prefix chip is currently selected as a sub-filter. */
+export interface RisenSectionFilterValue {
+  category: string;
+  prefix: string;
+}
+
+/** Build a descending-by-count list of ID-prefix "sections" among entries of one category. */
+export function buildSectionPrefixIndex(
+  entries: Array<RisenCategoryEntry & { label: string }>,
+  categoryId: string,
+): SectionPrefixCount[] {
   const counts = new Map<string, number>();
   for (const e of entries) {
-    if (categorizeRisenEntry(e) !== "risen-dialogue") continue;
+    if (categorizeRisenEntry(e) !== categoryId) continue;
     const prefix = getInfoIdPrefix(e.label);
     counts.set(prefix, (counts.get(prefix) || 0) + 1);
   }

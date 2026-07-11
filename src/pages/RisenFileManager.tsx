@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info, BadgeCheck,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/risen-images-pak";
 import {
   collectSelectedFiles, totalSelectionSize, allTopLevelPaths,
-  filterTreeByQuery, sortTree, allFolderPaths, type TreeSortBy, type TreeSortDir,
+  filterTreeByQuery, filterTreeByPaths, sortTree, allFolderPaths, type TreeSortBy, type TreeSortDir,
 } from "@/lib/risen-archive-selection";
 import {
   findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
@@ -498,6 +498,13 @@ const RisenFileManager: React.FC = () => {
   const [treeSortBy, setTreeSortBy] = useState<TreeSortBy>("name");
   const [treeSortDir, setTreeSortDir] = useState<TreeSortDir>("asc");
 
+  // "Documented files only" view filter — scans every .tple once and hides
+  // files with no curated property (view-only, never touches the archive).
+  const [showDocumentedOnly, setShowDocumentedOnly] = useState(false);
+  const [documentedScanning, setDocumentedScanning] = useState(false);
+  const [documentedPaths, setDocumentedPaths] = useState<Set<string> | null>(null);
+  const [documentedError, setDocumentedError] = useState<string | null>(null);
+
   // Batch mode: edit one property across every .tple file in the open archive at once.
   const [batchMode, setBatchMode] = useState(false);
   const [batchScanning, setBatchScanning] = useState(false);
@@ -517,14 +524,15 @@ const RisenFileManager: React.FC = () => {
   const fsaSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
   const flatFileCount = useMemo(() => flattenPakTree(tree).length, [tree]);
-  const displayedTree = useMemo(
-    () => sortTree(filterTreeByQuery(tree, treeSearch), treeSortBy, treeSortDir),
-    [tree, treeSearch, treeSortBy, treeSortDir]
-  );
+  const displayedTree = useMemo(() => {
+    let t = filterTreeByQuery(tree, treeSearch);
+    if (showDocumentedOnly && documentedPaths) t = filterTreeByPaths(t, documentedPaths);
+    return sortTree(t, treeSortBy, treeSortDir);
+  }, [tree, treeSearch, treeSortBy, treeSortDir, showDocumentedOnly, documentedPaths]);
   const effectiveExpanded = useMemo(() => {
-    if (!treeSearch.trim()) return expanded;
+    if (!treeSearch.trim() && !(showDocumentedOnly && documentedPaths)) return expanded;
     return new Set(allFolderPaths(displayedTree));
-  }, [treeSearch, expanded, displayedTree]);
+  }, [treeSearch, expanded, displayedTree, showDocumentedOnly, documentedPaths]);
 
   const closeEntry = useCallback(() => {
     setViewingEntry(null);
@@ -569,6 +577,9 @@ const RisenFileManager: React.FC = () => {
     setTreeSizeWarning(null);
     setSelected(new Set());
     setExpanded(new Set());
+    setShowDocumentedOnly(false);
+    setDocumentedPaths(null);
+    setDocumentedError(null);
     closeEntry();
     exitBatchMode();
     try {
@@ -670,6 +681,9 @@ const RisenFileManager: React.FC = () => {
     setExpanded(new Set());
     setLoadError(null);
     setTreeSizeWarning(null);
+    setShowDocumentedOnly(false);
+    setDocumentedPaths(null);
+    setDocumentedError(null);
     closeEntry();
     exitBatchMode();
   }, [closeEntry, exitBatchMode]);
@@ -845,6 +859,41 @@ const RisenFileManager: React.FC = () => {
       setBatchScanning(false);
     }
   }, [file, tree]);
+
+  /** Scans every .tple in the archive once and remembers which ones contain
+   * at least one property with a curated Arabic description — a pure
+   * read-only view filter, never modifies the archive itself. */
+  const scanDocumentedPaths = useCallback(async () => {
+    if (!file) return;
+    setDocumentedScanning(true);
+    setDocumentedError(null);
+    try {
+      const tpleEntries = flattenPakTree(tree).filter((f) => /\.tple$/i.test(f.path));
+      const documented = new Set<string>();
+      for (const entry of tpleEntries) {
+        const bytes = new Uint8Array(await file.slice(entry.offset, entry.offset + entry.size).arrayBuffer());
+        const names = [
+          ...findTpleFloatProperties(bytes),
+          ...findTpleBoolProperties(bytes),
+          ...findTpleIntProperties(bytes),
+        ];
+        if (names.some((p) => TPLE_PROPERTY_INFO[p.name] !== undefined)) documented.add(entry.path);
+      }
+      setDocumentedPaths(documented);
+    } catch (e) {
+      setDocumentedError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDocumentedScanning(false);
+    }
+  }, [file, tree]);
+
+  const toggleShowDocumentedOnly = useCallback(() => {
+    setShowDocumentedOnly((prev) => {
+      const next = !prev;
+      if (next && documentedPaths === null) void scanDocumentedPaths();
+      return next;
+    });
+  }, [documentedPaths, scanDocumentedPaths]);
 
   const updateBatchFloatValue = useCallback((path: string, valueOffset: number, newValue: number) => {
     setBatchFloatEdits((prev) => {
@@ -1470,7 +1519,26 @@ const RisenFileManager: React.FC = () => {
         >
           <ArrowUpDown className="w-4 h-4" />
         </button>
+        <button
+          onClick={toggleShowDocumentedOnly}
+          disabled={documentedScanning}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg border transition-colors ${
+            showDocumentedOnly ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:text-foreground"
+          }`}
+          title="إظهار الملفات التي فيها خاصية موثّقة واحدة على الأقل، وإخفاء الباقي — لا يغيّر الأرشيف نفسه إطلاقاً"
+        >
+          {documentedScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <BadgeCheck className="w-4 h-4" />}
+          الملفات الموثّقة فقط
+          {documentedPaths && <span className="text-xs">({documentedPaths.size})</span>}
+        </button>
       </div>
+
+      {documentedError && (
+        <div className="mx-3 mt-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive flex gap-2 items-start">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{documentedError}</span>
+        </div>
+      )}
 
       {entryLoading && (
         <div className="mx-3 mb-2 flex items-center gap-2 text-sm text-muted-foreground">
@@ -1487,6 +1555,9 @@ const RisenFileManager: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-3">
         {displayedTree.length === 0 && treeSearch.trim() && (
           <div className="text-sm text-muted-foreground p-4 text-center">لا توجد ملفات مطابقة للبحث.</div>
+        )}
+        {displayedTree.length === 0 && !treeSearch.trim() && showDocumentedOnly && documentedPaths && (
+          <div className="text-sm text-muted-foreground p-4 text-center">لا توجد ملفات موثّقة في هذا الأرشيف.</div>
         )}
         {displayedTree.map((node) => (
           <TreeRow

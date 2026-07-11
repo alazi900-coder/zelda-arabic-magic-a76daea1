@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   collectSelectedFiles, totalSelectionSize, allTopLevelPaths,
-  filterTreeByQuery, sortTree, allFolderPaths,
+  filterTreeByQuery, filterTreeByPaths, sortTree, allFolderPaths,
 } from "@/lib/risen-archive-selection";
 import type { RisenPakNode } from "@/lib/risen-images-pak";
 
@@ -113,6 +113,34 @@ describe("filterTreeByQuery", () => {
   it("matches case-insensitively", () => {
     expect(filterTreeByQuery(TREE, "readme")).toHaveLength(1);
     expect(filterTreeByQuery(TREE, "README")).toHaveLength(1);
+  });
+});
+
+describe("filterTreeByPaths", () => {
+  it("keeps only files whose full path is in the allowed set, plus ancestor folders", () => {
+    const result = filterTreeByPaths(TREE, new Set(["NPC/World/PC_Hero.tple", "Readme.txt"]));
+    expect(result).toEqual([
+      { type: "folder", name: "NPC", children: [
+        { type: "folder", name: "World", children: [{ type: "file", name: "PC_Hero.tple", offset: 48, size: 11709 }] },
+      ] },
+      { type: "file", name: "Readme.txt", offset: 11957, size: 50 },
+    ]);
+  });
+
+  it("drops a folder entirely when none of its descendants are allowed", () => {
+    const result = filterTreeByPaths(TREE, new Set(["Readme.txt"]));
+    expect(result).toEqual([{ type: "file", name: "Readme.txt", offset: 11957, size: 50 }]);
+  });
+
+  it("returns an empty array when the allowed set is empty", () => {
+    expect(filterTreeByPaths(TREE, new Set())).toEqual([]);
+  });
+
+  it("keeps a sibling file inside a partially-allowed folder", () => {
+    const result = filterTreeByPaths(TREE, new Set(["NPC/Sidekick.tple"]));
+    expect(result).toEqual([
+      { type: "folder", name: "NPC", children: [{ type: "file", name: "Sidekick.tple", offset: 11757, size: 200 }] },
+    ]);
   });
 });
 

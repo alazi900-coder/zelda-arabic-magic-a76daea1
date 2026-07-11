@@ -53,6 +53,23 @@ export function filterTreeByQuery(tree: RisenPakNode[], query: string): RisenPak
   return tree.map(filterNode).filter((n): n is RisenPakNode => n !== null);
 }
 
+/** Keeps only files whose full path is in `allowedPaths`, plus their ancestor
+ * folders (folders with no surviving descendant are dropped entirely). */
+export function filterTreeByPaths(tree: RisenPakNode[], allowedPaths: Set<string>, prefix = ""): RisenPakNode[] {
+  const filterNode = (node: RisenPakNode, path: string): RisenPakNode | null => {
+    if (node.type === "file") {
+      return allowedPaths.has(path) ? node : null;
+    }
+    const children = node.children
+      .map((child) => filterNode(child, `${path}/${child.name}`))
+      .filter((n): n is RisenPakNode => n !== null);
+    return children.length > 0 ? { ...node, children } : null;
+  };
+  return tree
+    .map((node) => filterNode(node, prefix ? `${prefix}/${node.name}` : node.name))
+    .filter((n): n is RisenPakNode => n !== null);
+}
+
 export type TreeSortBy = "name" | "size";
 export type TreeSortDir = "asc" | "desc";
 

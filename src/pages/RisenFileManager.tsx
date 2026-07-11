@@ -491,7 +491,15 @@ const RisenFileManager: React.FC = () => {
       const f = await handle.getFile();
       await loadArchive(f);
     } catch (e) {
-      if (e instanceof Error && e.name !== "AbortError") setLoadError(e.message);
+      if (e instanceof Error && e.name === "AbortError") return;
+      // Some embedded/cross-origin preview frames (e.g. Lovable's iframe) block
+      // the advanced picker entirely — fall back to the plain file input instead
+      // of dead-ending on a raw browser error the user can't act on.
+      if (e instanceof Error && e.message.includes("Cross origin sub frames")) {
+        fileInputRef.current?.click();
+        return;
+      }
+      if (e instanceof Error) setLoadError(e.message);
     }
   }, [loadArchive]);
 
@@ -1166,13 +1174,14 @@ const RisenFileManager: React.FC = () => {
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="w-5 h-5 animate-spin" /> جارٍ قراءة الملف...
           </div>
-        ) : fsaSupported ? (
-          <Button size="lg" onClick={handleOpenFsa} className="font-display font-bold text-lg px-10 py-6" style={{ backgroundColor: ACCENT, color: "white" }}>
-            <FolderOpen className="w-5 h-5 ml-2" /> افتح أرشيفاً
-          </Button>
         ) : (
           <>
-            <Button size="lg" onClick={() => fileInputRef.current?.click()} className="font-display font-bold text-lg px-10 py-6" style={{ backgroundColor: ACCENT, color: "white" }}>
+            <Button
+              size="lg"
+              onClick={fsaSupported ? handleOpenFsa : () => fileInputRef.current?.click()}
+              className="font-display font-bold text-lg px-10 py-6"
+              style={{ backgroundColor: ACCENT, color: "white" }}
+            >
               <FolderOpen className="w-5 h-5 ml-2" /> افتح أرشيفاً
             </Button>
             <input ref={fileInputRef} type="file" className="hidden" onChange={handlePlainInput} />

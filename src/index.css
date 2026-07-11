@@ -254,33 +254,162 @@
   --sidebar-ring: 35 78% 52%;
 }
 
-/* Subtle parchment/wood atmosphere over the whole editor surface. */
+/* ==========================================================================
+ * Full Risen atmosphere: parchment paper texture, wood plank shadows,
+ * torchlit vignettes, ornamental card borders, ink-stained inputs and
+ * medieval typography. Everything scoped under .theme-risen.
+ * ========================================================================== */
+
+/* Global surface — parchment noise + wood-plank vertical bands + vignette. */
 .theme-risen {
+  background-color: hsl(28 25% 7%);
   background-image:
-    radial-gradient(ellipse at top, hsl(35 60% 20% / 0.18) 0%, transparent 55%),
-    radial-gradient(ellipse at bottom, hsl(90 30% 12% / 0.22) 0%, transparent 60%);
+    /* torch glow top */
+    radial-gradient(ellipse 900px 500px at 50% -10%, hsl(35 80% 35% / 0.22), transparent 60%),
+    /* jungle bottom */
+    radial-gradient(ellipse 1200px 600px at 50% 110%, hsl(90 40% 12% / 0.35), transparent 60%),
+    /* vignette */
+    radial-gradient(ellipse at center, transparent 40%, hsl(0 0% 0% / 0.55) 100%),
+    /* parchment fiber noise via layered SVG */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.25  0 0 0 0 0.12  0 0 0 0.18 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"),
+    /* wood grain vertical bands */
+    repeating-linear-gradient(90deg, hsl(28 30% 9%) 0 40px, hsl(28 25% 8%) 40px 42px, hsl(28 30% 9%) 42px 90px);
+  background-attachment: fixed, fixed, fixed, fixed, fixed;
+  background-size: auto, auto, auto, 240px 240px, auto;
 }
 
-/* Cards look like weathered parchment cards on wood. */
-.theme-risen [class*="rounded-lg"].border,
-.theme-risen .bg-card {
-  background-image: linear-gradient(180deg, hsl(35 30% 14% / 0.6), hsl(26 22% 10% / 0.6));
-  box-shadow: 0 1px 0 hsl(35 60% 40% / 0.08) inset, 0 8px 20px -12px hsl(0 0% 0% / 0.6);
-}
-
-/* Display headings feel more chiseled / medieval. */
+/* Medieval display typography for headings + Amiri for Arabic elegance. */
 .theme-risen h1,
 .theme-risen h2,
 .theme-risen .font-display {
-  letter-spacing: 0.01em;
-  text-shadow: 0 1px 0 hsl(0 0% 0% / 0.5);
+  font-family: 'Cinzel', 'Amiri', 'Cairo', serif;
+  letter-spacing: 0.04em;
+  text-shadow:
+    0 1px 0 hsl(0 0% 0% / 0.7),
+    0 0 18px hsl(35 78% 40% / 0.35);
+  color: hsl(40 65% 82%);
+}
+.theme-risen [lang="ar"],
+.theme-risen p,
+.theme-risen span,
+.theme-risen label,
+.theme-risen button,
+.theme-risen textarea,
+.theme-risen input {
+  font-family: 'Amiri', 'Tajawal', 'Cairo', serif;
 }
 
-/* Primary buttons glow like torchlit bronze. */
-.theme-risen .bg-primary {
-  background-image: linear-gradient(180deg, hsl(38 82% 58%), hsl(32 75% 44%));
-  box-shadow: 0 0 0 1px hsl(30 60% 30%) inset, 0 6px 14px -8px hsl(35 78% 52% / 0.7);
+/* Cards — parchment paper with burned edges + subtle inner glow. */
+.theme-risen [class*="rounded-lg"].border,
+.theme-risen .bg-card,
+.theme-risen [class*="rounded-xl"].border {
+  position: relative;
+  background-color: hsl(35 28% 12%);
+  background-image:
+    radial-gradient(ellipse at top left, hsl(38 45% 22% / 0.4), transparent 55%),
+    radial-gradient(ellipse at bottom right, hsl(25 30% 8% / 0.6), transparent 55%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.28  0 0 0 0 0.14  0 0 0 0.12 0'/></filter><rect width='100%25' height='100%25' filter='url(%23p)'/></svg>");
+  background-size: auto, auto, 180px 180px;
+  border-color: hsl(30 40% 22%) !important;
+  box-shadow:
+    0 0 0 1px hsl(35 55% 30% / 0.25) inset,
+    0 0 30px hsl(0 0% 0% / 0.35) inset,
+    0 10px 24px -14px hsl(0 0% 0% / 0.8);
 }
+
+/* Ornamental gold rule under section headings. */
+.theme-risen h1::after,
+.theme-risen h2::after {
+  content: "";
+  display: block;
+  height: 2px;
+  margin: 0.6rem auto 0;
+  width: 120px;
+  background: linear-gradient(90deg, transparent, hsl(38 78% 55%), transparent);
+  box-shadow: 0 0 8px hsl(38 78% 55% / 0.5);
+}
+
+/* Primary buttons — torch bronze with warm glow + carved edge. */
+.theme-risen .bg-primary,
+.theme-risen button[class*="bg-primary"] {
+  background-image: linear-gradient(180deg, hsl(42 88% 62%), hsl(30 78% 40%));
+  color: hsl(28 40% 10%) !important;
+  border: 1px solid hsl(30 60% 25%);
+  box-shadow:
+    0 1px 0 hsl(45 90% 75% / 0.6) inset,
+    0 -1px 0 hsl(20 60% 20% / 0.8) inset,
+    0 0 18px hsl(35 78% 52% / 0.55),
+    0 4px 10px -4px hsl(0 0% 0% / 0.7);
+  text-shadow: 0 1px 0 hsl(45 80% 85% / 0.5);
+  transition: filter 0.2s ease, transform 0.1s ease;
+}
+.theme-risen .bg-primary:hover,
+.theme-risen button[class*="bg-primary"]:hover {
+  filter: brightness(1.12) saturate(1.1);
+}
+
+/* Secondary / outline buttons — carved wood with brass border. */
+.theme-risen button[class*="border"],
+.theme-risen .border-input {
+  border-color: hsl(30 45% 28%) !important;
+}
+
+/* Inputs — parchment with ink text. */
+.theme-risen input,
+.theme-risen textarea,
+.theme-risen [contenteditable="true"] {
+  background-color: hsl(38 30% 88%) !important;
+  color: hsl(25 60% 12%) !important;
+  border: 1px solid hsl(30 50% 30%) !important;
+  box-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.35) inset,
+    0 2px 6px hsl(0 0% 0% / 0.4);
+  font-family: 'Amiri', 'Tajawal', serif !important;
+}
+.theme-risen input::placeholder,
+.theme-risen textarea::placeholder {
+  color: hsl(25 30% 40%) !important;
+}
+.theme-risen input:focus,
+.theme-risen textarea:focus {
+  outline: 2px solid hsl(38 78% 55%) !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px hsl(38 78% 55% / 0.25);
+}
+
+/* Custom scrollbar — brass rail. */
+.theme-risen ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.theme-risen ::-webkit-scrollbar-track {
+  background: hsl(28 25% 9%);
+  border-left: 1px solid hsl(30 40% 20%);
+}
+.theme-risen ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, hsl(38 60% 40%), hsl(30 55% 25%));
+  border-radius: 6px;
+  border: 1px solid hsl(30 50% 20%);
+}
+.theme-risen ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, hsl(42 78% 52%), hsl(32 70% 35%));
+}
+
+/* Links + selection — bronze. */
+.theme-risen a { color: hsl(38 78% 62%); }
+.theme-risen ::selection {
+  background: hsl(38 78% 52% / 0.4);
+  color: hsl(40 60% 95%);
+}
+
+/* Section dividers styled like wax-seal rules. */
+.theme-risen hr,
+.theme-risen [role="separator"] {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(38 60% 45% / 0.6), transparent);
+}
+
 
 
 @layer base {

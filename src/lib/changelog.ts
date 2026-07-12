@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.52.0",
+    date: "2026-07-12",
+    changes: [
+      { kind: "added", text: "مدير ملفات Risen 1: توثيق 3 خصائص من مجلد Navigation — PatrolIndex وMaxUsers (من فئة gCAnchor_PS، نقاط إرساء الشخصيات/الدوريات) وCircleCount (من فئة gCCollisionCircle_PS، دوائر التصادم) — استُخرجت من فحص أرشيف حقيقي كامل (64 ملف ملاحة). خصائص TileCountX/TileCountY/TileIndex/BillboardCount التي ظهرت أيضاً في هذا المجلد لم تُوثَّق كخصائص ملاحة لأنها تبيّن أنها إعدادات لوحة عرض بصرية عامة (eCBillboard_PS) غير مرتبطة بالملاحة فعلياً." },
+    ],
+  },
+  {
     version: "1.51.0",
     date: "2026-07-12",
     changes: [

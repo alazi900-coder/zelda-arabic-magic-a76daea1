@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -574,10 +574,16 @@ const RisenFileManager: React.FC = () => {
     if (showFavoritesOnly) t = filterTreeByPaths(t, favorites);
     return sortTree(t, treeSortBy, treeSortDir);
   }, [workingTree, treeSearch, treeSortBy, treeSortDir, showDocumentedOnly, documentedPaths, showFavoritesOnly, favorites]);
-  const effectiveExpanded = useMemo(() => {
-    if (!treeSearch.trim() && !(showDocumentedOnly && documentedPaths) && !showFavoritesOnly) return expanded;
-    return new Set(allFolderPaths(displayedTree));
-  }, [treeSearch, expanded, displayedTree, showDocumentedOnly, documentedPaths, showFavoritesOnly]);
+  // Auto-expand every folder that survives the current search/filter so
+  // matches aren't hidden inside a collapsed folder — but only when the
+  // search text or filter toggles actually change, so a manual collapse
+  // afterward (via the chevron) isn't immediately overwritten on every render.
+  useEffect(() => {
+    if (treeSearch.trim() || (showDocumentedOnly && documentedPaths) || showFavoritesOnly) {
+      setExpanded(new Set(allFolderPaths(displayedTree)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treeSearch, showDocumentedOnly, documentedPaths, showFavoritesOnly]);
 
   const closeEntry = useCallback(() => {
     setViewingEntry(null);
@@ -1704,7 +1710,7 @@ const RisenFileManager: React.FC = () => {
             node={node}
             path={node.name}
             depth={0}
-            expanded={effectiveExpanded}
+            expanded={expanded}
             toggleExpanded={toggleExpanded}
             selected={selected}
             toggleSelected={toggleSelected}

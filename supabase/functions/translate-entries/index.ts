@@ -1005,10 +1005,10 @@ function applyGlossaryPost(text: string, glossaryMap: Map<string, string>): stri
 }
 
 // --- Fetch with retry ---
-async function fetchWithRetry(url: string, retries = 2, delayMs = 1000): Promise<Response> {
+async function fetchWithRetry(url: string, retries = 2, delayMs = 1000, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, init);
       if (response.ok || response.status === 400) return response;
       if (attempt < retries) {
         await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
@@ -1022,6 +1022,15 @@ async function fetchWithRetry(url: string, retries = 2, delayMs = 1000): Promise
   }
   throw new Error('fetchWithRetry exhausted');
 }
+
+// Google's free translate endpoint blocks or 403s requests without a browser-like
+// User-Agent (Deno's default UA is empty). Use the same UA for every Google call.
+const GOOGLE_TRANSLATE_HEADERS: HeadersInit = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  'Accept': '*/*',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
 
 // --- Pick best translation from MyMemory matches ---
 function pickBestTranslation(data: any): string | null {

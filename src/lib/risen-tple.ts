@@ -574,6 +574,11 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     description: "هل اكتشف اللاعب هذا الكيان/الشخصية من قبل — يؤثر مثلاً على ظهوره على الخريطة أو سجل المعرفة.",
     category: "other", system: "الشخصية (NPC)",
   },
+  ManaUsed: {
+    label: "المانا المستخدَمة",
+    description: "مقدار المانا المستهلَكة حالياً لهذه الشخصية — من فئة gCNPC_PS. حالة تشغيل، كانت 0 في كل الـ27 عيّنة الحقيقية المفحوصة (قوالب افتراضية، ليست حفظات لعبة فعلية).",
+    category: "other", system: "الشخصية (NPC)",
+  },
 
   // gCScriptRoutine_PS — حالة تنفيذ الروتين السلوكي والذكاء الاصطناعي.
   TaskTime: {
@@ -665,6 +670,16 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     description: "هل سبق للاعب أن نشل جيب هذه الشخصية (سرقة خفية) من قبل.",
     category: "other", system: "الحوار والتجارة",
   },
+  MinValue: {
+    label: "أدنى قيمة",
+    description: "الحد الأدنى لنطاق قيمة عشوائية يستخدمه نظام الحوار/التجارة (gCDialog_PS) — تأكَّدت عبر فحص أرشيف حقيقي كامل (148 زوجاً حقيقياً) أن هذه القيمة أصغر من MaxValue المرافقة لها دائماً بلا استثناء واحد، وغالباً 0. الغرض الدقيق للنطاق (كمية أم مبلغ ذهب أم شيء آخر) غير مؤكَّد بالكامل.",
+    category: "other", system: "الحوار والتجارة",
+  },
+  MaxValue: {
+    label: "أقصى قيمة",
+    description: "الحد الأقصى لنطاق قيمة عشوائية يستخدمه نظام الحوار/التجارة (gCDialog_PS)، يرافق دائماً MinValue أصغر منه — تتراوح قيمها الحقيقية بين 1 و2000 حسب السياق. الغرض الدقيق للنطاق غير مؤكَّد بالكامل.",
+    category: "other", system: "الحوار والتجارة",
+  },
 
   // eCAnimation_PS — الحركة والرسوم المتحركة والدُّمية الفيزيائية.
   RagDollMass: {
@@ -719,6 +734,26 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     description: "هل وُلِّد مخزون تجاري عشوائي لهذا الكيان مسبقاً (لتجّار عشوائيي المخزون).",
     category: "other", system: "المخزون والغنيمة",
   },
+  QuickSlot: {
+    label: "فهرس الاختصار السريع",
+    description: "فهرس شريط الاختصارات السريعة في مخزون اللاعب (gCInventory_PS) — الفئة موثّقة في مصادر مجتمع تعديل محرك Genome كـ«حزم مخزون» (inventory stacks)، وتأكَّدنا أن Amount ضمنها يعني كمية القطع في الحزمة. القيمة كانت -1 (غير معيَّنة) في كل الـ165 عيّنة الحقيقية المفحوصة.",
+    category: "other", system: "المخزون والغنيمة",
+  },
+  Selection: {
+    label: "التحديد الحالي",
+    description: "حالة تحديد داخلية ضمن نظام المخزون (gCInventory_PS) — على الأرجح يشير لأي حزمة مخزون محدَّدة حالياً في الواجهة. كانت 0 في كل الـ81 عيّنة الحقيقية المفحوصة (قوالب افتراضية).",
+    category: "other", system: "المخزون والغنيمة",
+  },
+  SelectLimit: {
+    label: "حد التحديد",
+    description: "حد أقصى محتمل لعدد حزم المخزون القابلة للتحديد معاً ضمن نظام المخزون (gCInventory_PS) — غير مؤكَّد بدقة كاملة. كانت 0 في كل الـ81 عيّنة الحقيقية المفحوصة.",
+    category: "other", system: "المخزون والغنيمة",
+  },
+  TransactionCount: {
+    label: "عدّاد المعاملات",
+    description: "عدّاد معاملات تجارية مع هذه الشخصية ضمن نظام المخزون التجاري (gCInventory_PS) — يحتمل استخدامه لتحديد متى يُعاد توليد/تحديث مخزون التاجر (مطابقةً لآلية «Trade Generate/Refresh» الموثّقة لدى مجتمع تعديل محرك Genome). كان 0 في كل الـ84 عيّنة الحقيقية المفحوصة.",
+    category: "other", system: "المخزون والغنيمة",
+  },
 
   // gCScriptProxyAIState — حالة سلوك مساعدة إضافية.
   GroundBias: {
@@ -770,6 +805,59 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   UseMaxRepeats: {
     label: "استخدام حد أقصى للتكرار",
     description: "هل يُطبَّق حد أقصى لعدد مرات تكرار التأثير البصري (يعمل مع MaxNumRepeats القريبة منها في الملف) بدل تكراره إلى ما لا نهاية.",
+    category: "other", system: "التأثيرات البصرية",
+  },
+
+  // eCParticle_PS/eCEntityProxy — باعثات الجسيمات (VFX) — من فئة eCParticle_PS
+  // لأول خاصية، وeCEntityProxy للباقي، مؤكَّدة عبر فحص أرشيف حقيقي كامل (798
+  // عيّنة لكل منها عبر باعثات VFX حقيقية).
+  MaxNumParticles: {
+    label: "أقصى عدد جسيمات",
+    description: "أقصى عدد جسيمات يمكن أن يكون حياً في نفس اللحظة لهذا الباعث — من فئة eCParticle_PS. قيمها الحقيقية تتراوح بين 1 و500 حسب نوع التأثير (798 عيّنة حقيقية مفحوصة).",
+    category: "other", system: "التأثيرات البصرية",
+  },
+  NumUSubdivisions: {
+    label: "تقسيمات الشبكة (U)",
+    description: "عدد تقسيمات شبكة الجسيمات على المحور الأفقي (U) لهذا الباعث — من فئة eCEntityProxy. قيمها الحقيقية 0 أو 3 أو 7 في العينات المفحوصة.",
+    category: "other", system: "التأثيرات البصرية",
+  },
+  NumVSubdivisions: {
+    label: "تقسيمات الشبكة (V)",
+    description: "نفس مبدأ تقسيمات الشبكة الأفقية (NumUSubdivisions) لكن على المحور الرأسي (V) — من فئة eCEntityProxy.",
+    category: "other", system: "التأثيرات البصرية",
+  },
+  SubdivisionStart: {
+    label: "بداية نطاق التقسيمات",
+    description: "فهرس بداية النطاق المستخدَم من شبكة تقسيمات الباعث — من فئة eCEntityProxy. يعمل مع SubdivisionEnd لتحديد أي جزء من الشبكة يُستخدَم فعلياً.",
+    category: "other", system: "التأثيرات البصرية",
+  },
+  SubdivisionEnd: {
+    label: "نهاية نطاق التقسيمات",
+    description: "فهرس نهاية النطاق المستخدَم من شبكة تقسيمات الباعث — من فئة eCEntityProxy، يرافق SubdivisionStart.",
+    category: "other", system: "التأثيرات البصرية",
+  },
+
+  // eCBillboard_PS/eCDecal_PS — لوحات عرض مسطّحة وملصقات سطحية — تظهر عبر
+  // مجلدات متعددة (VFX، Objects، SFX، الملاحة) لأنها إعداد رسومي عام وليس
+  // خاصاً بمجلد واحد، مؤكَّدة عبر فحص أرشيف حقيقي كامل.
+  TileCountX: {
+    label: "عدد قطع الشبكة (أفقياً)",
+    description: "عدد قطع/بلاطات نسيج اللوحة المسطّحة أو الملصق أفقياً (لتقسيم صورة إلى شبكة إطارات، كصفوف رسوم متحركة) — من فئتَي eCBillboard_PS وeCDecal_PS. -1 = غير مستخدَم (القيمة السائدة في العينات الحقيقية).",
+    category: "other", system: "التأثيرات البصرية",
+  },
+  TileCountY: {
+    label: "عدد قطع الشبكة (رأسياً)",
+    description: "نفس مبدأ TileCountX لكن عمودياً — من فئتَي eCBillboard_PS وeCDecal_PS.",
+    category: "other", system: "التأثيرات البصرية",
+  },
+  TileIndex: {
+    label: "فهرس القطعة المعروضة",
+    description: "فهرس القطعة/الإطار المحدَّد من شبكة TileCountX×TileCountY لعرضه — من فئتَي eCBillboard_PS وeCDecal_PS. -1 = غير مستخدَم.",
+    category: "other", system: "التأثيرات البصرية",
+  },
+  BillboardCount: {
+    label: "عدد اللوحات المسطّحة",
+    description: "عدد اللوحات المسطّحة (Billboards) المُعرَّفة ضمن هذا الكيان — من فئة eCBillboard_PS. كانت 1 في الغالبية الساحقة من العينات الحقيقية المفحوصة.",
     category: "other", system: "التأثيرات البصرية",
   },
 

@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.55.0",
+    date: "2026-07-12",
+    changes: [
+      { kind: "added", text: "مدير ملفات Risen 1: توثيق كل الخصائص المتبقية غير الموثّقة عبر الأرشيف بأكمله (لم تعد هناك أي خاصية غير موثّقة في الأرشيف الحقيقي الكامل بـ2679 ملفاً). تضمّن هذا فحصاً إضافياً للتحقق: MinValue/MaxValue (gCDialog_PS) تأكَّد أن الأولى أصغر من الثانية في 148 من 148 عيّنة حقيقية بلا استثناء. كذلك بحث في توثيق مجتمع تعديل محرك Genome (المستخدَم أيضاً في Gothic 3 وELEX) أكَّد الشكل العام لنظام gCInventory_PS ومنطق توليد الغنيمة/التجارة. أُضيفت: MinValue/MaxValue، QuickSlot/Selection/SelectLimit/TransactionCount (المخزون)، ManaUsed (الشخصية)، MaxNumParticles وتقسيمات الشبكة (باعثات الجسيمات VFX)، وحقول اللوحات المسطّحة العامة (TileCountX/Y، TileIndex، BillboardCount)." },
+    ],
+  },
+  {
     version: "1.54.0",
     date: "2026-07-12",
     changes: [

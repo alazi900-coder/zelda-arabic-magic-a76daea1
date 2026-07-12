@@ -1096,7 +1096,56 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     description: "هل يوقف هذا الفعل تأثيراً بصرياً بدل بدء تشغيله — من فئة gCStateGraphActionStartEffect. وُجدت في ملف اختباري واحد فقط.",
     category: "other", system: "أفعال السكربت المرئي",
   },
+
+  // gCNPC_PS — تصنيف الشخصيات (تأكّدنا عبر فحص كامل الأرشيف 2679 ملف).
+  Gender: {
+    label: "الجنس",
+    description: "جنس الشخصية — من فئة gCNPC_PS، نوع بيانات تعدادي (Enum). تأكّدنا من القيمتين عبر أسماء ملفات لا لبس فيها: 0=ذكر (يطابق PC_Hero.tple بطل اللعبة، و_Master_Male_NPC.tple حرفياً)، 1=أنثى (يطابق Sara.tple وJasmin.tple). عدّلها بحذر — قد تغيّر حوارات أو أنميشن مرتبط بالجنس دون تغيير المظهر البصري نفسه.",
+    category: "other", system: "الشخصيات (NPC)",
+  },
+  Species: {
+    label: "النوع/الفصيلة",
+    description: "الفصيلة الحيوانية/العرقية للكيان — من فئة gCNPC_PS، نوع بيانات تعدادي (Enum). الأرقام التالية استُنتجت من مطابقة مسارات وأسماء ملفات وحوش حقيقية، وليست ترجمة رسمية: 2=سحلية محارب (LizardWarrior)، 6=وحش رمادي (AshBeast)، 8=يعسوب (Dragonfly)، 9=حشرة عملاقة (GiantBug)، 10=عقرب عملاق (GiantScorpion)، 11=هيكل عظمي (Skeleton)، 12=مستنقعي محنّط (SwampMummy)، 13=دودة حمراء (Rotworm)، 15=قزم (Gnome)، 16=خنزير بري (Boar)، 17=ذئب (Wolf)، 18=فأر لاسع (Stingrat)، 19=نسر (Vulture)، 20=رعد الذيل (Thundertail)، 21=أوغر/جيرغر (Ogre/Gyrger)، 23=بقرة (Cow)، 24=خنزير (Pig)، 25=دجاجة (Chicken). القيمة 1 (الأكثر شيوعاً بفارق كبير، 262 من 445 عيّنة) تطابق كل ملفات البشر (Townswoman/Townsman/الحراس الموتى) — يبدو أنها «إنسان». القيمة 0 غير مؤكّدة المعنى (ظهرت في ملفات اختبار/أوهام متنوّعة). عدّل بحذر شديد — رقم لا يطابق فصيلة موجودة فعلياً قد يكسر الأنميشن أو الصوتيات المرتبطة.",
+    category: "other", system: "الشخصيات (NPC)",
+  },
+
+  // gCItem_PS — مكافآت المهارات المخفية داخل الخواتم/الدروع (مصفوفة ModifySkills).
+  Skill: {
+    label: "المهارة المستهدَفة",
+    description: "أي مهارة يستهدفها هذا التعديل — من فئة gCItem_PS ضمن مصفوفة ModifySkills (مكافآت الخواتم/الدروع)، نوع بيانات تعدادي (Enum) واحد فعلياً في كل الأرشيف (لا تعدد معنى). الأرقام التالية استُنتجت من مطابقة أسماء 11 غرضاً حقيقياً ذاتية الوصف، وليست ترجمة رسمية: 5=الصحة (من It_Ri_HP_Small)، 6=المانا (من It_Ri_MP_Small)، 7=القوة (من It_Ri_STR_Small وIt_Ri_STR_DEX)، 8=البراعة (من It_Ri_DEX_Small وIt_Ri_STR_DEX)، 16=السيف/الأحادي اليد (من It_Ri_Sword)، 17=الفأس (من It_Ri_Axe)، 18=العصا (من It_Ri_Staff)، 19=القوس (من It_Ri_Bow)، 20=القوس المعترض (من It_Ri_Crossbow)، 29=التسلل (من It_Ri_Sneak)، 30=البهلوانية (من It_Ri_Acrobat). أرقام أخرى موجودة (خواتم الأحجار الكريمة كـRuby/Diamond/Sapphire ومقاومة السحر) لكن لا يمكن تحديد معناها بثقة من اسم الملف وحده. عدّل بحذر — قيمة لا تطابق مهارة حقيقية قد لا يكون لها أي أثر ملموس في اللعبة.",
+    category: "other", system: "مكافآت المهارات (الخواتم/الدروع)",
+  },
+  Modifier: {
+    label: "طريقة التعديل",
+    description: "كيف تُطبَّق قيمة Amount المجاورة على المهارة (إضافة، ضرب، إلخ) — من فئة gCItem_PS ضمن نفس مصفوفة ModifySkills. في كل الـ123 عيّنة حقيقية عبر الأرشيف بلا استثناء كانت القيمة 0 (يُفترض أنها «إضافي» بناءً على أن Amount يُضاف مباشرة لقيمة المهارة كما لاحظنا سابقاً) — لا توجد أي عيّنة حقيقية بقيمة مختلفة لمقارنتها، لذا معنى الأرقام الأخرى غير معروف إطلاقاً. عدّلها فقط إن كنت تجرّب عن قصد، فقد لا يكون لأي قيمة غير 0 أي دعم فعلي في اللعبة.",
+    category: "other", system: "مكافآت المهارات (الخواتم/الدروع)",
+  },
+
+  // Status: نفس الاسم يحمل معنيين حقيقيين مختلفين تماماً (نوعا Enum مختلفان
+  // فعلياً في الملف نفسه، وليس تخميناً) — لذا وُثِّق بمفتاح مركّب (الاسم+النوع)
+  // بدل الاسم وحده، لتفادي نفس مشكلة DamageAmount سابقاً. القفل موثَّق؛ الباب
+  // والحلبة غير موثَّقين لأن كل عيّناتهما الحقيقية أظهرت نفس القيمة الثابتة
+  // (لا تباين يسمح باستنتاج معنى الأرقام).
+  "Status|bTPropertyContainer<enum gELockStatus>": {
+    label: "حالة القفل",
+    description: "حالة القفل الابتدائية لهذا الصندوق/الباب — من فئة gCLock_PS، نوع بيانات تعدادي (Enum). استُنتجت من مطابقة 11 عيّنة حقيقية: القيم الملاحظة 0 (7 مرات، الأغلب — صناديق عادية) و1 (4 مرات — يطابق PirateTreasure وأبواب توجد كموانع). الأرجح 0=غير مُقفَل، 1=مُقفَل، لكن هذا استنتاج وليس تأكيداً رسمياً. عدّل بحذر — قد لا يتطابق مع منطق المفتاح/الوتد الفعلي في اللعبة.",
+    category: "other", system: "الأقفال والأبواب",
+  },
 };
+
+/** Looks up documentation for an enum property, preferring an entry keyed by
+ * the exact (name, real engine type) pair when the same property name is
+ * known to carry genuinely different meanings depending on its enum type
+ * (e.g. "Status" means something different for locks vs doors) — falling
+ * back to a plain name lookup for the common case where a name has only one
+ * real meaning across the whole archive. */
+export function resolveTplePropertyInfo(name: string, typeName?: string): TplePropertyInfo | undefined {
+  if (typeName) {
+    const composite = TPLE_PROPERTY_INFO[`${name}|${typeName}`];
+    if (composite) return composite;
+  }
+  return TPLE_PROPERTY_INFO[name];
+}
 
 function findSentinelOffset(bytes: Uint8Array): number {
   for (let i = 0; i + 4 <= bytes.length; i++) {

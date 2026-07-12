@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseTpleStringPool, findTpleFloatProperties, applyTpleFloatEdits,
   findTpleBoolProperties, applyTpleBoolEdits, findTpleIntProperties, applyTpleIntEdits,
-  findTpleEnumProperties, applyTpleEnumEdits,
+  findTpleEnumProperties, applyTpleEnumEdits, resolveTplePropertyInfo,
   spliceFileIntoArchive, spliceMultipleFilesIntoArchive,
   buildTpleBatchIndex,
 } from "@/lib/risen-tple";
@@ -353,6 +353,30 @@ describe("applyTpleEnumEdits", () => {
     applyTpleEnumEdits(bytes, new Map([[prop.valueOffset, 9]]));
     const [origProp] = findTpleEnumProperties(bytes);
     expect(origProp.value).toBe(2);
+  });
+});
+
+describe("resolveTplePropertyInfo", () => {
+  it("prefers a composite (name+type) entry over the plain name when both could match", () => {
+    const info = resolveTplePropertyInfo("Status", "bTPropertyContainer<enum gELockStatus>");
+    expect(info?.label).toBe("حالة القفل");
+  });
+
+  it("falls back to a plain name lookup when no composite entry exists for that type", () => {
+    // "Status" is documented only for gELockStatus — a different real type
+    // (e.g. gEDoorStatus) must not silently inherit the lock's description.
+    const info = resolveTplePropertyInfo("Status", "bTPropertyContainer<enum gEDoorStatus>");
+    expect(info).toBeUndefined();
+  });
+
+  it("falls back to a plain name lookup when no typeName is given", () => {
+    const info = resolveTplePropertyInfo("DamageType", undefined);
+    expect(info?.label).toBe("نوع الضرر");
+  });
+
+  it("resolves an unambiguous name (single real type across the archive) regardless of composite keys", () => {
+    const info = resolveTplePropertyInfo("Gender", "bTPropertyContainer<enum gEGender>");
+    expect(info?.label).toBe("الجنس");
   });
 });
 

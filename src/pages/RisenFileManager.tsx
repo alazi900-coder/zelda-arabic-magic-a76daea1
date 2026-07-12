@@ -18,7 +18,7 @@ import { RISEN_FOLDER_NAMES_AR } from "@/lib/risen-folder-names";
 import {
   findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
   findTpleIntProperties, applyTpleIntEdits, findTpleEnumProperties, applyTpleEnumEdits,
-  spliceFileIntoArchive, spliceMultipleFilesIntoArchive, buildTpleBatchIndex, TPLE_PROPERTY_INFO,
+  spliceFileIntoArchive, spliceMultipleFilesIntoArchive, buildTpleBatchIndex, TPLE_PROPERTY_INFO, resolveTplePropertyInfo,
   type TpleFloatProperty, type TpleBoolProperty, type TpleIntProperty, type TpleEnumProperty, type TpleBatchOccurrence, type ArchiveReplacement,
 } from "@/lib/risen-tple";
 
@@ -324,7 +324,7 @@ interface EnumPropertyRowProps {
 }
 
 const EnumPropertyRow: React.FC<EnumPropertyRowProps> = ({ prop, currentValue, onChange, onInfoClick }) => {
-  const info = TPLE_PROPERTY_INFO[prop.name];
+  const info = resolveTplePropertyInfo(prop.name, prop.typeName);
   const [text, setText] = useState(String(currentValue));
 
   return (
@@ -368,7 +368,7 @@ interface PropertyInfoModalProps {
  * button or a click on the dark backdrop — both work identically with touch
  * (phone) and mouse (PC), no platform-specific handling needed. */
 const PropertyInfoModal: React.FC<PropertyInfoModalProps> = ({ name, kind, typeName, onClose }) => {
-  const info = TPLE_PROPERTY_INFO[name];
+  const info = kind === "enum" ? resolveTplePropertyInfo(name, typeName) : TPLE_PROPERTY_INFO[name];
   const isMovement = (info?.category ?? "other") === "movement";
   const fallbackDescription =
     kind === "bool"
@@ -1368,9 +1368,9 @@ const RisenFileManager: React.FC = () => {
   if (viewingEntry) {
     const shortName = viewingEntry.path.slice(viewingEntry.path.lastIndexOf("/") + 1);
     const q = propSearch.trim().toLowerCase();
-    const matchesSearch = (name: string) => {
+    const matchesSearch = (name: string, typeName?: string) => {
       if (!q) return true;
-      const label = TPLE_PROPERTY_INFO[name]?.label ?? "";
+      const label = (typeName ? resolveTplePropertyInfo(name, typeName)?.label : TPLE_PROPERTY_INFO[name]?.label) ?? "";
       return name.toLowerCase().includes(q) || label.toLowerCase().includes(q);
     };
     const movementProps = tpleProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "movement" && matchesSearch(p.name));
@@ -1380,7 +1380,7 @@ const RisenFileManager: React.FC = () => {
     const otherBoolProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
     const otherGroups = groupOtherProperties(otherFloatProps, otherBoolProps);
     const intProps = tpleIntProps.filter((p) => matchesSearch(p.name));
-    const enumProps = tpleEnumProps.filter((p) => matchesSearch(p.name));
+    const enumProps = tpleEnumProps.filter((p) => matchesSearch(p.name, p.typeName));
     const totalPropCount = tpleProps.length + tpleBoolProps.length + tpleIntProps.length + tpleEnumProps.length;
     const hasEdits = edits.size > 0 || boolEdits.size > 0 || intEdits.size > 0 || enumEdits.size > 0;
     const nothingFound = totalPropCount === 0;
@@ -1397,7 +1397,7 @@ const RisenFileManager: React.FC = () => {
         .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: String(p.value), newValue: String(intEdits.get(p.valueOffset)!.value) })),
       ...tpleEnumProps
         .filter((p) => enumEdits.has(p.valueOffset) && enumEdits.get(p.valueOffset) !== p.value)
-        .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: String(p.value), newValue: String(enumEdits.get(p.valueOffset)!) })),
+        .map((p) => ({ fileLabel: "", propertyName: resolveTplePropertyInfo(p.name, p.typeName)?.label ?? p.name, oldValue: String(p.value), newValue: String(enumEdits.get(p.valueOffset)!) })),
     ];
 
     return (

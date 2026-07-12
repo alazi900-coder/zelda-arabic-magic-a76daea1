@@ -14,6 +14,7 @@ import {
   collectSelectedFiles, totalSelectionSize, allTopLevelPaths,
   filterTreeByQuery, filterTreeByPaths, excludeTreeByPaths, sortTree, allFolderPaths, type TreeSortBy, type TreeSortDir,
 } from "@/lib/risen-archive-selection";
+import { RISEN_FOLDER_NAMES_AR } from "@/lib/risen-folder-names";
 import {
   findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
   findTpleIntProperties, applyTpleIntEdits,
@@ -134,7 +135,9 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleEx
           className="shrink-0"
         />
         {isFolder ? <Folder className="w-4 h-4 shrink-0 text-muted-foreground" /> : <FileIcon className="w-4 h-4 shrink-0 text-muted-foreground" />}
-        <span className="truncate flex-1">{node.name}</span>
+        <span className="truncate flex-1">
+          {isFolder && RISEN_FOLDER_NAMES_AR[path] ? `${RISEN_FOLDER_NAMES_AR[path]} (${node.name})` : node.name}
+        </span>
         {node.type === "file" && (
           <>
             <span className="text-xs text-muted-foreground shrink-0">{formatBytes(node.size)}</span>

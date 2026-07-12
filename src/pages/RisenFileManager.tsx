@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info, BadgeCheck, Trash2, Star,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info, BadgeCheck, Trash2, Star, Tags,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree, buildPakArchive,
@@ -17,9 +17,9 @@ import {
 import { RISEN_FOLDER_NAMES_AR } from "@/lib/risen-folder-names";
 import {
   findTpleFloatProperties, applyTpleFloatEdits, findTpleBoolProperties, applyTpleBoolEdits,
-  findTpleIntProperties, applyTpleIntEdits,
+  findTpleIntProperties, applyTpleIntEdits, findTpleEnumProperties, applyTpleEnumEdits,
   spliceFileIntoArchive, spliceMultipleFilesIntoArchive, buildTpleBatchIndex, TPLE_PROPERTY_INFO,
-  type TpleFloatProperty, type TpleBoolProperty, type TpleIntProperty, type TpleBatchOccurrence, type ArchiveReplacement,
+  type TpleFloatProperty, type TpleBoolProperty, type TpleIntProperty, type TpleEnumProperty, type TpleBatchOccurrence, type ArchiveReplacement,
 } from "@/lib/risen-tple";
 
 const ACCENT = "#4a7c3f";
@@ -316,9 +316,50 @@ const IntPropertyRow: React.FC<IntPropertyRowProps> = ({ prop, currentValue, onC
   );
 };
 
+interface EnumPropertyRowProps {
+  prop: TpleEnumProperty;
+  currentValue: number;
+  onChange: (valueOffset: number, newValue: number) => void;
+  onInfoClick: () => void;
+}
+
+const EnumPropertyRow: React.FC<EnumPropertyRowProps> = ({ prop, currentValue, onChange, onInfoClick }) => {
+  const info = TPLE_PROPERTY_INFO[prop.name];
+  const [text, setText] = useState(String(currentValue));
+
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-background">
+      <PropertyIconButton Icon={Tags} onInfoClick={onInfoClick} />
+      <div className="flex-1 min-w-0">
+        <div className="font-display font-bold text-sm">{info?.label ?? prop.name}</div>
+        <div className="text-xs text-muted-foreground">
+          {info?.description ?? `قيمة تعداد (${prop.typeName}) اكتُشفت تلقائياً — غير موثّق معنى أرقامها بدقة، عدّل بحذر شديد.`}
+        </div>
+        <div className="text-[11px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1.5">
+          <span>{prop.name}</span>
+          <span className="px-1.5 py-0.5 rounded bg-muted shrink-0">Enum</span>
+        </div>
+      </div>
+      <input
+        type="number"
+        step="1"
+        min="0"
+        max="255"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const v = parseInt(e.target.value, 10);
+          if (!Number.isNaN(v) && v >= 0 && v <= 255) onChange(prop.valueOffset, v);
+        }}
+        className="w-28 shrink-0 px-2 py-1.5 text-sm rounded border border-border bg-background text-center"
+      />
+    </div>
+  );
+};
+
 interface PropertyInfoModalProps {
   name: string;
-  kind: "float" | "bool" | "int";
+  kind: "float" | "bool" | "int" | "enum";
   typeName?: string;
   onClose: () => void;
 }
@@ -334,8 +375,10 @@ const PropertyInfoModal: React.FC<PropertyInfoModalProps> = ({ name, kind, typeN
       ? "خاصية نعم/لا اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر."
       : kind === "int"
       ? `عدد صحيح (${typeName}) اكتُشف تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.`
+      : kind === "enum"
+      ? `قيمة تعداد (${typeName}) اكتُشفت تلقائياً — غير موثّق معنى أرقامها بدقة، عدّل بحذر شديد.`
       : "خاصية رقمية اكتُشفت تلقائياً — غير موثّق معناها بدقة، عدّل بحذر.";
-  const typeLabel = kind === "bool" ? "نعم/لا" : kind === "int" ? typeName ?? "عدد صحيح" : "Float";
+  const typeLabel = kind === "bool" ? "نعم/لا" : kind === "int" ? typeName ?? "عدد صحيح" : kind === "enum" ? "Enum" : "Float";
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
@@ -512,15 +555,17 @@ const RisenFileManager: React.FC = () => {
   const [tpleProps, setTpleProps] = useState<TpleFloatProperty[]>([]);
   const [tpleBoolProps, setTpleBoolProps] = useState<TpleBoolProperty[]>([]);
   const [tpleIntProps, setTpleIntProps] = useState<TpleIntProperty[]>([]);
+  const [tpleEnumProps, setTpleEnumProps] = useState<TpleEnumProperty[]>([]);
   const [edits, setEdits] = useState<Map<number, number>>(new Map());
   const [boolEdits, setBoolEdits] = useState<Map<number, boolean>>(new Map());
   const [intEdits, setIntEdits] = useState<Map<number, { value: number; size: number }>>(new Map());
+  const [enumEdits, setEnumEdits] = useState<Map<number, number>>(new Map());
   const [resetToken, setResetToken] = useState(0);
   const [entryLoading, setEntryLoading] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [propSearch, setPropSearch] = useState("");
-  const [infoModalProp, setInfoModalProp] = useState<{ name: string; kind: "float" | "bool" | "int"; typeName?: string } | null>(null);
+  const [infoModalProp, setInfoModalProp] = useState<{ name: string; kind: "float" | "bool" | "int" | "enum"; typeName?: string } | null>(null);
   const [collapsedOtherGroups, setCollapsedOtherGroups] = useState<Set<string>>(new Set());
 
   // Tree browsing (search/sort).
@@ -602,9 +647,11 @@ const RisenFileManager: React.FC = () => {
     setTpleProps([]);
     setTpleBoolProps([]);
     setTpleIntProps([]);
+    setTpleEnumProps([]);
     setEdits(new Map());
     setBoolEdits(new Map());
     setIntEdits(new Map());
+    setEnumEdits(new Map());
     setEntryError(null);
     setPropSearch("");
     setInfoModalProp(null);
@@ -659,15 +706,18 @@ const RisenFileManager: React.FC = () => {
         const props = findTpleFloatProperties(wholeBytes);
         const boolProps = findTpleBoolProperties(wholeBytes);
         const intProps = findTpleIntProperties(wholeBytes);
-        if (props.length === 0 && boolProps.length === 0 && intProps.length === 0) throw g3v0Err;
+        const enumProps = findTpleEnumProperties(wholeBytes);
+        if (props.length === 0 && boolProps.length === 0 && intProps.length === 0 && enumProps.length === 0) throw g3v0Err;
         setFile(f);
         setEntryBytes(wholeBytes);
         setTpleProps(props);
         setTpleBoolProps(boolProps);
         setTpleIntProps(intProps);
+        setTpleEnumProps(enumProps);
         setEdits(new Map());
         setBoolEdits(new Map());
         setIntEdits(new Map());
+        setEnumEdits(new Map());
         setViewingEntry({ path: f.name, offset: 0, size: wholeBytes.length });
         setStandaloneMode(true);
         return;
@@ -856,6 +906,7 @@ const RisenFileManager: React.FC = () => {
     setEdits(new Map());
     setBoolEdits(new Map());
     setIntEdits(new Map());
+    setEnumEdits(new Map());
     setPropSearch("");
     setResetToken((t) => t + 1);
     try {
@@ -864,10 +915,12 @@ const RisenFileManager: React.FC = () => {
       const props = findTpleFloatProperties(bytes);
       const boolProps = findTpleBoolProperties(bytes);
       const intProps = findTpleIntProperties(bytes);
+      const enumProps = findTpleEnumProperties(bytes);
       setEntryBytes(bytes);
       setTpleProps(props);
       setTpleBoolProps(boolProps);
       setTpleIntProps(intProps);
+      setTpleEnumProps(enumProps);
       setViewingEntry({ path, offset, size });
       setStandaloneMode(false);
     } catch (e) {
@@ -901,17 +954,26 @@ const RisenFileManager: React.FC = () => {
     });
   }, []);
 
+  const updateEnumEditValue = useCallback((valueOffset: number, newValue: number) => {
+    setEnumEdits((prev) => {
+      const next = new Map(prev);
+      next.set(valueOffset, newValue);
+      return next;
+    });
+  }, []);
+
   const resetEdits = useCallback(() => {
     setEdits(new Map());
     setBoolEdits(new Map());
     setIntEdits(new Map());
+    setEnumEdits(new Map());
     setResetToken((t) => t + 1);
   }, []);
 
   const patchedEntryBytes = useMemo(() => {
     if (!entryBytes) return null;
-    return applyTpleIntEdits(applyTpleBoolEdits(applyTpleFloatEdits(entryBytes, edits), boolEdits), intEdits);
-  }, [entryBytes, edits, boolEdits, intEdits]);
+    return applyTpleEnumEdits(applyTpleIntEdits(applyTpleBoolEdits(applyTpleFloatEdits(entryBytes, edits), boolEdits), intEdits), enumEdits);
+  }, [entryBytes, edits, boolEdits, intEdits, enumEdits]);
 
   const downloadEditedFileOnly = useCallback(() => {
     if (!patchedEntryBytes || !viewingEntry) return;
@@ -1318,10 +1380,11 @@ const RisenFileManager: React.FC = () => {
     const otherBoolProps = tpleBoolProps.filter((p) => (TPLE_PROPERTY_INFO[p.name]?.category ?? "other") === "other" && matchesSearch(p.name));
     const otherGroups = groupOtherProperties(otherFloatProps, otherBoolProps);
     const intProps = tpleIntProps.filter((p) => matchesSearch(p.name));
-    const totalPropCount = tpleProps.length + tpleBoolProps.length + tpleIntProps.length;
-    const hasEdits = edits.size > 0 || boolEdits.size > 0 || intEdits.size > 0;
+    const enumProps = tpleEnumProps.filter((p) => matchesSearch(p.name));
+    const totalPropCount = tpleProps.length + tpleBoolProps.length + tpleIntProps.length + tpleEnumProps.length;
+    const hasEdits = edits.size > 0 || boolEdits.size > 0 || intEdits.size > 0 || enumEdits.size > 0;
     const nothingFound = totalPropCount === 0;
-    const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsFloatProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0 && intProps.length === 0;
+    const nothingMatchesSearch = !nothingFound && movementProps.length === 0 && physicsFloatProps.length === 0 && physicsProps.length === 0 && otherFloatProps.length === 0 && otherBoolProps.length === 0 && intProps.length === 0 && enumProps.length === 0;
     const singlePendingChanges: PendingChange[] = [
       ...tpleProps
         .filter((p) => edits.has(p.valueOffset) && edits.get(p.valueOffset) !== p.value)
@@ -1332,6 +1395,9 @@ const RisenFileManager: React.FC = () => {
       ...tpleIntProps
         .filter((p) => intEdits.has(p.valueOffset) && intEdits.get(p.valueOffset)!.value !== p.value)
         .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: String(p.value), newValue: String(intEdits.get(p.valueOffset)!.value) })),
+      ...tpleEnumProps
+        .filter((p) => enumEdits.has(p.valueOffset) && enumEdits.get(p.valueOffset) !== p.value)
+        .map((p) => ({ fileLabel: "", propertyName: TPLE_PROPERTY_INFO[p.name]?.label ?? p.name, oldValue: String(p.value), newValue: String(enumEdits.get(p.valueOffset)!) })),
     ];
 
     return (
@@ -1489,6 +1555,26 @@ const RisenFileManager: React.FC = () => {
                         currentValue={intEdits.get(p.valueOffset)?.value ?? p.value}
                         onChange={updateIntEditValue}
                         onInfoClick={() => setInfoModalProp({ name: p.name, kind: "int", typeName: p.typeName })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {enumProps.length > 0 && (
+                <div>
+                  <div className="font-display font-bold mb-2 flex items-center gap-1.5">🏷️ قيم تعدادية (مكتشَفة تلقائياً)</div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    أرقام تمثّل خياراً من قائمة ثابتة (كنوع الضرر أو تصنيف الغرض) — لا رقماً حراً. عدّل بحذر شديد؛ قيمة خاطئة قد لا
+                    تُطابق أي خيار حقيقي في اللعبة.
+                  </div>
+                  <div className="space-y-2">
+                    {enumProps.map((p) => (
+                      <EnumPropertyRow
+                        key={`${p.valueOffset}-${resetToken}`}
+                        prop={p}
+                        currentValue={enumEdits.get(p.valueOffset) ?? p.value}
+                        onChange={updateEnumEditValue}
+                        onInfoClick={() => setInfoModalProp({ name: p.name, kind: "enum", typeName: p.typeName })}
                       />
                     ))}
                   </div>

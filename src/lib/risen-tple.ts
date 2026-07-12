@@ -77,6 +77,21 @@ const INT_MAGIC_RESERVED = 0x0000;
 const INT_TYPE_SIZES: Record<string, number> = { short: 2, int: 4, long: 4 };
 const MAX_POOL_STRING_LEN = 500;
 
+// Enum-typed properties (e.g. Category, DamageType) — reverse-engineered from
+// real ring/armor "skill modifier" records and confirmed against hundreds of
+// real item/weapon samples: same 10-byte header shape as int properties, but
+// typeIdx always resolves to a "bTPropertyContainer<enum X>" pool string
+// (never "short"/"int"/"long"), and the 6-byte value is always exactly
+// [0xC9, 0x00, ordinal, 0x00, 0x00, 0x00] — only the ordinal byte varies.
+// Rejecting anything that doesn't match this exact constant pattern keeps
+// editing safe even though we don't know every enum's official value names.
+const ENUM_RECORD_HEADER_SIZE = 10;
+const ENUM_MAGIC_SLOT = 0x001e;
+const ENUM_MAGIC_RESERVED = 0x0000;
+const ENUM_VALUE_SIZE = 6;
+const ENUM_VALUE_CONST_BYTE0 = 0xc9;
+const ENUM_ORDINAL_OFFSET = 2; // ordinal sits at valueOffset + 2, within the 6-byte value
+
 export interface TpleFloatProperty {
   name: string;
   poolIndex: number;
@@ -100,6 +115,17 @@ export interface TpleIntProperty {
   recordOffset: number;
   valueOffset: number;
   size: number;
+  value: number;
+}
+
+export interface TpleEnumProperty {
+  name: string;
+  poolIndex: number;
+  /** The enum's pool string, e.g. "bTPropertyContainer<enum gEDamageType>". */
+  typeName: string;
+  recordOffset: number;
+  valueOffset: number;
+  /** The selected enum ordinal (0-255) — the real value name isn't known for most enums; see TPLE_PROPERTY_INFO for the few we've grounded against real files. */
   value: number;
 }
 
@@ -618,6 +644,11 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     description: "معامل عام يُضرب في كل الضرر الذي يتلقاه هذا الكيان. أقل من 1.0 = مقاومة/تخفيف ضرر، أكبر من 1.0 = ضعف وضرر إضافي.",
     category: "other", system: "الضرر",
   },
+  DamageType: {
+    label: "نوع الضرر",
+    description: "نوع الضرر الذي يُلحقه هذا السلاح/المقذوف — من فئة gCDamage_PS، نوع بيانات تعدادي (Enum) وليس رقماً حراً. الأرقام التالية استُنتجت من مطابقة أسماء 555 ملف حقيقي، وليست ترجمة رسمية: 0=بلا ضرر (جثث)، 1=قريب/حاد (سيوف)، 2=كليل/رمي (عصي، أغراض مرمية)، 3=ثاقب/عن بُعد (كروسبو، سهام)، 4=ناري، 5=بردي، 6=سحري/سام. عدّل بحذر — قد لا تُطابق هذه الأرقام أنظمة المقاومة في اللعبة تماماً.",
+    category: "other", system: "الضرر",
+  },
 
   // gCDialog_PS — التجارة والحوار والتفاعل الاجتماعي مع الشخصية.
   EndDialogTimestamp: {
@@ -904,6 +935,12 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     category: "other",
     system: "الأغراض (Item)",
   },
+  Category: {
+    label: "تصنيف الغرض",
+    description: "تصنيف هذا الغرض ضمن نظام المخزون — من فئة gCItem_PS، نوع بيانات تعدادي (Enum) وليس رقماً حراً. الأرقام التالية استُنتجت من مطابقة أسماء 712 ملف حقيقي، وليست ترجمة رسمية: 1=أسلحة (سيوف)، 2=مجوهرات/معدّات (خواتم، قلائد، ترس)، 3=استهلاكيات (جرعات، طعام، أدوات)، 5=أغراض خاصة (رونيات انتقال)، 7=مواد مكتوبة (خرائط، رسائل). قد يؤثر تغييره على كيفية تصنيف الغرض وعرضه في قائمة الجرد داخل اللعبة — عدّل بحذر.",
+    category: "other",
+    system: "الأغراض (Item)",
+  },
   SortValue: {
     label: "قيمة الترتيب",
     description: "قيمة تقنية تحدد مكان ظهور الغرض ضمن قائمة الجرد (Inventory) بالنسبة لأغراض أخرى من نفس الفئة — لا تؤثر على أي قيمة لعب فعلية (سعر، ضرر...)، فقط ترتيب العرض في الواجهة. من فئة gCItem_PS.",
@@ -1169,6 +1206,47 @@ export function findTpleIntProperties(bytes: Uint8Array): TpleIntProperty[] {
   return results;
 }
 
+/** Scans the whole file for enum-property records (e.g. Category, DamageType)
+ * matching the exact verified signature — typeIdx resolving to a
+ * "bTPropertyContainer<enum X>" pool string, and the full 6-byte value
+ * matching the known constant shape byte-for-byte except the ordinal itself.
+ * Returns [] if the file isn't a recognized .tple (no sentinel found). */
+export function findTpleEnumProperties(bytes: Uint8Array): TpleEnumProperty[] {
+  const sentinel = findSentinelOffset(bytes);
+  if (sentinel < 0) return [];
+  const names = parseTpleStringPool(bytes);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const results: TpleEnumProperty[] = [];
+  for (let off = 0; off + ENUM_RECORD_HEADER_SIZE <= sentinel; off++) {
+    const propIdx = view.getUint16(off, true);
+    if (propIdx >= names.length) continue;
+    const typeIdx = view.getUint16(off + 2, true);
+    if (typeIdx >= names.length) continue;
+    const typeName = names[typeIdx];
+    if (!typeName.startsWith("bTPropertyContainer<enum")) continue;
+    if (view.getUint16(off + 4, true) !== ENUM_MAGIC_SLOT) continue;
+    const size = view.getUint16(off + 6, true);
+    if (size !== ENUM_VALUE_SIZE) continue;
+    if (view.getUint16(off + 8, true) !== ENUM_MAGIC_RESERVED) continue;
+    const valueOffset = off + ENUM_RECORD_HEADER_SIZE;
+    if (valueOffset + ENUM_VALUE_SIZE > sentinel) continue;
+    // The whole 6-byte value must match the known constant shape exactly,
+    // except the ordinal byte itself — reject anything else rather than guess.
+    if (bytes[valueOffset] !== ENUM_VALUE_CONST_BYTE0) continue;
+    if (bytes[valueOffset + 1] !== 0) continue;
+    if (bytes[valueOffset + 3] !== 0 || bytes[valueOffset + 4] !== 0 || bytes[valueOffset + 5] !== 0) continue;
+    results.push({
+      name: names[propIdx],
+      poolIndex: propIdx,
+      typeName,
+      recordOffset: off,
+      valueOffset,
+      value: bytes[valueOffset + ENUM_ORDINAL_OFFSET],
+    });
+  }
+  return results;
+}
+
 /** Patches float values in place (by valueOffset) — never changes the file's length. */
 export function applyTpleFloatEdits(bytes: Uint8Array, edits: Map<number, number>): Uint8Array {
   const out = new Uint8Array(bytes);
@@ -1197,6 +1275,17 @@ export function applyTpleIntEdits(bytes: Uint8Array, edits: Map<number, { value:
   for (const [valueOffset, { value, size }] of edits) {
     if (size === 2) view.setInt16(valueOffset, value, true);
     else view.setInt32(valueOffset, value, true);
+  }
+  return out;
+}
+
+/** Patches enum ordinal values in place (by valueOffset) — only the ordinal
+ * byte (at valueOffset + 2) is touched; the rest of the 6-byte value slot
+ * (the constant marker and padding bytes) is left exactly as it was. */
+export function applyTpleEnumEdits(bytes: Uint8Array, edits: Map<number, number>): Uint8Array {
+  const out = new Uint8Array(bytes);
+  for (const [valueOffset, ordinal] of edits) {
+    out[valueOffset + ENUM_ORDINAL_OFFSET] = ordinal;
   }
   return out;
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseTpleStringPool, findTpleFloatProperties, applyTpleFloatEdits,
   findTpleBoolProperties, applyTpleBoolEdits, findTpleIntProperties, applyTpleIntEdits,
+  findTpleEnumProperties, applyTpleEnumEdits,
   spliceFileIntoArchive, spliceMultipleFilesIntoArchive,
   buildTpleBatchIndex,
 } from "@/lib/risen-tple";
@@ -52,6 +53,15 @@ function i32(v: number): number[] {
  * records in a real PC_Hero.tple. */
 function intRecord(propIdx: number, typeIdx: number, size: 2 | 4, value: number): number[] {
   return [...u16(propIdx), ...u16(typeIdx), ...u16(0x001e), ...u16(size), ...u16(0x0000), ...(size === 2 ? i16(value) : i32(value))];
+}
+
+/** [propIdx][typeIdx][0x001e][0x0006][0x0000][0xC9,0x00,ordinal,0x00,0x00,0x00]
+ * — the exact verified enum record layout (typeIdx resolving to a
+ * "bTPropertyContainer<enum X>" pool string), confirmed against real
+ * gCModifySkill entries (rings/armor) and hundreds of DamageType/Category
+ * samples across the full real archive. */
+function enumRecord(propIdx: number, typeIdx: number, ordinal: number): number[] {
+  return [...u16(propIdx), ...u16(typeIdx), ...u16(0x001e), ...u16(6), ...u16(0x0000), 0xc9, 0x00, ordinal, 0x00, 0x00, 0x00];
 }
 
 function buildTple(records: number[], names: string[], headerPadding = 20): Uint8Array {
@@ -281,6 +291,68 @@ describe("applyTpleIntEdits", () => {
     applyTpleIntEdits(bytes, new Map([[prop.valueOffset, { value: 1, size: 2 }]]));
     const [origProp] = findTpleIntProperties(bytes);
     expect(origProp.value).toBe(74);
+  });
+});
+
+describe("findTpleEnumProperties", () => {
+  it("finds an enum property and resolves its name, type, and ordinal", () => {
+    const bytes = buildTple(enumRecord(0, 1, 2), ["Category", "bTPropertyContainer<enum gEItemCategory>"]);
+    const props = findTpleEnumProperties(bytes);
+    expect(props).toHaveLength(1);
+    expect(props[0]).toMatchObject({ name: "Category", typeName: "bTPropertyContainer<enum gEItemCategory>", value: 2 });
+  });
+
+  it("matches the real confirmed byte pattern for a ring's Skill modifier (ordinal 7 = Strength)", () => {
+    // Literal bytes captured from a real ring's ModifySkills entry.
+    const realRecordBytes = [0x00, 0x00, 0x01, 0x00, 0x1e, 0x00, 0x06, 0x00, 0x00, 0x00, 0xc9, 0x00, 0x07, 0x00, 0x00, 0x00];
+    const bytes = buildTple(realRecordBytes, ["Skill", "bTPropertyContainer<enum gESkill>"]);
+    const props = findTpleEnumProperties(bytes);
+    expect(props).toHaveLength(1);
+    expect(props[0]).toMatchObject({ name: "Skill", value: 7 });
+  });
+
+  it("rejects a record whose type index does NOT resolve to a bTPropertyContainer<enum...> name", () => {
+    const bytes = buildTple(enumRecord(0, 1, 2), ["Category", "NotAnEnumType"]);
+    expect(findTpleEnumProperties(bytes)).toEqual([]);
+  });
+
+  it("rejects a record whose value bytes don't match the known constant shape exactly", () => {
+    // Same header, but byte[1] of the value is 0x05 instead of the required 0x00.
+    const bad = [...u16(0), ...u16(1), ...u16(0x001e), ...u16(6), ...u16(0), 0xc9, 0x05, 0x02, 0x00, 0x00, 0x00];
+    const bytes = buildTple(bad, ["Category", "bTPropertyContainer<enum gEItemCategory>"]);
+    expect(findTpleEnumProperties(bytes)).toEqual([]);
+  });
+
+  it("does not confuse enum records with int records (independent signatures, no collision)", () => {
+    const bytes = buildTple(
+      [...intRecord(0, 1, 2, 74), ...enumRecord(2, 3, 2)],
+      ["FileVersion", "short", "Category", "bTPropertyContainer<enum gEItemCategory>"],
+    );
+    expect(findTpleIntProperties(bytes)).toHaveLength(1);
+    expect(findTpleEnumProperties(bytes)).toHaveLength(1);
+  });
+
+  it("returns an empty array (not a throw) for a file with no sentinel at all", () => {
+    expect(findTpleEnumProperties(new Uint8Array([1, 2, 3]))).toEqual([]);
+  });
+});
+
+describe("applyTpleEnumEdits", () => {
+  it("patches only the ordinal byte, leaving the rest of the 6-byte value slot untouched", () => {
+    const bytes = buildTple(enumRecord(0, 1, 2), ["Category", "bTPropertyContainer<enum gEItemCategory>"]);
+    const [prop] = findTpleEnumProperties(bytes);
+    const patched = applyTpleEnumEdits(bytes, new Map([[prop.valueOffset, 7]]));
+    expect(patched.length).toBe(bytes.length);
+    const [patchedProp] = findTpleEnumProperties(patched);
+    expect(patchedProp.value).toBe(7);
+  });
+
+  it("does not mutate the original array", () => {
+    const bytes = buildTple(enumRecord(0, 1, 2), ["Category", "bTPropertyContainer<enum gEItemCategory>"]);
+    const [prop] = findTpleEnumProperties(bytes);
+    applyTpleEnumEdits(bytes, new Map([[prop.valueOffset, 9]]));
+    const [origProp] = findTpleEnumProperties(bytes);
+    expect(origProp.value).toBe(2);
   });
 });
 

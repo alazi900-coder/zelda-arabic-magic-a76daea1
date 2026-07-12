@@ -118,6 +118,12 @@ export interface TplePropertyInfo {
  * gCCharacterMovement_PS context they were found in. Anything else found
  * by the generic scan is shown with its raw name and no invented meaning. */
 export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
+  // gCCharacterMovement_PS — تأكّدنا عبر فحص أرشيف حقيقي كامل (2679 ملف .tple)
+  // أن كل خصائص هذا القسم لا تظهر إلا في ملف واحد عبر كامل الأرشيف:
+  // NPC/World/PC_Hero.tple (شخصية اللاعب نفسها) — لا تتكرر بقيم خاصة بها في
+  // أي ملف NPC آخر. أي أنها تخص شخصية اللاعب تحديداً في هذا الأرشيف، وأي
+  // شخصية أخرى بحركة مختلفة تُدار على الأرجح عبر آلية أخرى (وراثة قالب أو
+  // ملف منفصل) لا تظهر كسجلات صريحة هنا.
   ForwardSpeedMax: {
     label: "أقصى سرعة للأمام",
     description: "السرعة القصوى عند الجري للأمام. زيادتها = جري أسرع للأمام، تخفيضها = أبطأ. تُضرب أحياناً بمعامل إضافي (SlowModifier عند المشي الخفيف، FastModifier عند الجري القوي) — إن لم يظهر أثر تعديلها وحدها، عدّلها مع تلك المعاملات معاً عبر «تعديل جماعي عبر الأرشيف».",
@@ -372,6 +378,10 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     category: "movement",
   },
 
+  // ملاحظة من فحص الأرشيف الحقيقي الكامل: خصائص نعم/لا التالية توجد في
+  // ملفين فقط عبر كل الأرشيف — NPC/World/PC_Hero.tple (شخصية اللاعب) وباب
+  // قابل للتدمير (Obj_EVT_DestructableDoor_Temple_01.tple) — وليس في كل
+  // الكيانات كما قد يُفهم من الاسم العام "فيزياء".
   PhysicsEnabled: {
     label: "تفعيل الفيزياء",
     description: "هل يتأثر الكيان بمحرك الفيزياء (الجاذبية والتصادم) عموماً. تعطيلها (لا) يجعله يتجاهل الجاذبية والتصادم تماماً — قد يُعلَّق في الهواء أو يمر خلال الجدران. غيّرها بحذر شديد؛ للشخصيات تبقى «نعم» عادة.",
@@ -478,8 +488,10 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     category: "physics",
   },
 
-  // ما يلي من فئات gCDynamicCollisionCircle_PS، eCRigidBody_PS، eCCollisionShape_PS
-  // (فيزياء تصادم/جسم صلب متقدمة، تأكّدنا من انتمائها من ترتيب مجمّع الأسماء).
+  // ما يلي من فئات gCDynamicCollisionCircle_PS (Radius)، eCRigidBody_PS (البقية
+  // حتى CCDMotionTreshold)، وeCCollisionShape بلا لاحقة _PS (SkinWidth تحديداً
+  // — تأكّدنا من الفارق الدقيق بين الاسمين من فحص أرشيف حقيقي كامل). كلها أيضاً
+  // توجد في ملف واحد فقط عبر كل الأرشيف: NPC/World/PC_Hero.tple.
   Radius: {
     label: "نصف قطر دائرة التصادم",
     description: "نصف قطر دائرة التصادم الديناميكية المستخدمة لهذا الكيان — تُستخدم غالباً لحساب الازدحام/التنافر بين الشخصيات القريبة من بعضها.",
@@ -666,7 +678,9 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     category: "other", system: "الحركة والرسوم المتحركة",
   },
 
-  // gCNavigation_PS — تخطيط المسارات والملاحة.
+  // eCEntityProxy — تصحيح: كانت مصنَّفة سابقاً كـ gCNavigation_PS بالخطأ؛
+  // فحص أرشيف حقيقي كامل أظهر أن فئتها الفعلية السابقة لها في مجمّع الأسماء
+  // هي eCEntityProxy (مؤشر/وكيل الكيان)، وليست gCNavigation_PS.
   LastUseableNavigationZoneIsPath: {
     label: "آخر منطقة ملاحة هي مسار",
     description: "هل آخر منطقة ملاحة صالحة مسجَّلة للشخصية هي «مسار» (Path) تحديداً وليست منطقة عامة — تفصيل داخلي لنظام تخطيط المسارات.",
@@ -750,10 +764,14 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   // above) — most currently hold 0 in the one sample checked and look like
   // transient runtime/save state (timestamps, internal counters) rather
   // than designer-authored settings, which is noted honestly below.
-  InteractionCounter: { label: "عداد التفاعل", description: "عدد مرات التفاعل مع هذا الكيان.", category: "other" },
+  InteractionCounter: {
+    label: "عداد التفاعل",
+    description: "قيمة عدّاد/حالة مرتبطة بالتفاعل مع هذا الكيان — من فئة gCScriptProxyAIState غالباً (أو eCEntityProxy أحياناً). تنبيه من فحص أرشيف حقيقي كامل: في كل الحالات المفحوصة (1320 حالة عبر 1320 ملفاً، أغلبها مناطق تفعيل سكربتية ونقاط تفاعل) لم تُسجَّل قيمته أبداً أعلى من صفر — فقط 0 أو -1 — ما يرجّح أنها حالة/علامة داخلية (كـ«لم يُستخدم بعد») أكثر من كونها عداداً تراكمياً فعلياً تصممه.",
+    category: "other",
+  },
   MaterialSwitch: {
     label: "نوع المادة",
-    description: "مؤشر لنوع المادة المستخدمة (قد يؤثر مثلاً على صوت الخطى أو خامة السطح). ملاحظة: هذا الحقل مُعاد استخدامه في أكثر من فئة برمجية (eCAnimation_PS للشخصيات، eCMesh_PS للأغراض) بنفس الاسم — المعنى العام واحد لكن السياق يختلف حسب نوع الملف.",
+    description: "مؤشر لنوع المادة المستخدمة (قد يؤثر مثلاً على صوت الخطى أو خامة السطح). ملاحظة: هذا الحقل مُعاد استخدامه في عدة فئات برمجية مختلفة بنفس الاسم — تأكّدنا عبر فحص أرشيف حقيقي كامل (1730 حالة في 1666 ملفاً) من ظهوره في eCMesh_PS (الأغراض، الأكثر شيوعاً)، eCAnimation_PS (الشخصيات)، eCBodyPart_PS (أجزاء الجسم)، eCBillboard_PS (لوحات العرض المسطّحة)، وeCStrip_PS (أثر الحركة البصري) — المعنى العام واحد لكن السياق يختلف حسب الفئة.",
     category: "other",
   },
   DamageBonus: { label: "إضافة على الضرر", description: "قيمة تُضاف عند حساب الضرر — من فئة gCDamage_PS.", category: "other" },
@@ -763,7 +781,7 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   // eCMesh_PS) من تحليل ملف سلاح حقيقي (It_Sword_Hot.tple)، وليس تخميناً.
   Amount: {
     label: "الكمية",
-    description: "عدد القطع التي يمثّلها هذا الغرض عند الحصول عليه دفعة واحدة (حجم الرزمة الافتراضي) — مثلاً كمية السهام في حزمة واحدة. للأغراض المفردة غير القابلة للتكديس تكون عادة 1. من فئة gCItem_PS.",
+    description: "عدد القطع التي يمثّلها هذا الغرض عند الحصول عليه دفعة واحدة (حجم الرزمة الافتراضي) — مثلاً كمية السهام في حزمة واحدة. للأغراض المفردة غير القابلة للتكديس تكون عادة 1. من فئة gCItem_PS. ملاحظة من فحص أرشيف حقيقي كامل: نفس الاسم يظهر أيضاً بمعنى مختلف ضمن فئة gCInventory_PS (165 حالة حقيقية) في ملفات شخصيات ميتة/قابلة للنهب — هناك يمثّل كمية كل غرض ضمن قائمة الغنيمة المولَّدة لتلك الشخصية تحديداً، وليس حجم رزمة الغرض نفسه.",
     category: "other",
     system: "الأغراض (Item)",
   },
@@ -821,7 +839,7 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
   },
   Priority: {
     label: "أولوية العرض",
-    description: "قيمة أولوية ضمن نظام مراجع الكيانات النصية (eCEntityStringProxy). وجدناها فقط في ملف خريطة (Priority=15)، ويبدو أنها مرتبطة بترتيب ظهور علامات الخريطة عند تداخلها — لكن هذا أقل يقيناً من بقية الخصائص الموثّقة، عدّل بحذر إضافي.",
+    description: "قيمة أولوية من فئة eCLocString (تصحيح: كانت موثّقة سابقاً كـ eCEntityStringProxy بالخطأ). تأكّدنا عبر فحص أرشيف حقيقي كامل من ظهورها في 11 ملف خريطة حقيقياً (كل ملفات It_Map_* ضمن Items/Written وItems/Quests) بقيم تتراوح بين 10 و30 — يبدو أنها مرتبطة بترتيب ظهور علامات الخريطة عند تداخلها.",
     category: "other",
     system: "الأغراض (Item)",
   },
@@ -834,12 +852,12 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
 
   FileVersion: {
     label: "إصدار بنية الملف",
-    description: "رقم إصدار بنية شكل التصادم (eCCollisionShape_PS) لهذا القالب — يستخدمه محرك اللعبة داخلياً للتوافق بين إصدارات أدوات التطوير، وليس إعداداً يُفترض تعديله. تغييره لا يُحدث أثراً في اللعبة عادة، وقد يجعل بعض أدوات المعاينة الرسمية تسيء تفسير الملف.",
+    description: "رقم إصدار بنية شكل التصادم (eCCollisionShape، بلا لاحقة _PS — تصحيح من فحص أرشيف حقيقي) لهذا القالب — يستخدمه محرك اللعبة داخلياً للتوافق بين إصدارات أدوات التطوير، وليس إعداداً يُفترض تعديله. قيمته 74 في الغالبية الساحقة من 1401 حالة حقيقية مفحوصة، مع استثناءات نادرة بقيمة 0. تغييره لا يُحدث أثراً في اللعبة عادة، وقد يجعل بعض أدوات المعاينة الرسمية تسيء تفسير الملف.",
     category: "other",
   },
   CurrentRoutine: {
     label: "الروتين الحالي (ملاحة)",
-    description: "مؤشر/فهرس الروتين السلوكي الحالي الذي تتبعه الشخصية ضمن نظام الملاحة والحركة المبرمجة (gCNavigation_PS) — حالة تشغيل، غالباً صفر عند عدم وجود روتين نشط.",
+    description: "مؤشر/فهرس الروتين السلوكي الحالي الذي تتبعه الشخصية — حالة تشغيل، دائماً صفر في القوالب الافتراضية (443 حالة حقيقية مفحوصة، كلها 0). تصحيح: فحص أرشيف حقيقي كامل أظهر أن الفئة السائدة فعلياً هي eCScriptProxyScript (417 من 443 ملفاً)، وأن نظام الملاحة gCNavigation_PS المذكور في التسمية أقلية صغيرة فقط (26 ملفاً) وليس الفئة الوحيدة كما أُوحي سابقاً.",
     category: "other",
   },
   TaskPosition: {

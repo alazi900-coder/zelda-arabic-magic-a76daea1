@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.50.0",
+    date: "2026-07-12",
+    changes: [
+      { kind: "fixed", text: "مدير ملفات Risen 1: تدقيق شامل لكل الخصائص الموثّقة (~140 خاصية) عبر فحص فعلي لأرشيف حقيقي كامل (2679 ملف .tple) بدل عيّنات صغيرة سابقة. صُحِّحت أخطاء نسبة حقيقية: Priority (فئتها الفعلية eCLocString لا eCEntityStringProxy، وتوجد في 11 ملف خريطة حقيقي بقيم 10–30 لا ملف واحد فقط)، CurrentRoutine وLastUseableNavigationZoneIsPath (فئاتهما السائدة الفعلية eCScriptProxyScript وeCEntityProxy على التوالي، لا gCNavigation_PS كما كان موثّقاً). وُسِّع وصف MaterialSwitch (5 فئات مؤكَّدة بدل 2) وAmount (معنى إضافي ضمن قوائم غنيمة الشخصيات). خُفِّف وصف InteractionCounter بعد تأكّد أن قيمته لم تتجاوز صفراً أبداً في 1320 حالة حقيقية. أُضيفت ملاحظات توضّح أن كل خصائص قسمَي «الحركة» و«الفيزياء» (نعم/لا) توجد حصراً في ملف أو ملفين فقط عبر كل الأرشيف (شخصية اللاعب PC_Hero.tple بشكل أساسي)." },
+    ],
+  },
+  {
     version: "1.49.0",
     date: "2026-07-12",
     changes: [

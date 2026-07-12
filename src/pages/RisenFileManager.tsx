@@ -495,6 +495,13 @@ const RisenFileManager: React.FC = () => {
   const [buildingTrimmedArchive, setBuildingTrimmedArchive] = useState(false);
   const [trimmedArchiveError, setTrimmedArchiveError] = useState<string | null>(null);
 
+  // Edits saved (but not yet merged into a downloaded archive) while editing
+  // several files one after another — "حفظ والرجوع" stores the patched bytes
+  // here keyed by path; "بناء الأرشيف النهائي" merges all of them at once.
+  const [pendingFileEdits, setPendingFileEdits] = useState<Map<string, Uint8Array>>(new Map());
+  const [buildingPendingArchive, setBuildingPendingArchive] = useState(false);
+  const [pendingArchiveError, setPendingArchiveError] = useState<string | null>(null);
+
   // Property editor (opened either from inside an archive, or as a standalone loose file).
   const [viewingEntry, setViewingEntry] = useState<{ path: string; offset: number; size: number } | null>(null);
   const [standaloneMode, setStandaloneMode] = useState(false);
@@ -633,6 +640,8 @@ const RisenFileManager: React.FC = () => {
     setDocumentedError(null);
     setExcludedPaths(new Set());
     setTrimmedArchiveError(null);
+    setPendingFileEdits(new Map());
+    setPendingArchiveError(null);
     closeEntry();
     exitBatchMode();
     try {
@@ -739,6 +748,8 @@ const RisenFileManager: React.FC = () => {
     setDocumentedError(null);
     setExcludedPaths(new Set());
     setTrimmedArchiveError(null);
+    setPendingFileEdits(new Map());
+    setPendingArchiveError(null);
     closeEntry();
     exitBatchMode();
   }, [closeEntry, exitBatchMode]);
@@ -845,7 +856,8 @@ const RisenFileManager: React.FC = () => {
     setPropSearch("");
     setResetToken((t) => t + 1);
     try {
-      const bytes = new Uint8Array(await file.slice(offset, offset + size).arrayBuffer());
+      const pending = pendingFileEdits.get(path);
+      const bytes = pending ?? new Uint8Array(await file.slice(offset, offset + size).arrayBuffer());
       const props = findTpleFloatProperties(bytes);
       const boolProps = findTpleBoolProperties(bytes);
       const intProps = findTpleIntProperties(bytes);
@@ -860,7 +872,7 @@ const RisenFileManager: React.FC = () => {
     } finally {
       setEntryLoading(false);
     }
-  }, [file]);
+  }, [file, pendingFileEdits]);
 
   const updateEditValue = useCallback((valueOffset: number, newValue: number) => {
     setEdits((prev) => {
@@ -918,6 +930,49 @@ const RisenFileManager: React.FC = () => {
       setBuilding(false);
     }
   }, [file, patchedEntryBytes, viewingEntry]);
+
+  /** Stores this file's edit in memory (no download, no build) and returns to
+   * the list — lets several files be edited one after another, then merged
+   * into one archive at once via buildAndDownloadFinalArchive. */
+  const savePendingEdit = useCallback(() => {
+    if (!patchedEntryBytes || !viewingEntry) return;
+    setPendingFileEdits((prev) => {
+      const next = new Map(prev);
+      next.set(viewingEntry.path, patchedEntryBytes);
+      return next;
+    });
+    closeEntry();
+  }, [patchedEntryBytes, viewingEntry, closeEntry]);
+
+  const clearPendingEdits = useCallback(() => {
+    setPendingFileEdits(new Map());
+    setPendingArchiveError(null);
+  }, []);
+
+  const buildAndDownloadFinalArchive = useCallback(async () => {
+    if (!file || pendingFileEdits.size === 0) return;
+    setBuildingPendingArchive(true);
+    setPendingArchiveError(null);
+    try {
+      const archiveBytes = new Uint8Array(await file.arrayBuffer());
+      const flat = flattenPakTree(workingTree);
+      const replacements: ArchiveReplacement[] = [];
+      for (const [path, bytes] of pendingFileEdits) {
+        const entry = flat.find((f) => f.path === path);
+        if (!entry) continue;
+        replacements.push({ offset: entry.offset, size: entry.size, bytes });
+      }
+      if (replacements.length === 0) {
+        throw new Error("كل الملفات ذات التعديلات المحفوظة لم تعد موجودة في مجموعة العمل الحالية (رُبما حُذفت).");
+      }
+      const rebuilt = spliceMultipleFilesIntoArchive(archiveBytes, replacements);
+      downloadBlob(new Blob([rebuilt as BlobPart]), withModifiedSuffix(file.name));
+    } catch (e) {
+      setPendingArchiveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBuildingPendingArchive(false);
+    }
+  }, [file, pendingFileEdits, workingTree]);
 
   const downloadFileDirect = useCallback(async (path: string, offset: number, size: number) => {
     if (!file) return;
@@ -1451,6 +1506,17 @@ const RisenFileManager: React.FC = () => {
             </Button>
             {!standaloneMode && (
               <Button
+                variant="outline"
+                onClick={savePendingEdit}
+                disabled={!hasEdits}
+                className="font-display font-bold"
+                title="يحفظ هذا التعديل مؤقتاً (بلا تنزيل) ويرجعك للقائمة — لتعديل عدة ملفات ثم بناء أرشيف واحد يجمعها كلها لاحقاً"
+              >
+                <Save className="w-4 h-4 ml-2" /> حفظ والرجوع
+              </Button>
+            )}
+            {!standaloneMode && (
+              <Button
                 onClick={() => void buildAndDownloadArchive()}
                 disabled={building}
                 className="font-display font-bold"
@@ -1588,6 +1654,40 @@ const RisenFileManager: React.FC = () => {
           )}
         </Button>
       </div>
+
+      {pendingFileEdits.size > 0 && (
+        <div className="m-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm flex flex-col gap-2">
+          <div className="flex gap-2 items-start">
+            <Save className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
+            <div>
+              <strong className="block mb-1">{pendingFileEdits.size} ملف بتعديلات محفوظة مؤقتاً (بلا تنزيل بعد)</strong>
+              افتح ملفات أخرى وعدّلها واحفظها بنفس الطريقة، ثم اضغط "بناء الأرشيف النهائي" مرة واحدة لدمج كل التعديلات
+              المتراكمة في أرشيف واحد. عند إعادة فتح أحد هذه الملفات ستجد آخر نسخة محفوظة منه، لا الأصلية.
+            </div>
+          </div>
+          {pendingArchiveError && (
+            <div className="text-destructive text-xs">{pendingArchiveError}</div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={clearPendingEdits}>
+              <RotateCcw className="w-4 h-4 ml-1" /> مسح كل التعديلات المعلّقة
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void buildAndDownloadFinalArchive()}
+              disabled={buildingPendingArchive}
+              className="font-display font-bold"
+              style={{ backgroundColor: ACCENT, color: "white" }}
+            >
+              {buildingPendingArchive ? (
+                <><Loader2 className="w-4 h-4 ml-2 animate-spin" /> جارٍ البناء...</>
+              ) : (
+                <><PackageCheck className="w-4 h-4 ml-2" /> بناء الأرشيف النهائي</>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {excludedPaths.size > 0 && (
         <div className="m-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm flex flex-col gap-2">

@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.55.1",
+    date: "2026-07-12",
+    changes: [
+      { kind: "fixed", text: "مدير ملفات Risen 1: وصف DamageAmount كان يوحي أنه دائماً «مقدار الضرر الحقيقي» — فحص أرشيف حقيقي لمجلد الكائنات (Objects) كشف أن 8 من 9 حالات هناك (أزرار وونشات التفعيل) هي فعلياً فئة مختلفة تماماً (gCStateGraphEventFilterDamageAmount) تمثّل عتبة تفعيل شرطية، لا ضرراً يُلحَق. عُدِّل الوصف ليوضّح الفرق بين السياقين بدقة." },
+    ],
+  },
+  {
     version: "1.55.0",
     date: "2026-07-12",
     changes: [

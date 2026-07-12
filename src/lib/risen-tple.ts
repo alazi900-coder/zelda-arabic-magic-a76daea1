@@ -884,7 +884,11 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     category: "other",
   },
   DamageBonus: { label: "إضافة على الضرر", description: "قيمة تُضاف عند حساب الضرر — من فئة gCDamage_PS.", category: "other" },
-  DamageAmount: { label: "مقدار الضرر", description: "القيمة الأساسية للضرر — من فئة gCDamage_PS.", category: "other" },
+  DamageAmount: {
+    label: "مقدار الضرر",
+    description: "القيمة الأساسية للضرر — من فئة gCDamage_PS (نفس الحقل بالضبط المستخدَم في الأسلحة). تنبيه من فحص أرشيف حقيقي كامل لمجلد الكائنات (Objects): في أزرار وونشات التفعيل تحديداً (Obj_EVT_Button_*، Obj_EVT_Winch_*) يظهر نفس الاسم لكن من فئة مختلفة تماماً هي gCStateGraphEventFilterDamageAmount — هناك لا يمثّل ضرراً يُلحَق إطلاقاً، بل عتبة ضرر شرطية لتفعيل الزر/الونش ضمن نظام مخطط الحالة البرمجي (كانت 1 في كل الحالات المفحوصة، أي أي ضربة تقريباً تكفي).",
+    category: "other",
+  },
 
   // ما يلي من ملفات الأغراض (Items) — تأكّدنا من فئتها الحقيقية (gCItem_PS،
   // eCMesh_PS) من تحليل ملف سلاح حقيقي (It_Sword_Hot.tple)، وليس تخميناً.

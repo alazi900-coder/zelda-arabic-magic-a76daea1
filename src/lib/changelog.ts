@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.54.0",
+    date: "2026-07-12",
+    changes: [
+      { kind: "added", text: "مدير ملفات Risen 1: توثيق 11 خاصية من مجلد Objects. Difficulty (صعوبة فتح القفل، من gCLock_PS — مؤكَّدة: تتدرّج فعلياً مع قيمة الكنز في صناديق حقيقية فقيرة/متوسطة/غنية)، LoopCount (تكرار حركة الأجسام المتحركة)، TriggerStateTargetIndex وTriggerTargetIndex (فهارس أهداف ضمن نظام «مخطط الحالة» البرمجي). كذلك 7 خصائص إضافية (Wait، PauseAnimation، StopAnimation، BlendAdditive، OffsetCircle، InteruptCurrentState، StopEffect) وُجدت في ملف اختباري واحد فقط، وثّقناها مع الإشارة الصريحة لضآلة العيّنة وبالتالي انخفاض الثقة بمعناها الدقيق." },
+    ],
+  },
+  {
     version: "1.53.0",
     date: "2026-07-12",
     changes: [

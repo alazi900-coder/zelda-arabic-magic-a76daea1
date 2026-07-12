@@ -906,6 +906,67 @@ export const TPLE_PROPERTY_INFO: Record<string, TplePropertyInfo> = {
     description: "مؤشر لنقطة توقف/تجزئة حالية داخل تنفيذ الروتين البرمجي للشخصية (gCScriptRoutine_PS) — حالة تنفيذ داخلية.",
     category: "other",
   },
+
+  // مجلد Objects — استُخرجت من فحص أرشيف حقيقي كامل. الأربعة الأولى (Difficulty،
+  // LoopCount، TriggerStateTargetIndex، TriggerTargetIndex) مؤكَّدة عبر عيّنات
+  // حقيقية متعددة. البقية (Wait حتى StopEffect أدناه) وُجدت في ملف اختباري واحد
+  // فقط (باب متحرك قابل للتدمير) ضمن نظام "مخطط الحالة" (State Graph) البرمجي
+  // المرئي — معناها مستنبَط من اسمها الذاتي الوصف وفئتها، لكن بثقة أقل لضآلة العيّنة.
+  Difficulty: {
+    label: "صعوبة القفل",
+    description: "مستوى صعوبة فتح قفل هذا الكيان (صندوق أو باب) — من فئة gCLock_PS. تأكَّدت من فحص أرشيف حقيقي: تتدرّج فعلياً مع قيمة الكنز (صناديق فقيرة=1، متوسطة=2، غنية=3)، وتكون -1 للكيانات غير القابلة للقفل أصلاً.",
+    category: "other", system: "الأقفال",
+  },
+  LoopCount: {
+    label: "عدد تكرار الحركة",
+    description: "عدد مرات تكرار حركة هذا الجسم المتحرك (كونش أو باب متحرك) — من فئات eCMoverAnimation* (هيكلية، منحنى Bezier، خطية، أو من ملف حركة). كانت 0 في كل العينات الحقيقية المفحوصة، ويُحتمل أن تعني «بلا تكرار» أو «تكرار لا نهائي» حسب سياق الحركة.",
+    category: "other", system: "الحركة والرسوم المتحركة",
+  },
+  TriggerStateTargetIndex: {
+    label: "فهرس الحالة المستهدَفة",
+    description: "فهرس الحالة المستهدَفة ضمن «مخطط الحالة» (State Graph) البرمجي المرئي لهذا الكيان — من فئة gCStateGraphActionTriggerState. كانت -1 (غير محدَّدة) في كل العينات الحقيقية المفحوصة (150 حالة).",
+    category: "other", system: "أفعال السكربت المرئي",
+  },
+  TriggerTargetIndex: {
+    label: "فهرس الهدف المُفعَّل",
+    description: "فهرس الكيان/الحدث المستهدَف عند تفعيل هذا الفعل ضمن مخطط الحالة البرمجي — من فئتين مرتبطتين (gCStateGraphActionEventDispatcher وgCStateGraphActionTrigger). كانت -1 (غير محدَّدة) في كل العينات الحقيقية المفحوصة.",
+    category: "other", system: "أفعال السكربت المرئي",
+  },
+  Wait: {
+    label: "انتظار انتهاء الحركة",
+    description: "هل ينتظر تنفيذ السكربت انتهاء تشغيل الرسوم المتحركة قبل المتابعة للفعل التالي — من فئة gCStateGraphActionPlayAni. وُجدت في ملف اختباري واحد فقط (باب متحرك)، فالثقة بمعناها أقل من الخصائص الأخرى.",
+    category: "other", system: "أفعال السكربت المرئي",
+  },
+  PauseAnimation: {
+    label: "إيقاف مؤقت للرسوم المتحركة",
+    description: "هل يُوقِف هذا الفعل الرسوم المتحركة مؤقتاً بدل تشغيلها — من فئة gCStateGraphActionPlayAni. وُجدت في ملف اختباري واحد فقط، فالثقة بمعناها أقل.",
+    category: "other", system: "أفعال السكربت المرئي",
+  },
+  StopAnimation: {
+    label: "إيقاف الرسوم المتحركة",
+    description: "هل يوقف هذا الفعل الرسوم المتحركة نهائياً بدل تشغيلها — من فئة gCStateGraphActionPlayAni. وُجدت في ملف اختباري واحد فقط، فالثقة بمعناها أقل.",
+    category: "other", system: "أفعال السكربت المرئي",
+  },
+  BlendAdditive: {
+    label: "مزج تراكمي للحركة",
+    description: "هل تُمزَج حركة الهيكل العظمي لهذا الجسم المتحرك بشكل تراكمي (Additive) فوق حركات أخرى بدل استبدالها — من فئة eCMoverAnimationSkeletal. وُجدت في ملف اختباري واحد فقط.",
+    category: "other", system: "الحركة والرسوم المتحركة",
+  },
+  OffsetCircle: {
+    label: "إزاحة ملاحية دائرية",
+    description: "هل تُستخدَم إزاحة الملاحة (NavOffset) بنمط دائري لهذا الكيان — من فئة gCNavOffset_PS. وُجدت في ملف اختباري واحد فقط.",
+    category: "other", system: "الملاحة",
+  },
+  InteruptCurrentState: {
+    label: "مقاطعة الحالة الحالية",
+    description: "هل يقاطع فعل «متابعة الحالة» (FollowState) الحالة الحالية للكيان فوراً بدل انتظار انتهائها — من فئة gCStateGraphActionFollowState. وُجدت في ملف اختباري واحد فقط.",
+    category: "other", system: "أفعال السكربت المرئي",
+  },
+  StopEffect: {
+    label: "إيقاف التأثير",
+    description: "هل يوقف هذا الفعل تأثيراً بصرياً بدل بدء تشغيله — من فئة gCStateGraphActionStartEffect. وُجدت في ملف اختباري واحد فقط.",
+    category: "other", system: "أفعال السكربت المرئي",
+  },
 };
 
 function findSentinelOffset(bytes: Uint8Array): number {

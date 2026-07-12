@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, Folder, FileIcon,
   ChevronDown, ChevronRight, X, Eye, Gauge, Zap, TrendingDown, Percent, Settings2,
-  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info, BadgeCheck, Trash2,
+  Save, PackageCheck, RotateCcw, Search, ArrowUpDown, Wrench, Layers3, FileDown, ClipboardList, Hash, Info, BadgeCheck, Trash2, Star,
 } from "lucide-react";
 import {
   parseImagesPakHeader, parseImagesPakFileInfoTree, flattenPakTree, buildPakArchive,
@@ -24,6 +24,7 @@ import {
 const ACCENT = "#4a7c3f";
 /** Above this, zip generation can take a while and use a lot of memory — warn before proceeding. */
 const LARGE_SELECTION_BYTES = 300 * 1024 * 1024;
+const FAVORITES_STORAGE_KEY = "risen-file-manager-favorites";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} بايت`;
@@ -103,12 +104,15 @@ interface TreeRowProps {
   toggleSelected: (path: string) => void;
   onOpenFile: (path: string, offset: number, size: number) => void;
   onDownloadFile: (path: string, offset: number, size: number) => void;
+  favorites: Set<string>;
+  toggleFavorite: (path: string) => void;
 }
 
-const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleExpanded, selected, toggleSelected, onOpenFile, onDownloadFile }) => {
+const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleExpanded, selected, toggleSelected, onOpenFile, onDownloadFile, favorites, toggleFavorite }) => {
   const isFolder = node.type === "folder";
   const isExpanded = expanded.has(path);
   const isChecked = selected.has(path);
+  const isFavorite = favorites.has(path);
 
   return (
     <div>
@@ -134,6 +138,13 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleEx
         {node.type === "file" && (
           <>
             <span className="text-xs text-muted-foreground shrink-0">{formatBytes(node.size)}</span>
+            <button
+              onClick={() => toggleFavorite(path)}
+              className={`shrink-0 p-1 rounded ${isFavorite ? "text-amber-500" : "text-muted-foreground/50 hover:text-amber-500"}`}
+              title={isFavorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"}
+            >
+              <Star className="w-3.5 h-3.5" fill={isFavorite ? "currentColor" : "none"} />
+            </button>
             <button
               onClick={() => onDownloadFile(path, node.offset, node.size)}
               className="shrink-0 text-xs p-1 rounded border border-border/50 hover:border-primary/50 hover:text-primary"
@@ -165,6 +176,8 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, path, depth, expanded, toggleEx
               toggleSelected={toggleSelected}
               onOpenFile={onOpenFile}
               onDownloadFile={onDownloadFile}
+              favorites={favorites}
+              toggleFavorite={toggleFavorite}
             />
           ))}
         </div>
@@ -512,6 +525,27 @@ const RisenFileManager: React.FC = () => {
   const [documentedPaths, setDocumentedPaths] = useState<Set<string> | null>(null);
   const [documentedError, setDocumentedError] = useState<string | null>(null);
 
+  // Favorited file paths — persisted across sessions/archives in localStorage,
+  // so a file edited now can be found again later regardless of which .pak it's in.
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+  const toggleFavorite = useCallback((path: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   // Batch mode: edit one property across every .tple file in the open archive at once.
   const [batchMode, setBatchMode] = useState(false);
   const [batchScanning, setBatchScanning] = useState(false);
@@ -537,12 +571,13 @@ const RisenFileManager: React.FC = () => {
   const displayedTree = useMemo(() => {
     let t = filterTreeByQuery(workingTree, treeSearch);
     if (showDocumentedOnly && documentedPaths) t = filterTreeByPaths(t, documentedPaths);
+    if (showFavoritesOnly) t = filterTreeByPaths(t, favorites);
     return sortTree(t, treeSortBy, treeSortDir);
-  }, [workingTree, treeSearch, treeSortBy, treeSortDir, showDocumentedOnly, documentedPaths]);
+  }, [workingTree, treeSearch, treeSortBy, treeSortDir, showDocumentedOnly, documentedPaths, showFavoritesOnly, favorites]);
   const effectiveExpanded = useMemo(() => {
-    if (!treeSearch.trim() && !(showDocumentedOnly && documentedPaths)) return expanded;
+    if (!treeSearch.trim() && !(showDocumentedOnly && documentedPaths) && !showFavoritesOnly) return expanded;
     return new Set(allFolderPaths(displayedTree));
-  }, [treeSearch, expanded, displayedTree, showDocumentedOnly, documentedPaths]);
+  }, [treeSearch, expanded, displayedTree, showDocumentedOnly, documentedPaths, showFavoritesOnly]);
 
   const closeEntry = useCallback(() => {
     setViewingEntry(null);
@@ -1621,6 +1656,17 @@ const RisenFileManager: React.FC = () => {
           الملفات الموثّقة فقط
           {documentedPaths && <span className="text-xs">({documentedPaths.size})</span>}
         </button>
+        <button
+          onClick={() => setShowFavoritesOnly((v) => !v)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg border transition-colors ${
+            showFavoritesOnly ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:text-foreground"
+          }`}
+          title="إظهار الملفات المفضّلة فقط — قائمة تُحفظ على جهازك وتبقى عبر كل الأرشيفات"
+        >
+          <Star className="w-4 h-4" fill={showFavoritesOnly ? "currentColor" : "none"} />
+          المفضلة فقط
+          <span className="text-xs">({favorites.size})</span>
+        </button>
       </div>
 
       {documentedError && (
@@ -1649,6 +1695,9 @@ const RisenFileManager: React.FC = () => {
         {displayedTree.length === 0 && !treeSearch.trim() && showDocumentedOnly && documentedPaths && (
           <div className="text-sm text-muted-foreground p-4 text-center">لا توجد ملفات موثّقة في هذا الأرشيف.</div>
         )}
+        {displayedTree.length === 0 && !treeSearch.trim() && showFavoritesOnly && (
+          <div className="text-sm text-muted-foreground p-4 text-center">لا توجد ملفات مفضّلة في هذا الأرشيف.</div>
+        )}
         {displayedTree.map((node) => (
           <TreeRow
             key={node.name}
@@ -1661,6 +1710,8 @@ const RisenFileManager: React.FC = () => {
             toggleSelected={toggleSelected}
             onOpenFile={(p, o, s) => void openEntry(p, o, s)}
             onDownloadFile={(p, o, s) => void downloadFileDirect(p, o, s)}
+            favorites={favorites}
+            toggleFavorite={toggleFavorite}
           />
         ))}
       </div>

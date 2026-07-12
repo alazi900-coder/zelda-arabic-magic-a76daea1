@@ -1005,10 +1005,10 @@ function applyGlossaryPost(text: string, glossaryMap: Map<string, string>): stri
 }
 
 // --- Fetch with retry ---
-async function fetchWithRetry(url: string, retries = 2, delayMs = 1000): Promise<Response> {
+async function fetchWithRetry(url: string, retries = 2, delayMs = 1000, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, init);
       if (response.ok || response.status === 400) return response;
       if (attempt < retries) {
         await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
@@ -1022,6 +1022,15 @@ async function fetchWithRetry(url: string, retries = 2, delayMs = 1000): Promise
   }
   throw new Error('fetchWithRetry exhausted');
 }
+
+// Google's free translate endpoint blocks or 403s requests without a browser-like
+// User-Agent (Deno's default UA is empty). Use the same UA for every Google call.
+const GOOGLE_TRANSLATE_HEADERS: HeadersInit = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  'Accept': '*/*',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
 
 // --- Pick best translation from MyMemory matches ---
 function pickBestTranslation(data: any): string | null {
@@ -1178,22 +1187,47 @@ async function translateWithGoogle(
       }
 
       try {
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(textForTranslation)}`;
-        const response = await fetchWithRetry(url);
-        if (!response.ok) {
-          console.error(`Google Translate error for key ${entry.key}: ${response.status}`);
-          await response.text();
+        const q = encodeURIComponent(textForTranslation);
+        // Try multiple hosts — translate.googleapis.com is often blocked or
+        // rate-limited from Deno Deploy IPs; clients5 is the mobile fallback.
+        const urls = [
+          `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${q}`,
+          `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=ar&q=${q}`,
+        ];
+        let data: unknown = null;
+        let lastStatus = 0;
+        let lastBody = '';
+        for (const url of urls) {
+          const response = await fetchWithRetry(url, 2, 1000, { headers: GOOGLE_TRANSLATE_HEADERS });
+          lastStatus = response.status;
+          if (!response.ok) {
+            lastBody = (await response.text()).slice(0, 200);
+            continue;
+          }
+          try {
+            data = await response.json();
+            break;
+          } catch {
+            lastBody = 'invalid json';
+            continue;
+          }
+        }
+        if (data === null) {
+          console.error(`Google Translate error for key ${entry.key}: ${lastStatus} ${lastBody}`);
           continue;
         }
-        const data = await response.json();
 
         let translation = '';
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-          for (const segment of data[0]) {
-            if (Array.isArray(segment) && segment[0]) {
+        if (Array.isArray(data) && Array.isArray((data as unknown[])[0])) {
+          // translate.googleapis.com shape: [[[ "ترجمة", "src", ... ], ...], ...]
+          for (const segment of (data as unknown[])[0] as unknown[]) {
+            if (Array.isArray(segment) && typeof segment[0] === 'string') {
               translation += segment[0];
             }
           }
+        } else if (Array.isArray(data) && typeof (data as unknown[])[0] === 'string') {
+          // clients5 shape: ["ترجمة", "en"]
+          translation = (data as string[])[0];
         }
         translation = translation.trim();
 
@@ -1211,6 +1245,7 @@ async function translateWithGoogle(
       } catch (err) {
         console.error(`Google Translate error for key ${entry.key}:`, err);
       }
+
 
       if (i < entries.length - 1) {
         await new Promise(r => setTimeout(r, 100));

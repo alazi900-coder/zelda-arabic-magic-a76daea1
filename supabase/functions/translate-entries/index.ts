@@ -1187,22 +1187,47 @@ async function translateWithGoogle(
       }
 
       try {
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(textForTranslation)}`;
-        const response = await fetchWithRetry(url);
-        if (!response.ok) {
-          console.error(`Google Translate error for key ${entry.key}: ${response.status}`);
-          await response.text();
+        const q = encodeURIComponent(textForTranslation);
+        // Try multiple hosts — translate.googleapis.com is often blocked or
+        // rate-limited from Deno Deploy IPs; clients5 is the mobile fallback.
+        const urls = [
+          `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${q}`,
+          `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=ar&q=${q}`,
+        ];
+        let data: unknown = null;
+        let lastStatus = 0;
+        let lastBody = '';
+        for (const url of urls) {
+          const response = await fetchWithRetry(url, 2, 1000, { headers: GOOGLE_TRANSLATE_HEADERS });
+          lastStatus = response.status;
+          if (!response.ok) {
+            lastBody = (await response.text()).slice(0, 200);
+            continue;
+          }
+          try {
+            data = await response.json();
+            break;
+          } catch {
+            lastBody = 'invalid json';
+            continue;
+          }
+        }
+        if (data === null) {
+          console.error(`Google Translate error for key ${entry.key}: ${lastStatus} ${lastBody}`);
           continue;
         }
-        const data = await response.json();
 
         let translation = '';
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-          for (const segment of data[0]) {
-            if (Array.isArray(segment) && segment[0]) {
+        if (Array.isArray(data) && Array.isArray((data as unknown[])[0])) {
+          // translate.googleapis.com shape: [[[ "ترجمة", "src", ... ], ...], ...]
+          for (const segment of (data as unknown[])[0] as unknown[]) {
+            if (Array.isArray(segment) && typeof segment[0] === 'string') {
               translation += segment[0];
             }
           }
+        } else if (Array.isArray(data) && typeof (data as unknown[])[0] === 'string') {
+          // clients5 shape: ["ترجمة", "en"]
+          translation = (data as string[])[0];
         }
         translation = translation.trim();
 
@@ -1220,6 +1245,7 @@ async function translateWithGoogle(
       } catch (err) {
         console.error(`Google Translate error for key ${entry.key}:`, err);
       }
+
 
       if (i < entries.length - 1) {
         await new Promise(r => setTimeout(r, 100));

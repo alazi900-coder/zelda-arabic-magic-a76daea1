@@ -378,6 +378,13 @@ describe("resolveTplePropertyInfo", () => {
     const info = resolveTplePropertyInfo("Gender", "bTPropertyContainer<enum gEGender>");
     expect(info?.label).toBe("الجنس");
   });
+
+  it("documents Guild, FightAIMode, GuardStatus, AttitudeLock (gCNPC_PS)", () => {
+    expect(resolveTplePropertyInfo("Guild")?.label).toBe("الانتماء/الفصيل");
+    expect(resolveTplePropertyInfo("FightAIMode")?.label).toBe("نمط الذكاء الاصطناعي القتالي");
+    expect(resolveTplePropertyInfo("GuardStatus")?.label).toBe("حالة الحراسة");
+    expect(resolveTplePropertyInfo("AttitudeLock")?.label).toBe("قفل الموقف");
+  });
 });
 
 describe("applyTpleFloatEdits", () => {

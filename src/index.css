@@ -123,6 +123,10 @@
 .light .bg-orange-500\/20 { background-color: #f9731666 !important; }
 .light .bg-pink-500\/10 { background-color: #ec48994c !important; }
 .light .bg-pink-500\/20 { background-color: #ec489966 !important; }
+.light .bg-primary\/5 { background-color: #257e4a26 !important; }
+.light .bg-primary\/10 { background-color: #257e4a4c !important; }
+.light .bg-primary\/15 { background-color: #257e4a59 !important; }
+.light .bg-primary\/20 { background-color: #257e4a66 !important; }
 .light .bg-purple-500\/10 { background-color: #a855f74c !important; }
 .light .bg-purple-500\/15 { background-color: #a855f759 !important; }
 .light .bg-purple-500\/20 { background-color: #a855f766 !important; }
@@ -174,6 +178,14 @@
 .light .border-orange-500\/40 { border-color: #f973168c !important; }
 .light .border-pink-500\/20 { border-color: #ec489966 !important; }
 .light .border-pink-500\/30 { border-color: #ec489980 !important; }
+.light .border-primary\/10 { border-color: #257e4a4c !important; }
+.light .border-primary\/15 { border-color: #257e4a59 !important; }
+.light .border-primary\/20 { border-color: #257e4a66 !important; }
+.light .border-primary\/25 { border-color: #257e4a73 !important; }
+.light .border-primary\/30 { border-color: #257e4a80 !important; }
+.light .border-primary\/40 { border-color: #257e4a8c !important; }
+.light .border-primary\/50 { border-color: #257e4a99 !important; }
+.light .border-primary\/60 { border-color: #257e4ab2 !important; }
 .light .border-purple-500\/20 { border-color: #a855f766 !important; }
 .light .border-purple-500\/25 { border-color: #a855f773 !important; }
 .light .border-purple-500\/30 { border-color: #a855f780 !important; }

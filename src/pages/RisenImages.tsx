@@ -280,6 +280,10 @@ export default function RisenImages() {
   const [modifiedLog, setModifiedLog] = useState<Map<string, ModifiedRecord>>(new Map());
   const firstWriteConfirmedRef = useRef(false);
   const [busyPath, setBusyPath] = useState<string | null>(null);
+  // Replace flow: when on, the new image's own alpha channel is discarded and
+  // replaced with the original DDS's real alpha channel, so a replacement PNG
+  // with a baked-in background ends up transparent wherever the original was.
+  const [useOriginalAlpha, setUseOriginalAlpha] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -725,6 +729,18 @@ export default function RisenImages() {
             ? `PNG — مرّ عبر Canvas (أبعاد PNG ${directDecode.width}x${directDecode.height} لا تطابق الأصل ${original.width}x${original.height})`
             : "PNG — مرّ عبر Canvas (فشل الفك المباشر لصيغة PNG هذه)";
         }
+        if (useOriginalAlpha) {
+          const originalDecoded = decodeDdsToRgba(original.ddsBytes);
+          if (originalDecoded.supported && originalDecoded.width === imageData.width && originalDecoded.height === imageData.height) {
+            const newPixels = imageData.data;
+            const origPixels = originalDecoded.rgba;
+            for (let i = 3; i < newPixels.length; i += 4) newPixels[i] = origPixels[i];
+            importMethod += " — استُخدمت شفافية الصورة الأصلية";
+          } else {
+            toast.error("تعذّر استخدام شفافية الصورة الأصلية (صيغة الأصل غير مدعومة أو الأبعاد غير متطابقة) — استُخدمت شفافية الصورة الجديدة كما هي");
+          }
+        }
+
         const encoded = encodeToOriginalFormat(original, imageData);
         if ("error" in encoded) {
           toast.error(encoded.error);
@@ -762,7 +778,7 @@ export default function RisenImages() {
     } finally {
       setBusyPath(null);
     }
-  }, [selectedEntry, file, encodeToOriginalFormat, applyReplacementDds]);
+  }, [selectedEntry, file, encodeToOriginalFormat, applyReplacementDds, useOriginalAlpha]);
 
   const handleUndo = useCallback(async (path: string) => {
     const record = modifiedLog.get(path);
@@ -1551,6 +1567,15 @@ export default function RisenImages() {
                 <Button size="sm" variant="outline" onClick={handleExportRawDds}>
                   <Download className="w-3.5 h-3.5 ml-1" /> تنزيل DDS الخام
                 </Button>
+                <label className="flex items-start gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useOriginalAlpha}
+                    onChange={(e) => setUseOriginalAlpha(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>استخدم شفافية الصورة الأصلية (تتجاهل خلفية الصورة الجديدة وتستخدم مكانها مناطق الشفافية الحقيقية من الأصل)</span>
+                </label>
                 <Button
                   size="sm"
                   onClick={() => replaceInputRef.current?.click()}

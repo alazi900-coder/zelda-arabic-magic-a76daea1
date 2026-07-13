@@ -254,7 +254,7 @@ const Editor = () => {
   return (
     <TooltipProvider>
       <div
-        className={`min-h-screen flex flex-col relative overflow-x-hidden max-w-[100vw] ${(isRisen || isRisenEntries) ? "theme-risen" : ""}`}
+        className="min-h-screen flex flex-col relative overflow-x-hidden max-w-[100vw]"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -267,7 +267,6 @@ const Editor = () => {
           processPath={processPath}
           pageLocked={pageLocked}
           setPageLocked={setPageLocked}
-          isRisen={isRisen || isRisenEntries}
         />
 
         <div className="flex-1 py-4 md:py-6 px-3 md:px-4">

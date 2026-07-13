@@ -25,13 +25,21 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
       return saved >= MIN_LIMIT && saved <= MAX_LIMIT ? saved : DEFAULT_LIMIT;
     } catch { return DEFAULT_LIMIT; }
   });
+  // Free-typing buffer for the input — clamping happens on commit, not on every keystroke,
+  // so typing e.g. "37" isn't snapped to MIN_LIMIT after the first digit.
+  const [limitText, setLimitText] = React.useState(String(limit));
   // One undo level is enough — a later bulk split/join invalidates the previous snapshot.
   const undoSnapshotRef = React.useRef<Record<string, string> | null>(null);
 
   const setLimitPersisted = (v: number) => {
     const clamped = Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Number.isFinite(v) ? v : DEFAULT_LIMIT));
     setLimit(clamped);
+    setLimitText(String(clamped));
     try { localStorage.setItem(STORAGE_KEY, String(clamped)); } catch { /* localStorage unavailable */ }
+  };
+
+  const commitLimitText = () => {
+    setLimitPersisted(parseInt(limitText, 10));
   };
 
   const handleSplit = async () => {
@@ -99,8 +107,10 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
       <span className="text-xs text-muted-foreground font-body hidden md:inline">الحد الأقصى للسطر</span>
       <input
         type="number"
-        value={limit}
-        onChange={(e) => setLimitPersisted(parseInt(e.target.value, 10))}
+        value={limitText}
+        onChange={(e) => setLimitText(e.target.value)}
+        onBlur={commitLimitText}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
         min={MIN_LIMIT}
         max={MAX_LIMIT}
         title="الحد الأقصى للسطر"

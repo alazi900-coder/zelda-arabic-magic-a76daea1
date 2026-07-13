@@ -1142,6 +1142,27 @@ export default function RisenImages() {
       const composited = compositeIntoRegion(compositeBaseImageData.data, original.width, original.height, overlayData, selectionRect);
       const imageData = new ImageData(composited as Uint8ClampedArray<ArrayBuffer>, original.width, original.height);
 
+      let alphaNote = "";
+      if (useOriginalAlpha) {
+        const originalDecoded = decodeDdsToRgba(original.ddsBytes);
+        if (originalDecoded.supported && originalDecoded.width === original.width && originalDecoded.height === original.height) {
+          const pixels = imageData.data;
+          const origPixels = originalDecoded.rgba;
+          const x0 = Math.floor(selectionRect.x), y0 = Math.floor(selectionRect.y);
+          const x1 = Math.min(original.width, x0 + Math.floor(selectionRect.w));
+          const y1 = Math.min(original.height, y0 + Math.floor(selectionRect.h));
+          for (let y = y0; y < y1; y++) {
+            for (let x = x0; x < x1; x++) {
+              const i = (y * original.width + x) * 4 + 3;
+              pixels[i] = origPixels[i];
+            }
+          }
+          alphaNote = " — استُخدمت شفافية الصورة الأصلية داخل منطقة التركيب";
+        } else {
+          toast.error("تعذّر استخدام شفافية الصورة الأصلية (صيغة الأصل غير مدعومة أو الأبعاد غير متطابقة) — استُخدمت شفافية صورة التركيب كما هي");
+        }
+      }
+
       const encoded = encodeToOriginalFormat(original, imageData);
       if ("error" in encoded) {
         toast.error(encoded.error);
@@ -1154,7 +1175,7 @@ export default function RisenImages() {
         `المسار: ${selectedEntry.path}`,
         `الإزاحة داخل images.pak: ${selectedEntry.offset}   الحجم: ${selectedEntry.size}`,
         `منطقة التركيب: x=${selectionRect.x} y=${selectionRect.y} w=${selectionRect.w} h=${selectionRect.h}`,
-        `طريقة تحجيم صورة التركيب: ${overlayScaleMethod}`,
+        `طريقة تحجيم صورة التركيب: ${overlayScaleMethod}${alphaNote}`,
         ``,
         `== الترويسة الأصلية (قبل التركيب) ==`,
         describeDdsHeaderFlags(original),
@@ -1179,7 +1200,7 @@ export default function RisenImages() {
     } finally {
       setBusyPath(null);
     }
-  }, [selectedEntry, file, compositeOverlayImg, compositeOverlayFile, selectionRect, compositeBaseImageData, encodeToOriginalFormat, applyReplacementDds, exitCompositeMode]);
+  }, [selectedEntry, file, compositeOverlayImg, compositeOverlayFile, selectionRect, compositeBaseImageData, encodeToOriginalFormat, applyReplacementDds, exitCompositeMode, useOriginalAlpha]);
 
   // ==========================================================================
 
@@ -1382,6 +1403,15 @@ export default function RisenImages() {
               {compositeOverlayFile && (
                 <div className="text-[11px] text-muted-foreground text-center truncate">{compositeOverlayFile.name}</div>
               )}
+              <label className="flex items-start gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useOriginalAlpha}
+                  onChange={(e) => setUseOriginalAlpha(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>استخدم شفافية الصورة الأصلية داخل منطقة التركيب (يتجاهل خلفية صورة التركيب ويستخدم مكانها مناطق الشفافية الحقيقية من الأصل)</span>
+              </label>
               <div className="flex gap-2">
                 <Button
                   size="sm"

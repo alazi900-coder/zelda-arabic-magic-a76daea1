@@ -49,7 +49,7 @@ const RisenProcess = () => {
     addLog(`بدء قراءة الملف: ${file.name} (${file.size.toLocaleString()} بايت)`);
     try {
       const buffer = await file.arrayBuffer();
-      addLog("تم تحميل الملف في الذاكرة، جاري تحليل جداول TAB0...");
+      addLog("تم تحميل الملف في الذاكرة، جاري تحليل الجداول...");
 
       const result = extractEntriesFromP00(buffer, DEFAULT_ARABIC_TARGET_FIELD, { includeStageDir });
       addLog(`تم تحليل ${result.doc.tables.length} جدول: ${result.doc.tables.map((t) => t.name).join("، ")}`);

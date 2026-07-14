@@ -342,6 +342,66 @@ describe("findFirstByteMismatch", () => {
   });
 });
 
+describe("Risen 2 GAR3-wrapped .ximg (extra 8-byte marker before the GR01IM04 magic AND before the DDS blob)", () => {
+  /** Re-wraps a plain Risen 1 .ximg buffer (GR01IM04 at offset 0) into the Risen 2
+   * shape confirmed on a real file: "GAR3"+4 zero bytes before the GR01IM04 magic,
+   * and a second "GAR3"+4 zero bytes right before the DDS blob itself — patching
+   * ddsOffset/ddsSize (both relative to the GR01IM04 magic) to account for the
+   * inner marker exactly like the real Risen 2 asset does. */
+  function wrapAsGar3(plainXimg: Uint8Array): Uint8Array {
+    const view = new DataView(plainXimg.buffer, plainXimg.byteOffset, plainXimg.byteLength);
+    const DDS_OFFSET_FIELD = 0x10, DDS_SIZE_FIELD = 0x14;
+    const origDdsOffsetField = view.getUint32(DDS_OFFSET_FIELD, true);
+    const origDdsSizeField = view.getUint32(DDS_SIZE_FIELD, true);
+
+    const GAR3_MARKER = new Uint8Array(8); // "GAR3" + 4 zero bytes
+    GAR3_MARKER.set(new TextEncoder().encode("GAR3"), 0);
+
+    const before = plainXimg.subarray(0, origDdsOffsetField).slice();
+    const beforeView = new DataView(before.buffer);
+    beforeView.setUint32(DDS_OFFSET_FIELD, origDdsOffsetField + 8, true);
+    beforeView.setUint32(DDS_SIZE_FIELD, origDdsSizeField + 8, true);
+    const ddsAndAfter = plainXimg.subarray(origDdsOffsetField);
+
+    const out = new Uint8Array(8 + before.length + 8 + ddsAndAfter.length);
+    let p = 0;
+    out.set(GAR3_MARKER, p); p += 8;
+    out.set(before, p); p += before.length;
+    out.set(GAR3_MARKER, p); p += 8;
+    out.set(ddsAndAfter, p);
+    return out;
+  }
+
+  it("extracts the same DDS bytes/dimensions/format as the plain (Risen 1) equivalent", () => {
+    const plain = extractDdsFromXimg(numbersXimg);
+    const wrapped = wrapAsGar3(numbersXimg);
+    const result = extractDdsFromXimg(wrapped);
+    expect(result.width).toBe(plain.width);
+    expect(result.height).toBe(plain.height);
+    expect(result.fourCC).toBe(plain.fourCC);
+    expect(Array.from(result.ddsBytes)).toEqual(Array.from(plain.ddsBytes));
+    // ddsOffset shifts by exactly the two 8-byte markers (16 total).
+    expect(result.ddsOffset).toBe(plain.ddsOffset + 16);
+  });
+
+  it("splices a replacement in-place through the GAR3 wrapper, preserving the wrapper bytes exactly", () => {
+    const wrapped = wrapAsGar3(numbersXimg);
+    const { ddsBytes } = extractDdsFromXimg(wrapped);
+    const rebuilt = spliceReplacementDds(wrapped, ddsBytes);
+    expect(rebuilt.length).toBe(wrapped.length);
+    expect(Array.from(rebuilt)).toEqual(Array.from(wrapped));
+  });
+
+  it("validateReplacementDds works correctly against a GAR3-wrapped original", () => {
+    const wrapped = wrapAsGar3(numbersXimg);
+    const { width, height } = extractDdsFromXimg(wrapped);
+    const wrongDds = buildDdsFile("DXT3", width + 4, height, new Uint8Array(((width + 4) * height) / 2));
+    const validation = validateReplacementDds(wrapped, wrongDds);
+    expect(validation.ok).toBe(false);
+    expect(validation.reason).toMatch(/أبعاد/);
+  });
+});
+
 describe("wrapRawDdsAsXimg", () => {
   it("wraps raw DDS bytes so extractDdsFromXimg recovers them byte-identical", () => {
     const realDds = extractDdsFromXimg(numbersXimg).ddsBytes;

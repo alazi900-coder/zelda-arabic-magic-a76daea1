@@ -141,25 +141,43 @@ export function wrapRawDdsAsXimg(ddsBytes: Uint8Array): Uint8Array {
   return out;
 }
 
+/** Risen 2 wraps the whole GR01IM04 blob (and, separately, the DDS blob inside
+ * it) in an extra 8-byte "GAR3" + 4 zero-byte marker not present in Risen 1.
+ * Both wrappers are optional and self-describing — skip one if present. */
+const GAR3_WRAPPER_SIZE = 8;
+function skipGar3Wrapper(bytes: Uint8Array, offset: number): number {
+  return readAscii(bytes, offset, 4) === "GAR3" ? offset + GAR3_WRAPPER_SIZE : offset;
+}
+
 /** Locates and parses the embedded DDS blob inside a full .ximg file buffer. */
 export function extractDdsFromXimg(ximgBytes: Uint8Array): XimgDds {
   if (ximgBytes.length < 0x18) throw new Error("ملف .ximg غير مكتمل");
-  if (readAscii(ximgBytes, 0, 8) !== MAGIC) {
+
+  // Risen 2: an extra "GAR3" + 4 zero-byte marker precedes the GR01IM04 magic itself.
+  const magicStart = skipGar3Wrapper(ximgBytes, 0);
+  if (readAscii(ximgBytes, magicStart, 8) !== MAGIC) {
     throw new Error(`توقيع غير متوقع — ليس ملف .ximg صالح (GR01IM04)`);
   }
   const view = new DataView(ximgBytes.buffer, ximgBytes.byteOffset, ximgBytes.byteLength);
-  let ddsOffset = view.getUint32(DDS_OFFSET_FIELD, true);
-  let ddsSize = view.getUint32(DDS_SIZE_FIELD, true);
+  let ddsOffset = magicStart + view.getUint32(magicStart + DDS_OFFSET_FIELD, true);
+  let ddsSize = view.getUint32(magicStart + DDS_SIZE_FIELD, true);
 
   const looksLikeDds = (off: number) =>
     off + 4 <= ximgBytes.length && readAscii(ximgBytes, off, 4) === "DDS ";
 
   if (!looksLikeDds(ddsOffset)) {
-    // Defensive fallback if the header field ever doesn't hold — scan for the magic directly.
-    const scanned = indexOfBytes(ximgBytes, [0x44, 0x44, 0x53, 0x20]); // "DDS "
-    if (scanned < 0) throw new Error('لم يتم العثور على بيانات DDS داخل ملف .ximg');
-    ddsOffset = scanned;
-    ddsSize = ximgBytes.length - ddsOffset;
+    // Risen 2: a second "GAR3" + 4 zero-byte marker precedes the DDS blob itself.
+    const afterGar3 = skipGar3Wrapper(ximgBytes, ddsOffset);
+    if (looksLikeDds(afterGar3)) {
+      ddsSize -= (afterGar3 - ddsOffset);
+      ddsOffset = afterGar3;
+    } else {
+      // Defensive fallback if the header field ever doesn't hold — scan for the magic directly.
+      const scanned = indexOfBytes(ximgBytes, [0x44, 0x44, 0x53, 0x20]); // "DDS "
+      if (scanned < 0) throw new Error('لم يتم العثور على بيانات DDS داخل ملف .ximg');
+      ddsOffset = scanned;
+      ddsSize = ximgBytes.length - ddsOffset;
+    }
   }
 
   const ddsBytes = ximgBytes.subarray(ddsOffset, ddsOffset + ddsSize);

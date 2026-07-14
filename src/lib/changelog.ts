@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.63.1",
+    date: "2026-07-14",
+    changes: [
+      { kind: "added", text: "تسميات عربية للجداول الأربعة الجديدة الخاصة بـRisen 2 غير الموجودة في Risen 1: hud3.tab وgui_prototype.tab أُضيفا إلى فئة \"القوائم والواجهة\" الموجودة (بجانب hud.tab/hud2.tab)، وأُضيفت فئتان جديدتان: \"المشاهد السينمائية\" 🎬 لـcutscenes.tab و\"معلومات الخريطة\" 🗺️ لـmapinfo.tab." },
+    ],
+  },
+  {
     version: "1.63.0",
     date: "2026-07-14",
     changes: [

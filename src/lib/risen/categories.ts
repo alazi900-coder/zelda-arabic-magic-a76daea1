@@ -29,13 +29,15 @@ const KNOWN_TABLE_CATEGORIES: Array<{ id: string; label: string; emoji: string; 
   { id: "risen-quests", label: "المهام", emoji: "📜", tables: ["quests.tab"] },
   { id: "risen-skills", label: "المهارات", emoji: "🎓", tables: ["skills.tab"] },
   { id: "risen-documents", label: "الوثائق والكتب", emoji: "📖", tables: ["documents.tab"] },
-  { id: "risen-ui", label: "القوائم والواجهة", emoji: "🖥️", tables: ["hud.tab", "hud2.tab", "x360.tab"] },
+  { id: "risen-ui", label: "القوائم والواجهة", emoji: "🖥️", tables: ["hud.tab", "hud2.tab", "hud3.tab", "x360.tab", "gui_prototype.tab"] },
   { id: "risen-tutorial", label: "الدروس التعليمية", emoji: "🎯", tables: ["tutorial.tab", "tutorial_c.tab"] },
   {
     id: "risen-general", label: "نصوص عامة", emoji: "📋",
     tables: ["strings.tab", "npcinfo.tab", "focus.tab", "focus_unique.tab", "storyprints.tab", "achievements.tab"],
   },
   { id: "risen-combat-comments", label: "تعليقات القتال", emoji: "🗣️", tables: ["svms.tab"] },
+  { id: "risen-cutscenes", label: "المشاهد السينمائية", emoji: "🎬", tables: ["cutscenes.tab"] },
+  { id: "risen-mapinfo", label: "معلومات الخريطة", emoji: "🗺️", tables: ["mapinfo.tab"] },
 ];
 
 const TABLE_TO_CATEGORY = new Map<string, RisenCategory>();

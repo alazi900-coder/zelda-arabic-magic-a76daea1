@@ -4,7 +4,7 @@
 // Pre-splitting at word boundaries (~40 chars) renders correctly top-to-bottom
 // with no engine wrapping. Confirmed by in-game testing.
 import { RISEN_TAG_REGEX } from "./risen-tag-guard";
-import { detectBreakStyle } from "./balance-lines";
+import { detectBreakStyle, balanceChunk } from "./balance-lines";
 import type { ExtractedEntry } from "@/components/editor/types";
 
 const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -23,11 +23,17 @@ export function getLongestLineLength(text: string): number {
 /**
  * Split every logical line longer than `limit` at word boundaries (spaces
  * only — never inside a word). Existing line breaks are preserved exactly;
- * only over-limit lines get further split. A protected Risen tag (<Tag>,
- * $(name), ...) never contains a space, so treating whitespace-delimited
- * "words" as atomic units automatically keeps every tag intact — a tag
- * that would cross the limit moves whole to the next line, like any word.
- * A single word longer than `limit` stays whole on its own (over-limit) line.
+ * only over-limit lines get further split, using the same DP word-balancer
+ * as the Xenoblade line tools (`balanceChunk`) so words are distributed
+ * evenly instead of greedily filling each line first — a greedy fill can
+ * strand a single short word alone on a line when the next word doesn't
+ * fit, forcing an extra line. `hardMax` is passed as `limit` itself (no
+ * slack) to keep the existing guarantee that every resulting line is
+ * within `limit`. A protected Risen tag (<Tag>, $(name), ...) never
+ * contains a space, so treating whitespace-delimited "words" as atomic
+ * units automatically keeps every tag intact — a tag that would cross the
+ * limit moves whole to the next line, like any word. A single word longer
+ * than `limit` stays whole on its own (over-limit) line.
  */
 export function splitLongLines(text: string, limit: number, breakStyle: "\r\n" | "\n" = "\r\n"): string {
   const lines = (text || "").split(/\r\n|\n/);
@@ -37,19 +43,7 @@ export function splitLongLines(text: string, limit: number, breakStyle: "\r\n" |
       outLines.push(line);
       continue;
     }
-    const words = line.split(" ");
-    let current = "";
-    for (const word of words) {
-      if (current === "") {
-        current = word;
-      } else if (current.length + 1 + word.length <= limit) {
-        current += " " + word;
-      } else {
-        outLines.push(current);
-        current = word;
-      }
-    }
-    outLines.push(current);
+    outLines.push(...balanceChunk(line, limit, limit).split("\n"));
   }
   return outLines.join(breakStyle);
 }

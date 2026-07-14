@@ -95,7 +95,15 @@ function scoreSplit(lines: string[]): number {
 }
 
 
-function fixOrphans(lines: string[]): string[] {
+/** Merges `a` and `b` with a single space, or null if the result would exceed `maxLen`
+ * — a merge that busts the limit is worse than leaving the orphan alone (e.g. a single
+ * word that's over-limit by itself and must stay isolated on its own line). */
+function tryMerge(a: string, b: string, maxLen: number): string | null {
+  const merged = `${a} ${b}`.replace(/\s{2,}/g, ' ').trim();
+  return merged.length <= maxLen ? merged : null;
+}
+
+function fixOrphans(lines: string[], maxLen: number = Infinity): string[] {
   if (lines.length <= 1) return lines;
   const result = [...lines];
   let changed = true;
@@ -107,20 +115,35 @@ function fixOrphans(lines: string[]): string[] {
       const lexical = countLexicalWords(result[i]);
       if (lexical <= 1 && result.length > 1) {
         if (i === 0) {
-          result[1] = `${result[0]} ${result[1]}`.replace(/\s{2,}/g, ' ').trim();
+          const merged = tryMerge(result[0], result[1], maxLen);
+          if (merged === null) continue;
+          result[1] = merged;
           result.splice(0, 1);
         } else if (i === result.length - 1) {
-          result[i - 1] = `${result[i - 1]} ${result[i]}`.replace(/\s{2,}/g, ' ').trim();
+          const merged = tryMerge(result[i - 1], result[i], maxLen);
+          if (merged === null) continue;
+          result[i - 1] = merged;
           result.splice(i, 1);
         } else {
           const prevLen = result[i - 1].length;
           const nextLen = result[i + 1].length;
-          if (prevLen <= nextLen) {
-            result[i - 1] = `${result[i - 1]} ${result[i]}`.replace(/\s{2,}/g, ' ').trim();
+          const preferPrev = prevLen <= nextLen;
+          const mergedPrev = tryMerge(result[i - 1], result[i], maxLen);
+          const mergedNext = tryMerge(result[i], result[i + 1], maxLen);
+          if (preferPrev && mergedPrev !== null) {
+            result[i - 1] = mergedPrev;
+            result.splice(i, 1);
+          } else if (!preferPrev && mergedNext !== null) {
+            result[i + 1] = mergedNext;
+            result.splice(i, 1);
+          } else if (mergedPrev !== null) {
+            result[i - 1] = mergedPrev;
+            result.splice(i, 1);
+          } else if (mergedNext !== null) {
+            result[i + 1] = mergedNext;
             result.splice(i, 1);
           } else {
-            result[i + 1] = `${result[i]} ${result[i + 1]}`.replace(/\s{2,}/g, ' ').trim();
-            result.splice(i, 1);
+            continue;
           }
         }
         changed = true;
@@ -214,9 +237,11 @@ function dpSplitShielded(
 const XENO_N_HARD_BREAK = /\[\s*XENO\s*:\s*n\s*\]\s*\n?|\[\s*System\s*:\s*PageBreak\s*\]\s*\n?/g;
 
 /**
- * Internal: balance a SINGLE chunk (no [XENO:n ] inside) into lines using DP.
+ * Balance a SINGLE chunk (no [XENO:n ] inside) into lines using DP. Exported
+ * for reuse by other line-splitting tools (e.g. Risen's manual char-limit
+ * splitter) that need the same orphan-avoiding word balancing.
  */
-function balanceChunk(chunk: string, limit: number, hardMax: number, maxLines?: number): string {
+export function balanceChunk(chunk: string, limit: number, hardMax: number, maxLines?: number): string {
   const stripped = chunk.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
   if (!stripped) return stripped;
   const { shielded, map } = shieldTagsForBalance(stripped);
@@ -263,7 +288,7 @@ function balanceChunk(chunk: string, limit: number, hardMax: number, maxLines?: 
   }
 
   if (!bestResult) return stripped;
-  bestResult = fixOrphans(bestResult);
+  bestResult = fixOrphans(bestResult, hardMax);
   return bestResult.map((line) => unshieldTagsAfterBalance(line, map)).join('\n');
 }
 

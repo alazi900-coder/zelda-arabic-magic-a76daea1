@@ -64,6 +64,31 @@ describe("splitLongLines", () => {
     const text = "نص قصير لا يحتاج تقسيماً";
     expect(splitLongLines(text, 40, "\r\n")).toBe(text);
   });
+
+  it("does not strand a single word alone on a middle line when a better balance exists", () => {
+    // A naive greedy word-wrap fills line 1 first, then starts line 2 with
+    // whatever word didn't fit — if the *next* word also doesn't fit next to
+    // it, line 2 ends up as a single word while line 3 continues, exactly the
+    // reported bug. The balanced splitter should redistribute instead.
+    const word1 = "ا".repeat(16);
+    const word2 = "ب".repeat(16);
+    const word3 = "ج".repeat(17);
+    const word4 = "ح".repeat(25);
+    const word5 = "د".repeat(4);
+    const text = [word1, word2, word3, word4, word5].join(" ");
+
+    const result = splitLongLines(text, 40, "\n");
+    const lines = result.split("\n");
+
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(40);
+    // No middle line should be a lone word when it could have been paired
+    // with a neighbor without busting the limit.
+    for (let i = 1; i < lines.length - 1; i++) {
+      expect(lines[i].split(" ").length).toBeGreaterThan(1);
+    }
+    // Content is fully preserved, in order, no words cut.
+    expect(lines.join(" ")).toBe(text);
+  });
 });
 
 describe("getLongestLineLength", () => {

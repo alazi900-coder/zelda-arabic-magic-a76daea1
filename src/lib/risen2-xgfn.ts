@@ -46,16 +46,16 @@
  *         { charCode:u16, glyphIndex:u16 }
  *         (glyph 0 is a spare/fallback slot with no charmap entry pointing at it
  *         in the sample; the very first pair maps a control code 0x0C -> glyph 0)
- *   ...   measurement table: charmapPairCount + 1 records, 9 x int32 (36 bytes)
- *         each -- EXCEPT the last record, which is truncated to however many
- *         bytes remain before the DDS payload starts. Confirmed on ALL 77 real
- *         .xgfn entries extracted from a real fonts.pak: for every single one,
- *         (ddsOffset - (0xFE + charmapPairCount*4)) === charmapPairCount*36 + 4
- *         exactly — i.e. charmapPairCount full 36-byte records plus one final
- *         4-byte (single int32) record ending exactly at the DDS offset. The
- *         DDS start offset remains the authority for where the table ends;
- *         the +4 remainder is an empirical constant confirmed on every real
- *         sample, not assumed.
+ *   ...   measurement table: as many 9 x int32 (36-byte) records as fit
+ *         between the charmap end and the DDS payload start, plus one final
+ *         record truncated to however many bytes remain. The record count is
+ *         NOT charmapPairCount + 1 in general — that formula matched the
+ *         first two real samples tested (numbers-only, then Georgia_16_bo)
+ *         but broke on a third (Trajan Pro_8_bio._xgfn has charmapPairCount
+ *         + 2 records), proving it was coincidence, not a rule. The DDS
+ *         start offset is the ONLY reliable authority for where this table
+ *         ends — the parser derives the record count from
+ *         (ddsOffset - charmapEnd), never assumes it from any header field.
  *   ...   DDS file (standard header + pixel data) to EOF.
  *
  * Per-glyph measurement record fields — CONFIRMED on the real Georgia sample
@@ -160,13 +160,22 @@ export function parseXgfn(buffer: ArrayBuffer): XgfnDocument {
   const ddsOffset = indexOfDdsMagic(bytes, p);
   if (ddsOffset < 0) throw new Error("لم يتم العثور على بيانات DDS داخل ملف .xgfn");
 
-  // --- measurement table: numPairs + 1 records, 36 bytes each, except the
-  // last one which is truncated at the DDS boundary. ---
+  // --- measurement table: as many 36-byte records as fit between the
+  // charmap end and the DDS boundary, plus one final truncated record for
+  // any leftover bytes. The record count is NOT numPairs + 1 in general —
+  // confirmed wrong on a real font (Trajan Pro_8_bio._xgfn has numPairs + 2
+  // records) after the simpler assumption looked right on the first two
+  // samples tested. The DDS offset is the only reliable authority for where
+  // this table ends; the record count must be derived from it, never assumed. ---
+  const measurementTableBytes = ddsOffset - p;
+  const fullRecordCount = Math.floor(measurementTableBytes / MEASUREMENT_RECORD_SIZE);
+  const trailingBytes = measurementTableBytes - fullRecordCount * MEASUREMENT_RECORD_SIZE;
+  const recordLengths = Array(fullRecordCount).fill(MEASUREMENT_RECORD_SIZE);
+  if (trailingBytes > 0) recordLengths.push(trailingBytes);
+
   const measurements: XgfnMeasurement[] = [];
   let mp = p;
-  for (let i = 0; i < numPairs + 1; i++) {
-    const remaining = ddsOffset - mp;
-    const recLen = Math.min(MEASUREMENT_RECORD_SIZE, Math.max(0, remaining));
+  for (const recLen of recordLengths) {
     const rawBytes = bytes.slice(mp, mp + recLen);
     const fields: number[] = [];
     const recView = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);

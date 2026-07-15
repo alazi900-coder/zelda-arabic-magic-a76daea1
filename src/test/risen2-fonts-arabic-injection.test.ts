@@ -98,4 +98,47 @@ describe("End-to-end: generate Arabic glyphs -> merge -> inject into real fonts.
       expect(Buffer.from(rebuiltEntryContent).equals(Buffer.from(originalContent))).toBe(true);
     }
   });
+
+  it("batch mode: injects Arabic-merged versions of ALL 35 target fonts simultaneously (matches the real Chinese mod's scope)", () => {
+    const bytes = loadFixtureBytes();
+    const { header, tree } = openArchive(bytes);
+    const files = flattenFileNodes(tree);
+    const targets = files.filter((f) => f.path.startsWith("Trajan Pro_") || f.path.startsWith("Georgia_"));
+    expect(targets.length).toBe(35);
+
+    const replacements = new Map<string, Uint8Array>();
+    for (const { path, node } of targets) {
+      const decompressed = inflateFontsPakEntry(bytes, node);
+      const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength);
+      const doc = parseXgfn(buf);
+      const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e), makeGlyph(0x0660)]);
+      replacements.set(path, new Uint8Array(buildXgfn(merged)));
+    }
+
+    const result = buildFontsPakArchive(bytes, header, tree, replacements);
+    const { tree: rebuiltTree } = openArchive(result.bytes);
+    const rebuiltFiles = flattenFileNodes(rebuiltTree);
+    expect(rebuiltFiles.length).toBe(files.length);
+
+    // Every one of the 35 targets now contains the new Arabic entries.
+    for (const { path } of targets) {
+      const rebuiltEntry = rebuiltFiles.find((f) => f.path === path)!;
+      const content = inflateFontsPakEntry(result.bytes, rebuiltEntry.node);
+      const doc = parseXgfn(content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength));
+      const byChar = new Map(doc.charmap.map((r) => [r.charCode, r.glyphIndex]));
+      expect(byChar.get(0xfe8e)).toBeDefined();
+      expect(byChar.get(0x0660)).toBeDefined();
+    }
+
+    // Every non-target entry (font_headers.whdr + anything outside the 35) is untouched.
+    const targetPaths = new Set(targets.map((t) => t.path));
+    for (const { path, node } of rebuiltFiles) {
+      if (targetPaths.has(path)) continue;
+      const original = files.find((f) => f.path === path)!;
+      const originalContent = inflateFontsPakEntry(bytes, original.node);
+      const rebuiltEntryContent = inflateFontsPakEntry(result.bytes, node);
+      expect(rebuiltEntryContent.length).toBe(originalContent.length);
+      expect(Buffer.from(rebuiltEntryContent).equals(Buffer.from(originalContent))).toBe(true);
+    }
+  });
 });

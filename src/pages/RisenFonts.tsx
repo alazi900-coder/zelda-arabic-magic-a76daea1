@@ -105,6 +105,13 @@ const RisenFonts = () => {
   const [arabicMerged, setArabicMerged] = useState(false);
   const [injectBusy, setInjectBusy] = useState(false);
 
+  // Batch mode — generates + merges Arabic glyphs into all 35 target fonts
+  // at once and injects them into a single fonts.pak (matches the real
+  // Chinese mod's scope, confirmed via the fonts.p00 comparison: it modified
+  // exactly this same 35-file set, not a single font).
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<string>("");
+
   const decodeFontName = useCallback((headerPrefix: Uint8Array): string => {
     const nameBytes = headerPrefix.subarray(0x96, 0x96 + 64);
     return new TextDecoder("utf-16le").decode(nameBytes).replace(/\0+$/, "");
@@ -239,6 +246,37 @@ const RisenFonts = () => {
     }
   }, [doc, pakBytes, pakHeader, pakTree, selectedPath, pakName]);
 
+  const handleGenerateBatch = useCallback(async () => {
+    if (!pakBytes || !pakHeader || !pakTree || !arabicFontBytes) return;
+    setBatchBusy(true);
+    setBatchProgress("");
+    try {
+      const targets = pakEntries.filter((e) => isTargetFont(e.path));
+      const replacements = new Map<string, Uint8Array>();
+      for (let i = 0; i < targets.length; i++) {
+        const { path, node } = targets[i];
+        setBatchProgress(`(${i + 1}/${targets.length}) ${path}`);
+        const decompressed = inflateFontsPakEntry(pakBytes, node);
+        const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength);
+        const fontDoc = parseXgfn(buf);
+        const rowHeightPx = computeRowHeightPx(fontDoc);
+        const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, rowHeightPx);
+        const merged = appendArabicGlyphsToXgfn(fontDoc, glyphs);
+        replacements.set(path, new Uint8Array(buildXgfn(merged)));
+      }
+      const result = buildFontsPakArchive(pakBytes, pakHeader, pakTree, replacements);
+      const outName = (pakName ?? "fonts.pak").replace(/\.pak$/i, "") + "_ar_all35.pak";
+      downloadBlob(result.bytes, outName);
+      toast.success(`تم توليد ودمج وحقن الحروف العربية في ${targets.length} خطاً، وتنزيل "${outName}" (${result.bytes.length.toLocaleString()} بايت)`);
+    } catch (err) {
+      console.error(err);
+      toast.error("فشلت الدفعة: " + (err as Error).message);
+    } finally {
+      setBatchBusy(false);
+      setBatchProgress("");
+    }
+  }, [pakBytes, pakHeader, pakTree, arabicFontBytes, pakEntries, pakName]);
+
   const handleRoundTripTest = useCallback(() => {
     if (!doc || !originalBytes) return;
     try {
@@ -369,6 +407,35 @@ const RisenFonts = () => {
                     {entry.path}
                   </button>
                 ))}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-border space-y-3">
+                <h3 className="font-display font-bold text-sm">
+                  توليد ودمج الحروف العربية في الـ35 خطاً المستهدفة دفعة واحدة، وحقنها في fonts.pak
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  يكرر عملية التوليد والدمج على كل خط من قائمة الـ35 الخضراء (وليس خطاً واحداً فقط)، ثم يحقن الكل في نسخة واحدة من fonts.pak وينزّلها — الطريقة المؤكدة من مود صيني حقيقي ناجح.
+                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="block">
+                    <input
+                      type="file"
+                      accept=".ttf,.otf"
+                      className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleArabicFontFile(f); }}
+                    />
+                    <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm cursor-pointer hover:border-primary/50">
+                      <Upload className="w-4 h-4" /> {arabicFontName ?? "اختر خط TTF عربي"}
+                    </span>
+                  </label>
+                  <Button onClick={handleGenerateBatch} disabled={!arabicFontBytes || batchBusy} className="font-display gap-2">
+                    {batchBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    توليد + حقن + تنزيل ({pakEntries.filter((e) => isTargetFont(e.path)).length} خطاً)
+                  </Button>
+                </div>
+                {batchBusy && batchProgress && (
+                  <p className="text-xs text-muted-foreground font-mono">{batchProgress}</p>
+                )}
               </div>
             </div>
           )}

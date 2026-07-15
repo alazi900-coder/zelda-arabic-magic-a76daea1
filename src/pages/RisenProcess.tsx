@@ -41,6 +41,11 @@ const RisenProcess = () => {
     (async () => {
       const m = await idbGet<RisenMeta>(RISEN_META_KEY);
       if (m) setMeta(m);
+      // Restore the last actually-used game selection, so revisiting this page
+      // (e.g. via "افتح المحرر للترجمة" without re-uploading) doesn't visually
+      // reset to Risen 1 and risk a mislabeled re-upload later.
+      const g = await idbGet<string>("editor-source-game");
+      if (g === "risen2") setRisenGame("risen2");
     })();
   }, []);
 

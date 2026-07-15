@@ -37,6 +37,7 @@ const Risen = lazyWithIgnoredRef(() => import("./pages/Risen"));
 const RisenProcess = lazyWithIgnoredRef(() => import("./pages/RisenProcess"));
 const RisenImages = lazyWithIgnoredRef(() => import("./pages/RisenImages"));
 const RisenFileManager = lazyWithIgnoredRef(() => import("./pages/RisenFileManager"));
+const RisenFonts = lazyWithIgnoredRef(() => import("./pages/RisenFonts"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
@@ -75,6 +76,7 @@ const App = () => (
                 <Route path="/risen/process" element={<ErrorBoundary fallbackTitle="خطأ في معالجة Risen"><RisenProcess /></ErrorBoundary>} />
                 <Route path="/risen/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Risen"><RisenImages /></ErrorBoundary>} />
                 <Route path="/risen/files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Risen"><RisenFileManager /></ErrorBoundary>} />
+                <Route path="/risen2/fonts" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطوط Risen 2"><RisenFonts /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

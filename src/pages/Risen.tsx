@@ -133,6 +133,26 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
         </div>
       </section>
 
+      {/* Risen 2 Fonts Tool Section (experimental) */}
+      <section className="py-16 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="rounded-2xl border p-8 md:p-12 shadow-lg" style={{ borderColor: `${ACCENT}4d` }}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6" style={{ backgroundColor: `${ACCENT}1a` }}>
+              <span className="text-3xl">🔤</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-display font-bold mb-4">أداة خطوط Risen 2 (تجريبية)</h2>
+            <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
+              فحص ملفات .xgfn (خطوط Risen 2)، معاينة أطلس الحروف مع شبكة تشخيصية، واختبار round-trip — مرحلة تحليل الصيغة، قبل توليد الخطوط العربية
+            </p>
+            <Link to="/risen2/fonts">
+              <Button size="lg" className="font-display font-bold text-xl px-12 py-7 shadow-xl" style={{ backgroundColor: ACCENT, color: "white" }}>
+                🔤 افتح أداة الخطوط
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <GameInfoSection
         accentColor={ACCENT}
         secondaryColor={SECONDARY}

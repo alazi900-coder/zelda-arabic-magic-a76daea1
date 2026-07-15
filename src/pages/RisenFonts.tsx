@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package } from "lucide-react";
+import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package, Download } from "lucide-react";
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
 import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn } from "@/lib/risen2-arabic-font-gen";
@@ -10,10 +10,21 @@ import {
   parseImagesPakHeader,
   parseImagesPakFileInfoTree,
   inflateFontsPakEntry,
+  buildFontsPakArchive,
   type RisenPakHeader,
   type RisenPakNode,
   type RisenPakFileEntry,
 } from "@/lib/risen2-fontspak";
+
+function downloadBlob(bytes: Uint8Array, filename: string): void {
+  const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const ACCENT = "#4a7c3f";
 
@@ -80,14 +91,19 @@ const RisenFonts = () => {
   const [pakName, setPakName] = useState<string | null>(null);
   const [pakBytes, setPakBytes] = useState<Uint8Array | null>(null);
   const [pakHeader, setPakHeader] = useState<RisenPakHeader | null>(null);
+  const [pakTree, setPakTree] = useState<RisenPakNode[] | null>(null);
   const [pakEntries, setPakEntries] = useState<PakEntryRef[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
-  // Arabic glyph generator (Phase 3, preview-only) — merges rendered Arabic
-  // glyphs into the currently-displayed font for visual inspection.
+  // Arabic glyph generator (Phase 3) — merges rendered Arabic glyphs into
+  // the currently-displayed font for visual inspection, and (once merged)
+  // allows injecting the result back into the source fonts.pak for a real
+  // in-game test.
   const [arabicFontBytes, setArabicFontBytes] = useState<ArrayBuffer | null>(null);
   const [arabicFontName, setArabicFontName] = useState<string | null>(null);
   const [arabicBusy, setArabicBusy] = useState(false);
+  const [arabicMerged, setArabicMerged] = useState(false);
+  const [injectBusy, setInjectBusy] = useState(false);
 
   const decodeFontName = useCallback((headerPrefix: Uint8Array): string => {
     const nameBytes = headerPrefix.subarray(0x96, 0x96 + 64);
@@ -103,6 +119,7 @@ const RisenFonts = () => {
     setFileName(label);
     setFontLabel(decodeFontName(parsed.headerPrefix));
     setRoundTrip(null);
+    setArabicMerged(false);
     toast.success(`تم تحليل الملف: ${parsed.glyphCount} حرفاً`);
   }, [decodeFontName]);
 
@@ -142,6 +159,7 @@ const RisenFonts = () => {
       const entries = walkFileEntries(tree).filter((e) => e.path.endsWith("._xgfn"));
       setPakBytes(bytes);
       setPakHeader(header);
+      setPakTree(tree);
       setPakEntries(entries);
       setPakName(file.name);
       setSelectedPath(null);
@@ -150,6 +168,7 @@ const RisenFonts = () => {
       console.error(err);
       toast.error("فشل فتح fonts.pak: " + (err as Error).message);
       setPakBytes(null);
+      setPakTree(null);
       setPakEntries([]);
     } finally {
       setPakBusy(false);
@@ -193,7 +212,8 @@ const RisenFonts = () => {
       setDoc(merged);
       setOriginalBytes(null); // merged doc no longer corresponds to any single original byte stream
       setRoundTrip(null);
-      toast.success(`تم توليد ${glyphs.length} حرفاً عربياً ودمجها للمعاينة (بدون حقن في fonts.pak)`);
+      setArabicMerged(true);
+      toast.success(`تم توليد ${glyphs.length} حرفاً عربياً ودمجها للمعاينة`);
     } catch (err) {
       console.error(err);
       toast.error("فشل توليد الحروف العربية: " + (err as Error).message);
@@ -201,6 +221,23 @@ const RisenFonts = () => {
       setArabicBusy(false);
     }
   }, [doc, arabicFontBytes]);
+
+  const handleInjectAndDownload = useCallback(() => {
+    if (!doc || !pakBytes || !pakHeader || !pakTree || !selectedPath) return;
+    setInjectBusy(true);
+    try {
+      const newXgfnBytes = new Uint8Array(buildXgfn(doc));
+      const result = buildFontsPakArchive(pakBytes, pakHeader, pakTree, new Map([[selectedPath, newXgfnBytes]]));
+      const outName = (pakName ?? "fonts.pak").replace(/\.pak$/i, "") + "_ar_test.pak";
+      downloadBlob(result.bytes, outName);
+      toast.success(`تم حقن الخط وتنزيل "${outName}" (${result.bytes.length.toLocaleString()} بايت)`);
+    } catch (err) {
+      console.error(err);
+      toast.error("فشل حقن الخط في fonts.pak: " + (err as Error).message);
+    } finally {
+      setInjectBusy(false);
+    }
+  }, [doc, pakBytes, pakHeader, pakTree, selectedPath, pakName]);
 
   const handleRoundTripTest = useCallback(() => {
     if (!doc || !originalBytes) return;
@@ -423,7 +460,7 @@ const RisenFonts = () => {
             )}
 
             <div className="rounded-lg border border-border p-4 space-y-3">
-              <h3 className="font-display font-bold text-sm">توليد ودمج الحروف العربية (معاينة فقط — بلا حقن في fonts.pak)</h3>
+              <h3 className="font-display font-bold text-sm">توليد ودمج الحروف العربية</h3>
               <p className="text-xs text-muted-foreground">
                 يرسم كل نقاط اليونيكود التي يحتاجها نظام تشكيل Risen العربي الحالي (الأشكال السياقية + لامات الألف + الأرقام العربية الهندية) من خط TTF، ويضيفها أسفل أطلس هذا الخط لمعاينتها في الشبكة التشخيصية.
               </p>
@@ -443,6 +480,24 @@ const RisenFonts = () => {
                   {arabicBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "توليد ودمج"}
                 </Button>
               </div>
+
+              {arabicMerged && (
+                pakBytes && selectedPath ? (
+                  <div className="pt-3 border-t border-border space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      تم الدمج للمعاينة. لاختبار الخط فعلياً داخل اللعبة، احقنه في نسخة كاملة من fonts.pak وحمّلها، ثم استبدل بها fonts.pak في ملفات اللعبة (يُستحسن أخذ نسخة احتياطية من الملف الأصلي أولاً).
+                    </p>
+                    <Button onClick={handleInjectAndDownload} disabled={injectBusy} variant="outline" className="font-display gap-2">
+                      {injectBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      حقن الخط في fonts.pak وتنزيله
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-500">
+                    الدمج تم للمعاينة فقط — الحقن في fonts.pak يتطلب أن يكون هذا الخط مفتوحاً من رفع fonts.pak كامل (وليس ملف .xgfn منفرداً).
+                  </p>
+                )
+              )}
             </div>
 
             <div>

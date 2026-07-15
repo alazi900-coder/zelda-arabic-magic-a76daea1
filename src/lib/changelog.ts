@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.65.0",
+    date: "2026-07-15",
+    changes: [
+      { kind: "fixed", text: "فتح ملفات strings.pak/strings.p00 لـRisen 2 كان يفشل أحياناً برسالة \"incorrect header check\": بعض الأرشيفات الحقيقية تخلط جداول مضغوطة zlib وأخرى خام بلا ضغط إطلاقاً في نفس الملف (مثلاً strings.tab وmapinfo.tab وcutscenes.tab غير مضغوطة بينما items.tab وinfos.tab مضغوطة)، وكان الكود يفترض إما ضغط الكل أو عدمه فيحاول فك ضغط جدول خام فيفشل. أصبح كل جدول يُفحص على حدة (المؤشر: تساوي size1 وsize2 في FileInfoHdr يعني جدولاً خاماً) قراءةً وكتابةً — تحقّقت فعلياً برفع ملف strings.pak حقيقي مختلط (16 جدولاً، أكثر من 28 ألف نص) وفتحه بنجاح في المحرر." },
+      { kind: "added", text: "تسميات عربية لبنية مجلدات قوالب Risen 2 (templates.pak/.p00) في مدير الملفات: بنية Risen 2 مختلفة تماماً عن Risen 1 (Creatures بدل Monster، NPCs بدل NPC، تصنيفات أسلحة/دروع/عناصر جديدة كلياً...). أُضيفت تسميات لكل الـ120 مساراً الحقيقياً الموجودة في أرشيف templates.pak فعلي (2213 قالباً)، بالإضافة لإعادة استخدام المسارات المشتركة مع Risen 1 بنفس المعنى (Items وNavigation/* وObjects/Interacts وغيرها)." },
+    ],
+  },
+  {
     version: "1.64.0",
     date: "2026-07-14",
     changes: [

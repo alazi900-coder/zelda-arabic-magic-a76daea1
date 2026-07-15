@@ -61,6 +61,10 @@ export interface RisenTableRaw {
   versionMinor: number;
   timestampRaw: bigint; // 8 بايت، معناها الدقيق غير محسوم (FILETIME على الأرجح) — تُنسخ كما هي
   fields: RisenFieldRaw[];
+  /** هل هذا الجدول تحديداً مضغوط zlib على القرص؟ بعض ملفات Risen 2 تخلط جداول
+   * مضغوطة وأخرى خام في نفس الأرشيف (مؤكَّد على ملف strings.pak حقيقي) — لذا
+   * هذا علم لكل جدول على حدة، وليس قراراً واحداً للملف كله. */
+  compressed: boolean;
 }
 
 export interface RisenFileInfoEntryRaw {
@@ -82,7 +86,8 @@ export interface RisenP00Document {
   fileInfoEntries: RisenFileInfoEntryRaw[];
   /** 32 بايت غير محسومة المعنى بالكامل بين نهاية البيانات وبداية FileInfoHdr — تُنسخ حرفيًا */
   reservedTrailer: Uint8Array;
-  /** Risen 2: كل جدول (TAB1) مضغوط zlib على حدة داخل الملف. Risen 1 (TAB0) غير مضغوط إطلاقاً. */
+  /** هل حُدِّدت الجداول عبر FileInfoHdr (أسلوب Risen 2) بدل المسح الخام عن TAB0
+   * (أسلوب Risen 1)؟ الضغط الفعلي لكل جدول قد يختلف — انظر `RisenTableRaw.compressed`. */
   compressed: boolean;
 }
 
@@ -288,7 +293,7 @@ export function parseRisenP00Full(buffer: ArrayBuffer): RisenP00Document {
     compressed = false;
     tables = tab0Offsets.map((tableStart, i) => {
       const parsed = parseTableAt(bytes, view, tableStart);
-      return { name: `table_${i}.tab`, originalOffset: tableStart, ...parsed };
+      return { name: `table_${i}.tab`, originalOffset: tableStart, compressed: false, ...parsed };
     });
     lastTableEnd = computeTableEndOffsets(tables, tab0Offsets)[tables.length - 1];
 
@@ -301,20 +306,27 @@ export function parseRisenP00Full(buffer: ArrayBuffer): RisenP00Document {
       if (realName) table.name = realName;
     });
   } else {
-    // --- Risen 2: لا يوجد توقيع TAB0 خام — كل جدول مضغوط zlib على حدة، يُحدَّد
-    // موضعه وحجمه من FileInfoHdr مباشرة (بدل المسح الخام) ثم يُفكّ ضغطه ---
+    // --- Risen 2: لا يوجد توقيع TAB0 خام — كل جدول يُحدَّد موضعه وحجمه من
+    // FileInfoHdr مباشرة (بدل المسح الخام). بعض الملفات (مؤكَّد على strings.pak
+    // حقيقي) تخلط جداول مضغوطة zlib وأخرى خام في نفس الأرشيف — المؤشر الموثوق:
+    // size1 === size2 يعني خام (لا داعٍ لفك الضغط)، غير ذلك مضغوط ---
     const fullEntries = parseFileInfoHdr(bytes, view, fileInfoOffset);
     if (fullEntries.length === 0) {
       throw new Error("لم يتم العثور على أي جدول TAB0/TAB1 — هل هذا فعلاً ملف Risen strings.p00؟");
     }
     compressed = true;
     tables = fullEntries.map((entry) => {
-      const compressedBytes = bytes.subarray(entry.offset, entry.offset + entry.size1);
+      const tableIsCompressed = entry.size1 !== entry.size2;
+      const rawBytes = bytes.subarray(entry.offset, entry.offset + entry.size1);
       let decompressed: Uint8Array;
-      try {
-        decompressed = inflate(compressedBytes);
-      } catch (err) {
-        throw new Error(`تعذّر فك ضغط جدول "${entry.name}": ${(err as Error).message}`);
+      if (tableIsCompressed) {
+        try {
+          decompressed = inflate(rawBytes);
+        } catch (err) {
+          throw new Error(`تعذّر فك ضغط جدول "${entry.name}": ${(err as Error).message}`);
+        }
+      } else {
+        decompressed = rawBytes;
       }
       const dView = new DataView(decompressed.buffer, decompressed.byteOffset, decompressed.byteLength);
       const tableMagic = new TextDecoder("ascii").decode(decompressed.subarray(0, 4));
@@ -322,7 +334,7 @@ export function parseRisenP00Full(buffer: ArrayBuffer): RisenP00Document {
         throw new Error(`صيغة جدول غير معروفة "${tableMagic}" في "${entry.name}"`);
       }
       const parsed = parseTableAt(decompressed, dView, 0);
-      return { name: entry.name, originalOffset: entry.offset, ...parsed };
+      return { name: entry.name, originalOffset: entry.offset, compressed: tableIsCompressed, ...parsed };
     });
     lastTableEnd = fullEntries[fullEntries.length - 1].offset + fullEntries[fullEntries.length - 1].size1;
     fileInfoEntries = fullEntries.map(({ name, pad, timestamps, marker2, zero1, zero2 }) => ({ name, pad, timestamps, marker2, zero1, zero2 }));
@@ -442,9 +454,10 @@ function serializeTable(table: RisenTableRaw): Uint8Array {
 }
 
 export function buildRisenP00(doc: RisenP00Document): ArrayBuffer {
-  // 1) نسلسل كل جدول أولاً — خام دائماً؛ نضغطه بعدها فقط إن كان doc.compressed
+  // 1) نسلسل كل جدول أولاً — خام دائماً؛ نضغطه بعدها فقط إن كان الجدول نفسه
+  // مضغوطاً أصلاً (كل جدول له علمه الخاص — بعض ملفات Risen 2 تخلط مضغوطاً وخاماً)
   const rawTableBytes = doc.tables.map(serializeTable);
-  const writtenTableBytes = doc.compressed ? rawTableBytes.map((raw) => deflate(raw)) : rawTableBytes;
+  const writtenTableBytes = rawTableBytes.map((raw, i) => (doc.tables[i].compressed ? deflate(raw) : raw));
   // size2 = الحجم الحقيقي دائماً؛ size1 = الحجم المكتوب فعلياً (مضغوط أو لا)
   const uncompressedSizes = rawTableBytes.map((b) => b.length);
   const writtenSizes = writtenTableBytes.map((b) => b.length);

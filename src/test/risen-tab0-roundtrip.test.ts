@@ -181,6 +181,71 @@ function wrapAsFileCompressed(rawTables: Uint8Array[], names: string[]): ArrayBu
   return out.buffer;
 }
 
+/** Wrap raw TAB1 table byte blocks into a Risen-2-shaped file with PER-TABLE
+ * compression — some tables zlib-deflated, some left raw — matching a real
+ * strings.pak confirmed to mix both in the same archive (size1===size2 marks
+ * a raw table in FileInfoHdr; anything else is zlib-compressed). */
+function wrapAsFileMixedCompression(rawTables: Uint8Array[], names: string[], isCompressed: boolean[]): ArrayBuffer {
+  const HEADER_SIZE = 48;
+  const reservedTrailer = new Uint8Array(32);
+  const writtenTables = rawTables.map((t, i) => (isCompressed[i] ? deflate(t) : t));
+
+  const tableOffsets: number[] = [];
+  let cursor = HEADER_SIZE;
+  for (const t of writtenTables) {
+    tableOffsets.push(cursor);
+    cursor += t.length;
+  }
+  const dataEnd = cursor;
+  const fileInfoOffset = dataEnd + reservedTrailer.length;
+
+  const entryBytesList = names.map((name, i) => {
+    const nameBytes = new TextEncoder().encode(name);
+    const size = 2 + 2 + 4 + nameBytes.length + 1 + 8 + 24 + 4 + 4 + 4 + 4 + 4;
+    const buf = new Uint8Array(size);
+    const dv = new DataView(buf.buffer);
+    let p = 0;
+    dv.setUint16(p, 32, true); p += 2; // marker1
+    dv.setUint16(p, 2, true); p += 2; // marker2
+    dv.setUint32(p, nameBytes.length, true); p += 4;
+    buf.set(nameBytes, p); p += nameBytes.length;
+    buf[p] = 0; p += 1; // pad
+    dv.setBigInt64(p, BigInt(tableOffsets[i]), true); p += 8; // offset
+    dv.setBigInt64(p, 0n, true); p += 8; // timestamp1
+    dv.setBigInt64(p, 0n, true); p += 8; // timestamp2
+    dv.setBigInt64(p, 0n, true); p += 8; // timestamp3
+    dv.setUint32(p, 131104, true); p += 4; // marker2_field
+    dv.setUint32(p, 0, true); p += 4; // zero1
+    dv.setUint32(p, 0, true); p += 4; // zero2
+    dv.setUint32(p, writtenTables[i].length, true); p += 4; // size1
+    dv.setUint32(p, rawTables[i].length, true); p += 4; // size2 — equals size1 iff raw
+    return buf;
+  });
+
+  let fileInfoSize = 4;
+  for (const e of entryBytesList) fileInfoSize += e.length;
+  const totalSize = fileInfoOffset + fileInfoSize;
+
+  const out = new Uint8Array(totalSize);
+  const outView = new DataView(out.buffer);
+  outView.setUint32(0, 1, true); // headerVersion
+  out.set(new TextEncoder().encode("G3V0"), 4);
+  outView.setBigInt64(0x08, 0n, true);
+  outView.setBigInt64(0x10, 0n, true);
+  outView.setBigInt64(0x18, 0x30n, true); // dataAddress
+  outView.setBigInt64(0x20, BigInt(fileInfoOffset - 0x20), true);
+  outView.setBigInt64(0x28, BigInt(totalSize), true);
+
+  for (let i = 0; i < writtenTables.length; i++) out.set(writtenTables[i], tableOffsets[i]);
+  out.set(reservedTrailer, dataEnd);
+
+  let p = fileInfoOffset;
+  outView.setUint32(p, entryBytesList.length, true); p += 4;
+  for (const e of entryBytesList) { out.set(e, p); p += e.length; }
+
+  return out.buffer;
+}
+
 function buildSynthetic(): ArrayBuffer {
   const table1 = buildTab0([
     { name: "ID", values: ["Q1", "Q2"] },
@@ -479,5 +544,61 @@ describe("Risen 2 (TAB1, zlib-compressed tables)", () => {
     expect(newT2Offset).not.toBe(oldT2Offset);
     expect(reparsed.tables[1].name).toBe("infos.tab");
     expect(reparsed.tables[1].fields[1].values).toEqual(["Dialog line"]);
+  });
+});
+
+describe("Risen 2 mixed-compression strings.pak (some tables zlib, some raw, in the same archive)", () => {
+  function buildSyntheticMixed(): ArrayBuffer {
+    const table1 = buildTab0([
+      { name: "ID", values: ["Q1", "Q2"] },
+      { name: "English_Text", values: ["Hello world", "Second quest"] },
+    ], "TAB1");
+    const table2 = buildTab0([
+      { name: "ID", values: ["I1"] },
+      { name: "English_Text", values: ["Dialog line"] },
+    ], "TAB1");
+    // table1 stays raw (size1 === size2 in FileInfoHdr, like the real strings.tab/
+    // mapinfo.tab/cutscenes.tab entries), table2 is zlib-compressed (like svms.tab/items.tab).
+    return wrapAsFileMixedCompression([table1, table2], ["strings.tab", "svms.tab"], [false, true]);
+  }
+
+  it("parses both a raw table and a compressed table from the same archive without throwing", () => {
+    const buffer = buildSyntheticMixed();
+    const doc = parseRisenP00Full(buffer);
+    expect(doc.tables.length).toBe(2);
+    expect(doc.tables[0].name).toBe("strings.tab");
+    expect(doc.tables[0].compressed).toBe(false);
+    expect(doc.tables[0].fields[1].values).toEqual(["Hello world", "Second quest"]);
+    expect(doc.tables[1].name).toBe("svms.tab");
+    expect(doc.tables[1].compressed).toBe(true);
+    expect(doc.tables[1].fields[1].values).toEqual(["Dialog line"]);
+  });
+
+  it("rebuild without changes round-trips (raw table stays raw, compressed table stays compressed)", () => {
+    const buffer = buildSyntheticMixed();
+    const doc = parseRisenP00Full(buffer);
+    const rebuilt = buildRisenP00(doc);
+    const reparsed = parseRisenP00Full(rebuilt);
+    expect(reparsed.tables[0].compressed).toBe(false);
+    expect(reparsed.tables[1].compressed).toBe(true);
+    expect(reparsed.tables[0].fields[1].values).toEqual(["Hello world", "Second quest"]);
+    expect(reparsed.tables[1].fields[1].values).toEqual(["Dialog line"]);
+  });
+
+  it("rebuild with Arabic overwrite on the raw table preserves the other (compressed) table untouched", () => {
+    const buffer = buildSyntheticMixed();
+    const doc = parseRisenP00Full(buffer);
+    const translations = new Map<string, string>();
+    translations.set(makeKey("strings.tab", "English_Text", 0), "مرحبا بالعالم");
+
+    applyTranslations(doc, translations);
+    const rebuilt = buildRisenP00(doc);
+    const reparsed = parseRisenP00Full(rebuilt);
+
+    expect(reparsed.tables[0].compressed).toBe(false);
+    expect(reparsed.tables[0].fields[1].values[0]).toBe("مرحبا بالعالم");
+    expect(reparsed.tables[0].fields[1].values[1]).toBe("Second quest");
+    expect(reparsed.tables[1].compressed).toBe(true);
+    expect(reparsed.tables[1].fields[1].values[0]).toBe("Dialog line");
   });
 });

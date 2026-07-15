@@ -189,35 +189,18 @@ const RisenFonts = () => {
 
     if (showGrid) {
       ctx.save();
+      // Per-glyph atlas bounding box: fields[0..3] = [x0, y0, x1, y1] —
+      // confirmed by checking real ink pixel bounds against these fields on
+      // the Georgia sample (276 glyphs): the actual non-transparent pixels
+      // always sit comfortably inside this rectangle, for both single-row
+      // (numbers) and multi-row (full-alphabet) atlases alike.
       ctx.strokeStyle = "rgba(255, 0, 128, 0.85)";
       ctx.lineWidth = 1;
       for (const m of doc.measurements) {
-        const atlasX = m.fields[0];
-        if (atlasX === undefined || atlasX < 0 || atlasX > decoded.width) continue;
-        ctx.beginPath();
-        ctx.moveTo(atlasX + 0.5, 0);
-        ctx.lineTo(atlasX + 0.5, decoded.height);
-        ctx.stroke();
-      }
-      // Tentative cell-height/baseline overlay (fields[3]/[4] hypothesis — unconfirmed).
-      ctx.strokeStyle = "rgba(0, 200, 255, 0.7)";
-      ctx.setLineDash([4, 3]);
-      const withGuess = doc.measurements.find((m) => m.fields.length > 4);
-      if (withGuess) {
-        const cellHeight = withGuess.fields[3];
-        const baseline = withGuess.fields[4];
-        if (cellHeight > 0 && cellHeight < decoded.height) {
-          ctx.beginPath();
-          ctx.moveTo(0, cellHeight + 0.5);
-          ctx.lineTo(decoded.width, cellHeight + 0.5);
-          ctx.stroke();
-        }
-        if (baseline > 0 && baseline < decoded.height) {
-          ctx.beginPath();
-          ctx.moveTo(0, baseline + 0.5);
-          ctx.lineTo(decoded.width, baseline + 0.5);
-          ctx.stroke();
-        }
+        const [x0, y0, x1, y1] = m.fields;
+        if (x0 === undefined || x1 === undefined || y1 === undefined) continue;
+        if (x1 <= x0 || y1 <= y0) continue; // skip zero-size cells (e.g. space)
+        ctx.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0, y1 - y0);
       }
       ctx.restore();
     }
@@ -390,7 +373,7 @@ const RisenFonts = () => {
 
             <div>
               <p className="text-xs text-muted-foreground mb-2">
-                الخطوط الوردية: مواضع atlas_x لكل حرف (مؤكدة). الخطوط الزرقاء المتقطعة: تخمين حالي لارتفاع الخلية/خط الأساس (غير مؤكد بعد — قارنه بصرياً مع الحروف).
+                المربعات الوردية: صندوق كل حرف في الأطلس (fields[0..3] = [x0,y0,x1,y1]) — تحقق منها فعلياً بمطابقة بكسلات الحروف الحقيقية داخلها على عيّنة Georgia (276 حرفاً).
               </p>
               <div className="overflow-auto rounded-lg border border-border bg-[repeating-conic-gradient(#0002_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-2">
                 <canvas ref={canvasRef} className="max-w-none" style={{ imageRendering: "pixelated" }} />

@@ -58,14 +58,24 @@
  *         sample, not assumed.
  *   ...   DDS file (standard header + pixel data) to EOF.
  *
- * Per-glyph measurement record fields — index [0] (atlas_x) is confirmed (a
- * monotonically increasing sequence matching the real glyph positions).
- * Fields [1]-[8] are NOT yet semantically confirmed: fields [3]=13 and [4]=5
- * are constant across all glyphs in the sample (plausibly cell-height/baseline
- * for a 7pt font) but this is a hypothesis pending visual confirmation via the
- * diagnostic grid tool (see RisenFonts.tsx) — do not rely on their meaning for
- * anything beyond display/inspection until confirmed against a live in-game
- * screenshot or a second real sample at a different point size.
+ * Per-glyph measurement record fields — CONFIRMED on the real Georgia sample
+ * (276 glyphs, multi-row atlas) by decoding the DDS to RGBA and checking that
+ * real ink (alpha > 0) pixels for known characters ('i', 'l', 'W', 'M', 'A',
+ * 'g', '0', '.') always fall strictly inside the declared rectangle, for
+ * glyphs on every row of the atlas (not just a single-row numbers sample):
+ *
+ *   fields[0] = x0 (left)    \  atlas bounding box containing the glyph's
+ *   fields[1] = y0 (top)      \ pixels, with a few pixels of packer padding
+ *   fields[2] = x1 (right)    / on each side (e.g. 'i' cell [143,0]-[152,27]
+ *   fields[3] = y1 (bottom)  /  vs. real ink [145,5]-[150,20]).
+ *   fields[4] = advance width — confirmed via the space character (charCode
+ *               32), whose cell is degenerate ([0,0]-[0,0], no ink) yet still
+ *               has fields[4] = 5, proving it's an independent typographic
+ *               advance metric, not derived from the cell box.
+ *
+ * Fields [5]-[8] are NOT yet semantically confirmed (plausible candidates:
+ * left/top bearing, kerning, or a secondary advance) — do not rely on their
+ * meaning for anything beyond display/inspection.
  */
 
 const DDS_MAGIC = [0x44, 0x44, 0x53, 0x20]; // "DDS "

@@ -31,6 +31,7 @@ const RisenProcess = () => {
   const [includeStageDir, setIncludeStageDir] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [dragOver, setDragOver] = useState(false);
+  const [risenGame, setRisenGame] = useState<"risen1" | "risen2">("risen1");
 
   const addLog = useCallback((msg: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString("ar-SA")}] ${msg}`]);
@@ -89,7 +90,7 @@ const RisenProcess = () => {
         clearedKeys: new Set(),
       };
       await idbSet("editorState", editorState);
-      await idbSet("editor-source-game", "risen");
+      await idbSet("editor-source-game", risenGame);
       addLog(`تم تحميل ${result.entries.length} نص في المحرر`);
 
       // Store originals map so editor "detectPreTranslated" behaves sanely
@@ -108,7 +109,7 @@ const RisenProcess = () => {
     } finally {
       setBusy(false);
     }
-  }, [navigate, addLog, includeStageDir]);
+  }, [navigate, addLog, includeStageDir, risenGame]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -168,7 +169,32 @@ const RisenProcess = () => {
           <Link to="/risen" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
             <ArrowRight className="w-4 h-4" /> الرجوع
           </Link>
-          <h1 className="text-2xl font-display font-bold">معالجة Risen 1</h1>
+          <h1 className="text-2xl font-display font-bold">معالجة Risen</h1>
+        </div>
+
+        {/* Game selector — determines which AI prompts/lore/labels apply (Risen 1 vs Risen 2) */}
+        <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+          <p className="text-sm font-display font-bold mb-3">اختر إصدار اللعبة قبل الرفع:</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setRisenGame("risen1")}
+              className={`rounded-lg border-2 p-4 text-center transition-colors ${risenGame === "risen1" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
+            >
+              <div className="font-display font-bold text-lg">Risen 1</div>
+              <div className="text-xs text-muted-foreground">عالم فانتازيا قروسطي</div>
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setRisenGame("risen2")}
+              className={`rounded-lg border-2 p-4 text-center transition-colors ${risenGame === "risen2" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
+            >
+              <div className="font-display font-bold text-lg">Risen 2</div>
+              <div className="text-xs text-muted-foreground">عالم قراصنة (Dark Waters)</div>
+            </button>
+          </div>
         </div>
 
         {/* Upload */}

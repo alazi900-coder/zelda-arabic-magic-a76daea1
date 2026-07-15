@@ -34,7 +34,7 @@ interface RequestBody {
   /** Which game this entry is from — the system prompt names it correctly instead
    * of always assuming Xenoblade. Defaults to Xenoblade for backward compatibility
    * with callers that don't send it yet. */
-  game?: 'xenoblade' | 'risen';
+  game?: 'xenoblade' | 'risen' | 'risen2';
   /** Risen: the speaking NPC (Owner/Role fields from infos.tab), when known. */
   speaker?: Speaker;
   /** Risen: the entry's raw id/key (e.g. "HUD2_Damage_Edge") — grounds the model instead of it guessing from a bare filename. */
@@ -48,10 +48,11 @@ const DEFAULT_LOVABLE_MODEL = 'google/gemini-3-flash-preview';
 const GAME_LABELS: Record<string, string> = {
   xenoblade: 'سلسلة Xenoblade Chronicles',
   risen: 'لعبة Risen 1 (محرك Genome — عالم RPG مفتوح بطابع قروسطي)',
+  risen2: 'لعبة Risen 2: Dark Waters (محرك Genome — عالم قراصنة مفتوح في الكاريبي)',
 };
 
 function buildSystemPrompt(game?: string): string {
-  const isRisen = game === 'risen';
+  const isRisen = game === 'risen' || game === 'risen2';
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
   const risenTagRule = isRisen
     ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'
@@ -266,7 +267,7 @@ Deno.serve(async (req) => {
   // Risen-only proactive tag masking — the model never sees the raw tag, so it
   // can't mistranslate it. Restored on every returned suggestion before responding.
   let risenTags: string[] = [];
-  if (body.game === 'risen') {
+  if (body.game === 'risen' || body.game === 'risen2') {
     const { masked, tags } = maskRisenTags(body.target.original);
     body = { ...body, target: { ...body.target, original: masked } };
     risenTags = tags;

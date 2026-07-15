@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     const { entries, glossary, game } = await req.json() as {
       entries: { key: string; original: string; translation: string }[];
       glossary?: string;
-      game?: 'xenoblade' | 'risen';
+      game?: 'xenoblade' | 'risen' | 'risen2';
     };
 
     if (!entries || entries.length === 0) {
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     // Mask Risen tags (<Exit>, $(name), ...) before they reach the model —
     // this function's whole job is "translate remaining English words", and
     // without masking it would happily "translate" a bare tag too.
-    const isRisen = game === 'risen';
+    const isRisen = game === 'risen' || game === 'risen2';
     const risenTagsByIndex: string[][] = [];
     const promptEntries = isRisen
       ? entries.map((e) => {
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       glossarySection = `\n\nUse this glossary for consistent terminology:\n${glossary}\n`;
     }
 
-    const gameNameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles';
+    const gameNameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles';
     const prompt = `You are a professional Arabic game translator for ${gameNameLabel}.
 ${isRisen ? '\n' + RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}
 The following translations contain a mix of Arabic and English text. Your job is to translate the remaining English words into Arabic while keeping the sentence natural and coherent.

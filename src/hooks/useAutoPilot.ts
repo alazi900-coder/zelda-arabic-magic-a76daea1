@@ -63,6 +63,8 @@ interface UseAutoPilotProps {
   filteredEntries: ExtractedEntry[];
   customPromptInstructions: string;
   aiRoutingMode?: 'free' | 'paid' | 'auto';
+  /** Which Risen game the loaded entries belong to (manually chosen on /risen/process) — picks the right game's AI prompt lore. No effect for non-Risen sessions. */
+  risenVariant: 'risen1' | 'risen2';
 }
 
 const AI_BATCH = 10;
@@ -80,7 +82,7 @@ export function useAutoPilot({
   translationProvider, userGeminiKey, userDeepSeekKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
-  customPromptInstructions, aiRoutingMode = 'paid',
+  customPromptInstructions, aiRoutingMode = 'paid', risenVariant,
 }: UseAutoPilotProps) {
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState("");
@@ -127,7 +129,7 @@ export function useAutoPilot({
       aiModel: forceModel || (prov === 'gemini' ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
-      game: /\.tab$/i.test(state?.entries?.[0]?.msbtFile || '') ? 'risen' : 'xenoblade',
+      game: /\.tab$/i.test(state?.entries?.[0]?.msbtFile || '') ? risenVariant : 'xenoblade',
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
       myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode, state]);

@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     // Mask Risen tags before ANY prompt text is built — the response here is a
     // single combined string (per-entry masking isn't needed), so one shared
     // masker for the whole request is enough; unmask the final result once.
-    const isRisen = game === 'risen';
+    const isRisen = game === 'risen' || game === 'risen2';
     const masker = isRisen ? createRisenMasker() : null;
     const pt = (s: string): string => (masker && typeof s === 'string' ? masker.mask(s) : s);
 
@@ -78,7 +78,7 @@ Rules:
         });
       }
       const glossaryContext = glossary ? `\nGame glossary for reference:\n${glossary.slice(0, 3000)}` : '';
-      const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+      const gameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
       systemPrompt = `You are a professional video game localization QA reviewer for ${gameLabel} Arabic translation.
 ${isRisen ? RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}Review each translation for contextual accuracy in the game's universe.
 Check for:

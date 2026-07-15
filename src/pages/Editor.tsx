@@ -115,7 +115,7 @@ const Editor = () => {
     }
   }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.aiModel]);
 
-  const isRisen = sourceGame === "risen";
+  const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2";
   const processPath = isRisen ? "/risen/process" : "/process";
   // Derived from the actually-loaded entries (not the "editor-source-game" idb
   // flag above, which is never reset and can go stale across projects) — used

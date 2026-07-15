@@ -147,6 +147,24 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
 6. Use natural Arabic equivalents for generic medieval-fantasy/RPG concepts based on their plain English meaning — e.g. magic → سحر, mana → مانا, spell → تعويذة, potion → جرعة, guild → نقابة, temple → معبد. Never substitute a term from another game's lore (e.g. never translate "magic" as "إيثر" — that is a Xenoblade-specific term with no meaning here).`;
 
+/** System prompt for Risen 2 (Dark Waters) — same structural rules, but a
+ * pirate/Caribbean setting instead of Risen 1's medieval fantasy. Both games
+ * share the same Genome engine and file formats, but different lore/terminology. */
+const RISEN2_SYSTEM_PROMPT = `You are a professional video game text translator working on Risen 2: Dark Waters (Genome engine — pirate-themed open-world RPG, sequel to Risen 1). This is NOT Xenoblade Chronicles, and NOT Risen 1's medieval-fantasy setting — do not use terminology or lore from either.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, TAG_2, ... (technical tags)
+   - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
+   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   - ⟦0⟧, ⟦1⟧, ... (Risen game tags — button prompts, variables, save-screen codes). Copy them EXACTLY as-is, in the same relative position as the input. Never translate what they might represent — you cannot see the real tag text, only its placeholder.
+   Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it — never "ترجمة TAG_0 TAG_1" or "TAG_0 TAG_1 ترجمة". Tag position carries game meaning (icons, status, line markers).
+5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
+6. Use natural Arabic equivalents for generic pirate/nautical RPG concepts based on their plain English meaning — e.g. voodoo → فودو, musket → بندقية, pistol → مسدس, cutlass/saber → سيف قرصان, rum → رَم, captain → قبطان, crew → طاقم, ship → سفينة. Never substitute a term from another game's lore (e.g. never translate "magic"/"voodoo" as "إيثر" or as Risen 1's rune-magic terms — those have no meaning here).`;
+
 /**
  * Build the user-facing prompt with full universe knowledge, ordered rules,
  * glossary, context, and the input block.
@@ -162,14 +180,22 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen';
+  game?: 'xenoblade' | 'risen' | 'risen2';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
-  const isRisen = game === 'risen';
-  const gameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+  const isRisen = game === 'risen' || game === 'risen2';
+  const isRisen2 = game === 'risen2';
+  const gameLabel = isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
-  const universeBlock = isRisen
+  const universeBlock = isRisen2
+    ? `RISEN 2 UNIVERSE — KEY KNOWLEDGE:
+• Setting: Genome-engine pirate-themed open-world RPG (Dark Waters, sequel to Risen 1) — a tropical Caribbean-like archipelago. The hero (same protagonist as Risen 1) allies with pirates and/or Inquisition remnants against an undead/voodoo threat.
+• This is a DIFFERENT game from Xenoblade Chronicles AND from Risen 1's medieval-fantasy setting — do NOT use Xenoblade terminology, and do NOT import Risen 1's Inquisition-vs-mage-camps framing or rune-magic system.
+• Primary combat is firearms (pistols, muskets, blunderbusses) and cutlasses/sabers rather than Risen 1's swords/staffs. Magic here is Voodoo (dolls, curses, totems), not Risen 1's rune-based magic.
+• Use plain, natural Arabic for generic pirate/nautical RPG concepts based on their literal English meaning — e.g. voodoo → فودو, musket → بندقية, pistol → مسدس, cutlass/saber → سيف قرصان, rum → رَم, captain → قبطان, crew → طاقم, ship → سفينة.
+• Pickup/reward notifications like "<amount> x <name> obtained!": the item name placeholder's grammatical gender is unknown, so NEVER end with a gendered pronoun suffix referring to it (do not default to "تم الحصول عليها" or "تم الحصول عليه"). Prefer a gender-neutral verb phrase placed before the placeholders instead, e.g. "تم الحصول على <amount> x <name>!".`
+    : isRisen
     ? `RISEN 1 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Genome-engine open-world medieval-fantasy RPG — a hero shipwrecked on a mysterious island, torn between the Inquisition (a militant/monastic order) and free bandit/mage camps.
 • This is a DIFFERENT game from Xenoblade Chronicles — do NOT use Xenoblade terminology, character names, or lore under any circumstance.
@@ -283,7 +309,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   // the generic Xenoblade patterns below (e.g. <Exit> would otherwise also
   // match the generic HTML-like-tag pattern and get a TAG_N instead of ⟦N⟧).
   const matches: { start: number; end: number; original: string; risen?: boolean }[] = [];
-  if (_game === 'risen') {
+  if (_game === 'risen' || _game === 'risen2') {
     const risenRegex = new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags);
     let rMatch: RegExpExecArray | null;
     while ((rMatch = risenRegex.exec(shielded)) !== null) {
@@ -420,7 +446,7 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' = 'xenoblade';
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -1331,7 +1357,7 @@ async function translateWithOpenAICompat(
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+        { role: 'system', content: _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
         { role: 'user', content: prompt },
       ],
     }),
@@ -1732,7 +1758,7 @@ async function translateWithAI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
           generationConfig: { temperature: 0.3 },
         }),
       });
@@ -1829,7 +1855,7 @@ async function translateWithAI(
           body: JSON.stringify({
             model: lovableModel,
             messages: [
-              { role: 'system', content: _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+              { role: 'system', content: _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
               { role: 'user', content: aiPrompt },
             ],
           }),
@@ -1933,7 +1959,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen';
+      game?: 'xenoblade' | 'risen' | 'risen2';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -1945,7 +1971,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'risen' ? 'risen' : 'xenoblade';
+    _game = game === 'risen2' ? 'risen2' : game === 'risen' ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

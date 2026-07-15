@@ -25,7 +25,7 @@ const gatewayModelMap: Record<string, string> = {
 
 function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean): string {
   const glossarySection = glossary ? `\nالقاموس المعتمد (التزم بهذه المصطلحات):\n${glossary.split('\n').slice(0, 100).join('\n')}` : '';
-  const gameNameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+  const gameNameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
   const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
 
   if (action === 'literal-detect') {
@@ -253,7 +253,7 @@ Deno.serve(async (req) => {
       glossary?: string;
       aiModel?: string;
       styleGuide?: string;
-      game?: 'xenoblade' | 'risen';
+      game?: 'xenoblade' | 'risen' | 'risen2';
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
     // Mask Risen tags before ANY prompt text is built — one tag list per entry
     // (index-aligned with `entries`, since the model echoes back an `index`
     // field), used to unmask whichever result field references that index.
-    const isRisen = game === 'risen';
+    const isRisen = game === 'risen' || game === 'risen2';
     const risenTagsByIndex: string[][] = [];
     const promptEntries: AnalysisEntry[] = isRisen
       ? entries.map((e) => {

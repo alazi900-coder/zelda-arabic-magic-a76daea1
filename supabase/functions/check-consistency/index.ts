@@ -27,9 +27,9 @@ Deno.serve(async (req) => {
     const { entries, glossary, game } = await req.json() as {
       entries: ConsistencyEntry[];
       glossary?: string;
-      game?: 'xenoblade' | 'risen';
+      game?: 'xenoblade' | 'risen' | 'risen2';
     };
-    const isRisen = game === 'risen';
+    const isRisen = game === 'risen' || game === 'risen2';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ groups: [], aiSuggestions: [] }), {

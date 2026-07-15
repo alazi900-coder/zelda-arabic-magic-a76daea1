@@ -19,7 +19,7 @@ interface ReqBody {
   engine?: "lovable" | "deepseek";
   aiModel?: string;          // gemini-3-flash-preview | gpt-5 | deepseek-v4-pro | deepseek-v4-flash …
   providerApiKey?: string;   // DeepSeek key from UI settings (optional)
-  game?: "xenoblade" | "risen";
+  game?: "xenoblade" | "risen" | "risen2";
 }
 
 // PUA tags (U+E000..U+E0FF) و U+FFF9..U+FFFC + وسوم XC3 النصّية بين معقوفات.
@@ -58,7 +58,7 @@ ${e.original}
 ${e.translation}`;
   }).join("\n\n");
 
-  const gameNameLabel = isRisen ? "Risen 1" : "Xenoblade Chronicles 1";
+  const gameNameLabel = isRisen ? "Risen" : "Xenoblade Chronicles 1";
   const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : "";
   return `أنت مُصحِّح ترجمة عربية للعبة ${gameNameLabel}. لكل عنصر، أعد كتابة الترجمة العربية بحيث:
 ${forgetOtherGame}
@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     // tags/lines" prompt — this function's tagSignature() safety net only knows
     // about XC3 PUA/bracket tags, not Risen's <Tag> format, so without masking
     // an AI-mangled <Exit> would slip through unnoticed.
-    const isRisen = body.game === "risen";
+    const isRisen = body.game === "risen" || body.game === "risen2";
     const risenTagsByKey = new Map<string, string[]>();
     const promptEntries: SmartFixEntry[] = isRisen
       ? body.entries.map((e) => {

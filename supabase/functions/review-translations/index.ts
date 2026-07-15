@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
         action?: 'review' | 'suggest-short' | 'improve' | 'smart-review' | 'grammar-check' | 'context-review' | 'quick-alternatives' | 'auto-correct' | 'detect-weak' | 'context-retranslate';
         aiModel?: string;
         contextEntries?: { key: string; original: string; translation: string }[];
-        game?: 'xenoblade' | 'risen';
+        game?: 'xenoblade' | 'risen' | 'risen2';
       };
 
       // Mask Risen tags before ANY prompt text is built, across every action
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
       // byte-length checks, and result metadata; `promptText(e)` gives the
       // masked original/translation to embed in prompt strings only, and
       // `unmaskFor(key, text)` restores a model-returned string afterward.
-      const isRisen = game === 'risen';
+      const isRisen = game === 'risen' || game === 'risen2';
       const risenTagsByKey = new Map<string, string[]>();
       const maskedByKey = new Map<string, { original: string; translation: string }>();
       if (isRisen) {
@@ -191,7 +191,7 @@ ${tooLongEntries.map((e, i) => {
         for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
           const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
 
-          const gameNameLabel = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+          const gameNameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
           const prompt = `أنت مدقق لغوي متخصص في ترجمة ألعاب الفيديو (${gameNameLabel}). حلّل كل ترجمة وأبلغ عن المشاكل الواضحة فقط:
 ${isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
 
@@ -827,7 +827,7 @@ ${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`; }).join('\n\n')}
         for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
           const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
 
-          const gameNameLabel2 = isRisen ? 'Risen 1' : 'Xenoblade Chronicles 3';
+          const gameNameLabel2 = isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
           const prompt = `أنت مترجم ألعاب فيديو محترف متخصص في ${gameNameLabel2}. مهمتك: إعادة صياغة وتحسين كل ترجمة عربية بشكل ملحوظ.
 ${isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
 قواعد صارمة:

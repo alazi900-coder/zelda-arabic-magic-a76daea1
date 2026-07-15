@@ -5,12 +5,13 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Key, Loader2, CheckCircle2, XCircle, Wifi } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROMPT_PRESETS } from "@/components/editor/promptPresets";
+import { PROMPT_PRESETS, RISEN_PROMPT_PRESETS } from "@/components/editor/promptPresets";
 import { CATEGORY_PROMPT_DEFAULTS, resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
+  | "state" | "risenVariant"
   | "userGeminiKey" | "setUserGeminiKey"
   | "userDeepSeekKey" | "setUserDeepSeekKey"
   | "translationProvider" | "setTranslationProvider"
@@ -53,6 +54,8 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
   const isShowingDefault = !!activeCategory
     && !editor.categoryPromptTemplates[activeCategory.id]?.trim()
     && !!CATEGORY_PROMPT_DEFAULTS[activeCategory.id];
+  const isRisen = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const activePresets = isRisen ? RISEN_PROMPT_PRESETS : PROMPT_PRESETS;
 
   return (
   <Card className="mb-6 border-primary/20 bg-primary/5">
@@ -372,7 +375,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         <Select
           value=""
           onValueChange={(id) => {
-            const preset = PROMPT_PRESETS.find(p => p.id === id);
+            const preset = activePresets.find(p => p.id === id);
             if (preset) setPromptValue(preset.text);
           }}
         >
@@ -380,7 +383,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
             <SelectValue placeholder="اختر قالباً جاهزاً..." />
           </SelectTrigger>
           <SelectContent>
-            {PROMPT_PRESETS.map(p => (
+            {activePresets.map(p => (
               <SelectItem key={p.id} value={p.id} className="font-body">
                 {p.label}
               </SelectItem>

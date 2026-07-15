@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package } from "lucide-react";
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
+import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn } from "@/lib/risen2-arabic-font-gen";
 import { decodeDdsToRgba } from "@/lib/risen-ximg";
 import {
   parseImagesPakHeader,
@@ -30,6 +31,25 @@ interface PakEntryRef {
  * Pro + every Georgia entry (confirmed by counting: 21 + 14 = 35 exactly). */
 function isTargetFont(path: string): boolean {
   return path.startsWith("Trajan Pro_") || path.startsWith("Georgia_");
+}
+
+/** Most common (mode) row height across existing measurement records — used
+ * as the target draw size when rendering new Arabic glyphs, so they're
+ * visually comparable in scale to the font's existing Latin glyphs. */
+function computeRowHeightPx(doc: XgfnDocument): number {
+  const counts = new Map<number, number>();
+  for (const m of doc.measurements) {
+    if (m.fields.length < 4) continue;
+    const h = m.fields[3] - m.fields[1];
+    if (h <= 0) continue;
+    counts.set(h, (counts.get(h) ?? 0) + 1);
+  }
+  let best = 20;
+  let bestCount = 0;
+  for (const [h, count] of counts) {
+    if (count > bestCount) { best = h; bestCount = count; }
+  }
+  return best;
 }
 
 function walkFileEntries(tree: RisenPakNode[], prefix = ""): PakEntryRef[] {
@@ -62,6 +82,12 @@ const RisenFonts = () => {
   const [pakHeader, setPakHeader] = useState<RisenPakHeader | null>(null);
   const [pakEntries, setPakEntries] = useState<PakEntryRef[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+
+  // Arabic glyph generator (Phase 3, preview-only) — merges rendered Arabic
+  // glyphs into the currently-displayed font for visual inspection.
+  const [arabicFontBytes, setArabicFontBytes] = useState<ArrayBuffer | null>(null);
+  const [arabicFontName, setArabicFontName] = useState<string | null>(null);
+  const [arabicBusy, setArabicBusy] = useState(false);
 
   const decodeFontName = useCallback((headerPrefix: Uint8Array): string => {
     const nameBytes = headerPrefix.subarray(0x96, 0x96 + 64);
@@ -150,6 +176,31 @@ const RisenFonts = () => {
       toast.error(`فشل استخراج "${entry.path}": ` + (err as Error).message);
     }
   }, [pakBytes, loadXgfnBytes]);
+
+  const handleArabicFontFile = useCallback(async (file: File) => {
+    const buffer = await file.arrayBuffer();
+    setArabicFontBytes(buffer);
+    setArabicFontName(file.name);
+  }, []);
+
+  const handleGenerateArabic = useCallback(async () => {
+    if (!doc || !arabicFontBytes) return;
+    setArabicBusy(true);
+    try {
+      const rowHeightPx = computeRowHeightPx(doc);
+      const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, rowHeightPx);
+      const merged = appendArabicGlyphsToXgfn(doc, glyphs);
+      setDoc(merged);
+      setOriginalBytes(null); // merged doc no longer corresponds to any single original byte stream
+      setRoundTrip(null);
+      toast.success(`تم توليد ${glyphs.length} حرفاً عربياً ودمجها للمعاينة (بدون حقن في fonts.pak)`);
+    } catch (err) {
+      console.error(err);
+      toast.error("فشل توليد الحروف العربية: " + (err as Error).message);
+    } finally {
+      setArabicBusy(false);
+    }
+  }, [doc, arabicFontBytes]);
 
   const handleRoundTripTest = useCallback(() => {
     if (!doc || !originalBytes) return;
@@ -370,6 +421,29 @@ const RisenFonts = () => {
                 {roundTrip.message}
               </div>
             )}
+
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <h3 className="font-display font-bold text-sm">توليد ودمج الحروف العربية (معاينة فقط — بلا حقن في fonts.pak)</h3>
+              <p className="text-xs text-muted-foreground">
+                يرسم كل نقاط اليونيكود التي يحتاجها نظام تشكيل Risen العربي الحالي (الأشكال السياقية + لامات الألف + الأرقام العربية الهندية) من خط TTF، ويضيفها أسفل أطلس هذا الخط لمعاينتها في الشبكة التشخيصية.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="block">
+                  <input
+                    type="file"
+                    accept=".ttf,.otf"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleArabicFontFile(f); }}
+                  />
+                  <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm cursor-pointer hover:border-primary/50">
+                    <Upload className="w-4 h-4" /> {arabicFontName ?? "اختر خط TTF عربي"}
+                  </span>
+                </label>
+                <Button onClick={handleGenerateArabic} disabled={!arabicFontBytes || arabicBusy} className="font-display">
+                  {arabicBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "توليد ودمج"}
+                </Button>
+              </div>
+            </div>
 
             <div>
               <p className="text-xs text-muted-foreground mb-2">

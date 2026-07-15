@@ -276,6 +276,27 @@ function reverseShapedLine(line: string): string {
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/** Every Unicode codepoint `shapeArabicForRisen` can ever emit: all
+ * contextual presentation forms + lam-alef ligatures from the tables above,
+ * tatweel, Arabic-Indic digits (passed through unshaped), and the Arabic
+ * punctuation marks left unshaped by `shapeArabicLetters` (not in
+ * ARABIC_FORMS, so they pass through at their base codepoint). This is the
+ * exact glyph set a replacement bitmap font needs to cover — derived from
+ * the shaping tables themselves so it can never drift out of sync with them. */
+export function getRisenArabicGlyphCodepoints(): number[] {
+  const codepoints = new Set<number>();
+  for (const forms of Object.values(ARABIC_FORMS)) {
+    for (const f of forms) if (f !== null) codepoints.add(f);
+  }
+  for (const lig of Object.values(LAM_ALEF_LIGATURES)) {
+    codepoints.add(lig[0]);
+    codepoints.add(lig[1]);
+  }
+  for (let d = 0x0660; d <= 0x0669; d++) codepoints.add(d); // Arabic-Indic digits
+  for (const p of [0x060c, 0x061b, 0x061f, 0x0621]) codepoints.add(p); // comma, semicolon, question mark, hamza
+  return [...codepoints].sort((a, b) => a - b);
+}
+
 function hasArabicLetters(text: string): boolean {
   return [...text].some((ch) => {
     const code = ch.charCodeAt(0);

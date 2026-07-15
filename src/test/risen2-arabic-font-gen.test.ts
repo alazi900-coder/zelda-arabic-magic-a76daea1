@@ -104,6 +104,34 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     expect(rec.fields[4]).toBe(3); // advance preserved
   });
 
+  it("pads the atlas to power-of-2 dimensions — the game's DX9-era engine silently fails to load NPOT textures", () => {
+    const doc = parseXgfn(loadFixture());
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0xfeee, 4, 7, 5), makeGlyph(0x0660, 3, 5, 4)]);
+    const decoded = decodeDdsToRgba(merged.ddsBytes);
+    if (!decoded.supported) throw new Error("merged DDS unsupported");
+
+    const isPowerOfTwo = (n: number) => n > 0 && (n & (n - 1)) === 0;
+    expect(isPowerOfTwo(decoded.width)).toBe(true);
+    expect(isPowerOfTwo(decoded.height)).toBe(true);
+  });
+
+  it("rounds a 450px-tall requirement up to 512 (next power of 2), not the tight-fit size", () => {
+    const doc = parseXgfn(loadFixture());
+    const originalDecoded = decodeDdsToRgba(doc.ddsBytes);
+    if (!originalDecoded.supported) throw new Error("fixture DDS unsupported");
+    expect(originalDecoded.width).toBe(256);
+    expect(originalDecoded.height).toBe(256);
+
+    // One glyph exactly tall enough to push the tight-fit height to 256 + 194 = 450.
+    const tallGlyph = makeGlyph(0xfe8e, 250, 194, 10);
+    const merged = appendArabicGlyphsToXgfn(doc, [tallGlyph]);
+    const decoded = decodeDdsToRgba(merged.ddsBytes);
+    if (!decoded.supported) throw new Error("merged DDS unsupported");
+
+    expect(decoded.width).toBe(256);
+    expect(decoded.height).toBe(512);
+  });
+
   it("round-trips through buildXgfn/parseXgfn byte-for-byte consistent", () => {
     const doc = parseXgfn(loadFixture());
     const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0x0660, 3, 5, 4)]);

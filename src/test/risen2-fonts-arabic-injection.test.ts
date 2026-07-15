@@ -100,6 +100,10 @@ describe("End-to-end: generate Arabic glyphs -> merge -> inject into real fonts.
   });
 
   it("batch mode: injects Arabic-merged versions of ALL 35 target fonts simultaneously (matches the real Chinese mod's scope)", () => {
+    // Power-of-2 atlas padding makes some fonts' DDS noticeably larger than
+    // the tight-fit size, so decompressing/comparing all 78 entries here
+    // (self-verification inside buildFontsPakArchive) takes longer than the
+    // default 5s timeout.
     const bytes = loadFixtureBytes();
     const { header, tree } = openArchive(bytes);
     const files = flattenFileNodes(tree);
@@ -140,5 +144,5 @@ describe("End-to-end: generate Arabic glyphs -> merge -> inject into real fonts.
       expect(rebuiltEntryContent.length).toBe(originalContent.length);
       expect(Buffer.from(rebuiltEntryContent).equals(Buffer.from(originalContent))).toBe(true);
     }
-  });
+  }, 20000);
 });

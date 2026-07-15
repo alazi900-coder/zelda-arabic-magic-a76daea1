@@ -43,6 +43,16 @@ export interface RenderedArabicGlyph {
   advance: number;
 }
 
+/** Rounds up to the next power of two (n itself if already one). DX9-era
+ * texture loaders (this game's engine included, confirmed by a real in-game
+ * test: a non-power-of-2 atlas height silently failed to load, leaving a
+ * structurally-valid but imageless font — charmap fine, no visible glyphs)
+ * require power-of-2 texture dimensions. */
+function nextPowerOfTwo(n: number): number {
+  if (n <= 1) return 1;
+  return 2 ** Math.ceil(Math.log2(n));
+}
+
 function inkBoundingBox(data: Uint8ClampedArray, width: number, height: number) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (let y = 0; y < height; y++) {
@@ -145,7 +155,13 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
     cursorX += g.width;
     rowHeight = Math.max(rowHeight, g.height);
   }
-  const newHeight = cursorY + rowHeight;
+  const neededHeight = cursorY + rowHeight;
+  // Pad up to a power-of-2 height (the DX9-era engine rejects NPOT texture
+  // dimensions — see nextPowerOfTwo's docs). The extra rows stay transparent
+  // (Uint8Array is zero-initialized), which is harmless. Width never grows
+  // (new glyphs wrap to new rows instead), and it's already power-of-2 in
+  // every real font sampled, so it needs no rounding of its own.
+  const newHeight = nextPowerOfTwo(neededHeight);
 
   const newRgba = new Uint8Array(atlasWidth * newHeight * 4);
   newRgba.set(decoded.rgba.subarray(0, atlasWidth * oldHeight * 4), 0);

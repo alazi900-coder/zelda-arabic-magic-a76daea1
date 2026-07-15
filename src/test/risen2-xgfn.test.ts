@@ -21,7 +21,10 @@ describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font, 13 gly
 
   it("parses the charmap with the confirmed digit/space mappings", () => {
     const doc = parseXgfn(loadFixture());
-    expect(doc.charmap.length).toBe(doc.glyphCount - 1);
+    // 12 pairs — the authoritative count comes from the 0xF6 header field,
+    // not glyphCount (0xEA); they happen to coincide on this small sample
+    // (glyphCount - 1 === 12) but do NOT in general (see Georgia sample test).
+    expect(doc.charmap.length).toBe(12);
     const byChar = new Map(doc.charmap.map((r) => [r.charCode, r.glyphIndex]));
     expect(byChar.get(32)).toBe(1); // space
     for (let d = 0; d <= 9; d++) {
@@ -30,9 +33,11 @@ describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font, 13 gly
     expect(byChar.get(0x0c)).toBe(0); // fallback pair -> glyph 0
   });
 
-  it("parses glyphCount measurement records with atlas_x as a monotonically increasing sequence for the digits", () => {
+  it("parses charmapPairCount + 1 measurement records with atlas_x as a monotonically increasing sequence for the digits", () => {
     const doc = parseXgfn(loadFixture());
-    expect(doc.measurements.length).toBe(doc.glyphCount);
+    // 13 records (12 charmap pairs + 1) — coincides with glyphCount on this
+    // small sample but not in general (see Georgia sample test).
+    expect(doc.measurements.length).toBe(13);
     // glyph indices 2..11 are the digits '0'..'9', in charmap order
     const atlasXs = doc.measurements.slice(2, 12).map((m) => m.fields[0]);
     for (let i = 1; i < atlasXs.length; i++) {
@@ -102,10 +107,14 @@ describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font, 13 gly
       doc.measurements.push({ rawBytes, fields: [100 + i * 10] });
     }
     doc.glyphCount += newEntries.length;
-    // Patch the header's glyphCount field to match (Phase 1 exposes headerPrefix
-    // as opaque, so the test patches it directly the same way a real generator would).
+    // Patch the header's charmap pair count field (0xF6 — the authoritative
+    // field, confirmed across all 77 real fonts.pak entries) to match the
+    // new charmap length. Also patch 0xEA for realism even though its true
+    // meaning is unresolved (Phase 1 exposes headerPrefix as opaque, so the
+    // test patches it directly the same way a real generator would).
     const headerView = new DataView(doc.headerPrefix.buffer, doc.headerPrefix.byteOffset, doc.headerPrefix.byteLength);
     headerView.setUint32(0xea, doc.glyphCount, true);
+    headerView.setUint32(0xf6, doc.charmap.length, true);
 
     const rebuilt = buildXgfn(doc);
     const reparsed = parseXgfn(rebuilt);
@@ -119,5 +128,49 @@ describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font, 13 gly
     // Original mappings still intact
     expect(byChar.get(32)).toBe(1);
     expect(byChar.get(57)).toBe(11);
+  });
+});
+
+const GEORGIA_FIXTURE_PATH = join(__dirname, "fixtures", "risen2-georgia-font-sample.xgfn");
+
+function loadGeorgiaFixture(): ArrayBuffer {
+  const buf = readFileSync(GEORGIA_FIXTURE_PATH);
+  const bytes = new Uint8Array(buf.length);
+  bytes.set(buf);
+  return bytes.buffer;
+}
+
+describe("Risen 2 .xgfn parser (real sample: Georgia 16pt bold-oblique, 276 charmap pairs)", () => {
+  it("parses a much larger real charmap correctly, proving the 0xF6-based formula generalizes beyond the numbers sample", () => {
+    const doc = parseXgfn(loadGeorgiaFixture());
+    // glyphCount (0xEA) is 27 here — proof that it is NOT the charmap size
+    // (the bug this test guards against: the old glyphCount-1 formula only
+    // "worked" on the numbers sample by coincidence).
+    expect(doc.glyphCount).toBe(27);
+    expect(doc.charmap.length).toBe(276);
+    expect(doc.measurements.length).toBe(277);
+
+    const byChar = new Map(doc.charmap.map((r) => [r.charCode, r.glyphIndex]));
+    expect(byChar.get(32)).toBe(1); // space
+    expect(byChar.get(0x41)).toBe(28); // 'A'
+    expect(byChar.get(0x52)).toBe(45); // 'R'
+    expect(byChar.get(0x44f)).toBe(238); // CYRILLIC SMALL LETTER YA (я)
+    expect(byChar.get(0x20ac)).toBe(123); // EURO SIGN
+  });
+
+  it("the last measurement record is truncated exactly at the DDS boundary (not a full 36 bytes)", () => {
+    const doc = parseXgfn(loadGeorgiaFixture());
+    const last = doc.measurements[doc.measurements.length - 1];
+    expect(last.rawBytes.length).toBe(4);
+  });
+
+  it("round-trips byte-for-byte with no modifications", () => {
+    const original = loadGeorgiaFixture();
+    const doc = parseXgfn(original);
+    const rebuilt = buildXgfn(doc);
+    const a = new Uint8Array(original);
+    const b = new Uint8Array(rebuilt);
+    expect(b.length).toBe(a.length);
+    expect(Buffer.from(b).equals(Buffer.from(a))).toBe(true);
   });
 });

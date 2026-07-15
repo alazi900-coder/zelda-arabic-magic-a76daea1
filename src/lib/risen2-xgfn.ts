@@ -30,20 +30,32 @@
  *   0xDE  u32 = 0x58                     (confirmed constant)
  *   0xE2  u32 = 0
  *   0xE6  u32 = 1
- *   0xEA  u32 glyphCount
+ *   0xEA  u32 (NOT the charmap/glyph count — see below; meaning unresolved.
+ *         On the numbers-only sample this happened to equal charmapPairs + 1,
+ *         which is what caused the original mis-identification as
+ *         "glyphCount"; on real multi-glyph fonts (e.g. Georgia_16_bo, 276
+ *         charmap pairs) it holds an unrelated small number (27) with no
+ *         known relationship to the charmap or measurement table sizes.)
  *   0xEE  u32 (unresolved, e.g. 11)
  *   0xF2  u32 (unresolved, e.g. 32 — possibly first mapped char code, coincides with space)
- *   0xF6  u32 (unresolved, e.g. 12)
+ *   0xF6  u32 charmapPairCount — CONFIRMED across all 77 real .xgfn entries in
+ *         a real fonts.pak: this field (not 0xEA) is the authoritative count
+ *         of charmap pairs. See below.
  *   0xFA  u32 (unresolved, e.g. 31)
- *   0xFE  charmap: (glyphCount - 1) pairs of { charCode:u16, glyphIndex:u16 }
+ *   0xFE  charmap: charmapPairCount (the u32 at 0xF6) pairs of
+ *         { charCode:u16, glyphIndex:u16 }
  *         (glyph 0 is a spare/fallback slot with no charmap entry pointing at it
  *         in the sample; the very first pair maps a control code 0x0C -> glyph 0)
- *   ...   measurement table: glyphCount records, 9 x int32 (36 bytes) each --
- *         EXCEPT the last record, which is truncated to however many bytes
- *         remain before the DDS payload starts. This is confirmed on the real
- *         sample (12 full 36-byte records + 1 4-byte record ending exactly at
- *         the DDS offset) — the DDS start offset is the authority for where
- *         the table ends, not glyphCount * 36.
+ *   ...   measurement table: charmapPairCount + 1 records, 9 x int32 (36 bytes)
+ *         each -- EXCEPT the last record, which is truncated to however many
+ *         bytes remain before the DDS payload starts. Confirmed on ALL 77 real
+ *         .xgfn entries extracted from a real fonts.pak: for every single one,
+ *         (ddsOffset - (0xFE + charmapPairCount*4)) === charmapPairCount*36 + 4
+ *         exactly — i.e. charmapPairCount full 36-byte records plus one final
+ *         4-byte (single int32) record ending exactly at the DDS offset. The
+ *         DDS start offset remains the authority for where the table ends;
+ *         the +4 remainder is an empirical constant confirmed on every real
+ *         sample, not assumed.
  *   ...   DDS file (standard header + pixel data) to EOF.
  *
  * Per-glyph measurement record fields — index [0] (atlas_x) is confirmed (a
@@ -58,7 +70,8 @@
 
 const DDS_MAGIC = [0x44, 0x44, 0x53, 0x20]; // "DDS "
 const CHARMAP_START = 0xfe;
-const GLYPH_COUNT_OFFSET = 0xea;
+const GLYPH_COUNT_OFFSET = 0xea; // meaning unresolved — kept for display/round-trip only, NOT used to size the charmap
+const CHARMAP_PAIR_COUNT_OFFSET = 0xf6; // confirmed authoritative charmap pair count (see docblock)
 const MEASUREMENT_RECORD_SIZE = 36;
 
 export interface XgfnGlyphRecord {
@@ -78,11 +91,14 @@ export interface XgfnMeasurement {
 export interface XgfnDocument {
   /** Bytes [0, 0xFE) verbatim — full header incl. GEC0 block, name field, and
    * all numeric header fields listed in the docblock above. Opaque for now:
-   * Phase 1 only needs to read glyphCount out of it (see glyphCount below);
-   * regenerating a font with a different glyph count (Phase 2) will need to
-   * patch GLYPH_COUNT_OFFSET here explicitly rather than treating this as a
-   * single immutable blob. */
+   * Phase 1 only needs to read the charmap pair count out of it (see
+   * CHARMAP_PAIR_COUNT_OFFSET / 0xF6); regenerating a font with a different
+   * charmap (Phase 2) will need to patch CHARMAP_PAIR_COUNT_OFFSET here
+   * explicitly rather than treating this as a single immutable blob. */
   headerPrefix: Uint8Array;
+  /** Raw value of the u32 at 0xEA, kept for display/round-trip only — its
+   * true meaning is unresolved (it is NOT the charmap/glyph count, see the
+   * module docblock). */
   glyphCount: number;
   charmap: XgfnGlyphRecord[];
   measurements: XgfnMeasurement[];
@@ -114,14 +130,15 @@ export function parseXgfn(buffer: ArrayBuffer): XgfnDocument {
   if (magic2 !== "GR01FN01") throw new Error(`توقيع داخلي غير متوقع: "${magic2}"`);
 
   const glyphCount = view.getUint32(GLYPH_COUNT_OFFSET, true);
-  if (glyphCount < 1 || glyphCount > 10000) {
-    throw new Error(`عدد حروف غير معقول: ${glyphCount}`);
+
+  const numPairs = view.getUint32(CHARMAP_PAIR_COUNT_OFFSET, true);
+  if (numPairs < 1 || numPairs > 100000) {
+    throw new Error(`عدد أزواج خارطة الحروف غير معقول: ${numPairs}`);
   }
 
   const headerPrefix = bytes.slice(0, CHARMAP_START);
 
-  // --- charmap: (glyphCount - 1) pairs of (u16 charCode, u16 glyphIndex) ---
-  const numPairs = glyphCount - 1;
+  // --- charmap: numPairs (from 0xF6) pairs of (u16 charCode, u16 glyphIndex) ---
   const charmap: XgfnGlyphRecord[] = [];
   let p = CHARMAP_START;
   for (let i = 0; i < numPairs; i++) {
@@ -133,11 +150,11 @@ export function parseXgfn(buffer: ArrayBuffer): XgfnDocument {
   const ddsOffset = indexOfDdsMagic(bytes, p);
   if (ddsOffset < 0) throw new Error("لم يتم العثور على بيانات DDS داخل ملف .xgfn");
 
-  // --- measurement table: glyphCount records, 36 bytes each, except the
+  // --- measurement table: numPairs + 1 records, 36 bytes each, except the
   // last one which is truncated at the DDS boundary. ---
   const measurements: XgfnMeasurement[] = [];
   let mp = p;
-  for (let i = 0; i < glyphCount; i++) {
+  for (let i = 0; i < numPairs + 1; i++) {
     const remaining = ddsOffset - mp;
     const recLen = Math.min(MEASUREMENT_RECORD_SIZE, Math.max(0, remaining));
     const rawBytes = bytes.slice(mp, mp + recLen);

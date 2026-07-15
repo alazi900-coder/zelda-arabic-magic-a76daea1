@@ -1,16 +1,45 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload } from "lucide-react";
+import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package } from "lucide-react";
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
 import { decodeDdsToRgba } from "@/lib/risen-ximg";
+import {
+  parseImagesPakHeader,
+  parseImagesPakFileInfoTree,
+  inflateFontsPakEntry,
+  type RisenPakHeader,
+  type RisenPakNode,
+  type RisenPakFileEntry,
+} from "@/lib/risen2-fontspak";
 
 const ACCENT = "#4a7c3f";
 
 interface RoundTripResult {
   ok: boolean;
   message: string;
+}
+
+interface PakEntryRef {
+  path: string;
+  node: RisenPakFileEntry;
+}
+
+/** The 35-file list a real Chinese mod successfully modified — every Trajan
+ * Pro + every Georgia entry (confirmed by counting: 21 + 14 = 35 exactly). */
+function isTargetFont(path: string): boolean {
+  return path.startsWith("Trajan Pro_") || path.startsWith("Georgia_");
+}
+
+function walkFileEntries(tree: RisenPakNode[], prefix = ""): PakEntryRef[] {
+  const out: PakEntryRef[] = [];
+  for (const n of tree) {
+    const path = prefix ? `${prefix}/${n.name}` : n.name;
+    if (n.type === "folder") out.push(...walkFileEntries(n.children, path));
+    else out.push({ path, node: n });
+  }
+  return out;
 }
 
 const RisenFonts = () => {
@@ -24,22 +53,38 @@ const RisenFonts = () => {
   const [roundTrip, setRoundTrip] = useState<RoundTripResult | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // fonts.pak container state — lets the user pick any real font directly
+  // from the archive instead of needing to extract/decompress one manually first.
+  const [pakBusy, setPakBusy] = useState(false);
+  const [pakDragOver, setPakDragOver] = useState(false);
+  const [pakName, setPakName] = useState<string | null>(null);
+  const [pakBytes, setPakBytes] = useState<Uint8Array | null>(null);
+  const [pakHeader, setPakHeader] = useState<RisenPakHeader | null>(null);
+  const [pakEntries, setPakEntries] = useState<PakEntryRef[]>([]);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+
   const decodeFontName = useCallback((headerPrefix: Uint8Array): string => {
     const nameBytes = headerPrefix.subarray(0x96, 0x96 + 64);
     return new TextDecoder("utf-16le").decode(nameBytes).replace(/\0+$/, "");
   }, []);
 
+  /** Parses already-decompressed .xgfn bytes and updates the shared preview state
+   * (used both for a direct .xgfn upload and for a font selected from fonts.pak). */
+  const loadXgfnBytes = useCallback((buffer: ArrayBuffer, label: string) => {
+    const parsed = parseXgfn(buffer);
+    setOriginalBytes(new Uint8Array(buffer));
+    setDoc(parsed);
+    setFileName(label);
+    setFontLabel(decodeFontName(parsed.headerPrefix));
+    setRoundTrip(null);
+    toast.success(`تم تحليل الملف: ${parsed.glyphCount} حرفاً`);
+  }, [decodeFontName]);
+
   const handleFile = useCallback(async (file: File) => {
     setBusy(true);
-    setRoundTrip(null);
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = parseXgfn(buffer);
-      setOriginalBytes(new Uint8Array(buffer));
-      setDoc(parsed);
-      setFileName(file.name);
-      setFontLabel(decodeFontName(parsed.headerPrefix));
-      toast.success(`تم تحليل الملف: ${parsed.glyphCount} حرفاً`);
+      loadXgfnBytes(buffer, file.name);
     } catch (err) {
       console.error(err);
       toast.error("فشل تحليل الملف: " + (err as Error).message);
@@ -48,7 +93,7 @@ const RisenFonts = () => {
     } finally {
       setBusy(false);
     }
-  }, [decodeFontName]);
+  }, [loadXgfnBytes]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -57,6 +102,54 @@ const RisenFonts = () => {
     const f = e.dataTransfer.files?.[0];
     if (f) void handleFile(f);
   }, [busy, handleFile]);
+
+  const handlePakFile = useCallback(async (file: File) => {
+    setPakBusy(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const header = parseImagesPakHeader(bytes.slice(0, 48));
+      const { tree, endOffset } = parseImagesPakFileInfoTree(bytes.subarray(header.fileInfoOffset), header);
+      if (endOffset !== bytes.length) {
+        throw new Error("نهاية شجرة الملفات لا تطابق نهاية الملف — الملف قد يكون غير مكتمل أو غير مدعوم");
+      }
+      const entries = walkFileEntries(tree).filter((e) => e.path.endsWith("._xgfn"));
+      setPakBytes(bytes);
+      setPakHeader(header);
+      setPakEntries(entries);
+      setPakName(file.name);
+      setSelectedPath(null);
+      toast.success(`تم فتح الحاوية: ${entries.length} خطاً`);
+    } catch (err) {
+      console.error(err);
+      toast.error("فشل فتح fonts.pak: " + (err as Error).message);
+      setPakBytes(null);
+      setPakEntries([]);
+    } finally {
+      setPakBusy(false);
+    }
+  }, []);
+
+  const handlePakDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setPakDragOver(false);
+    if (pakBusy) return;
+    const f = e.dataTransfer.files?.[0];
+    if (f) void handlePakFile(f);
+  }, [pakBusy, handlePakFile]);
+
+  const handleSelectPakEntry = useCallback((entry: PakEntryRef) => {
+    if (!pakBytes) return;
+    try {
+      const decompressed = inflateFontsPakEntry(pakBytes, entry.node);
+      const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength);
+      loadXgfnBytes(buf, entry.path);
+      setSelectedPath(entry.path);
+    } catch (err) {
+      console.error(err);
+      toast.error(`فشل استخراج "${entry.path}": ` + (err as Error).message);
+    }
+  }, [pakBytes, loadXgfnBytes]);
 
   const handleRoundTripTest = useCallback(() => {
     if (!doc || !originalBytes) return;
@@ -143,9 +236,71 @@ const RisenFonts = () => {
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
           <strong className="font-display block mb-1">مرحلة تحليل الصيغة</strong>
           <p className="text-muted-foreground">
-            هذه المرحلة الأولى: فحص ملف .xgfn واحد (مفكوك الضغط مسبقاً) واختبار round-trip ومعاينة الأطلس مع شبكة تشخيصية.
+            هذه مرحلة تحليل الصيغة: افتح fonts.pak كاملاً واختر أي خط منه (أو ملف .xgfn منفرد)، شغّل اختبار round-trip، وقارن الشبكة التشخيصية بصرياً مع الحروف.
             توليد الخطوط العربية والحقن في fonts.pak سيأتي لاحقاً بعد تأكيد معنى حقول القياسات.
           </p>
+        </div>
+
+        {/* fonts.pak container upload — pick any real font directly from the archive */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center">
+              <Package className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-display font-bold">أو ارفع fonts.pak كاملاً واختر خطاً منه</h2>
+              <p className="text-sm text-muted-foreground">يفتح الحاوية ويفك ضغط أي خط تختاره تلقائياً</p>
+            </div>
+          </div>
+          <label className="block">
+            <input
+              type="file"
+              accept=".pak"
+              className="hidden"
+              disabled={pakBusy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handlePakFile(f);
+              }}
+            />
+            <div
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${pakBusy ? "opacity-50 pointer-events-none border-border" : pakDragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+              onDragOver={(e) => { e.preventDefault(); setPakDragOver(true); }}
+              onDragLeave={() => setPakDragOver(false)}
+              onDrop={handlePakDrop}
+            >
+              {pakBusy ? (
+                <>
+                  <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">جاري الفتح...</p>
+                </>
+              ) : (
+                <>
+                  <Package className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm">اضغط لاختيار fonts.pak، أو اسحبه وأفلته هنا</p>
+                </>
+              )}
+            </div>
+          </label>
+
+          {pakEntries.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm text-muted-foreground mb-2">
+                تم فتح <span className="font-mono">{pakName}</span> — {pakEntries.length} خطاً (المميّزة بالأخضر من قائمة الـ35 المستهدفة):
+              </p>
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+                {pakEntries.map((entry) => (
+                  <button
+                    key={entry.path}
+                    onClick={() => handleSelectPakEntry(entry)}
+                    className={`w-full text-right px-3 py-2 text-sm font-mono hover:bg-primary/10 transition-colors ${selectedPath === entry.path ? "bg-primary/20" : ""} ${isTargetFont(entry.path) ? "text-emerald-500" : ""}`}
+                  >
+                    {entry.path}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Upload */}
@@ -155,7 +310,7 @@ const RisenFonts = () => {
               <Upload className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="font-display font-bold">ارفع ملف .xgfn (مفكوك الضغط)</h2>
+              <h2 className="font-display font-bold">أو ارفع ملف .xgfn منفرداً (مفكوك الضغط)</h2>
               <p className="text-sm text-muted-foreground">مثال: خط واحد مستخرج ومفكوك مسبقاً من fonts.pak</p>
             </div>
           </div>

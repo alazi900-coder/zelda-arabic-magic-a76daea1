@@ -23,6 +23,7 @@ interface QualityChecksPanelProps {
   onFilterByKeys: (keys: Set<string>) => void;
   onNavigateToEntry?: (key: string) => void;
   glossary?: string;
+  risenVariant: 'risen1' | 'risen2';
 }
 
 // === Check functions ===
@@ -273,7 +274,7 @@ const CHECK_LABELS: Record<string, string> = {
 // Types that can be auto-fixed without AI
 const FIXABLE_TYPES = new Set(["extra_spaces_check", "punctuation_check", "grammar_check"]);
 
-export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry, glossary }: QualityChecksPanelProps) {
+export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry, glossary, risenVariant }: QualityChecksPanelProps) {
   const isEnabled = (_id: string) => true;
   const isRisen = /\.tab$/i.test(state.entries[0]?.msbtFile || "");
   const [open, setOpen] = useState(false);
@@ -391,7 +392,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
               original: issue.original,
               translation: issue.translation,
               issues: issueDescriptions,
-              game: isRisen ? 'risen' : 'xenoblade',
+              game: isRisen ? risenVariant : 'xenoblade',
             },
           });
           if (!error && data?.result) {
@@ -420,7 +421,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
           original: issue.original,
           translation: issue.translation,
           issues: issueDescriptions,
-          game: isRisen ? 'risen' : 'xenoblade',
+          game: isRisen ? risenVariant : 'xenoblade',
         },
       });
       if (error) throw error;
@@ -447,7 +448,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
         translation: i.translation,
       }));
       const { data, error } = await supabase.functions.invoke('translation-tools', {
-        body: { style: 'context-check', entries, glossary: glossary?.slice(0, 3000), game: isRisen ? 'risen' : 'xenoblade' },
+        body: { style: 'context-check', entries, glossary: glossary?.slice(0, 3000), game: isRisen ? risenVariant : 'xenoblade' },
       });
       if (error) throw error;
       if (data?.result) {
@@ -479,7 +480,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
         translation: i.translation,
       }));
       const { data, error } = await supabase.functions.invoke('translation-tools', {
-        body: { style: 'batch-improve', entries, improvementStyle, glossary: glossary?.slice(0, 3000), game: isRisen ? 'risen' : 'xenoblade' },
+        body: { style: 'batch-improve', entries, improvementStyle, glossary: glossary?.slice(0, 3000), game: isRisen ? risenVariant : 'xenoblade' },
       });
       if (error) throw error;
       if (data?.result) {

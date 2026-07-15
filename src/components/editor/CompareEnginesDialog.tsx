@@ -19,6 +19,7 @@ interface CompareEnginesDialogProps {
   userDeepSeekKey?: string;
   myMemoryEmail: string;
   aiModel?: string;
+  risenVariant: 'risen1' | 'risen2';
 }
 
 interface EngineConfig {
@@ -166,7 +167,7 @@ function renderTranslationWithProtectedTags(text: string, singleLine = false) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, myMemoryEmail,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, myMemoryEmail, risenVariant,
 }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, string | null>>({});
@@ -206,7 +207,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
           providerApiKey: providerKey,
           myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
           aiModel: engine.model || undefined,
-          game: /\.tab$/i.test(entry.msbtFile || '') ? 'risen' : 'xenoblade',
+          game: /\.tab$/i.test(entry.msbtFile || '') ? risenVariant : 'xenoblade',
         }),
       });
       if (!response.ok) {

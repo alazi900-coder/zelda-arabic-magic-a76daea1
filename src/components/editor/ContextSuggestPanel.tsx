@@ -28,6 +28,7 @@ interface ContextSuggestPanelProps {
   glossary?: string;
   findSimilar?: (entryKey: string, original: string, minSimilarity?: number) => TMSuggestion[];
   onApplyTranslation: (key: string, text: string) => void;
+  risenVariant: 'risen1' | 'risen2';
 }
 
 // Persistent IndexedDB cache. Keyed by `ctxsugg:<msbtFile>:<index>`.
@@ -69,7 +70,7 @@ const STYLE_STYLES: Record<Suggestion["style"], { emoji: string; cls: string }> 
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
 
 const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
-  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation,
+  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation, risenVariant,
 }) => {
   const key = entry ? `${entry.msbtFile}:${entry.index}` : "";
   const currentTranslation = entry ? translations[key] || "" : "";
@@ -169,7 +170,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           provider,
           aiModel,
           providerApiKey,
-          game: isRisen ? "risen" : "xenoblade",
+          game: isRisen ? risenVariant : "xenoblade",
           speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined,
           entryKey: isRisen ? entry.label : undefined,
           category: isRisen ? categorizeRisenTable(risenTableFromMsbtFile(entry.msbtFile)).label : undefined,

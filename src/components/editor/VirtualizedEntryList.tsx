@@ -40,6 +40,7 @@ interface VirtualizedEntryListProps {
   height?: number;
   legacyCommaSplitEnabled?: boolean;
   buildExtraToolButtons?: (entry: ExtractedEntry) => { onClick: () => void; icon: string; title: string; cls?: string }[];
+  risenVariant: 'risen1' | 'risen2';
 }
 
 const ESTIMATED_ITEM_SIZE = 280;
@@ -72,6 +73,7 @@ const VirtualizedEntryList = React.memo(({
   height = 600,
   legacyCommaSplitEnabled,
   buildExtraToolButtons,
+  risenVariant,
 }: VirtualizedEntryListProps) => {
   const listRef = useRef<VList>(null);
   const rowHeights = useRef<Record<number, number>>({});
@@ -130,11 +132,12 @@ const VirtualizedEntryList = React.memo(({
             tmSuggestions={findSimilar(key, entry.original)}
             legacyCommaSplitEnabled={legacyCommaSplitEnabled}
             extraToolButtons={buildExtraToolButtons?.(entry)}
+            risenVariant={risenVariant}
           />
         </RowMeasurer>
       </div>
     );
-  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, findSimilar, setRowHeight, legacyCommaSplitEnabled]);
+  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, findSimilar, setRowHeight, legacyCommaSplitEnabled, risenVariant]);
 
   return (
     <VList

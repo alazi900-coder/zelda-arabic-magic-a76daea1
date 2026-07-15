@@ -21,6 +21,7 @@ type EditorSubset = Pick<
   | "isFilterActive"
   | "activeGlossary"
   | "legacyCommaSplitEnabled"
+  | "risenVariant"
 >;
 
 interface EditorGameSafetySectionProps {
@@ -127,6 +128,7 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
           }, 50);
         }}
         glossary={editor.activeGlossary}
+        risenVariant={editor.risenVariant}
       />
 
       {/* Cleanup Tools */}

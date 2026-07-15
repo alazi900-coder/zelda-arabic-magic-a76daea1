@@ -56,6 +56,7 @@ type EditorSubset = Pick<
   | "pendingMerge" | "setPendingMerge" | "applyMergeDiffs"
   | "handleAdvancedAnalysis"
   | "restoreReport" | "handleScanTagsAndLineBreaks" | "handleApplyTagsAndLineBreaksFix" | "handleApplySmartTagReorder" | "dismissRestoreReport"
+  | "risenVariant"
 >;
 
 interface EditorDialogsProps {
@@ -145,6 +146,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
               }
             }, 50);
           }}
+          risenVariant={editor.risenVariant}
         />
       )}
 
@@ -208,6 +210,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
           userDeepSeekKey={editor.userDeepSeekKey}
           myMemoryEmail={editor.myMemoryEmail}
           aiModel={editor.aiModel}
+          risenVariant={editor.risenVariant}
         />
       )}
       <ExportEnglishDialog

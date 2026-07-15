@@ -34,6 +34,7 @@ interface FixTagsLineBreaksDialogProps {
   splitEntries?: LineSplitEntryRef[];
   splitTranslations?: Record<string, string>;
   onJumpToEntry?: (key: string) => void;
+  risenVariant: 'risen1' | 'risen2';
 }
 
 const TAG_REGEX = /[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
@@ -507,6 +508,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   splitEntries,
   splitTranslations,
   onJumpToEntry,
+  risenVariant,
 }) => {
   const [tab, setTab] = useState<"auto" | "review" | "split">("auto");
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -552,7 +554,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
           aiModel: model,
           providerApiKey: engine === "deepseek" ? (deepseekKey || undefined) : undefined,
           entries: issues.map(i => ({ key: i.key, original: i.original, translation: i.before })),
-          game: isRisen ? "risen" : "xenoblade",
+          game: isRisen ? risenVariant : "xenoblade",
         },
       });
       if (error) throw new Error(error.message || "تعذّر الاتصال بالخدمة");
@@ -936,6 +938,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
                   translations={splitTranslations || {}}
                   onUpdateTranslation={onUpdateTranslation}
                   onJumpToEntry={onJumpToEntry}
+                  risenVariant={risenVariant}
                 />
               ) : (
                 <div className="text-center text-sm text-muted-foreground py-8">

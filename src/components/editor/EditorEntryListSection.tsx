@@ -34,6 +34,7 @@ type EditorSubset = Pick<
   | "handleRejectFuzzy"
   | "handleSplitSingleEntry"
   | "legacyCommaSplitEnabled"
+  | "risenVariant"
 >;
 
 interface EditorEntryListSectionProps {
@@ -109,6 +110,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
         height={Math.max(400, window.innerHeight - 300)}
         legacyCommaSplitEnabled={editor.legacyCommaSplitEnabled}
         buildExtraToolButtons={buildExtraToolButtons}
+        risenVariant={editor.risenVariant}
       />
     ) : null}
 

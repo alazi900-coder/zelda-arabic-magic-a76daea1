@@ -43,6 +43,7 @@ interface TranslationAIEnhancePanelProps {
   glossary?: string;
   /** Extra prompt instructions — the active filter card's dedicated prompt, or the general one. */
   extraInstructions?: string;
+  risenVariant: 'risen1' | 'risen2';
 }
 
 interface EnhanceSuggestion {
@@ -204,6 +205,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   onApplySuggestion,
   glossary,
   extraInstructions,
+  risenVariant,
 }) => {
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
@@ -617,7 +619,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
               builtinOverrides: currentBuiltinOverrides,
               passes: SCAN_PASSES,
-              game: isRisen ? "risen" : "xenoblade",
+              game: isRisen ? risenVariant : "xenoblade",
               extraInstructions: extraInstructions?.trim() || undefined,
               learnedFeedback: learnedFeedback || undefined,
             },
@@ -656,7 +658,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? "risen" : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? risenVariant : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;

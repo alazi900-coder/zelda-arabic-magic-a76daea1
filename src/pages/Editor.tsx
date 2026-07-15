@@ -467,6 +467,7 @@ const Editor = () => {
               onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
               glossary={editor.activeGlossary}
               extraInstructions={effectiveExtraInstructions}
+              risenVariant={editor.risenVariant}
             />
           )}
 
@@ -759,6 +760,7 @@ const Editor = () => {
               glossary={editor.activeGlossary}
               findSimilar={findSimilar}
               onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
+              risenVariant={editor.risenVariant}
             />
           </React.Suspense>
         )}

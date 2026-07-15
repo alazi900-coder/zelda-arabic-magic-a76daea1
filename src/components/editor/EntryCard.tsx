@@ -185,6 +185,7 @@ interface EntryCardProps {
   tmSuggestions?: TMSuggestion[];
   legacyCommaSplitEnabled?: boolean;
   extraToolButtons?: { onClick: () => void; icon: string; title: string; cls?: string }[];
+  risenVariant: 'risen1' | 'risen2';
 }
 
 function findGlossaryMatches(original: string, glossary?: string): { term: string; translation: string }[] {
@@ -217,7 +218,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
   handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag,
   onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, tmSuggestions,
-  legacyCommaSplitEnabled, extraToolButtons,
+  legacyCommaSplitEnabled, extraToolButtons, risenVariant,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
@@ -271,7 +272,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
     setBackTranslation(null);
     try {
       const { data, error } = await supabase.functions.invoke('translation-tools', {
-        body: { text: translation, style: 'back-translate', game: isRisenEntry ? 'risen' : 'xenoblade' },
+        body: { text: translation, style: 'back-translate', game: isRisenEntry ? risenVariant : 'xenoblade' },
       });
       if (error) throw error;
       setBackTranslation(data?.result || 'لم يتم الحصول على نتيجة');
@@ -294,7 +295,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
           entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }],
           glossary,
           action: 'quick-alternatives',
-          game: isRisenEntry ? 'risen' : 'xenoblade',
+          game: isRisenEntry ? risenVariant : 'xenoblade',
         }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);

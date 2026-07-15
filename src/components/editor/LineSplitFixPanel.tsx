@@ -41,6 +41,7 @@ interface Props {
   translations: Record<string, string>;
   onUpdateTranslation: (key: string, value: string) => void;
   onJumpToEntry?: (key: string) => void;
+  risenVariant: 'risen1' | 'risen2';
 }
 
 type Engine =
@@ -104,7 +105,7 @@ const renderInvisible = (text: string): React.ReactNode => {
 };
 
 export const LineSplitFixPanel: React.FC<Props> = ({
-  entries, translations, onUpdateTranslation, onJumpToEntry,
+  entries, translations, onUpdateTranslation, onJumpToEntry, risenVariant,
 }) => {
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
   const [issues, setIssues] = useState<LineSplitIssue[]>([]);
@@ -193,7 +194,7 @@ export const LineSplitFixPanel: React.FC<Props> = ({
             : isDeepseek ? deepseekKey
             : undefined,
       entries: items.map(it => ({ key: it.key, originalEn: it.original, currentAr: it.current })),
-      game: isRisen ? "risen" : "xenoblade",
+      game: isRisen ? risenVariant : "xenoblade",
     };
     const { data, error } = await supabase.functions.invoke("improve-line-splits", { body: payload });
     if (error) {

@@ -12,7 +12,15 @@
  *   0x08  "GR01FN01"
  *   0x10  u32 = 0x28                     (confirmed constant)
  *   0x14  u32, u32                       (segment sizes — meaning not fully resolved, copied verbatim)
- *   0x1C  u32                            (meaning not resolved, copied verbatim)
+ *   0x1C  u32 internalPayloadSize = totalFileSize - 0x66. CONFIRMED exactly
+ *         on two real samples of different sizes (263,010 and 1,409,526
+ *         bytes). This module's own parser/serializer never depended on it
+ *         (headerPrefix is copied verbatim on an unmodified round-trip, so
+ *         it stays correct automatically) — but risen2-arabic-font-gen.ts's
+ *         glyph-appending code MUST recompute and patch it after growing a
+ *         document, or the real game engine misreads payload boundaries and
+ *         crashes (confirmed via a real in-game STATUS_NO_MEMORY crash that
+ *         went away only once this field was kept in sync).
  *   0x20  int64 timestamp (FILETIME)     (copied verbatim)
  *   0x28  ".gfn" + 4 bytes padding
  *   0x30  "GEC0" + object block, TOTAL span (incl. magic) = 0x36 bytes — copied verbatim

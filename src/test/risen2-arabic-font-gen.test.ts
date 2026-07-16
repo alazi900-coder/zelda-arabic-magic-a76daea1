@@ -157,5 +157,37 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     const byChar = new Map(reparsed.charmap.map((r) => [r.charCode, r.glyphIndex]));
     expect(byChar.get(0xfe8e)).toBeDefined();
     expect(byChar.get(0x0660)).toBeDefined();
+
+    // 0x1C is opaque to this module's own parser (parseXgfn never reads it),
+    // so the assertions above would pass even if it were stale — check the
+    // RAW rebuilt bytes directly against the confirmed formula, since that's
+    // what the real game engine actually depends on.
+    const rebuiltView = new DataView(rebuilt);
+    expect(rebuiltView.getUint32(0x1c, true)).toBe(rebuilt.byteLength - 0x66);
+  });
+
+  it("patches 0x1C to (new total size - 0x66) after appending glyphs — confirmed exactly on two real fonts of different sizes; stale here caused a real in-game STATUS_NO_MEMORY crash", () => {
+    const doc = parseXgfn(loadFixture());
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0x0660, 3, 5, 4)]);
+
+    const totalSize =
+      merged.headerPrefix.length +
+      merged.charmap.length * 4 +
+      merged.measurements.reduce((sum, m) => sum + m.rawBytes.length, 0) +
+      merged.ddsBytes.length;
+
+    const headerView = new DataView(merged.headerPrefix.buffer, merged.headerPrefix.byteOffset, merged.headerPrefix.byteLength);
+    expect(headerView.getUint32(0x1c, true)).toBe(totalSize - 0x66);
+
+    // Sanity: the merged document actually grew, so the assertion above
+    // isn't trivially true just because the field was left equal to the
+    // original (unchanged) size.
+    const originalDoc = parseXgfn(loadFixture());
+    const originalTotalSize =
+      originalDoc.headerPrefix.length +
+      originalDoc.charmap.length * 4 +
+      originalDoc.measurements.reduce((sum, m) => sum + m.rawBytes.length, 0) +
+      originalDoc.ddsBytes.length;
+    expect(totalSize).toBeGreaterThan(originalTotalSize);
   });
 });

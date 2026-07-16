@@ -227,6 +227,20 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   const headerPrefix = doc.headerPrefix.slice();
   const headerView = new DataView(headerPrefix.buffer, headerPrefix.byteOffset, headerPrefix.byteLength);
   headerView.setUint32(0xf6, newCharmap.length, true); // authoritative charmap pair count (confirmed field)
+
+  // 0x1C = total decompressed file size - 0x66 (internal payload size,
+  // confirmed exactly on two real samples of different sizes: 263,010 and
+  // 1,409,526 bytes both satisfy field == length - 0x66 precisely). Left
+  // stale at the pre-merge file size, this caused the engine to misread
+  // payload boundaries once the file actually grew — read garbage
+  // counts/sizes from data past the (wrongly) declared end, request a
+  // bogus huge heap allocation, and crash with STATUS_NO_MEMORY (matches
+  // a real in-game crash log, including the file staying fully unusable —
+  // English glyphs included — once the engine can't parse it at all).
+  const measurementsTotalLen = newMeasurements.reduce((sum, m) => sum + m.rawBytes.length, 0);
+  const totalSize = headerPrefix.length + newCharmap.length * 4 + measurementsTotalLen + newDdsBytes.length;
+  headerView.setUint32(0x1c, totalSize - 0x66, true);
+
   // 0xEA is intentionally left untouched. It was previously bumped
   // proportionally to the added glyph count, on the assumption it was some
   // kind of glyph counter — but a real, working, heavily-modified font from

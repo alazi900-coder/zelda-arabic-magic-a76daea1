@@ -54,6 +54,19 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     expect(mergedDecoded.height).toBeGreaterThan(originalDecoded.height);
   });
 
+  it("leaves the 0xEA header field completely untouched regardless of how many glyphs are added", () => {
+    // A real, working, heavily-modified font (from a successful Chinese mod:
+    // 276 -> 3197 charmap pairs) leaves this exact field unchanged (27, same
+    // as the unmodified original) even after a twelvefold charmap increase.
+    // Previously this code bumped 0xEA proportionally to the glyph count on
+    // an unverified guess about its meaning — that guess was wrong and
+    // caused a real in-game crash (STATUS_NO_MEMORY during asset loading).
+    const doc = parseXgfn(loadFixture());
+    const originalGlyphCount = doc.glyphCount;
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0xfeee, 4, 7, 5)]);
+    expect(merged.glyphCount).toBe(originalGlyphCount);
+  });
+
   it("places new glyph pixels at the position recorded in its measurement fields", () => {
     const doc = parseXgfn(loadFixture());
     const glyph = makeGlyph(0xfe8e, 4, 4, 6);

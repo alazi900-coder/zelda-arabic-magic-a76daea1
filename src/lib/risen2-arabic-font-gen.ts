@@ -227,8 +227,16 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   const headerPrefix = doc.headerPrefix.slice();
   const headerView = new DataView(headerPrefix.buffer, headerPrefix.byteOffset, headerPrefix.byteLength);
   headerView.setUint32(0xf6, newCharmap.length, true); // authoritative charmap pair count (confirmed field)
-  const oldGlyphCountField = headerView.getUint32(0xea, true);
-  headerView.setUint32(0xea, oldGlyphCountField + glyphs.length, true); // meaning unresolved, kept proportional
+  // 0xEA is intentionally left untouched. It was previously bumped
+  // proportionally to the added glyph count, on the assumption it was some
+  // kind of glyph counter — but a real, working, heavily-modified font from
+  // a successful Chinese mod (276 -> 3197 charmap pairs, twelvefold growth)
+  // leaves this exact field completely unchanged (27, identical to the
+  // unmodified original). Bumping it was writing a wrong value into a field
+  // whose real meaning is still unknown; the in-game crash (STATUS_NO_MEMORY
+  // during asset loading, consistent with a corrupted size/count field
+  // driving a bad heap allocation) went away only once this stopped
+  // happening. Do not "fix" this again without new evidence.
 
   return {
     headerPrefix,

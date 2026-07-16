@@ -11,6 +11,7 @@ import {
   parseImagesPakFileInfoTree,
   inflateFontsPakEntry,
   buildFontsPakArchive,
+  buildFontsPatchArchive,
   type RisenPakHeader,
   type RisenPakNode,
   type RisenPakFileEntry,
@@ -264,10 +265,15 @@ const RisenFonts = () => {
         const merged = appendArabicGlyphsToXgfn(fontDoc, glyphs);
         replacements.set(path, new Uint8Array(buildXgfn(merged)));
       }
-      const result = buildFontsPakArchive(pakBytes, pakHeader, pakTree, replacements);
-      const outName = (pakName ?? "fonts.pak").replace(/\.pak$/i, "") + "_ar_all35.pak";
+      // Build a STANDALONE patch archive (fonts.p00-style) containing only
+      // the 35 modified fonts — matches the real Chinese mod's structure
+      // exactly (confirmed: their fonts.p00 is a complete, self-contained
+      // 35-entry archive) instead of rebuilding the full 78-entry fonts.pak.
+      // The base fonts.pak stays completely untouched.
+      const result = buildFontsPatchArchive(pakBytes, pakHeader, pakTree, replacements);
+      const outName = "fonts.p00";
       downloadBlob(result.bytes, outName);
-      toast.success(`تم توليد ودمج وحقن الحروف العربية في ${targets.length} خطاً، وتنزيل "${outName}" (${result.bytes.length.toLocaleString()} بايت)`);
+      toast.success(`تم توليد ودمج وحقن الحروف العربية في ${targets.length} خطاً، وتنزيل "${outName}" (${result.bytes.length.toLocaleString()} بايت) — ضعه بجانب fonts.pak الأصلي دون تعديله`);
     } catch (err) {
       console.error(err);
       toast.error("فشلت الدفعة: " + (err as Error).message);
@@ -411,10 +417,10 @@ const RisenFonts = () => {
 
               <div className="mt-4 pt-4 border-t border-border space-y-3">
                 <h3 className="font-display font-bold text-sm">
-                  توليد ودمج الحروف العربية في الـ35 خطاً المستهدفة دفعة واحدة، وحقنها في fonts.pak
+                  توليد ودمج الحروف العربية في الـ35 خطاً المستهدفة دفعة واحدة، وبناء fonts.p00
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  يكرر عملية التوليد والدمج على كل خط من قائمة الـ35 الخضراء (وليس خطاً واحداً فقط)، ثم يحقن الكل في نسخة واحدة من fonts.pak وينزّلها — الطريقة المؤكدة من مود صيني حقيقي ناجح.
+                  يكرر عملية التوليد والدمج على كل خط من قائمة الـ35 الخضراء، ثم يبني ملف تصحيح (patch) مستقل يحتوي هذه الـ35 فقط باسم fonts.p00 — بنفس بنية المود الصيني الحقيقي الناجح. يوضع fonts.p00 بجانب fonts.pak الأصلي دون تعديله؛ اللعبة تدمج التعديلات تلقائياً.
                 </p>
                 <div className="flex items-center gap-3 flex-wrap">
                   <label className="block">

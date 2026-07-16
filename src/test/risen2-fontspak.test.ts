@@ -6,6 +6,7 @@ import {
   parseImagesPakFileInfoTree,
   inflateFontsPakEntry,
   buildFontsPakArchive,
+  buildFontsPatchArchive,
   type RisenPakFileEntry,
 } from "@/lib/risen2-fontspak";
 
@@ -163,5 +164,68 @@ describe("Risen 2 fonts.pak (real 2.4MB archive, 78 entries)", () => {
       const rebuiltEntryContent = inflateFontsPakEntry(result.bytes, node);
       expect(rebuiltEntryContent.length).toBe(originalContent.length);
     }
+  });
+});
+
+describe("buildFontsPatchArchive (standalone fonts.p00-style patch archive)", () => {
+  it("builds a self-contained archive with ONLY the replaced entries — not the full 78", () => {
+    const bytes = loadFixtureBytes();
+    const { header, tree } = openArchive(bytes);
+    const files = flattenFileNodes(tree);
+
+    const targetPaths = ["Trajan Pro_7_o_numbers._xgfn", "Georgia_8_o._xgfn", "Georgia_7_bo._xgfn"];
+    const replacements = new Map<string, Uint8Array>();
+    for (const path of targetPaths) {
+      const node = files.find((f) => f.path === path)!.node;
+      const decompressed = inflateFontsPakEntry(bytes, node);
+      replacements.set(path, decompressed);
+    }
+
+    const result = buildFontsPatchArchive(bytes, header, tree, replacements);
+
+    // Same G3V0 header markers as fonts.pak (confirmed on the real Chinese
+    // fonts.p00 mod: identical header format to fonts.pak, just fewer entries).
+    const view = new DataView(result.bytes.buffer, result.bytes.byteOffset, result.bytes.byteLength);
+    expect(view.getUint32(0x10, true)).toBe(1);
+    expect(view.getUint32(0x14, true)).toBe(0xfeedface);
+
+    const { header: patchHeader, tree: patchTree } = openArchive(result.bytes);
+    expect(patchHeader.totalFileSize).toBe(result.bytes.length);
+    const patchFiles = flattenFileNodes(patchTree);
+
+    // Exactly the 3 replaced entries — not 78, not any untouched original entry.
+    expect(patchFiles.length).toBe(3);
+    expect(new Set(patchFiles.map((f) => f.path))).toEqual(new Set(targetPaths));
+
+    for (const path of targetPaths) {
+      const entry = patchFiles.find((f) => f.path === path)!;
+      const content = inflateFontsPakEntry(result.bytes, entry.node);
+      const expected = replacements.get(path)!;
+      expect(content.length).toBe(expected.length);
+      expect(Buffer.from(content).equals(Buffer.from(expected))).toBe(true);
+    }
+  });
+
+  it("stores a replacement raw (not zlib) when its original entry was raw — mixed-compression rule preserved", () => {
+    const bytes = loadFixtureBytes();
+    const { header, tree } = openArchive(bytes);
+    const files = flattenFileNodes(tree);
+    const whdrNode = files.find((f) => f.path === "font_headers.whdr")!.node;
+    const original = inflateFontsPakEntry(bytes, whdrNode);
+
+    const replacements = new Map([["font_headers.whdr", original]]);
+    const result = buildFontsPatchArchive(bytes, header, tree, replacements);
+
+    const { tree: patchTree } = openArchive(result.bytes);
+    const patchFiles = flattenFileNodes(patchTree);
+    expect(patchFiles.length).toBe(1);
+    const rebuiltContent = inflateFontsPakEntry(result.bytes, patchFiles[0].node);
+    expect(rebuiltContent.length).toBe(original.length);
+  });
+
+  it("throws on an empty replacements map instead of building a useless empty archive", () => {
+    const bytes = loadFixtureBytes();
+    const { header, tree } = openArchive(bytes);
+    expect(() => buildFontsPatchArchive(bytes, header, tree, new Map())).toThrow();
   });
 });

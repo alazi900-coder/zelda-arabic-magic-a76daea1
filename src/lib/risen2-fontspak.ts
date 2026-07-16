@@ -127,6 +127,115 @@ export interface FontsPakBuildResult {
 }
 
 /**
+ * Builds a STANDALONE patch archive (fonts.p00-style) containing ONLY the
+ * entries present in `replacements` — not the full original tree. Confirmed
+ * structurally: a real Chinese fonts.p00 mod (35 entries, the same Trajan
+ * Pro + Georgia target set as this tool's batch generator) is a complete,
+ * self-contained G3V0 archive in exactly this shape (same header markers,
+ * same FileInfo tree format as fonts.pak) — the game engine loads it as a
+ * patch layer over the base fonts.pak, which stays completely untouched on
+ * disk. `replacements` values are DECOMPRESSED bytes; each is stored
+ * compressed unless the matching original entry (from `tree`) was raw
+ * (same mixed-compression rule as buildFontsPakArchive).
+ */
+export function buildFontsPatchArchive(
+  originalBytes: Uint8Array,
+  header: RisenPakHeader,
+  tree: RisenPakNode[],
+  replacements: Map<string, Uint8Array>
+): FontsPakBuildResult {
+  const allFileNodes = walkFileNodes(tree);
+  const patchEntries = allFileNodes.filter(({ path }) => replacements.has(path));
+  if (patchEntries.length === 0) {
+    throw new Error("لا توجد ملفات في replacements لبناء ملف تصحيح منها");
+  }
+
+  const compressedByNode = new Map<RisenPakFileEntry, Uint8Array>();
+  const decompressedSizeByNode = new Map<RisenPakFileEntry, number>();
+  const sizes: Record<string, { compressed: number; decompressed: number }> = {};
+
+  for (const { path, node } of patchEntries) {
+    const replacement = replacements.get(path)!;
+    const wasRaw = node.size === readSize2(node);
+    const stored = wasRaw ? replacement : deflate(replacement);
+    compressedByNode.set(node, stored);
+    decompressedSizeByNode.set(node, replacement.length);
+    sizes[path] = { compressed: stored.length, decompressed: replacement.length };
+  }
+
+  const newOffsets = new Map<RisenPakFileEntry, number>();
+  let cursor = header.dataAddress;
+  for (const { node } of patchEntries) {
+    newOffsets.set(node, cursor);
+    cursor += compressedByNode.get(node)!.length;
+  }
+  const dataEnd = cursor;
+
+  const patchNodeList: RisenPakNode[] = patchEntries.map(({ node }) => node);
+
+  const originalTailBytes = new Map<RisenPakFileEntry, Uint8Array>();
+  for (const { node } of patchEntries) {
+    originalTailBytes.set(node, node.tailBytes!);
+    const compressed = compressedByNode.get(node)!;
+    const decompressedSize = decompressedSizeByNode.get(node)!;
+    node.tailBytes = patchTailSizes(node.tailBytes!, compressed.length, decompressedSize);
+  }
+
+  try {
+    const treeWriter = new PakByteWriter();
+    treeWriter.u32(patchNodeList.length);
+    for (const node of patchNodeList) writeNode(treeWriter, node, newOffsets);
+    const treeBytes = treeWriter.build();
+
+    const totalFileSize = dataEnd + treeBytes.length;
+    const out = new Uint8Array(totalFileSize);
+
+    // Header: copy the original 48 bytes verbatim, then patch offsetToFileInfo + totalFileSize.
+    out.set(originalBytes.subarray(0, 48), 0);
+    const outView = new DataView(out.buffer);
+    outView.setBigInt64(0x20, BigInt(dataEnd - 0x20), true);
+    outView.setBigInt64(0x28, BigInt(totalFileSize), true);
+
+    for (const { node } of patchEntries) {
+      out.set(compressedByNode.get(node)!, newOffsets.get(node)!);
+    }
+    out.set(treeBytes, dataEnd);
+
+    // --- verify our own output before returning it ---
+    const verifyHeader = parseImagesPakHeader(out.subarray(0, 48));
+    if (verifyHeader.totalFileSize !== out.length) {
+      throw new Error("فشل التحقق: حجم ملف التصحيح لا يطابق رأسه");
+    }
+    const { tree: verifyTree, endOffset } = parseImagesPakFileInfoTree(out.subarray(verifyHeader.fileInfoOffset), verifyHeader);
+    if (endOffset !== out.length) {
+      throw new Error("فشل التحقق: نهاية شجرة ملف التصحيح لا تطابق نهايته");
+    }
+    const verifyFiles = walkFileNodes(verifyTree);
+    if (verifyFiles.length !== patchEntries.length) {
+      throw new Error("فشل التحقق: عدد الملفات في ملف التصحيح الناتج غير مطابق");
+    }
+    for (const { path, node } of verifyFiles) {
+      const expected = replacements.get(path)!;
+      const actual = inflateFontsPakEntry(out, node);
+      if (actual.length !== expected.length) {
+        throw new Error(`فشل التحقق لـ"${path}": طول المحتوى المفكوك لا يطابق المتوقع`);
+      }
+      for (let i = 0; i < actual.length; i++) {
+        if (actual[i] !== expected[i]) {
+          throw new Error(`فشل التحقق لـ"${path}": محتوى مختلف بعد إعادة البناء`);
+        }
+      }
+    }
+
+    return { bytes: out, sizes };
+  } finally {
+    // Restore mutated tailBytes on the input tree so this function has no
+    // observable side effect on its caller's tree object on success or failure.
+    for (const { node } of patchEntries) node.tailBytes = originalTailBytes.get(node)!;
+  }
+}
+
+/**
  * Rebuilds the archive. `replacements` maps a file's path (as returned by
  * flattenPakTree — top-level name for fonts.pak since it has no folders) to
  * DECOMPRESSED replacement bytes; every other entry is re-emitted with its

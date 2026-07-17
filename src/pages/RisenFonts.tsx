@@ -5,6 +5,8 @@ import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Packag
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
 import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn } from "@/lib/risen2-arabic-font-gen";
+import { auditXgfnDocument, formatAuditReportText, type XgfnAuditReport } from "@/lib/risen2-xgfn-audit";
+import { updateGlyphFields, deleteCharmapPair, addCharmapAlias, remapCharmapPair } from "@/lib/risen2-xgfn-edit";
 import { decodeDdsToRgba } from "@/lib/risen-ximg";
 import {
   parseImagesPakHeader,
@@ -64,6 +66,17 @@ function computeRowHeightPx(doc: XgfnDocument): number {
   return best;
 }
 
+/** Parses a character reference typed by the user: a single character
+ * ("ب"), a hex codepoint ("FE8E" / "0xFE8E" / "U+FE8E"), or decimal. */
+function parseCharInput(input: string): number | null {
+  const s = input.trim();
+  if (!s) return null;
+  if ([...s].length === 1) return s.codePointAt(0)!;
+  const hex = s.replace(/^(U\+|0x)/i, "");
+  if (/^[0-9a-fA-F]{1,6}$/.test(hex)) return parseInt(hex, 16);
+  return null;
+}
+
 function walkFileEntries(tree: RisenPakNode[], prefix = ""): PakEntryRef[] {
   const out: PakEntryRef[] = [];
   for (const n of tree) {
@@ -112,6 +125,18 @@ const RisenFonts = () => {
   // exactly this same 35-file set, not a single font).
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchProgress, setBatchProgress] = useState<string>("");
+  const [batchSummary, setBatchSummary] = useState<{ errors: number; warnings: number; report: string } | null>(null);
+
+  // Inspection / manual-edit state.
+  const [auditReport, setAuditReport] = useState<XgfnAuditReport | null>(null);
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [selectedPairIdx, setSelectedPairIdx] = useState<number | null>(null);
+  const [editFieldValues, setEditFieldValues] = useState<string[]>([]);
+  const [aliasCharInput, setAliasCharInput] = useState("");
+  const [aliasGlyphInput, setAliasGlyphInput] = useState("");
+  const [remapGlyphInput, setRemapGlyphInput] = useState("");
+  /** The doc as first loaded (pre-merge/pre-edit) — comparison baseline for audits. */
+  const baseDocRef = useRef<XgfnDocument | null>(null);
 
   const decodeFontName = useCallback((headerPrefix: Uint8Array): string => {
     const nameBytes = headerPrefix.subarray(0x96, 0x96 + 64);
@@ -124,11 +149,14 @@ const RisenFonts = () => {
     const parsed = parseXgfn(buffer);
     setOriginalBytes(new Uint8Array(buffer));
     setDoc(parsed);
+    baseDocRef.current = parseXgfn(buffer); // independent copy as audit baseline
     setFileName(label);
     setFontLabel(decodeFontName(parsed.headerPrefix));
     setRoundTrip(null);
     setArabicMerged(false);
-    toast.success(`تم تحليل الملف: ${parsed.glyphCount} حرفاً`);
+    setAuditReport(null);
+    setSelectedPairIdx(null);
+    toast.success(`تم تحليل الملف: ${parsed.charmap.length} زوجاً / ${parsed.recordCount} سجلاً`);
   }, [decodeFontName]);
 
   const handleFile = useCallback(async (file: File) => {
@@ -251,29 +279,78 @@ const RisenFonts = () => {
     if (!pakBytes || !pakHeader || !pakTree || !arabicFontBytes) return;
     setBatchBusy(true);
     setBatchProgress("");
+    setBatchSummary(null);
     try {
       const targets = pakEntries.filter((e) => isTargetFont(e.path));
       const replacements = new Map<string, Uint8Array>();
+      const originalDocs = new Map<string, XgfnDocument>();
+      const reportLines: string[] = [];
+      reportLines.push(`===== تقرير بناء وحقن fonts.p00 — ${new Date().toISOString()} =====`, "");
+
       for (let i = 0; i < targets.length; i++) {
         const { path, node } = targets[i];
-        setBatchProgress(`(${i + 1}/${targets.length}) ${path}`);
+        setBatchProgress(`توليد (${i + 1}/${targets.length}) ${path}`);
         const decompressed = inflateFontsPakEntry(pakBytes, node);
         const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength) as ArrayBuffer;
         const fontDoc = parseXgfn(buf);
+        originalDocs.set(path, parseXgfn(buf));
         const rowHeightPx = computeRowHeightPx(fontDoc);
         const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, rowHeightPx);
         const merged = appendArabicGlyphsToXgfn(fontDoc, glyphs);
         replacements.set(path, new Uint8Array(buildXgfn(merged)));
+
+        const oldDims = decodeDdsToRgba(fontDoc.ddsBytes);
+        const newDims = decodeDdsToRgba(merged.ddsBytes);
+        reportLines.push(
+          `--- ${path} ---`,
+          `الأزواج: ${fontDoc.charmap.length} → ${merged.charmap.length} (+${merged.charmap.length - fontDoc.charmap.length})`,
+          `السجلات: ${fontDoc.recordCount} → ${merged.recordCount}`,
+          `الأطلس: ${oldDims.supported ? `${oldDims.width}×${oldDims.height}` : "؟"} → ${newDims.supported ? `${newDims.width}×${newDims.height}` : "؟"}`,
+        );
       }
-      // Build a STANDALONE patch archive (fonts.p00-style) containing only
-      // the 35 modified fonts — matches the real Chinese mod's structure
-      // exactly (confirmed: their fonts.p00 is a complete, self-contained
-      // 35-entry archive) instead of rebuilding the full 78-entry fonts.pak.
-      // The base fonts.pak stays completely untouched.
+
+      // Standalone fonts.p00-style patch archive (matches the real Chinese
+      // mod's structure); the base fonts.pak stays completely untouched.
+      setBatchProgress("بناء fonts.p00...");
       const result = buildFontsPatchArchive(pakBytes, pakHeader, pakTree, replacements);
-      const outName = "fonts.p00";
-      downloadBlob(result.bytes, outName);
-      toast.success(`تم توليد ودمج وحقن الحروف العربية في ${targets.length} خطاً، وتنزيل "${outName}" (${result.bytes.length.toLocaleString()} بايت) — ضعه بجانب fonts.pak الأصلي دون تعديله`);
+
+      // ── Post-injection deep audit: re-open OUR OWN OUTPUT from its raw
+      // bytes and run the full audit (structure + per-glyph pixel checks +
+      // compare-against-original) on every font actually inside it. This is
+      // the direct answer to "does the injection itself introduce even a
+      // small problem": we verify what the game will actually read. ──
+      let totalErrors = 0;
+      let totalWarnings = 0;
+      reportLines.push("", "===== فحص ما بعد الحقن (قراءة fonts.p00 الناتج نفسه) =====");
+      const outHeader = parseImagesPakHeader(result.bytes.slice(0, 48));
+      const { tree: outTree } = parseImagesPakFileInfoTree(result.bytes.subarray(outHeader.fileInfoOffset), outHeader);
+      const outEntries = walkFileEntries(outTree);
+      for (let i = 0; i < outEntries.length; i++) {
+        const { path, node } = outEntries[i];
+        setBatchProgress(`فحص ما بعد الحقن (${i + 1}/${outEntries.length}) ${path}`);
+        // Yield to the event loop so progress paints during the heavy scans.
+        await new Promise((r) => setTimeout(r, 0));
+        const content = inflateFontsPakEntry(result.bytes, node);
+        const parsed = parseXgfn(content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer);
+        const audit = auditXgfnDocument(parsed, { fontLabel: path, original: originalDocs.get(path) });
+        totalErrors += audit.errorCount;
+        totalWarnings += audit.warningCount;
+        if (audit.errorCount > 0 || audit.warningCount > 0) {
+          reportLines.push("", formatAuditReportText(audit));
+        } else {
+          reportLines.push(`${path}: سليم ✅ (${audit.glyphs.length} حرفاً، أطلس ${audit.atlas?.width}×${audit.atlas?.height})`);
+        }
+      }
+      reportLines.push("", `===== الخلاصة: ${totalErrors} خطأ، ${totalWarnings} تحذير عبر ${outEntries.length} خطاً =====`);
+      const reportText = reportLines.join("\n");
+      setBatchSummary({ errors: totalErrors, warnings: totalWarnings, report: reportText });
+
+      downloadBlob(result.bytes, "fonts.p00");
+      if (totalErrors > 0) {
+        toast.error(`اكتمل البناء لكن الفحص وجد ${totalErrors} خطأً — راجع التقرير قبل الاستخدام`);
+      } else {
+        toast.success(`تم بناء fonts.p00 (${result.bytes.length.toLocaleString()} بايت) وفحص كل الـ${outEntries.length} خطاً بعد الحقن: ${totalErrors} خطأ، ${totalWarnings} تحذير`);
+      }
     } catch (err) {
       console.error(err);
       toast.error("فشلت الدفعة: " + (err as Error).message);
@@ -281,7 +358,7 @@ const RisenFonts = () => {
       setBatchBusy(false);
       setBatchProgress("");
     }
-  }, [pakBytes, pakHeader, pakTree, arabicFontBytes, pakEntries, pakName]);
+  }, [pakBytes, pakHeader, pakTree, arabicFontBytes, pakEntries]);
 
   const handleRoundTripTest = useCallback(() => {
     if (!doc || !originalBytes) return;
@@ -302,6 +379,122 @@ const RisenFonts = () => {
       setRoundTrip({ ok: false, message: "خطأ أثناء إعادة البناء: " + (err as Error).message });
     }
   }, [doc, originalBytes]);
+
+  // ─── Inspection / manual edit ──────────────────────────────────────────
+
+  const handleRunAudit = useCallback(() => {
+    if (!doc) return;
+    setAuditBusy(true);
+    // setTimeout so the busy state paints before the (CPU-heavy) pixel scan.
+    setTimeout(() => {
+      try {
+        const report = auditXgfnDocument(doc, {
+          fontLabel: fileName ?? "",
+          original: arabicMerged ? baseDocRef.current ?? undefined : undefined,
+        });
+        setAuditReport(report);
+        if (report.errorCount === 0 && report.warningCount === 0) {
+          toast.success("الفحص الشامل: لا أخطاء ولا تحذيرات ✅");
+        } else {
+          toast[report.errorCount > 0 ? "error" : "warning"](`الفحص: ${report.errorCount} خطأ، ${report.warningCount} تحذير`);
+        }
+      } catch (err) {
+        toast.error("فشل الفحص: " + (err as Error).message);
+      } finally {
+        setAuditBusy(false);
+      }
+    }, 30);
+  }, [doc, fileName, arabicMerged]);
+
+  const handleDownloadAuditReport = useCallback(() => {
+    if (!auditReport) return;
+    const text = formatAuditReportText(auditReport);
+    downloadBlob(new TextEncoder().encode(text), `font-audit-${(fileName ?? "font").replace(/[^\w.-]+/g, "_")}.txt`);
+  }, [auditReport, fileName]);
+
+  const selectPair = useCallback((idx: number | null) => {
+    setSelectedPairIdx(idx);
+    if (idx !== null && doc) {
+      const pair = doc.charmap[idx];
+      const rec = pair.glyphIndex < doc.measurements.length ? doc.measurements[pair.glyphIndex] : null;
+      setEditFieldValues(rec ? rec.fields.map((v) => String(v)) : []);
+      setRemapGlyphInput(String(pair.glyphIndex));
+    }
+  }, [doc]);
+
+  /** Applies an edit result (already safety-verified by the edit module). */
+  const applyEdit = useCallback((fn: () => { doc: XgfnDocument }) => {
+    try {
+      const { doc: next } = fn();
+      setDoc(next);
+      setAuditReport(null);
+      setRoundTrip(null);
+      setOriginalBytes(null); // manually edited — no longer matches any original stream
+      setArabicMerged(true); // enables inject/download buttons
+      toast.success("طُبّق التعديل بعد اجتياز الفحص الكامل ✅");
+      return true;
+    } catch (err) {
+      toast.error((err as Error).message);
+      return false;
+    }
+  }, []);
+
+  const handleApplyFieldEdit = useCallback(() => {
+    if (!doc || selectedPairIdx === null) return;
+    const pair = doc.charmap[selectedPairIdx];
+    const fields = editFieldValues.map((v) => parseInt(v, 10));
+    if (fields.length !== 9 || fields.some((v) => !Number.isFinite(v))) {
+      toast.error("القيم يجب أن تكون 9 أعداد صحيحة");
+      return;
+    }
+    applyEdit(() => updateGlyphFields(doc, pair.glyphIndex, fields));
+  }, [doc, selectedPairIdx, editFieldValues, applyEdit]);
+
+  const handleDeletePair = useCallback(() => {
+    if (!doc || selectedPairIdx === null) return;
+    const pair = doc.charmap[selectedPairIdx];
+    if (applyEdit(() => deleteCharmapPair(doc, pair.charCode))) {
+      setSelectedPairIdx(null);
+    }
+  }, [doc, selectedPairIdx, applyEdit]);
+
+  const handleRemapPair = useCallback(() => {
+    if (!doc || selectedPairIdx === null) return;
+    const pair = doc.charmap[selectedPairIdx];
+    const gi = parseInt(remapGlyphInput, 10);
+    if (!Number.isFinite(gi)) { toast.error("مؤشر غير صالح"); return; }
+    applyEdit(() => remapCharmapPair(doc, pair.charCode, gi));
+  }, [doc, selectedPairIdx, remapGlyphInput, applyEdit]);
+
+  const handleAddAlias = useCallback(() => {
+    if (!doc) return;
+    const code = parseCharInput(aliasCharInput);
+    if (code === null) { toast.error("أدخل حرفاً واحداً أو رمزاً ست عشرياً مثل FE8E"); return; }
+    const gi = parseInt(aliasGlyphInput, 10);
+    if (!Number.isFinite(gi)) { toast.error("مؤشر الحرف الهدف غير صالح"); return; }
+    if (applyEdit(() => addCharmapAlias(doc, code, gi))) {
+      setAliasCharInput("");
+      setAliasGlyphInput("");
+    }
+  }, [doc, aliasCharInput, aliasGlyphInput, applyEdit]);
+
+  /** Click on the atlas selects the glyph whose box contains the point. */
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!doc || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = Math.floor((e.clientX - rect.left) * (canvasRef.current.width / rect.width));
+    const y = Math.floor((e.clientY - rect.top) * (canvasRef.current.height / rect.height));
+    for (let i = 0; i < doc.charmap.length; i++) {
+      const gi = doc.charmap[i].glyphIndex;
+      if (gi >= doc.measurements.length) continue;
+      const [x0, y0, x1, y1] = doc.measurements[gi].fields;
+      if (x1 > x0 && y1 > y0 && x >= x0 && x < x1 && y >= y0 && y < y1) {
+        selectPair(i);
+        return;
+      }
+    }
+    selectPair(null);
+  }, [doc, selectPair]);
 
   // Render the DDS atlas + diagnostic grid overlay whenever the doc or grid toggle changes.
   useEffect(() => {
@@ -336,7 +529,22 @@ const RisenFonts = () => {
       }
       ctx.restore();
     }
-  }, [doc, showGrid]);
+
+    // Selected-glyph highlight (drawn regardless of the grid toggle).
+    if (selectedPairIdx !== null && doc.charmap[selectedPairIdx]) {
+      const gi = doc.charmap[selectedPairIdx].glyphIndex;
+      if (gi < doc.measurements.length) {
+        const [x0, y0, x1, y1] = doc.measurements[gi].fields;
+        if (x1 > x0 && y1 > y0) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(0, 220, 255, 1)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0, y1 - y0);
+          ctx.restore();
+        }
+      }
+    }
+  }, [doc, showGrid, selectedPairIdx]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
@@ -442,6 +650,24 @@ const RisenFonts = () => {
                 {batchBusy && batchProgress && (
                   <p className="text-xs text-muted-foreground font-mono">{batchProgress}</p>
                 )}
+                {batchSummary && (
+                  <div className={`rounded-lg p-3 text-sm space-y-2 ${batchSummary.errors > 0 ? "bg-destructive/10" : "bg-emerald-500/10"}`}>
+                    <div className="flex items-center gap-2">
+                      {batchSummary.errors > 0 ? <XCircle className="w-4 h-4 text-destructive shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+                      <span>
+                        فحص ما بعد الحقن (قراءة fonts.p00 الناتج نفسه): {batchSummary.errors} خطأ، {batchSummary.warnings} تحذير
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="font-display gap-2"
+                      onClick={() => downloadBlob(new TextEncoder().encode(batchSummary.report), "fonts-p00-build-report.txt")}
+                    >
+                      <Download className="w-3 h-3" /> تنزيل التقرير المفصل (البناء + الحقن + كل حرف)
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -519,11 +745,54 @@ const RisenFonts = () => {
               <Button onClick={handleRoundTripTest} variant="outline" className="font-display">
                 اختبار Round-trip
               </Button>
+              <Button onClick={handleRunAudit} disabled={auditBusy} variant="outline" className="font-display gap-2">
+                {auditBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                فحص شامل (بنية + بكسلات)
+              </Button>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} className="rounded border-border" />
                 إظهار الشبكة التشخيصية
               </label>
             </div>
+
+            {auditReport && (
+              <div className={`rounded-lg border p-3 text-sm space-y-2 ${auditReport.errorCount > 0 ? "border-destructive/40 bg-destructive/5" : auditReport.warningCount > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-emerald-500/40 bg-emerald-500/5"}`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    {auditReport.errorCount > 0 ? <XCircle className="w-4 h-4 text-destructive" /> : <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    <strong className="font-display">
+                      سجل الفحص: {auditReport.errorCount} خطأ، {auditReport.warningCount} تحذير — {auditReport.glyphs.length} حرفاً، أطلس {auditReport.atlas ? `${auditReport.atlas.width}×${auditReport.atlas.height}` : "؟"}
+                    </strong>
+                  </div>
+                  <Button variant="outline" size="sm" className="font-display gap-2" onClick={handleDownloadAuditReport}>
+                    <Download className="w-3 h-3" /> تنزيل التقرير الكامل
+                  </Button>
+                </div>
+                {auditReport.headerIssues.length > 0 && (
+                  <ul className="text-xs space-y-1">
+                    {auditReport.headerIssues.map((issue, i) => (
+                      <li key={i} className={issue.severity === "error" ? "text-destructive" : "text-amber-500"}>
+                        [{issue.severity === "error" ? "خطأ" : "تحذير"}] {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {auditReport.glyphs.some((g) => g.issues.length > 0) && (
+                  <div className="max-h-40 overflow-y-auto text-xs space-y-1 border-t border-border pt-2">
+                    {auditReport.glyphs.filter((g) => g.issues.length > 0).map((g, i) => (
+                      <div key={i}>
+                        <span className="font-mono">{g.charLabel} (U+{g.charCode.toString(16).toUpperCase()})</span>:{" "}
+                        {g.issues.map((issue, j) => (
+                          <span key={j} className={issue.severity === "error" ? "text-destructive" : "text-amber-500"}>
+                            {issue.message}{j < g.issues.length - 1 ? " ؛ " : ""}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {roundTrip && (
               <div className={`rounded-lg p-3 text-sm flex items-center gap-2 ${roundTrip.ok ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}>
@@ -575,10 +844,118 @@ const RisenFonts = () => {
 
             <div>
               <p className="text-xs text-muted-foreground mb-2">
-                المربعات الوردية: صندوق كل حرف في الأطلس (fields[0..3] = [x0,y0,x1,y1]) — تحقق منها فعلياً بمطابقة بكسلات الحروف الحقيقية داخلها على عيّنة Georgia (276 حرفاً).
+                المربعات الوردية: صندوق كل حرف في الأطلس. انقر على أي حرف داخل الأطلس (أو في الجدول أدناه) لاختياره وفحص بياناته وتعديلها — المختار يُحاط بإطار سماوي.
               </p>
               <div className="overflow-auto rounded-lg border border-border bg-[repeating-conic-gradient(#0002_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-2">
-                <canvas ref={canvasRef} className="max-w-none" style={{ imageRendering: "pixelated" }} />
+                <canvas ref={canvasRef} onClick={handleCanvasClick} className="max-w-none cursor-crosshair" style={{ imageRendering: "pixelated" }} />
+              </div>
+            </div>
+
+            {/* Glyph inspector table */}
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <h3 className="font-display font-bold text-sm">جدول الحروف ({doc.charmap.length}) — انقر صفاً لاختياره</h3>
+              <div className="max-h-64 overflow-y-auto rounded border border-border">
+                <table className="w-full text-xs font-mono">
+                  <thead className="sticky top-0 bg-card">
+                    <tr className="text-muted-foreground">
+                      <th className="px-2 py-1 text-right">الحرف</th>
+                      <th className="px-2 py-1 text-right">الرمز</th>
+                      <th className="px-2 py-1 text-right">المؤشر</th>
+                      <th className="px-2 py-1 text-right">الصندوق</th>
+                      <th className="px-2 py-1 text-right">التباعد</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {doc.charmap.map((pair, i) => {
+                      const rec = pair.glyphIndex < doc.measurements.length ? doc.measurements[pair.glyphIndex] : null;
+                      const [x0, y0, x1, y1, adv] = rec ? rec.fields : [];
+                      return (
+                        <tr
+                          key={i}
+                          onClick={() => selectPair(i)}
+                          className={`cursor-pointer border-t border-border hover:bg-primary/10 ${selectedPairIdx === i ? "bg-primary/20" : ""}`}
+                        >
+                          <td className="px-2 py-1">{pair.charCode >= 0x21 ? String.fromCharCode(pair.charCode) : pair.charCode === 0x20 ? "␣" : "·"}</td>
+                          <td className="px-2 py-1">U+{pair.charCode.toString(16).toUpperCase().padStart(4, "0")}</td>
+                          <td className="px-2 py-1">{pair.glyphIndex}</td>
+                          <td className="px-2 py-1" dir="ltr">{rec ? `[${x0},${y0}]-[${x1},${y1}]` : "—"}</td>
+                          <td className="px-2 py-1">{rec ? adv : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {selectedPairIdx !== null && doc.charmap[selectedPairIdx] && (
+                <div className="rounded-lg bg-background/50 p-3 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <strong className="font-display text-sm">
+                      الحرف المختار: {doc.charmap[selectedPairIdx].charCode >= 0x21 ? String.fromCharCode(doc.charmap[selectedPairIdx].charCode) : "·"}{" "}
+                      (U+{doc.charmap[selectedPairIdx].charCode.toString(16).toUpperCase().padStart(4, "0")}) → السجل {doc.charmap[selectedPairIdx].glyphIndex}
+                    </strong>
+                    <Button variant="destructive" size="sm" className="font-display" onClick={handleDeletePair}>
+                      حذف ربط هذا الحرف
+                    </Button>
+                  </div>
+
+                  {editFieldValues.length === 9 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">تعديل حقول السجل (كل تعديل يمر بفحص كامل قبل قبوله — التعديل المُفسِد يُرفض تلقائياً):</p>
+                      <div className="grid grid-cols-3 md:grid-cols-9 gap-2" dir="ltr">
+                        {["x0", "y0", "x1", "y1", "adv", "f5", "f6", "f7", "f8"].map((label, k) => (
+                          <label key={label} className="text-xs font-mono">
+                            <span className="text-muted-foreground block">{label}</span>
+                            <input
+                              type="number"
+                              value={editFieldValues[k]}
+                              onChange={(e) => setEditFieldValues((prev) => prev.map((v, j) => (j === k ? e.target.value : v)))}
+                              className="w-full rounded border border-border bg-background px-1 py-0.5"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button size="sm" className="font-display" onClick={handleApplyFieldEdit}>تطبيق تعديل الحقول</Button>
+                        <span className="text-xs text-muted-foreground">أو إعادة ربط الحرف بسجل آخر:</span>
+                        <input
+                          type="number"
+                          value={remapGlyphInput}
+                          onChange={(e) => setRemapGlyphInput(e.target.value)}
+                          className="w-20 rounded border border-border bg-background px-1 py-0.5 text-xs font-mono"
+                          dir="ltr"
+                        />
+                        <Button size="sm" variant="outline" className="font-display" onClick={handleRemapPair}>إعادة ربط</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Add a new character mapped to an existing glyph */}
+              <div className="rounded-lg bg-background/50 p-3 space-y-2">
+                <strong className="font-display text-sm">إضافة حرف جديد (ربط ذكي بسجل موجود)</strong>
+                <p className="text-xs text-muted-foreground">
+                  اكتب الحرف نفسه أو رمزه الست عشري (مثل FE8E)، ورقم السجل الذي سيرسمه — الحرف الجديد يستخدم رسماً مجرَّباً دون أي تغيير في الأطلس. يمر بالفحص الكامل قبل القبول.
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="text"
+                    placeholder="الحرف أو FE8E"
+                    value={aliasCharInput}
+                    onChange={(e) => setAliasCharInput(e.target.value)}
+                    className="w-28 rounded border border-border bg-background px-2 py-1 text-sm font-mono"
+                  />
+                  <input
+                    type="number"
+                    placeholder="السجل"
+                    value={aliasGlyphInput}
+                    onChange={(e) => setAliasGlyphInput(e.target.value)}
+                    className="w-24 rounded border border-border bg-background px-2 py-1 text-sm font-mono"
+                    dir="ltr"
+                  />
+                  <Button size="sm" className="font-display" onClick={handleAddAlias}>إضافة الربط</Button>
+                </div>
               </div>
             </div>
           </div>

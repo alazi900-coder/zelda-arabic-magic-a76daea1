@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package, Download } from "lucide-react";
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
-import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn, measureFontCellMetrics } from "@/lib/risen2-arabic-font-gen";
+import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn, measureFontCellMetrics, type AlternateFontOverride } from "@/lib/risen2-arabic-font-gen";
+import { getPresentationFormsForLetter } from "@/lib/risen/arabic-shaper";
 import { auditXgfnDocument, formatAuditReportText, buildDiagnosticJson, type XgfnAuditReport } from "@/lib/risen2-xgfn-audit";
 import { updateGlyphFields, deleteCharmapPair, addCharmapAlias, remapCharmapPair } from "@/lib/risen2-xgfn-edit";
 import { shapeArabicForRisen } from "@/lib/risen/arabic-shaper";
@@ -134,6 +135,12 @@ const RisenFonts = () => {
   // in-game test.
   const [arabicFontBytes, setArabicFontBytes] = useState<ArrayBuffer | null>(null);
   const [arabicFontName, setArabicFontName] = useState<string | null>(null);
+  // Alternate font: selected base letters are rendered from this TTF instead
+  // of the primary one (all their contextual forms at once), fixing letters
+  // the primary font draws badly (e.g. medial ع designed like an initial).
+  const [altFontBytes, setAltFontBytes] = useState<ArrayBuffer | null>(null);
+  const [altFontName, setAltFontName] = useState<string | null>(null);
+  const [altLetters, setAltLetters] = useState("");
   const [arabicBusy, setArabicBusy] = useState(false);
   const [arabicMerged, setArabicMerged] = useState(false);
   const [injectBusy, setInjectBusy] = useState(false);
@@ -277,11 +284,33 @@ const RisenFonts = () => {
     setArabicFontName(file.name);
   }, []);
 
+  const handleAltFontFile = useCallback(async (file: File) => {
+    const buffer = await file.arrayBuffer();
+    setAltFontBytes(buffer);
+    setAltFontName(file.name);
+  }, []);
+
+  /** Expands the typed base letters (e.g. "ع غ") into ALL their contextual
+   * presentation-form codepoints — replacing a letter must replace every
+   * form it takes, or styles would mix mid-word. */
+  const altCodepoints = useMemo(() => {
+    const set = new Set<number>();
+    for (const ch of altLetters.replace(/\s+/g, "")) {
+      for (const cp of getPresentationFormsForLetter(ch.codePointAt(0)!)) set.add(cp);
+    }
+    return set;
+  }, [altLetters]);
+
+  const altOverride: AlternateFontOverride | undefined = useMemo(
+    () => (altFontBytes && altCodepoints.size > 0 ? { fontBytes: altFontBytes, codepoints: altCodepoints } : undefined),
+    [altFontBytes, altCodepoints]
+  );
+
   const handleGenerateArabic = useCallback(async () => {
     if (!doc || !arabicFontBytes) return;
     setArabicBusy(true);
     try {
-      const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, measureFontCellMetrics(doc));
+      const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, measureFontCellMetrics(doc), altOverride);
       const merged = appendArabicGlyphsToXgfn(doc, glyphs);
       setDoc(merged);
       setOriginalBytes(null); // merged doc no longer corresponds to any single original byte stream
@@ -294,7 +323,7 @@ const RisenFonts = () => {
     } finally {
       setArabicBusy(false);
     }
-  }, [doc, arabicFontBytes]);
+  }, [doc, arabicFontBytes, altOverride]);
 
   const handleInjectAndDownload = useCallback(() => {
     if (!doc || !pakBytes || !pakHeader || !pakTree || !selectedPath) return;
@@ -332,7 +361,7 @@ const RisenFonts = () => {
         const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength) as ArrayBuffer;
         const fontDoc = parseXgfn(buf);
         originalDocs.set(path, parseXgfn(buf));
-        const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, measureFontCellMetrics(fontDoc));
+        const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, measureFontCellMetrics(fontDoc), altOverride);
         const merged = appendArabicGlyphsToXgfn(fontDoc, glyphs);
         replacements.set(path, new Uint8Array(buildXgfn(merged)));
 
@@ -397,7 +426,7 @@ const RisenFonts = () => {
       setBatchBusy(false);
       setBatchProgress("");
     }
-  }, [pakBytes, pakHeader, pakTree, arabicFontBytes, pakEntries]);
+  }, [pakBytes, pakHeader, pakTree, arabicFontBytes, pakEntries, altOverride]);
 
   const handleRoundTripTest = useCallback(() => {
     if (!doc || !originalBytes) return;
@@ -710,6 +739,41 @@ const RisenFonts = () => {
     }
   }, [doc, showGrid, selectedPairIdx, editFieldValues]);
 
+  const altFontControls = (
+    <div className="space-y-1">
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="block">
+          <input
+            type="file"
+            accept=".ttf,.otf"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleAltFontFile(f); }}
+          />
+          <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-sm cursor-pointer hover:border-primary/50">
+            <Upload className="w-4 h-4" /> {altFontName ?? "خط بديل (اختياري)"}
+          </span>
+        </label>
+        <input
+          type="text"
+          placeholder="حروف من البديل مثل: ع غ"
+          value={altLetters}
+          onChange={(e) => setAltLetters(e.target.value)}
+          className="w-48 rounded border border-border bg-background px-2 py-1.5 text-sm"
+          dir="rtl"
+        />
+        {altOverride && (
+          <span className="text-xs text-emerald-500">سيُؤخذ {altCodepoints.size} شكلاً من {altFontName}</span>
+        )}
+        {altLetters.trim() && !altFontBytes && (
+          <span className="text-xs text-amber-500">ارفع الخط البديل أولاً</span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        اكتب الحرف الأساسي (مثل ع) فتُستبدل كل أشكاله الأربعة تلقائياً من الخط البديل — بنفس الخلايا وخط القاعدة والإحداثيات المحسوبة تلقائياً، بلا أي ضبط يدوي.
+      </p>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -811,6 +875,7 @@ const RisenFonts = () => {
                     توليد + حقن + تنزيل ({pakEntries.filter((e) => isTargetFont(e.path)).length} خطاً)
                   </Button>
                 </div>
+                {altFontControls}
                 {batchBusy && batchProgress && (
                   <p className="text-xs text-muted-foreground font-mono">{batchProgress}</p>
                 )}
@@ -1001,6 +1066,7 @@ const RisenFonts = () => {
                   {arabicBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "توليد ودمج"}
                 </Button>
               </div>
+              {altFontControls}
 
               {arabicMerged && (
                 pakBytes && selectedPath ? (

@@ -152,19 +152,61 @@ function inkBoundingBox(data: Uint8ClampedArray, width: number, height: number) 
  * (30px cells in the 27px Georgia_16) and render fine in-game. */
 const DESCENT_EXTRA_PX = 3;
 
+/** Per-character alternate font: the listed codepoints are rendered from
+ * `fontBytes` instead of the primary TTF (fix for primary-font glyphs drawn
+ * badly, e.g. a medial ع designed like an initial one). Alternate glyphs go
+ * through the exact same cell/baseline fitting, so their coordinates and
+ * spacing come out consistent with the rest automatically. */
+export interface AlternateFontOverride {
+  fontBytes: ArrayBuffer;
+  codepoints: Set<number>;
+}
+
+/** Picks the font size at which the given glyph set fits the cell: tallest
+ * ascender stays above the baseline, deepest descender inside the cell. */
+function fitFontSize(
+  ctx: CanvasRenderingContext2D,
+  family: string,
+  codepoints: number[],
+  baseline: number,
+  descentRoom: number,
+  cellHeight: number
+): number {
+  const trialSize = cellHeight * 4;
+  ctx.font = `${trialSize}px ${family}`;
+  let maxAscent = 1;
+  let maxDescent = 1;
+  for (const cp of codepoints) {
+    const m = ctx.measureText(String.fromCharCode(cp));
+    if (m.actualBoundingBoxAscent > maxAscent) maxAscent = m.actualBoundingBoxAscent;
+    if (m.actualBoundingBoxDescent > maxDescent) maxDescent = m.actualBoundingBoxDescent;
+  }
+  const scale = Math.min(baseline / maxAscent, descentRoom / maxDescent);
+  return Math.max(5, Math.floor(trialSize * scale));
+}
+
 /** Renders every required Arabic glyph codepoint from a TTF's bytes as
  * uniform-height baseline-aligned CELLS (the same geometry the original
  * fonts and the working Chinese mod use — see measureFontCellMetrics).
  * The font size is chosen automatically so that NO glyph's ascender rises
- * above the cell top and NO descender falls below the cell bottom.
+ * above the cell top and NO descender falls below the cell bottom. Pass an
+ * `override` to source selected codepoints from a second TTF (sized with
+ * the same fitting, so everything stays on one baseline).
  * Browser-only (FontFace/Canvas 2D). */
 export async function renderArabicGlyphsFromFont(
   fontBytes: ArrayBuffer,
-  metrics: FontCellMetrics
+  metrics: FontCellMetrics,
+  override?: AlternateFontOverride
 ): Promise<RenderedArabicGlyph[]> {
   const fontFace = new FontFace("RisenArabicGen", fontBytes);
   await fontFace.load();
   document.fonts.add(fontFace);
+  let altFace: FontFace | null = null;
+  if (override && override.codepoints.size > 0) {
+    altFace = new FontFace("RisenArabicGenAlt", override.fontBytes);
+    await altFace.load();
+    document.fonts.add(altFace);
+  }
 
   try {
     const { cellHeight, baseline } = metrics;
@@ -173,32 +215,25 @@ export async function renderArabicGlyphsFromFont(
     const codepoints = getRisenArabicGlyphCodepoints();
 
     const canvas = document.createElement("canvas");
+    canvas.width = cellHeight * 16;
+    canvas.height = cellH;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("تعذّر إنشاء سياق Canvas 2D لرسم الحروف العربية");
 
-    // Pass 1 — measure the whole glyph set at a large trial size, then scale
-    // the font so the tallest ascender fits above the baseline and the
-    // deepest descender fits below it within the cell.
-    const trialSize = cellHeight * 4;
-    canvas.width = trialSize * 4;
-    canvas.height = cellH;
-    ctx.font = `${trialSize}px RisenArabicGen`;
-    let maxAscent = 1;
-    let maxDescent = 1;
-    for (const cp of codepoints) {
-      const m = ctx.measureText(String.fromCharCode(cp));
-      if (m.actualBoundingBoxAscent > maxAscent) maxAscent = m.actualBoundingBoxAscent;
-      if (m.actualBoundingBoxDescent > maxDescent) maxDescent = m.actualBoundingBoxDescent;
-    }
-    const scale = Math.min(baseline / maxAscent, descentRoom / maxDescent);
-    const fontSize = Math.max(5, Math.floor(trialSize * scale));
-
-    ctx.font = `${fontSize}px RisenArabicGen`;
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#fff";
+    // Each font family is fitted over the FULL glyph set with the same
+    // formula — both end up sharing the cell and baseline, so mixed-source
+    // text stays level without any manual coordinate work.
+    const mainSize = fitFontSize(ctx, "RisenArabicGen", codepoints, baseline, descentRoom, cellHeight);
+    const altSize = altFace ? fitFontSize(ctx, "RisenArabicGenAlt", codepoints, baseline, descentRoom, cellHeight) : 0;
 
     const glyphs: RenderedArabicGlyph[] = [];
     for (const cp of codepoints) {
+      const useAlt = altFace !== null && override!.codepoints.has(cp);
+      const fontSpec = useAlt ? `${altSize}px RisenArabicGenAlt` : `${mainSize}px RisenArabicGen`;
+      ctx.font = fontSpec;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#fff";
+
       const ch = String.fromCharCode(cp);
       const m = ctx.measureText(ch);
       const advance = Math.max(1, Math.round(m.width));
@@ -209,7 +244,7 @@ export async function renderArabicGlyphsFromFont(
       if (canvas.width < cellW) {
         canvas.width = cellW;
         canvas.height = cellH;
-        ctx.font = `${fontSize}px RisenArabicGen`;
+        ctx.font = fontSpec;
         ctx.textBaseline = "alphabetic";
         ctx.fillStyle = "#fff";
       }
@@ -230,6 +265,7 @@ export async function renderArabicGlyphsFromFont(
     return glyphs;
   } finally {
     document.fonts.delete(fontFace);
+    if (altFace) document.fonts.delete(altFace);
   }
 }
 

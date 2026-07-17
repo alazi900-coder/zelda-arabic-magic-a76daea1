@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shapeArabicForRisen } from "@/lib/risen/arabic-shaper";
+import { shapeArabicForRisen, getPresentationFormsForLetter } from "@/lib/risen/arabic-shaper";
 import { parseRisenP00Full, buildRisenP00, applyTranslations, makeKey } from "@/lib/risen-p00";
 
 /** Build a string from hex codepoints, e.g. cp(0x0645, 0x062A) — keeps
@@ -273,5 +273,28 @@ describe("shapeArabicForRisen — integration: survives the real binary build ro
     expect(storedValue).toBe(shaped);
     expect(storedValue).toContain("<Attack>");
     expect(storedValue).not.toBe(logicalTranslation);
+  });
+});
+
+describe("getPresentationFormsForLetter — alternate-font override expansion", () => {
+  it("ع expands to exactly its 4 contextual forms", () => {
+    expect(getPresentationFormsForLetter(0x0639).sort()).toEqual([0xfec9, 0xfeca, 0xfecb, 0xfecc]);
+  });
+
+  it("د (non-connecting forward) expands to its 2 forms only", () => {
+    expect(getPresentationFormsForLetter(0x062f).sort()).toEqual([0xfea9, 0xfeaa]);
+  });
+
+  it("ل includes its 4 forms plus all 8 lam-alef ligature forms", () => {
+    const forms = getPresentationFormsForLetter(0x0644);
+    expect(forms).toHaveLength(12);
+    for (const lig of [0xfef5, 0xfef6, 0xfef7, 0xfef8, 0xfef9, 0xfefa, 0xfefb, 0xfefc]) {
+      expect(forms).toContain(lig);
+    }
+  });
+
+  it("a codepoint outside the shaping table (Arabic-Indic digit, punctuation) maps to itself", () => {
+    expect(getPresentationFormsForLetter(0x0665)).toEqual([0x0665]);
+    expect(getPresentationFormsForLetter(0x061f)).toEqual([0x061f]);
   });
 });

@@ -74,6 +74,26 @@ const LAM_ALEF_LIGATURES: Record<number, [number, number]> = {
   0x0627: [0xFEFB, 0xFEFC], // لا
 };
 
+/** All presentation-form codepoints a base Arabic letter can appear as in
+ * shaped output: its isolated/final/initial/medial forms, plus (for ل only)
+ * the lam-alef ligature forms it participates in. A codepoint with no entry
+ * in the shaping table (Arabic punctuation, Arabic-Indic digits) maps to
+ * itself. Used by the alternate-font override feature: replacing a letter
+ * must replace ALL its contextual forms, or the styles mix mid-word. */
+export function getPresentationFormsForLetter(base: number): number[] {
+  const out = new Set<number>();
+  const forms = ARABIC_FORMS[base];
+  if (forms) for (const f of forms) if (f !== null) out.add(f);
+  if (base === 0x0644) {
+    for (const [iso, fin] of Object.values(LAM_ALEF_LIGATURES)) {
+      out.add(iso);
+      out.add(fin);
+    }
+  }
+  if (out.size === 0) out.add(base);
+  return [...out];
+}
+
 function isTashkeelCode(code: number): boolean {
   return (code >= 0x064B && code <= 0x065F) || code === 0x0670;
 }

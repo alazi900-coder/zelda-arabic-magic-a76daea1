@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
     // would already reject a mistranslated tag (content no longer matches), so
     // without masking, Risen entries just silently fail to get re-split at all.
     // Google Translate never sees an LLM (word-weighting only) — no masking needed there.
-    const isRisen = body.game === "risen" || body.game === "risen2";
+    const isRisen = body.game === "risen" || body.game === "risen1" || body.game === "risen2";
     const risenTagsByKey = new Map<string, string[]>();
     const promptEntries: ReqEntry[] = isRisen
       ? body.entries.map((e) => {

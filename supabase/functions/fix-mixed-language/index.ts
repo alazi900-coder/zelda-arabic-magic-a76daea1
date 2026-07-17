@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     // Mask Risen tags (<Exit>, $(name), ...) before they reach the model —
     // this function's whole job is "translate remaining English words", and
     // without masking it would happily "translate" a bare tag too.
-    const isRisen = game === 'risen' || game === 'risen2';
+    const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const risenTagsByIndex: string[][] = [];
     const promptEntries = isRisen
       ? entries.map((e) => {

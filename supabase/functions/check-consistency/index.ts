@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
       glossary?: string;
       game?: 'xenoblade' | 'risen' | 'risen2';
     };
-    const isRisen = game === 'risen' || game === 'risen2';
+    const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ groups: [], aiSuggestions: [] }), {

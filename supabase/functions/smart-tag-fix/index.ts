@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     // tags/lines" prompt — this function's tagSignature() safety net only knows
     // about XC3 PUA/bracket tags, not Risen's <Tag> format, so without masking
     // an AI-mangled <Exit> would slip through unnoticed.
-    const isRisen = body.game === "risen" || body.game === "risen2";
+    const isRisen = body.game === "risen" || body.game === "risen1" || body.game === "risen2";
     const risenTagsByKey = new Map<string, string[]>();
     const promptEntries: SmartFixEntry[] = isRisen
       ? body.entries.map((e) => {

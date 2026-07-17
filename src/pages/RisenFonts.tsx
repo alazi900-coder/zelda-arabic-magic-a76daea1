@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package, Download } from "lucide-react";
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
-import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn } from "@/lib/risen2-arabic-font-gen";
+import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn, measureFontCellMetrics } from "@/lib/risen2-arabic-font-gen";
 import { auditXgfnDocument, formatAuditReportText, buildDiagnosticJson, type XgfnAuditReport } from "@/lib/risen2-xgfn-audit";
 import { updateGlyphFields, deleteCharmapPair, addCharmapAlias, remapCharmapPair } from "@/lib/risen2-xgfn-edit";
 import { shapeArabicForRisen } from "@/lib/risen/arabic-shaper";
@@ -281,8 +281,7 @@ const RisenFonts = () => {
     if (!doc || !arabicFontBytes) return;
     setArabicBusy(true);
     try {
-      const rowHeightPx = computeRowHeightPx(doc);
-      const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, rowHeightPx);
+      const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, measureFontCellMetrics(doc));
       const merged = appendArabicGlyphsToXgfn(doc, glyphs);
       setDoc(merged);
       setOriginalBytes(null); // merged doc no longer corresponds to any single original byte stream
@@ -333,8 +332,7 @@ const RisenFonts = () => {
         const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength) as ArrayBuffer;
         const fontDoc = parseXgfn(buf);
         originalDocs.set(path, parseXgfn(buf));
-        const rowHeightPx = computeRowHeightPx(fontDoc);
-        const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, rowHeightPx);
+        const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, measureFontCellMetrics(fontDoc));
         const merged = appendArabicGlyphsToXgfn(fontDoc, glyphs);
         replacements.set(path, new Uint8Array(buildXgfn(merged)));
 

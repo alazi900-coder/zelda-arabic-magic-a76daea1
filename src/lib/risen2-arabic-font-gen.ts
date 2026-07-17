@@ -7,21 +7,24 @@
  * already-parsed `.xgfn` document (risen2-xgfn.ts) for visual inspection in
  * the diagnostic grid tool.
  *
- * Two-part design, deliberately split:
+ * Three-part design, deliberately split:
+ *   - `measureFontCellMetrics` — pure, measures the target font's uniform
+ *     cell height + baseline from its own glyph ink (Vitest-testable).
  *   - `renderArabicGlyphsFromFont` — browser-only (uses FontFace + Canvas
- *     2D), turns TTF bytes into cropped RGBA glyph bitmaps.
+ *     2D), turns TTF bytes into uniform-height baseline-aligned cell
+ *     bitmaps sized to those metrics.
  *   - `appendArabicGlyphsToXgfn` — pure data transform, no DOM dependency,
  *     unit-testable with synthetic glyph bitmaps in Vitest/Node.
  *
  * Atlas packing: new glyphs are shelf-packed into new rows appended BELOW
  * the existing atlas content (existing pixels/rows are untouched, byte-for-
- * byte). Reuses the existing raw-RGB DDS encode/build helpers from
- * risen-ximg.ts rather than reimplementing DDS writing.
+ * byte), 1px gap between neighbours like the Chinese mod. Reuses the
+ * existing raw-RGB DDS encode/build helpers from risen-ximg.ts rather than
+ * reimplementing DDS writing.
  *
  * Measurement record fields for new glyphs: fields[0..4] (atlas bbox +
- * advance) are fully confirmed; fields[7]/[8] are set to the glyph's visible
- * width / negative height (see the inline comment at the fields assignment);
- * fields[5]/[6] stay 0.
+ * advance) are fully confirmed; fields[5..8] stay 0 exactly like every
+ * added record in the working Chinese mod.
  */
 import {
   decodeDdsToRgba,
@@ -36,11 +39,84 @@ export interface RenderedArabicGlyph {
   codepoint: number;
   width: number;
   height: number;
-  /** RGBA, width*height*4, already cropped to the ink bounding box. Empty
-   * (width=height=0) for codepoints that render with no visible ink (e.g.
-   * blank marks) — they still carry a real `advance`. */
+  /** RGBA, width*height*4 — a full uniform-height CELL (baseline-aligned),
+   * matching how the original fonts and the working Chinese mod store their
+   * glyphs. Empty (width=height=0) for codepoints that render with no
+   * visible ink (e.g. blank marks) — they still carry a real `advance`. */
   rgba: Uint8Array;
   advance: number;
+}
+
+/** Cell geometry of an existing font, measured from its own glyphs:
+ * `cellHeight` is the uniform box height every original glyph uses, and
+ * `baseline` is the writing baseline's offset from the box top (measured
+ * from the ink bottom of flat-bottomed reference characters). New Arabic
+ * glyphs must be rendered as same-height cells aligned to this baseline —
+ * the engine draws each box top-aligned on a fixed line, so any deviation
+ * shows up in-game as characters hanging at the wrong height. */
+export interface FontCellMetrics {
+  cellHeight: number;
+  baseline: number;
+}
+
+/** Characters whose ink bottom sits exactly ON the baseline (no descender,
+ * no rounded overshoot): digits + flat-bottomed Latin capitals. */
+const BASELINE_REF_CHARS = "0123456789ABDEFHIKLMNPRTUVWXZ";
+
+/** Measures the uniform cell height and baseline position of an existing
+ * font document. Pure (no DOM) — testable in Vitest.
+ *
+ * Evidence this is how the format works (measured directly): the original
+ * Georgia_16 stores every one of its 275 non-empty glyph boxes at exactly
+ * 27px tall, Trajan Pro_16 at 29px, Trajan Pro_24 at 46px — full cells, NOT
+ * tight ink boxes. The working Chinese mod's added glyphs are also uniform
+ * cells (30px / 46px). Our earlier tight-ink-cropped boxes of varying
+ * heights rendered top-aligned in-game: every letter hung from the line top
+ * (ر looked like ا) and nudging any glyph immediately sampled its
+ * neighbour's ink. */
+export function measureFontCellMetrics(doc: XgfnDocument): FontCellMetrics {
+  // Cell height = mode of non-degenerate box heights.
+  const heightCounts = new Map<number, number>();
+  for (const m of doc.measurements) {
+    if (m.fields.length < 4) continue;
+    const h = m.fields[3] - m.fields[1];
+    if (m.fields[2] > m.fields[0] && h > 0) heightCounts.set(h, (heightCounts.get(h) ?? 0) + 1);
+  }
+  let cellHeight = 20;
+  let bestCount = 0;
+  for (const [h, count] of heightCounts) {
+    if (count > bestCount) { cellHeight = h; bestCount = count; }
+  }
+
+  // Baseline = mode of (ink bottom + 1, relative to box top) across the
+  // flat-bottomed reference characters actually present in this font.
+  let baseline = Math.round(cellHeight * 0.8); // fallback if no refs/ink
+  const decoded = decodeDdsToRgba(doc.ddsBytes);
+  if (decoded.supported) {
+    const byChar = new Map(doc.charmap.map((p) => [p.charCode, p.glyphIndex]));
+    const bottomCounts = new Map<number, number>();
+    for (const ch of BASELINE_REF_CHARS) {
+      const gi = byChar.get(ch.charCodeAt(0));
+      if (gi === undefined || gi >= doc.measurements.length) continue;
+      const [x0, y0, x1, y1] = doc.measurements[gi].fields;
+      if (x1 <= x0 || y1 <= y0) continue;
+      let inkMaxY = -1;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          if (decoded.rgba[(y * decoded.width + x) * 4 + 3] > 10 && y > inkMaxY) inkMaxY = y;
+        }
+      }
+      if (inkMaxY >= 0) {
+        const rel = inkMaxY - y0 + 1;
+        bottomCounts.set(rel, (bottomCounts.get(rel) ?? 0) + 1);
+      }
+    }
+    let bestBottom = 0;
+    for (const [rel, count] of bottomCounts) {
+      if (count > bestBottom) { baseline = rel; bestBottom = count; }
+    }
+  }
+  return { cellHeight, baseline };
 }
 
 /** Rounds up to the next power of two (n itself if already one). DX9-era
@@ -70,53 +146,86 @@ function inkBoundingBox(data: Uint8ClampedArray, width: number, height: number) 
   return { minX, minY, maxX, maxY };
 }
 
-/** Renders every required Arabic glyph codepoint from a TTF's bytes.
- * `rowHeightPx` should match the target font's atlas row height (fields[3]
- * - fields[1] on an existing glyph) so the generated glyphs are drawn at a
- * comparable visual size. Browser-only (FontFace/Canvas 2D). */
+/** How far below the original cell height an added glyph's cell may extend,
+ * to give Arabic descenders (ر, ج, و…) room under the baseline. The working
+ * Chinese mod's added cells overhang the original cell height by up to 3px
+ * (30px cells in the 27px Georgia_16) and render fine in-game. */
+const DESCENT_EXTRA_PX = 3;
+
+/** Renders every required Arabic glyph codepoint from a TTF's bytes as
+ * uniform-height baseline-aligned CELLS (the same geometry the original
+ * fonts and the working Chinese mod use — see measureFontCellMetrics).
+ * The font size is chosen automatically so that NO glyph's ascender rises
+ * above the cell top and NO descender falls below the cell bottom.
+ * Browser-only (FontFace/Canvas 2D). */
 export async function renderArabicGlyphsFromFont(
   fontBytes: ArrayBuffer,
-  rowHeightPx: number
+  metrics: FontCellMetrics
 ): Promise<RenderedArabicGlyph[]> {
   const fontFace = new FontFace("RisenArabicGen", fontBytes);
   await fontFace.load();
   document.fonts.add(fontFace);
 
   try {
-    const drawSize = Math.round(rowHeightPx * 1.6);
-    const pad = drawSize;
+    const { cellHeight, baseline } = metrics;
+    const cellH = cellHeight + DESCENT_EXTRA_PX;
+    const descentRoom = cellH - baseline;
+    const codepoints = getRisenArabicGlyphCodepoints();
+
     const canvas = document.createElement("canvas");
-    canvas.width = pad * 2;
-    canvas.height = pad * 2;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("تعذّر إنشاء سياق Canvas 2D لرسم الحروف العربية");
-    ctx.font = `${drawSize}px RisenArabicGen`;
+
+    // Pass 1 — measure the whole glyph set at a large trial size, then scale
+    // the font so the tallest ascender fits above the baseline and the
+    // deepest descender fits below it within the cell.
+    const trialSize = cellHeight * 4;
+    canvas.width = trialSize * 4;
+    canvas.height = cellH;
+    ctx.font = `${trialSize}px RisenArabicGen`;
+    let maxAscent = 1;
+    let maxDescent = 1;
+    for (const cp of codepoints) {
+      const m = ctx.measureText(String.fromCharCode(cp));
+      if (m.actualBoundingBoxAscent > maxAscent) maxAscent = m.actualBoundingBoxAscent;
+      if (m.actualBoundingBoxDescent > maxDescent) maxDescent = m.actualBoundingBoxDescent;
+    }
+    const scale = Math.min(baseline / maxAscent, descentRoom / maxDescent);
+    const fontSize = Math.max(5, Math.floor(trialSize * scale));
+
+    ctx.font = `${fontSize}px RisenArabicGen`;
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = "#fff";
 
     const glyphs: RenderedArabicGlyph[] = [];
-    for (const cp of getRisenArabicGlyphCodepoints()) {
+    for (const cp of codepoints) {
       const ch = String.fromCharCode(cp);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillText(ch, pad, pad);
-      const advance = Math.round(ctx.measureText(ch).width);
+      const m = ctx.measureText(ch);
+      const advance = Math.max(1, Math.round(m.width));
+      // Cell width covers the advance plus any right-side ink overhang
+      // (connected forms may paint slightly past their advance — the engine
+      // draws the full box, so the overlap keeps the joining stroke intact).
+      const cellW = Math.max(advance, Math.ceil(m.actualBoundingBoxRight), 1);
+      if (canvas.width < cellW) {
+        canvas.width = cellW;
+        canvas.height = cellH;
+        ctx.font = `${fontSize}px RisenArabicGen`;
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#fff";
+      }
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const bbox = inkBoundingBox(imageData.data, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillText(ch, 0, baseline);
+      const imageData = ctx.getImageData(0, 0, cellW, cellH);
+      const bbox = inkBoundingBox(imageData.data, cellW, cellH);
       if (!bbox) {
         glyphs.push({ codepoint: cp, width: 0, height: 0, rgba: new Uint8Array(0), advance });
         continue;
       }
-
-      const w = bbox.maxX - bbox.minX + 1;
-      const h = bbox.maxY - bbox.minY + 1;
-      const cropped = new Uint8Array(w * h * 4);
-      for (let y = 0; y < h; y++) {
-        const srcRowStart = ((bbox.minY + y) * canvas.width + bbox.minX) * 4;
-        const dstRowStart = y * w * 4;
-        cropped.set(imageData.data.subarray(srcRowStart, srcRowStart + w * 4), dstRowStart);
-      }
-      glyphs.push({ codepoint: cp, width: w, height: h, rgba: cropped, advance });
+      // Full uniform cell — deliberately NOT cropped to the ink box: the
+      // engine top-aligns every box on the text line, so only equal-height
+      // baseline-aligned cells render at consistent heights in-game.
+      glyphs.push({ codepoint: cp, width: cellW, height: cellH, rgba: new Uint8Array(imageData.data.buffer.slice(0)), advance });
     }
     return glyphs;
   } finally {
@@ -139,7 +248,12 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   const atlasWidth = decoded.width;
   const oldHeight = decoded.height;
 
-  // Shelf-pack new (non-empty) glyphs into rows appended below the existing atlas.
+  // Shelf-pack new (non-empty) glyphs into rows appended below the existing
+  // atlas, with a 1px gap between neighbours in both directions — exactly
+  // like the working Chinese mod (its added cells are separated by 1px
+  // horizontally and vertically). Zero-gap packing made glyphs touch, so any
+  // manual box nudge immediately sampled the neighbouring letter's ink.
+  const GAP = 1;
   const placements = new Map<number, { x: number; y: number }>();
   let cursorX = 0;
   let cursorY = oldHeight;
@@ -147,12 +261,12 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   for (const g of glyphs) {
     if (g.width === 0 || g.height === 0) continue;
     if (cursorX + g.width > atlasWidth) {
-      cursorY += rowHeight;
+      cursorY += rowHeight + GAP;
       cursorX = 0;
       rowHeight = 0;
     }
     placements.set(g.codepoint, { x: cursorX, y: cursorY });
-    cursorX += g.width;
+    cursorX += g.width + GAP;
     rowHeight = Math.max(rowHeight, g.height);
   }
   const neededHeight = cursorY + rowHeight;

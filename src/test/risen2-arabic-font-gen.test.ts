@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parseXgfn, buildXgfn } from "@/lib/risen2-xgfn";
-import { appendArabicGlyphsToXgfn, type RenderedArabicGlyph } from "@/lib/risen2-arabic-font-gen";
+import { appendArabicGlyphsToXgfn, measureFontCellMetrics, type RenderedArabicGlyph } from "@/lib/risen2-arabic-font-gen";
 import { decodeDdsToRgba } from "@/lib/risen-ximg";
 
 const FIXTURE_PATH = join(__dirname, "fixtures", "risen2-numbers-font-sample.xgfn");
@@ -24,6 +24,30 @@ function makeGlyph(codepoint: number, w = 3, h = 3, advance = 5): RenderedArabic
   }
   return { codepoint, width: w, height: h, rgba, advance };
 }
+
+describe("measureFontCellMetrics (real fixtures)", () => {
+  it("numbers font: every non-empty original box shares one uniform cell height, and the baseline sits inside it", () => {
+    const doc = parseXgfn(loadFixture());
+    const { cellHeight, baseline } = measureFontCellMetrics(doc);
+    for (const m of doc.measurements) {
+      const [x0, y0, x1, y1] = m.fields;
+      if (x1 > x0 && y1 > y0) expect(y1 - y0).toBe(cellHeight);
+    }
+    expect(baseline).toBeGreaterThan(cellHeight / 2); // baseline is in the lower half
+    expect(baseline).toBeLessThanOrEqual(cellHeight);
+  });
+
+  it("Georgia_16: cell height is exactly 27 (measured directly on the original font — all 275 non-empty boxes)", () => {
+    const buf = readFileSync(join(__dirname, "fixtures", "risen2-georgia-font-sample.xgfn"));
+    const bytes = new Uint8Array(buf.length);
+    bytes.set(buf);
+    const doc = parseXgfn(bytes.buffer);
+    const { cellHeight, baseline } = measureFontCellMetrics(doc);
+    expect(cellHeight).toBe(27);
+    expect(baseline).toBeGreaterThan(13);
+    expect(baseline).toBeLessThanOrEqual(27);
+  });
+});
 
 describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font base document)", () => {
   it("appends new glyphs with correct charmap entries and grows the atlas", () => {
@@ -193,6 +217,16 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     // Non-trivial: the atlas really grew, so a stale copy of the original
     // value would fail this assertion.
     expect(merged.ddsBytes.length).toBeGreaterThan(originalDdsLen);
+  });
+
+  it("packs neighbouring glyphs with a 1px gap (like the Chinese mod) — no touching cells", () => {
+    const doc = parseXgfn(loadFixture());
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0xfeee, 4, 7, 5), makeGlyph(0x0660, 3, 5, 4)]);
+    const base = doc.measurements.length;
+    const [a, b, c] = [base, base + 1, base + 2].map((i) => merged.measurements[i].fields);
+    // same shelf row: each next box starts 1px after the previous box ends
+    expect(b[0]).toBe(a[2] + 1);
+    expect(c[0]).toBe(b[2] + 1);
   });
 
   it("sets fields[5..8] of every ADDED glyph record to zero, matching the working Chinese mod's added records exactly", () => {

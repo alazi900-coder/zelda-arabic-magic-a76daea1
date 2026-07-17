@@ -252,15 +252,16 @@ export function useEditorSettings() {
     });
   }, []);
 
-  // === AI Routing Mode: مثبت على "paid" دائماً ===
-  // الترجمة تستخدم رصيد Lovable AI المدفوع. أي قيمة قديمة في localStorage تُمسح
-  // حتى لا تبقى تجربة المستخدم عالقة على free/auto بعد إزالة زر التبديل.
-  useEffect(() => {
-    try { localStorage.removeItem('aiRoutingMode'); } catch { /* ignore */ }
-  }, []);
-  const [aiRoutingMode] = useState<'free' | 'paid' | 'auto'>('paid');
-  const setAiRoutingMode = useCallback((_v: 'free' | 'paid' | 'auto') => {
-    /* الزر أُزيل — الوضع مثبت على paid */
+  // === AI Routing Mode: free (مفتاح المستخدم فقط) | paid (بوابة Lovable) | auto ===
+  const [aiRoutingMode, _setAiRoutingMode] = useState<'free' | 'paid' | 'auto'>(() => {
+    try {
+      const v = localStorage.getItem('aiRoutingMode');
+      return v === 'free' || v === 'paid' || v === 'auto' ? v : 'auto';
+    } catch { return 'auto'; }
+  });
+  const setAiRoutingMode = useCallback((v: 'free' | 'paid' | 'auto') => {
+    _setAiRoutingMode(v);
+    try { localStorage.setItem('aiRoutingMode', v); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   // === Adaptive throttle between AI batches (avoids hitting per-minute rate limits) ===

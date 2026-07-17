@@ -7,6 +7,7 @@ import { Key, Loader2, CheckCircle2, XCircle, Wifi } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PROMPT_PRESETS, RISEN_PROMPT_PRESETS } from "@/components/editor/promptPresets";
 import { CATEGORY_PROMPT_DEFAULTS, resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
+import AIRoutingToggle from "@/components/editor/AIRoutingToggle";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -25,6 +26,7 @@ type EditorSubset = Pick<
   | "categoryPromptTemplates" | "setCategoryPromptTemplate"
   | "aiBatchSize" | "setAiBatchSize"
   | "translationCacheEnabled" | "setTranslationCacheEnabled"
+  | "aiRoutingMode" | "setAiRoutingMode"
 >;
 
 type TestConnState = 'idle' | 'testing' | 'ok' | 'error';
@@ -244,6 +246,11 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               {(editor.aiModel === 'gemini-3.1-pro-preview' || editor.aiModel === 'gpt-5') && !editor.userGeminiKey && (
                 <p className="text-[10px] text-muted-foreground font-body">يعمل عبر Lovable AI فقط (لا يدعم المفتاح الشخصي)</p>
               )}
+            </div>
+
+            {/* AI Routing Mode */}
+            <div className="flex items-center gap-2">
+              <AIRoutingToggle mode={editor.aiRoutingMode} onChange={editor.setAiRoutingMode} />
             </div>
 
             {/* API Key */}

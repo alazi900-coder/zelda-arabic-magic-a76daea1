@@ -217,7 +217,16 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
     const y0 = pos?.y ?? 0;
     const x1 = pos ? pos.x + g.width : 0;
     const y1 = pos ? pos.y + g.height : 0;
-    const fields = [x0, y0, x1, y1, g.advance, 0, 0, 0, 0];
+    // fields[5..8] on real glyphs are (xOffset, yOffset, visibleWidth,
+    // baselineOffset). Leaving them at 0 caused a REAL in-game invisibility
+    // bug (font uploaded, engine loaded it fine, but Arabic glyphs rendered
+    // with visibleWidth=0 → nothing drawn). Sampling 27 real ASCII glyphs in
+    // a shipped Trajan Pro atlas: fields[7] tracks visible glyph width ≈
+    // atlas box width − 1 packer-padding pixel; fields[8] is a small
+    // negative baseline offset roughly proportional to ink height. Use the
+    // Arabic glyph's own cropped dimensions — they're already tight-bboxed
+    // to ink, so `width`/`height` are the correct visible extents.
+    const fields = [x0, y0, x1, y1, g.advance, 0, 0, g.width, -g.height];
     const rawBytes = new Uint8Array(36);
     const dv = new DataView(rawBytes.buffer);
     fields.forEach((v, i) => dv.setInt32(i * 4, v, true));

@@ -416,7 +416,7 @@ Deno.serve(async (req) => {
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
       learnedFeedback?: string;
     };
-    const isRisen = game === 'risen' || game === 'risen2';
+    const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const gameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
     const extraInstructionsBlock = extraInstructions?.trim()

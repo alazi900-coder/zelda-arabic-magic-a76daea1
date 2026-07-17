@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
       // byte-length checks, and result metadata; `promptText(e)` gives the
       // masked original/translation to embed in prompt strings only, and
       // `unmaskFor(key, text)` restores a model-returned string afterward.
-      const isRisen = game === 'risen' || game === 'risen2';
+      const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
       const risenTagsByKey = new Map<string, string[]>();
       const maskedByKey = new Map<string, { original: string; translation: string }>();
       if (isRisen) {

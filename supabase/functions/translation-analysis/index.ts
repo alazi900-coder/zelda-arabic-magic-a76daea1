@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
     // Mask Risen tags before ANY prompt text is built — one tag list per entry
     // (index-aligned with `entries`, since the model echoes back an `index`
     // field), used to unmask whichever result field references that index.
-    const isRisen = game === 'risen' || game === 'risen2';
+    const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const risenTagsByIndex: string[][] = [];
     const promptEntries: AnalysisEntry[] = isRisen
       ? entries.map((e) => {

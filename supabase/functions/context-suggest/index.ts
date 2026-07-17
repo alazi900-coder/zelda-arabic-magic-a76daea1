@@ -52,7 +52,7 @@ const GAME_LABELS: Record<string, string> = {
 };
 
 function buildSystemPrompt(game?: string): string {
-  const isRisen = game === 'risen' || game === 'risen2';
+  const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
   const risenTagRule = isRisen
     ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'
@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
   // Risen-only proactive tag masking — the model never sees the raw tag, so it
   // can't mistranslate it. Restored on every returned suggestion before responding.
   let risenTags: string[] = [];
-  if (body.game === 'risen' || body.game === 'risen2') {
+  if (body.game === 'risen' || body.game === 'risen1' || body.game === 'risen2') {
     const { masked, tags } = maskRisenTags(body.target.original);
     body = { ...body, target: { ...body.target, original: masked } };
     risenTags = tags;

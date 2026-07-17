@@ -64,7 +64,7 @@ interface UseAutoPilotProps {
   customPromptInstructions: string;
   aiRoutingMode?: 'free' | 'paid' | 'auto';
   /** Which Risen game the loaded entries belong to (manually chosen on /risen/process) — picks the right game's AI prompt lore. No effect for non-Risen sessions. */
-  risenVariant: 'risen1' | 'risen2';
+  risenVariant?: 'risen1' | 'risen2';
 }
 
 const AI_BATCH = 10;

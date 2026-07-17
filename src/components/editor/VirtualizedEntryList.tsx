@@ -40,7 +40,7 @@ interface VirtualizedEntryListProps {
   height?: number;
   legacyCommaSplitEnabled?: boolean;
   buildExtraToolButtons?: (entry: ExtractedEntry) => { onClick: () => void; icon: string; title: string; cls?: string }[];
-  risenVariant: 'risen1' | 'risen2';
+  risenVariant?: 'risen1' | 'risen2';
 }
 
 const ESTIMATED_ITEM_SIZE = 280;

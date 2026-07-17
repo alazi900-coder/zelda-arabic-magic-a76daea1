@@ -195,7 +195,7 @@ const RisenFonts = () => {
     if (!pakBytes) return;
     try {
       const decompressed = inflateFontsPakEntry(pakBytes, entry.node);
-      const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength);
+      const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength) as ArrayBuffer;
       loadXgfnBytes(buf, entry.path);
       setSelectedPath(entry.path);
     } catch (err) {
@@ -258,7 +258,7 @@ const RisenFonts = () => {
         const { path, node } = targets[i];
         setBatchProgress(`(${i + 1}/${targets.length}) ${path}`);
         const decompressed = inflateFontsPakEntry(pakBytes, node);
-        const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength);
+        const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength) as ArrayBuffer;
         const fontDoc = parseXgfn(buf);
         const rowHeightPx = computeRowHeightPx(fontDoc);
         const glyphs = await renderArabicGlyphsFromFont(arabicFontBytes, rowHeightPx);

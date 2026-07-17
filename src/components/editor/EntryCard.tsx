@@ -185,7 +185,7 @@ interface EntryCardProps {
   tmSuggestions?: TMSuggestion[];
   legacyCommaSplitEnabled?: boolean;
   extraToolButtons?: { onClick: () => void; icon: string; title: string; cls?: string }[];
-  risenVariant: 'risen1' | 'risen2';
+  risenVariant?: 'risen1' | 'risen2';
 }
 
 function findGlossaryMatches(original: string, glossary?: string): { term: string; translation: string }[] {

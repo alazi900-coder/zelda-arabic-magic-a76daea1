@@ -54,7 +54,7 @@ describe("End-to-end: generate Arabic glyphs -> merge -> inject into real fonts.
     const target = files.find((f) => f.path === "Trajan Pro_7_o_numbers._xgfn")!;
 
     const decompressed = inflateFontsPakEntry(bytes, target.node);
-    const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength);
+    const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength) as ArrayBuffer;
     const doc = parseXgfn(buf);
 
     const glyphs = [makeGlyph(0xfe8e), makeGlyph(0xfeee), makeGlyph(0x0660)];
@@ -72,7 +72,7 @@ describe("End-to-end: generate Arabic glyphs -> merge -> inject into real fonts.
     expect(Buffer.from(rebuiltContent).equals(Buffer.from(mergedXgfnBytes))).toBe(true);
 
     // The injected font re-parses correctly and contains the new Arabic charmap entries.
-    const reparsed = parseXgfn(rebuiltContent.buffer.slice(rebuiltContent.byteOffset, rebuiltContent.byteOffset + rebuiltContent.byteLength));
+    const reparsed = parseXgfn(rebuiltContent.buffer.slice(rebuiltContent.byteOffset, rebuiltContent.byteOffset + rebuiltContent.byteLength) as ArrayBuffer);
     const byChar = new Map(reparsed.charmap.map((r) => [r.charCode, r.glyphIndex]));
     expect(byChar.get(0xfe8e)).toBeDefined();
     expect(byChar.get(0xfeee)).toBeDefined();
@@ -113,7 +113,7 @@ describe("End-to-end: generate Arabic glyphs -> merge -> inject into real fonts.
     const replacements = new Map<string, Uint8Array>();
     for (const { path, node } of targets) {
       const decompressed = inflateFontsPakEntry(bytes, node);
-      const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength);
+      const buf = decompressed.buffer.slice(decompressed.byteOffset, decompressed.byteOffset + decompressed.byteLength) as ArrayBuffer;
       const doc = parseXgfn(buf);
       const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e), makeGlyph(0x0660)]);
       replacements.set(path, new Uint8Array(buildXgfn(merged)));
@@ -128,7 +128,7 @@ describe("End-to-end: generate Arabic glyphs -> merge -> inject into real fonts.
     for (const { path } of targets) {
       const rebuiltEntry = rebuiltFiles.find((f) => f.path === path)!;
       const content = inflateFontsPakEntry(result.bytes, rebuiltEntry.node);
-      const doc = parseXgfn(content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength));
+      const doc = parseXgfn(content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer);
       const byChar = new Map(doc.charmap.map((r) => [r.charCode, r.glyphIndex]));
       expect(byChar.get(0xfe8e)).toBeDefined();
       expect(byChar.get(0x0660)).toBeDefined();

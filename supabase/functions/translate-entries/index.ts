@@ -1971,7 +1971,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'risen2' ? 'risen2' : game === 'risen' ? 'risen' : 'xenoblade';
+    _game = game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

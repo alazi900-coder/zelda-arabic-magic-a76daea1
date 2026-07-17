@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.85.0",
+    date: "2026-07-17",
+    changes: [
+      { kind: "added", text: "مكتبة خطوط عربية مجانية داخل أداة خطوط Risen 2: 12 خطاً منتقى بأساليب متنوعة (Cairo، Amiri، Noto Naskh، Tajawal، Almarai، Scheherazade، Reem Kufi، El Messiri، Harmattan، Lalezar، Changa، Mada) — كلها برخصة OFL المفتوحة وتُجلب مباشرة من مستودع Google Fonts الرسمي عبر CDN (كل رابط تم التحقق منه فعلياً). لكل خط: معاينة حية بجملة عربية بأسلوبه، وزر \"خط أساسي\" لاستخدامه في التوليد، وزر \"خط بديل\" لاستنساخ حروف مختارة منه (يتكامل مع ميزة استبدال الحروف: اختر الخط بديلاً واكتب ع فتُستبدل كل أشكالها). الخط يُحمَّل مرة واحدة ويُخزَّن للجلسة، مع رسالة خطأ واضحة عند انقطاع الإنترنت. تحقق حي كامل: معاينة Amiri، ثم توليد فعلي بخط Cairo أساسياً وعين Amiri بديلة حتى ظهور النتيجة في المحاكي." },
+    ],
+  },
+  {
     version: "1.84.0",
     date: "2026-07-17",
     changes: [

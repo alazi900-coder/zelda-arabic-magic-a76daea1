@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
 import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn, measureFontCellMetrics, type AlternateFontOverride } from "@/lib/risen2-arabic-font-gen";
 import { getPresentationFormsForLetter } from "@/lib/risen/arabic-shaper";
+import { FREE_ARABIC_FONTS, fetchFreeFontBytes, type FreeFontEntry } from "@/lib/risen2-free-fonts";
 import { auditXgfnDocument, formatAuditReportText, buildDiagnosticJson, type XgfnAuditReport } from "@/lib/risen2-xgfn-audit";
 import { updateGlyphFields, deleteCharmapPair, addCharmapAlias, remapCharmapPair } from "@/lib/risen2-xgfn-edit";
 import { shapeArabicForRisen } from "@/lib/risen/arabic-shaper";
@@ -142,6 +143,12 @@ const RisenFonts = () => {
   const [altFontName, setAltFontName] = useState<string | null>(null);
   const [altLetters, setAltLetters] = useState("");
   const [arabicBusy, setArabicBusy] = useState(false);
+
+  // Free-font library: per-font load status; bytes cached so a font is
+  // fetched from the CDN at most once per session.
+  const [freeFontStatus, setFreeFontStatus] = useState<Record<string, "loading" | "ready" | "error">>({});
+  const freeFontBytesRef = useRef<Map<string, ArrayBuffer>>(new Map());
+  const [showFontLibrary, setShowFontLibrary] = useState(false);
   const [arabicMerged, setArabicMerged] = useState(false);
   const [injectBusy, setInjectBusy] = useState(false);
 
@@ -289,6 +296,41 @@ const RisenFonts = () => {
     setAltFontBytes(buffer);
     setAltFontName(file.name);
   }, []);
+
+  /** Loads a library font once (CDN fetch + FontFace registration for the
+   * live style preview). Returns the cached bytes on later calls. */
+  const loadFreeFont = useCallback(async (entry: FreeFontEntry): Promise<ArrayBuffer | null> => {
+    const cached = freeFontBytesRef.current.get(entry.id);
+    if (cached) return cached;
+    setFreeFontStatus((s) => ({ ...s, [entry.id]: "loading" }));
+    try {
+      const bytes = await fetchFreeFontBytes(entry);
+      const face = new FontFace(`FreeFont_${entry.id}`, bytes.slice(0));
+      await face.load();
+      document.fonts.add(face);
+      freeFontBytesRef.current.set(entry.id, bytes);
+      setFreeFontStatus((s) => ({ ...s, [entry.id]: "ready" }));
+      return bytes;
+    } catch (err) {
+      console.error(err);
+      setFreeFontStatus((s) => ({ ...s, [entry.id]: "error" }));
+      toast.error((err as Error).message);
+      return null;
+    }
+  }, []);
+
+  const useFreeFontAs = useCallback(async (entry: FreeFontEntry, role: "main" | "alt") => {
+    const bytes = await loadFreeFont(entry);
+    if (!bytes) return;
+    if (role === "main") {
+      setArabicFontBytes(bytes);
+      setArabicFontName(entry.name);
+    } else {
+      setAltFontBytes(bytes);
+      setAltFontName(entry.name);
+    }
+    toast.success(role === "main" ? `صار ${entry.name} الخط الأساسي` : `صار ${entry.name} الخط البديل — اكتب الحروف المطلوبة منه`);
+  }, [loadFreeFont]);
 
   /** Expands the typed base letters (e.g. "ع غ") into ALL their contextual
    * presentation-form codepoints — replacing a letter must replace every
@@ -908,6 +950,52 @@ const RisenFonts = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Free Arabic font library — fetched straight from the google/fonts CDN */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-display font-bold">مكتبة خطوط عربية مجانية (رخصة OFL المفتوحة)</h2>
+              <p className="text-sm text-muted-foreground">
+                12 خطاً من مستودع Google Fonts الرسمي — معاينة حية، ثم استخدمه كخط أساسي أو كخط بديل لاستنساخ حروف مختارة منه. يتطلب اتصال إنترنت عند أول تحميل.
+              </p>
+            </div>
+            <Button variant="outline" className="font-display" onClick={() => setShowFontLibrary((s) => !s)}>
+              {showFontLibrary ? "إخفاء المكتبة" : "عرض المكتبة"}
+            </Button>
+          </div>
+          {showFontLibrary && (
+            <div className="mt-4 divide-y divide-border rounded-lg border border-border">
+              {FREE_ARABIC_FONTS.map((f) => {
+                const status = freeFontStatus[f.id];
+                return (
+                  <div key={f.id} className="p-3 flex items-center gap-3 flex-wrap">
+                    <div className="min-w-32">
+                      <div className="font-display font-bold text-sm">{f.name}</div>
+                      <div className="text-xs text-muted-foreground">{f.style}</div>
+                    </div>
+                    <div className="flex-1 min-w-40 text-xl leading-snug" style={status === "ready" ? { fontFamily: `FreeFont_${f.id}` } : undefined}>
+                      {status === "ready" ? "معركة عز حج ٢٣" : status === "loading" ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : status === "error" ? <span className="text-xs text-destructive">فشل التحميل</span> : <span className="text-xs text-muted-foreground">اضغط معاينة</span>}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {status !== "ready" && (
+                        <Button size="sm" variant="outline" className="font-display" disabled={status === "loading"} onClick={() => void loadFreeFont(f)}>
+                          معاينة
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" className="font-display" onClick={() => void useFreeFontAs(f, "main")}>
+                        خط أساسي
+                      </Button>
+                      <Button size="sm" variant="outline" className="font-display" onClick={() => void useFreeFontAs(f, "alt")}>
+                        خط بديل
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

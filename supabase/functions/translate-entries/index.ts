@@ -184,7 +184,7 @@ function buildXC1UserPrompt(opts: {
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
-  const isRisen = game === 'risen' || game === 'risen2';
+  const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
   const isRisen2 = game === 'risen2';
   const gameLabel = isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 

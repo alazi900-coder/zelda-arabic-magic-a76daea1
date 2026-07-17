@@ -286,6 +286,72 @@ export function verifyDocumentSafe(doc: XgfnDocument, original?: XgfnDocument): 
   return { doc: reparsed, report };
 }
 
+/**
+ * Machine-readable diagnostic bundle (JSON) — designed to be sent as-is to
+ * an assistant/developer for remote diagnosis: carries the tool version, the
+ * raw header bytes, every known header field, every structural equation with
+ * its actual vs expected values, and the full per-glyph table with issues.
+ */
+export function buildDiagnosticJson(
+  report: XgfnAuditReport,
+  doc: XgfnDocument,
+  extras: { appVersion: string; context?: string } // context: e.g. "single-font" | "post-injection"
+): string {
+  const headerView = new DataView(doc.headerPrefix.buffer, doc.headerPrefix.byteOffset, doc.headerPrefix.byteLength);
+  const headerHex = Array.from(doc.headerPrefix, (b) => b.toString(16).padStart(2, "0")).join("");
+  let totalSize: number | null = null;
+  try {
+    totalSize = buildXgfn(doc).byteLength;
+  } catch {
+    totalSize = null;
+  }
+  const maxGlyphIndex = doc.charmap.length ? Math.max(...doc.charmap.map((r) => r.glyphIndex)) : -1;
+  const bundle = {
+    schema: "risen2-xgfn-diagnostic/1",
+    appVersion: extras.appVersion,
+    generatedAt: new Date().toISOString(),
+    context: extras.context ?? "single-font",
+    fontLabel: report.fontLabel,
+    headerHex,
+    headerFields: {
+      "0x10": headerView.getUint32(0x10, true),
+      "0x14": headerView.getUint32(0x14, true),
+      "0x18": headerView.getUint32(0x18, true),
+      "0x1C": headerView.getUint32(0x1c, true),
+      "0xEA": headerView.getUint32(0xea, true),
+      "0xEE": headerView.getUint32(0xee, true),
+      "0xF2": headerView.getUint32(0xf2, true),
+      "0xF6": headerView.getUint32(0xf6, true),
+    },
+    equations: {
+      payloadSize0x1C: { actual: headerView.getUint32(0x1c, true), expected: totalSize !== null ? totalSize - 0x66 : null, pass: totalSize !== null && headerView.getUint32(0x1c, true) === totalSize - 0x66 },
+      pairCount0xF6: { actual: headerView.getUint32(0xf6, true), expected: doc.charmap.length, pass: headerView.getUint32(0xf6, true) === doc.charmap.length },
+      recordCount: { actual: doc.recordCount, expectedMaxGlyphPlus1: maxGlyphIndex + 1, measurements: doc.measurements.length, pass: doc.recordCount === doc.measurements.length && doc.recordCount === maxGlyphIndex + 1 },
+      atlasPowerOfTwo: { dims: report.atlas ? `${report.atlas.width}x${report.atlas.height}` : null, pass: report.atlas?.powerOfTwo ?? false },
+    },
+    totals: {
+      pairs: doc.charmap.length,
+      records: doc.recordCount,
+      ddsBytes: doc.ddsBytes.length,
+      totalSize,
+      errorCount: report.errorCount,
+      warningCount: report.warningCount,
+    },
+    headerIssues: report.headerIssues,
+    glyphs: report.glyphs.map((g) => ({
+      char: g.charLabel,
+      code: "U+" + g.charCode.toString(16).toUpperCase().padStart(4, "0"),
+      glyphIndex: g.glyphIndex,
+      box: g.box,
+      advance: g.advance,
+      fields: g.fields,
+      ink: g.inkBounds,
+      issues: g.issues,
+    })),
+  };
+  return JSON.stringify(bundle, null, 1);
+}
+
 /** Plain-text report (Arabic) for download/inspection. */
 export function formatAuditReportText(report: XgfnAuditReport): string {
   const lines: string[] = [];

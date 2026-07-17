@@ -5,8 +5,10 @@ import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Packag
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
 import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn } from "@/lib/risen2-arabic-font-gen";
-import { auditXgfnDocument, formatAuditReportText, type XgfnAuditReport } from "@/lib/risen2-xgfn-audit";
+import { auditXgfnDocument, formatAuditReportText, buildDiagnosticJson, type XgfnAuditReport } from "@/lib/risen2-xgfn-audit";
 import { updateGlyphFields, deleteCharmapPair, addCharmapAlias, remapCharmapPair } from "@/lib/risen2-xgfn-edit";
+import { shapeArabicForRisen } from "@/lib/risen/arabic-shaper";
+import { APP_VERSION } from "@/lib/version";
 import { decodeDdsToRgba } from "@/lib/risen-ximg";
 import {
   parseImagesPakHeader,
@@ -125,7 +127,7 @@ const RisenFonts = () => {
   // exactly this same 35-file set, not a single font).
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchProgress, setBatchProgress] = useState<string>("");
-  const [batchSummary, setBatchSummary] = useState<{ errors: number; warnings: number; report: string } | null>(null);
+  const [batchSummary, setBatchSummary] = useState<{ errors: number; warnings: number; report: string; reportJson: string } | null>(null);
 
   // Inspection / manual-edit state.
   const [auditReport, setAuditReport] = useState<XgfnAuditReport | null>(null);
@@ -137,6 +139,15 @@ const RisenFonts = () => {
   const [remapGlyphInput, setRemapGlyphInput] = useState("");
   /** The doc as first loaded (pre-merge/pre-edit) — comparison baseline for audits. */
   const baseDocRef = useRef<XgfnDocument | null>(null);
+
+  // Text preview simulator — renders a sentence EXACTLY the way the game
+  // engine does: shape via shapeArabicForRisen, then draw each codepoint's
+  // atlas region left-to-right advancing by fields[4]. If it looks right
+  // here but wrong in-game the problem is engine-side; if it's wrong here
+  // the font data itself is wrong.
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [previewText, setPreviewText] = useState("مرحبا بكم في Risen 2");
+  const [previewMissing, setPreviewMissing] = useState<string[]>([]);
 
   const decodeFontName = useCallback((headerPrefix: Uint8Array): string => {
     const nameBytes = headerPrefix.subarray(0x96, 0x96 + 64);
@@ -321,6 +332,7 @@ const RisenFonts = () => {
       // small problem": we verify what the game will actually read. ──
       let totalErrors = 0;
       let totalWarnings = 0;
+      const diagBundles: string[] = [];
       reportLines.push("", "===== فحص ما بعد الحقن (قراءة fonts.p00 الناتج نفسه) =====");
       const outHeader = parseImagesPakHeader(result.bytes.slice(0, 48));
       const { tree: outTree } = parseImagesPakFileInfoTree(result.bytes.subarray(outHeader.fileInfoOffset), outHeader);
@@ -335,6 +347,7 @@ const RisenFonts = () => {
         const audit = auditXgfnDocument(parsed, { fontLabel: path, original: originalDocs.get(path) });
         totalErrors += audit.errorCount;
         totalWarnings += audit.warningCount;
+        diagBundles.push(buildDiagnosticJson(audit, parsed, { appVersion: APP_VERSION, context: "post-injection" }));
         if (audit.errorCount > 0 || audit.warningCount > 0) {
           reportLines.push("", formatAuditReportText(audit));
         } else {
@@ -343,7 +356,7 @@ const RisenFonts = () => {
       }
       reportLines.push("", `===== الخلاصة: ${totalErrors} خطأ، ${totalWarnings} تحذير عبر ${outEntries.length} خطاً =====`);
       const reportText = reportLines.join("\n");
-      setBatchSummary({ errors: totalErrors, warnings: totalWarnings, report: reportText });
+      setBatchSummary({ errors: totalErrors, warnings: totalWarnings, report: reportText, reportJson: "[\n" + diagBundles.join(",\n") + "\n]" });
 
       downloadBlob(result.bytes, "fonts.p00");
       if (totalErrors > 0) {
@@ -411,6 +424,12 @@ const RisenFonts = () => {
     const text = formatAuditReportText(auditReport);
     downloadBlob(new TextEncoder().encode(text), `font-audit-${(fileName ?? "font").replace(/[^\w.-]+/g, "_")}.txt`);
   }, [auditReport, fileName]);
+
+  const handleDownloadDiagnosticJson = useCallback(() => {
+    if (!auditReport || !doc) return;
+    const json = buildDiagnosticJson(auditReport, doc, { appVersion: APP_VERSION, context: "single-font" });
+    downloadBlob(new TextEncoder().encode(json), `font-diagnostic-${(fileName ?? "font").replace(/[^\w.-]+/g, "_")}.json`);
+  }, [auditReport, doc, fileName]);
 
   const selectPair = useCallback((idx: number | null) => {
     setSelectedPairIdx(idx);
@@ -495,6 +514,63 @@ const RisenFonts = () => {
     }
     selectPair(null);
   }, [doc, selectPair]);
+
+  // Render the text-preview simulation whenever the doc or the sample text changes.
+  useEffect(() => {
+    if (!doc || !previewCanvasRef.current) return;
+    const decoded = decodeDdsToRgba(doc.ddsBytes);
+    if (!decoded.supported) return;
+
+    const atlas = document.createElement("canvas");
+    atlas.width = decoded.width;
+    atlas.height = decoded.height;
+    atlas.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(decoded.rgba), decoded.width, decoded.height), 0, 0);
+
+    const shaped = shapeArabicForRisen(previewText);
+    const byChar = new Map(doc.charmap.map((p) => [p.charCode, p.glyphIndex]));
+    const rowH = Math.max(10, computeRowHeightPx(doc));
+
+    // First pass: total width + missing chars.
+    const missing: string[] = [];
+    let totalW = 8;
+    for (const ch of [...shaped]) {
+      const gi = byChar.get(ch.charCodeAt(0));
+      if (gi === undefined || gi >= doc.measurements.length) {
+        missing.push(ch);
+        totalW += Math.ceil(rowH * 0.6) + 2;
+      } else {
+        totalW += Math.max(1, doc.measurements[gi].fields[4]) + 1;
+      }
+    }
+
+    const canvas = previewCanvasRef.current;
+    const scale = 2;
+    canvas.width = Math.max(60, totalW + 8) * scale;
+    canvas.height = (rowH + 12) * scale;
+    const ctx = canvas.getContext("2d")!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#12241a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+
+    let x = 6;
+    for (const ch of [...shaped]) {
+      const gi = byChar.get(ch.charCodeAt(0));
+      if (gi === undefined || gi >= doc.measurements.length) {
+        // missing char — draw a red notdef-style box, like the engine's fallback
+        ctx.strokeStyle = "rgba(255,60,60,0.9)";
+        ctx.strokeRect(x + 0.5, 4.5, Math.ceil(rowH * 0.6), rowH);
+        x += Math.ceil(rowH * 0.6) + 2;
+        continue;
+      }
+      const [x0, y0, x1, y1, adv] = doc.measurements[gi].fields;
+      if (x1 > x0 && y1 > y0) {
+        ctx.drawImage(atlas, x0, y0, x1 - x0, y1 - y0, x, 4, x1 - x0, y1 - y0);
+      }
+      x += Math.max(1, adv) + 1;
+    }
+    setPreviewMissing([...new Set(missing)]);
+  }, [doc, previewText]);
 
   // Render the DDS atlas + diagnostic grid overlay whenever the doc or grid toggle changes.
   useEffect(() => {
@@ -658,14 +734,24 @@ const RisenFonts = () => {
                         فحص ما بعد الحقن (قراءة fonts.p00 الناتج نفسه): {batchSummary.errors} خطأ، {batchSummary.warnings} تحذير
                       </span>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="font-display gap-2"
-                      onClick={() => downloadBlob(new TextEncoder().encode(batchSummary.report), "fonts-p00-build-report.txt")}
-                    >
-                      <Download className="w-3 h-3" /> تنزيل التقرير المفصل (البناء + الحقن + كل حرف)
-                    </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="font-display gap-2"
+                        onClick={() => downloadBlob(new TextEncoder().encode(batchSummary.report), "fonts-p00-build-report.txt")}
+                      >
+                        <Download className="w-3 h-3" /> تنزيل التقرير المفصل (البناء + الحقن + كل حرف)
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="font-display gap-2"
+                        onClick={() => downloadBlob(new TextEncoder().encode(batchSummary.reportJson), "fonts-p00-diagnostic.json")}
+                      >
+                        <Download className="w-3 h-3" /> JSON تشخيصي (للإرسال للمطوّر)
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -764,9 +850,14 @@ const RisenFonts = () => {
                       سجل الفحص: {auditReport.errorCount} خطأ، {auditReport.warningCount} تحذير — {auditReport.glyphs.length} حرفاً، أطلس {auditReport.atlas ? `${auditReport.atlas.width}×${auditReport.atlas.height}` : "؟"}
                     </strong>
                   </div>
-                  <Button variant="outline" size="sm" className="font-display gap-2" onClick={handleDownloadAuditReport}>
-                    <Download className="w-3 h-3" /> تنزيل التقرير الكامل
-                  </Button>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" className="font-display gap-2" onClick={handleDownloadAuditReport}>
+                      <Download className="w-3 h-3" /> تقرير نصي
+                    </Button>
+                    <Button variant="outline" size="sm" className="font-display gap-2" onClick={handleDownloadDiagnosticJson}>
+                      <Download className="w-3 h-3" /> JSON تشخيصي (للإرسال للمطوّر)
+                    </Button>
+                  </div>
                 </div>
                 {auditReport.headerIssues.length > 0 && (
                   <ul className="text-xs space-y-1">
@@ -851,10 +942,33 @@ const RisenFonts = () => {
               </div>
             </div>
 
+            {/* Text preview simulator — draws exactly like the game engine */}
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <h3 className="font-display font-bold text-sm">محاكي المعاينة — كما سيرسمها المحرك حرفياً</h3>
+              <p className="text-xs text-muted-foreground">
+                اكتب جملة: تُشكَّل بنفس نظام اللعبة ثم تُرسم من أطلس هذا الخط نفسه (حرفاً حرفاً بنفس التباعد). إن ظهرت صحيحة هنا وخاطئة داخل اللعبة فالمشكلة في المحرك؛ وإن ظهرت خاطئة هنا فالمشكلة في بيانات الخط. المربع الأحمر = حرف غير موجود في الخريطة.
+              </p>
+              <input
+                type="text"
+                value={previewText}
+                onChange={(e) => setPreviewText(e.target.value)}
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
+                dir="rtl"
+              />
+              <div className="overflow-x-auto rounded border border-border p-2 bg-[#12241a]">
+                <canvas ref={previewCanvasRef} className="max-w-none" style={{ imageRendering: "pixelated" }} />
+              </div>
+              {previewMissing.length > 0 && (
+                <p className="text-xs text-destructive">
+                  حروف غير موجودة في هذا الخط: {previewMissing.map((c) => `${c} (U+${c.charCodeAt(0).toString(16).toUpperCase()})`).join("، ")}
+                </p>
+              )}
+            </div>
+
             {/* Glyph inspector table */}
             <div className="rounded-lg border border-border p-4 space-y-3">
               <h3 className="font-display font-bold text-sm">جدول الحروف ({doc.charmap.length}) — انقر صفاً لاختياره</h3>
-              <div className="max-h-64 overflow-y-auto rounded border border-border">
+              <div className="max-h-64 overflow-y-auto overflow-x-auto rounded border border-border">
                 <table className="w-full text-xs font-mono">
                   <thead className="sticky top-0 bg-card">
                     <tr className="text-muted-foreground">

@@ -170,11 +170,8 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     const doc = parseXgfn(loadFixture());
     const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0x0660, 3, 5, 4)]);
 
-    const totalSize =
-      merged.headerPrefix.length +
-      merged.charmap.length * 4 +
-      merged.measurements.reduce((sum, m) => sum + m.rawBytes.length, 0) +
-      merged.ddsBytes.length;
+    const rebuilt = buildXgfn(merged);
+    const totalSize = rebuilt.byteLength;
 
     const headerView = new DataView(merged.headerPrefix.buffer, merged.headerPrefix.byteOffset, merged.headerPrefix.byteLength);
     expect(headerView.getUint32(0x1c, true)).toBe(totalSize - 0x66);
@@ -182,12 +179,7 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     // Sanity: the merged document actually grew, so the assertion above
     // isn't trivially true just because the field was left equal to the
     // original (unchanged) size.
-    const originalDoc = parseXgfn(loadFixture());
-    const originalTotalSize =
-      originalDoc.headerPrefix.length +
-      originalDoc.charmap.length * 4 +
-      originalDoc.measurements.reduce((sum, m) => sum + m.rawBytes.length, 0) +
-      originalDoc.ddsBytes.length;
+    const originalTotalSize = loadFixture().byteLength;
     expect(totalSize).toBeGreaterThan(originalTotalSize);
   });
 });

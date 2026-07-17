@@ -12,32 +12,38 @@ function loadFixture(): ArrayBuffer {
   return bytes.buffer;
 }
 
-describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font, 13 glyphs)", () => {
+describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font)", () => {
   it("parses the confirmed header fields correctly", () => {
     const doc = parseXgfn(loadFixture());
-    expect(doc.glyphCount).toBe(13);
-    expect(doc.headerPrefix.length).toBe(0xfe);
+    expect(doc.glyphCount).toBe(13); // raw 0xEA value — meaning unresolved, preserved verbatim
+    expect(doc.headerPrefix.length).toBe(0xfa);
   });
 
   it("parses the charmap with the confirmed digit/space mappings", () => {
     const doc = parseXgfn(loadFixture());
-    // 12 pairs — the authoritative count comes from the 0xF6 header field,
-    // not glyphCount (0xEA); they happen to coincide on this small sample
-    // (glyphCount - 1 === 12) but do NOT in general (see Georgia sample test).
+    // 12 pairs (the 0xF6 field). The FIRST pair is the (0x1F -> glyph 0)
+    // notdef-box mapping — an earlier revision misread it as a header field
+    // at 0xFA and consequently misread the recordCount field as a final pair.
     expect(doc.charmap.length).toBe(12);
+    expect(doc.charmap[0].charCode).toBe(0x1f);
+    expect(doc.charmap[0].glyphIndex).toBe(0);
     const byChar = new Map(doc.charmap.map((r) => [r.charCode, r.glyphIndex]));
     expect(byChar.get(32)).toBe(1); // space
     for (let d = 0; d <= 9; d++) {
       expect(byChar.get(48 + d)).toBe(2 + d); // '0'..'9' -> glyph 2..11
     }
-    expect(byChar.get(0x0c)).toBe(0); // fallback pair -> glyph 0
   });
 
-  it("parses charmapPairCount + 1 measurement records with atlas_x as a monotonically increasing sequence for the digits", () => {
+  it("parses recordCount full measurement records with atlas_x as a monotonically increasing sequence for the digits", () => {
     const doc = parseXgfn(loadFixture());
-    // 13 records (12 charmap pairs + 1) — coincides with glyphCount on this
-    // small sample but not in general (see Georgia sample test).
-    expect(doc.measurements.length).toBe(13);
+    // recordCount (12) is an independent field, NOT derived from the pair
+    // count — confirmed exactly on all 112 real fonts sampled (77 original +
+    // 35 from a working Chinese mod), where it always equals the highest
+    // glyphIndex + 1.
+    expect(doc.recordCount).toBe(12);
+    expect(doc.measurements.length).toBe(12);
+    const maxGlyph = Math.max(...doc.charmap.map((r) => r.glyphIndex));
+    expect(doc.recordCount).toBe(maxGlyph + 1);
     // glyph indices 2..11 are the digits '0'..'9', in charmap order
     const atlasXs = doc.measurements.slice(2, 12).map((m) => m.fields[0]);
     for (let i = 1; i < atlasXs.length; i++) {
@@ -45,11 +51,10 @@ describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font, 13 gly
     }
   });
 
-  it("the last measurement record is truncated exactly at the DDS boundary (not a full 36 bytes)", () => {
+  it("every measurement record is a full 36 bytes, followed by a 4-byte trailing field before DDS", () => {
     const doc = parseXgfn(loadFixture());
-    const last = doc.measurements[doc.measurements.length - 1];
-    expect(last.rawBytes.length).toBeLessThan(36);
-    expect(last.rawBytes.length).toBeGreaterThan(0);
+    for (const m of doc.measurements) expect(m.rawBytes.length).toBe(36);
+    expect(doc.trailingBytes.length).toBe(4);
   });
 
   it("parses a real 256x256 uncompressed BGRA32 DDS atlas", () => {
@@ -80,54 +85,43 @@ describe("Risen 2 .xgfn parser (real sample: Trajan Pro 7pt numbers font, 13 gly
   it("charmap edits round-trip correctly: adding 3 synthetic Arabic glyph entries parses back at the right positions", () => {
     const doc = parseXgfn(loadFixture());
     const originalCharmapLen = doc.charmap.length;
+    const originalRecordCount = doc.recordCount;
 
-    // The original last record (glyph 12, the fallback) is truncated because
-    // it used to be last — now that we're appending after it, it must become
-    // a full 36-byte record like any non-final record (a real generator has
-    // to do exactly this: only the true final record may be short).
-    const oldLast = doc.measurements[doc.measurements.length - 1];
-    const paddedLast = new Uint8Array(36);
-    paddedLast.set(oldLast.rawBytes);
-    doc.measurements[doc.measurements.length - 1] = { rawBytes: paddedLast, fields: oldLast.fields };
-
-    // Simulate what Phase 2 will do: append new charmap entries + matching
-    // measurement records, bump glyphCount, keep the DDS bytes as-is (a real
-    // generator would also grow the atlas, but that's out of scope here —
-    // this test only verifies the charmap/measurement/glyphCount bookkeeping).
+    // Simulate what the generator does: append new charmap entries + matching
+    // measurement records, bump recordCount and the 0xF6 pair count, keep the
+    // DDS bytes as-is (a real generator also grows the atlas — out of scope
+    // here; this test only verifies the charmap/record bookkeeping).
     const newEntries: { charCode: number; glyphIndex: number }[] = [
-      { charCode: 0xfe8e, glyphIndex: doc.glyphCount },     // ARABIC LETTER ALEF FINAL FORM
-      { charCode: 0xfeee, glyphIndex: doc.glyphCount + 1 }, // ARABIC LETTER WAW FINAL FORM
-      { charCode: 0xfef2, glyphIndex: doc.glyphCount + 2 }, // ARABIC LETTER YEH FINAL FORM
+      { charCode: 0xfe8e, glyphIndex: originalRecordCount },     // ARABIC LETTER ALEF FINAL FORM
+      { charCode: 0xfeee, glyphIndex: originalRecordCount + 1 }, // ARABIC LETTER WAW FINAL FORM
+      { charCode: 0xfef2, glyphIndex: originalRecordCount + 2 }, // ARABIC LETTER YEH FINAL FORM
     ];
     doc.charmap.push(...newEntries);
     for (let i = 0; i < newEntries.length; i++) {
       const rawBytes = new Uint8Array(36);
       const dv = new DataView(rawBytes.buffer);
       dv.setInt32(0, 100 + i * 10, true); // fake atlas_x
-      doc.measurements.push({ rawBytes, fields: [100 + i * 10] });
+      const fields: number[] = [];
+      for (let k = 0; k < 9; k++) fields.push(dv.getInt32(k * 4, true));
+      doc.measurements.push({ rawBytes, fields });
     }
-    doc.glyphCount += newEntries.length;
-    // Patch the header's charmap pair count field (0xF6 — the authoritative
-    // field, confirmed across all 77 real fonts.pak entries) to match the
-    // new charmap length. Also patch 0xEA for realism even though its true
-    // meaning is unresolved (Phase 1 exposes headerPrefix as opaque, so the
-    // test patches it directly the same way a real generator would).
+    doc.recordCount += newEntries.length;
     const headerView = new DataView(doc.headerPrefix.buffer, doc.headerPrefix.byteOffset, doc.headerPrefix.byteLength);
-    headerView.setUint32(0xea, doc.glyphCount, true);
     headerView.setUint32(0xf6, doc.charmap.length, true);
 
     const rebuilt = buildXgfn(doc);
     const reparsed = parseXgfn(rebuilt);
 
-    expect(reparsed.glyphCount).toBe(13 + 3);
     expect(reparsed.charmap.length).toBe(originalCharmapLen + 3);
+    expect(reparsed.recordCount).toBe(originalRecordCount + 3);
     const byChar = new Map(reparsed.charmap.map((r) => [r.charCode, r.glyphIndex]));
-    expect(byChar.get(0xfe8e)).toBe(13);
-    expect(byChar.get(0xfeee)).toBe(14);
-    expect(byChar.get(0xfef2)).toBe(15);
+    expect(byChar.get(0xfe8e)).toBe(originalRecordCount);
+    expect(byChar.get(0xfeee)).toBe(originalRecordCount + 1);
+    expect(byChar.get(0xfef2)).toBe(originalRecordCount + 2);
     // Original mappings still intact
     expect(byChar.get(32)).toBe(1);
     expect(byChar.get(57)).toBe(11);
+    expect(byChar.get(0x1f)).toBe(0);
   });
 });
 
@@ -141,15 +135,17 @@ function loadGeorgiaFixture(): ArrayBuffer {
 }
 
 describe("Risen 2 .xgfn parser (real sample: Georgia 16pt bold-oblique, 276 charmap pairs)", () => {
-  it("parses a much larger real charmap correctly, proving the 0xF6-based formula generalizes beyond the numbers sample", () => {
+  it("parses a much larger real charmap correctly, proving the structure generalizes beyond the numbers sample", () => {
     const doc = parseXgfn(loadGeorgiaFixture());
-    // glyphCount (0xEA) is 27 here — proof that it is NOT the charmap size
-    // (the bug this test guards against: the old glyphCount-1 formula only
-    // "worked" on the numbers sample by coincidence).
-    expect(doc.glyphCount).toBe(27);
+    expect(doc.glyphCount).toBe(27); // raw 0xEA — NOT a pair/record count
     expect(doc.charmap.length).toBe(276);
-    expect(doc.measurements.length).toBe(277);
+    expect(doc.recordCount).toBe(276);
+    expect(doc.measurements.length).toBe(276);
+    const maxGlyph = Math.max(...doc.charmap.map((r) => r.glyphIndex));
+    expect(doc.recordCount).toBe(maxGlyph + 1);
 
+    expect(doc.charmap[0].charCode).toBe(0x1f);
+    expect(doc.charmap[0].glyphIndex).toBe(0);
     const byChar = new Map(doc.charmap.map((r) => [r.charCode, r.glyphIndex]));
     expect(byChar.get(32)).toBe(1); // space
     expect(byChar.get(0x41)).toBe(28); // 'A'
@@ -158,10 +154,10 @@ describe("Risen 2 .xgfn parser (real sample: Georgia 16pt bold-oblique, 276 char
     expect(byChar.get(0x20ac)).toBe(123); // EURO SIGN
   });
 
-  it("the last measurement record is truncated exactly at the DDS boundary (not a full 36 bytes)", () => {
+  it("every measurement record is full-size with a 4-byte trailing field before DDS", () => {
     const doc = parseXgfn(loadGeorgiaFixture());
-    const last = doc.measurements[doc.measurements.length - 1];
-    expect(last.rawBytes.length).toBe(4);
+    for (const m of doc.measurements) expect(m.rawBytes.length).toBe(36);
+    expect(doc.trailingBytes.length).toBe(4);
   });
 
   it("round-trips byte-for-byte with no modifications", () => {

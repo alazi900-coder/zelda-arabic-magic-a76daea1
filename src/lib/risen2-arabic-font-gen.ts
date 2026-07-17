@@ -18,10 +18,10 @@
  * byte). Reuses the existing raw-RGB DDS encode/build helpers from
  * risen-ximg.ts rather than reimplementing DDS writing.
  *
- * Measurement record fields[5..8] are left at 0 for new glyphs — their
- * meaning is still unresolved (see risen2-xgfn.ts docblock); fields[0..4]
- * (atlas bbox + advance width) are the confirmed ones and are what actually
- * matters for placement/spacing.
+ * Measurement record fields for new glyphs: fields[0..4] (atlas bbox +
+ * advance) are fully confirmed; fields[7]/[8] are set to the glyph's visible
+ * width / negative height (see the inline comment at the fields assignment);
+ * fields[5]/[6] stay 0.
  */
 import {
   decodeDdsToRgba,
@@ -190,24 +190,14 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
     ddsHeader.ddspfFlags, ddsHeader.caps
   );
 
-  // Only the TRUE final record may be short (DDS-boundary truncation) — pad
-  // the previous last record to a full 36 bytes before appending after it.
+  // New glyph indices start at the ORIGINAL recordCount (= highest existing
+  // glyphIndex + 1, confirmed on all 112 real fonts), and their records are
+  // appended to the measurement table so record[glyphIndex] stays aligned.
+  // New charmap pairs are appended after the existing pairs — sorting is
+  // confirmed unnecessary (the working Chinese mod's charmaps are unsorted).
   const newMeasurements: XgfnMeasurement[] = doc.measurements.map((m) => m);
-  if (glyphs.length > 0 && newMeasurements.length > 0) {
-    const lastIdx = newMeasurements.length - 1;
-    const last = newMeasurements[lastIdx];
-    if (last.rawBytes.length < 36) {
-      const padded = new Uint8Array(36);
-      padded.set(last.rawBytes);
-      const dv = new DataView(padded.buffer);
-      const fields: number[] = [];
-      for (let k = 0; k < 9; k++) fields.push(dv.getInt32(k * 4, true));
-      newMeasurements[lastIdx] = { rawBytes: padded, fields };
-    }
-  }
-
   const newCharmap: XgfnGlyphRecord[] = [...doc.charmap];
-  let nextGlyphIndex = newMeasurements.length;
+  let nextGlyphIndex = doc.recordCount;
   for (const g of glyphs) {
     const glyphIndex = nextGlyphIndex++;
     newCharmap.push({ charCode: g.codepoint, glyphIndex });
@@ -232,6 +222,7 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
     fields.forEach((v, i) => dv.setInt32(i * 4, v, true));
     newMeasurements.push({ rawBytes, fields });
   }
+  const newRecordCount = doc.recordCount + glyphs.length;
 
   const headerPrefix = doc.headerPrefix.slice();
   const headerView = new DataView(headerPrefix.buffer, headerPrefix.byteOffset, headerPrefix.byteLength);
@@ -247,7 +238,13 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   // a real in-game crash log, including the file staying fully unusable —
   // English glyphs included — once the engine can't parse it at all).
   const measurementsTotalLen = newMeasurements.reduce((sum, m) => sum + m.rawBytes.length, 0);
-  const totalSize = headerPrefix.length + newCharmap.length * 4 + measurementsTotalLen + newDdsBytes.length;
+  const totalSize =
+    headerPrefix.length +
+    newCharmap.length * 4 +
+    4 /* recordCount field */ +
+    measurementsTotalLen +
+    doc.trailingBytes.length +
+    newDdsBytes.length;
   headerView.setUint32(0x1c, totalSize - 0x66, true);
 
   // 0xEA is intentionally left untouched. It was previously bumped
@@ -265,7 +262,9 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
     headerPrefix,
     glyphCount: headerView.getUint32(0xea, true),
     charmap: newCharmap,
+    recordCount: newRecordCount,
     measurements: newMeasurements,
+    trailingBytes: doc.trailingBytes.slice(),
     ddsBytes: newDdsBytes,
   };
 }

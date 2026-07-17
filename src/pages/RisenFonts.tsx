@@ -33,6 +33,23 @@ function downloadBlob(bytes: Uint8Array, filename: string): void {
 
 const ACCENT = "#4a7c3f";
 
+/** Zoom factor of the text-preview simulator canvas (drawing + hit-testing). */
+const PREVIEW_SCALE = 2;
+
+/** Arabic label + effect explanation for each of the 9 measurement-record
+ * fields, shown in the field editor and its help panel. */
+const FIELD_INFO: { key: string; short: string; desc: string }[] = [
+  { key: "x0", short: "يسار", desc: "الحافة اليسرى لصندوق الحرف داخل صورة الأطلس (بالبكسل). إنقاصها يوسّع الاقتطاع يساراً وقد يُدخل بكسلات من حرف مجاور؛ زيادتها تقص يسار الحرف." },
+  { key: "y0", short: "أعلى", desc: "الحافة العليا للصندوق. إنقاصها يُدخل صفوفاً فارغة فوق الحرف فيُرسم أنزل؛ زيادتها تقص أعلى الحرف فيُرسم أعلى." },
+  { key: "x1", short: "يمين", desc: "الحافة اليمنى للصندوق. يجب أن تبقى أكبر من «يسار» وداخل عرض الأطلس، وإلا يُرفض التعديل تلقائياً." },
+  { key: "y1", short: "أسفل", desc: "الحافة السفلى للصندوق. يجب أن تبقى أكبر من «أعلى» وداخل ارتفاع الأطلس، وإلا يُرفض التعديل تلقائياً." },
+  { key: "adv", short: "تباعد", desc: "عدد البكسلات التي يتقدمها المؤشر بعد رسم هذا الحرف: زيادته توسّع الفراغ بعده، وإنقاصه يجعل الحرف التالي أقرب (القيمة السالبة مرفوضة)." },
+  { key: "f5", short: "؟6", desc: "وظيفته غير مؤكدة. كل الحروف المضافة في المود الصيني العامل تتركه صفراً — لا تغيّره إلا للتجربة." },
+  { key: "f6", short: "؟7", desc: "وظيفته غير مؤكدة. كل الحروف المضافة في المود الصيني العامل تتركه صفراً — لا تغيّره إلا للتجربة." },
+  { key: "f7", short: "؟8", desc: "وظيفته غير مؤكدة. كل الحروف المضافة في المود الصيني العامل تتركه صفراً — لا تغيّره إلا للتجربة." },
+  { key: "f8", short: "؟9", desc: "وظيفته غير مؤكدة. كل الحروف المضافة في المود الصيني العامل تتركه صفراً — لا تغيّره إلا للتجربة." },
+];
+
 interface RoundTripResult {
   ok: boolean;
   message: string;
@@ -137,6 +154,13 @@ const RisenFonts = () => {
   const [aliasCharInput, setAliasCharInput] = useState("");
   const [aliasGlyphInput, setAliasGlyphInput] = useState("");
   const [remapGlyphInput, setRemapGlyphInput] = useState("");
+  /** Inline result of the last edit action — replaces the floating toasts
+   * that used to cover the apply button and block further clicks. */
+  const [editStatus, setEditStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [showFieldHelp, setShowFieldHelp] = useState(false);
+  /** Scroll container of the glyph table — used to bring the selected row
+   * into view when a glyph is picked from the atlas or the preview. */
+  const tableWrapRef = useRef<HTMLDivElement>(null);
   /** The doc as first loaded (pre-merge/pre-edit) — comparison baseline for audits. */
   const baseDocRef = useRef<XgfnDocument | null>(null);
 
@@ -148,6 +172,9 @@ const RisenFonts = () => {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [previewText, setPreviewText] = useState("مرحبا بكم في Risen 2");
   const [previewMissing, setPreviewMissing] = useState<string[]>([]);
+  /** Horizontal hit region of every glyph drawn in the preview (unscaled
+   * canvas units) → its charmap pair index, for click-to-select. */
+  const previewHitsRef = useRef<{ x0: number; x1: number; pairIdx: number }[]>([]);
 
   const decodeFontName = useCallback((headerPrefix: Uint8Array): string => {
     const nameBytes = headerPrefix.subarray(0x96, 0x96 + 64);
@@ -167,6 +194,7 @@ const RisenFonts = () => {
     setArabicMerged(false);
     setAuditReport(null);
     setSelectedPairIdx(null);
+    setEditStatus(null);
     toast.success(`تم تحليل الملف: ${parsed.charmap.length} زوجاً / ${parsed.recordCount} سجلاً`);
   }, [decodeFontName]);
 
@@ -433,15 +461,22 @@ const RisenFonts = () => {
 
   const selectPair = useCallback((idx: number | null) => {
     setSelectedPairIdx(idx);
+    setEditStatus(null);
     if (idx !== null && doc) {
       const pair = doc.charmap[idx];
       const rec = pair.glyphIndex < doc.measurements.length ? doc.measurements[pair.glyphIndex] : null;
       setEditFieldValues(rec ? rec.fields.map((v) => String(v)) : []);
       setRemapGlyphInput(String(pair.glyphIndex));
+      // Bring the row into view when the pick came from the atlas/preview.
+      requestAnimationFrame(() => {
+        tableWrapRef.current?.querySelector(`tr[data-idx="${idx}"]`)?.scrollIntoView({ block: "nearest" });
+      });
     }
   }, [doc]);
 
-  /** Applies an edit result (already safety-verified by the edit module). */
+  /** Applies an edit result (already safety-verified by the edit module).
+   * Outcome is reported inline next to the buttons (NOT as a floating toast
+   * — toasts used to cover the apply button and block repeated clicks). */
   const applyEdit = useCallback((fn: () => { doc: XgfnDocument }) => {
     try {
       const { doc: next } = fn();
@@ -450,10 +485,10 @@ const RisenFonts = () => {
       setRoundTrip(null);
       setOriginalBytes(null); // manually edited — no longer matches any original stream
       setArabicMerged(true); // enables inject/download buttons
-      toast.success("طُبّق التعديل بعد اجتياز الفحص الكامل ✅");
+      setEditStatus({ ok: true, message: "طُبّق التعديل بعد اجتياز الفحص الكامل ✅" });
       return true;
     } catch (err) {
-      toast.error((err as Error).message);
+      setEditStatus({ ok: false, message: (err as Error).message });
       return false;
     }
   }, []);
@@ -463,11 +498,29 @@ const RisenFonts = () => {
     const pair = doc.charmap[selectedPairIdx];
     const fields = editFieldValues.map((v) => parseInt(v, 10));
     if (fields.length !== 9 || fields.some((v) => !Number.isFinite(v))) {
-      toast.error("القيم يجب أن تكون 9 أعداد صحيحة");
+      setEditStatus({ ok: false, message: "القيم يجب أن تكون 9 أعداد صحيحة" });
       return;
     }
     applyEdit(() => updateGlyphFields(doc, pair.glyphIndex, fields));
   }, [doc, selectedPairIdx, editFieldValues, applyEdit]);
+
+  /** Arrow-nudge: moves where the selected glyph is DRAWN by one pixel. The
+   * sampled atlas box must shift the OPPOSITE way to achieve that visually
+   * (sampling one row lower draws the ink one pixel higher, etc.). Updates
+   * the editor inputs only — the live preview reflects it immediately, and
+   * nothing is written until "تطبيق تعديل الحقول" passes the safety gate. */
+  const nudgeSelected = useCallback((dx: number, dy: number) => {
+    setEditFieldValues((prev) => {
+      if (prev.length !== 9) return prev;
+      const f = prev.map((v) => parseInt(v, 10));
+      if (f.slice(0, 4).some((v) => !Number.isFinite(v))) return prev;
+      return prev.map((v, i) => {
+        if (i === 0 || i === 2) return String(f[i] - dx);
+        if (i === 1 || i === 3) return String(f[i] - dy);
+        return v;
+      });
+    });
+  }, []);
 
   const handleDeletePair = useCallback(() => {
     if (!doc || selectedPairIdx === null) return;
@@ -481,16 +534,16 @@ const RisenFonts = () => {
     if (!doc || selectedPairIdx === null) return;
     const pair = doc.charmap[selectedPairIdx];
     const gi = parseInt(remapGlyphInput, 10);
-    if (!Number.isFinite(gi)) { toast.error("مؤشر غير صالح"); return; }
+    if (!Number.isFinite(gi)) { setEditStatus({ ok: false, message: "مؤشر غير صالح" }); return; }
     applyEdit(() => remapCharmapPair(doc, pair.charCode, gi));
   }, [doc, selectedPairIdx, remapGlyphInput, applyEdit]);
 
   const handleAddAlias = useCallback(() => {
     if (!doc) return;
     const code = parseCharInput(aliasCharInput);
-    if (code === null) { toast.error("أدخل حرفاً واحداً أو رمزاً ست عشرياً مثل FE8E"); return; }
+    if (code === null) { setEditStatus({ ok: false, message: "أدخل حرفاً واحداً أو رمزاً ست عشرياً مثل FE8E" }); return; }
     const gi = parseInt(aliasGlyphInput, 10);
-    if (!Number.isFinite(gi)) { toast.error("مؤشر الحرف الهدف غير صالح"); return; }
+    if (!Number.isFinite(gi)) { setEditStatus({ ok: false, message: "مؤشر الحرف الهدف غير صالح" }); return; }
     if (applyEdit(() => addCharmapAlias(doc, code, gi))) {
       setAliasCharInput("");
       setAliasGlyphInput("");
@@ -528,7 +581,24 @@ const RisenFonts = () => {
 
     const shaped = shapeArabicForRisen(previewText);
     const byChar = new Map(doc.charmap.map((p) => [p.charCode, p.glyphIndex]));
+    const pairIdxByChar = new Map<number, number>();
+    doc.charmap.forEach((p, i) => { if (!pairIdxByChar.has(p.charCode)) pairIdxByChar.set(p.charCode, i); });
     const rowH = Math.max(10, computeRowHeightPx(doc));
+
+    // Unapplied field-editor values override the selected glyph's record, so
+    // arrow-nudges and typed edits show their visual effect BEFORE being
+    // applied through the safety gate.
+    let pendingGi: number | null = null;
+    let pendingFields: number[] | null = null;
+    if (selectedPairIdx !== null && doc.charmap[selectedPairIdx] && editFieldValues.length === 9) {
+      const parsed = editFieldValues.map((v) => parseInt(v, 10));
+      if (!parsed.some((v) => !Number.isFinite(v))) {
+        pendingGi = doc.charmap[selectedPairIdx].glyphIndex;
+        pendingFields = parsed;
+      }
+    }
+    const fieldsOf = (gi: number): number[] =>
+      gi === pendingGi && pendingFields ? pendingFields : doc.measurements[gi].fields;
 
     // First pass: total width + missing chars.
     const missing: string[] = [];
@@ -539,23 +609,24 @@ const RisenFonts = () => {
         missing.push(ch);
         totalW += Math.ceil(rowH * 0.6) + 2;
       } else {
-        totalW += Math.max(1, doc.measurements[gi].fields[4]) + 1;
+        totalW += Math.max(1, fieldsOf(gi)[4]) + 1;
       }
     }
 
     const canvas = previewCanvasRef.current;
-    const scale = 2;
-    canvas.width = Math.max(60, totalW + 8) * scale;
-    canvas.height = (rowH + 12) * scale;
+    canvas.width = Math.max(60, totalW + 8) * PREVIEW_SCALE;
+    canvas.height = (rowH + 12) * PREVIEW_SCALE;
     const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = "#12241a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale);
+    ctx.scale(PREVIEW_SCALE, PREVIEW_SCALE);
 
     let x = 6;
+    const hits: { x0: number; x1: number; pairIdx: number }[] = [];
     for (const ch of [...shaped]) {
-      const gi = byChar.get(ch.charCodeAt(0));
+      const code = ch.charCodeAt(0);
+      const gi = byChar.get(code);
       if (gi === undefined || gi >= doc.measurements.length) {
         // missing char — draw a red notdef-style box, like the engine's fallback
         ctx.strokeStyle = "rgba(255,60,60,0.9)";
@@ -563,14 +634,28 @@ const RisenFonts = () => {
         x += Math.ceil(rowH * 0.6) + 2;
         continue;
       }
-      const [x0, y0, x1, y1, adv] = doc.measurements[gi].fields;
+      const [x0, y0, x1, y1, adv] = fieldsOf(gi);
       if (x1 > x0 && y1 > y0) {
         ctx.drawImage(atlas, x0, y0, x1 - x0, y1 - y0, x, 4, x1 - x0, y1 - y0);
       }
-      x += Math.max(1, adv) + 1;
+      const w = Math.max(1, adv) + 1;
+      const pi = pairIdxByChar.get(code);
+      if (pi !== undefined) hits.push({ x0: x, x1: x + Math.max(w, x1 - x0), pairIdx: pi });
+      x += w;
     }
+    previewHitsRef.current = hits;
     setPreviewMissing([...new Set(missing)]);
-  }, [doc, previewText]);
+  }, [doc, previewText, selectedPairIdx, editFieldValues]);
+
+  /** Click a glyph in the preview → select its charmap pair directly. */
+  const handlePreviewClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) * (canvas.width / rect.width)) / PREVIEW_SCALE;
+    const hit = previewHitsRef.current.find((h) => x >= h.x0 && x < h.x1);
+    if (hit) selectPair(hit.pairIdx);
+  }, [selectPair]);
 
   // Render the DDS atlas + diagnostic grid overlay whenever the doc or grid toggle changes.
   useEffect(() => {
@@ -606,11 +691,16 @@ const RisenFonts = () => {
       ctx.restore();
     }
 
-    // Selected-glyph highlight (drawn regardless of the grid toggle).
+    // Selected-glyph highlight (drawn regardless of the grid toggle) — uses
+    // the UNAPPLIED editor values when valid, so arrow-nudges move the box.
     if (selectedPairIdx !== null && doc.charmap[selectedPairIdx]) {
       const gi = doc.charmap[selectedPairIdx].glyphIndex;
       if (gi < doc.measurements.length) {
-        const [x0, y0, x1, y1] = doc.measurements[gi].fields;
+        let [x0, y0, x1, y1] = doc.measurements[gi].fields;
+        if (editFieldValues.length === 9) {
+          const pending = editFieldValues.slice(0, 4).map((v) => parseInt(v, 10));
+          if (!pending.some((v) => !Number.isFinite(v))) [x0, y0, x1, y1] = pending;
+        }
         if (x1 > x0 && y1 > y0) {
           ctx.save();
           ctx.strokeStyle = "rgba(0, 220, 255, 1)";
@@ -620,7 +710,7 @@ const RisenFonts = () => {
         }
       }
     }
-  }, [doc, showGrid, selectedPairIdx]);
+  }, [doc, showGrid, selectedPairIdx, editFieldValues]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
@@ -946,7 +1036,7 @@ const RisenFonts = () => {
             <div className="rounded-lg border border-border p-4 space-y-3">
               <h3 className="font-display font-bold text-sm">محاكي المعاينة — كما سيرسمها المحرك حرفياً</h3>
               <p className="text-xs text-muted-foreground">
-                اكتب جملة: تُشكَّل بنفس نظام اللعبة ثم تُرسم من أطلس هذا الخط نفسه (حرفاً حرفاً بنفس التباعد). إن ظهرت صحيحة هنا وخاطئة داخل اللعبة فالمشكلة في المحرك؛ وإن ظهرت خاطئة هنا فالمشكلة في بيانات الخط. المربع الأحمر = حرف غير موجود في الخريطة.
+                اكتب جملة: تُشكَّل بنفس نظام اللعبة ثم تُرسم من أطلس هذا الخط نفسه (حرفاً حرفاً بنفس التباعد). إن ظهرت صحيحة هنا وخاطئة داخل اللعبة فالمشكلة في المحرك؛ وإن ظهرت خاطئة هنا فالمشكلة في بيانات الخط. المربع الأحمر = حرف غير موجود في الخريطة. <strong>انقر على أي حرف في المعاينة لاختياره مباشرة</strong> بدل البحث عنه في الجدول.
               </p>
               <input
                 type="text"
@@ -956,7 +1046,7 @@ const RisenFonts = () => {
                 dir="rtl"
               />
               <div className="overflow-x-auto rounded border border-border p-2 bg-[#12241a]">
-                <canvas ref={previewCanvasRef} className="max-w-none" style={{ imageRendering: "pixelated" }} />
+                <canvas ref={previewCanvasRef} onClick={handlePreviewClick} className="max-w-none cursor-pointer" style={{ imageRendering: "pixelated" }} />
               </div>
               {previewMissing.length > 0 && (
                 <p className="text-xs text-destructive">
@@ -968,7 +1058,7 @@ const RisenFonts = () => {
             {/* Glyph inspector table */}
             <div className="rounded-lg border border-border p-4 space-y-3">
               <h3 className="font-display font-bold text-sm">جدول الحروف ({doc.charmap.length}) — انقر صفاً لاختياره</h3>
-              <div className="max-h-64 overflow-y-auto overflow-x-auto rounded border border-border">
+              <div ref={tableWrapRef} className="max-h-64 overflow-y-auto overflow-x-auto rounded border border-border">
                 <table className="w-full text-xs font-mono">
                   <thead className="sticky top-0 bg-card">
                     <tr className="text-muted-foreground">
@@ -986,6 +1076,7 @@ const RisenFonts = () => {
                       return (
                         <tr
                           key={i}
+                          data-idx={i}
                           onClick={() => selectPair(i)}
                           className={`cursor-pointer border-t border-border hover:bg-primary/10 ${selectedPairIdx === i ? "bg-primary/20" : ""}`}
                         >
@@ -1017,9 +1108,9 @@ const RisenFonts = () => {
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">تعديل حقول السجل (كل تعديل يمر بفحص كامل قبل قبوله — التعديل المُفسِد يُرفض تلقائياً):</p>
                       <div className="grid grid-cols-3 md:grid-cols-9 gap-2" dir="ltr">
-                        {["x0", "y0", "x1", "y1", "adv", "f5", "f6", "f7", "f8"].map((label, k) => (
-                          <label key={label} className="text-xs font-mono">
-                            <span className="text-muted-foreground block">{label}</span>
+                        {FIELD_INFO.map((info, k) => (
+                          <label key={info.key} className="text-xs font-mono">
+                            <span className="text-muted-foreground block" title={info.desc}>{info.short}</span>
                             <input
                               type="number"
                               value={editFieldValues[k]}
@@ -1028,6 +1119,27 @@ const RisenFonts = () => {
                             />
                           </label>
                         ))}
+                      </div>
+                      <Button type="button" variant="outline" size="sm" className="font-display" onClick={() => setShowFieldHelp((s) => !s)}>
+                        ؟ ماذا يعني كل حقل
+                      </Button>
+                      {showFieldHelp && (
+                        <div className="rounded border border-border bg-background/70 p-3 space-y-1.5 text-xs">
+                          {FIELD_INFO.map((f) => (
+                            <p key={f.key}>
+                              <strong className="font-display">{f.short}</strong>: {f.desc}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-muted-foreground">تحريك رسم الحرف بكسلاً (المعاينة والأطلس يتحدثان فوراً — التطبيق بالزر أدناه):</span>
+                        <div className="flex items-center gap-1" dir="ltr">
+                          <Button type="button" variant="outline" size="sm" className="w-9 px-0 font-mono" onClick={() => nudgeSelected(-1, 0)} aria-label="تحريك لليسار">◀</Button>
+                          <Button type="button" variant="outline" size="sm" className="w-9 px-0 font-mono" onClick={() => nudgeSelected(0, -1)} aria-label="تحريك للأعلى">▲</Button>
+                          <Button type="button" variant="outline" size="sm" className="w-9 px-0 font-mono" onClick={() => nudgeSelected(0, 1)} aria-label="تحريك للأسفل">▼</Button>
+                          <Button type="button" variant="outline" size="sm" className="w-9 px-0 font-mono" onClick={() => nudgeSelected(1, 0)} aria-label="تحريك لليمين">▶</Button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <Button size="sm" className="font-display" onClick={handleApplyFieldEdit}>تطبيق تعديل الحقول</Button>
@@ -1041,6 +1153,12 @@ const RisenFonts = () => {
                         />
                         <Button size="sm" variant="outline" className="font-display" onClick={handleRemapPair}>إعادة ربط</Button>
                       </div>
+                      {editStatus && (
+                        <div className={`rounded p-2 text-xs flex items-center gap-2 ${editStatus.ok ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}>
+                          {editStatus.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+                          {editStatus.message}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1070,6 +1188,12 @@ const RisenFonts = () => {
                   />
                   <Button size="sm" className="font-display" onClick={handleAddAlias}>إضافة الربط</Button>
                 </div>
+                {editStatus && selectedPairIdx === null && (
+                  <div className={`rounded p-2 text-xs flex items-center gap-2 ${editStatus.ok ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}>
+                    {editStatus.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+                    {editStatus.message}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -207,16 +207,12 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
     const y0 = pos?.y ?? 0;
     const x1 = pos ? pos.x + g.width : 0;
     const y1 = pos ? pos.y + g.height : 0;
-    // fields[5..8] on real glyphs are (xOffset, yOffset, visibleWidth,
-    // baselineOffset). Leaving them at 0 caused a REAL in-game invisibility
-    // bug (font uploaded, engine loaded it fine, but Arabic glyphs rendered
-    // with visibleWidth=0 → nothing drawn). Sampling 27 real ASCII glyphs in
-    // a shipped Trajan Pro atlas: fields[7] tracks visible glyph width ≈
-    // atlas box width − 1 packer-padding pixel; fields[8] is a small
-    // negative baseline offset roughly proportional to ink height. Use the
-    // Arabic glyph's own cropped dimensions — they're already tight-bboxed
-    // to ink, so `width`/`height` are the correct visible extents.
-    const fields = [x0, y0, x1, y1, g.advance, 0, 0, g.width, -g.height];
+    // fields[5..8] = 0 for added glyphs — matches the working Chinese mod
+    // exactly: inspected its ADDED (CJK) records directly and all four are
+    // zero on every added glyph, while only pre-existing Latin records carry
+    // nonzero bearing-like values. An earlier guess set [7]/[8] from the
+    // glyph's dimensions; the proven reference doesn't, so neither do we.
+    const fields = [x0, y0, x1, y1, g.advance, 0, 0, 0, 0];
     const rawBytes = new Uint8Array(36);
     const dv = new DataView(rawBytes.buffer);
     fields.forEach((v, i) => dv.setInt32(i * 4, v, true));
@@ -258,13 +254,22 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   // driving a bad heap allocation) went away only once this stopped
   // happening. Do not "fix" this again without new evidence.
 
+  // The u32 between the measurement table and the DDS payload is the DDS
+  // BYTE LENGTH — confirmed exactly on 112/112 real fonts (77 original + 35
+  // Chinese-mod), and the working Chinese mod updates it when its atlases
+  // grow. Leaving it stale at the original DDS size (as an earlier revision
+  // did) makes the engine read a too-short texture payload and reject the
+  // whole font — every glyph invisible, Latin included.
+  const newTrailingBytes = new Uint8Array(4);
+  new DataView(newTrailingBytes.buffer).setUint32(0, newDdsBytes.length, true);
+
   return {
     headerPrefix,
     glyphCount: headerView.getUint32(0xea, true),
     charmap: newCharmap,
     recordCount: newRecordCount,
     measurements: newMeasurements,
-    trailingBytes: doc.trailingBytes.slice(),
+    trailingBytes: newTrailingBytes,
     ddsBytes: newDdsBytes,
   };
 }

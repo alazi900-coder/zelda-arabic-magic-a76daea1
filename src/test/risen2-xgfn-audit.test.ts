@@ -66,6 +66,14 @@ describe("auditXgfnDocument (real fixtures)", () => {
     expect(report.headerIssues.some((i) => i.severity === "error" && i.message.includes("0x1C"))).toBe(true);
   });
 
+  it("detects a stale trailing DDS-byte-length field", () => {
+    const doc = parseXgfn(loadFixture("risen2-numbers-font-sample.xgfn"));
+    const view = new DataView(doc.trailingBytes.buffer, doc.trailingBytes.byteOffset, doc.trailingBytes.byteLength);
+    view.setUint32(0, doc.ddsBytes.length - 100, true);
+    const report = auditXgfnDocument(doc);
+    expect(report.headerIssues.some((i) => i.severity === "error" && i.message.includes("طول DDS"))).toBe(true);
+  });
+
   it("detects a glyph index pointing past the record table", () => {
     const doc = parseXgfn(loadFixture("risen2-numbers-font-sample.xgfn"));
     doc.charmap[1] = { ...doc.charmap[1], glyphIndex: 500 };

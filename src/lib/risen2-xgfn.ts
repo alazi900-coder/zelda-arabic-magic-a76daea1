@@ -56,8 +56,12 @@
  *   ...   measurement table: recordCount records of 9 x int32 (36 bytes) each
  *         — all FULL records; the "truncated last record" of earlier
  *         revisions was actually the trailing u32 below.
- *   ...   u32 trailing field (meaning unresolved, present on all 112 real
- *         fonts — copied verbatim).
+ *   ...   u32 ddsByteLength — the byte length of the DDS payload that
+ *         follows. CONFIRMED equal to the DDS length on 112/112 real fonts,
+ *         and the working Chinese mod updates it when its atlases grow.
+ *         MUST be recomputed whenever the DDS changes — left stale it made
+ *         the engine read a truncated texture and reject the whole font
+ *         (all glyphs invisible in-game, Latin included).
  *   ...   DDS file (standard header + pixel data) to EOF.
  *
  * Per-glyph measurement record fields — CONFIRMED on the real Georgia sample

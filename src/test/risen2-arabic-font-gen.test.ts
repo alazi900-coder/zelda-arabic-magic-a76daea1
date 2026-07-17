@@ -182,4 +182,26 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     const originalTotalSize = loadFixture().byteLength;
     expect(totalSize).toBeGreaterThan(originalTotalSize);
   });
+
+  it("updates the trailing u32 to the NEW DDS byte length — equal on 112/112 real fonts; left stale it hid ALL glyphs in-game (Arabic and Latin)", () => {
+    const doc = parseXgfn(loadFixture());
+    const originalDdsLen = doc.ddsBytes.length;
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0x0660, 3, 5, 4)]);
+
+    const trailingView = new DataView(merged.trailingBytes.buffer, merged.trailingBytes.byteOffset, merged.trailingBytes.byteLength);
+    expect(trailingView.getUint32(0, true)).toBe(merged.ddsBytes.length);
+    // Non-trivial: the atlas really grew, so a stale copy of the original
+    // value would fail this assertion.
+    expect(merged.ddsBytes.length).toBeGreaterThan(originalDdsLen);
+  });
+
+  it("sets fields[5..8] of every ADDED glyph record to zero, matching the working Chinese mod's added records exactly", () => {
+    const doc = parseXgfn(loadFixture());
+    const baseCount = doc.measurements.length;
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfe8e, 5, 7, 6), makeGlyph(0x0660, 3, 5, 4)]);
+    for (let i = baseCount; i < merged.measurements.length; i++) {
+      const f = merged.measurements[i].fields;
+      expect(f.slice(5)).toEqual([0, 0, 0, 0]);
+    }
+  });
 });

@@ -105,6 +105,15 @@ export function auditXgfnDocument(
     }
   }
 
+  // trailing u32 == DDS byte length (exact on 112/112 real fonts; the working
+  // Chinese mod updates it when its atlases grow — left stale it made the
+  // engine reject the whole font: all glyphs invisible, Latin included)
+  const trailingView = new DataView(doc.trailingBytes.buffer, doc.trailingBytes.byteOffset, doc.trailingBytes.byteLength);
+  const ddsLenField = trailingView.getUint32(0, true);
+  if (ddsLenField !== doc.ddsBytes.length) {
+    headerIssues.push({ severity: "error", message: `حقل طول DDS (${ddsLenField}) لا يطابق طول الأطلس الفعلي (${doc.ddsBytes.length}) — قيمة قديمة هنا تجعل المحرك يخفي كل الحروف (العربية والإنجليزية)` });
+  }
+
   // --- vs original: nothing pre-existing may change ---
   if (options.original) {
     const orig = options.original;
@@ -328,6 +337,11 @@ export function buildDiagnosticJson(
       pairCount0xF6: { actual: headerView.getUint32(0xf6, true), expected: doc.charmap.length, pass: headerView.getUint32(0xf6, true) === doc.charmap.length },
       recordCount: { actual: doc.recordCount, expectedMaxGlyphPlus1: maxGlyphIndex + 1, measurements: doc.measurements.length, pass: doc.recordCount === doc.measurements.length && doc.recordCount === maxGlyphIndex + 1 },
       atlasPowerOfTwo: { dims: report.atlas ? `${report.atlas.width}x${report.atlas.height}` : null, pass: report.atlas?.powerOfTwo ?? false },
+      ddsByteLength: {
+        actual: new DataView(doc.trailingBytes.buffer, doc.trailingBytes.byteOffset, doc.trailingBytes.byteLength).getUint32(0, true),
+        expected: doc.ddsBytes.length,
+        pass: new DataView(doc.trailingBytes.buffer, doc.trailingBytes.byteOffset, doc.trailingBytes.byteLength).getUint32(0, true) === doc.ddsBytes.length,
+      },
     },
     totals: {
       pairs: doc.charmap.length,

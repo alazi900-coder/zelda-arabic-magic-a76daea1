@@ -32,7 +32,15 @@ import {
   encodeRawRgbDds,
   buildRawRgbDdsFile,
 } from "./risen-ximg";
-import { getRisenArabicGlyphCodepoints } from "./risen/arabic-shaper";
+import { getRisenArabicGlyphCodepoints, RISEN_ARABIC_QMARK_ALIAS } from "./risen/arabic-shaper";
+
+/** codepoint -> the character to actually DRAW for it. Only the Arabic
+ * question mark alias needs this (see RISEN_ARABIC_QMARK_ALIAS docblock in
+ * arabic-shaper.ts): the glyph is generated under a different stored
+ * codepoint than the one whose shape it draws. */
+const GLYPH_SOURCE_OVERRIDE: Record<number, number> = {
+  [RISEN_ARABIC_QMARK_ALIAS]: 0x061f,
+};
 import type { XgfnDocument, XgfnGlyphRecord, XgfnMeasurement } from "./risen2-xgfn";
 import { verifyDocumentSafe, type XgfnAuditReport } from "./risen2-xgfn-audit";
 
@@ -178,7 +186,7 @@ function fitFontSize(
   let maxAscent = 1;
   let maxDescent = 1;
   for (const cp of codepoints) {
-    const m = ctx.measureText(String.fromCharCode(cp));
+    const m = ctx.measureText(String.fromCharCode(GLYPH_SOURCE_OVERRIDE[cp] ?? cp));
     if (m.actualBoundingBoxAscent > maxAscent) maxAscent = m.actualBoundingBoxAscent;
     if (m.actualBoundingBoxDescent > maxDescent) maxDescent = m.actualBoundingBoxDescent;
   }
@@ -336,7 +344,7 @@ export async function renderArabicGlyphsFromFont(
       ctx.textBaseline = "alphabetic";
       ctx.fillStyle = "#fff";
 
-      const ch = String.fromCharCode(cp);
+      const ch = String.fromCharCode(GLYPH_SOURCE_OVERRIDE[cp] ?? cp);
       const m = ctx.measureText(ch);
       const advance = Math.max(1, Math.round(m.width));
       // Cell width covers the advance plus any right-side ink overhang

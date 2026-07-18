@@ -209,6 +209,19 @@ const PROTECTED_TOKEN_REGEX = /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,3
 const SHIELD_BASE = 0xE900;
 const SHIELD_MAX_SLOTS = 0x100;
 
+/** Stand-in codepoint for the Arabic question mark (؟, U+061F) in Risen
+ * builds. In-game testing (real fonts.p00 + strings.p00, glyph confirmed
+ * present with real ink in every one of the 35 fonts, and re-pointing ؟'s
+ * charmap entry at the already-working Latin "?" glyph slot made no
+ * difference) showed the Genome engine applies some codepoint-keyed special
+ * handling to U+061F specifically, independent of what glyph it maps to —
+ * it always renders as a missing-glyph box. Substituting it for an unused
+ * private-use codepoint (outside both the E000-E0FF icon range and the
+ * E900-E9FF shield range above) sidesteps whatever that handling is, while
+ * `risen2-arabic-font-gen.ts` still draws the real Arabic "؟" shape for it —
+ * only the stored codepoint changes, not the rendered glyph. */
+export const RISEN_ARABIC_QMARK_ALIAS = 0xE100;
+
 function shieldProtectedTokens(line: string): { shielded: string; tokens: string[] } {
   const tokens: string[] = [];
   const regex = new RegExp(PROTECTED_TOKEN_REGEX.source, PROTECTED_TOKEN_REGEX.flags);
@@ -318,7 +331,8 @@ export function getRisenArabicGlyphCodepoints(): number[] {
     codepoints.add(lig[1]);
   }
   for (let d = 0x0660; d <= 0x0669; d++) codepoints.add(d); // Arabic-Indic digits
-  for (const p of [0x060c, 0x061b, 0x061f, 0x0621]) codepoints.add(p); // comma, semicolon, question mark, hamza
+  for (const p of [0x060c, 0x061b, 0x0621]) codepoints.add(p); // comma, semicolon, hamza
+  codepoints.add(RISEN_ARABIC_QMARK_ALIAS); // question mark — see RISEN_ARABIC_QMARK_ALIAS docblock
   return [...codepoints].sort((a, b) => a - b);
 }
 
@@ -339,6 +353,11 @@ function hasArabicLetters(text: string): boolean {
  */
 export function shapeArabicForRisen(text: string): string {
   if (!text || !hasArabicLetters(text)) return text;
+
+  // See RISEN_ARABIC_QMARK_ALIAS docblock — swapped in before shaping so it
+  // flows through shielding/reversal exactly like any other Arabic
+  // punctuation mark, landing in the correct position.
+  text = text.replace(/؟/g, String.fromCharCode(RISEN_ARABIC_QMARK_ALIAS));
 
   // Hard line separators stay in place; each line is shaped/reversed independently.
   const lineParts = text.split(/(\r\n|\n)/);

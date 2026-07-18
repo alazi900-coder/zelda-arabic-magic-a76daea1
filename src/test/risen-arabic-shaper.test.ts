@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shapeArabicForRisen, getPresentationFormsForLetter } from "@/lib/risen/arabic-shaper";
+import { shapeArabicForRisen, getPresentationFormsForLetter, getRisenArabicGlyphCodepoints, RISEN_ARABIC_QMARK_ALIAS } from "@/lib/risen/arabic-shaper";
 import { parseRisenP00Full, buildRisenP00, applyTranslations, makeKey } from "@/lib/risen-p00";
 
 /** Build a string from hex codepoints, e.g. cp(0x0645, 0x062A) — keeps
@@ -320,5 +320,41 @@ describe("shapeArabicForRisen — printf-style format specifiers survive shaping
     const SAFE_RANGE = /^[\u0020-\u00FF\u0660-\u0669\uFE70-\uFEFF]*$/;
     const result = shapeArabicForRisen("لديك %s قطعة").replace(/[\r\n]/g, "");
     expect(SAFE_RANGE.test(result)).toBe(true);
+  });
+});
+
+describe("shapeArabicForRisen — Arabic question mark aliasing (RISEN_ARABIC_QMARK_ALIAS)", () => {
+  // Confirmed by live in-game testing (real fonts.p00 + strings.p00): the
+  // Genome engine renders U+061F as a missing-glyph box no matter what glyph
+  // its charmap entry points to (even the already-working Latin "?" slot) —
+  // some codepoint-keyed special handling, not a font/data problem. The
+  // build substitutes it for an unused private-use codepoint instead.
+  it("substitutes \u061F for the alias codepoint before shaping, landing in the correct reversed position", () => {
+    const result = shapeArabicForRisen("\u0647\u0644 \u0647\u0630\u0627 \u0635\u062D\u064A\u062D\u061F");
+    expect(result).not.toContain("\u061F");
+    expect(result[0]).toBe(String.fromCharCode(RISEN_ARABIC_QMARK_ALIAS));
+  });
+
+  it("leaves other Arabic punctuation (comma, semicolon) completely unaffected", () => {
+    const result = shapeArabicForRisen("\u0623\u0648\u0644\u0627\u064B\u060C \u062B\u0627\u0646\u064A\u0627\u064B\u061B \u062B\u0627\u0644\u062B\u0627\u064B");
+    expect(result).toContain("\u060C"); // Arabic comma
+    expect(result).toContain("\u061B"); // Arabic semicolon
+  });
+
+  it("does nothing when there's no question mark in the text", () => {
+    const result = shapeArabicForRisen("\u0644\u0627 \u064A\u0648\u062C\u062F \u0627\u0633\u062A\u0641\u0647\u0627\u0645 \u0647\u0646\u0627");
+    expect(result).not.toContain(String.fromCharCode(RISEN_ARABIC_QMARK_ALIAS));
+  });
+
+  it("getRisenArabicGlyphCodepoints includes the alias, not the raw 0x061F, and keeps the same total count", () => {
+    const codepoints = getRisenArabicGlyphCodepoints();
+    expect(codepoints).toContain(RISEN_ARABIC_QMARK_ALIAS);
+    expect(codepoints).not.toContain(0x061f);
+    expect(codepoints.length).toBe(140);
+  });
+
+  it("the alias codepoint doesn't collide with the PUA icon range (E000-E0FF) or the shield range (E900-E9FF)", () => {
+    expect(RISEN_ARABIC_QMARK_ALIAS).toBeGreaterThan(0xe0ff);
+    expect(RISEN_ARABIC_QMARK_ALIAS).toBeLessThan(0xe900);
   });
 });

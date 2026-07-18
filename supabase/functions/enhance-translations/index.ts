@@ -699,10 +699,14 @@ Deno.serve(async (req) => {
         const errText = await response.text();
         const provider = isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : 'Lovable Gateway';
         console.error(`[enhance] ${modeLabel} ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
+        // Diagnostic marker: reveals which function version is live + how the
+        // request was routed, so a "Lovable" error on a TokenRouter request is
+        // immediately traceable to old deployed code vs a real provider error.
+        const diag = ` [fn=enh-1.95.0 · aiModel=${aiModel ?? '∅'} · tr=${isTokenRouter} · ds=${isDeepSeek}]`;
         let errMsg: string;
-        if (response.status === 429) errMsg = `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})`;
-        else if (response.status === 402) errMsg = `الرصيد غير كافٍ على ${provider}`;
-        else errMsg = `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}`;
+        if (response.status === 429) errMsg = `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})${diag}`;
+        else if (response.status === 402) errMsg = `الرصيد غير كافٍ على ${provider}${diag}`;
+        else errMsg = `خطأ من ${provider} (HTTP ${response.status}): ${errText.slice(0, 300)}${diag}`;
         return { items: [], errorResponse: new Response(JSON.stringify({ error: errMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
       }
       const aiResult = await response.json();

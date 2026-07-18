@@ -642,33 +642,25 @@ Deno.serve(async (req) => {
       }
 
       if (isTokenRouter) {
-        let trResponse: Response;
-        try {
-          trResponse = await fetch('https://api.tokenrouter.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${TOKENROUTER_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: resolvedModel,
-              temperature: 0.3,
-              response_format: { type: 'json_object' },
-              messages,
-            }),
-          });
-        } catch (networkErr) {
-          if (!LOVABLE_API_KEY || !allowLovableFallback) throw networkErr;
-          console.warn('[enhance] TokenRouter network error — falling back to Gemini:', networkErr);
-          usedProviderFallback = true;
-          return await callGemini(messages);
-        }
-        if (!trResponse.ok && FALLBACK_STATUSES.has(trResponse.status) && LOVABLE_API_KEY && allowLovableFallback) {
-          console.warn(`[enhance] TokenRouter HTTP ${trResponse.status} — falling back to Gemini`);
-          usedProviderFallback = true;
-          return await callGemini(messages);
-        }
-        return trResponse;
+        // TokenRouter is the free engine — the user chose it specifically to
+        // avoid Lovable credits, so we do NOT fall back to the (paid) Lovable
+        // gateway on failure the way DeepSeek does. Falling back there only
+        // produces a misleading "Lovable credits" error when the real cause is
+        // a TokenRouter issue. Surface the TokenRouter response/error directly,
+        // matching translate-entries' behavior for this provider.
+        return await fetch('https://api.tokenrouter.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${TOKENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: resolvedModel,
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            messages,
+          }),
+        });
       }
 
       // Non-DeepSeek/TokenRouter: honor routing mode.

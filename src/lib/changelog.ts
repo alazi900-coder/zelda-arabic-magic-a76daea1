@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.95.0",
+    date: "2026-07-18",
+    changes: [
+      { kind: "fixed", text: "إصلاح رسالة الخطأ المضلّلة \"رصيد Lovable AI غير كافٍ\" عند استخدام محرّك TokenRouter في أداة تحسين الترجمة بالذكاء الاصطناعي: كانت الأداة عند فشل TokenRouter (حدّ مجاني/ضغط طلبات) ترجع تلقائياً إلى بوّابة Lovable المدفوعة، فتظهر رسالة نفاد رصيد Lovable بدل الخطأ الحقيقي — رغم أن المستخدم اختار المحرّك المجاني تحديداً لتجنّب Lovable. الآن يُعرَض خطأ TokenRouter الفعلي مباشرة بلا رجوع إلى Lovable (مطابقةً لسلوك الترجمة الأساسية مع نفس المحرّك)." },
+    ],
+  },
+  {
     version: "1.94.0",
     date: "2026-07-18",
     changes: [

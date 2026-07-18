@@ -13,11 +13,14 @@ interface RisenLineSplitToolProps {
   filteredEntries: ExtractedEntry[];
   translations: Record<string, string>;
   updateTranslationsBatch: (updates: Record<string, string>) => number;
+  /** Pins the just-split entries in the editor's real entry list, so their
+   * result is immediately visible without searching manually. */
+  onFilterByKeys?: (keys: Set<string>) => void;
 }
 
 /** Manual bulk line-splitting tool for Risen — see src/lib/risen-line-split.ts for why. */
 const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
-  filteredEntries, translations, updateTranslationsBatch,
+  filteredEntries, translations, updateTranslationsBatch, onFilterByKeys,
 }) => {
   const [limit, setLimit] = React.useState<number>(() => {
     try {
@@ -58,6 +61,7 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
 
     undoSnapshotRef.current = plan.snapshot;
     const count = updateTranslationsBatch(plan.updates);
+    onFilterByKeys?.(new Set(plan.targetKeys));
 
     toast.success(`تم تقسيم أسطر ${count} نصًا`, {
       action: {

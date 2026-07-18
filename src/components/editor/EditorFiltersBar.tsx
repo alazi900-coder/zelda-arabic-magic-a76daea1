@@ -49,6 +49,9 @@ type EditorSubset = Pick<
   | "filteredEntries"
   | "updateTranslationsBatch"
   | "legacyCommaSplitEnabled"
+  | "setPinnedKeys"
+  | "setIsSearchPinned"
+  | "setCurrentPage"
 >;
 
 interface EditorFiltersBarProps {
@@ -95,6 +98,19 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
     toast.success(`تم حذف ${count} ترجمة من «${label}»`);
   }, [editor]);
 
+  /** Pins an exact set of entry keys in the editor (same mechanism as the
+   * Deep Diagnostic panel's "عرض في المحرر") so a tool's result is visible
+   * immediately without a manual search. */
+  const focusKeys = React.useCallback((keys: Set<string>) => {
+    editor.setPinnedKeys(keys);
+    editor.setIsSearchPinned(true);
+    editor.setCurrentPage(0);
+    setTimeout(() => {
+      const list = document.querySelector('[data-entries-list]');
+      if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }, [editor]);
+
   return (
   <div className="mb-6 p-3 md:p-4 bg-card rounded border border-border">
     <div className="flex gap-2 md:gap-3 items-center">
@@ -118,6 +134,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           filteredEntries={editor.filteredEntries}
           translations={editor.state?.translations || {}}
           updateTranslationsBatch={editor.updateTranslationsBatch}
+          onFilterByKeys={focusKeys}
         />
       )}
       {isMobile ? (
@@ -193,6 +210,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             filteredEntries={editor.filteredEntries}
             translations={editor.state?.translations || {}}
             updateTranslationsBatch={editor.updateTranslationsBatch}
+            onFilterByKeys={focusKeys}
           />
         )}
         <select value={editor.filterStatus} onChange={e => editor.setFilterStatus(e.target.value as FilterStatus)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">

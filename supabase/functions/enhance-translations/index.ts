@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions, learnedFeedback } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions, learnedFeedback, routingMode, userGeminiKey } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -410,12 +410,19 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen2';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
       learnedFeedback?: string;
+      /** free = Gemini direct only (user or server key); paid = Lovable Gateway only; auto = Gemini then fallback to Lovable. */
+      routingMode?: 'free' | 'paid' | 'auto';
+      /** مفتاح Gemini الشخصي من إعدادات المستخدم — يُستخدم في المسار المباشر (free/auto). */
+      userGeminiKey?: string;
     };
+    const normalizedRouting: 'free' | 'paid' | 'auto' =
+      routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'paid';
+
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const gameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
@@ -519,22 +526,67 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (!isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0 });
+    // ─── Routing: free/auto → try direct Gemini first (server or user key). ──
+    // paid → skip Gemini direct entirely, use Lovable Gateway only.
+    const geminiDirectKey = (userGeminiKey && userGeminiKey.trim()) || Deno.env.get('GEMINI_API_KEY') || '';
+    const useGeminiDirect = !isDeepSeek && normalizedRouting !== 'paid' && !!geminiDirectKey;
+    const allowLovableFallback = normalizedRouting !== 'free';
+
+    if (normalizedRouting === 'free' && !isDeepSeek && !geminiDirectKey) {
+      return new Response(JSON.stringify({ error: '🆓 وضع "مجاني فقط": لم يُكوَّن مفتاح Gemini (لا في إعدادات المستخدم ولا في أسرار السيرفر) — أضف مفتاحك من Google AI Studio أو بدّل الوضع' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!useGeminiDirect && !isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
+    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
 
     // يُرفَع لـ true إن اضطُررنا للتحويل من DeepSeek إلى Gemini بسبب فشل مؤقّت —
     // نُضمّنه في الردّ النهائي (_meta.providerFallback) ليعرف المستخدم أنّ
     // النتائج جاءت من موديل غير الذي اختاره، بدل رسالة خطأ عامة.
     let usedProviderFallback = false;
-    const callGemini = (messages: Array<{ role: string; content: string }>) => fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+
+    // ─── Direct Gemini call (Google generative-language API) ─────────────────
+    // نُحوّل الرسائل بصيغة OpenAI إلى صيغة Google، ثم نُغلّف الردّ بشكل OpenAI
+    // حتى يعمل باقي الكود (choices[0].message.content) بلا تغيير.
+    const GEMINI_MODEL_MAP: Record<string, string> = {
+      'gemini-3-flash-preview': 'gemini-2.5-flash',
+      'gemini-3-pro-preview': 'gemini-2.5-pro',
+      'gemini-2.5-flash': 'gemini-2.5-flash',
+      'gemini-2.5-flash-lite': 'gemini-2.5-flash',
+      'gemini-2.5-pro': 'gemini-2.5-pro',
+    };
+    const directGeminiModel = (aiModel && GEMINI_MODEL_MAP[aiModel]) || 'gemini-2.5-flash';
+    const callGeminiDirect = async (messages: Array<{ role: string; content: string }>): Promise<Response> => {
+      const systemText = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+      const userText = messages.filter(m => m.role !== 'system').map(m => m.content).join('\n\n');
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${directGeminiModel}:generateContent?key=${geminiDirectKey}`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: userText }] }],
+          systemInstruction: systemText ? { parts: [{ text: systemText }] } : undefined,
+          generationConfig: { temperature: 0.3, responseMimeType: 'application/json' },
+        }),
+      });
+      if (!resp.ok) return resp; // pass through error status
+      const data = await resp.json();
+      const content = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '';
+      const wrapped = { choices: [{ message: { content } }] };
+      return new Response(JSON.stringify(wrapped), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    const callLovableGateway = (messages: Array<{ role: string; content: string }>, modelOverride?: string) => fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: PROVIDER_FALLBACK_MODEL, messages }),
+      body: JSON.stringify({ model: modelOverride || resolvedModel, messages }),
     });
+    const callGemini = (messages: Array<{ role: string; content: string }>) => callLovableGateway(messages, PROVIDER_FALLBACK_MODEL);
 
     // يبني حقل _meta الموحَّد للردّ النهائي (تحويل المزوّد + مفاتيح النصوص التي
     // فشل تحليلها فعلياً ولم تُفحَص) — الواجهة تستخدم failedKeys لتجنّب تعليم
@@ -546,13 +598,7 @@ Deno.serve(async (req) => {
       return Object.keys(meta).length > 0 ? { _meta: meta } : {};
     };
 
-    // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway أو DeepSeek).
-    // DeepSeek يحتاج response_format=json_object صراحةً وإلّا يُرجع نصّاً
-    // داخل markdown fences لا يلتقطه parser الـ JSON دائماً (نفس تكوين
-    // translate-entries الذي يعمل مع جميع نماذج DeepSeek).
-    // موثوقيّة: عند فشل DeepSeek بشكل مؤقّت (ضغط طلبات/رصيد/خطأ خادم/شبكة)
-    // وتوفّر LOVABLE_API_KEY، نُحوّل تلقائياً لنفس الطلب عبر Gemini بدل إرجاع
-    // خطأ للمستخدم — الدفعة تكتمل بموديل بديل بدل الفشل الكامل.
+    // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway، Gemini المباشر، أو DeepSeek).
     const FALLBACK_STATUSES = new Set([429, 402, 500, 502, 503, 504]);
     const callAI = async (messages: Array<{ role: string; content: string }>): Promise<Response> => {
       if (isDeepSeek) {
@@ -573,27 +619,35 @@ Deno.serve(async (req) => {
             }),
           });
         } catch (networkErr) {
-          if (!LOVABLE_API_KEY) throw networkErr;
+          if (!LOVABLE_API_KEY || !allowLovableFallback) throw networkErr;
           console.warn('[enhance] DeepSeek network error — falling back to Gemini:', networkErr);
           usedProviderFallback = true;
           return await callGemini(messages);
         }
-        if (!dsResponse.ok && FALLBACK_STATUSES.has(dsResponse.status) && LOVABLE_API_KEY) {
+        if (!dsResponse.ok && FALLBACK_STATUSES.has(dsResponse.status) && LOVABLE_API_KEY && allowLovableFallback) {
           console.warn(`[enhance] DeepSeek HTTP ${dsResponse.status} — falling back to Gemini`);
           usedProviderFallback = true;
           return await callGemini(messages);
         }
         return dsResponse;
       }
-      return await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model: resolvedModel, messages }),
-      });
+
+      // Non-DeepSeek: honor routing mode.
+      if (useGeminiDirect) {
+        const resp = await callGeminiDirect(messages);
+        if (resp.ok) return resp;
+        // auto → fallback to Lovable Gateway on quota/server errors.
+        if (allowLovableFallback && LOVABLE_API_KEY && FALLBACK_STATUSES.has(resp.status)) {
+          console.warn(`[enhance] Gemini direct HTTP ${resp.status} — falling back to Lovable Gateway`);
+          usedProviderFallback = true;
+          return await callLovableGateway(messages);
+        }
+        // free mode or non-recoverable error → return the failing response so the shared handler emits a clear error.
+        return resp;
+      }
+      return await callLovableGateway(messages);
     };
+
 
     // ─── Single AI call + JSON parse ──────────────────────────────────────
     // يعزل استدعاء الـAI وتحليل JSON في دالّة واحدة تُعيد إمّا قائمة العناصر

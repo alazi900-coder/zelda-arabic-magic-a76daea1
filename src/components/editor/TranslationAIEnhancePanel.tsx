@@ -540,7 +540,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const deepseekKey = (() => {
       try { return localStorage.getItem('userDeepSeekKey') || ''; } catch { return ''; }
     })();
+    // مفتاح Gemini الشخصي + وضع التوجيه (مجاني/مدفوع/تلقائي) — نفس المفاتيح المستخدمة
+    // في translate-entries حتى تعمل أداة التحسين مع الوضع المجاني عبر Gemini المباشر.
+    const userGeminiKey = (() => {
+      try { return localStorage.getItem('userGeminiKey') || ''; } catch { return ''; }
+    })();
+    const aiRoutingMode = (() => {
+      try {
+        const v = localStorage.getItem('aiRoutingMode');
+        return v === 'free' || v === 'paid' || v === 'auto' ? v : 'paid';
+      } catch { return 'paid'; }
+    })() as 'free' | 'paid' | 'auto';
     const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined) : undefined;
+
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب
     // تكرار نفس نمط الخطأ. نجلبها مرّة واحدة قبل كل الدفعات (نفس القائمة لكلّها).
     const learnedFeedback = await getRecentFeedbackForPrompt().catch(() => "");
@@ -622,6 +634,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               game: isRisen ? risenVariant : "xenoblade",
               extraInstructions: extraInstructions?.trim() || undefined,
               learnedFeedback: learnedFeedback || undefined,
+              routingMode: aiRoutingMode,
+              userGeminiKey: userGeminiKey || undefined,
+
             },
             signal: abortSignal,
           });
@@ -658,7 +673,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? risenVariant : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined },
+                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? risenVariant : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined, routingMode: aiRoutingMode, userGeminiKey: userGeminiKey || undefined },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;

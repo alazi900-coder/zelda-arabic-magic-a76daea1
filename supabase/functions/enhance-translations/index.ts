@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions, learnedFeedback } = await req.json() as {
+    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions, learnedFeedback, routingMode, userGeminiKey } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
@@ -410,12 +410,19 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen2';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
       learnedFeedback?: string;
+      /** free = Gemini direct only (user or server key); paid = Lovable Gateway only; auto = Gemini then fallback to Lovable. */
+      routingMode?: 'free' | 'paid' | 'auto';
+      /** مفتاح Gemini الشخصي من إعدادات المستخدم — يُستخدم في المسار المباشر (free/auto). */
+      userGeminiKey?: string;
     };
+    const normalizedRouting: 'free' | 'paid' | 'auto' =
+      routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'paid';
+
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const gameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';

@@ -634,6 +634,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               game: isRisen ? risenVariant : "xenoblade",
               extraInstructions: extraInstructions?.trim() || undefined,
               learnedFeedback: learnedFeedback || undefined,
+              routingMode: aiRoutingMode,
+              userGeminiKey: userGeminiKey || undefined,
+
             },
             signal: abortSignal,
           });

@@ -540,7 +540,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const deepseekKey = (() => {
       try { return localStorage.getItem('userDeepSeekKey') || ''; } catch { return ''; }
     })();
+    // مفتاح Gemini الشخصي + وضع التوجيه (مجاني/مدفوع/تلقائي) — نفس المفاتيح المستخدمة
+    // في translate-entries حتى تعمل أداة التحسين مع الوضع المجاني عبر Gemini المباشر.
+    const userGeminiKey = (() => {
+      try { return localStorage.getItem('userGeminiKey') || ''; } catch { return ''; }
+    })();
+    const aiRoutingMode = (() => {
+      try {
+        const v = localStorage.getItem('aiRoutingMode');
+        return v === 'free' || v === 'paid' || v === 'auto' ? v : 'paid';
+      } catch { return 'paid'; }
+    })() as 'free' | 'paid' | 'auto';
     const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined) : undefined;
+
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب
     // تكرار نفس نمط الخطأ. نجلبها مرّة واحدة قبل كل الدفعات (نفس القائمة لكلّها).
     const learnedFeedback = await getRecentFeedbackForPrompt().catch(() => "");

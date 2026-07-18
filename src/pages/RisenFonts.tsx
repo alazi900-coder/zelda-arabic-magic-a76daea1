@@ -380,7 +380,7 @@ const RisenFonts = () => {
     if (!doc || !altFontBytes || altCodepoints.size === 0) return;
     setReplaceBusy(true);
     try {
-      const glyphs = await renderArabicGlyphsFromFont(altFontBytes, measureFontCellMetrics(doc), undefined, [...altCodepoints]);
+      const glyphs = await renderArabicGlyphsFromFont(altFontBytes, measureFontCellMetrics(doc), undefined, [...altCodepoints], doc);
       const { doc: replaced, previousGlyphIndex } = replaceGlyphsInXgfn(doc, glyphs);
       setDoc(replaced);
       setOriginalBytes(null);

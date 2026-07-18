@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parseXgfn, buildXgfn } from "@/lib/risen2-xgfn";
-import { appendArabicGlyphsToXgfn, replaceGlyphsInXgfn, measureFontCellMetrics, type RenderedArabicGlyph } from "@/lib/risen2-arabic-font-gen";
+import { appendArabicGlyphsToXgfn, replaceGlyphsInXgfn, measureFontCellMetrics, measureDocGlyphInkHeight, calibrateSize, type RenderedArabicGlyph } from "@/lib/risen2-arabic-font-gen";
 import { remapCharmapPair } from "@/lib/risen2-xgfn-edit";
 import { decodeDdsToRgba } from "@/lib/risen-ximg";
 
@@ -297,5 +297,48 @@ describe("replaceGlyphsInXgfn (instant single-letter replace + undo)", () => {
       expect(previousGlyphIndex.has(cp)).toBe(true);
       expect(replaced.charmap.find((p) => p.charCode === cp)!.glyphIndex).not.toBe(previousGlyphIndex.get(cp));
     }
+  });
+});
+
+describe("measureDocGlyphInkHeight (pure, reads real ink from an .xgfn doc)", () => {
+  it("returns null for a codepoint with a degenerate (empty) box, like space in the numbers fixture", () => {
+    const doc = parseXgfn(loadFixture());
+    expect(measureDocGlyphInkHeight(doc, 0x20)).toBeNull();
+  });
+
+  it("returns null for a codepoint not present in the charmap at all", () => {
+    const doc = parseXgfn(loadFixture());
+    expect(measureDocGlyphInkHeight(doc, 0xfea1)).toBeNull(); // ح — not in the digits-only fixture
+  });
+
+  it("returns the real ink height of a synthetic glyph after merging it in", () => {
+    const doc = parseXgfn(loadFixture());
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfea1, 6, 9, 5)]); // fully-opaque 6x9
+    expect(measureDocGlyphInkHeight(merged, 0xfea1)).toBe(9);
+  });
+});
+
+describe("calibrateSize (pure)", () => {
+  it("returns safeSize unchanged when either reference height is unavailable", () => {
+    expect(calibrateSize(null, 20, 30)).toBe(30);
+    expect(calibrateSize(20, null, 30)).toBe(30);
+    expect(calibrateSize(null, null, 30)).toBe(30);
+  });
+
+  it("scales UP toward the target but never exceeds safeSize (the anti-clipping ceiling)", () => {
+    // own ref is half the target's height -> would want to double, but must clamp at safeSize
+    expect(calibrateSize(10, 20, 30)).toBe(30);
+  });
+
+  it("scales DOWN when the target reference is smaller than this font's own", () => {
+    // own ref is double the target's -> should roughly halve, well under safeSize
+    const result = calibrateSize(20, 10, 30);
+    expect(result).toBeLessThan(30);
+    expect(result).toBeGreaterThan(0);
+    expect(result).toBe(15); // 30 * (10/20)
+  });
+
+  it("never returns less than 1 even for extreme ratios", () => {
+    expect(calibrateSize(1000, 1, 30)).toBe(1);
   });
 });

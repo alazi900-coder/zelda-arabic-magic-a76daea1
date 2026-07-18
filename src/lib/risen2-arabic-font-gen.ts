@@ -186,6 +186,60 @@ function fitFontSize(
   return Math.max(5, Math.floor(trialSize * scale));
 }
 
+/** ح (isolated form) — no dots, no ascender, no descender in virtually any
+ * Arabic type style, and guaranteed present in getRisenArabicGlyphCodepoints
+ * (part of the standard shaping table). A stable, always-comparable anchor
+ * for judging whether two different fonts LOOK the same size at their
+ * respective fitted sizes — "doesn't clip" (fitFontSize) and "looks the same
+ * size as the rest of the font" (this) are different properties; a font with
+ * naturally short ascenders/descenders fits a much bigger em-size into the
+ * same cell than one with tall ones, so two fonts fitted to the same cell
+ * can still visually differ a lot in body size. */
+const SIZE_CALIBRATION_REF_CODEPOINT = 0xfea1;
+
+function measureTextInkHeight(ctx: CanvasRenderingContext2D, family: string, size: number, ch: string): number {
+  ctx.font = `${size}px ${family}`;
+  const m = ctx.measureText(ch);
+  return m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+}
+
+/** Reads the real ink height (pixels) of an already-present glyph directly
+ * from a parsed `.xgfn` document's own atlas — null if the codepoint isn't
+ * mapped, its box is degenerate, or it has no ink. Pure (no DOM/Canvas),
+ * unit-testable. */
+export function measureDocGlyphInkHeight(doc: XgfnDocument, codepoint: number): number | null {
+  const pair = doc.charmap.find((p) => p.charCode === codepoint);
+  if (!pair || pair.glyphIndex >= doc.measurements.length) return null;
+  const [x0, y0, x1, y1] = doc.measurements[pair.glyphIndex].fields;
+  if (x1 <= x0 || y1 <= y0) return null;
+  const decoded = decodeDdsToRgba(doc.ddsBytes);
+  if (!decoded.supported) return null;
+  let minY = Infinity, maxY = -Infinity;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      if (decoded.rgba[(y * decoded.width + x) * 4 + 3] > 10) {
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  return minY === Infinity ? null : maxY - minY + 1;
+}
+
+/** Corrects `sizeToCalibrate` so its reference-letter ink height visually
+ * matches `targetRefHeight`, WITHOUT ever exceeding `safeSize` (the
+ * anti-clipping ceiling already computed by fitFontSize) — calibration can
+ * only bring an undersized font up to (at most) the full safe size, or bring
+ * an oversized one down; it can never introduce clipping. Falls back to
+ * `safeSize` unchanged when either reference height is unavailable (e.g. a
+ * brand-new document with no Arabic merged yet to compare against). Pure,
+ * unit-testable. */
+export function calibrateSize(ownRefHeight: number | null, targetRefHeight: number | null, safeSize: number): number {
+  if (!ownRefHeight || !targetRefHeight) return safeSize;
+  const ratio = targetRefHeight / ownRefHeight;
+  return Math.max(1, Math.min(safeSize, Math.round(safeSize * ratio)));
+}
+
 /** Renders every required Arabic glyph codepoint from a TTF's bytes as
  * uniform-height baseline-aligned CELLS (the same geometry the original
  * fonts and the working Chinese mod use — see measureFontCellMetrics).
@@ -196,12 +250,21 @@ function fitFontSize(
  * `codepointsOverride`, when given, renders only that codepoint list instead
  * of the full Risen Arabic set — used by the instant single-letter replace
  * feature so testing one letter doesn't re-render all 140 codepoints.
- * Browser-only (FontFace/Canvas 2D). */
+ * `calibrateAgainstDoc`, when given, visually SIZE-MATCHES this render
+ * against an already-merged document's own reference letter ink (see
+ * calibrateSize) — "doesn't clip" alone doesn't guarantee two different
+ * fonts look the same size at the same cell. Only meaningful with no
+ * `override` (i.e. this whole call sources characters from one foreign
+ * font being spliced into an existing document, as the instant single-
+ * letter replace feature does); the override path calibrates internally
+ * against its own main font instead, so calibrateAgainstDoc is ignored
+ * when override is set. Browser-only (FontFace/Canvas 2D). */
 export async function renderArabicGlyphsFromFont(
   fontBytes: ArrayBuffer,
   metrics: FontCellMetrics,
   override?: AlternateFontOverride,
-  codepointsOverride?: number[]
+  codepointsOverride?: number[],
+  calibrateAgainstDoc?: XgfnDocument
 ): Promise<RenderedArabicGlyph[]> {
   const fontFace = new FontFace("RisenArabicGen", fontBytes);
   await fontFace.load();
@@ -217,10 +280,6 @@ export async function renderArabicGlyphsFromFont(
     const { cellHeight, baseline } = metrics;
     const cellH = cellHeight + DESCENT_EXTRA_PX;
     const descentRoom = cellH - baseline;
-    // Sizing is ALWAYS fitted against the full Risen Arabic set, even when
-    // codepointsOverride renders only a handful of them — using the subset's
-    // own (possibly smaller) extremes would pick a larger font size than the
-    // rest of the already-merged glyphs use, breaking visual consistency.
     const fullCodepoints = getRisenArabicGlyphCodepoints();
     const codepoints = codepointsOverride ?? fullCodepoints;
 
@@ -230,11 +289,44 @@ export async function renderArabicGlyphsFromFont(
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("تعذّر إنشاء سياق Canvas 2D لرسم الحروف العربية");
 
-    // Each font family is fitted over the FULL glyph set with the same
-    // formula — both end up sharing the cell and baseline, so mixed-source
-    // text stays level without any manual coordinate work.
-    const mainSize = fitFontSize(ctx, "RisenArabicGen", fullCodepoints, baseline, descentRoom, cellHeight);
-    const altSize = altFace ? fitFontSize(ctx, "RisenArabicGenAlt", fullCodepoints, baseline, descentRoom, cellHeight) : 0;
+    // Each family's anti-clipping ceiling is fitted against ONLY the
+    // codepoints it actually renders in THIS call — the full 140-codepoint
+    // set for a normal/batch generate (mainFamily renders all of it, so it
+    // must stay internally consistent across all of them), but just the
+    // narrow requested subset for an instant single-letter replace or an
+    // alt-font override (altFamily only ever draws override.codepoints).
+    // Fitting a narrow replace against the full alphabet was needlessly
+    // conservative whenever some UNRELATED letter was the alphabet's tallest
+    // — narrowing gives calibration below all the headroom that's actually
+    // available. It does NOT help when the requested letter's OWN forms are
+    // themselves the bottleneck: a live test replacing ح from a calligraphic
+    // Naskh-style font (Amiri) found its joined/final forms need real curve
+    // depth even for a "plain" dotless letter, capping the safe ceiling at
+    // ~15px against a 20px target — a genuine limit of that font's own
+    // proportions in this cell, not something size calibration can work
+    // around without risking clipping.
+    let mainSize = fitFontSize(ctx, "RisenArabicGen", codepoints, baseline, descentRoom, cellHeight);
+    const altCodepoints = override ? [...override.codepoints] : [];
+    let altSize = altFace ? fitFontSize(ctx, "RisenArabicGenAlt", altCodepoints, baseline, descentRoom, cellHeight) : 0;
+
+    const refChar = String.fromCharCode(SIZE_CALIBRATION_REF_CODEPOINT);
+    if (altFace) {
+      // Override path: calibrate the ALT font's body size against the MAIN
+      // font's — both are being rendered in this same call, so no doc lookup
+      // is needed. Never exceeds altSize (the anti-clipping ceiling).
+      const mainRef = measureTextInkHeight(ctx, "RisenArabicGen", mainSize, refChar);
+      const altRef = measureTextInkHeight(ctx, "RisenArabicGenAlt", altSize, refChar);
+      altSize = calibrateSize(altRef, mainRef, altSize);
+    } else if (calibrateAgainstDoc) {
+      // Instant single-letter replace: this whole call sources characters
+      // from ONE foreign font — calibrate its body size against the ink the
+      // target document's OWN already-merged reference letter actually has,
+      // read straight from its atlas. Never exceeds mainSize (the
+      // anti-clipping ceiling for exactly the codepoints being replaced).
+      const targetRef = measureDocGlyphInkHeight(calibrateAgainstDoc, SIZE_CALIBRATION_REF_CODEPOINT);
+      const ownRef = measureTextInkHeight(ctx, "RisenArabicGen", mainSize, refChar);
+      mainSize = calibrateSize(ownRef, targetRef, mainSize);
+    }
 
     const glyphs: RenderedArabicGlyph[] = [];
     for (const cp of codepoints) {

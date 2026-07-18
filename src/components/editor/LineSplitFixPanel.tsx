@@ -54,9 +54,10 @@ type Engine =
   | "lovable-gpt-5-mini"
   | "deepseek-v4-flash"
   | "deepseek-v4-pro"
+  | "tokenrouter-glm-5.2"
   | "google-translate";
 
-const ENGINE_OPTIONS: { value: Engine; label: string; needsKey?: "gemini" | "google" | "deepseek" }[] = [
+const ENGINE_OPTIONS: { value: Engine; label: string; needsKey?: "gemini" | "google" | "deepseek" | "tokenrouter" }[] = [
   { value: "local", label: "محلّي ذكي (فوري — افتراضي)" },
   { value: "gemini-direct", label: "Google Gemini API (مفتاحك)", needsKey: "gemini" },
   { value: "lovable-gemini-3-flash-preview", label: "Lovable AI · Gemini 3 Flash" },
@@ -66,6 +67,7 @@ const ENGINE_OPTIONS: { value: Engine; label: string; needsKey?: "gemini" | "goo
   { value: "lovable-gpt-5-mini", label: "Lovable AI · GPT-5 Mini" },
   { value: "deepseek-v4-flash", label: "🐋 DeepSeek V4 Flash (مفتاحك)", needsKey: "deepseek" },
   { value: "deepseek-v4-pro", label: "🐋 DeepSeek V4 Pro — الأقوى (مفتاحك)", needsKey: "deepseek" },
+  { value: "tokenrouter-glm-5.2", label: "🔀 TokenRouter GLM-5.2 (مفتاحك — مجاني)", needsKey: "tokenrouter" },
   { value: "google-translate", label: "Google Translate (round-trip)", needsKey: "google" },
 ];
 
@@ -75,6 +77,7 @@ function engineToBackend(eng: Engine): { engine: string; model?: string } {
   if (eng === "google-translate") return { engine: "google-translate" };
   if (eng === "deepseek-v4-flash") return { engine: "deepseek", model: "deepseek-v4-flash" };
   if (eng === "deepseek-v4-pro") return { engine: "deepseek", model: "deepseek-v4-pro" };
+  if (eng === "tokenrouter-glm-5.2") return { engine: "tokenrouter" };
   const model = eng.replace("lovable-", "");
   return { engine: "lovable", model: `google/${model}`.replace("google/gpt", "openai/gpt") };
 }
@@ -117,6 +120,7 @@ export const LineSplitFixPanel: React.FC<Props> = ({
   const [geminiKey, setGeminiKey] = useState<string>(() => localStorage.getItem("gemini_api_key") || "");
   const [googleKey, setGoogleKey] = useState<string>(() => localStorage.getItem("google_translate_api_key") || "");
   const [deepseekKey, setDeepseekKey] = useState<string>(() => localStorage.getItem("userDeepSeekKey") || "");
+  const [tokenRouterKey, setTokenRouterKey] = useState<string>(() => localStorage.getItem("userTokenRouterKey") || "");
   const [busy, setBusy] = useState<string | null>(null); // key قيد المعالجة بـ AI، أو "all"
   const [diffFilter, setDiffFilter] = useState<"all" | "easy" | "hard" | "resolved">("all");
   const [page, setPage] = useState(0);
@@ -174,6 +178,7 @@ export const LineSplitFixPanel: React.FC<Props> = ({
   const callAi = async (items: LineSplitIssue[]): Promise<Record<string, string>> => {
     const backend = engineToBackend(engine);
     const isDeepseek = engine === "deepseek-v4-flash" || engine === "deepseek-v4-pro";
+    const isTokenRouter = engine === "tokenrouter-glm-5.2";
     if (engine === "gemini-direct" && !geminiKey.trim()) {
       throw new Error("أدخل مفتاح Google Gemini أوّلاً.");
     }
@@ -183,15 +188,20 @@ export const LineSplitFixPanel: React.FC<Props> = ({
     if (isDeepseek && !deepseekKey.trim()) {
       throw new Error("أدخل مفتاح DeepSeek API أوّلاً.");
     }
+    if (isTokenRouter && !tokenRouterKey.trim()) {
+      throw new Error("أدخل مفتاح TokenRouter API أوّلاً.");
+    }
     if (engine === "gemini-direct") localStorage.setItem("gemini_api_key", geminiKey);
     if (engine === "google-translate") localStorage.setItem("google_translate_api_key", googleKey);
     if (isDeepseek) localStorage.setItem("userDeepSeekKey", deepseekKey);
+    if (isTokenRouter) localStorage.setItem("userTokenRouterKey", tokenRouterKey);
 
     const payload = {
       ...backend,
       apiKey: engine === "gemini-direct" ? geminiKey
             : engine === "google-translate" ? googleKey
             : isDeepseek ? deepseekKey
+            : isTokenRouter ? tokenRouterKey
             : undefined,
       entries: items.map(it => ({ key: it.key, originalEn: it.original, currentAr: it.current })),
       game: isRisen ? risenVariant : "xenoblade",
@@ -345,6 +355,15 @@ export const LineSplitFixPanel: React.FC<Props> = ({
             value={deepseekKey}
             onChange={e => setDeepseekKey(e.target.value)}
             placeholder="مفتاح DeepSeek API (sk-...)"
+            className="w-full text-xs bg-background border rounded px-2 py-1.5"
+          />
+        )}
+        {selectedEngineOpt.needsKey === "tokenrouter" && (
+          <input
+            type="password"
+            value={tokenRouterKey}
+            onChange={e => setTokenRouterKey(e.target.value)}
+            placeholder="مفتاح TokenRouter API (sk-...)"
             className="w-full text-xs bg-background border rounded px-2 py-1.5"
           />
         )}

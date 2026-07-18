@@ -15,11 +15,12 @@ const DEEPSEEK_MODELS = [
   { id: 'deepseek-v4-pro',   label: 'V4 Pro 🆕',    note: '1.6T/49B — الأقوى' },
 ];
 
-type Provider = 'gemini' | 'mymemory' | 'google' | 'deepseek';
+type Provider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter';
 
 const PROVIDERS: { id: Provider; label: string; note: string }[] = [
   { id: 'gemini',      label: 'Gemini',         note: 'مفتاح Gemini' },
   { id: 'deepseek',   label: 'DeepSeek',        note: 'مفتاح DeepSeek' },
+  { id: 'tokenrouter', label: 'TokenRouter',    note: 'مفتاح TokenRouter' },
   { id: 'mymemory',   label: 'MyMemory',        note: 'بريد إلكتروني' },
   { id: 'google',     label: 'Google Translate', note: 'مجاني بالكامل' },
 ];

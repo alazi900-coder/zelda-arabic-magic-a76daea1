@@ -39,7 +39,7 @@ export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();
   const {
-    arabicNumerals, mirrorPunctuation, userGeminiKey, userDeepSeekKey, aiModel, translationProvider,
+    arabicNumerals, mirrorPunctuation, userGeminiKey, userDeepSeekKey, userTokenRouterKey, aiModel, translationProvider,
     myMemoryEmail, myMemoryCharsUsed, addMyMemoryChars, aiRequestsToday, aiRequestsMonth,
     addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, setNpcSplitCharLimit,
     newlineSplitCharLimit, setNewlineSplitCharLimit, autoSmartReview, setAutoSmartReview,
@@ -933,13 +933,13 @@ export function useEditorState() {
 
   const translation = useEditorTranslation({
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
+    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
   });
   const { translating, translatingSingle, tmStats, glossarySessionStats, failedEntries, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleRetryFailed, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview, lastBatchQuality, cumulativeQuality, resetBatchQuality } = translation;
 
   const autoPilot = useAutoPilot({
     state, setState, activeGlossary, parseGlossaryMap,
-    translationProvider, userGeminiKey, userDeepSeekKey,
+    translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
     addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
     customPromptInstructions, aiRoutingMode, risenVariant,

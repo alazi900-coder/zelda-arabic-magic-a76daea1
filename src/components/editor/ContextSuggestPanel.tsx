@@ -154,6 +154,8 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
         aiModel = localStorage.getItem("aiModel") || "";
         if (provider === "deepseek") {
           providerApiKey = localStorage.getItem("userDeepSeekKey") || "";
+        } else if (provider === "tokenrouter") {
+          providerApiKey = localStorage.getItem("userTokenRouterKey") || "";
         }
       } catch { /* localStorage unavailable */ }
 

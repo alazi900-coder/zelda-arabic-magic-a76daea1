@@ -474,6 +474,7 @@ Deno.serve(async (req) => {
     // مفتاح DeepSeek: الأولوية للمفتاح القادم من الواجهة (إعدادات المستخدم)
     // ثم سرّ Lovable Cloud كاحتياط — مطابق لسلوك translate-entries.
     const DEEPSEEK_API_KEY = (providerApiKey && providerApiKey.trim()) || Deno.env.get('DEEPSEEK_API_KEY');
+    const TOKENROUTER_API_KEY = (providerApiKey && providerApiKey.trim()) || Deno.env.get('TOKENROUTER_API_KEY');
 
     // خريطة موحَّدة لكلّ النماذج المعروضة في TranslationAIEnhancePanel.
     const gatewayModelMap: Record<string, string> = {
@@ -504,8 +505,11 @@ Deno.serve(async (req) => {
       'deepseek-reasoner': 'deepseek-v4-pro',
     };
     const isDeepSeek = !!aiModel && aiModel in DEEPSEEK_NAME_MAP;
+    const isTokenRouter = aiModel === 'tokenrouter-glm-5.2';
     const resolvedModel = isDeepSeek
       ? DEEPSEEK_NAME_MAP[aiModel as string]
+      : isTokenRouter
+      ? 'z-ai/glm-5.2-free'
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
     // إذا أرسلت الواجهة thinkingMode فإنّه يفرض تفعيل/تعطيل التفكير العميق صراحةً؛
     // وإلّا الافتراضي حسب الموديل: V4 Pro بتفكير (يطابق سلوك reasoner القديم)،
@@ -526,21 +530,26 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    if (isTokenRouter && !TOKENROUTER_API_KEY) {
+      return new Response(JSON.stringify({ error: 'يحتاج TokenRouter مفتاح API — أضفه في الإعدادات' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // ─── Routing: free/auto → try direct Gemini first (server or user key). ──
     // paid → skip Gemini direct entirely, use Lovable Gateway only.
     const geminiDirectKey = (userGeminiKey && userGeminiKey.trim()) || Deno.env.get('GEMINI_API_KEY') || '';
-    const useGeminiDirect = !isDeepSeek && normalizedRouting !== 'paid' && !!geminiDirectKey;
+    const useGeminiDirect = !isDeepSeek && !isTokenRouter && normalizedRouting !== 'paid' && !!geminiDirectKey;
     const allowLovableFallback = normalizedRouting !== 'free';
 
-    if (normalizedRouting === 'free' && !isDeepSeek && !geminiDirectKey) {
+    if (normalizedRouting === 'free' && !isDeepSeek && !isTokenRouter && !geminiDirectKey) {
       return new Response(JSON.stringify({ error: '🆓 وضع "مجاني فقط": لم يُكوَّن مفتاح Gemini (لا في إعدادات المستخدم ولا في أسرار السيرفر) — أضف مفتاحك من Google AI Studio أو بدّل الوضع' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (!useGeminiDirect && !isDeepSeek && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+    if (!useGeminiDirect && !isDeepSeek && !isTokenRouter && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
+    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, isTokenRouter, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
 
     // يُرفَع لـ true إن اضطُررنا للتحويل من DeepSeek إلى Gemini بسبب فشل مؤقّت —
     // نُضمّنه في الردّ النهائي (_meta.providerFallback) ليعرف المستخدم أنّ
@@ -632,7 +641,37 @@ Deno.serve(async (req) => {
         return dsResponse;
       }
 
-      // Non-DeepSeek: honor routing mode.
+      if (isTokenRouter) {
+        let trResponse: Response;
+        try {
+          trResponse = await fetch('https://api.tokenrouter.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${TOKENROUTER_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: resolvedModel,
+              temperature: 0.3,
+              response_format: { type: 'json_object' },
+              messages,
+            }),
+          });
+        } catch (networkErr) {
+          if (!LOVABLE_API_KEY || !allowLovableFallback) throw networkErr;
+          console.warn('[enhance] TokenRouter network error — falling back to Gemini:', networkErr);
+          usedProviderFallback = true;
+          return await callGemini(messages);
+        }
+        if (!trResponse.ok && FALLBACK_STATUSES.has(trResponse.status) && LOVABLE_API_KEY && allowLovableFallback) {
+          console.warn(`[enhance] TokenRouter HTTP ${trResponse.status} — falling back to Gemini`);
+          usedProviderFallback = true;
+          return await callGemini(messages);
+        }
+        return trResponse;
+      }
+
+      // Non-DeepSeek/TokenRouter: honor routing mode.
       if (useGeminiDirect) {
         const resp = await callGeminiDirect(messages);
         if (resp.ok) return resp;
@@ -666,7 +705,7 @@ Deno.serve(async (req) => {
       }
       if (!response.ok) {
         const errText = await response.text();
-        const provider = isDeepSeek ? 'DeepSeek' : 'Lovable Gateway';
+        const provider = isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : 'Lovable Gateway';
         console.error(`[enhance] ${modeLabel} ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
         let errMsg: string;
         if (response.status === 429) errMsg = `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})`;
@@ -678,7 +717,7 @@ Deno.serve(async (req) => {
       if (aiResult?.error) {
         const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
         console.error(`[enhance] ${modeLabel} AI inner error:`, errMsg);
-        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : 'AI Gateway'}: ${errMsg}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : 'AI Gateway'}: ${errMsg}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
       }
       if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
         console.error(`[enhance] ${modeLabel}: no choices in AI response`, JSON.stringify(aiResult).slice(0, 500));

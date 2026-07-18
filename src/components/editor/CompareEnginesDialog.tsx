@@ -17,6 +17,7 @@ interface CompareEnginesDialogProps {
   glossary: string;
   userGeminiKey: string;
   userDeepSeekKey?: string;
+  userTokenRouterKey?: string;
   myMemoryEmail: string;
   aiModel?: string;
   risenVariant: 'risen1' | 'risen2';
@@ -29,7 +30,7 @@ interface EngineConfig {
   provider: string;
   model?: string;
   description: string;
-  requiresKey?: 'gemini' | 'deepseek';
+  requiresKey?: 'gemini' | 'deepseek' | 'tokenrouter';
 }
 
 function buildEngines(): EngineConfig[] {
@@ -40,6 +41,7 @@ function buildEngines(): EngineConfig[] {
     { id: 'gpt-5', label: 'GPT-5', emoji: '🧠', provider: 'gemini', model: 'gpt-5', description: 'استدلال متقدم OpenAI' },
     { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', emoji: '🚀', provider: 'deepseek', model: 'deepseek-v4-flash', description: '284B/13B — اقتصادي', requiresKey: 'deepseek' },
     { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', emoji: '🧩', provider: 'deepseek', model: 'deepseek-v4-pro', description: '1.6T/49B — الأقوى', requiresKey: 'deepseek' },
+    { id: 'tokenrouter-glm-5.2', label: 'TokenRouter GLM-5.2', emoji: '🔀', provider: 'tokenrouter', description: 'مجاني', requiresKey: 'tokenrouter' },
     { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
     { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
   ];
@@ -167,7 +169,7 @@ function renderTranslationWithProtectedTags(text: string, singleLine = false) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, myMemoryEmail, risenVariant,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userTokenRouterKey, myMemoryEmail, risenVariant,
 }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, string | null>>({});
@@ -179,6 +181,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
 
   const getProviderKey = (engine: EngineConfig): string | undefined => {
     if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;
+    if (engine.requiresKey === 'tokenrouter') return userTokenRouterKey || undefined;
     return undefined;
   };
 

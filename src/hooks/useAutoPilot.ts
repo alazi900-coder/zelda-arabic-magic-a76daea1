@@ -52,6 +52,7 @@ interface UseAutoPilotProps {
   translationProvider: string;
   userGeminiKey: string;
   userDeepSeekKey: string;
+  userTokenRouterKey: string;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
@@ -79,7 +80,7 @@ function pickFreeProvider(): { provider: string; model?: string; label: string }
 
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
-  translationProvider, userGeminiKey, userDeepSeekKey,
+  translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
   customPromptInstructions, aiRoutingMode = 'paid', risenVariant,
@@ -115,7 +116,7 @@ export function useAutoPilot({
     forceModel?: string,
   ) => {
     const prov = forceProvider || translationProvider;
-    const provKey = prov === 'deepseek' ? userDeepSeekKey : undefined;
+    const provKey = prov === 'deepseek' ? userDeepSeekKey : prov === 'tokenrouter' ? userTokenRouterKey : undefined;
     return JSON.stringify({
       entries,
       glossary: activeGlossary,
@@ -131,7 +132,7 @@ export function useAutoPilot({
       routingMode: aiRoutingMode,
       game: /\.tab$/i.test(state?.entries?.[0]?.msbtFile || '') ? risenVariant : 'xenoblade',
     });
-  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
+  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
       myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode, state]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {

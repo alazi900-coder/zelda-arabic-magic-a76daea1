@@ -67,8 +67,8 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek';
-  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek'];
+  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter';
+  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter'];
   const [translationProvider, _setTranslationProvider] = useState<TranslationProvider>(() => {
     try {
       const saved = localStorage.getItem('translationProvider') as TranslationProvider | null;
@@ -87,6 +87,14 @@ export function useEditorSettings() {
   const setUserDeepSeekKey = useCallback((key: string) => {
     _setUserDeepSeekKey(key);
     try { if (key) localStorage.setItem('userDeepSeekKey', key); else localStorage.removeItem('userDeepSeekKey'); } catch { /* localStorage unavailable - ignore */ }
+  }, []);
+
+  const [userTokenRouterKey, _setUserTokenRouterKey] = useState(() => {
+    try { return localStorage.getItem('userTokenRouterKey') || ''; } catch { return ''; }
+  });
+  const setUserTokenRouterKey = useCallback((key: string) => {
+    _setUserTokenRouterKey(key);
+    try { if (key) localStorage.setItem('userTokenRouterKey', key); else localStorage.removeItem('userTokenRouterKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
@@ -348,6 +356,7 @@ export function useEditorSettings() {
     mirrorPunctuation, setMirrorPunctuation,
     userGeminiKey, setUserGeminiKey,
     userDeepSeekKey, setUserDeepSeekKey,
+    userTokenRouterKey, setUserTokenRouterKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,
     myMemoryEmail, setMyMemoryEmail,

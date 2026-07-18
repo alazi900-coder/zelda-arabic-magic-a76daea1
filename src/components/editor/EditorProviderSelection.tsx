@@ -15,6 +15,7 @@ type EditorSubset = Pick<
   | "state" | "risenVariant"
   | "userGeminiKey" | "setUserGeminiKey"
   | "userDeepSeekKey" | "setUserDeepSeekKey"
+  | "userTokenRouterKey" | "setUserTokenRouterKey"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
   | "myMemoryCharsUsed"
@@ -74,6 +75,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'google' as const, label: '🌐 Google Translate', badge: '✅' },
               { id: 'gemini' as const, label: '🤖 Lovable AI', badge: editor.userGeminiKey ? '✅' : '⚡' },
               { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
+              { id: 'tokenrouter' as const, label: '🔀 TokenRouter', badge: editor.userTokenRouterKey ? '✅' : '⚠️' },
             ].map(({ id, label, badge }) => (
               <Button
                 key={id}
@@ -206,6 +208,57 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               </p>
               {!editor.userDeepSeekKey && (
                 <a href="https://platform.deepseek.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
+                  احصل على مفتاح ↗
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {editor.translationProvider === 'tokenrouter' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2 flex-1">
+              <input
+                type="password"
+                placeholder="الصق مفتاح TokenRouter API هنا..."
+                value={editor.userTokenRouterKey}
+                onChange={(e) => editor.setUserTokenRouterKey(e.target.value)}
+                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                dir="ltr"
+              />
+              {editor.userTokenRouterKey && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => handleTestConnection('tokenrouter')}
+                  disabled={testConnStatus['tokenrouter'] === 'testing'}
+                  className="text-xs shrink-0 gap-1"
+                >
+                  {testConnStatus['tokenrouter'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                   testConnStatus['tokenrouter'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                   testConnStatus['tokenrouter'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                   <Wifi className="w-3 h-3" />}
+                  تجربة
+                </Button>
+              )}
+              {editor.userTokenRouterKey && (
+                <Button variant="ghost" size="sm" onClick={() => editor.setUserTokenRouterKey('')} className="text-xs text-destructive shrink-0">
+                  مسح
+                </Button>
+              )}
+            </div>
+            {testConnMsg['tokenrouter'] && (
+              <p className={`text-xs font-body ${testConnStatus['tokenrouter'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                {testConnStatus['tokenrouter'] === 'ok' ? '✅' : '❌'} {testConnMsg['tokenrouter']}
+              </p>
+            )}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground font-body">
+                {editor.userTokenRouterKey
+                  ? '✅ مفتاح TokenRouter مفعّل — نموذج z-ai/glm-5.2 (مجاني)'
+                  : '⚠️ يحتاج مفتاح API — سجّل مجاناً على tokenrouter.com'}
+              </p>
+              {!editor.userTokenRouterKey && (
+                <a href="https://www.tokenrouter.com" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
                   احصل على مفتاح ↗
                 </a>
               )}

@@ -16,9 +16,9 @@ const corsHeaders = {
 interface SmartFixEntry { key: string; original: string; translation: string; }
 interface ReqBody {
   entries: SmartFixEntry[];
-  engine?: "lovable" | "deepseek";
+  engine?: "lovable" | "deepseek" | "tokenrouter";
   aiModel?: string;          // gemini-3-flash-preview | gpt-5 | deepseek-v4-pro | deepseek-v4-flash …
-  providerApiKey?: string;   // DeepSeek key from UI settings (optional)
+  providerApiKey?: string;   // DeepSeek/TokenRouter key from UI settings (optional)
   game?: "xenoblade" | "risen" | "risen2";
 }
 
@@ -149,6 +149,32 @@ async function callDeepSeek(prompt: string, model: string, apiKey: string): Prom
   if (data?.error) {
     const msg = typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error));
     throw new Error(`DeepSeek: ${msg}`);
+  }
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+async function callTokenRouter(prompt: string, apiKey: string): Promise<string> {
+  const resp = await fetch("https://api.tokenrouter.com/v1/chat/completions", {
+    method: "POST",
+    signal: AbortSignal.timeout(120_000),
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "z-ai/glm-5.2-free",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "أنت مصحّح ترجمة عربية. أعِد JSON صالحاً فقط بالشكل المطلوب." },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+  if (resp.status === 429) throw new Error("429: تم تجاوز حدّ الطلبات على TokenRouter");
+  if (resp.status === 402) throw new Error("402: الرصيد غير كافٍ على TokenRouter");
+  if (!resp.ok) throw new Error(`TokenRouter HTTP ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  const data = await resp.json();
+  if (data?.error) {
+    const msg = typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error));
+    throw new Error(`TokenRouter: ${msg}`);
   }
   return data?.choices?.[0]?.message?.content || "";
 }
@@ -326,6 +352,14 @@ Deno.serve(async (req) => {
       }
       const model = DEEPSEEK_NAME_MAP[body.aiModel || "deepseek-v4-pro"] || "deepseek-v4-pro";
       content = await callDeepSeek(buildPrompt(promptEntries, isRisen), model, apiKey);
+    } else if (engine === "tokenrouter") {
+      const apiKey = (body.providerApiKey && body.providerApiKey.trim()) || Deno.env.get("TOKENROUTER_API_KEY");
+      if (!apiKey) {
+        return new Response(JSON.stringify({ error: "TokenRouter غير مُكوّن — أضف مفتاحك في الإعدادات" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      content = await callTokenRouter(buildPrompt(promptEntries, isRisen), apiKey);
     } else {
       const model = GATEWAY_MAP[body.aiModel || "gemini-3-flash-preview"] || "google/gemini-3-flash-preview";
       try {

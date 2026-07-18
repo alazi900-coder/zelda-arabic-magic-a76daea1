@@ -28,7 +28,7 @@ interface RequestBody {
   maxBytes?: number;
   glossary?: string;
   file?: string;
-  provider?: 'gemini' | 'deepseek' | 'mymemory' | 'google';
+  provider?: 'gemini' | 'deepseek' | 'tokenrouter' | 'mymemory' | 'google';
   aiModel?: string;
   providerApiKey?: string;
   /** Which game this entry is from — the system prompt names it correctly instead
@@ -219,6 +219,39 @@ async function callDeepSeek(body: RequestBody, apiKey: string, model: string): P
   return parsed;
 }
 
+// ===== TokenRouter =====
+async function callTokenRouter(body: RequestBody, apiKey: string): Promise<any> {
+  const resp = await fetch('https://api.tokenrouter.com/v1/chat/completions', {
+    method: 'POST',
+    signal: AbortSignal.timeout(120_000),
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'z-ai/glm-5.2-free',
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: buildSystemPrompt(body.game) + '\n\n' + SUGGESTIONS_JSON_SCHEMA_HINT },
+        { role: 'user', content: buildUserPrompt(body) },
+      ],
+    }),
+  });
+  if (resp.status === 429) throw new Error('429: تجاوز معدّل الطلبات على TokenRouter. أعد المحاولة بعد قليل.');
+  if (resp.status === 402) throw new Error('402: الرصيد غير كافٍ على TokenRouter.');
+  if (resp.status === 401) throw new Error('مفتاح TokenRouter غير صالح. تحقق من الإعدادات.');
+  if (!resp.ok) throw new Error(`TokenRouter HTTP ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  const data = await resp.json();
+  if (data?.error) {
+    const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+    throw new Error(`TokenRouter: ${msg}`);
+  }
+  const content = data?.choices?.[0]?.message?.content || '';
+  const parsed = parseLooseJson(content);
+  if (!parsed || !Array.isArray(parsed.suggestions)) {
+    throw new Error('لم يعد TokenRouter بصيغة JSON صالحة');
+  }
+  return parsed;
+}
+
 // ===== Lovable AI Gateway =====
 async function callLovable(body: RequestBody, apiKey: string, model: string): Promise<any> {
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -281,6 +314,12 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات.' }, 400);
       }
       parsed = await callDeepSeek(body, dsKey, body.aiModel || 'deepseek-v4-flash');
+    } else if (provider === 'tokenrouter') {
+      const trKey = body.providerApiKey || Deno.env.get('TOKENROUTER_API_KEY');
+      if (!trKey) {
+        return jsonResponse({ error: 'يحتاج TokenRouter مفتاح API — أضفه في الإعدادات.' }, 400);
+      }
+      parsed = await callTokenRouter(body, trKey);
     } else {
       // Default: Lovable AI Gateway. mymemory/google don't expose chat — fall back to Lovable.
       const apiKey = Deno.env.get('LOVABLE_API_KEY');

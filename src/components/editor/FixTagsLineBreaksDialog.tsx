@@ -543,16 +543,21 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   const callSmartFix = useCallback(async (issues: RestoreIssue[]) => {
     if (!issues.length) return;
     const isRisen = /\.tab$/i.test(issues[0]?.msbtFile || "");
-    const [engine, model] = aiEngine.split(":") as ["lovable" | "deepseek", string];
+    const [engine, model] = aiEngine.split(":") as ["lovable" | "deepseek" | "tokenrouter", string];
     const deepseekKey = (() => {
       try { return localStorage.getItem("userDeepSeekKey") || ""; } catch { return ""; }
+    })();
+    const tokenRouterKey = (() => {
+      try { return localStorage.getItem("userTokenRouterKey") || ""; } catch { return ""; }
     })();
     try {
       const { data, error } = await supabase.functions.invoke("smart-tag-fix", {
         body: {
           engine,
           aiModel: model,
-          providerApiKey: engine === "deepseek" ? (deepseekKey || undefined) : undefined,
+          providerApiKey: engine === "deepseek" ? (deepseekKey || undefined)
+            : engine === "tokenrouter" ? (tokenRouterKey || undefined)
+            : undefined,
           entries: issues.map(i => ({ key: i.key, original: i.original, translation: i.before })),
           game: isRisen ? risenVariant : "xenoblade",
         },
@@ -840,6 +845,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
                               <SelectItem value="lovable:gpt-5" className="text-xs">✨ GPT-5</SelectItem>
                               <SelectItem value="deepseek:deepseek-v4-flash" className="text-xs">🐋 DeepSeek V4 Flash</SelectItem>
                               <SelectItem value="deepseek:deepseek-v4-pro" className="text-xs">🐋 DeepSeek V4 Pro (الأقوى)</SelectItem>
+                              <SelectItem value="tokenrouter:tokenrouter-glm-5.2" className="text-xs">🔀 TokenRouter GLM-5.2 (مجاني)</SelectItem>
                             </SelectContent>
                           </Select>
                           {!aiBulkBusy ? (

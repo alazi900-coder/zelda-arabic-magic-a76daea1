@@ -2069,6 +2069,19 @@ Deno.serve(async (req) => {
       }
 
       return buildSuccessResponse(entries, { translations: merged, glossaryStats: aggStats });
+    } else if (provider === 'tokenrouter') {
+      const trKey = providerApiKey || Deno.env.get('TOKENROUTER_API_KEY');
+      if (!trKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج TokenRouter مفتاح API — أضفه في الإعدادات' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const result = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, trKey,
+        'https://api.tokenrouter.com/v1', 'z-ai/glm-5.2-free',
+      );
+      return buildSuccessResponse(entries, result);
     } else {
       if (provider && provider !== 'gemini') {
         console.warn(`[translate-entries] Unhandled provider value "${provider}" — falling back to Lovable AI/Gemini path`);

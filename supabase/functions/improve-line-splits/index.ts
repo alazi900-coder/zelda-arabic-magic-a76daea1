@@ -13,7 +13,7 @@ const corsHeaders = {
 
 interface ReqEntry { key: string; originalEn: string; currentAr: string; }
 interface ReqBody {
-  engine: "lovable" | "gemini-direct" | "google-translate" | "deepseek" | "local";
+  engine: "lovable" | "gemini-direct" | "google-translate" | "deepseek" | "tokenrouter" | "local";
   model?: string;
   apiKey?: string;
   entries: ReqEntry[];
@@ -200,6 +200,39 @@ async function callDeepSeek(entries: ReqEntry[], model: string, apiKey: string):
   return out;
 }
 
+async function callTokenRouter(entries: ReqEntry[], apiKey: string): Promise<Record<string, string>> {
+  const prompt = buildPrompt(entries) + `\n\nأعد JSON صالحاً فقط بالشكل: {"results":[{"key":"...","text":"..."}]}`;
+  const resp = await fetch("https://api.tokenrouter.com/v1/chat/completions", {
+    method: "POST",
+    signal: AbortSignal.timeout(120_000),
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "z-ai/glm-5.2-free",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "أنت مُحرّر تنسيق نصوص عربية. أعِد JSON صالحاً فقط بالشكل المطلوب." },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+  if (resp.status === 429) throw new Error("429: TokenRouter rate limit");
+  if (resp.status === 402) throw new Error("402: TokenRouter credits");
+  if (!resp.ok) throw new Error(`TokenRouter ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  const data = await resp.json();
+  const text = data?.choices?.[0]?.message?.content || "{}";
+  let parsed: { results?: Array<{ key: string; text: string }> } = {};
+  try { parsed = JSON.parse(text); } catch { /* try to extract */
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) { try { parsed = JSON.parse(m[0]); } catch { /* ignore */ } }
+  }
+  const out: Record<string, string> = {};
+  for (const r of parsed.results || []) {
+    if (r?.key && typeof r.text === "string") out[r.key] = r.text;
+  }
+  return out;
+}
+
 /** ضمان عدم تغيير الرموز التقنية والكلمات. لو فشل الفحص، أعد الترجمة الأصلية. */
 function safeguard(orig: string, candidate: string): string {
   if (!candidate) return orig;
@@ -279,6 +312,10 @@ Deno.serve(async (req) => {
       const key = body.apiKey || Deno.env.get("DEEPSEEK_API_KEY");
       if (!key) throw new Error("مفتاح DeepSeek مطلوب");
       raw = await callDeepSeek(promptEntries, body.model || "deepseek-v4-pro", key);
+    } else if (body.engine === "tokenrouter") {
+      const key = body.apiKey || Deno.env.get("TOKENROUTER_API_KEY");
+      if (!key) throw new Error("مفتاح TokenRouter مطلوب");
+      raw = await callTokenRouter(promptEntries, key);
     } else {
       return new Response(JSON.stringify({ error: "محرّك غير مدعوم في هذه النقطة." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

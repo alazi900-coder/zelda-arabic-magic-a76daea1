@@ -91,7 +91,7 @@ const PARALLEL_REQUESTS = 3;
 const SCAN_PASSES = 1;
 const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
-interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "local" | "free"; }
+interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "tokenrouter" | "local" | "free"; }
 
 const MODEL_OPTIONS: ModelOption[] = [
   { value: "google-translate-check", label: "Google Translate — فحص دقة (مجاني)", group: "free" },
@@ -105,6 +105,7 @@ const MODEL_OPTIONS: ModelOption[] = [
   { value: "gpt-5-nano", label: "GPT-5 nano (الأسرع — الأرخص)", group: "openai" },
   { value: "deepseek-v4-flash", label: "🐋 DeepSeek V4 Flash (284B/13B — اقتصادي)", group: "deepseek" },
   { value: "deepseek-v4-pro", label: "🐋 DeepSeek V4 Pro (1.6T/49B — الأقوى)", group: "deepseek" },
+  { value: "tokenrouter-glm-5.2", label: "🔀 TokenRouter GLM-5.2 (مجاني)", group: "tokenrouter" },
 ];
 
 const GOOGLE_CHECK_CONCURRENCY = 3;
@@ -540,6 +541,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const deepseekKey = (() => {
       try { return localStorage.getItem('userDeepSeekKey') || ''; } catch { return ''; }
     })();
+    // مفتاح TokenRouter مخزَّن في إعدادات المحرّر؛ نمرّره عند اختيار نموذج TokenRouter.
+    const tokenRouterKey = (() => {
+      try { return localStorage.getItem('userTokenRouterKey') || ''; } catch { return ''; }
+    })();
     // مفتاح Gemini الشخصي + وضع التوجيه (مجاني/مدفوع/تلقائي) — نفس المفاتيح المستخدمة
     // في translate-entries حتى تعمل أداة التحسين مع الوضع المجاني عبر Gemini المباشر.
     const userGeminiKey = (() => {
@@ -551,7 +556,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         return v === 'free' || v === 'paid' || v === 'auto' ? v : 'paid';
       } catch { return 'paid'; }
     })() as 'free' | 'paid' | 'auto';
-    const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined) : undefined;
+    const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined)
+      : model.startsWith('tokenrouter') ? (tokenRouterKey || undefined)
+      : undefined;
 
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب
     // تكرار نفس نمط الخطأ. نجلبها مرّة واحدة قبل كل الدفعات (نفس القائمة لكلّها).
@@ -1385,6 +1392,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                     <SelectGroup>
                       <SelectLabel className="text-[10px]">DeepSeek</SelectLabel>
                       {MODEL_OPTIONS.filter(m => m.group === "deepseek").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px]">TokenRouter</SelectLabel>
+                      {MODEL_OPTIONS.filter(m => m.group === "tokenrouter").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
                     </SelectGroup>
                   </SelectContent>
                 </Select>

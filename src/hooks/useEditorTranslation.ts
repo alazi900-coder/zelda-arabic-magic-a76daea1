@@ -35,7 +35,8 @@ interface UseEditorTranslationProps {
   setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
   userGeminiKey: string;
   userDeepSeekKey: string;
-  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek';
+  userTokenRouterKey: string;
+  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter';
   myMemoryEmail: string;
   addMyMemoryChars: (chars: number) => void;
   addAiRequest: (count?: number) => void;
@@ -67,6 +68,7 @@ interface UseEditorTranslationProps {
 const PROVIDER_BATCH_DELAY_MS = {
   gemini:     { free: 4000, paid: 500 },  // ~15 RPM free tier
   deepseek:   { free: 0,    paid: 0 },    // generous; no proactive throttle
+  tokenrouter:{ free: 0,    paid: 0 },    // generous; no proactive throttle
   mymemory:   { free: 0,    paid: 0 },    // not AI; own char-budget logic
   google:     { free: 0,    paid: 0 },    // not AI
 } as const;
@@ -83,7 +85,7 @@ const RISEN_LINE_STRUCTURE_RULE =
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
 }: UseEditorTranslationProps) {
 
   /**
@@ -218,7 +220,7 @@ export function useEditorTranslation({
         glossary: activeGlossary,
         userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
         providerApiKey:
-          (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
+          (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
         provider: translationProvider,
         myMemoryEmail: myMemoryEmail || undefined,
         rebalanceNewlines: rebalanceNewlines || undefined,
@@ -302,7 +304,7 @@ export function useEditorTranslation({
     // إعادة الإنشاء عند تغيّر إعدادات المزوّد/الموديل/القاموس حتى تُلتقط القيم الحديثة في buildPayload.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey,
+    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines,
     npcMode, aiModel, customPromptInstructions, categoryPromptTemplates, filterCategory, aiRoutingMode, aiBatchSize, translationCacheEnabled, isRisenSource,
   ]);
@@ -551,7 +553,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
         });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
@@ -677,7 +679,8 @@ export function useEditorTranslation({
       : null;
     const hasPersonalKey =
       (translationProvider === 'gemini'     && !!userGeminiKey)     ||
-      (translationProvider === 'deepseek'   && !!userDeepSeekKey);
+      (translationProvider === 'deepseek'   && !!userDeepSeekKey)   ||
+      (translationProvider === 'tokenrouter' && !!userTokenRouterKey);
     const batchDelayMs = !aiThrottleEnabled
       ? 0
       : aiRoutingMode === 'paid'
@@ -812,7 +815,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -870,7 +873,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -1027,7 +1030,7 @@ export function useEditorTranslation({
             entries,
             glossary: activeGlossary,
             userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-            providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
+            providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
             provider: translationProvider,
             myMemoryEmail: myMemoryEmail || undefined,
             npcMaxLines,
@@ -1226,7 +1229,7 @@ export function useEditorTranslation({
                 entries,
                 glossary: activeGlossary,
                 userApiKey: effectiveProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-                providerApiKey: (effectiveProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
+                providerApiKey: (effectiveProvider === 'deepseek' ? userDeepSeekKey : effectiveProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
                 provider: effectiveProvider,
                 myMemoryEmail: myMemoryEmail || undefined,
                 npcMaxLines,
@@ -1479,7 +1482,7 @@ export function useEditorTranslation({
               entries: [{ key, original: entry.original }],
               glossary: activeGlossary,
               userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : undefined) || undefined,
+              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
               provider: translationProvider,
               myMemoryEmail: myMemoryEmail || undefined,
               rebalanceNewlines: rebalanceNewlines || undefined,

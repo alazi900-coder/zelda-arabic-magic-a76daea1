@@ -88,7 +88,8 @@ const Editor = () => {
     setTestConnMsg(prev => ({ ...prev, [provider]: '' }));
     try {
       const providerApiKey =
-        provider === 'deepseek' ? editor.userDeepSeekKey : undefined;
+        provider === 'deepseek' ? editor.userDeepSeekKey :
+        provider === 'tokenrouter' ? editor.userTokenRouterKey : undefined;
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
@@ -113,7 +114,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.aiModel]);
 
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2";
   const processPath = isRisen ? "/risen/process" : "/process";

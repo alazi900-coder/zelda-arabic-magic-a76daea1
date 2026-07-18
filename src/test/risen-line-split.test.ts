@@ -89,6 +89,23 @@ describe("splitLongLines", () => {
     // Content is fully preserved, in order, no words cut.
     expect(lines.join(" ")).toBe(text);
   });
+
+  it("prefers fewer, fuller lines over more, choppier ones when both fit the limit (reported bug)", () => {
+    // Real reported case: 52 chars at limit=25 used to produce 4 lines
+    // (11/10/14/14) instead of the clearly better 3-line split (17/19/14),
+    // because the scorer compared ABSOLUTE spread across different
+    // candidate line counts — shorter lines have a smaller absolute spread
+    // even when proportionally just as uneven, unfairly favoring more lines.
+    const text = "الماء ومرور الزمن أثرا على هذا السلاح المعدن صدئ وهش";
+    expect(text.length).toBe(52);
+
+    const result = splitLongLines(text, 25, "\n");
+    const lines = result.split("\n");
+
+    expect(lines.length).toBe(3);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(25);
+    expect(lines.join(" ")).toBe(text);
+  });
 });
 
 describe("getLongestLineLength", () => {

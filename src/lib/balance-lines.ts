@@ -74,16 +74,24 @@ function scoreSplit(lines: string[]): number {
   const maxLen = Math.max(...lengths);
   const minLen = Math.min(...lengths);
   let cost = 0;
-  // Strong penalty for imbalance between longest and shortest line
-  const spread = maxLen - minLen;
-  cost += spread * spread * 2;
+  // Imbalance is scored RELATIVE to the average line length, not as raw
+  // character counts — this function also compares candidates with
+  // DIFFERENT line counts (balanceChunk tries both the minimum feasible
+  // nLines and nLines+1), and an absolute spread naturally shrinks when
+  // lines are shorter even if they're proportionally just as (or more)
+  // uneven. That biased the comparison toward more, shorter, choppier
+  // lines over fewer, fuller, better-balanced ones. Normalizing by the
+  // average makes different nLines candidates comparable on equal footing.
+  const norm = avg > 0 ? avg : 1;
+  const relSpread = (maxLen - minLen) / norm;
+  cost += relSpread * relSpread * 2;
   for (let i = 0; i < lines.length; i++) {
-    const dev = lengths[i] - avg;
-    cost += dev * dev;
+    const relDev = (lengths[i] - avg) / norm;
+    cost += relDev * relDev;
     // Penalize lines that are far below average (under 60% of avg)
     if (lengths[i] < avg * 0.6 && lines.length > 1) {
-      const shortBy = avg * 0.6 - lengths[i];
-      cost += shortBy * shortBy * 3;
+      const relShortBy = (avg * 0.6 - lengths[i]) / norm;
+      cost += relShortBy * relShortBy * 3;
     }
     if (i > 0 && i < lines.length - 1) {
       const lexical = countLexicalWords(lines[i]);

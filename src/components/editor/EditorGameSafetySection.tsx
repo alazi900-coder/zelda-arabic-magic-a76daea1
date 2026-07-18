@@ -138,6 +138,7 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
         onApplyAll={(fixes) => {
           for (const f of fixes) editor.updateTranslation(f.key, f.value);
         }}
+        onFilterByKeys={(keys) => focusDeepDiagnosticKeys(keys)}
       />
 
       {/* Line Balance Tool — مخفيّة خلف legacyCommaSplitEnabled (أداة موازنة الأسطر القديمة) */}

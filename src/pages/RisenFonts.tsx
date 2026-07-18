@@ -211,6 +211,7 @@ const RisenFonts = () => {
     setEditStatus(null);
     setReplaceStatus(null);
     lastReplaceRef.current = null;
+    lastAppendedRegionRef.current = null;
     toast.success(`تم تحليل الملف: ${parsed.charmap.length} زوجاً / ${parsed.recordCount} سجلاً`);
   }, [decodeFontName]);
 
@@ -375,19 +376,28 @@ const RisenFonts = () => {
   const [replaceBusy, setReplaceBusy] = useState(false);
   const [replaceStatus, setReplaceStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const lastReplaceRef = useRef<Map<number, number> | null>(null);
+  // Tracks the atlas rows the PREVIOUS instant-replace appended, so the next
+  // one can reclaim them instead of growing the atlas on every click. Only
+  // reused when the new call touches none of the same codepoints (otherwise
+  // the previous record — still needed for "استرجاع" — lives in there).
+  const lastAppendedRegionRef = useRef<{ y: number; height: number; codepoints: Set<number> } | null>(null);
 
   const handleReplaceNow = useCallback(async () => {
     if (!doc || !altFontBytes || altCodepoints.size === 0) return;
     setReplaceBusy(true);
     try {
       const glyphs = await renderArabicGlyphsFromFont(altFontBytes, measureFontCellMetrics(doc), undefined, [...altCodepoints], doc);
-      const { doc: replaced, previousGlyphIndex } = replaceGlyphsInXgfn(doc, glyphs);
+      const prevRegion = lastAppendedRegionRef.current;
+      const overlapsPrev = prevRegion ? [...altCodepoints].some((cp) => prevRegion.codepoints.has(cp)) : false;
+      const reuseFromHeight = prevRegion && !overlapsPrev ? prevRegion.y : undefined;
+      const { doc: replaced, previousGlyphIndex, appendedRegion } = replaceGlyphsInXgfn(doc, glyphs, reuseFromHeight);
       setDoc(replaced);
       setOriginalBytes(null);
       setRoundTrip(null);
       setAuditReport(null);
       setArabicMerged(true);
       lastReplaceRef.current = previousGlyphIndex;
+      lastAppendedRegionRef.current = { ...appendedRegion, codepoints: new Set(altCodepoints) };
       setReplaceStatus({ ok: true, message: `استُبدل ${glyphs.length} شكلاً من ${altFontName} — انظر المعاينة والأطلس أدناه ✅` });
     } catch (err) {
       console.error(err);
@@ -407,6 +417,7 @@ const RisenFonts = () => {
       setDoc(cur);
       setAuditReport(null);
       lastReplaceRef.current = null;
+      lastAppendedRegionRef.current = null;
       setReplaceStatus({ ok: true, message: "أُرجع الحرف السابق ✅" });
     } catch (err) {
       setReplaceStatus({ ok: false, message: (err as Error).message });

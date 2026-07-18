@@ -30,7 +30,7 @@ const CATEGORIES = [
   "curly_vars",        // {var}, {player:name}
   "html_like",         // <tag>, </tag>
   "escape_seq",        // \xNN, \uNNNN, \n, \t
-  "pua_chars",         // U+E000..U+F8FF
+  "pua_chars",         // U+E000..U+E0FF (matches the real protection range in xc3-tag-protection.ts)
   "control_chars",     // U+FFF9..U+FFFC, BiDi marks
   "uppercase_tokens",  // FAT, EXP, ABCDEF (≥2 uppercase letters, standalone)
   "dollar_vars",       // $1, $2, $name
@@ -43,36 +43,80 @@ const PATTERNS: Record<Category, RegExp> = {
   bracket_tags: /\\?\[\s*\/?\s*[A-Za-z][\w\s:=.'\/-]*\s*\\?\]/g,
   curly_vars: /\{[^{}]{1,60}\}/g,
   html_like: /<\/?[A-Za-z][^>]{0,80}>/g,
-  escape_seq: /\\[xun][0-9A-Fa-f]{2,8}|\\[ntr0]/g,
-  pua_chars: /[\uE000-\uF8FF]+/g,
+  // 'n' is deliberately excluded from the hex-prefix class below: \xNN and
+  // \uNNNN are real hex escapes, but \n is the single-char newline escape —
+  // including 'n' there let "\n12" (newline followed by literal digits "12")
+  // get misparsed as a bogus hex escape "\n12" instead of \n + "12".
+  escape_seq: /\\[xu][0-9A-Fa-f]{2,8}|\\[ntr0]/g,
+  pua_chars: /[\uE000-\uE0FF]+/g,
   control_chars: /[\uFFF9-\uFFFC\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
   uppercase_tokens: /(?<![A-Za-z])[A-Z]{2,10}(?![A-Za-z])/g,
   dollar_vars: /\$\w+/g,
   percent_vars: /%[\d.$-]*[sdif]/g,
 };
 
-function recordMatch(map: Map<string, Occurrence>, token: string, file: string, example: string) {
-  const existing = map.get(token);
+// Priority order for cross-category de-duplication: when two categories'
+// patterns both match overlapping text (e.g. paired_tags' full
+// "[Tag]...[/Tag]" span also matches bracket_tags' single-bracket pattern,
+// and uppercase_tokens matches inner text of any of the above), the first
+// category in this list to claim a span wins; the same span is skipped by
+// every later category so the same token isn't reported 2-3x over.
+const SCAN_PRIORITY: Category[] = [
+  "paired_tags",
+  "bracket_tags",
+  "curly_vars",
+  "html_like",
+  "escape_seq",
+  "pua_chars",
+  "control_chars",
+  "uppercase_tokens",
+  "dollar_vars",
+  "percent_vars",
+];
+
+/** Extracts a stable de-dup key for paired_tags: the opening+closing tag
+ * skeleton, with the (usually-unique) inner text stripped out. Without this,
+ * "[System:Ruby]Aegis[/System:Ruby]" and "[System:Ruby]Alrest[/System:Ruby]"
+ * are treated as different tokens and `count` never aggregates past 1. */
+const PAIRED_TAG_SKELETON = /^(\[\s*\w+\s*:[^\]]*\])[^[]*?(\[\/\s*\w+\s*:[^\]]*\])$/;
+function pairedTagKey(fullMatch: string): string {
+  const m = PAIRED_TAG_SKELETON.exec(fullMatch);
+  return m ? `${m[1]}...${m[2]}` : fullMatch;
+}
+
+function recordMatch(map: Map<string, Occurrence>, key: string, file: string, example: string) {
+  const existing = map.get(key);
   if (existing) {
     existing.count++;
     if (existing.files.size < 20) existing.files.add(file);
   } else {
-    map.set(token, { count: 1, files: new Set([file]), example });
+    map.set(key, { count: 1, files: new Set([file]), example });
   }
 }
 
 function scanSingle(text: string, file: string, categories: Record<Category, Map<string, Occurrence>>) {
-  for (const cat of CATEGORIES) {
-    const re = new RegExp(PATTERNS[cat].source, PATTERNS[cat].flags);
+  const claimed: [number, number][] = [];
+  const isClaimed = (start: number, end: number) => claimed.some(([s, e]) => start >= s && end <= e);
+  const example = text.length > 100 ? text.slice(0, 97) + "..." : text;
+
+  for (const cat of SCAN_PRIORITY) {
+    const re = PATTERNS[cat];
+    re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
-      const token = cat === "pua_chars"
-        ? Array.from(m[0]).map((c) => `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`).join("")
-        : cat === "control_chars"
-          ? `\\u${m[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
-          : m[0];
-      const example = text.length > 100 ? text.slice(0, 97) + "..." : text;
-      recordMatch(categories[cat], token, file, example);
+      const start = m.index;
+      const end = start + m[0].length;
+      if (isClaimed(start, end)) continue;
+      claimed.push([start, end]);
+
+      const key = cat === "paired_tags"
+        ? pairedTagKey(m[0])
+        : cat === "pua_chars"
+          ? Array.from(m[0]).map((c) => `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`).join("")
+          : cat === "control_chars"
+            ? `\\u${m[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
+            : m[0];
+      recordMatch(categories[cat], key, file, example);
     }
   }
 }
@@ -151,7 +195,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
   curly_vars: "Curly Variables {var}",
   html_like: "HTML-like <tag>",
   escape_seq: "Escape Sequences \\xNN \\uNNNN",
-  pua_chars: "PUA Characters (U+E000..U+F8FF) — likely icons",
+  pua_chars: "PUA Characters (U+E000..U+E0FF) — likely icons",
   control_chars: "Control / BiDi Characters",
   uppercase_tokens: "Uppercase Tokens (potential abbreviations or leaked tag names)",
   dollar_vars: "Dollar Variables $N / $name",
@@ -204,3 +248,15 @@ export function downloadReport(report: TagReport, filename?: string) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/** Tests whether `text` contains at least one match for the given category —
+ * used by CleanupToolsPanel to wire its category filter chips into the
+ * editor's real entry filter (via matching entry keys), without duplicating
+ * each category's regex there. */
+export function categoryMatches(cat: Category, text: string): boolean {
+  const re = PATTERNS[cat];
+  re.lastIndex = 0;
+  return re.test(text);
+}
+
+export type { Category };

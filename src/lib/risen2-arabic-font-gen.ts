@@ -380,6 +380,10 @@ interface GrownAtlas {
   /** codepoint -> its newly-appended glyph index (one entry per input glyph,
    * including zero-ink ones, which still get a record — just no atlas box). */
   glyphIndexByCode: Map<number, number>;
+  /** Row range occupied by this call's newly-placed glyphs — lets a later
+   * call reclaim it via `reuseFromHeight` once it's confirmed orphaned. */
+  appendedFromY: number;
+  newHeight: number;
 }
 
 /** Shared core of both append (new characters) and replace (existing
@@ -388,8 +392,15 @@ interface GrownAtlas {
  * measurement records — WITHOUT touching doc.charmap at all, since the two
  * callers disagree on what to do with the charmap (append new pairs vs.
  * repoint existing ones). Does not patch 0xF6/0x1C — callers do that once
- * they know the final charmap, since pair count differs between the two. */
-function growAtlasAndAppendRecords(doc: XgfnDocument, glyphs: RenderedArabicGlyph[]): GrownAtlas {
+ * they know the final charmap, since pair count differs between the two.
+ *
+ * `reuseFromHeight`, when given, drops any existing atlas rows at/after that
+ * height before packing — used by the instant single-letter replace to
+ * reclaim its own previous, now-orphaned append instead of growing the atlas
+ * forever on repeated clicks. Callers only pass this when they've confirmed
+ * nothing still-reachable lives in the reclaimed rows (see replaceGlyphsInXgfn
+ * callers in RisenFonts.tsx). */
+function growAtlasAndAppendRecords(doc: XgfnDocument, glyphs: RenderedArabicGlyph[], reuseFromHeight?: number): GrownAtlas {
   const ddsHeader = readDdsHeader(doc.ddsBytes);
   if (!ddsHeader.isRawRgb || ddsHeader.rgbBitCount !== 32) {
     throw new Error("توليد الحروف العربية يدعم حالياً فقط أطلس DDS خام BGRA32 غير مضغوط");
@@ -398,7 +409,7 @@ function growAtlasAndAppendRecords(doc: XgfnDocument, glyphs: RenderedArabicGlyp
   if (!decoded.supported) throw new Error("تعذّر فك ضغط أطلس DDS الأصلي");
 
   const atlasWidth = decoded.width;
-  const oldHeight = decoded.height;
+  const oldHeight = reuseFromHeight !== undefined && reuseFromHeight <= decoded.height ? reuseFromHeight : decoded.height;
 
   // Shelf-pack new (non-empty) glyphs into rows appended below the existing
   // atlas, with a 1px gap between neighbours in both directions — exactly
@@ -503,6 +514,8 @@ function growAtlasAndAppendRecords(doc: XgfnDocument, glyphs: RenderedArabicGlyp
     ddsBytes: newDdsBytes,
     trailingBytes: newTrailingBytes,
     glyphIndexByCode,
+    appendedFromY: oldHeight,
+    newHeight,
   };
 }
 
@@ -551,6 +564,11 @@ export interface ReplaceGlyphsResult {
    * no re-render needed. Only includes codepoints that already had a pair
    * (a codepoint newly introduced by this call has nothing to revert to). */
   previousGlyphIndex: Map<number, number>;
+  /** Row range this call's glyphs were placed in — pass its `y` back in as
+   * `reuseFromHeight` on a LATER call (once it's confirmed orphaned, i.e. the
+   * later call doesn't touch any of the same codepoints) to reclaim the
+   * space instead of growing the atlas again. */
+  appendedRegion: { y: number; height: number };
 }
 
 /** Re-sources specific EXISTING characters from a different set of rendered
@@ -560,9 +578,14 @@ export interface ReplaceGlyphsResult {
  * repoints their existing pair at the newly-appended record instead, so the
  * font gains a handful of extra (orphaned but harmless) records rather than
  * duplicate mappings. Goes through the same rebuild→reparse→audit safety
- * gate as every hand-edit in risen2-xgfn-edit.ts. */
-export function replaceGlyphsInXgfn(doc: XgfnDocument, glyphs: RenderedArabicGlyph[]): ReplaceGlyphsResult {
-  const grown = growAtlasAndAppendRecords(doc, glyphs);
+ * gate as every hand-edit in risen2-xgfn-edit.ts.
+ *
+ * `reuseFromHeight`: see ReplaceGlyphsResult.appendedRegion — pass a PRIOR
+ * call's region here to reclaim it instead of growing the atlas further.
+ * Only safe when this call's glyphs don't overlap the codepoints that
+ * occupied that region (the caller in RisenFonts.tsx enforces this). */
+export function replaceGlyphsInXgfn(doc: XgfnDocument, glyphs: RenderedArabicGlyph[], reuseFromHeight?: number): ReplaceGlyphsResult {
+  const grown = growAtlasAndAppendRecords(doc, glyphs, reuseFromHeight);
   const newCharmap: XgfnGlyphRecord[] = doc.charmap.map((p) => ({ ...p }));
   const previousGlyphIndex = new Map<number, number>();
   for (const g of glyphs) {
@@ -586,5 +609,10 @@ export function replaceGlyphsInXgfn(doc: XgfnDocument, glyphs: RenderedArabicGly
     ddsBytes: grown.ddsBytes,
   };
   const { doc: verified, report } = verifyDocumentSafe(next);
-  return { doc: verified, report, previousGlyphIndex };
+  return {
+    doc: verified,
+    report,
+    previousGlyphIndex,
+    appendedRegion: { y: grown.appendedFromY, height: grown.newHeight - grown.appendedFromY },
+  };
 }

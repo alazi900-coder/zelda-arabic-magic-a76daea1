@@ -24,14 +24,20 @@ import {
   extractTags,
   downloadReport,
   formatReport,
+  categoryMatches,
   type TagReport,
+  type Category,
 } from "@/lib/tag-extractor";
+import { Filter } from "lucide-react";
 
 interface CleanupToolsPanelProps {
   state: EditorState;
   // kept for back-compat with the mounting component; unused here.
   onApplyFix?: (key: string, fixedText: string) => void;
   onApplyAll?: (fixes: { key: string; value: string }[]) => void;
+  /** Pins the matching entries in the editor's real entry list — same
+   * mechanism DeepDiagnosticPanel/QualityChecksPanel use to "عرض في المحرر". */
+  onFilterByKeys?: (keys: Set<string>) => void;
 }
 
 const CATEGORY_META: Record<
@@ -52,7 +58,7 @@ const CATEGORY_META: Record<
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_META);
 
-export default function CleanupToolsPanel({ state }: CleanupToolsPanelProps) {
+export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupToolsPanelProps) {
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -143,6 +149,20 @@ export default function CleanupToolsPanel({ state }: CleanupToolsPanelProps) {
     setCopiedToken("__all__");
     setTimeout(() => setCopiedToken(null), 1200);
   }, [report]);
+
+  const handleFilterByCategory = useCallback(
+    (cat: Category) => {
+      if (!onFilterByKeys) return;
+      const keys = new Set<string>();
+      for (const e of state.entries) {
+        if (e.original && categoryMatches(cat, e.original)) {
+          keys.add(`${e.msbtFile}:${e.index}`);
+        }
+      }
+      onFilterByKeys(keys);
+    },
+    [state.entries, onFilterByKeys],
+  );
 
   const totals = useMemo(() => {
     if (!report) return { unique: 0, occurrences: 0, nonEmpty: 0 };
@@ -349,17 +369,17 @@ export default function CleanupToolsPanel({ state }: CleanupToolsPanelProps) {
                         key={cat}
                         className="rounded-lg border border-border/50 bg-background/40 overflow-hidden"
                       >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setOpenCats((prev) => ({
-                              ...prev,
-                              [cat]: !isOpen,
-                            }))
-                          }
-                          className="w-full flex items-center justify-between p-2 hover:bg-background/60"
-                        >
-                          <div className="flex items-center gap-2">
+                        <div className="w-full flex items-center justify-between p-2 hover:bg-background/60">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenCats((prev) => ({
+                                ...prev,
+                                [cat]: !isOpen,
+                              }))
+                            }
+                            className="flex items-center gap-2 flex-1 text-right"
+                          >
                             <span className={`text-sm ${meta.tone}`}>
                               {meta.emoji}
                             </span>
@@ -369,13 +389,37 @@ export default function CleanupToolsPanel({ state }: CleanupToolsPanelProps) {
                             <Badge variant="secondary" className="text-[10px]">
                               {sorted.length} وسم · {totalCount} ظهور
                             </Badge>
+                          </button>
+                          <div className="flex items-center gap-1">
+                            {onFilterByKeys && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                title="عرض هذه النصوص في المحرر"
+                                className="h-6 gap-1 text-[10px] px-1.5"
+                                onClick={() => handleFilterByCategory(cat)}
+                              >
+                                <Filter className="w-3 h-3" /> عرض في المحرر
+                              </Button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenCats((prev) => ({
+                                  ...prev,
+                                  [cat]: !isOpen,
+                                }))
+                              }
+                            >
+                              {isOpen ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
+                            </button>
                           </div>
-                          {isOpen ? (
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+                        </div>
 
                         {isOpen && (
                           <div className="border-t border-border/40 divide-y divide-border/30">

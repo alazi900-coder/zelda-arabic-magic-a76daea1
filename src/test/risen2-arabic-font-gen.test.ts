@@ -298,6 +298,40 @@ describe("replaceGlyphsInXgfn (instant single-letter replace + undo)", () => {
       expect(replaced.charmap.find((p) => p.charCode === cp)!.glyphIndex).not.toBe(previousGlyphIndex.get(cp));
     }
   });
+
+  it("without reuseFromHeight, each replace grows the atlas further (the reported bug: repeated clicks require more and more scrolling)", () => {
+    const doc = parseXgfn(loadFixture());
+    const h0 = decodeDdsToRgba(doc.ddsBytes).height;
+    const step1 = replaceGlyphsInXgfn(doc, [makeGlyph(0x30, 4, 4, 6)]);
+    const h1 = decodeDdsToRgba(step1.doc.ddsBytes).height;
+    const step2 = replaceGlyphsInXgfn(step1.doc, [makeGlyph(0x31, 4, 4, 6)]);
+    const h2 = decodeDdsToRgba(step2.doc.ddsBytes).height;
+    expect(h1).toBeGreaterThanOrEqual(h0);
+    expect(h2).toBeGreaterThan(h1); // grows again on the second, unrelated-letter replace
+  });
+
+  it("reuseFromHeight reclaims a prior (now-orphaned) region instead of growing the atlas further", () => {
+    const doc = parseXgfn(loadFixture());
+    const step1 = replaceGlyphsInXgfn(doc, [makeGlyph(0x30, 4, 4, 6)]);
+    const h1 = decodeDdsToRgba(step1.doc.ddsBytes).height;
+    // Different codepoint (0x31), reclaiming step1's now-orphaned region.
+    const step2 = replaceGlyphsInXgfn(step1.doc, [makeGlyph(0x31, 4, 4, 6)], step1.appendedRegion.y);
+    const h2 = decodeDdsToRgba(step2.doc.ddsBytes).height;
+    expect(h2).toBeLessThanOrEqual(h1); // no further growth — space was reclaimed, not appended past it
+    expect(step2.report.errorCount).toBe(0);
+    expect(step2.doc.charmap.find((p) => p.charCode === 0x31)!.glyphIndex).toBeDefined();
+  });
+
+  it("reclaiming does not corrupt a still-charmap-referenced glyph outside the reclaimed region", () => {
+    const doc = parseXgfn(loadFixture());
+    const nine = doc.charmap.find((p) => p.charCode === 0x39)!;
+    const nineFieldsBefore = [...doc.measurements[nine.glyphIndex].fields];
+    const step1 = replaceGlyphsInXgfn(doc, [makeGlyph(0x30, 4, 4, 6)]);
+    const step2 = replaceGlyphsInXgfn(step1.doc, [makeGlyph(0x31, 4, 4, 6)], step1.appendedRegion.y);
+    // '9' was never touched by either replace — its record must be untouched.
+    expect(step2.doc.measurements[nine.glyphIndex].fields).toEqual(nineFieldsBefore);
+    expect(step2.doc.charmap.find((p) => p.charCode === 0x39)!.glyphIndex).toBe(nine.glyphIndex);
+  });
 });
 
 describe("measureDocGlyphInkHeight (pure, reads real ink from an .xgfn doc)", () => {

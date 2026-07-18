@@ -34,6 +34,7 @@ import {
 } from "./risen-ximg";
 import { getRisenArabicGlyphCodepoints } from "./risen/arabic-shaper";
 import type { XgfnDocument, XgfnGlyphRecord, XgfnMeasurement } from "./risen2-xgfn";
+import { verifyDocumentSafe, type XgfnAuditReport } from "./risen2-xgfn-audit";
 
 export interface RenderedArabicGlyph {
   codepoint: number;
@@ -192,11 +193,15 @@ function fitFontSize(
  * above the cell top and NO descender falls below the cell bottom. Pass an
  * `override` to source selected codepoints from a second TTF (sized with
  * the same fitting, so everything stays on one baseline).
+ * `codepointsOverride`, when given, renders only that codepoint list instead
+ * of the full Risen Arabic set — used by the instant single-letter replace
+ * feature so testing one letter doesn't re-render all 140 codepoints.
  * Browser-only (FontFace/Canvas 2D). */
 export async function renderArabicGlyphsFromFont(
   fontBytes: ArrayBuffer,
   metrics: FontCellMetrics,
-  override?: AlternateFontOverride
+  override?: AlternateFontOverride,
+  codepointsOverride?: number[]
 ): Promise<RenderedArabicGlyph[]> {
   const fontFace = new FontFace("RisenArabicGen", fontBytes);
   await fontFace.load();
@@ -212,7 +217,12 @@ export async function renderArabicGlyphsFromFont(
     const { cellHeight, baseline } = metrics;
     const cellH = cellHeight + DESCENT_EXTRA_PX;
     const descentRoom = cellH - baseline;
-    const codepoints = getRisenArabicGlyphCodepoints();
+    // Sizing is ALWAYS fitted against the full Risen Arabic set, even when
+    // codepointsOverride renders only a handful of them — using the subset's
+    // own (possibly smaller) extremes would pick a larger font size than the
+    // rest of the already-merged glyphs use, breaking visual consistency.
+    const fullCodepoints = getRisenArabicGlyphCodepoints();
+    const codepoints = codepointsOverride ?? fullCodepoints;
 
     const canvas = document.createElement("canvas");
     canvas.width = cellHeight * 16;
@@ -223,8 +233,8 @@ export async function renderArabicGlyphsFromFont(
     // Each font family is fitted over the FULL glyph set with the same
     // formula — both end up sharing the cell and baseline, so mixed-source
     // text stays level without any manual coordinate work.
-    const mainSize = fitFontSize(ctx, "RisenArabicGen", codepoints, baseline, descentRoom, cellHeight);
-    const altSize = altFace ? fitFontSize(ctx, "RisenArabicGenAlt", codepoints, baseline, descentRoom, cellHeight) : 0;
+    const mainSize = fitFontSize(ctx, "RisenArabicGen", fullCodepoints, baseline, descentRoom, cellHeight);
+    const altSize = altFace ? fitFontSize(ctx, "RisenArabicGenAlt", fullCodepoints, baseline, descentRoom, cellHeight) : 0;
 
     const glyphs: RenderedArabicGlyph[] = [];
     for (const cp of codepoints) {
@@ -269,11 +279,25 @@ export async function renderArabicGlyphsFromFont(
   }
 }
 
-/** Appends rendered Arabic glyphs to an existing `.xgfn` document: grows the
- * DDS atlas downward (shelf-packing new rows below the untouched original
- * content), and appends matching charmap + measurement records. Pure data
- * transform — no DOM dependency, safe to unit test with synthetic glyphs. */
-export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArabicGlyph[]): XgfnDocument {
+interface GrownAtlas {
+  headerPrefix: Uint8Array;
+  measurements: XgfnMeasurement[];
+  recordCount: number;
+  ddsBytes: Uint8Array;
+  trailingBytes: Uint8Array;
+  /** codepoint -> its newly-appended glyph index (one entry per input glyph,
+   * including zero-ink ones, which still get a record — just no atlas box). */
+  glyphIndexByCode: Map<number, number>;
+}
+
+/** Shared core of both append (new characters) and replace (existing
+ * characters, new source glyph) operations: shelf-packs the given glyphs
+ * into new atlas rows below the existing content and appends their
+ * measurement records — WITHOUT touching doc.charmap at all, since the two
+ * callers disagree on what to do with the charmap (append new pairs vs.
+ * repoint existing ones). Does not patch 0xF6/0x1C — callers do that once
+ * they know the final charmap, since pair count differs between the two. */
+function growAtlasAndAppendRecords(doc: XgfnDocument, glyphs: RenderedArabicGlyph[]): GrownAtlas {
   const ddsHeader = readDdsHeader(doc.ddsBytes);
   if (!ddsHeader.isRawRgb || ddsHeader.rgbBitCount !== 32) {
     throw new Error("توليد الحروف العربية يدعم حالياً فقط أطلس DDS خام BGRA32 غير مضغوط");
@@ -343,14 +367,12 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   // New glyph indices start at the ORIGINAL recordCount (= highest existing
   // glyphIndex + 1, confirmed on all 112 real fonts), and their records are
   // appended to the measurement table so record[glyphIndex] stays aligned.
-  // New charmap pairs are appended after the existing pairs — sorting is
-  // confirmed unnecessary (the working Chinese mod's charmaps are unsorted).
   const newMeasurements: XgfnMeasurement[] = doc.measurements.map((m) => m);
-  const newCharmap: XgfnGlyphRecord[] = [...doc.charmap];
+  const glyphIndexByCode = new Map<number, number>();
   let nextGlyphIndex = doc.recordCount;
   for (const g of glyphs) {
     const glyphIndex = nextGlyphIndex++;
-    newCharmap.push({ charCode: g.codepoint, glyphIndex });
+    glyphIndexByCode.set(g.codepoint, glyphIndex);
 
     const pos = placements.get(g.codepoint);
     const x0 = pos?.x ?? 0;
@@ -370,40 +392,6 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   }
   const newRecordCount = doc.recordCount + glyphs.length;
 
-  const headerPrefix = doc.headerPrefix.slice();
-  const headerView = new DataView(headerPrefix.buffer, headerPrefix.byteOffset, headerPrefix.byteLength);
-  headerView.setUint32(0xf6, newCharmap.length, true); // authoritative charmap pair count (confirmed field)
-
-  // 0x1C = total decompressed file size - 0x66 (internal payload size,
-  // confirmed exactly on two real samples of different sizes: 263,010 and
-  // 1,409,526 bytes both satisfy field == length - 0x66 precisely). Left
-  // stale at the pre-merge file size, this caused the engine to misread
-  // payload boundaries once the file actually grew — read garbage
-  // counts/sizes from data past the (wrongly) declared end, request a
-  // bogus huge heap allocation, and crash with STATUS_NO_MEMORY (matches
-  // a real in-game crash log, including the file staying fully unusable —
-  // English glyphs included — once the engine can't parse it at all).
-  const measurementsTotalLen = newMeasurements.reduce((sum, m) => sum + m.rawBytes.length, 0);
-  const totalSize =
-    headerPrefix.length +
-    newCharmap.length * 4 +
-    4 /* recordCount field */ +
-    measurementsTotalLen +
-    doc.trailingBytes.length +
-    newDdsBytes.length;
-  headerView.setUint32(0x1c, totalSize - 0x66, true);
-
-  // 0xEA is intentionally left untouched. It was previously bumped
-  // proportionally to the added glyph count, on the assumption it was some
-  // kind of glyph counter — but a real, working, heavily-modified font from
-  // a successful Chinese mod (276 -> 3197 charmap pairs, twelvefold growth)
-  // leaves this exact field completely unchanged (27, identical to the
-  // unmodified original). Bumping it was writing a wrong value into a field
-  // whose real meaning is still unknown; the in-game crash (STATUS_NO_MEMORY
-  // during asset loading, consistent with a corrupted size/count field
-  // driving a bad heap allocation) went away only once this stopped
-  // happening. Do not "fix" this again without new evidence.
-
   // The u32 between the measurement table and the DDS payload is the DDS
   // BYTE LENGTH — confirmed exactly on 112/112 real fonts (77 original + 35
   // Chinese-mod), and the working Chinese mod updates it when its atlases
@@ -413,13 +401,98 @@ export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArab
   const newTrailingBytes = new Uint8Array(4);
   new DataView(newTrailingBytes.buffer).setUint32(0, newDdsBytes.length, true);
 
+  // 0xEA is intentionally left untouched — see appendArabicGlyphsToXgfn's
+  // docblock history; a real working Chinese mod (12x charmap growth) never
+  // changes it.
   return {
-    headerPrefix,
+    headerPrefix: doc.headerPrefix.slice(),
+    measurements: newMeasurements,
+    recordCount: newRecordCount,
+    ddsBytes: newDdsBytes,
+    trailingBytes: newTrailingBytes,
+    glyphIndexByCode,
+  };
+}
+
+/** Patches 0xF6 (pair count) and 0x1C (payload size = total size - 0x66,
+ * confirmed exactly on every real sample) to match a document's actual
+ * content. Shared by append and replace so both stay byte-formula-identical. */
+function patchHeaderCounts(headerPrefix: Uint8Array, charmap: XgfnGlyphRecord[], measurements: XgfnMeasurement[], trailingBytes: Uint8Array, ddsBytes: Uint8Array): void {
+  const view = new DataView(headerPrefix.buffer, headerPrefix.byteOffset, headerPrefix.byteLength);
+  view.setUint32(0xf6, charmap.length, true);
+  const measurementsTotalLen = measurements.reduce((sum, m) => sum + m.rawBytes.length, 0);
+  const totalSize = headerPrefix.length + charmap.length * 4 + 4 /* recordCount field */ + measurementsTotalLen + trailingBytes.length + ddsBytes.length;
+  view.setUint32(0x1c, totalSize - 0x66, true);
+}
+
+/** Appends rendered Arabic glyphs to an existing `.xgfn` document: grows the
+ * DDS atlas downward (shelf-packing new rows below the untouched original
+ * content), and appends matching charmap + measurement records. Pure data
+ * transform — no DOM dependency, safe to unit test with synthetic glyphs. */
+export function appendArabicGlyphsToXgfn(doc: XgfnDocument, glyphs: RenderedArabicGlyph[]): XgfnDocument {
+  const grown = growAtlasAndAppendRecords(doc, glyphs);
+  // New charmap pairs are appended after the existing pairs — sorting is
+  // confirmed unnecessary (the working Chinese mod's charmaps are unsorted).
+  const newCharmap: XgfnGlyphRecord[] = [
+    ...doc.charmap,
+    ...glyphs.map((g) => ({ charCode: g.codepoint, glyphIndex: grown.glyphIndexByCode.get(g.codepoint)! })),
+  ];
+  patchHeaderCounts(grown.headerPrefix, newCharmap, grown.measurements, grown.trailingBytes, grown.ddsBytes);
+  const headerView = new DataView(grown.headerPrefix.buffer, grown.headerPrefix.byteOffset, grown.headerPrefix.byteLength);
+  return {
+    headerPrefix: grown.headerPrefix,
     glyphCount: headerView.getUint32(0xea, true),
     charmap: newCharmap,
-    recordCount: newRecordCount,
-    measurements: newMeasurements,
-    trailingBytes: newTrailingBytes,
-    ddsBytes: newDdsBytes,
+    recordCount: grown.recordCount,
+    measurements: grown.measurements,
+    trailingBytes: grown.trailingBytes,
+    ddsBytes: grown.ddsBytes,
   };
+}
+
+export interface ReplaceGlyphsResult {
+  doc: XgfnDocument;
+  report: XgfnAuditReport;
+  /** codepoint -> the glyph index it pointed at BEFORE this replace. The old
+   * record and its atlas pixels are never deleted (same orphan-record policy
+   * as risen2-xgfn-edit.ts), so undoing is just re-pointing back to these —
+   * no re-render needed. Only includes codepoints that already had a pair
+   * (a codepoint newly introduced by this call has nothing to revert to). */
+  previousGlyphIndex: Map<number, number>;
+}
+
+/** Re-sources specific EXISTING characters from a different set of rendered
+ * glyphs (typically from an alternate TTF) — the instant single-letter
+ * "replace and preview" operation. Unlike appendArabicGlyphsToXgfn, this
+ * does NOT add new charmap pairs for characters that already have one; it
+ * repoints their existing pair at the newly-appended record instead, so the
+ * font gains a handful of extra (orphaned but harmless) records rather than
+ * duplicate mappings. Goes through the same rebuild→reparse→audit safety
+ * gate as every hand-edit in risen2-xgfn-edit.ts. */
+export function replaceGlyphsInXgfn(doc: XgfnDocument, glyphs: RenderedArabicGlyph[]): ReplaceGlyphsResult {
+  const grown = growAtlasAndAppendRecords(doc, glyphs);
+  const newCharmap: XgfnGlyphRecord[] = doc.charmap.map((p) => ({ ...p }));
+  const previousGlyphIndex = new Map<number, number>();
+  for (const g of glyphs) {
+    const newIndex = grown.glyphIndexByCode.get(g.codepoint)!;
+    const existing = newCharmap.find((p) => p.charCode === g.codepoint);
+    if (existing) {
+      previousGlyphIndex.set(g.codepoint, existing.glyphIndex);
+      existing.glyphIndex = newIndex;
+    } else {
+      newCharmap.push({ charCode: g.codepoint, glyphIndex: newIndex });
+    }
+  }
+  patchHeaderCounts(grown.headerPrefix, newCharmap, grown.measurements, grown.trailingBytes, grown.ddsBytes);
+  const next: XgfnDocument = {
+    headerPrefix: grown.headerPrefix,
+    glyphCount: doc.glyphCount,
+    charmap: newCharmap,
+    recordCount: grown.recordCount,
+    measurements: grown.measurements,
+    trailingBytes: grown.trailingBytes,
+    ddsBytes: grown.ddsBytes,
+  };
+  const { doc: verified, report } = verifyDocumentSafe(next);
+  return { doc: verified, report, previousGlyphIndex };
 }

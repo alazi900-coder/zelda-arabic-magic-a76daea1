@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parseXgfn, buildXgfn } from "@/lib/risen2-xgfn";
-import { appendArabicGlyphsToXgfn, measureFontCellMetrics, type RenderedArabicGlyph } from "@/lib/risen2-arabic-font-gen";
+import { appendArabicGlyphsToXgfn, replaceGlyphsInXgfn, measureFontCellMetrics, type RenderedArabicGlyph } from "@/lib/risen2-arabic-font-gen";
+import { remapCharmapPair } from "@/lib/risen2-xgfn-edit";
 import { decodeDdsToRgba } from "@/lib/risen-ximg";
 
 const FIXTURE_PATH = join(__dirname, "fixtures", "risen2-numbers-font-sample.xgfn");
@@ -236,6 +237,65 @@ describe("appendArabicGlyphsToXgfn (synthetic glyph bitmaps, real numbers-font b
     for (let i = baseCount; i < merged.measurements.length; i++) {
       const f = merged.measurements[i].fields;
       expect(f.slice(5)).toEqual([0, 0, 0, 0]);
+    }
+  });
+});
+
+describe("replaceGlyphsInXgfn (instant single-letter replace + undo)", () => {
+  it("repoints an EXISTING character's charmap pair to the new glyph, without adding a new pair", () => {
+    const doc = parseXgfn(loadFixture());
+    const spacePairBefore = doc.charmap.find((p) => p.charCode === 0x20)!;
+    const { doc: replaced, previousGlyphIndex, report } = replaceGlyphsInXgfn(doc, [makeGlyph(0x20, 4, 4, 6)]);
+
+    expect(report.errorCount).toBe(0);
+    expect(replaced.charmap.length).toBe(doc.charmap.length); // no new pair added
+    const spacePairAfter = replaced.charmap.find((p) => p.charCode === 0x20)!;
+    expect(spacePairAfter.glyphIndex).not.toBe(spacePairBefore.glyphIndex);
+    expect(spacePairAfter.glyphIndex).toBeGreaterThanOrEqual(doc.recordCount); // points at a newly-appended record
+    expect(previousGlyphIndex.get(0x20)).toBe(spacePairBefore.glyphIndex);
+  });
+
+  it("adds a new pair (like append) for a codepoint that had none before, and omits it from previousGlyphIndex", () => {
+    const doc = parseXgfn(loadFixture());
+    const { doc: replaced, previousGlyphIndex, report } = replaceGlyphsInXgfn(doc, [makeGlyph(0xfe8e, 4, 4, 6)]);
+
+    expect(report.errorCount).toBe(0);
+    expect(replaced.charmap.length).toBe(doc.charmap.length + 1);
+    expect(replaced.charmap.some((p) => p.charCode === 0xfe8e)).toBe(true);
+    expect(previousGlyphIndex.has(0xfe8e)).toBe(false);
+  });
+
+  it("leaves the OLD record's bytes fully intact (orphaned, not deleted) after replacing", () => {
+    const doc = parseXgfn(loadFixture());
+    const oldGlyphIndex = doc.charmap.find((p) => p.charCode === 0x35)!.glyphIndex; // '5'
+    const oldFieldsBefore = [...doc.measurements[oldGlyphIndex].fields];
+    const { doc: replaced } = replaceGlyphsInXgfn(doc, [makeGlyph(0x35, 4, 4, 6)]);
+    expect(replaced.measurements[oldGlyphIndex].fields).toEqual(oldFieldsBefore);
+  });
+
+  it("undo via remapCharmapPair restores the exact original mapping and audits clean", () => {
+    const doc = parseXgfn(loadFixture());
+    const nine = doc.charmap.find((p) => p.charCode === 0x39)!;
+    const { doc: replaced, previousGlyphIndex } = replaceGlyphsInXgfn(doc, [makeGlyph(0x39, 5, 5, 7)]);
+    expect(replaced.charmap.find((p) => p.charCode === 0x39)!.glyphIndex).not.toBe(nine.glyphIndex);
+
+    const { doc: reverted, report } = remapCharmapPair(replaced, 0x39, previousGlyphIndex.get(0x39)!);
+    expect(report.errorCount).toBe(0);
+    expect(reverted.charmap.find((p) => p.charCode === 0x39)!.glyphIndex).toBe(nine.glyphIndex);
+    expect(reverted.measurements[nine.glyphIndex].fields).toEqual(doc.measurements[nine.glyphIndex].fields);
+  });
+
+  it("replacing multiple presentation forms of one letter at once repoints all of them", () => {
+    const doc = parseXgfn(loadFixture());
+    const merged = appendArabicGlyphsToXgfn(doc, [makeGlyph(0xfeca, 4, 4, 5), makeGlyph(0xfecb, 4, 4, 5), makeGlyph(0xfecc, 4, 4, 5)]);
+    const { doc: replaced, previousGlyphIndex, report } = replaceGlyphsInXgfn(merged, [
+      makeGlyph(0xfeca, 5, 5, 6), makeGlyph(0xfecb, 5, 5, 6), makeGlyph(0xfecc, 5, 5, 6),
+    ]);
+    expect(report.errorCount).toBe(0);
+    expect(replaced.charmap.length).toBe(merged.charmap.length); // all 3 already existed — no new pairs
+    for (const cp of [0xfeca, 0xfecb, 0xfecc]) {
+      expect(previousGlyphIndex.has(cp)).toBe(true);
+      expect(replaced.charmap.find((p) => p.charCode === cp)!.glyphIndex).not.toBe(previousGlyphIndex.get(cp));
     }
   });
 });

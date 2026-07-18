@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package, Download } from "lucide-react";
+import { ArrowRight, FileArchive, Loader2, CheckCircle2, XCircle, Upload, Package, Download, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { parseXgfn, buildXgfn, type XgfnDocument } from "@/lib/risen2-xgfn";
-import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn, measureFontCellMetrics, type AlternateFontOverride } from "@/lib/risen2-arabic-font-gen";
+import { renderArabicGlyphsFromFont, appendArabicGlyphsToXgfn, replaceGlyphsInXgfn, measureFontCellMetrics, type AlternateFontOverride } from "@/lib/risen2-arabic-font-gen";
 import { getPresentationFormsForLetter } from "@/lib/risen/arabic-shaper";
 import { FREE_ARABIC_FONTS, fetchFreeFontBytes, type FreeFontEntry } from "@/lib/risen2-free-fonts";
 import { auditXgfnDocument, formatAuditReportText, buildDiagnosticJson, type XgfnAuditReport } from "@/lib/risen2-xgfn-audit";
@@ -209,6 +209,8 @@ const RisenFonts = () => {
     setAuditReport(null);
     setSelectedPairIdx(null);
     setEditStatus(null);
+    setReplaceStatus(null);
+    lastReplaceRef.current = null;
     toast.success(`تم تحليل الملف: ${parsed.charmap.length} زوجاً / ${parsed.recordCount} سجلاً`);
   }, [decodeFontName]);
 
@@ -366,6 +368,50 @@ const RisenFonts = () => {
       setArabicBusy(false);
     }
   }, [doc, arabicFontBytes, altOverride]);
+
+  // Instant single-letter replace: re-sources just the typed letters' forms
+  // from the alt font into the CURRENTLY open (already Arabic-merged) doc —
+  // no full 140-glyph / 35-font regeneration needed to test one letter.
+  const [replaceBusy, setReplaceBusy] = useState(false);
+  const [replaceStatus, setReplaceStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const lastReplaceRef = useRef<Map<number, number> | null>(null);
+
+  const handleReplaceNow = useCallback(async () => {
+    if (!doc || !altFontBytes || altCodepoints.size === 0) return;
+    setReplaceBusy(true);
+    try {
+      const glyphs = await renderArabicGlyphsFromFont(altFontBytes, measureFontCellMetrics(doc), undefined, [...altCodepoints]);
+      const { doc: replaced, previousGlyphIndex } = replaceGlyphsInXgfn(doc, glyphs);
+      setDoc(replaced);
+      setOriginalBytes(null);
+      setRoundTrip(null);
+      setAuditReport(null);
+      setArabicMerged(true);
+      lastReplaceRef.current = previousGlyphIndex;
+      setReplaceStatus({ ok: true, message: `استُبدل ${glyphs.length} شكلاً من ${altFontName} — انظر المعاينة والأطلس أدناه ✅` });
+    } catch (err) {
+      console.error(err);
+      setReplaceStatus({ ok: false, message: (err as Error).message });
+    } finally {
+      setReplaceBusy(false);
+    }
+  }, [doc, altFontBytes, altCodepoints, altFontName]);
+
+  const handleRevertReplace = useCallback(() => {
+    if (!doc || !lastReplaceRef.current) return;
+    try {
+      let cur = doc;
+      for (const [charCode, oldGlyphIndex] of lastReplaceRef.current) {
+        cur = remapCharmapPair(cur, charCode, oldGlyphIndex).doc;
+      }
+      setDoc(cur);
+      setAuditReport(null);
+      lastReplaceRef.current = null;
+      setReplaceStatus({ ok: true, message: "أُرجع الحرف السابق ✅" });
+    } catch (err) {
+      setReplaceStatus({ ok: false, message: (err as Error).message });
+    }
+  }, [doc]);
 
   const handleInjectAndDownload = useCallback(() => {
     if (!doc || !pakBytes || !pakHeader || !pakTree || !selectedPath) return;
@@ -1155,6 +1201,29 @@ const RisenFonts = () => {
                 </Button>
               </div>
               {altFontControls}
+
+              {arabicMerged && altOverride && (
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <Button onClick={handleReplaceNow} disabled={replaceBusy} variant="outline" className="font-display gap-2">
+                    {replaceBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    استبدال الآن
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    يستبدل فقط أشكال الحروف المكتوبة في الخط المفتوح حالياً — يظهر أثره فوراً في المعاينة والأطلس أدناه، بلا إعادة توليد كاملة
+                  </span>
+                  {lastReplaceRef.current && (
+                    <Button onClick={handleRevertReplace} variant="ghost" size="sm" className="font-display gap-1 text-destructive">
+                      <RotateCcw className="w-3.5 h-3.5" /> استرجاع الحرف السابق
+                    </Button>
+                  )}
+                </div>
+              )}
+              {replaceStatus && (
+                <div className={`rounded p-2 text-xs flex items-center gap-2 ${replaceStatus.ok ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}>
+                  {replaceStatus.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+                  {replaceStatus.message}
+                </div>
+              )}
 
               {arabicMerged && (
                 pakBytes && selectedPath ? (

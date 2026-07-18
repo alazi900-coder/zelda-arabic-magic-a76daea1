@@ -6,6 +6,7 @@ import { stripBidiMarkers } from "@/lib/arabic-processing";
 import { EditorState, hasTechnicalTags } from "@/components/editor/types";
 import { BuildPreview } from "@/components/editor/BuildConfirmDialog";
 import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 
@@ -763,10 +764,31 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
 
         let finalTagRepairCount = 0;
         let finalTagRevertCount = 0;
+        let finalFormatSpecIssueCount = 0;
         for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
           if (previouslyBuiltKeys.has(key)) continue;
           const orig = entryOriginals.get(key);
           if (!orig) continue;
+
+          // Format specifiers (%s/%d/%i/%f) are the one tag type where ORDER
+          // (not just presence) must survive Arabic processing — the engine
+          // substitutes runtime values into them in stored-string order, so a
+          // reversal-induced swap silently puts the wrong value in the wrong
+          // slot. Warn-only (like the control/PUA check below): the Deep
+          // Diagnostic panel already offers a one-click "restore original"
+          // fix for this exact issue before build, so this is a last-resort
+          // net, not a silent auto-revert that could itself false-positive.
+          const specDiff = diffFormatSpecifiers(orig, trans);
+          if (specDiff.missing.length > 0 || specDiff.extra.length > 0 || specDiff.reordered) {
+            finalFormatSpecIssueCount++;
+            repairLog.push({
+              key, label: entryLabels.get(key) || key, action: 'repaired',
+              reason: specDiff.reordered
+                ? '⚠️ معاملات الصيغة (%s/%d) معكوسة الترتيب — راجعها قبل الاعتماد على هذا البناء'
+                : '⚠️ معامل صيغة (%s/%d) مفقود أو زائد — راجعها قبل الاعتماد على هذا البناء',
+              missingControl: 0, missingPua: 0,
+            });
+          }
 
           // After Arabic processing (reshaping + BiDi), only control chars (U+FFF9-FFFC)
           // and PUA chars (U+E000-E0FF) survive unchanged. Bracket tags like [Tag:Value]
@@ -802,14 +824,15 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           }
         }
 
-        if (finalTagRepairCount > 0 || finalTagRevertCount > 0) {
-          // Update safety report with any new reverts
-          if (finalTagRevertCount > 0) setSafetyRepairs([...repairLog]);
+        if (finalTagRepairCount > 0 || finalTagRevertCount > 0 || finalFormatSpecIssueCount > 0) {
+          // Update safety report with any new reverts/warnings
+          if (finalTagRevertCount > 0 || finalFormatSpecIssueCount > 0) setSafetyRepairs([...repairLog]);
           const parts: string[] = [];
           if (finalTagRepairCount > 0) parts.push(`🏷️ إصلاح ${finalTagRepairCount} نص (وسوم + متغيرات $N)`);
           if (finalTagRevertCount > 0) parts.push(`↩️ استعادة ${finalTagRevertCount} نص أصلي (وسوم غير قابلة للإصلاح)`);
+          if (finalFormatSpecIssueCount > 0) parts.push(`🧮 ${finalFormatSpecIssueCount} نص بمعاملات صيغة (%s/%d) مفقودة/معكوسة — راجعها`);
           setBuildProgress(`${parts.join(' | ')} قبل حقن ترجمات BDAT...`);
-          if (finalTagRevertCount > 0) setShowSafetyReport(true);
+          if (finalTagRevertCount > 0 || finalFormatSpecIssueCount > 0) setShowSafetyReport(true);
           await yieldToUI();
         }
 

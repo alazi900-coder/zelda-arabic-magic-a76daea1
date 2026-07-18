@@ -12,8 +12,10 @@
 //   - Duration template:   "MM minutes, HH hours, DD days" — MM/HH/DD are
 //     only tags in that exact context; matched via lookahead on the unit
 //     word so ordinary dialogue never false-positives.
+//   - Printf-style specifiers: %s, %d, %i, %f, %1$s, %.2f — same pattern
+//     the local (no-AI) tag-extractor report recognizes as "percent_vars".
 export const RISEN_TAG_REGEX =
-  /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|\b(?:XXX|SGN|SGT|SGPT|SGL)\b|\bMM\b(?=\s*minutes)|\bHH\b(?=\s*hours)|\bDD\b(?=\s*days)/g;
+  /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|\b(?:XXX|SGN|SGT|SGPT|SGL)\b|\bMM\b(?=\s*minutes)|\bHH\b(?=\s*hours)|\bDD\b(?=\s*days)|%[\d.$-]*[sdif]/g;
 
 export function extractRisenTags(text: string): string[] {
   return [...(text || "").matchAll(new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags))].map((m) => m[0]);

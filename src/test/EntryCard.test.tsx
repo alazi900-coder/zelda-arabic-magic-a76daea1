@@ -82,4 +82,13 @@ describe("EntryCard", () => {
     );
     expect(translateBtn).toBeTruthy();
   });
+
+  it("highlights a %s format specifier in the original text with its own distinct color and title", () => {
+    const entry: ExtractedEntry = { ...mockEntry, original: "You have %s items" };
+    render(<EntryCard {...defaultProps} entry={entry} />);
+    const span = screen.getByText("%s");
+    expect(span).toBeInTheDocument();
+    expect(span.className).toContain("fuchsia");
+    expect(span.getAttribute("title")).toContain("معامل صيغة");
+  });
 });

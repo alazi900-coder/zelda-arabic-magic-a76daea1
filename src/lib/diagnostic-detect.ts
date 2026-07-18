@@ -16,6 +16,7 @@
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
+import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -413,6 +414,29 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       issues.push({
         ...base, severity: "critical", category: "risen_tag_mismatch",
         message: parts.join(" — ") || "وسوم Risen لا تطابق الأصل",
+      });
+    }
+  }
+
+  // 25. Printf-style format specifiers (%s/%d/%i/%f) — missing, extra, or
+  // reordered. Order matters uniquely for these (each fills a specific
+  // runtime value slot), so this checks sequence, not just presence, unlike
+  // the multiset-only checks above. Game-agnostic — applies to both Xenoblade
+  // and Risen strings alike.
+  if (extractFormatSpecifiers(entry.original).length > 0 || extractFormatSpecifiers(trimmed).length > 0) {
+    const specDiff = diffFormatSpecifiers(entry.original, trimmed);
+    if (specDiff.missing.length > 0 || specDiff.extra.length > 0) {
+      const parts: string[] = [];
+      if (specDiff.missing.length > 0) parts.push(`مفقود: ${specDiff.missing.join("، ")}`);
+      if (specDiff.extra.length > 0) parts.push(`زائد: ${specDiff.extra.join("، ")}`);
+      issues.push({
+        ...base, severity: "critical", category: "format_specifier_mismatch",
+        message: parts.join(" — "),
+      });
+    } else if (specDiff.reordered) {
+      issues.push({
+        ...base, severity: "critical", category: "format_specifier_reordered",
+        message: "معاملات الصيغة (%s/%d) موجودة لكن ترتيبها معكوس — قد تظهر القيمة الخطأ في المكان الخطأ",
       });
     }
   }

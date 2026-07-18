@@ -29,6 +29,12 @@ describe("extractRisenTags / hasRisenTags", () => {
     expect(hasRisenTags("MM is a mysterious merchant")).toBe(false);
     expect(hasRisenTags("HH? What kind of name is that")).toBe(false);
   });
+
+  it("detects printf-style format specifiers %s/%d/%i/%f and compound forms", () => {
+    expect(extractRisenTags("You have %i gold and %s items")).toEqual(["%i", "%s"]);
+    expect(extractRisenTags("%1$s dealt %.2f damage")).toEqual(["%1$s", "%.2f"]);
+    expect(hasRisenTags("Welcome, %s")).toBe(true);
+  });
 });
 
 describe("diffRisenTags", () => {

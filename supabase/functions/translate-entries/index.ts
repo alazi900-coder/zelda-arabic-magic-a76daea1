@@ -303,6 +303,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     /[\uFFF9-\uFFFC]/g,                       // Unicode special markers
     /<[\w\/][^>]*>/g,                         // HTML-like tags
     ABBREV_PATTERN,                             // Game abbreviations
+    /%[\d.$-]*[sdif]/g,                       // Printf-style specifiers: %s, %d, %1$s, %.2f
   ];
 
   // Collect all matches. Risen tags go first so they win any overlap against

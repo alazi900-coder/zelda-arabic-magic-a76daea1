@@ -28,6 +28,7 @@ import {
 } from "./risen-p00";
 import { idbGet } from "./idb-storage";
 import { hasRisenTags, restoreRisenTags, extractRisenTags } from "./risen-tag-guard";
+import { extractFormatSpecifiers } from "./format-specifier-guard";
 import { shapeArabicForRisen } from "./risen/arabic-shaper";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
@@ -254,7 +255,14 @@ export async function buildRisenOutputFromState(
       const beforeTags = extractRisenTags(value).slice().sort();
       const shapedValue = shapeArabicForRisen(value);
       const afterTags = extractRisenTags(shapedValue).slice().sort();
-      if (beforeTags.join(' ') !== afterTags.join(' ')) {
+      // Format specifiers (%s/%d/%i/%f) are the one tag type where ORDER
+      // itself must survive shaping unchanged: the engine substitutes
+      // runtime values into them in stored-string order, so a
+      // reversal-induced swap (unlike a harmless <Tag> reorder) silently
+      // puts the wrong value in the wrong slot instead of just reading
+      // right-to-left differently.
+      const specOrderOk = extractFormatSpecifiers(value).join('') === extractFormatSpecifiers(shapedValue).join('');
+      if (beforeTags.join(' ') !== afterTags.join(' ') || !specOrderOk) {
         console.warn(`[risen-build] Arabic shaping altered protected tags for key ${key} — keeping unshaped value`);
       } else {
         value = shapedValue;

@@ -298,3 +298,27 @@ describe("getPresentationFormsForLetter — alternate-font override expansion", 
     expect(getPresentationFormsForLetter(0x061f)).toEqual([0x061f]);
   });
 });
+
+describe("shapeArabicForRisen — printf-style format specifiers survive shaping/reversal intact", () => {
+  it('keeps "%s" as one intact token embedded in an Arabic sentence (the exact corruption risk: "%" and "s" landing in different bidi runs)', () => {
+    const result = shapeArabicForRisen("لديك %s قطعة");
+    expect(result).toContain("%s");
+  });
+
+  it("keeps %d and %i intact and distinguishable from each other in the same line", () => {
+    const result = shapeArabicForRisen("لديك %i ذهب و%d نقاط");
+    expect(result).toContain("%i");
+    expect(result).toContain("%d");
+  });
+
+  it("keeps a compound specifier %1$s intact", () => {
+    const result = shapeArabicForRisen("مرحباً %1$s كيف حالك");
+    expect(result).toContain("%1$s");
+  });
+
+  it("round-trip safety: only font-safe codepoints even with a format specifier present", () => {
+    const SAFE_RANGE = /^[\u0020-\u00FF\u0660-\u0669\uFE70-\uFEFF]*$/;
+    const result = shapeArabicForRisen("لديك %s قطعة").replace(/[\r\n]/g, "");
+    expect(SAFE_RANGE.test(result)).toBe(true);
+  });
+});

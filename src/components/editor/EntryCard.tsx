@@ -47,6 +47,10 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
   if (/^<[A-Za-z][A-Za-z0-9_]{0,30}>$/.test(tag) || /^\$\([A-Za-z0-9_]{1,30}\)$/.test(tag) || /^(?:XXX|SGN|SGT|SGPT|SGL|MM|HH|DD)$/.test(tag)) {
     return { label: tag, color: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25', title: 'وسم Risen — لا تحذفه ولا تترجمه' };
   }
+  // Printf-style format specifiers: %s, %d, %i, %f, %1$s, %.2f
+  if (/^%[\d.$-]*[sdif]$/.test(tag)) {
+    return { label: tag, color: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/25', title: 'معامل صيغة — لا تحذفه ولا تغيّر مكانه، يُستبدل برقم أو نص من اللعبة' };
+  }
   // Brace tags {key} or {key:value}
   if (/^\{/.test(tag)) {
     const inner = tag.slice(1, -1);

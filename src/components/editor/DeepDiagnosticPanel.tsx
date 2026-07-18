@@ -97,6 +97,8 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
   { id: "bare_tag_remnant", label: "بقايا وسوم تقنية كنص", icon: "🏚️", severity: "critical", description: "كلمات وسوم تقنية (FAT/XENO/System/ML/Event…) تسرّبت كنص ظاهر بدون أقواس [ ] — تظهر للاعب بدل الأيقونة/الأمر" },
   { id: "risen_tag_mismatch", label: "وسوم Risen ناقصة/زائدة", icon: "🏷️", severity: "critical", description: "وسم Risen (<Exit>، $(name)، XXX/SGN/SGT/SGPT/SGL) مفقود أو زائد مقارنة بالأصل — قد يكون تُرجم بالخطأ بدل الإبقاء عليه" },
+  { id: "format_specifier_mismatch", label: "معاملات صيغة (%s) ناقصة/زائدة", icon: "🧮", severity: "critical", description: "معامل صيغة (%s/%d/%i/%f) مفقود أو زائد مقارنة بالأصل — يسبب عرض قيمة خاطئة أو تجمّد" },
+  { id: "format_specifier_reordered", label: "معاملات صيغة (%s) معكوسة", icon: "🔃", severity: "critical", description: "نفس معاملات الصيغة موجودة لكن بترتيب معكوس — القيمة الخطأ قد تظهر في المكان الخطأ" },
 ];
 
 // Categories that belong to the NEW tag-remnant check — toggled by the
@@ -137,7 +139,7 @@ const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", 
 // Categories fixable by repairing $N variables
 const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
-const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars", "technical_mismatch"]);
+const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars", "technical_mismatch", "format_specifier_mismatch", "format_specifier_reordered"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]

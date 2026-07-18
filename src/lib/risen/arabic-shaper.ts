@@ -199,7 +199,12 @@ function shapeArabicLetters(text: string): string {
 
 // ─── Protected tokens (never reshaped, never internally reordered) ──────────
 
-const PROTECTED_TOKEN_REGEX = /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)/g;
+// %[\d.$-]*[sdif] matches printf-style specifiers (%s, %d, %1$s, %.2f) — the
+// same pattern the tag-extractor report already recognizes as "percent_vars".
+// Without shielding, "%" (neutral punctuation) and its following letter
+// (Latin) end up in DIFFERENT bidi runs and can land on opposite sides after
+// reverseShapedLine's run-reversal, splitting/corrupting the specifier.
+const PROTECTED_TOKEN_REGEX = /<[A-Za-z][A-Za-z0-9_]{0,30}>|\$\([A-Za-z0-9_]{1,30}\)|%[\d.$-]*[sdif]/g;
 /** Private-use placeholders distinct from Risen's own font's icon ranges. */
 const SHIELD_BASE = 0xE900;
 const SHIELD_MAX_SLOTS = 0x100;

@@ -301,11 +301,11 @@ describe("replaceGlyphsInXgfn (instant single-letter replace + undo)", () => {
 
   it("without reuseFromHeight, each replace grows the atlas further (the reported bug: repeated clicks require more and more scrolling)", () => {
     const doc = parseXgfn(loadFixture());
-    const h0 = decodeDdsToRgba(doc.ddsBytes).height;
+    const h0 = (decodeDdsToRgba(doc.ddsBytes) as { height: number }).height;
     const step1 = replaceGlyphsInXgfn(doc, [makeGlyph(0x30, 4, 4, 6)]);
-    const h1 = decodeDdsToRgba(step1.doc.ddsBytes).height;
+    const h1 = (decodeDdsToRgba(step1.doc.ddsBytes) as { height: number }).height;
     const step2 = replaceGlyphsInXgfn(step1.doc, [makeGlyph(0x31, 4, 4, 6)]);
-    const h2 = decodeDdsToRgba(step2.doc.ddsBytes).height;
+    const h2 = (decodeDdsToRgba(step2.doc.ddsBytes) as { height: number }).height;
     expect(h1).toBeGreaterThanOrEqual(h0);
     expect(h2).toBeGreaterThan(h1); // grows again on the second, unrelated-letter replace
   });
@@ -313,10 +313,10 @@ describe("replaceGlyphsInXgfn (instant single-letter replace + undo)", () => {
   it("reuseFromHeight reclaims a prior (now-orphaned) region instead of growing the atlas further", () => {
     const doc = parseXgfn(loadFixture());
     const step1 = replaceGlyphsInXgfn(doc, [makeGlyph(0x30, 4, 4, 6)]);
-    const h1 = decodeDdsToRgba(step1.doc.ddsBytes).height;
+    const h1 = (decodeDdsToRgba(step1.doc.ddsBytes) as { height: number }).height;
     // Different codepoint (0x31), reclaiming step1's now-orphaned region.
     const step2 = replaceGlyphsInXgfn(step1.doc, [makeGlyph(0x31, 4, 4, 6)], step1.appendedRegion.y);
-    const h2 = decodeDdsToRgba(step2.doc.ddsBytes).height;
+    const h2 = (decodeDdsToRgba(step2.doc.ddsBytes) as { height: number }).height;
     expect(h2).toBeLessThanOrEqual(h1); // no further growth — space was reclaimed, not appended past it
     expect(step2.report.errorCount).toBe(0);
     expect(step2.doc.charmap.find((p) => p.charCode === 0x31)!.glyphIndex).toBeDefined();

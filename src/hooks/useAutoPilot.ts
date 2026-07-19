@@ -52,7 +52,7 @@ interface UseAutoPilotProps {
   translationProvider: string;
   userGeminiKey: string;
   userDeepSeekKey: string;
-  userTokenRouterKey: string;
+  userTokenRouterKey?: string;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;

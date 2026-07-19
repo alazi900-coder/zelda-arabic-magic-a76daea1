@@ -56,7 +56,7 @@ const CATEGORY_META: Record<
   percent_vars: { label: "محددات تنسيق %s %d", emoji: "📐", tone: "text-teal-400" },
 };
 
-const ALL_CATEGORIES = Object.keys(CATEGORY_META);
+const ALL_CATEGORIES = Object.keys(CATEGORY_META) as Category[];
 
 export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupToolsPanelProps) {
   const [open, setOpen] = useState(false);

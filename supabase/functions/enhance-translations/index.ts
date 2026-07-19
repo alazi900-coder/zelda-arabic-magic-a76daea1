@@ -398,11 +398,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { entries, mode, glossary, aiModel, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions, learnedFeedback, routingMode, userGeminiKey } = await req.json() as {
+    const { entries, mode, glossary, aiModel, provider, providerApiKey, thinkingMode, enabledRules, customRules, builtinOverrides, passes, game, extraInstructions, learnedFeedback, routingMode, userGeminiKey } = await req.json() as {
       entries: EnhanceEntry[];
       mode?: 'enhance' | 'grammar' | 'combined';
       glossary?: string;
       aiModel?: string;
+      provider?: 'gemini' | 'deepseek' | 'tokenrouter' | string;
       providerApiKey?: string;
       thinkingMode?: 'enabled' | 'disabled';
       enabledRules?: string[];
@@ -421,7 +422,7 @@ Deno.serve(async (req) => {
       userGeminiKey?: string;
     };
     const normalizedRouting: 'free' | 'paid' | 'auto' =
-      routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'paid';
+      routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
 
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const gameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
@@ -504,10 +505,10 @@ Deno.serve(async (req) => {
       'deepseek-chat': 'deepseek-v4-flash',
       'deepseek-reasoner': 'deepseek-v4-pro',
     };
-    const isDeepSeek = !!aiModel && aiModel in DEEPSEEK_NAME_MAP;
-    const isTokenRouter = aiModel === 'tokenrouter-glm-5.2';
+    const isDeepSeek = provider === 'deepseek' || (!!aiModel && aiModel in DEEPSEEK_NAME_MAP);
+    const isTokenRouter = provider === 'tokenrouter' || aiModel === 'tokenrouter-glm-5.2';
     const resolvedModel = isDeepSeek
-      ? DEEPSEEK_NAME_MAP[aiModel as string]
+      ? (aiModel && DEEPSEEK_NAME_MAP[aiModel]) || 'deepseek-v4-flash'
       : isTokenRouter
       ? 'z-ai/glm-5.2-free'
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
@@ -549,7 +550,7 @@ Deno.serve(async (req) => {
     }
     if (!useGeminiDirect && !isDeepSeek && !isTokenRouter && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    console.log('[enhance] request', { mode: mode || 'enhance', model: resolvedModel, isDeepSeek, isTokenRouter, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
+    console.log('[enhance] request', { mode: mode || 'enhance', provider: provider || 'auto', model: resolvedModel, isDeepSeek, isTokenRouter, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
 
     // يُرفَع لـ true إن اضطُررنا للتحويل من DeepSeek إلى Gemini بسبب فشل مؤقّت —
     // نُضمّنه في الردّ النهائي (_meta.providerFallback) ليعرف المستخدم أنّ
@@ -628,15 +629,7 @@ Deno.serve(async (req) => {
             }),
           });
         } catch (networkErr) {
-          if (!LOVABLE_API_KEY || !allowLovableFallback) throw networkErr;
-          console.warn('[enhance] DeepSeek network error — falling back to Gemini:', networkErr);
-          usedProviderFallback = true;
-          return await callGemini(messages);
-        }
-        if (!dsResponse.ok && FALLBACK_STATUSES.has(dsResponse.status) && LOVABLE_API_KEY && allowLovableFallback) {
-          console.warn(`[enhance] DeepSeek HTTP ${dsResponse.status} — falling back to Gemini`);
-          usedProviderFallback = true;
-          return await callGemini(messages);
+          throw networkErr;
         }
         return dsResponse;
       }

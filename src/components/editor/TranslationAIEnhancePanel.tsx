@@ -44,6 +44,12 @@ interface TranslationAIEnhancePanelProps {
   /** Extra prompt instructions — the active filter card's dedicated prompt, or the general one. */
   extraInstructions?: string;
   risenVariant: 'risen1' | 'risen2';
+  translationProvider?: string;
+  aiModel?: string;
+  userGeminiKey?: string;
+  userDeepSeekKey?: string;
+  userTokenRouterKey?: string;
+  aiRoutingMode?: 'free' | 'paid' | 'auto';
 }
 
 interface EnhanceSuggestion {
@@ -95,6 +101,7 @@ interface ModelOption { value: string; label: string; group: "google" | "openai"
 
 const MODEL_OPTIONS: ModelOption[] = [
   { value: "google-translate-check", label: "Google Translate — فحص دقة (مجاني)", group: "free" },
+  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash (مفتاح مجاني)", group: "google" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview (سريع — مُوصى)", group: "google" },
   { value: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview (دقة عالية)", group: "google" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (متوازن)", group: "google" },
@@ -112,6 +119,22 @@ const GOOGLE_CHECK_CONCURRENCY = 3;
 // Rule 1 thresholds: words present but order broken.
 const GOOGLE_PRESENCE_THRESHOLD = 0.7;
 const GOOGLE_ORDER_THRESHOLD = 0.4;
+
+function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | null {
+  if (model.startsWith("deepseek")) return "deepseek";
+  if (model.startsWith("tokenrouter")) return "tokenrouter";
+  return null;
+}
+
+function resolveEnhanceModelForProvider(provider: string | null | undefined, currentModel: string | null | undefined): string {
+  if (provider === "tokenrouter") return "tokenrouter-glm-5.2";
+  if (provider === "deepseek") return currentModel?.startsWith("deepseek") ? currentModel : "deepseek-v4-flash";
+  return currentModel || "gemini-2.5-flash";
+}
+
+function readLocalStorage(key: string): string {
+  try { return localStorage.getItem(key) || ""; } catch { return ""; }
+}
 
 // Tag patterns reused from local-enhance-scanner so Google check can detect
 // translations that dropped technical markers from the original English.
@@ -207,6 +230,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   glossary,
   extraInstructions,
   risenVariant,
+  translationProvider,
+  aiModel,
+  userGeminiKey: userGeminiKeyProp,
+  userDeepSeekKey: userDeepSeekKeyProp,
+  userTokenRouterKey: userTokenRouterKeyProp,
+  aiRoutingMode: aiRoutingModeProp,
 }) => {
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
@@ -224,16 +253,20 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [scope, setScope] = useState<Scope>("all");
   const [model, setModel] = useState<string>(() => {
     try {
+      const provider = translationProvider || localStorage.getItem('translationProvider') || 'gemini';
+      const globalModel = aiModel || localStorage.getItem('aiModel') || '';
+      const providerModel = resolveEnhanceModelForProvider(provider, globalModel);
+      if (providerModel) return providerModel;
       const saved = localStorage.getItem('enhanceAiModel');
       if (saved) return saved;
-      // Fallback: honor the global translation model so users don't get
-      // silently routed to Lovable Gateway when they already picked GLM/DeepSeek
-      // for translation and expect the same engine here.
-      const globalModel = localStorage.getItem('aiModel');
-      if (globalModel) return globalModel;
     } catch { /* ignore */ }
-    return "gemini-3-flash-preview";
+    return "gemini-2.5-flash";
   });
+  useEffect(() => {
+    const provider = translationProvider || readLocalStorage('translationProvider') || 'gemini';
+    const providerModel = resolveEnhanceModelForProvider(provider, aiModel || readLocalStorage('aiModel'));
+    if (providerModel) setModel(providerModel);
+  }, [translationProvider, aiModel]);
   useEffect(() => {
     try { localStorage.setItem('enhanceAiModel', model); } catch { /* ignore */ }
   }, [model]);
@@ -551,27 +584,23 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       }
     };
 
+    const currentProvider = translationProvider || readLocalStorage('translationProvider') || 'gemini';
+    const modelProvider = inferProviderFromModel(model);
+    const effectiveProvider = modelProvider || currentProvider;
+    const requestModel = resolveEnhanceModelForProvider(effectiveProvider, model);
     // مفتاح DeepSeek مخزَّن في إعدادات المحرّر؛ نمرّره للدالّة عند اختيار نموذج DeepSeek.
-    const deepseekKey = (() => {
-      try { return localStorage.getItem('userDeepSeekKey') || ''; } catch { return ''; }
-    })();
+    const deepseekKey = userDeepSeekKeyProp || readLocalStorage('userDeepSeekKey');
     // مفتاح TokenRouter مخزَّن في إعدادات المحرّر؛ نمرّره عند اختيار نموذج TokenRouter.
-    const tokenRouterKey = (() => {
-      try { return localStorage.getItem('userTokenRouterKey') || ''; } catch { return ''; }
-    })();
+    const tokenRouterKey = userTokenRouterKeyProp || readLocalStorage('userTokenRouterKey');
     // مفتاح Gemini الشخصي + وضع التوجيه (مجاني/مدفوع/تلقائي) — نفس المفاتيح المستخدمة
     // في translate-entries حتى تعمل أداة التحسين مع الوضع المجاني عبر Gemini المباشر.
-    const userGeminiKey = (() => {
-      try { return localStorage.getItem('userGeminiKey') || ''; } catch { return ''; }
-    })();
+    const userGeminiKey = userGeminiKeyProp || readLocalStorage('userGeminiKey');
     const aiRoutingMode = (() => {
-      try {
-        const v = localStorage.getItem('aiRoutingMode');
-        return v === 'free' || v === 'paid' || v === 'auto' ? v : 'paid';
-      } catch { return 'paid'; }
+      const v = aiRoutingModeProp || readLocalStorage('aiRoutingMode');
+      return v === 'free' || v === 'paid' || v === 'auto' ? v : 'auto';
     })() as 'free' | 'paid' | 'auto';
-    const providerApiKey = model.startsWith('deepseek') ? (deepseekKey || undefined)
-      : model.startsWith('tokenrouter') ? (tokenRouterKey || undefined)
+    const providerApiKey = effectiveProvider === 'deepseek' ? (deepseekKey || undefined)
+      : effectiveProvider === 'tokenrouter' ? (tokenRouterKey || undefined)
       : undefined;
 
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب
@@ -580,7 +609,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
     // توقيع سياق الفحص — أي تغيير فيه (موديل/وضع/قواعد/تعليمات) يُبطل الكاش تلقائياً.
     const cacheContextSignature = [
-      mode, model,
+      mode, requestModel, effectiveProvider, aiRoutingMode,
       Array.from(currentEnabledRules).sort().join(","),
       JSON.stringify(currentCustomRules),
       JSON.stringify(currentBuiltinOverrides),
@@ -645,9 +674,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               entries: textsToAnalyze,
               mode,
               glossary, // إرسال القاموس كاملاً — الـ edge function يفرز ويقطع بذكاء
-              aiModel: model,
+              provider: effectiveProvider,
+              aiModel: requestModel,
               providerApiKey,
-              thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
+              thinkingMode: requestModel.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
               enabledRules: Array.from(currentEnabledRules),
               customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
               builtinOverrides: currentBuiltinOverrides,
@@ -694,7 +724,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
               const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, aiModel: model, providerApiKey, thinkingMode: model.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? risenVariant : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined, routingMode: aiRoutingMode, userGeminiKey: userGeminiKey || undefined },
+                body: { entries: textsToAnalyze, mode, glossary, provider: effectiveProvider, aiModel: requestModel, providerApiKey, thinkingMode: requestModel.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? risenVariant : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined, routingMode: aiRoutingMode, userGeminiKey: userGeminiKey || undefined },
                 signal: abortSignal,
               });
               if (retryError) throw retryError;

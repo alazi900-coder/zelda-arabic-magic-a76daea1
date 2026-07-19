@@ -469,6 +469,12 @@ const Editor = () => {
               glossary={editor.activeGlossary}
               extraInstructions={effectiveExtraInstructions}
               risenVariant={editor.risenVariant}
+              translationProvider={editor.translationProvider}
+              aiModel={editor.aiModel}
+              userGeminiKey={editor.userGeminiKey}
+              userDeepSeekKey={editor.userDeepSeekKey}
+              userTokenRouterKey={editor.userTokenRouterKey}
+              aiRoutingMode={editor.aiRoutingMode}
             />
           )}
 

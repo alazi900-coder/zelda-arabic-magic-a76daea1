@@ -1302,7 +1302,7 @@ export function useEditorState() {
   // === Review (extracted to useEditorReview) ===
   const review = useEditorReview({
     state, setState, setTranslateProgress, setLastSaved, setPreviousTranslations,
-    filteredEntries, activeGlossary, aiModel, risenVariant,
+    filteredEntries, activeGlossary, aiModel, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, aiRoutingMode, risenVariant,
     setReviewing, setReviewResults, setSuggestingShort, setShortSuggestions,
     setImprovingTranslations, setImproveResults, setFixingMixed,
     setCheckingConsistency, setConsistencyResults,

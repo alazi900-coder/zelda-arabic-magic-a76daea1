@@ -56,6 +56,11 @@ interface UseEditorReviewParams {
   filteredEntries: ExtractedEntry[];
   activeGlossary: string;
   aiModel: string;
+  translationProvider?: string;
+  userGeminiKey?: string;
+  userDeepSeekKey?: string;
+  userTokenRouterKey?: string;
+  aiRoutingMode?: 'free' | 'paid' | 'auto';
   /** Which Risen game the loaded entries belong to (manually chosen on /risen/process) — picks the right game's AI prompt lore. No effect for non-Risen sessions. */
   risenVariant?: 'risen1' | 'risen2';
   // Scan result setters from useEditorScanResults
@@ -107,7 +112,7 @@ interface UseEditorReviewParams {
 export function useEditorReview(params: UseEditorReviewParams) {
   const {
     state, setState, setTranslateProgress, setLastSaved, setPreviousTranslations,
-    filteredEntries, activeGlossary, aiModel, risenVariant,
+    filteredEntries, activeGlossary, aiModel, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, aiRoutingMode, risenVariant,
     setReviewing, setReviewResults, setSuggestingShort, setShortSuggestions,
     setImprovingTranslations, setImproveResults, setFixingMixed,
     setCheckingConsistency, setConsistencyResults,
@@ -128,6 +133,26 @@ export function useEditorReview(params: UseEditorReviewParams) {
   // function below so it can mask/unmask Risen's own tags (<Exit>, $(name), ...)
   // around the model call instead of exposing them to it directly.
   const isRisen = /\.tab$/i.test(state?.entries?.[0]?.msbtFile || '');
+
+  const buildProviderPayload = () => {
+    const provider = translationProvider || 'gemini';
+    const requestModel = provider === 'tokenrouter'
+      ? 'tokenrouter-glm-5.2'
+      : provider === 'deepseek'
+      ? (aiModel.startsWith('deepseek') ? aiModel : 'deepseek-v4-flash')
+      : aiModel;
+    return {
+      provider,
+      aiModel: requestModel,
+      providerApiKey: provider === 'deepseek'
+        ? (userDeepSeekKey || undefined)
+        : provider === 'tokenrouter'
+        ? (userTokenRouterKey || undefined)
+        : undefined,
+      userGeminiKey: userGeminiKey || undefined,
+      routingMode: aiRoutingMode || 'auto',
+    };
+  };
 
   // === Review handlers ===
   const handleReviewTranslations = async () => {
@@ -543,7 +568,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("enhance-translations"), {
         method: 'POST',
         headers: { ...getSupabaseHeaders() },
-        body: JSON.stringify({ entries: translatedEntries, action: 'analyze', glossary: activeGlossary?.split('\n').slice(0, 200).join('\n'), aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: translatedEntries, action: 'analyze', glossary: activeGlossary?.split('\n').slice(0, 200).join('\n'), ...buildProviderPayload(), game: isRisen ? risenVariant : 'xenoblade' }),
       });
       if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.error || `خطأ ${response.status}`); }
       const data = await response.json();

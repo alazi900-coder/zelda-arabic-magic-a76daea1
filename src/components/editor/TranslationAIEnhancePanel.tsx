@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -222,7 +222,21 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [processedCount, setProcessedCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [scope, setScope] = useState<Scope>("all");
-  const [model, setModel] = useState<string>("gemini-3-flash-preview");
+  const [model, setModel] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('enhanceAiModel');
+      if (saved) return saved;
+      // Fallback: honor the global translation model so users don't get
+      // silently routed to Lovable Gateway when they already picked GLM/DeepSeek
+      // for translation and expect the same engine here.
+      const globalModel = localStorage.getItem('aiModel');
+      if (globalModel) return globalModel;
+    } catch { /* ignore */ }
+    return "gemini-3-flash-preview";
+  });
+  useEffect(() => {
+    try { localStorage.setItem('enhanceAiModel', model); } catch { /* ignore */ }
+  }, [model]);
   const [showDiff, setShowDiff] = useState(true);
   const [diffMode, setDiffMode] = useState<"word" | "sentence">("word");
   const [editingKey, setEditingKey] = useState<string | null>(null);

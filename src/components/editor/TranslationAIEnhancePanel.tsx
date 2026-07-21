@@ -89,10 +89,11 @@ type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
 // انتباه أعلى للـ AI لكل ترجمة — دفعات أصغر تقلّل تخطّي المشاكل.
 const BATCH_SIZE = 25;
-// GLM-5.2-free عبر TokenRouter بطيء وسياقه أضيق — دفعات أصغر وطلبات متوازية أقل
-// تمنع تعليق الطلبات وظهور "بحث بلا نتيجة".
-const TOKENROUTER_BATCH_SIZE = 8;
+// GLM-5.2-free عبر TokenRouter بطيء وسياقه أضيق — دفعات صغيرة جداً وطلب واحد فقط
+// حتى لا تبقى أداة الفحص على "جاري الفحص" بلا نتائج.
+const TOKENROUTER_BATCH_SIZE = 2;
 const TOKENROUTER_PARALLEL = 1;
+const TOKENROUTER_CLIENT_TIMEOUT_MS = 85_000;
 const PARALLEL_REQUESTS = 3;
 // عدد المرورات الداخلية على كل دفعة (تُنفَّذ بالتوازي داخل الـ edge function)
 // لزيادة شموليّة الكشف بدون الحاجة لإعادة الفحص يدويّاً.
@@ -249,6 +250,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>([]);
   const [activeTab, setActiveTab] = useState<string>("enhance");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<GrammarCategory | null>(null);
@@ -376,6 +378,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
     setIsAnalyzing(true);
     setLastError(null); // امسح خطأ التشغيل السابق عند بدء تشغيل جديد.
+    setStatusMessage(null);
     // الفحص الشامل يملأ كلا التبويبين — ابدأ بتبويب القواعد لأنّ الأخطاء الجوهريّة أولويّة.
     setActiveTab(mode === "combined" ? "grammar" : mode);
     abortRef.current = false;
@@ -518,6 +521,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     let allSuggestions: EnhanceSuggestion[] = [];
     let allIssues: GrammarIssue[] = [];
     let processed = 0;
+    let encounteredError = false;
     // نصوص فشل الخادم فعلياً بتحليل ردّ الـAI الخاص بها (رد مبتور/غير صالح) —
     // لا تُعلَّم كـ"مفحوصة" فتبقى مؤهّلة تلقائياً للفحص القادم بدل ضياعها بصمت.
     const failedKeysTotal = new Set<string>();
@@ -670,40 +674,77 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       }));
     };
 
+    const buildRequestBody = (textsToAnalyze: { key: string; original: string; translation: string; category?: string }[]) => ({
+      entries: textsToAnalyze,
+      mode,
+      glossary, // إرسال القاموس كاملاً — الـ edge function يفرز ويقطع بذكاء
+      provider: effectiveProvider,
+      aiModel: requestModel,
+      providerApiKey,
+      thinkingMode: requestModel.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
+      enabledRules: Array.from(currentEnabledRules),
+      customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
+      builtinOverrides: currentBuiltinOverrides,
+      passes: SCAN_PASSES,
+      game: isRisen ? risenVariant : "xenoblade",
+      extraInstructions: extraInstructions?.trim() || undefined,
+      learnedFeedback: learnedFeedback || undefined,
+      routingMode: aiRoutingMode,
+      userGeminiKey: userGeminiKey || undefined,
+    });
+
+    const invokeEnhance = async (textsToAnalyze: { key: string; original: string; translation: string; category?: string }[]) => {
+      if (!isTokenRouterActive) {
+        return supabase.functions.invoke('enhance-translations', {
+          body: buildRequestBody(textsToAnalyze),
+          signal: abortSignal,
+        });
+      }
+
+      const timeoutController = new AbortController();
+      let didTimeout = false;
+      const onAbort = () => timeoutController.abort();
+      const timeoutId = window.setTimeout(() => {
+        didTimeout = true;
+        timeoutController.abort();
+      }, TOKENROUTER_CLIENT_TIMEOUT_MS);
+      abortSignal.addEventListener('abort', onAbort, { once: true });
+
+      try {
+        return await supabase.functions.invoke('enhance-translations', {
+          body: buildRequestBody(textsToAnalyze),
+          signal: timeoutController.signal,
+        });
+      } catch (err) {
+        if (didTimeout) {
+          throw new Error(`انتهت مهلة GLM/TokenRouter بعد ${Math.round(TOKENROUTER_CLIENT_TIMEOUT_MS / 1000)} ثانية — قلّلت الأداة حجم الدفعات إلى نصّين، جرّب مرة أخرى أو افحص نطاقاً أصغر`);
+        }
+        throw err;
+      } finally {
+        window.clearTimeout(timeoutId);
+        abortSignal.removeEventListener('abort', onAbort);
+      }
+    };
+
     for (let i = 0; i < batches.length; i += effectiveParallel) {
       if (abortRef.current) break;
 
       const chunk = batches.slice(i, i + effectiveParallel);
       const promises = chunk.map(async ({ textsToAnalyze }) => {
         try {
-          const { data, error } = await supabase.functions.invoke('enhance-translations', {
-            body: {
-              entries: textsToAnalyze,
-              mode,
-              glossary, // إرسال القاموس كاملاً — الـ edge function يفرز ويقطع بذكاء
-              provider: effectiveProvider,
-              aiModel: requestModel,
-              providerApiKey,
-              thinkingMode: requestModel.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined,
-              enabledRules: Array.from(currentEnabledRules),
-              customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
-              builtinOverrides: currentBuiltinOverrides,
-              passes: SCAN_PASSES,
-              game: isRisen ? risenVariant : "xenoblade",
-              extraInstructions: extraInstructions?.trim() || undefined,
-              learnedFeedback: learnedFeedback || undefined,
-              routingMode: aiRoutingMode,
-              userGeminiKey: userGeminiKey || undefined,
-
-            },
-            signal: abortSignal,
-          });
+          if (isTokenRouterActive) {
+            const batchNumber = Math.floor(i / effectiveParallel) + 1;
+            const batchTotal = Math.ceil(batches.length / effectiveParallel);
+            setStatusMessage(`GLM يفحص الدفعة ${batchNumber} من ${batchTotal} (${textsToAnalyze.length} نص)`);
+          }
+          const { data, error } = await invokeEnhance(textsToAnalyze);
           if (error) throw error;
           if (data?.error) {
             // أظهر الخطأ في الأداة وفي toast لضمان رؤيته (الـ toast قد يُفوت).
+            encounteredError = true;
             setLastError(data.error);
             toast({ title: data.error, variant: "destructive" });
-            return { data: null, count: textsToAnalyze.length };
+            return { data: null, count: 0 };
           }
           if (data?._meta?.providerFallback && !fallbackNoticeShownRef.current) {
             fallbackNoticeShownRef.current = true;
@@ -730,15 +771,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             await new Promise(r => setTimeout(r, 5000));
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
-              const { data, error: retryError } = await supabase.functions.invoke('enhance-translations', {
-                body: { entries: textsToAnalyze, mode, glossary, provider: effectiveProvider, aiModel: requestModel, providerApiKey, thinkingMode: requestModel.startsWith('deepseek') ? (deepSeekThinking ? 'enabled' : 'disabled') : undefined, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })), builtinOverrides: currentBuiltinOverrides, passes: SCAN_PASSES, game: isRisen ? risenVariant : "xenoblade", extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined, routingMode: aiRoutingMode, userGeminiKey: userGeminiKey || undefined },
-                signal: abortSignal,
-              });
+              const { data, error: retryError } = await invokeEnhance(textsToAnalyze);
               if (retryError) throw retryError;
               if (data?.error) {
+                encounteredError = true;
                 setLastError(data.error);
                 toast({ title: data.error, variant: "destructive" });
-                return { data: null, count: textsToAnalyze.length };
+                return { data: null, count: 0 };
               }
               {
                 const failedKeys: string[] = Array.isArray(data?._meta?.failedKeys) ? data._meta.failedKeys : [];
@@ -754,8 +793,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               return { data, count: textsToAnalyze.length };
             } catch (retryErr) {
               const msg = `فشل بعد إعادة المحاولة: ${String(retryErr).slice(0, 200)}`;
+              encounteredError = true;
               setLastError(msg);
-              return { data: null, count: textsToAnalyze.length };
+              toast({ title: msg, variant: "destructive" });
+              return { data: null, count: 0 };
             }
           }
           // FunctionsHttpError يحوي Response كاملاً في .context — حاول استخراج
@@ -769,9 +810,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             }
           } catch { /* ignore body-read failures */ }
           const msg = `فشل الاتصال بـ enhance-translations: ${detail.slice(0, 400)}`;
+          encounteredError = true;
           setLastError(msg);
           toast({ title: msg, variant: "destructive" });
-          return { data: null, count: textsToAnalyze.length };
+          return { data: null, count: 0 };
         }
       });
 
@@ -787,6 +829,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
     setIsAnalyzing(false);
     setProgress(null);
+    setStatusMessage(null);
 
     const enhanceCount = allSuggestions.length;
     const grammarCount = allIssues.length;
@@ -794,6 +837,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const failedNote = failedKeysTotal.size > 0
       ? ` — تعذّر تحليل ${failedKeysTotal.size} نص (رد الذكاء الاصطناعي انقطع)، سيُعاد فحصها تلقائياً في المحاولة القادمة`
       : "";
+    if (encounteredError && total === 0 && !abortRef.current) {
+      return;
+    }
     if (total === 0 && !abortRef.current) {
       const emptyTitle = mode === "enhance" ? "✅ الترجمات جيدة" : mode === "grammar" ? "✅ لا توجد أخطاء" : "✅ الترجمات سليمة قواعديّاً وأسلوبيّاً";
       toast({ title: emptyTitle, description: failedNote || undefined });
@@ -810,6 +856,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     abortControllerRef.current?.abort();
     setIsAnalyzing(false);
     setProgress(null);
+    setStatusMessage(null);
   };
 
   const repairTechnicalTagsOnly = () => {
@@ -1617,7 +1664,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         {progress && (
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>جاري الفحص...</span>
+              <span>{statusMessage || "جاري الفحص..."}</span>
               <span className="font-mono">{progress.current} / {progress.total}</span>
             </div>
             <Progress value={(progress.current / progress.total) * 100} className="h-2" />

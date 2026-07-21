@@ -89,6 +89,10 @@ type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
 // انتباه أعلى للـ AI لكل ترجمة — دفعات أصغر تقلّل تخطّي المشاكل.
 const BATCH_SIZE = 25;
+// GLM-5.2-free عبر TokenRouter بطيء وسياقه أضيق — دفعات أصغر وطلبات متوازية أقل
+// تمنع تعليق الطلبات وظهور "بحث بلا نتيجة".
+const TOKENROUTER_BATCH_SIZE = 8;
+const TOKENROUTER_PARALLEL = 1;
 const PARALLEL_REQUESTS = 3;
 // عدد المرورات الداخلية على كل دفعة (تُنفَّذ بالتوازي داخل الـ edge function)
 // لزيادة شموليّة الكشف بدون الحاجة لإعادة الفحص يدويّاً.

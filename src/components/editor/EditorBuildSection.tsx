@@ -5,6 +5,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download } from "lucide-react";
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
+import { buildMother3Rom, MOTHER3_BUFFER_KEY } from "@/lib/mother3/m3-editor-bridge";
+import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -20,6 +22,7 @@ type EditorSubset = Pick<
 interface EditorBuildSectionProps {
   editor: EditorSubset;
   isRisen?: boolean;
+  isMother3?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -30,6 +33,7 @@ interface EditorBuildSectionProps {
 const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   editor,
   isRisen = false,
+  isMother3 = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -37,7 +41,42 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   setShowDiagnostic,
 }) => {
   const [risenBuilding, setRisenBuilding] = useState(false);
+  const [m3Building, setM3Building] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
+
+  const handleMother3Build = async () => {
+    setM3Building(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(MOTHER3_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على ملف الـ ROM — أعد فتحه من صفحة Mother 3");
+      const result = buildMother3Rom(new Uint8Array(buf), editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        const list = result.overflows
+          .slice(0, 6)
+          .map((o) => `بنك ${o.bank}${o.overflowBy ? ` (+${o.overflowBy}ب)` : ""}`)
+          .join("، ");
+        toast({ title: "تجاوز مساحة البنك", description: `${result.error}: ${list}`, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.rom], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Mother3_ar.gba";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "✅ تم بناء ROM معرّب",
+        description: `${result.translatedLines} سطر مترجم | ${result.changedBanks} بنك معدّل`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setM3Building(false);
+    }
+  };
 
   const handleRisenBuild = async () => {
     setRisenBuilding(true);
@@ -181,7 +220,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <ShieldCheck className="w-4 h-4" />
           <span className="hidden sm:inline">سلامة</span>
         </Button>
-        {isRisen ? (
+        {isMother3 ? (
+          <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">
+            {m3Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM معرّب وتنزيله
+          </Button>
+        ) : isRisen ? (
           <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {risenBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف Risen وتنزيله
           </Button>

@@ -51,10 +51,12 @@ export function encodeByte(rom: Uint8Array, decoded: number, romAddr: number): n
 /**
  * Character map: decoded 8-bit code -> printable string.
  * Verified against runtime RAM and decoded script:
- *   0x21..0x3A = A..Z, 0x41..0x5A = a..z, 0x40 = space,
- *   0x0E = '.', 0x0F = ',', 0x00..0x09 = '0'..'9'.
- * Codes outside these ranges are represented as `{XX}` byte tokens so they
- * survive an edit round-trip untouched (see tokenizeLine / detokenizeLine).
+ *   0x21..0x3A = A..Z, 0x41..0x5A = a..z, 0x40 = space, 0x0E = '.', 0x0F = ','.
+ * Codes 0x00..0x09 are NOT digits — they are control/formatting bytes (every
+ * dialogue line begins with one, e.g. 0x01), so they are intentionally left
+ * out of the map and render as `{0X}` tokens. Anything outside the mapped
+ * ranges likewise renders as a `{XX}` byte token so it survives an edit
+ * round-trip untouched (see codesToText / textToCodes).
  */
 const CODE_TO_CHAR = new Map<number, string>();
 const CHAR_TO_CODE = new Map<string, number>();
@@ -64,7 +66,6 @@ function biMap(code: number, ch: string) {
 }
 for (let i = 0; i < 26; i++) biMap(0x21 + i, String.fromCharCode(65 + i)); // A-Z
 for (let i = 0; i < 26; i++) biMap(0x41 + i, String.fromCharCode(97 + i)); // a-z
-for (let i = 0; i < 10; i++) biMap(0x00 + i, String.fromCharCode(48 + i)); // 0-9
 biMap(0x40, " ");
 biMap(0x0e, ".");
 biMap(0x0f, ",");

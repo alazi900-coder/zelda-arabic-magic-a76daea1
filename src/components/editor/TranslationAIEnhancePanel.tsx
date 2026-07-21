@@ -670,10 +670,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       }));
     };
 
-    for (let i = 0; i < batches.length; i += PARALLEL_REQUESTS) {
+    for (let i = 0; i < batches.length; i += effectiveParallel) {
       if (abortRef.current) break;
 
-      const chunk = batches.slice(i, i + PARALLEL_REQUESTS);
+      const chunk = batches.slice(i, i + effectiveParallel);
       const promises = chunk.map(async ({ textsToAnalyze }) => {
         try {
           const { data, error } = await supabase.functions.invoke('enhance-translations', {

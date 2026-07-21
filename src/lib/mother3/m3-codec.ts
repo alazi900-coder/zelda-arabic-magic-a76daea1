@@ -21,6 +21,9 @@
  * callers pass `0x08000000 + fileOffset`.
  */
 
+import { reshapeArabic, hasArabicChars } from "@/lib/arabic-processing";
+import { ARABIC_CHAR_TO_CODE } from "./m3-arabic-table";
+
 export const ROM_BASE = 0x08000000;
 
 const KEY1_OFF = 0x13c5d8;
@@ -113,51 +116,89 @@ export function codesToText(codes: number[]): string {
   return out;
 }
 
+/** Map one already-shaped display character to a font code, trying the Arabic
+ *  presentation-form table first, then the Latin/punctuation fallback. */
+function charToCode(ch: string): number | undefined {
+  const a = ARABIC_CHAR_TO_CODE[ch];
+  if (a !== undefined) return a;
+  return CHAR_TO_CODE.get(ch);
+}
+
+/** Encode one run of plain text (no control tokens) to codes. Arabic runs are
+ *  reshaped to presentation forms first so they match the font/table; the RTL
+ *  render patch handles visual right-to-left order, so text stays in logical
+ *  order here. */
+function encodeTextRun(run: string): number[] {
+  const shaped = hasArabicChars(run) ? reshapeArabic(run) : run;
+  const out: number[] = [];
+  for (const ch of shaped) {
+    if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue; // bidi/joiners
+    const code = charToCode(ch);
+    if (code === undefined) {
+      throw new Error(
+        `حرف غير قابل للترميز في نص Mother 3: ${JSON.stringify(ch)} (U+${ch
+          .charCodeAt(0)
+          .toString(16)
+          .toUpperCase()}) — غير موجود في جدول خط اللعبة`
+      );
+    }
+    out.push(code);
+  }
+  return out;
+}
+
 /**
  * Invert codesToText: parse an edited string back into decoded codes
- * (NOT including terminator). Unknown printable characters throw so the caller
- * can reject an un-encodable edit rather than silently corrupt the script.
+ * (NOT including terminator). Control tokens ([FxYY], [XX], {XX}) pass through
+ * verbatim; plain text between them is reshaped (Arabic) and mapped via the
+ * font table. Un-encodable characters throw so the caller can reject the edit
+ * rather than silently corrupt the script.
  */
 export function textToCodes(text: string): number[] {
   const out: number[] = [];
+  let run = "";
+  const flush = () => {
+    if (run) {
+      out.push(...encodeTextRun(run));
+      run = "";
+    }
+  };
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
-    // [FxYY] or [EF] control token
     if (ch === "[") {
       const end = text.indexOf("]", i);
       if (end > i) {
         const body = text.slice(i + 1, end);
         if (/^[0-9A-Fa-f]{2}$/.test(body)) {
+          flush();
           out.push(parseInt(body, 16));
           i = end + 1;
           continue;
         }
         if (/^[0-9A-Fa-f]{4}$/.test(body)) {
+          flush();
           out.push(parseInt(body.slice(0, 2), 16), parseInt(body.slice(2), 16));
           i = end + 1;
           continue;
         }
       }
     }
-    // {XX} raw byte token
     if (ch === "{") {
       const end = text.indexOf("}", i);
       if (end > i) {
         const body = text.slice(i + 1, end);
         if (/^[0-9A-Fa-f]{2}$/.test(body)) {
+          flush();
           out.push(parseInt(body, 16));
           i = end + 1;
           continue;
         }
       }
     }
-    const code = CHAR_TO_CODE.get(ch);
-    if (code === undefined) {
-      throw new Error(`حرف غير قابل للترميز في نص Mother 3: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16)})`);
-    }
-    out.push(code);
+    run += ch;
     i++;
   }
+  flush();
   return out;
 }

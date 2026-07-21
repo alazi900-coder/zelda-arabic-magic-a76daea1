@@ -51,8 +51,8 @@ function writeBankData(rom: Uint8Array, regionStart: number, lines: number[][]):
   const addrOfFFFF = regionStart + count * 2;
   rom[addrOfFFFF] = 0xff;
   rom[addrOfFFFF + 1] = 0xff;
-  const dataBase = addrOfFFFF + 1;
-  let cursor = dataBase + 1; // start data after the 2-byte terminator
+  const dataBase = addrOfFFFF;
+  let cursor = dataBase + 2; // start data after the 2-byte terminator
   lines.forEach((codes, n) => {
     const pointer = cursor - dataBase;
     rom[regionStart + n * 2] = pointer & 0xff;

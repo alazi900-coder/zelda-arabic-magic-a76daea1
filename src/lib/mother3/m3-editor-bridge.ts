@@ -22,6 +22,8 @@ import {
   applyRebuild,
   type M3Bank,
 } from "./m3-script";
+import { M3_ARABIC_FONT_B64, M3_ARABIC_WIDTHS_B64, M3_FONT_OFFSET, M3_WIDTHS_OFFSET } from "./m3-arabic-font";
+import { applyRtlPatch, flipGlyphsInPlace } from "./m3-rtl-patch";
 
 /** IndexedDB key holding the loaded Mother 3 ROM bytes for the build step. */
 export const MOTHER3_BUFFER_KEY = "mother3SourceBuffer";
@@ -54,6 +56,9 @@ export function extractMother3Entries(rom: Uint8Array): Mother3ExtractResult {
   const entries: ExtractedEntry[] = [];
   let lineCount = 0;
   let usedBanks = 0;
+  // Dedup: the same line appears verbatim across many banks (≈89% duplicates).
+  // Show each unique text once; the build applies its translation to every copy.
+  const seen = new Set<string>();
   for (const region of regions) {
     const bank = parseBankRegion(rom, region);
     if (!bank || bank.lines.length === 0) continue;
@@ -62,6 +67,8 @@ export function extractMother3Entries(rom: Uint8Array): Mother3ExtractResult {
       lineCount++;
       if (!isTranslatable(line.text)) continue;
       bankHasText = true;
+      if (seen.has(line.text)) continue;
+      seen.add(line.text);
       entries.push({
         msbtFile: `bank_${bank.index}`,
         index: line.index,
@@ -91,49 +98,81 @@ export interface Mother3BuildError {
 
 const KEY_RE = /^bank_(\d+)$/;
 
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** Insert the Arabic font (glyph-flipped for the RTL renderer) + widths and the
+ *  RTL rendering patch into a ROM copy. */
+function installArabicFontAndRtl(rom: Uint8Array): void {
+  const font = b64ToBytes(M3_ARABIC_FONT_B64);
+  const widths = b64ToBytes(M3_ARABIC_WIDTHS_B64);
+  flipGlyphsInPlace(font, widths);
+  rom.set(font, M3_FONT_OFFSET);
+  rom.set(widths, M3_WIDTHS_OFFSET);
+  applyRtlPatch(rom);
+}
+
 /**
- * Rebuild a patched ROM from the editor's translations. `translations` is keyed
- * `bank_<N>:<lineIndex>` -> Arabic text (same tokens the extractor produced).
- * Banks with no edits are left byte-identical.
+ * Rebuild a patched, Arabic ROM from the editor's translations. Each translation
+ * is applied to EVERY line that shares its original text (the editor dedups, so
+ * one entry stands for all its duplicate copies across banks). The Arabic font
+ * and RTL render patch are always installed. Banks with no edits keep their
+ * bytes; unchanged font/patch bytes are still written so the ROM renders Arabic.
+ *
+ * `translations` is keyed `bank_<N>:<lineIndex>` -> Arabic text.
  */
 export function buildMother3Rom(
   rom: Uint8Array,
   translations: Record<string, string>
 ): Mother3BuildOk | Mother3BuildError {
-  // group edits by bank index
-  const byBank = new Map<number, Map<number, string>>();
-  let translatedLines = 0;
-  for (const [key, value] of Object.entries(translations)) {
-    if (value == null || value === "") continue;
-    const [file, idxStr] = key.split(":");
-    const m = KEY_RE.exec(file);
-    if (!m) continue;
-    const bank = parseInt(m[1], 10);
-    const lineIndex = parseInt(idxStr, 10);
-    if (Number.isNaN(bank) || Number.isNaN(lineIndex)) continue;
-    if (!byBank.has(bank)) byBank.set(bank, new Map());
-    byBank.get(bank)!.set(lineIndex, value);
-    translatedLines++;
+  // 1) Resolve each translated representative to its original text, then map
+  //    original-text -> Arabic so every duplicate line gets the same translation.
+  const regions = parseBankTable(rom).filter((r) => r.end - r.start > 2);
+  const parsedBanks = regions
+    .map((r) => parseBankRegion(rom, r))
+    .filter((b): b is M3Bank => b != null && b.lines.length > 0);
+
+  const originalByKey = new Map<string, string>();
+  for (const bank of parsedBanks) {
+    for (const line of bank.lines) originalByKey.set(`bank_${bank.index}:${line.index}`, line.text);
   }
 
-  let out = rom;
+  const translationByOriginal = new Map<string, string>();
+  for (const [key, value] of Object.entries(translations)) {
+    if (value == null || value === "") continue;
+    const orig = originalByKey.get(key);
+    if (orig != null) translationByOriginal.set(orig, value);
+  }
+
+  let out = new Uint8Array(rom); // work on a copy; always produce an Arabic ROM
   const overflows: { bank: number; overflowBy: number }[] = [];
   let encodingFailure = false;
+  let encodingMsg = "";
+  let translatedLines = 0;
   let changedBanks = 0;
-  for (const [bankIndex, edits] of byBank) {
-    const parsed: M3Bank | null = parseBankRegion(
-      out,
-      parseBankTable(out).find((r) => r.index === bankIndex) ?? { index: bankIndex, start: 0, end: 0 }
-    );
-    if (!parsed) {
-      overflows.push({ bank: bankIndex, overflowBy: 0 });
-      continue;
+
+  for (const bank of parsedBanks) {
+    const edits = new Map<number, string>();
+    for (const line of bank.lines) {
+      const ar = translationByOriginal.get(line.text);
+      if (ar != null) {
+        edits.set(line.index, ar);
+        translatedLines++;
+      }
     }
-    const res = rebuildBank(out, parsed, edits);
+    if (edits.size === 0) continue;
+    const res = rebuildBank(out, bank, edits);
     if ("error" in res) {
-      // overflowBy set => space overflow; unset => an un-encodable character
-      if (res.overflowBy == null) encodingFailure = true;
-      else overflows.push({ bank: bankIndex, overflowBy: res.overflowBy });
+      if (res.overflowBy == null) {
+        encodingFailure = true;
+        encodingMsg = res.error;
+      } else {
+        overflows.push({ bank: bank.index, overflowBy: res.overflowBy });
+      }
       continue;
     }
     out = applyRebuild(out, res);
@@ -142,8 +181,7 @@ export function buildMother3Rom(
 
   if (encodingFailure) {
     return {
-      error:
-        "النص يحتوي حروفاً لا يدعمها خط اللعبة الحالي (مثل الحروف العربية). يلزم إدراج خط عربي في الـ ROM وربط الحروف بأكواد أولاً.",
+      error: `تعذّر ترميز بعض النص: ${encodingMsg}`,
       overflows,
       hasEncodingError: true,
     };
@@ -154,5 +192,7 @@ export function buildMother3Rom(
       overflows,
     };
   }
+
+  installArabicFontAndRtl(out);
   return { rom: out, translatedLines, changedBanks };
 }

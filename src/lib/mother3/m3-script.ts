@@ -129,7 +129,9 @@ export function parseBankRegion(rom: Uint8Array, region: BankRegion): M3Bank | n
   }
   if (i >= size - 1) return null; // no terminator found — not a real bank
   const addrOfFFFF = region.start + i;
-  const dataBase = addrOfFFFF + 1;
+  // The game reads line n at (addrOfFFFF + pointer[n]) — see script_convert
+  // (main_script_hacks.asm): `add r5, r2, r1` with r2 = addr of the 0xFFFF.
+  const dataBase = addrOfFFFF;
 
   const lines: M3Line[] = [];
   for (let n = 0; n < pointers.length; n++) {
@@ -216,7 +218,7 @@ export function rebuildBank(
   const addrOfFFFFrel = count * 2; // offset of 0xFFFF within region
   out[addrOfFFFFrel] = 0xff;
   out[addrOfFFFFrel + 1] = 0xff;
-  const dataBaseRel = addrOfFFFFrel + 1; // matches read formula (addrOfFFFF + 1)
+  const dataBaseRel = addrOfFFFFrel; // game reads at addrOfFFFF + pointer
 
   let cursor = ptrTableBytes; // first free byte after table+terminator
   for (let n = 0; n < count; n++) {

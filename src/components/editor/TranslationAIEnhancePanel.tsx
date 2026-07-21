@@ -89,6 +89,10 @@ type Scope = "all" | "short" | "long" | "with_tags" | "no_arabic";
 
 // انتباه أعلى للـ AI لكل ترجمة — دفعات أصغر تقلّل تخطّي المشاكل.
 const BATCH_SIZE = 25;
+// GLM-5.2-free عبر TokenRouter بطيء وسياقه أضيق — دفعات أصغر وطلبات متوازية أقل
+// تمنع تعليق الطلبات وظهور "بحث بلا نتيجة".
+const TOKENROUTER_BATCH_SIZE = 8;
+const TOKENROUTER_PARALLEL = 1;
 const PARALLEL_REQUESTS = 3;
 // عدد المرورات الداخلية على كل دفعة (تُنفَّذ بالتوازي داخل الـ edge function)
 // لزيادة شموليّة الكشف بدون الحاجة لإعادة الفحص يدويّاً.
@@ -645,9 +649,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setProcessedCount(processedKeysRef.current.size);
     setProgress({ current: processed, total: translatedEntries.length });
 
+    const isTokenRouterActive = effectiveProvider === 'tokenrouter';
+    const effectiveBatchSize = isTokenRouterActive ? TOKENROUTER_BATCH_SIZE : BATCH_SIZE;
+    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : PARALLEL_REQUESTS;
     const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
-    for (let i = 0; i < cacheMissEntries.length; i += BATCH_SIZE) {
-      batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + BATCH_SIZE) });
+    for (let i = 0; i < cacheMissEntries.length; i += effectiveBatchSize) {
+      batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + effectiveBatchSize) });
     }
 
     // خزّن نتيجة كلّ نصّ من دفعة حقيقيّة في الكاش (موجَبة أو null="لا مشكلة") —
@@ -663,10 +670,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       }));
     };
 
-    for (let i = 0; i < batches.length; i += PARALLEL_REQUESTS) {
+    for (let i = 0; i < batches.length; i += effectiveParallel) {
       if (abortRef.current) break;
 
-      const chunk = batches.slice(i, i + PARALLEL_REQUESTS);
+      const chunk = batches.slice(i, i + effectiveParallel);
       const promises = chunk.map(async ({ textsToAnalyze }) => {
         try {
           const { data, error } = await supabase.functions.invoke('enhance-translations', {

@@ -1664,7 +1664,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         {progress && (
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>جاري الفحص...</span>
+              <span>{statusMessage || "جاري الفحص..."}</span>
               <span className="font-mono">{progress.current} / {progress.total}</span>
             </div>
             <Progress value={(progress.current / progress.total) * 100} className="h-2" />

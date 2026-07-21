@@ -30,6 +30,18 @@ const games = [
     subtitleClass: "text-[hsl(90,50%,60%)]",
     arrowClass: "text-[hsl(90,50%,60%)]",
   },
+  {
+    title: "Mother 3",
+    subtitle: "عرّب مذر 3",
+    desc: "فكّ تشفير سكربت النسخة الإنجليزية 1.1 (GBA) مباشرة في المتصفح، تحرير الأسطر وإعادة بناء ROM معرّب — مع رقعة عكس اتجاه النص RTL",
+    link: "/mother3",
+    image: risenBg,
+    formats: ["GBA", "Script"],
+    cardClass: "border-[hsl(0,60%,45%)]/30 hover:border-[hsl(0,60%,45%)]/60",
+    formatClass: "bg-[hsl(0,60%,45%)]/20 text-[hsl(0,70%,62%)] border-[hsl(0,60%,45%)]/30",
+    subtitleClass: "text-[hsl(0,70%,62%)]",
+    arrowClass: "text-[hsl(0,70%,62%)]",
+  },
 ];
 
 const Home = () => {

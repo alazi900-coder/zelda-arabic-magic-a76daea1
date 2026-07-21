@@ -616,6 +616,7 @@ Deno.serve(async (req) => {
         try {
           dsResponse = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
+            signal: AbortSignal.timeout(90_000),
             headers: {
               'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
               'Content-Type': 'application/json',
@@ -641,8 +642,11 @@ Deno.serve(async (req) => {
         // produces a misleading "Lovable credits" error when the real cause is
         // a TokenRouter issue. Surface the TokenRouter response/error directly,
         // matching translate-entries' behavior for this provider.
+        // 90s timeout — GLM-5.2-free may otherwise hang indefinitely and the
+        // panel would show "searching" forever with no result and no error.
         return await fetch('https://api.tokenrouter.com/v1/chat/completions', {
           method: 'POST',
+          signal: AbortSignal.timeout(90_000),
           headers: {
             'Authorization': `Bearer ${TOKENROUTER_API_KEY}`,
             'Content-Type': 'application/json',

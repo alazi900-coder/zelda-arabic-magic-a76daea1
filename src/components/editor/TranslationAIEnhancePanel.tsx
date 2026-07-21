@@ -649,9 +649,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setProcessedCount(processedKeysRef.current.size);
     setProgress({ current: processed, total: translatedEntries.length });
 
+    const isTokenRouterActive = effectiveProvider === 'tokenrouter';
+    const effectiveBatchSize = isTokenRouterActive ? TOKENROUTER_BATCH_SIZE : BATCH_SIZE;
+    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : PARALLEL_REQUESTS;
     const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
-    for (let i = 0; i < cacheMissEntries.length; i += BATCH_SIZE) {
-      batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + BATCH_SIZE) });
+    for (let i = 0; i < cacheMissEntries.length; i += effectiveBatchSize) {
+      batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + effectiveBatchSize) });
     }
 
     // خزّن نتيجة كلّ نصّ من دفعة حقيقيّة في الكاش (موجَبة أو null="لا مشكلة") —

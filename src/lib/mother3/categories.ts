@@ -22,6 +22,7 @@ const KNOWN_TABLE_CATEGORIES: Record<string, Mother3Category> = {
   names_statuses: { id: "mother3-statuses", label: "أسماء الحالات", emoji: "🩹" },
   names_psinames: { id: "mother3-psi", label: "قوى PSI", emoji: "✨" },
   menu_menus1: { id: "mother3-menus", label: "القوائم", emoji: "📋" },
+  menu_menus2: { id: "mother3-menus2", label: "قوائم إضافية", emoji: "📋" },
 };
 
 const DIALOGUE_CATEGORY: Mother3Category = { id: "mother3-dialogue", label: "الحوارات", emoji: "💬" };

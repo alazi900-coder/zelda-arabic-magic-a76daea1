@@ -11,6 +11,7 @@ import { AutoPilotPanel } from "@/components/editor/AutoPilotPanel";
 import BdatBuildReport from "@/components/editor/BdatBuildReport";
 import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
 import { buildRisenCategories } from "@/lib/risen/categories";
+import { buildMother3Categories } from "@/lib/mother3/categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -56,8 +57,10 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
 }) => {
   const entries = editor.state?.entries;
   const isRisen = !!entries?.some((e) => /\.tab$/i.test(e.msbtFile));
+  const isMother3 = !isRisen && !!entries?.some((e) => /^(bank_\d+|names_\w+)$/.test(e.msbtFile));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
   const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
+  const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);
   if (!editor.state) return null;
   const state = editor.state;
   return (
@@ -75,10 +78,12 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         isFixing={editor.translating}
         onRedistributeTags={editor.handleRedistributeTags}
         tagsCount={editor.tagsCount}
-        isBdat={!isRisen && editor.bdatTableNames.length > 0}
-        isDanganronpa={!isRisen && isDanganronpa}
+        isBdat={!isRisen && !isMother3 && editor.bdatTableNames.length > 0}
+        isDanganronpa={!isRisen && !isMother3 && isDanganronpa}
         isRisen={isRisen}
         risenCategories={risenCategories}
+        isMother3={isMother3}
+        mother3Categories={mother3Categories}
       />
 
       {isRisen && (

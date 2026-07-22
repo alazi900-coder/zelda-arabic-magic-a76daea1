@@ -1,8 +1,8 @@
 /**
  * Reader/rebuilder for Mother 3's flat, unobfuscated, fixed-stride text
- * tables (item names confirmed; other tables from the same toolkit — menus,
- * statuses, PSI names/descriptions, item descriptions — likely share this
- * shape but are NOT yet verified, so only item names is wired in for now).
+ * tables (item names, status names, PSI power names confirmed; other tables
+ * from the same toolkit — menus, PSI/item/skill descriptions — use a
+ * different, variable-length pointer-table format, not this one).
  *
  * Structure (item names, byte-for-byte verified against itemnames.txt — 256/256
  * match, 0 mismatches):
@@ -55,7 +55,34 @@ export const ITEMNAMES_TABLE: NamesTableSpec = {
   count: 256,
 };
 
-export const NAMES_TABLES: NamesTableSpec[] = [ITEMNAMES_TABLE];
+/** Verified table: status ailment names (Poison, Numb, Sleep, ...), 32-byte
+ *  slots (15 chars max) — 0 mismatches across all 52 real entries. Region has
+ *  zero slack, same as item names. */
+export const STATUSES_TABLE: NamesTableSpec = {
+  id: "names_statuses",
+  label: "أسماء الحالات",
+  start: 0x01d06cca,
+  end: 0x01d0734e,
+  dataStart: 0x01d06cce,
+  stride: 32,
+  count: 52,
+};
+
+/** Verified table: PSI power names (PK Fire α/β/γ/Ω, ...), 40-byte slots
+ *  (19 chars max) — 0 mismatches across all 99 real entries. Region has
+ *  generous unused space after the 99 documented entries (reserved debug
+ *  slots), safely left untouched since each entry owns its own fixed slot. */
+export const PSINAMES_TABLE: NamesTableSpec = {
+  id: "names_psinames",
+  label: "أسماء قوى PSI",
+  start: 0x00d29050,
+  end: 0x00d2c708,
+  dataStart: 0x00d29054,
+  stride: 40,
+  count: 99,
+};
+
+export const NAMES_TABLES: NamesTableSpec[] = [ITEMNAMES_TABLE, STATUSES_TABLE, PSINAMES_TABLE];
 
 export interface NamesEntry {
   index: number;

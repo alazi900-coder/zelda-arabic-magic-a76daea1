@@ -32,9 +32,15 @@ for (let i = 0; i < 26; i++) biMap(0x41 + i, String.fromCharCode(97 + i)); // a-
 for (let i = 0; i < 10; i++) biMap(0x10 + i, String.fromCharCode(48 + i)); // 0-9
 biMap(0x40, " ");
 biMap(0x0e, ".");
-biMap(0x0f, ",");
+biMap(0x0c, ","); // verified via "Stopped, Frozen" in statuses — NOT 0x0f (never exercised by real data, wrong)
 biMap(0x07, "'");
 biMap(0x0d, "-");
+biMap(0x08, "(");
+biMap(0x09, ")");
+biMap(0x3b, "α"); // PSI tier suffixes: PK Fire α/β/γ/Ω
+biMap(0x3c, "β");
+biMap(0x3d, "γ");
+biMap(0x3e, "Ω");
 
 /** Decode one code to its display character, or undefined if unmapped. Unlike
  *  the dialogue codec, an unmapped code here is NOT rendered as a `{XX}`

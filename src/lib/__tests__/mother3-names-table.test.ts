@@ -53,6 +53,24 @@ describe("mother3 names codec", () => {
   it("rejects un-encodable characters", () => {
     expect(() => encodeNamesString("café")).toThrow();
   });
+
+  it("round-trips comma, parentheses, and PSI Greek-letter suffixes", () => {
+    // Verified against real statuses/psinames data: comma is 0x0C (not the
+    // dialogue codec's 0x0F, which this table never actually uses).
+    for (const text of ["Stopped, Frozen", "Off Down (weak)", "PK Fire α", "PK Fire Ω"]) {
+      const codes = encodeNamesString(text);
+      const rom = new Uint8Array(codes.length * 2 + 2);
+      let cursor = 0;
+      for (const c of codes) {
+        rom[cursor] = c & 0xff;
+        rom[cursor + 1] = (c >>> 8) & 0xff;
+        cursor += 2;
+      }
+      rom[cursor] = 0xff;
+      rom[cursor + 1] = 0xff;
+      expect(decodeNamesString(rom, 0, rom.length)?.text).toBe(text);
+    }
+  });
 });
 
 describe("mother3 names table parse + rebuild (fixed-stride slots)", () => {

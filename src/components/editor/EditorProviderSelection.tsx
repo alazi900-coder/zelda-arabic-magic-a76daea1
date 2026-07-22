@@ -321,6 +321,11 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               <div className="flex gap-2 flex-1">
                 <input
                   type="password"
+                  name="gemini-api-key"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   placeholder="الصق مفتاح Gemini API هنا (اختياري)..."
                   value={editor.userGeminiKey}
                   onChange={(e) => editor.setUserGeminiKey(e.target.value)}

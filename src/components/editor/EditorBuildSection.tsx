@@ -54,7 +54,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       if ("error" in result) {
         const list = result.overflows
           .slice(0, 6)
-          .map((o) => `بنك ${o.bank}${o.overflowBy ? ` (+${o.overflowBy}ب)` : ""}`)
+          .map((o) => `${o.bank === -1 ? "جدول نصوص" : `بنك ${o.bank}`}${o.overflowBy ? ` (+${o.overflowBy}ب)` : ""}`)
           .join("، ");
         toast({ title: "تجاوز مساحة البنك", description: `${result.error}: ${list}`, variant: "destructive" });
         return;

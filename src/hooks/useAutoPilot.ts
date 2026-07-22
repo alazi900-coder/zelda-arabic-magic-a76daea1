@@ -4,6 +4,7 @@ import type { EditorState, ExtractedEntry } from "@/components/editor/types";
 import { isTechnicalText } from "@/components/editor/types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
+import { resolveGameParam } from "@/lib/game-param";
 
 export interface AutoPilotLog {
   id: number;
@@ -130,7 +131,7 @@ export function useAutoPilot({
       aiModel: forceModel || (prov === 'gemini' ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
-      game: /\.tab$/i.test(state?.entries?.[0]?.msbtFile || '') ? risenVariant : 'xenoblade',
+      game: resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant),
     });
   }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
       myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode, state]);

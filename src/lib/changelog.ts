@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.106.0",
+    date: "2026-07-22",
+    changes: [
+      { kind: "added", text: "خطوة أولى لدعم Metroid Prime Remastered: صفحة عرض جديدة (/metroid-prime/font) تفتح ملف .pak وتعرض كل نسيج (TXTR) فيه — بما فيها أطلس الخط — كصورة حقيقية. الصيغة (حاوية RFRM + تبديل ذاكرة Tegra الخاص بـSwitch + ضغط BC7/ASTC) عولجت عبر ترجمة مكتبة retrolib مفتوحة المصدر (Rust) إلى WebAssembly مُدمَج مسبقاً في المشروع، بدل إعادة كتابتها يدوياً بجافاسكريبت — تحقّق تطابق تام بكسل بالبكسل مع الأداة المرجعية الأصلية على ملفات حقيقية من اللعبة. هذه مرحلة عرض فقط، التعديل والحفظ لاحقاً." },
+    ],
+  },
+  {
     version: "1.105.0",
     date: "2026-07-22",
     changes: [

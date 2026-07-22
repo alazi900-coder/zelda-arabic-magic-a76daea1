@@ -38,6 +38,11 @@ function writeBankData(rom: Uint8Array, regionStart: number, lines: number[][]):
 function placeOneBank(rom: Uint8Array, regionStart: number, lines: number[][]) {
   const dataEnd = writeBankData(rom, regionStart, lines);
   const nextStart = dataEnd + 200;
+  // This bounding bank is the last table entry, so its own region runs to ROM
+  // end (32MB) — same shape as the real ROM's bogus huge bank, which
+  // extractMother3Entries now filters out via MAX_BANK_REGION. Its entries
+  // (if any survive) are irrelevant here; only bank_0's region is bounded and
+  // under test.
   writeBankData(rom, nextStart, [textToCodes("z")]);
   const dv = new DataView(rom.buffer);
   dv.setUint32(BANK_TABLE_OFFSET + 0, regionStart - BANK_TABLE_OFFSET + 4, true);
@@ -56,9 +61,13 @@ describe("mother3 editor bridge", () => {
       textToCodes("Aahh"),
     ]);
     const { entries } = extractMother3Entries(rom);
-    // bank_1:0 is the bounding bank's single "z" line (also translatable).
-    expect(entries.map((e) => `${e.msbtFile}:${e.index}`)).toEqual(["bank_0:0", "bank_0:2", "bank_1:0"]);
-    expect(entries[0].original).toBe("Hello world");
+    // Only assert on bank_0's own entries — the bounding banks' single-letter
+    // lines may or may not survive the MAX_BANK_REGION cap depending on which
+    // one ends up last in the table (its region then runs to ROM end), which
+    // isn't what this test is about.
+    const bank0Entries = entries.filter((e) => e.msbtFile === "bank_0");
+    expect(bank0Entries.map((e) => `${e.msbtFile}:${e.index}`)).toEqual(["bank_0:0", "bank_0:2"]);
+    expect(bank0Entries[0].original).toBe("Hello world");
   });
 
   it("builds a patched ROM from editor translations and re-decodes to the new text", () => {

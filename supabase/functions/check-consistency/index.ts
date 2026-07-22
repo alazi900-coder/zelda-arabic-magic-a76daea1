@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     const { entries, glossary, game } = await req.json() as {
       entries: ConsistencyEntry[];
       glossary?: string;
-      game?: 'xenoblade' | 'risen' | 'risen2';
+      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
     };
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
 

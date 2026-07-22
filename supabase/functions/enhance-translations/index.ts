@@ -6,6 +6,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
+import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -411,7 +412,7 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
@@ -425,8 +426,13 @@ Deno.serve(async (req) => {
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
 
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-    const gameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
-    const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
+    const isMother3 = game === 'mother3';
+    const gameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
+    const forgetOtherGame = isMother3
+      ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
+      : isRisen
+      ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n`
+      : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
       : '';
@@ -458,7 +464,7 @@ Deno.serve(async (req) => {
     const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
-    const properNounsSection = isRisen
+    const properNounsSection = isRisen || isMother3
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -847,7 +853,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           i.key && i.suggestion !== i.translation &&
           isSafeSuggestion(i.original, i.translation, i.suggestion) &&
           isCategoryEnabled(i.category, ruleSections.enabledSet) &&
-          (!isRisen || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
+          (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
         return { items: mappedIssues };
       });
@@ -966,7 +972,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
             r.key && r.suggested !== r.translation &&
             isSafeSuggestion(r.original, r.translation, r.suggested) &&
             isTypeEnabled(r.type, ruleSections.enabledSet) &&
-            (!isRisen || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
+            (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
         return { items: mappedResults };
       });
@@ -1029,7 +1035,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         passes || 1,
         () => callOnceParse(
           [
-            { role: 'system', content: isRisen
+            { role: 'system', content: isRisen || isMother3
               ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
               : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
             { role: 'user', content: enhancePrompt },
@@ -1060,7 +1066,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         s.key && s.suggested !== s.current &&
         isSafeSuggestion(s.original, s.current, s.suggested) &&
         isTypeEnabled(s.type, ruleSections.enabledSet) &&
-        (!isRisen || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
+        (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );
       return { items: mappedSuggestions };
     });

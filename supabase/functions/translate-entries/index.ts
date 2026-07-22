@@ -165,6 +165,23 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
 6. Use natural Arabic equivalents for generic pirate/nautical RPG concepts based on their plain English meaning — e.g. voodoo → فودو, musket → بندقية, pistol → مسدس, cutlass/saber → سيف قرصان, rum → رَم, captain → قبطان, crew → طاقم, ship → سفينة. Never substitute a term from another game's lore (e.g. never translate "magic"/"voodoo" as "إيثر" or as Risen 1's rune-magic terms — those have no meaning here).`;
 
+/** System prompt for MOTHER 3 (GBA, Shigesato Itoi / Nintendo) — same structural
+ * rules, but the MOTHER/EarthBound universe and its warm, funny, plain-spoken
+ * tone. NOT Xenoblade and NOT Risen — no terminology or lore from either. */
+const MOTHER3_SYSTEM_PROMPT = `You are a professional video game text translator working on MOTHER 3 (Game Boy Advance — the MOTHER/EarthBound series by Shigesato Itoi / Nintendo). This is NOT Xenoblade Chronicles and NOT the Risen series — do not use any terminology, characters, or lore from either.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, TAG_2, ... (technical tags — MOTHER 3 control codes / raw bytes)
+   - NEWLINE_0, NEWLINE_1, NEWLINE_2, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
+   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it. Tag position carries game meaning.
+5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
+6. MOTHER 3's psychic powers are "PSI" (قوى نفسية) — never "Ether" (Xenoblade) or generic "Mana"/rune-magic (Risen). Use plain, natural Arabic for everyday concepts by their literal English meaning. Keep the series' quirky, warm, funny tone — simple everyday language, never epic high-fantasy or grim medieval prose.`;
+
 /**
  * Build the user-facing prompt with full universe knowledge, ordered rules,
  * glossary, context, and the input block.
@@ -180,15 +197,23 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen' | 'risen2';
+  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
   const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
   const isRisen2 = game === 'risen2';
-  const gameLabel = isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+  const isMother3 = game === 'mother3';
+  const gameLabel = isMother3 ? 'MOTHER 3' : isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
-  const universeBlock = isRisen2
+  const universeBlock = isMother3
+    ? `MOTHER 3 UNIVERSE — KEY KNOWLEDGE:
+• Setting: Game Boy Advance RPG in the MOTHER/EarthBound series (Shigesato Itoi / Nintendo). A quirky, heartfelt story set on the Nowhere Islands and in Tazmily Village — family, nature, and a strange industrial takeover by the Pigmask Army — following the boy Lucas.
+• This is a DIFFERENT game from Xenoblade Chronicles AND from Risen — do NOT use their terminology, characters, or lore under any circumstance.
+• Cast (transliterate consistently): Lucas (لوكاس), Claus (كلاوس), Flint (فلينت), Hinawa (هيناوا), Kumatora (كوماتورا), Duster (داستر), Boney the dog (بوني), Salsa the monkey (سالسا), Porky/Pokey (بوركي), Mr. Saturn (مستر ساتورن), the Magypsies (الماجيبسي), Dragos (دراغو).
+• Psychic powers are "PSI" (قوى نفسية) — NEVER "Ether" or "Mana". Use plain natural Arabic for everyday concepts by their literal English meaning.
+• Tone: simple, warm, funny, everyday language with sudden emotional depth — MOTHER's signature quirky humanity. Keep item and enemy names playful. Never epic high-fantasy, never grim medieval.`
+    : isRisen2
     ? `RISEN 2 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Genome-engine pirate-themed open-world RPG (Dark Waters, sequel to Risen 1) — a tropical Caribbean-like archipelago. The hero (same protagonist as Risen 1) allies with pirates and/or Inquisition remnants against an undead/voodoo threat.
 • This is a DIFFERENT game from Xenoblade Chronicles AND from Risen 1's medieval-fantasy setting — do NOT use Xenoblade terminology, and do NOT import Risen 1's Inquisition-vs-mage-camps framing or rune-magic system.
@@ -214,7 +239,9 @@ function buildXC1UserPrompt(opts: {
 • Antagonists: Zanza (زانزا), Egil (إيجل), Metal Face (الوجه المعدني).
 • Key terms: Monado (المونادو), Ether (إيثر), Colony 9 (المستعمرة 9), Mechon (ميكون), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا).`;
 
-  const npcVoiceRule = isRisen
+  const npcVoiceRule = isMother3
+    ? 'NPC dialogue — use natural, warm, everyday spoken Arabic with MOTHER 3\'s gentle humor, matching the tone implied by the text and any speaker info given in context. Do NOT assume Xenoblade or Risen characters — this is a different game.'
+    : isRisen
     ? 'NPC dialogue — use natural modern spoken Arabic matching the tone implied by the text and any speaker info given in context. Do NOT assume Xenoblade characters (Shulk, Reyn, etc.) — this is a different game.'
     : "NPC dialogue — match the speaker's personality: casual/blunt for Reyn and Riki, formal/dignified for Melia and Dunban, warm for Sharla and Fiora.";
 
@@ -238,7 +265,7 @@ RULES — ordered by priority (top = most critical):
 [C] TERMINOLOGY & STYLE:
 8. Glossary terms — if a term appears in the glossary section, you MUST use its EXACT Arabic translation. No alternatives, no synonyms, no paraphrasing. Match possessive forms too (e.g. "Noah's" uses the glossary entry for "Noah"). NON-NEGOTIABLE.
 9. Consistency — if a word/phrase was translated a certain way in "Previously Translated Texts", you MUST translate it the same way.
-10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب)${isRisen ? '' : ' consistent with the Arabic Xenoblade Chronicles 1 community'} — not overly formal classical Arabic.
+10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب)${isRisen || isMother3 ? '' : ' consistent with the Arabic Xenoblade Chronicles 1 community'} — not overly formal classical Arabic.
 11. Preserve proper nouns using the Arabic forms listed above. Unknown names → transliterate phonetically.
 12. ${npcVoiceRule}${npcRule}${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
 
@@ -447,7 +474,7 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' = 'xenoblade';
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -1358,7 +1385,7 @@ async function translateWithOpenAICompat(
       temperature: 0.3,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+        { role: 'system', content: _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
         { role: 'user', content: prompt },
       ],
     }),
@@ -1759,7 +1786,7 @@ async function translateWithAI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
           generationConfig: { temperature: 0.3 },
         }),
       });
@@ -1856,7 +1883,7 @@ async function translateWithAI(
           body: JSON.stringify({
             model: lovableModel,
             messages: [
-              { role: 'system', content: _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+              { role: 'system', content: _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
               { role: 'user', content: aiPrompt },
             ],
           }),
@@ -1960,7 +1987,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen2';
+      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -1972,7 +1999,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

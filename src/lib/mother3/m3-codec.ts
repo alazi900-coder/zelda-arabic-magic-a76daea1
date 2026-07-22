@@ -116,11 +116,30 @@ export function codesToText(codes: number[]): string {
   return out;
 }
 
+/**
+ * Presentation forms the friend's Arabic font never drew a glyph for. The
+ * reshaper still produces them for real words (e.g. a ط in the middle of a
+ * word → medial form U+FEC4), so without these fallbacks the build fails with
+ * "حرف غير قابل للترميز". Each maps to the nearest form the font *does* have —
+ * for ط/ظ the four forms are near-identical, so the word stays readable.
+ */
+const ARABIC_FALLBACK_CHAR_TO_CODE: Record<string, number> = {
+  "ﻃ": 0x08, // ط initial  → ط isolated (U+FEC1)
+  "ﻄ": 0x09, // ط medial   → ط final    (U+FEC2)
+  "ﻇ": 0x0c, // ظ initial  → ظ isolated (U+FEC5)
+  "ﻈ": 0x92, // ظ medial   → ظ final    (U+FEC6)
+  "ﺁ": 0x90, // آ isolated → آ final    (U+FE82)
+  "?": 0x1f, //      Latin ?     → ؟          (U+061F)
+};
+
 /** Map one already-shaped display character to a font code, trying the Arabic
- *  presentation-form table first, then the Latin/punctuation fallback. */
+ *  presentation-form table first, then the missing-glyph fallback, then the
+ *  Latin/punctuation fallback. */
 function charToCode(ch: string): number | undefined {
   const a = ARABIC_CHAR_TO_CODE[ch];
   if (a !== undefined) return a;
+  const f = ARABIC_FALLBACK_CHAR_TO_CODE[ch];
+  if (f !== undefined) return f;
   return CHAR_TO_CODE.get(ch);
 }
 

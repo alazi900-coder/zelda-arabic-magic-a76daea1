@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
+import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,10 +24,14 @@ const gatewayModelMap: Record<string, string> = {
   'gpt-5': 'openai/gpt-5',
 };
 
-function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean): string {
+function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean, isMother3?: boolean): string {
   const glossarySection = glossary ? `\nالقاموس المعتمد (التزم بهذه المصطلحات):\n${glossary.split('\n').slice(0, 100).join('\n')}` : '';
-  const gameNameLabel = isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
-  const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
+  const gameNameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
+  const forgetOtherGame = isMother3
+    ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
+    : isRisen
+    ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n`
+    : '';
 
   if (action === 'literal-detect') {
     return `أنت خبير في كشف الترجمات الحرفية من الإنجليزية للعربية في ألعاب الفيديو (${gameNameLabel}).
@@ -253,7 +258,7 @@ Deno.serve(async (req) => {
       glossary?: string;
       aiModel?: string;
       styleGuide?: string;
-      game?: 'xenoblade' | 'risen' | 'risen2';
+      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -271,6 +276,7 @@ Deno.serve(async (req) => {
     // (index-aligned with `entries`, since the model echoes back an `index`
     // field), used to unmask whichever result field references that index.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
+    const isMother3 = game === 'mother3';
     const risenTagsByIndex: string[][] = [];
     const promptEntries: AnalysisEntry[] = isRisen
       ? entries.map((e) => {
@@ -280,7 +286,7 @@ Deno.serve(async (req) => {
         })
       : entries;
 
-    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide, isRisen);
+    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide, isRisen, isMother3);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',

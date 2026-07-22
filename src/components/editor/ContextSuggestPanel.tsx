@@ -10,6 +10,7 @@ import { idbGet, idbSet } from "@/lib/idb-storage";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 import type { ExtractedEntry } from "./types";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
+import { resolveGameParam } from "@/lib/game-param";
 
 interface Suggestion {
   translation: string;
@@ -139,6 +140,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
   // Risen entries use "table.tab" as msbtFile (no "bdat-bin:"/"bdat:" prefix);
   // same detection used elsewhere (e.g. Editor.tsx, EditorProgressStatus.tsx).
   const isRisen = /\.tab$/i.test(entry?.msbtFile || "");
+  const gameParam = resolveGameParam(entry?.msbtFile, risenVariant);
 
   const generate = async () => {
     if (!entry) return;
@@ -172,7 +174,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           provider,
           aiModel,
           providerApiKey,
-          game: isRisen ? risenVariant : "xenoblade",
+          game: gameParam,
           speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined,
           entryKey: isRisen ? entry.label : undefined,
           category: isRisen ? categorizeRisenTable(risenTableFromMsbtFile(entry.msbtFile)).label : undefined,

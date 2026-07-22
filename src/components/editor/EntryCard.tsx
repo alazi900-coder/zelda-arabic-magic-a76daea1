@@ -13,6 +13,7 @@ import {
   hasOrphanLines, visualLength, splitEvenlyByLines, splitByOriginalBreaks,
   hasEngineLineBreakTags, mapTranslationToLineSkeleton,
 } from "@/lib/balance-lines";
+import { resolveGameParam } from "@/lib/game-param";
 import { countEffectiveLines, countLines } from "@/lib/text-tokens";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
@@ -226,6 +227,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
+  const gameParam = resolveGameParam(entry.msbtFile, risenVariant);
   const isTech = isTechnicalText(entry.original);
   const isSingleLineOriginal = countEffectiveLines(entry.original) <= 1;
   const [backTranslation, setBackTranslation] = useState<string | null>(null);
@@ -276,7 +278,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
     setBackTranslation(null);
     try {
       const { data, error } = await supabase.functions.invoke('translation-tools', {
-        body: { text: translation, style: 'back-translate', game: isRisenEntry ? risenVariant : 'xenoblade' },
+        body: { text: translation, style: 'back-translate', game: gameParam },
       });
       if (error) throw error;
       setBackTranslation(data?.result || 'لم يتم الحصول على نتيجة');
@@ -299,7 +301,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
           entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }],
           glossary,
           action: 'quick-alternatives',
-          game: isRisenEntry ? risenVariant : 'xenoblade',
+          game: gameParam,
         }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);

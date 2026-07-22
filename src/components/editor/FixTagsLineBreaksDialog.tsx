@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef, useEffect, useCallback } from "react"
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { resolveGameParam } from "@/lib/game-param";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -543,6 +544,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
   const callSmartFix = useCallback(async (issues: RestoreIssue[]) => {
     if (!issues.length) return;
     const isRisen = /\.tab$/i.test(issues[0]?.msbtFile || "");
+    const gameParam = resolveGameParam(issues[0]?.msbtFile, risenVariant);
     const [engine, model] = aiEngine.split(":") as ["lovable" | "deepseek" | "tokenrouter", string];
     const deepseekKey = (() => {
       try { return localStorage.getItem("userDeepSeekKey") || ""; } catch { return ""; }
@@ -559,7 +561,7 @@ export const FixTagsLineBreaksDialog: React.FC<FixTagsLineBreaksDialogProps> = (
             : engine === "tokenrouter" ? (tokenRouterKey || undefined)
             : undefined,
           entries: issues.map(i => ({ key: i.key, original: i.original, translation: i.before })),
-          game: isRisen ? risenVariant : "xenoblade",
+          game: gameParam,
         },
       });
       if (error) throw new Error(error.message || "تعذّر الاتصال بالخدمة");

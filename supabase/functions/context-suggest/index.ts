@@ -4,6 +4,7 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { maskRisenTags, unmaskRisenTags } from '../_shared/risen-tag-mask.ts';
 import { RISEN_FORGET_OTHER_GAME_RULE } from '../_shared/risen-persona-guard.ts';
+import { MOTHER3_FORGET_OTHER_GAME_RULE } from '../_shared/mother3-persona-guard.ts';
 
 interface ContextEntry {
   original: string;
@@ -34,7 +35,7 @@ interface RequestBody {
   /** Which game this entry is from — the system prompt names it correctly instead
    * of always assuming Xenoblade. Defaults to Xenoblade for backward compatibility
    * with callers that don't send it yet. */
-  game?: 'xenoblade' | 'risen' | 'risen2';
+  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
   /** Risen: the speaking NPC (Owner/Role fields from infos.tab), when known. */
   speaker?: Speaker;
   /** Risen: the entry's raw id/key (e.g. "HUD2_Damage_Edge") — grounds the model instead of it guessing from a bare filename. */
@@ -49,15 +50,21 @@ const GAME_LABELS: Record<string, string> = {
   xenoblade: 'سلسلة Xenoblade Chronicles',
   risen: 'لعبة Risen 1 (محرك Genome — عالم RPG مفتوح بطابع قروسطي)',
   risen2: 'لعبة Risen 2: Dark Waters (محرك Genome — عالم قراصنة مفتوح في الكاريبي)',
+  mother3: 'لعبة MOTHER 3 (سلسلة MOTHER/EarthBound لـ Shigesato Itoi ونينتندو — أسلوب بسيط دافئ طريف)',
 };
 
 function buildSystemPrompt(game?: string): string {
   const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
+  const isMother3 = game === 'mother3';
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
   const risenTagRule = isRisen
     ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'
     : '';
-  const forgetOtherGame = isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : '';
+  const forgetOtherGame = isMother3
+    ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
+    : isRisen
+    ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n`
+    : '';
   return `أنت مترجم ألعاب فيديو متخصص في ${gameLabel}.
 ${forgetOtherGame}قدّم 3 اقتراحات مختلفة لترجمة النص المستهدف بأساليب متنوعة:
 - formal (رسمي): لغة فصحى مهذبة مناسبة للقصة الرئيسية والشخصيات الرسمية.

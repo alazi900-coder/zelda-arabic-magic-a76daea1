@@ -11,6 +11,7 @@ import {
   Sparkles, Wand2, Check, X, Pencil, Loader2, RefreshCw, FileText,
   ArrowLeftCircle, Zap, AlertTriangle, StopCircle,
 } from "lucide-react";
+import { resolveGameParam } from "@/lib/game-param";
 
 const LS_RESOLVED = "lineSplit_resolvedKeys_v1";
 function loadResolved(): Set<string> {
@@ -111,6 +112,7 @@ export const LineSplitFixPanel: React.FC<Props> = ({
   entries, translations, onUpdateTranslation, onJumpToEntry, risenVariant,
 }) => {
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
+  const gameParam = resolveGameParam(entries[0]?.msbtFile, risenVariant);
   const [issues, setIssues] = useState<LineSplitIssue[]>([]);
   const [scanned, setScanned] = useState(0);
   const [resolvedKeys, setResolvedKeys] = useState<Set<string>>(loadResolved);
@@ -204,7 +206,7 @@ export const LineSplitFixPanel: React.FC<Props> = ({
             : isTokenRouter ? tokenRouterKey
             : undefined,
       entries: items.map(it => ({ key: it.key, originalEn: it.original, currentAr: it.current })),
-      game: isRisen ? risenVariant : "xenoblade",
+      game: gameParam,
     };
     const { data, error } = await supabase.functions.invoke("improve-line-splits", { body: payload });
     if (error) {

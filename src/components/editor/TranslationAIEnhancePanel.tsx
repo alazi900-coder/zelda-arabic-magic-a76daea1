@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { resolveGameParam } from "@/lib/game-param";
 import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
@@ -244,6 +245,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 }) => {
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
+  const gameParam = resolveGameParam(entries[0]?.msbtFile, risenVariant);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<EnhanceSuggestion[]>([]);
@@ -686,7 +688,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       customRules: currentCustomRules.map(r => ({ id: r.id, kind: r.kind, prompt: r.prompt })),
       builtinOverrides: currentBuiltinOverrides,
       passes: SCAN_PASSES,
-      game: isRisen ? risenVariant : "xenoblade",
+      game: gameParam,
       extraInstructions: extraInstructions?.trim() || undefined,
       learnedFeedback: learnedFeedback || undefined,
       routingMode: aiRoutingMode,

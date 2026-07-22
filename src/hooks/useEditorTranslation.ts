@@ -13,6 +13,7 @@ import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { resolveGameParam } from "@/lib/game-param";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
 import { cacheLookupMany, cacheStoreMany } from "@/lib/translation-cache";
@@ -145,6 +146,8 @@ export function useEditorTranslation({
   // which is never reset and can go stale across projects) — Xenoblade/other
   // sessions never have a `.tab` msbtFile, so this stays false for them.
   const isRisenSource = /\.tab$/i.test(state?.entries?.[0]?.msbtFile || "");
+  // Resolved AI `game` param (mother3 / risen1|2 / xenoblade) from entry shape.
+  const gameParam = resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant);
 
   // Uses the single active filter card's dedicated prompt when exactly one is
   // selected (and it has one saved); otherwise falls back to the general prompt.
@@ -229,7 +232,7 @@ export function useEditorTranslation({
         aiModel,
         extraInstructions: buildExtraInstructions(),
         routingMode: aiRoutingMode,
-        game: isRisenSource ? risenVariant : "xenoblade",
+        game: gameParam,
       }),
       fetcher: async (payload) => {
         // === Cache lookup قبل الإرسال ===
@@ -553,7 +556,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
         });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
@@ -815,7 +818,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -873,7 +876,7 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: isRisenSource ? risenVariant : "xenoblade" }),
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
@@ -1037,7 +1040,7 @@ export function useEditorTranslation({
             aiModel,
             extraInstructions: buildExtraInstructions(),
               routingMode: aiRoutingMode,
-            game: isRisenSource ? risenVariant : "xenoblade",
+            game: gameParam,
           }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
@@ -1236,7 +1239,7 @@ export function useEditorTranslation({
                 aiModel,
                 extraInstructions: buildExtraInstructions(),
               routingMode: aiRoutingMode,
-                game: isRisenSource ? risenVariant : "xenoblade",
+                game: gameParam,
               }),
             });
             if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
@@ -1490,7 +1493,7 @@ export function useEditorTranslation({
               aiModel,
               extraInstructions: buildExtraInstructions(),
               routingMode: aiRoutingMode,
-              game: isRisenSource ? risenVariant : "xenoblade",
+              game: gameParam,
             }),
           });
           if (!response.ok) { stillFailed.push(entry); continue; }

@@ -29,6 +29,15 @@ import { applyRtlPatch, flipGlyphsInPlace } from "./m3-rtl-patch";
 export const MOTHER3_BUFFER_KEY = "mother3SourceBuffer";
 export const MOTHER3_SOURCE_GAME = "mother3";
 
+/**
+ * Largest plausible script-bank region. The real banks top out at ~159 KB; the
+ * bank table also contains one bogus entry (index ~1001) whose region wrongly
+ * spans ~12 MB to the ROM end and decodes to ~43k lines of pure noise. Skipping
+ * any region above this cap drops that junk (≈1.7k fake entries) before it ever
+ * reaches the editor, and keeps the build from decoding megabytes of garbage.
+ */
+const MAX_BANK_REGION = 0x40000;
+
 const LETTER = /[A-Za-z]/;
 
 /** A line is worth showing in the editor only if it has at least one real
@@ -52,7 +61,9 @@ export interface Mother3ExtractResult {
 
 /** Decode the whole main script into editor entries. */
 export function extractMother3Entries(rom: Uint8Array): Mother3ExtractResult {
-  const regions = parseBankTable(rom).filter((r) => r.end - r.start > 2);
+  const regions = parseBankTable(rom).filter(
+    (r) => r.end - r.start > 2 && r.end - r.start <= MAX_BANK_REGION
+  );
   const entries: ExtractedEntry[] = [];
   let lineCount = 0;
   let usedBanks = 0;
@@ -131,7 +142,9 @@ export function buildMother3Rom(
 ): Mother3BuildOk | Mother3BuildError {
   // 1) Resolve each translated representative to its original text, then map
   //    original-text -> Arabic so every duplicate line gets the same translation.
-  const regions = parseBankTable(rom).filter((r) => r.end - r.start > 2);
+  const regions = parseBankTable(rom).filter(
+    (r) => r.end - r.start > 2 && r.end - r.start <= MAX_BANK_REGION
+  );
   const parsedBanks = regions
     .map((r) => parseBankRegion(rom, r))
     .filter((b): b is M3Bank => b != null && b.lines.length > 0);

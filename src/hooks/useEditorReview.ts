@@ -1,5 +1,6 @@
 import { toast } from "@/hooks/use-toast";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { resolveGameParam } from "@/lib/game-param";
 import { hasArabicPresentationForms, removeArabicPresentationForms } from "@/lib/arabic-processing";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import type {
@@ -133,6 +134,9 @@ export function useEditorReview(params: UseEditorReviewParams) {
   // function below so it can mask/unmask Risen's own tags (<Exit>, $(name), ...)
   // around the model call instead of exposing them to it directly.
   const isRisen = /\.tab$/i.test(state?.entries?.[0]?.msbtFile || '');
+  // Resolved AI `game` param for this session (mother3 / risen1|2 / xenoblade),
+  // inferred from the entry shape — see resolveGameParam.
+  const gameParam = resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant);
 
   const buildProviderPayload = () => {
     const provider = translationProvider || 'gemini';
@@ -168,7 +172,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, aiModel, game: gameParam }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       setReviewResults(await response.json());
@@ -190,7 +194,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'suggest-short', aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'suggest-short', aiModel, game: gameParam }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();
@@ -249,7 +253,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
         const response = await fetch(getEdgeFunctionUrl("fix-mixed-language"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
-          body: JSON.stringify({ entries: batch, glossary: activeGlossary, game: isRisen ? risenVariant : 'xenoblade' }),
+          body: JSON.stringify({ entries: batch, glossary: activeGlossary, game: gameParam }),
         });
         if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
         const data = await response.json();
@@ -288,7 +292,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'smart-review', aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'smart-review', aiModel, game: gameParam }),
       });
       if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
       const data = await response.json();
@@ -335,7 +339,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'grammar-check', aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'grammar-check', aiModel, game: gameParam }),
       });
       if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
       const data = await response.json();
@@ -368,7 +372,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-review', aiModel, contextEntries, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-review', aiModel, contextEntries, game: gameParam }),
       });
       if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
       const data = await response.json();
@@ -410,7 +414,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
         const response = await fetch(getEdgeFunctionUrl("review-translations"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
-          body: JSON.stringify({ entries: batch, action: 'auto-correct', aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+          body: JSON.stringify({ entries: batch, action: 'auto-correct', aiModel, game: gameParam }),
           signal: abortCtrl.signal,
         });
         if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
@@ -466,7 +470,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
         const response = await fetch(getEdgeFunctionUrl("review-translations"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
-          body: JSON.stringify({ entries: batch, glossary: activeGlossary, action: 'detect-weak', aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+          body: JSON.stringify({ entries: batch, glossary: activeGlossary, action: 'detect-weak', aiModel, game: gameParam }),
           signal: abortCtrl.signal,
         });
         if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
@@ -519,7 +523,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-retranslate', aiModel, contextEntries, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: reviewEntries, glossary: activeGlossary, action: 'context-retranslate', aiModel, contextEntries, game: gameParam }),
       });
       if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
       const data = await response.json();
@@ -568,7 +572,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("enhance-translations"), {
         method: 'POST',
         headers: { ...getSupabaseHeaders() },
-        body: JSON.stringify({ entries: translatedEntries, action: 'analyze', glossary: activeGlossary?.split('\n').slice(0, 200).join('\n'), ...buildProviderPayload(), game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: translatedEntries, action: 'analyze', glossary: activeGlossary?.split('\n').slice(0, 200).join('\n'), ...buildProviderPayload(), game: gameParam }),
       });
       if (!response.ok) { const errorData = await response.json().catch(() => ({})); throw new Error(errorData.error || `خطأ ${response.status}`); }
       const data = await response.json();
@@ -680,7 +684,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
           const response = await fetch(getEdgeFunctionUrl("translation-analysis"), {
             method: 'POST',
             headers: { ...getSupabaseHeaders() },
-            body: JSON.stringify({ entries: batchEntries, action, glossary: glossarySlice, aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+            body: JSON.stringify({ entries: batchEntries, action, glossary: glossarySlice, aiModel, game: gameParam }),
           });
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -784,7 +788,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary, action: 'improve', aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary, action: 'improve', aiModel, game: gameParam }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();
@@ -821,7 +825,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }], glossary: activeGlossary, action: 'improve', aiModel, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: [{ key, original: entry.original, translation, maxBytes: entry.maxBytes || 0 }], glossary: activeGlossary, action: 'improve', aiModel, game: gameParam }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();
@@ -846,7 +850,7 @@ export function useEditorReview(params: UseEditorReviewParams) {
       const response = await fetch(getEdgeFunctionUrl("check-consistency"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
-        body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary, game: isRisen ? risenVariant : 'xenoblade' }),
+        body: JSON.stringify({ entries: translatedEntries, glossary: activeGlossary, game: gameParam }),
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();

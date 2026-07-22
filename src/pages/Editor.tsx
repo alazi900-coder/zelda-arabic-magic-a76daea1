@@ -13,6 +13,7 @@ import {
 import { useEditorState } from "@/hooks/useEditorState";
 import { FILE_CATEGORIES, BDAT_CATEGORIES } from "@/components/editor/types";
 import { buildRisenCategories } from "@/lib/risen/categories";
+import { buildMother3Categories } from "@/lib/mother3/categories";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
@@ -131,9 +132,10 @@ const Editor = () => {
     const entries = editor.state?.entries;
     if (!entries) return [];
     if (isRisenEntries) return buildRisenCategories(entries);
+    if (isMother3Entries) return buildMother3Categories(entries);
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {

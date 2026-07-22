@@ -24,6 +24,7 @@ import {
 } from "./m3-script";
 import { M3_ARABIC_FONT_B64, M3_ARABIC_WIDTHS_B64, M3_FONT_OFFSET, M3_WIDTHS_OFFSET } from "./m3-arabic-font";
 import { applyRtlPatch, flipGlyphsInPlace } from "./m3-rtl-patch";
+import { NAMES_TABLES, parseNamesTable, rebuildNamesTable, applyNamesRebuild } from "./m3-names-table";
 
 /** IndexedDB key holding the loaded Mother 3 ROM bytes for the build step. */
 export const MOTHER3_BUFFER_KEY = "mother3SourceBuffer";
@@ -90,6 +91,22 @@ export function extractMother3Entries(rom: Uint8Array): Mother3ExtractResult {
     }
     if (bankHasText) usedBanks++;
   }
+
+  // Non-script text tables (item names, etc.) — flat, unobfuscated, no dedup
+  // needed (each is already a short, mostly-unique list).
+  for (const spec of NAMES_TABLES) {
+    for (const entry of parseNamesTable(rom, spec)) {
+      if (!isTranslatable(entry.text)) continue;
+      entries.push({
+        msbtFile: spec.id,
+        index: entry.index,
+        label: preview(entry.text),
+        original: entry.text,
+        maxBytes: 0x7fff, // real limit is per-table, enforced at build
+      });
+    }
+  }
+
   return { entries, bankCount: usedBanks, lineCount };
 }
 
@@ -189,6 +206,34 @@ export function buildMother3Rom(
       continue;
     }
     out = applyRebuild(out, res) as Uint8Array<ArrayBuffer>;
+    changedBanks++;
+  }
+
+  // 2) Same pass for the flat, unobfuscated text tables (item names, etc.),
+  //    keyed `<tableId>:<index>` directly (no dedup — each entry stands alone).
+  for (const spec of NAMES_TABLES) {
+    const tableEntries = parseNamesTable(out, spec);
+    if (tableEntries.length === 0) continue;
+    const edits = new Map<number, string>();
+    for (const entry of tableEntries) {
+      const value = translations[`${spec.id}:${entry.index}`];
+      if (value != null && value !== "") {
+        edits.set(entry.index, value);
+        translatedLines++;
+      }
+    }
+    if (edits.size === 0) continue;
+    const res = rebuildNamesTable(out, spec, tableEntries, edits);
+    if ("error" in res) {
+      if (res.overflowBy == null) {
+        encodingFailure = true;
+        encodingMsg = res.error;
+      } else {
+        overflows.push({ bank: -1, overflowBy: res.overflowBy });
+      }
+      continue;
+    }
+    out = applyNamesRebuild(out, res);
     changedBanks++;
   }
 

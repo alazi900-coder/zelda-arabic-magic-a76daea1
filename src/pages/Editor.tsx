@@ -122,7 +122,7 @@ const Editor = () => {
   // flag above, which is never reset and can go stale across projects) — used
   // wherever entries already exist, so it can't disagree with what's loaded.
   const isRisenEntries = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
-  const isMother3Entries = /^bank_\d+$/.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isMother3Entries = /^(bank_\d+|names_\w+)$/.test(editor.state?.entries?.[0]?.msbtFile || "");
 
   // Which category list applies to the loaded file — mirrors the same
   // resolution used by CategoryProgress/EditorProgressStatus for the filter

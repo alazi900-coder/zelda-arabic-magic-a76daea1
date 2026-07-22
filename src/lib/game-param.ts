@@ -3,9 +3,9 @@
  * enhance, review, tools…) so each request gets the right per-game prompt
  * lore/terminology instead of defaulting to Xenoblade. The game is inferred
  * from an entry's `msbtFile` shape — the same signal the editor already uses:
- *   - `bank_<N>`  → MOTHER 3   (m3-editor-bridge keys entries this way)
- *   - `*.tab`     → Risen      (variant chosen by the session: risen1 | risen2)
- *   - otherwise   → Xenoblade  (default, backward-compatible)
+ *   - `bank_<N>` / `names_<id>` → MOTHER 3 (m3-editor-bridge keys entries this way)
+ *   - `*.tab`                   → Risen     (variant chosen by the session: risen1 | risen2)
+ *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 export type GameParam = "xenoblade" | "risen1" | "risen2" | "mother3";
 
@@ -14,7 +14,7 @@ export function resolveGameParam(
   risenVariant: "risen1" | "risen2" = "risen1"
 ): GameParam {
   const f = msbtFile || "";
-  if (/^bank_\d+$/.test(f)) return "mother3";
+  if (/^(bank_\d+|names_\w+)$/.test(f)) return "mother3";
   if (/\.tab$/i.test(f)) return risenVariant;
   return "xenoblade";
 }

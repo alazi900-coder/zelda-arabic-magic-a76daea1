@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.117.0",
+    date: "2026-07-22",
+    changes: [
+      { kind: "fixed", text: "أداتا Mother 3 وMetroid Prime كانتا تمحوان كل الترجمات المحفوظة عند إعادة رفع نفس الملف — أصبحتا الآن تسترجعان الترجمات المحفوظة سابقاً وتدمجانها مع النصوص المستخرجة حديثاً، بنفس آلية أداة Xenoblade." },
+    ],
+  },
+  {
     version: "1.116.0",
     date: "2026-07-22",
     changes: [

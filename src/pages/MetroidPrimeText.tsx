@@ -2,8 +2,7 @@ import { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Upload, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { idbSet } from "@/lib/idb-storage";
-import type { EditorState } from "@/components/editor/types";
+import { idbSet, idbGet } from "@/lib/idb-storage";
 import {
   extractMetroidPrimeEntries,
   METROID_PRIME_BUFFER_KEY,
@@ -34,16 +33,20 @@ export default function MetroidPrimeText() {
           throw new Error("لم يُعثر على نصوص Metroid Prime في هذا الملف");
         }
 
-        const editorState: EditorState = {
-          entries,
-          translations: {},
-          protectedEntries: new Set(),
-          glossary: "",
-          technicalBypass: new Set(),
-          fuzzyScores: {},
-          clearedKeys: new Set(),
-        };
-        await idbSet("editorState", editorState);
+        // Preserve any translations already saved from a previous upload of
+        // this same .pak — matched by the same entry key (msbtFile:index) —
+        // mirroring how Xenoblade's opener avoids wiping the user's work on
+        // re-upload. `freshExtraction: true` tells the editor to load this
+        // merged state directly instead of showing the recovery-dialog.
+        const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
+        const existingTranslations = existing?.translations || {};
+        const validKeys = new Set(entries.map((e) => `${e.msbtFile}:${e.index}`));
+        const translations: Record<string, string> = {};
+        for (const [key, value] of Object.entries(existingTranslations)) {
+          if (validKeys.has(key) && value) translations[key] = value;
+        }
+
+        await idbSet("editorState", { entries, translations, freshExtraction: true });
         await idbSet("editor-source-game", METROID_PRIME_SOURCE_GAME);
         await idbSet(METROID_PRIME_BUFFER_KEY, pak.buffer.slice(0));
 
@@ -51,7 +54,11 @@ export default function MetroidPrimeText() {
         for (const e of entries) originals[`${e.msbtFile}:${e.index}`] = e.original;
         await idbSet("originalTexts", originals);
 
-        toast.success(`تم استخراج ${entries.length} نص من ${assetCount} ملف نصوص`);
+        const restoredCount = Object.keys(translations).length;
+        toast.success(
+          `تم استخراج ${entries.length} نص من ${assetCount} ملف نصوص` +
+            (restoredCount > 0 ? ` — تم استرجاع ${restoredCount} ترجمة محفوظة` : "")
+        );
         navigate("/editor");
       } catch (e) {
         toast.error((e as Error).message);

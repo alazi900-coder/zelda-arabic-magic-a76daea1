@@ -2,16 +2,9 @@
 /* eslint-disable */
 
 /**
- * Proof-of-pipeline step: expands the given TXTR atlas by 40 rows, draws a
- * fixed 20x30 filled test box into the new area, and inserts a matching
- * glyph record (fixed test codepoint U+0627, Arabic Alef) into the given
- * FONT asset's glyph table at the correct sorted position — then rebuilds
- * the whole PACK file. Not real glyph editing yet (no font rasterization,
- * fixed single test glyph) — this exists to verify the full encode/rebuild
- * pipeline works through the actual WASM boundary, mirroring a native-Rust
- * test that already proved it byte-for-byte against a real game asset.
+ * WASM export — thin wrapper around `build_font_glyphs_native`.
  */
-export function add_test_glyph(data: Uint8Array, txtr_id: string, font_id: string): Uint8Array;
+export function build_font_glyphs(data: Uint8Array, txtr_id: string, font_id: string, glyphs_meta_json: string, pixels_concat: Uint8Array): Uint8Array;
 
 /**
  * Decode a TXTR asset (by UUID) from a PACK file into PNG bytes.
@@ -34,7 +27,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly add_test_glyph: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly build_font_glyphs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
   readonly decode_texture_png: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly list_assets: (a: number, b: number) => [number, number, number, number];
   readonly list_glyphs: (a: number, b: number, c: number, d: number) => [number, number, number, number];

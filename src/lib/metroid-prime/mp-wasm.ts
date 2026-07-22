@@ -37,11 +37,24 @@ export interface MetroidPrimeGlyph {
   advance: number;
 }
 
+/** One glyph ready to be inserted into a FONT's atlas — same fields the
+ *  real glyph records store (see MetroidPrimeGlyph), plus its rasterized
+ *  pixel bitmap (grayscale/R8, row-major top-down, width*height bytes). */
+export interface MpGlyphInput {
+  code: number;
+  x0: number;
+  y0: number;
+  width: number;
+  height: number;
+  advance: number;
+  pixels: Uint8Array;
+}
+
 interface MpWasmModule {
   list_assets(data: Uint8Array): string;
   decode_texture_png(data: Uint8Array, id: string): Uint8Array;
   list_glyphs(data: Uint8Array, id: string): string;
-  add_test_glyph(data: Uint8Array, txtrId: string, fontId: string): Uint8Array;
+  build_font_glyphs(data: Uint8Array, txtrId: string, fontId: string, glyphsMetaJson: string, pixelsConcat: Uint8Array): Uint8Array;
 }
 
 let modPromise: Promise<MpWasmModule> | null = null;
@@ -75,13 +88,27 @@ export async function listGlyphs(data: Uint8Array, id: string): Promise<MetroidP
 }
 
 /**
- * Proof-of-pipeline test: expands the given texture, draws a fixed test box,
- * and inserts a matching glyph record (fixed codepoint U+0627) into the
- * given FONT's table, then rebuilds the whole .pak file. Not real glyph
- * editing yet — verifies the full encode/rebuild pipeline end-to-end
- * through the actual WASM boundary before a real editor is built.
+ * Adds real rasterized glyphs (e.g. from renderArabicGlyphsForMp) to a FONT
+ * asset: shelf-packs their pixel bitmaps into new atlas rows, inserts a
+ * matching glyph record for each at its correct sorted position in the
+ * FONT's glyph table, then rebuilds the whole .pak file. Throws if any
+ * requested codepoint already exists in the font — callers should filter
+ * against `listGlyphs` first.
  */
-export async function addTestGlyph(data: Uint8Array, txtrId: string, fontId: string): Promise<Uint8Array> {
+export async function buildFontGlyphs(
+  data: Uint8Array,
+  txtrId: string,
+  fontId: string,
+  glyphs: MpGlyphInput[]
+): Promise<Uint8Array> {
   const mod = await loadModule();
-  return mod.add_test_glyph(data, txtrId, fontId);
+  const meta = glyphs.map(({ code, x0, y0, width, height, advance }) => ({ code, x0, y0, width, height, advance }));
+  const totalLen = glyphs.reduce((sum, g) => sum + g.pixels.length, 0);
+  const pixelsConcat = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const g of glyphs) {
+    pixelsConcat.set(g.pixels, offset);
+    offset += g.pixels.length;
+  }
+  return mod.build_font_glyphs(data, txtrId, fontId, JSON.stringify(meta), pixelsConcat);
 }

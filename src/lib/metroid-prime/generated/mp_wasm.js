@@ -106,33 +106,32 @@ if (!('encodeInto' in cachedTextEncoder)) {
 let WASM_VECTOR_LEN = 0;
 
 /**
- * Proof-of-pipeline step: expands the given TXTR atlas by 40 rows, draws a
- * fixed 20x30 filled test box into the new area, and inserts a matching
- * glyph record (fixed test codepoint U+0627, Arabic Alef) into the given
- * FONT asset's glyph table at the correct sorted position — then rebuilds
- * the whole PACK file. Not real glyph editing yet (no font rasterization,
- * fixed single test glyph) — this exists to verify the full encode/rebuild
- * pipeline works through the actual WASM boundary, mirroring a native-Rust
- * test that already proved it byte-for-byte against a real game asset.
+ * WASM export — thin wrapper around `build_font_glyphs_native`.
  * @param {Uint8Array} data
  * @param {string} txtr_id
  * @param {string} font_id
+ * @param {string} glyphs_meta_json
+ * @param {Uint8Array} pixels_concat
  * @returns {Uint8Array}
  */
-export function add_test_glyph(data, txtr_id, font_id) {
+export function build_font_glyphs(data, txtr_id, font_id, glyphs_meta_json, pixels_concat) {
     const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(txtr_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
     const ptr2 = passStringToWasm0(font_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.add_test_glyph(ptr0, len0, ptr1, len1, ptr2, len2);
+    const ptr3 = passStringToWasm0(glyphs_meta_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passArray8ToWasm0(pixels_concat, wasm.__wbindgen_malloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.build_font_glyphs(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
-    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v4;
+    return v6;
 }
 
 /**

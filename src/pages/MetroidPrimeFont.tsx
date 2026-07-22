@@ -6,18 +6,58 @@ import {
   listPakAssets,
   decodeTextureToPng,
   listGlyphs,
-  addTestGlyph,
+  buildFontGlyphs,
   type MetroidPrimeAssetInfo,
   type MetroidPrimeGlyph,
 } from "@/lib/metroid-prime/mp-wasm";
+import { renderArabicGlyphsForMp, type RenderedMpGlyph } from "@/lib/metroid-prime/mp-arabic-font-gen";
+import { FREE_ARABIC_FONTS, fetchFreeFontBytes } from "@/lib/risen2-free-fonts";
+
+/** Small canvas preview of one rasterized glyph's coverage bitmap. */
+function GlyphThumb({ glyph, skipped }: { glyph: RenderedMpGlyph; skipped: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || glyph.width === 0 || glyph.height === 0) return;
+    canvas.width = glyph.width;
+    canvas.height = glyph.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const imageData = ctx.createImageData(glyph.width, glyph.height);
+    for (let i = 0; i < glyph.pixels.length; i++) {
+      imageData.data[i * 4] = 255;
+      imageData.data[i * 4 + 1] = 255;
+      imageData.data[i * 4 + 2] = 255;
+      imageData.data[i * 4 + 3] = glyph.pixels[i];
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }, [glyph]);
+
+  return (
+    <div className={`flex flex-col items-center gap-1 rounded border p-1.5 ${skipped ? "border-amber-500/40 bg-amber-500/10" : "border-border bg-black/60"}`}>
+      {glyph.width > 0 && glyph.height > 0 ? (
+        <canvas
+          ref={canvasRef}
+          style={{ imageRendering: "pixelated", width: glyph.width * 2, height: glyph.height * 2 }}
+        />
+      ) : (
+        <div className="flex h-8 w-8 items-center justify-center text-[10px] text-muted-foreground">فراغ</div>
+      )}
+      <span className="text-[10px] text-muted-foreground" dir="ltr">
+        U+{glyph.code.toString(16).toUpperCase().padStart(4, "0")}
+      </span>
+      {skipped && <span className="text-[9px] text-amber-500">موجود مسبقاً</span>}
+    </div>
+  );
+}
 
 /**
- * Read-only viewer for Metroid Prime Remastered .pak files: lists every
- * texture (TXTR) asset and renders the selected one on a canvas, with an
- * optional overlay of a FONT asset's glyph boxes (reverse-engineered — see
- * mp-wasm/src/lib.rs) to visually verify the UV-rect understanding against
- * the whole glyph table at once. First step toward a font-editing tool
- * (mirroring /risen2/fonts) — no editing yet, just extraction + display.
+ * Metroid Prime Remastered font tool: extracts and displays every texture
+ * (TXTR) and FONT asset in a .pak file, and lets you rasterize real Arabic
+ * text (via Canvas 2D + the project's Arabic shaping) and insert the
+ * resulting glyphs into a FONT asset's atlas — see mp-wasm/src/lib.rs for
+ * the reverse-engineered format (no official spec exists) and
+ * mp-arabic-font-gen.ts for the rasterization.
  */
 export default function MetroidPrimeFont() {
   const [busy, setBusy] = useState(false);
@@ -30,8 +70,17 @@ export default function MetroidPrimeFont() {
   const [decoding, setDecoding] = useState(false);
   const [selectedFontId, setSelectedFontId] = useState<string | null>(null);
   const [glyphs, setGlyphs] = useState<MetroidPrimeGlyph[] | null>(null);
-  const [buildingTest, setBuildingTest] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Free-form Arabic glyph editor state.
+  const [fontEntryId, setFontEntryId] = useState(FREE_ARABIC_FONTS[0].id);
+  const [inputText, setInputText] = useState("");
+  const [fontSizePx, setFontSizePx] = useState(32);
+  const [rendering, setRendering] = useState(false);
+  const [previewGlyphs, setPreviewGlyphs] = useState<RenderedMpGlyph[] | null>(null);
+  const [existingCodes, setExistingCodes] = useState<Set<number> | null>(null);
+  const [building, setBuilding] = useState(false);
+  const fontBytesCache = useRef<Map<string, ArrayBuffer>>(new Map());
 
   const loadPak = useCallback(async (file: File) => {
     setBusy(true);
@@ -50,6 +99,8 @@ export default function MetroidPrimeFont() {
       setImageBitmap(null);
       setSelectedFontId(null);
       setGlyphs(null);
+      setPreviewGlyphs(null);
+      setExistingCodes(null);
       toast.success(`تم العثور على ${textureList.length} نسيجاً و${fontList.length} خط من أصل ${list.length} أصلاً`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -98,25 +149,63 @@ export default function MetroidPrimeFont() {
     [pakBytes, selectedFontId]
   );
 
-  const buildTestPak = useCallback(async () => {
-    if (!pakBytes || !selectedId || !selectedFontId) return;
-    setBuildingTest(true);
+  const handlePreview = useCallback(async () => {
+    if (!inputText.trim()) {
+      toast.error("اكتب نصاً عربياً أولاً");
+      return;
+    }
+    if (!pakBytes || !selectedFontId) {
+      toast.error("اختر خطاً من القائمة أعلاه أولاً");
+      return;
+    }
+    setRendering(true);
     try {
-      const rebuilt = await addTestGlyph(pakBytes, selectedId, selectedFontId);
+      const entry = FREE_ARABIC_FONTS.find((f) => f.id === fontEntryId)!;
+      let bytes = fontBytesCache.current.get(entry.id);
+      if (!bytes) {
+        bytes = await fetchFreeFontBytes(entry);
+        fontBytesCache.current.set(entry.id, bytes);
+      }
+      const [{ glyphs: rendered }, existing] = await Promise.all([
+        renderArabicGlyphsForMp(bytes, inputText, fontSizePx),
+        listGlyphs(pakBytes, selectedFontId),
+      ]);
+      setPreviewGlyphs(rendered);
+      setExistingCodes(new Set(existing.map((g) => g.code)));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRendering(false);
+    }
+  }, [inputText, fontEntryId, fontSizePx, pakBytes, selectedFontId]);
+
+  const handleBuild = useCallback(async () => {
+    if (!pakBytes || !selectedId || !selectedFontId || !previewGlyphs || !existingCodes) return;
+    const toAdd = previewGlyphs.filter((g) => !existingCodes.has(g.code));
+    if (toAdd.length === 0) {
+      toast.error("كل الحروف المعروضة موجودة مسبقاً في هذا الخط");
+      return;
+    }
+    setBuilding(true);
+    try {
+      const rebuilt = await buildFontGlyphs(pakBytes, selectedId, selectedFontId, toAdd);
       const blob = new Blob([rebuilt as unknown as BlobPart], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "GuiSysMP1_test.pak";
+      a.download = "GuiSysMP1_arabic.pak";
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("تم بناء نسخة اختبار — تحقّق منها بإعادة رفعها هنا");
+      const skipped = previewGlyphs.length - toAdd.length;
+      toast.success(
+        `تم إدراج ${toAdd.length} حرفاً${skipped > 0 ? ` (تخطّي ${skipped} موجود مسبقاً)` : ""} — تحقّق منها بإعادة رفعها هنا`
+      );
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setBuildingTest(false);
+      setBuilding(false);
     }
-  }, [pakBytes, selectedId, selectedFontId]);
+  }, [pakBytes, selectedId, selectedFontId, previewGlyphs, existingCodes]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -147,7 +236,7 @@ export default function MetroidPrimeFont() {
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
       <div className="mx-auto max-w-5xl px-4 py-10">
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">عارض خطوط Metroid Prime Remastered</h1>
+          <h1 className="text-2xl font-bold">أداة خطوط Metroid Prime Remastered</h1>
           <Link to="/" className="text-sm text-muted-foreground hover:underline">
             الرئيسية <ArrowRight className="inline h-4 w-4" />
           </Link>
@@ -171,7 +260,7 @@ export default function MetroidPrimeFont() {
         >
           {busy ? <Loader2 className="h-10 w-10 animate-spin" /> : <Upload className="h-10 w-10 text-muted-foreground" />}
           <span className="text-lg font-medium">افتح ملف .pak (مثل GuiSysMP1.pak)</span>
-          <span className="text-sm text-muted-foreground">مرحلة أولى للعرض فقط — بدون تعديل بعد</span>
+          <span className="text-sm text-muted-foreground">استخراج وعرض الخطوط، ثم إدراج حروف عربية حقيقية</span>
           <input
             type="file"
             accept=".pak"
@@ -185,7 +274,7 @@ export default function MetroidPrimeFont() {
 
         {fonts.length > 0 && (
           <div className="mt-6 flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">إظهار مربعات حروف خط (فوق الصفحة الأولى للنسيج المعروض):</span>
+            <span className="text-sm text-muted-foreground">اختر خطاً للتعديل عليه (يعرض أيضاً مربعات حروفه فوق النسيج):</span>
             {fonts.map((f, i) => (
               <button
                 key={`${f.id}-${i}`}
@@ -225,14 +314,77 @@ export default function MetroidPrimeFont() {
                   <span className="text-sm text-muted-foreground">اختر نسيجاً من القائمة لعرضه</span>
                 )}
               </div>
+
               {selectedId && selectedFontId && (
-                <button
-                  onClick={() => void buildTestPak()}
-                  disabled={buildingTest}
-                  className="self-start rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
-                >
-                  {buildingTest ? "جارٍ البناء..." : "🧪 تنزيل نسخة اختبار (إضافة حرف الألف كمربع تجريبي)"}
-                </button>
+                <div className="flex flex-col gap-3 rounded-lg border p-4">
+                  <h2 className="text-sm font-bold">إضافة حروف عربية إلى هذا الخط</h2>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">خط الرسم (يُستخدم لرسم أشكال الحروف)</label>
+                    <select
+                      value={fontEntryId}
+                      onChange={(e) => setFontEntryId(e.target.value)}
+                      className="rounded border bg-background px-2 py-1.5 text-sm"
+                    >
+                      {FREE_ARABIC_FONTS.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name} — {f.style}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">النص العربي</label>
+                    <input
+                      type="text"
+                      dir="rtl"
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      placeholder="اكتب نصاً عربياً هنا..."
+                      className="rounded border bg-background px-2 py-1.5 text-sm"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">حجم الرسم: {fontSizePx}px</label>
+                    <input
+                      type="range"
+                      min={16}
+                      max={64}
+                      value={fontSizePx}
+                      onChange={(e) => setFontSizePx(Number(e.target.value))}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => void handlePreview()}
+                    disabled={rendering}
+                    className="self-start rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                  >
+                    {rendering ? "جارٍ الرسم..." : "معاينة الحروف"}
+                  </button>
+
+                  {previewGlyphs && existingCodes && (
+                    <div className="flex flex-col gap-3 border-t pt-3">
+                      <div className="flex flex-wrap gap-2">
+                        {previewGlyphs.map((g, i) => (
+                          <GlyphThumb key={`${g.code}-${i}`} glyph={g} skipped={existingCodes.has(g.code)} />
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        الحروف المظللة بالبرتقالي موجودة مسبقاً في هذا الخط ولن تُضاف مجدداً.
+                      </p>
+                      <button
+                        onClick={() => void handleBuild()}
+                        disabled={building}
+                        className="self-start rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
+                      >
+                        {building ? "جارٍ البناء..." : "بناء وتنزيل .pak معدَّل"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

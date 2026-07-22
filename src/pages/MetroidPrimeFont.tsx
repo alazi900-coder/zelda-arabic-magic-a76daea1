@@ -6,6 +6,7 @@ import {
   listPakAssets,
   decodeTextureToPng,
   listGlyphs,
+  addTestGlyph,
   type MetroidPrimeAssetInfo,
   type MetroidPrimeGlyph,
 } from "@/lib/metroid-prime/mp-wasm";
@@ -29,6 +30,7 @@ export default function MetroidPrimeFont() {
   const [decoding, setDecoding] = useState(false);
   const [selectedFontId, setSelectedFontId] = useState<string | null>(null);
   const [glyphs, setGlyphs] = useState<MetroidPrimeGlyph[] | null>(null);
+  const [buildingTest, setBuildingTest] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const loadPak = useCallback(async (file: File) => {
@@ -95,6 +97,26 @@ export default function MetroidPrimeFont() {
     },
     [pakBytes, selectedFontId]
   );
+
+  const buildTestPak = useCallback(async () => {
+    if (!pakBytes || !selectedId || !selectedFontId) return;
+    setBuildingTest(true);
+    try {
+      const rebuilt = await addTestGlyph(pakBytes, selectedId, selectedFontId);
+      const blob = new Blob([rebuilt as unknown as BlobPart], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "GuiSysMP1_test.pak";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("تم بناء نسخة اختبار — تحقّق منها بإعادة رفعها هنا");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBuildingTest(false);
+    }
+  }, [pakBytes, selectedId, selectedFontId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -164,9 +186,9 @@ export default function MetroidPrimeFont() {
         {fonts.length > 0 && (
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">إظهار مربعات حروف خط (فوق الصفحة الأولى للنسيج المعروض):</span>
-            {fonts.map((f) => (
+            {fonts.map((f, i) => (
               <button
-                key={f.id}
+                key={`${f.id}-${i}`}
                 onClick={() => void toggleGlyphOverlay(f.id)}
                 className={`rounded-full border px-3 py-1 text-xs ${
                   selectedFontId === f.id ? "bg-primary/20 border-primary" : "hover:bg-muted"
@@ -181,9 +203,9 @@ export default function MetroidPrimeFont() {
         {textures.length > 0 && (
           <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-3">
             <div className="md:col-span-1 max-h-[70vh] overflow-y-auto rounded-lg border">
-              {textures.map((a) => (
+              {textures.map((a, i) => (
                 <button
-                  key={a.id}
+                  key={`${a.id}-${i}`}
                   onClick={() => void selectTexture(a.id)}
                   className={`block w-full border-b px-3 py-2 text-right text-sm hover:bg-muted ${
                     selectedId === a.id ? "bg-primary/10 font-medium" : ""
@@ -193,13 +215,24 @@ export default function MetroidPrimeFont() {
                 </button>
               ))}
             </div>
-            <div className="md:col-span-2 flex min-h-[300px] items-center justify-center overflow-auto rounded-lg border bg-muted/20 p-4">
-              {decoding ? (
-                <Loader2 className="h-8 w-8 animate-spin" />
-              ) : imageBitmap ? (
-                <canvas ref={canvasRef} className="max-h-[65vh] max-w-full" style={{ imageRendering: "pixelated" }} />
-              ) : (
-                <span className="text-sm text-muted-foreground">اختر نسيجاً من القائمة لعرضه</span>
+            <div className="md:col-span-2 flex flex-col gap-3">
+              <div className="flex min-h-[300px] items-center justify-center overflow-auto rounded-lg border bg-muted/20 p-4">
+                {decoding ? (
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                ) : imageBitmap ? (
+                  <canvas ref={canvasRef} className="max-h-[65vh] max-w-full" style={{ imageRendering: "pixelated" }} />
+                ) : (
+                  <span className="text-sm text-muted-foreground">اختر نسيجاً من القائمة لعرضه</span>
+                )}
+              </div>
+              {selectedId && selectedFontId && (
+                <button
+                  onClick={() => void buildTestPak()}
+                  disabled={buildingTest}
+                  className="self-start rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium hover:bg-primary/20 disabled:opacity-50"
+                >
+                  {buildingTest ? "جارٍ البناء..." : "🧪 تنزيل نسخة اختبار (إضافة حرف الألف كمربع تجريبي)"}
+                </button>
               )}
             </div>
           </div>

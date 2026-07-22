@@ -41,6 +41,7 @@ interface MpWasmModule {
   list_assets(data: Uint8Array): string;
   decode_texture_png(data: Uint8Array, id: string): Uint8Array;
   list_glyphs(data: Uint8Array, id: string): string;
+  add_test_glyph(data: Uint8Array, txtrId: string, fontId: string): Uint8Array;
 }
 
 let modPromise: Promise<MpWasmModule> | null = null;
@@ -71,4 +72,16 @@ export async function decodeTextureToPng(data: Uint8Array, id: string): Promise<
 export async function listGlyphs(data: Uint8Array, id: string): Promise<MetroidPrimeGlyph[]> {
   const mod = await loadModule();
   return JSON.parse(mod.list_glyphs(data, id)) as MetroidPrimeGlyph[];
+}
+
+/**
+ * Proof-of-pipeline test: expands the given texture, draws a fixed test box,
+ * and inserts a matching glyph record (fixed codepoint U+0627) into the
+ * given FONT's table, then rebuilds the whole .pak file. Not real glyph
+ * editing yet — verifies the full encode/rebuild pipeline end-to-end
+ * through the actual WASM boundary before a real editor is built.
+ */
+export async function addTestGlyph(data: Uint8Array, txtrId: string, fontId: string): Promise<Uint8Array> {
+  const mod = await loadModule();
+  return mod.add_test_glyph(data, txtrId, fontId);
 }

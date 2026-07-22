@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Upload, Loader2, ArrowRight, CheckCircle2, XCircle, Download } from "lucide-react";
 import { toast } from "sonner";
+import JSZip from "jszip";
 import {
   listPakAssets,
   decodeTextureToPng,
@@ -485,6 +486,47 @@ export default function MetroidPrimeFont() {
     downloadBlob(pakBytes, "GuiSysMP1_arabic.pak");
   }, [pakBytes]);
 
+  /** Exports the currently displayed atlas as a real PNG + a CSV of every
+   *  glyph's coordinates (pixel box computed from u0/v0/u1/v1 against this
+   *  same image, so no extra math is needed to compare them by eye) —
+   *  zipped together for manual verification against the image. */
+  const handleExportImageAndCoords = useCallback(async () => {
+    if (!pakBytes || !selectedId || !imageBitmap) return;
+    try {
+      const png = await decodeTextureToPng(pakBytes, selectedId);
+      const header = "code_hex,char,flag,x0,y0,width,height,advance,u0,v0,u1,v1,box_x_px,box_y_px,box_w_px,box_h_px";
+      const rows = primaryFlagZero.map((g) => {
+        const boxX = Math.round(g.u0 * imageBitmap.width);
+        const boxXEnd = Math.round(g.u1 * imageBitmap.width);
+        const boxYTop = Math.round(g.v1 * imageBitmap.height);
+        const boxYBottom = Math.round(g.v0 * imageBitmap.height);
+        const ch = charLabel(g.code);
+        return [
+          `U+${g.code.toString(16).toUpperCase().padStart(4, "0")}`,
+          `"${ch}"`,
+          g.flag, g.x0, g.y0, g.width, g.height, g.advance,
+          g.u0, g.v0, g.u1, g.v1,
+          boxX, boxYTop, boxXEnd - boxX, boxYBottom - boxYTop,
+        ].join(",");
+      });
+      const csv = [header, ...rows].join("\n");
+
+      const zip = new JSZip();
+      zip.file("font-atlas.png", png);
+      zip.file("glyph-coordinates.csv", csv);
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "mp-font-image-and-coords.zip";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`تم تصدير الصورة و${primaryFlagZero.length} إحداثية في ملف ZIP`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }, [pakBytes, selectedId, imageBitmap, primaryFlagZero]);
+
   // Atlas canvas: draw image + pink boxes for every flag=0 glyph + cyan
   // outline for the selected one (using live-pending edit field values).
   useEffect(() => {
@@ -735,6 +777,9 @@ export default function MetroidPrimeFont() {
                   <Download className="h-4 w-4" /> تنزيل .pak الحالي
                 </button>
               )}
+              <button onClick={() => void handleExportImageAndCoords()} className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">
+                <Download className="h-4 w-4" /> تصدير صورة الخط + الإحداثيات (ZIP)
+              </button>
             </div>
             {roundTrip && (
               <div className={`flex items-center gap-2 rounded border p-2 text-sm ${roundTrip.ok ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>

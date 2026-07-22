@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.114.0",
+    date: "2026-07-22",
+    changes: [
+      { kind: "added", text: "أداة خط Metroid Prime: زر جديد \"تصدير صورة الخط + الإحداثيات (ZIP)\" — يُصدّر صورة PNG حقيقية لأطلس الخط المعروض مع ملف CSV بإحداثيات كل حرف (بالبكسل، محسوبة مسبقاً من نفس الصورة) للمقارنة اليدوية والتحقق من صحتها." },
+    ],
+  },
+  {
     version: "1.113.0",
     date: "2026-07-22",
     changes: [

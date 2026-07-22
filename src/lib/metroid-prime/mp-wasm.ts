@@ -71,6 +71,8 @@ interface MpWasmModule {
   build_font_glyphs(data: Uint8Array, txtrId: string, fontId: string, glyphsMetaJson: string, pixelsConcat: Uint8Array): Uint8Array;
   edit_font_glyphs(data: Uint8Array, fontId: string, opsJson: string): Uint8Array;
   list_font_pages(data: Uint8Array, id: string): string;
+  get_asset_data(data: Uint8Array, id: string): Uint8Array;
+  replace_assets_data(data: Uint8Array, idsJson: string, lengthsJson: string, concatData: Uint8Array): Uint8Array;
 }
 
 let modPromise: Promise<MpWasmModule> | null = null;
@@ -148,4 +150,28 @@ export async function editFontGlyphs(data: Uint8Array, fontId: string, ops: MpGl
 export async function listFontPages(data: Uint8Array, fontId: string): Promise<string[]> {
   const mod = await loadModule();
   return JSON.parse(mod.list_font_pages(data, fontId)) as string[];
+}
+
+/** Returns one asset's raw bytes (RFRM header + content) verbatim, by UUID. */
+export async function getAssetData(data: Uint8Array, id: string): Promise<Uint8Array> {
+  const mod = await loadModule();
+  return mod.get_asset_data(data, id);
+}
+
+/**
+ * Batch-replaces many assets' raw bytes in a single .pak rebuild pass —
+ * far cheaper than rebuilding once per asset when translating dozens of
+ * MSBT text assets. `ids` and `replacements` must be the same length and
+ * order (replacements[i] is the new raw bytes for ids[i]).
+ */
+export async function replaceAssetsData(data: Uint8Array, ids: string[], replacements: Uint8Array[]): Promise<Uint8Array> {
+  const mod = await loadModule();
+  const lengths = replacements.map((r) => r.length);
+  const concat = new Uint8Array(lengths.reduce((sum, l) => sum + l, 0));
+  let offset = 0;
+  for (const r of replacements) {
+    concat.set(r, offset);
+    offset += r.length;
+  }
+  return mod.replace_assets_data(data, JSON.stringify(ids), JSON.stringify(lengths), concat);
 }

@@ -46,7 +46,7 @@ const games = [
   {
     title: "Metroid Prime Remastered",
     subtitle: "أداة خطوط ميترويد برايم ريماسترد",
-    desc: "استخراج وعرض خطوط ملفات .pak (RFRM/TXTR/FONT) ورسم حروف عربية حقيقية بواسطة Canvas 2D وإدراجها في أطلس الخط — دعم أولي",
+    desc: "استخراج وعرض خطوط ملفات .pak (RFRM/TXTR/FONT) ورسم حروف عربية حقيقية بواسطة Canvas 2D وإدراجها في أطلس الخط، بالإضافة إلى أداة ترجمة نصوص MSBT الكاملة",
     link: "/metroid-prime/font",
     image: metroidPrimeBg,
     formats: [".pak", "FONT/TXTR"],

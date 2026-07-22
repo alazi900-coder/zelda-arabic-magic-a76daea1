@@ -177,6 +177,30 @@ export function edit_font_glyphs(data, font_id, ops_json) {
     return v4;
 }
 
+/**
+ * Returns one asset's raw bytes (the full RFRM-wrapped form, i.e.
+ * `asset.data` verbatim) by UUID — generic, works on any asset kind
+ * (used for MSBT text assets, which need no special Rust-side parsing:
+ * the RFRM/locale-chunk/MsgStdBn structure is simple enough to handle in
+ * pure TypeScript — see mp-msbt.ts).
+ * @param {Uint8Array} data
+ * @param {string} id
+ * @returns {Uint8Array}
+ */
+export function get_asset_data(data, id) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.get_asset_data(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
 export function init() {
     wasm.init();
 }
@@ -269,6 +293,38 @@ export function list_glyphs(data, id) {
     } finally {
         wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
+}
+
+/**
+ * Replaces MANY assets' raw bytes at once (by UUID) and rebuilds the whole
+ * PACK file in a single pass — used to swap in every edited MSBT text
+ * asset for a translation build. `ids_json` is a JSON array of UUID
+ * strings; `lengths_json` a parallel JSON array of byte lengths; the
+ * actual bytes are back-to-back in `concat_data` in the same order
+ * (avoids JSON-encoding large binary blobs — same pattern as
+ * build_font_glyphs's pixel buffer).
+ * @param {Uint8Array} data
+ * @param {string} ids_json
+ * @param {string} lengths_json
+ * @param {Uint8Array} concat_data
+ * @returns {Uint8Array}
+ */
+export function replace_assets_data(data, ids_json, lengths_json, concat_data) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ids_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(lengths_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray8ToWasm0(concat_data, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.replace_assets_data(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
 }
 
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);

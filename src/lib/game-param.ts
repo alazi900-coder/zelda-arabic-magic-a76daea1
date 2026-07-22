@@ -5,9 +5,10 @@
  * from an entry's `msbtFile` shape — the same signal the editor already uses:
  *   - `bank_<N>` / `names_<id>` → MOTHER 3 (m3-editor-bridge keys entries this way)
  *   - `*.tab`                   → Risen     (variant chosen by the session: risen1 | risen2)
+ *   - `TEXT_*`                  → Metroid Prime Remastered (mp-editor-bridge keys entries this way)
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
-export type GameParam = "xenoblade" | "risen1" | "risen2" | "mother3";
+export type GameParam = "xenoblade" | "risen1" | "risen2" | "mother3" | "metroidprime";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -16,5 +17,6 @@ export function resolveGameParam(
   const f = msbtFile || "";
   if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(f)) return "mother3";
   if (/\.tab$/i.test(f)) return risenVariant;
+  if (/^TEXT_/.test(f)) return "metroidprime";
   return "xenoblade";
 }

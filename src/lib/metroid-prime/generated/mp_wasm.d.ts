@@ -16,6 +16,15 @@ export function decode_texture_png(data: Uint8Array, id: string): Uint8Array;
  */
 export function edit_font_glyphs(data: Uint8Array, font_id: string, ops_json: string): Uint8Array;
 
+/**
+ * Returns one asset's raw bytes (the full RFRM-wrapped form, i.e.
+ * `asset.data` verbatim) by UUID — generic, works on any asset kind
+ * (used for MSBT text assets, which need no special Rust-side parsing:
+ * the RFRM/locale-chunk/MsgStdBn structure is simple enough to handle in
+ * pure TypeScript — see mp-msbt.ts).
+ */
+export function get_asset_data(data: Uint8Array, id: string): Uint8Array;
+
 export function init(): void;
 
 /**
@@ -39,6 +48,17 @@ export function list_font_pages(data: Uint8Array, id: string): string;
  */
 export function list_glyphs(data: Uint8Array, id: string): string;
 
+/**
+ * Replaces MANY assets' raw bytes at once (by UUID) and rebuilds the whole
+ * PACK file in a single pass — used to swap in every edited MSBT text
+ * asset for a translation build. `ids_json` is a JSON array of UUID
+ * strings; `lengths_json` a parallel JSON array of byte lengths; the
+ * actual bytes are back-to-back in `concat_data` in the same order
+ * (avoids JSON-encoding large binary blobs — same pattern as
+ * build_font_glyphs's pixel buffer).
+ */
+export function replace_assets_data(data: Uint8Array, ids_json: string, lengths_json: string, concat_data: Uint8Array): Uint8Array;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -46,9 +66,11 @@ export interface InitOutput {
   readonly build_font_glyphs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
   readonly decode_texture_png: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly edit_font_glyphs: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+  readonly get_asset_data: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly list_assets: (a: number, b: number) => [number, number, number, number];
   readonly list_font_pages: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly list_glyphs: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly replace_assets_data: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
   readonly init: () => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;

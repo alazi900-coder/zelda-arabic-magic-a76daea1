@@ -14,6 +14,7 @@ import { useEditorState } from "@/hooks/useEditorState";
 import { FILE_CATEGORIES, BDAT_CATEGORIES } from "@/components/editor/types";
 import { buildRisenCategories } from "@/lib/risen/categories";
 import { buildMother3Categories } from "@/lib/mother3/categories";
+import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
@@ -124,6 +125,7 @@ const Editor = () => {
   // wherever entries already exist, so it can't disagree with what's loaded.
   const isRisenEntries = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isMother3Entries = /^(bank_\d+|names_\w+|menu_\w+)$/.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isMetroidPrimeEntries = /^TEXT_/.test(editor.state?.entries?.[0]?.msbtFile || "");
 
   // Which category list applies to the loaded file — mirrors the same
   // resolution used by CategoryProgress/EditorProgressStatus for the filter
@@ -133,9 +135,10 @@ const Editor = () => {
     if (!entries) return [];
     if (isRisenEntries) return buildRisenCategories(entries);
     if (isMother3Entries) return buildMother3Categories(entries);
+    if (isMetroidPrimeEntries) return buildMetroidPrimeCategories(entries);
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -622,6 +625,7 @@ const Editor = () => {
             editor={editor}
             isRisen={isRisenEntries}
             isMother3={isMother3Entries}
+            isMetroidPrime={isMetroidPrimeEntries}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

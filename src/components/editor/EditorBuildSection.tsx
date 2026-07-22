@@ -6,6 +6,7 @@ import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, Sh
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildMother3Rom, MOTHER3_BUFFER_KEY } from "@/lib/mother3/m3-editor-bridge";
+import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -23,6 +24,7 @@ interface EditorBuildSectionProps {
   editor: EditorSubset;
   isRisen?: boolean;
   isMother3?: boolean;
+  isMetroidPrime?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -34,6 +36,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   editor,
   isRisen = false,
   isMother3 = false,
+  isMetroidPrime = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -42,6 +45,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
 }) => {
   const [risenBuilding, setRisenBuilding] = useState(false);
   const [m3Building, setM3Building] = useState(false);
+  const [mpBuilding, setMpBuilding] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
 
   const handleMother3Build = async () => {
@@ -75,6 +79,36 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setM3Building(false);
+    }
+  };
+
+  const handleMetroidPrimeBuild = async () => {
+    setMpBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(METROID_PRIME_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على ملف .pak — أعد فتحه من صفحة نصوص Metroid Prime");
+      const result = await buildMetroidPrimePak(new Uint8Array(buf), editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.pak as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "MetroidPrime_ar.pak";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "✅ تم بناء ملف .pak معرّب",
+        description: `${result.translatedLines} نص مترجم | ${result.changedAssets} ملف نصوص معدّل`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setMpBuilding(false);
     }
   };
 
@@ -223,6 +257,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         {isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">
             {m3Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM معرّب وتنزيله
+          </Button>
+        ) : isMetroidPrime ? (
+          <Button size="lg" onClick={handleMetroidPrimeBuild} disabled={mpBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {mpBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف .pak معرّب وتنزيله
           </Button>
         ) : isRisen ? (
           <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">

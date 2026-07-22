@@ -39,6 +39,7 @@ const RisenImages = lazyWithIgnoredRef(() => import("./pages/RisenImages"));
 const Mother3 = lazyWithIgnoredRef(() => import("./pages/Mother3"));
 const RisenFileManager = lazyWithIgnoredRef(() => import("./pages/RisenFileManager"));
 const RisenFonts = lazyWithIgnoredRef(() => import("./pages/RisenFonts"));
+const MetroidPrime = lazyWithIgnoredRef(() => import("./pages/MetroidPrime"));
 const MetroidPrimeFont = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeFont"));
 const MetroidPrimeText = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeText"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
@@ -80,6 +81,7 @@ const App = () => (
                 <Route path="/risen/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Risen"><RisenImages /></ErrorBoundary>} />
                 <Route path="/risen/files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Risen"><RisenFileManager /></ErrorBoundary>} />
                 <Route path="/risen2/fonts" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطوط Risen 2"><RisenFonts /></ErrorBoundary>} />
+                <Route path="/metroid-prime" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Metroid Prime"><MetroidPrime /></ErrorBoundary>} />
                 <Route path="/metroid-prime/font" element={<ErrorBoundary fallbackTitle="خطأ في عارض خطوط Metroid Prime"><MetroidPrimeFont /></ErrorBoundary>} />
                 <Route path="/metroid-prime/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Metroid Prime"><MetroidPrimeText /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />

@@ -13,6 +13,11 @@ export function init(): void;
  */
 export function list_assets(data: Uint8Array): string;
 
+/**
+ * Parse a FONT asset (by UUID) from a PACK file and return its glyph table as JSON.
+ */
+export function list_glyphs(data: Uint8Array, id: string): string;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -20,6 +25,7 @@ export interface InitOutput {
   readonly decode_texture_png: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly init: () => void;
   readonly list_assets: (a: number, b: number) => [number, number, number, number];
+  readonly list_glyphs: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

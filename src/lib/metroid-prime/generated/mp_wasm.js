@@ -154,6 +154,29 @@ export function decode_texture_png(data, id) {
     return v3;
 }
 
+/**
+ * WASM export — thin wrapper around `edit_font_glyphs_native`.
+ * @param {Uint8Array} data
+ * @param {string} font_id
+ * @param {string} ops_json
+ * @returns {Uint8Array}
+ */
+export function edit_font_glyphs(data, font_id, ops_json) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(font_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(ops_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_font_glyphs(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
 export function init() {
     wasm.init();
 }

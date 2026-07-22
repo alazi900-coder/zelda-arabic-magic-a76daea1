@@ -56,11 +56,20 @@ export interface MpGlyphInput {
   pixels: Uint8Array;
 }
 
+/** One glyph-table edit operation — see mp-wasm/src/lib.rs's GlyphEditOp.
+ *  None of these touch the TXTR atlas, only the FONT's record table. */
+export type MpGlyphEditOp =
+  | { op: "alias"; code: number; source_code: number }
+  | { op: "remap"; code: number; source_code: number }
+  | { op: "delete"; code: number }
+  | { op: "set_fields"; code: number; x0: number; y0: number; advance: number };
+
 interface MpWasmModule {
   list_assets(data: Uint8Array): string;
   decode_texture_png(data: Uint8Array, id: string): Uint8Array;
   list_glyphs(data: Uint8Array, id: string): string;
   build_font_glyphs(data: Uint8Array, txtrId: string, fontId: string, glyphsMetaJson: string, pixelsConcat: Uint8Array): Uint8Array;
+  edit_font_glyphs(data: Uint8Array, fontId: string, opsJson: string): Uint8Array;
 }
 
 let modPromise: Promise<MpWasmModule> | null = null;
@@ -117,4 +126,14 @@ export async function buildFontGlyphs(
     offset += g.pixels.length;
   }
   return mod.build_font_glyphs(data, txtrId, fontId, JSON.stringify(meta), pixelsConcat);
+}
+
+/**
+ * Applies glyph-table-only edits (alias/remap/delete/set_fields — see
+ * MpGlyphEditOp) to a FONT asset and rebuilds the whole .pak file. No TXTR
+ * involvement, so no pixel data is needed for any of these operations.
+ */
+export async function editFontGlyphs(data: Uint8Array, fontId: string, ops: MpGlyphEditOp[]): Promise<Uint8Array> {
+  const mod = await loadModule();
+  return mod.edit_font_glyphs(data, fontId, JSON.stringify(ops));
 }

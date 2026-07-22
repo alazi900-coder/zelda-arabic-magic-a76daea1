@@ -40,16 +40,41 @@ function inkBoundingBox(data: Uint8ClampedArray, width: number, height: number) 
   return { minX, minY, maxX, maxY };
 }
 
+/** Sources selected codepoints from a second TTF/OTF instead of the main
+ *  one — mirrors Risen's per-character alternate-font override. */
+export interface MpAlternateFontOverride {
+  fontBytes: ArrayBuffer;
+  codepoints: Set<number>;
+}
+
+/** Expands a base Arabic letter into every contextual presentation-form
+ * codepoint it can shape into (isolated/initial/medial/final) — replacing a
+ * letter must replace ALL its forms or joined text mixes styles mid-word.
+ * Reuses reshapeArabic itself (with a neutral connecting neighbor, ب) rather
+ * than needing direct access to its private shaping table. */
+export function getMpPresentationForms(baseChar: string): number[] {
+  const out = new Set<number>();
+  const neighbor = "ب";
+  out.add(reshapeArabic(baseChar).charCodeAt(0));
+  out.add(reshapeArabic(baseChar + neighbor).charCodeAt(0));
+  out.add(reshapeArabic(neighbor + baseChar).charCodeAt(1));
+  out.add(reshapeArabic(neighbor + baseChar + neighbor).charCodeAt(1));
+  return [...out];
+}
+
 /**
  * Shapes `text` (reshapeArabic joins letters by context) and rasterizes
  * every unique resulting codepoint at `fontSizePx` using `fontBytes`
- * (a TTF/OTF). Returns one glyph per unique codepoint (space excluded —
- * the game font already has one). Browser-only (FontFace + Canvas 2D).
+ * (a TTF/OTF) — except codepoints listed in `override.codepoints`, which are
+ * sourced from `override.fontBytes` instead, both at the same declared
+ * size. Returns one glyph per unique codepoint (space excluded — the game
+ * font already has one). Browser-only (FontFace + Canvas 2D).
  */
 export async function renderArabicGlyphsForMp(
   fontBytes: ArrayBuffer,
   text: string,
-  fontSizePx: number
+  fontSizePx: number,
+  override?: MpAlternateFontOverride
 ): Promise<{ shapedText: string; glyphs: RenderedMpGlyph[] }> {
   if (!hasArabicChars(text)) throw new Error("النص المُدخل لا يحتوي على حروف عربية");
   const shaped = reshapeArabic(text);
@@ -59,6 +84,12 @@ export async function renderArabicGlyphsForMp(
   const fontFace = new FontFace("MpArabicGen", fontBytes);
   await fontFace.load();
   document.fonts.add(fontFace);
+  let altFace: FontFace | null = null;
+  if (override && override.codepoints.size > 0) {
+    altFace = new FontFace("MpArabicGenAlt", override.fontBytes);
+    await altFace.load();
+    document.fonts.add(altFace);
+  }
   try {
     const pad = Math.ceil(fontSizePx * 0.6);
     const canvas = document.createElement("canvas");
@@ -69,15 +100,17 @@ export async function renderArabicGlyphsForMp(
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("تعذّر إنشاء سياق Canvas 2D لرسم الحروف العربية");
 
-    const setupCtx = () => {
-      ctx.font = `${fontSizePx}px MpArabicGen`;
+    const setupCtx = (family: string) => {
+      ctx.font = `${fontSizePx}px ${family}`;
       ctx.textBaseline = "alphabetic";
       ctx.fillStyle = "#fff";
     };
-    setupCtx();
 
     const glyphs: RenderedMpGlyph[] = [];
     for (const cp of codepoints) {
+      const useAlt = altFace !== null && override!.codepoints.has(cp);
+      const family = useAlt ? "MpArabicGenAlt" : "MpArabicGen";
+      setupCtx(family);
       const ch = String.fromCharCode(cp);
       const advance = Math.max(1, Math.round(ctx.measureText(ch).width));
 
@@ -106,10 +139,10 @@ export async function renderArabicGlyphsForMp(
         advance,
         pixels,
       });
-      setupCtx(); // clearRect doesn't reset font/baseline/fillStyle state, but stay defensive across browsers
     }
     return { shapedText: shaped, glyphs };
   } finally {
     document.fonts.delete(fontFace);
+    if (altFace) document.fonts.delete(altFace);
   }
 }

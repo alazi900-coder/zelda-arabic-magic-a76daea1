@@ -11,6 +11,11 @@ export function build_font_glyphs(data: Uint8Array, txtr_id: string, font_id: st
  */
 export function decode_texture_png(data: Uint8Array, id: string): Uint8Array;
 
+/**
+ * WASM export — thin wrapper around `edit_font_glyphs_native`.
+ */
+export function edit_font_glyphs(data: Uint8Array, font_id: string, ops_json: string): Uint8Array;
+
 export function init(): void;
 
 /**
@@ -29,6 +34,7 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly build_font_glyphs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
   readonly decode_texture_png: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly edit_font_glyphs: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly list_assets: (a: number, b: number) => [number, number, number, number];
   readonly list_glyphs: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly init: () => void;

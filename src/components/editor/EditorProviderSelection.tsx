@@ -225,6 +225,11 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
             <div className="flex gap-2 flex-1">
               <input
                 type="password"
+                name="tokenrouter-api-key"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
                 placeholder="الصق مفتاح TokenRouter API هنا..."
                 value={editor.userTokenRouterKey}
                 onChange={(e) => editor.setUserTokenRouterKey(e.target.value)}

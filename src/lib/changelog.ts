@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.117.1",
+    date: "2026-07-22",
+    changes: [
+      { kind: "fixed", text: "زر \"العودة للمعالجة\" في المحرر كان يعيد كل جلسات Mother 3 وMetroid Prime إلى صفحة معالجة Xenoblade بالخطأ — أصبح الآن يعيد كل لعبة إلى صفحتها الصحيحة." },
+    ],
+  },
+  {
     version: "1.117.0",
     date: "2026-07-22",
     changes: [

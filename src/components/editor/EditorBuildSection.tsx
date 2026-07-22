@@ -59,7 +59,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         toast({ title: "تجاوز مساحة البنك", description: `${result.error}: ${list}`, variant: "destructive" });
         return;
       }
-      const blob = new Blob([result.rom], { type: "application/octet-stream" });
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

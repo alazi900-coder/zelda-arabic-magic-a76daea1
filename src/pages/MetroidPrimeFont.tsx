@@ -141,7 +141,8 @@ export default function MetroidPrimeFont() {
         const g = await listGlyphs(pakBytes, fontId);
         setSelectedFontId(fontId);
         setGlyphs(g);
-        toast.success(`${g.length} حرفاً في هذا الخط`);
+        const primaryCount = g.filter((x) => x.flag === 0).length;
+        toast.success(`${g.length} حرفاً في هذا الخط (${primaryCount} منها في الصفحة الأساسية — هي التي تظهر مربعاتها وتُضاف إليها الحروف الجديدة)`);
       } catch (e) {
         toast.error((e as Error).message);
       }
@@ -220,7 +221,15 @@ export default function MetroidPrimeFont() {
     if (glyphs) {
       ctx.strokeStyle = "rgba(0, 255, 128, 0.8)";
       ctx.lineWidth = 1;
+      // FONT assets reference up to 5 texture pages, but each glyph record's
+      // UV rect is normalized against its OWN page — not necessarily the one
+      // currently displayed. flag=0 is the only group confirmed (by
+      // comparing against a real community mod that added Cyrillic) to
+      // belong to this primary/first page; other flag values belong to the
+      // other 4 (much larger, CJK/Hangul) pages and would draw nonsense
+      // boxes here if included.
       for (const g of glyphs) {
+        if (g.flag !== 0) continue;
         if (g.width <= 0 || g.height <= 0) continue;
         const x = g.u0 * imageBitmap.width;
         const y = g.v1 * imageBitmap.height;

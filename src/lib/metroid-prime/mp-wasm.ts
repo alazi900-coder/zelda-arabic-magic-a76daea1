@@ -18,11 +18,17 @@ export interface MetroidPrimeAssetInfo {
 
 /** One glyph's metrics — see mp-wasm/src/lib.rs for the reverse-engineered
  *  record layout this is parsed from (no official FONT format spec exists
- *  for Metroid Prime Remastered). `flag` is an unexplained per-record byte,
- *  kept for future investigation. u0/v0/u1/v1 are normalized (0..1) against
- *  the specific texture page this glyph's page reference points to — not
- *  yet resolved per-glyph, so only reliable for the game's default/first
- *  texture page today. */
+ *  for Metroid Prime Remastered). A FONT asset can reference up to 5 texture
+ *  pages, and `flag` groups glyphs by page — confirmed by comparing a real
+ *  community mod (which added Cyrillic) against the original: the mod added
+ *  66 new records, all `flag=0`, all sized/positioned against the first
+ *  (smallest) texture page only, which it grew/reformatted to fit them.
+ *  `flag=0` is the only value confirmed to map to that first page; the
+ *  other ~250 flag values seen (1 through 255) belong to the other 4 much
+ *  larger CJK/Hangul pages and are not reliably mapped per-page yet. u0/v0/
+ *  u1/v1 are normalized (0..1) against whichever page the glyph's flag
+ *  belongs to — so only reliable for `flag=0` glyphs against the game's
+ *  first texture page today. */
 export interface MetroidPrimeGlyph {
   code: number;
   flag: number;

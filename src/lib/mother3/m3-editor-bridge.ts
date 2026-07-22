@@ -25,6 +25,7 @@ import {
 import { M3_ARABIC_FONT_B64, M3_ARABIC_WIDTHS_B64, M3_FONT_OFFSET, M3_WIDTHS_OFFSET } from "./m3-arabic-font";
 import { applyRtlPatch, flipGlyphsInPlace } from "./m3-rtl-patch";
 import { NAMES_TABLES, parseNamesTable, rebuildNamesTable, applyNamesRebuild } from "./m3-names-table";
+import { MENU_TABLES, parseMenuTable, rebuildMenuTable, applyMenuRebuild } from "./m3-menu-table";
 
 /** IndexedDB key holding the loaded Mother 3 ROM bytes for the build step. */
 export const MOTHER3_BUFFER_KEY = "mother3SourceBuffer";
@@ -97,6 +98,24 @@ export function extractMother3Entries(rom: Uint8Array): Mother3ExtractResult {
   for (const spec of NAMES_TABLES) {
     for (const entry of parseNamesTable(rom, spec)) {
       if (!isTranslatable(entry.text)) continue;
+      entries.push({
+        msbtFile: spec.id,
+        index: entry.index,
+        label: preview(entry.text),
+        original: entry.text,
+        maxBytes: 0x7fff, // real limit is per-table, enforced at build
+      });
+    }
+  }
+
+  // Menu text tables (variable-length, real pointer table — see m3-menu-table.ts).
+  // Entries with no decoded text (a handful of naming-screen keyboard-symbol
+  // rows with glyph codes not worth mapping) are skipped, same as untranslatable ones.
+  for (const spec of MENU_TABLES) {
+    const table = parseMenuTable(rom, spec);
+    if (!table) continue;
+    for (const entry of table.entries) {
+      if (entry.text == null || !isTranslatable(entry.text)) continue;
       entries.push({
         msbtFile: spec.id,
         index: entry.index,
@@ -234,6 +253,33 @@ export function buildMother3Rom(
       continue;
     }
     out = applyNamesRebuild(out, res);
+    changedBanks++;
+  }
+
+  // 3) Same pass for menu text tables (variable-length, real pointer table).
+  for (const spec of MENU_TABLES) {
+    const table = parseMenuTable(out, spec);
+    if (!table || table.entries.length === 0) continue;
+    const edits = new Map<number, string>();
+    for (const entry of table.entries) {
+      const value = translations[`${spec.id}:${entry.index}`];
+      if (value != null && value !== "") {
+        edits.set(entry.index, value);
+        translatedLines++;
+      }
+    }
+    if (edits.size === 0) continue;
+    const res = rebuildMenuTable(out, table, edits);
+    if ("error" in res) {
+      if (res.overflowBy == null) {
+        encodingFailure = true;
+        encodingMsg = res.error;
+      } else {
+        overflows.push({ bank: -1, overflowBy: res.overflowBy });
+      }
+      continue;
+    }
+    out = applyMenuRebuild(out, res);
     changedBanks++;
   }
 

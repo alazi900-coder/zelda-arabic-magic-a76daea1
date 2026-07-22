@@ -14,7 +14,7 @@ export function resolveGameParam(
   risenVariant: "risen1" | "risen2" = "risen1"
 ): GameParam {
   const f = msbtFile || "";
-  if (/^(bank_\d+|names_\w+)$/.test(f)) return "mother3";
+  if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(f)) return "mother3";
   if (/\.tab$/i.test(f)) return risenVariant;
   return "xenoblade";
 }

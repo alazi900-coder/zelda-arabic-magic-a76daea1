@@ -41,13 +41,36 @@ biMap(0x3b, "α"); // PSI tier suffixes: PK Fire α/β/γ/Ω
 biMap(0x3c, "β");
 biMap(0x3d, "γ");
 biMap(0x3e, "Ω");
+biMap(0x1f, "?"); // menus1's "??????????" placeholder — every occurrence is this literal run
+biMap(0x01, "!"); // "recovered [X] HP!", "maxed out!"
+biMap(0x1a, ":"); // "Favorite Food:", "Text Speed:"
+biMap(0x0f, "/"); // "Invalid / duplicate name"
 
 /** Decode one code to its display character, or undefined if unmapped. Unlike
  *  the dialogue codec, an unmapped code here is NOT rendered as a `{XX}`
  *  passthrough token — it signals "not real entry text" (table header/padding
- *  bytes), and decodeNamesString below fails so the scanner steps past it. */
+ *  bytes), and decodeNamesString below fails so the scanner steps past it.
+ *  The one exception is control tokens (see decodeNamesString). */
 function codeToChar(code: number): string | undefined {
   return CODE_TO_CHAR.get(code);
+}
+
+/**
+ * menus1 (and likely other "any length" tables) also contain 2-byte control
+ * codes whose high byte is 0xFF or 0xEF — variable-insertion placeholders
+ * like "[A0 FF]" = the acting character's name, "[13 EF]" = an item name.
+ * The toolkit's own menus1.txt already shows these as raw `[XX YY]` hex-pair
+ * tokens (low byte, high byte) rather than translatable text, so this mirrors
+ * that convention exactly instead of inventing a new one.
+ */
+function isControlCode(code: number): boolean {
+  const hi = (code >>> 8) & 0xff;
+  return hi === 0xff || hi === 0xef;
+}
+function controlCodeToToken(code: number): string {
+  const lo = code & 0xff;
+  const hi = (code >>> 8) & 0xff;
+  return `[${lo.toString(16).toUpperCase().padStart(2, "0")} ${hi.toString(16).toUpperCase().padStart(2, "0")}]`;
 }
 
 /** Map one display character to a code, trying Arabic presentation forms first. */
@@ -74,6 +97,11 @@ export function decodeNamesString(
   while (a + 2 <= limit) {
     const code = rom[a] | (rom[a + 1] << 8);
     if (code === NAMES_END_CODE) return { text: out, nextOffset: a + 2 };
+    if (isControlCode(code)) {
+      out += controlCodeToToken(code);
+      a += 2;
+      continue;
+    }
     const ch = codeToChar(code);
     if (ch === undefined) return null;
     out += ch;
@@ -82,8 +110,9 @@ export function decodeNamesString(
   return null;
 }
 
-/** Encode a display string (control tokens `{XX}` pass through) to codes. Arabic
- *  runs are reshaped first. Throws on characters with no font code. */
+/** Encode a display string (control tokens `{XX}` and `[XX YY]` pass through)
+ *  to codes. Arabic runs are reshaped first. Throws on characters with no
+ *  font code. */
 export function encodeNamesString(text: string): number[] {
   const out: number[] = [];
   let i = 0;
@@ -94,6 +123,20 @@ export function encodeNamesString(text: string): number[] {
         const body = text.slice(i + 1, end);
         if (/^[0-9A-Fa-f]{2}$/.test(body)) {
           out.push(parseInt(body, 16));
+          i = end + 1;
+          continue;
+        }
+      }
+    }
+    if (text[i] === "[") {
+      const end = text.indexOf("]", i);
+      if (end > i) {
+        const body = text.slice(i + 1, end);
+        const m = /^([0-9A-Fa-f]{2}) ([0-9A-Fa-f]{2})$/.exec(body);
+        if (m) {
+          const lo = parseInt(m[1], 16);
+          const hi = parseInt(m[2], 16);
+          out.push((hi << 8) | lo);
           i = end + 1;
           continue;
         }

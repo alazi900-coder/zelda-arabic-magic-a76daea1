@@ -735,7 +735,7 @@ export function useEditorState() {
       const isBdat = /^.+?\[\d+\]\./.test(e.label);
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
       const isRisen = !isBdat && /\.tab$/i.test(e.msbtFile);
-      const isMother3 = !isBdat && !isRisen && /^(bank_\d+|names_\w+)$/.test(e.msbtFile);
+      const isMother3 = !isBdat && !isRisen && /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile);
       const isDr = !isBdat && !isRisen && !isMother3 && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
       const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));

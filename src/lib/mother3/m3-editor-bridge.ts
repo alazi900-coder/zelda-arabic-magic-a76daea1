@@ -188,7 +188,7 @@ export function buildMother3Rom(
       }
       continue;
     }
-    out = applyRebuild(out, res);
+    out = applyRebuild(out, res) as Uint8Array<ArrayBuffer>;
     changedBanks++;
   }
 

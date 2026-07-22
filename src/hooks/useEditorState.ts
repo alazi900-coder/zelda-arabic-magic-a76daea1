@@ -32,6 +32,7 @@ import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix, type RisenSectionFilterValue } from "@/lib/risen/categories";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
+import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
@@ -421,6 +422,24 @@ export function useEditorState() {
 
       const stored = await idbGet<EditorState>("editorState");
       if (stored && stored.entries && stored.entries.length > 0) {
+        // Mother3 extraction only ever runs once, at ROM upload — a later code
+        // change that adds a new table (e.g. the menus table) would otherwise
+        // never surface for an already-saved session, since reload just restores
+        // this same stored array. Re-run extraction from the already-saved ROM
+        // buffer and add any entries missing from the stored array — additive
+        // only, so existing entries/translations are never touched or lost.
+        const sourceGame = await idbGet<string>("editor-source-game");
+        if (sourceGame === MOTHER3_SOURCE_GAME) {
+          const romBuffer = await idbGet<ArrayBuffer>(MOTHER3_BUFFER_KEY);
+          if (romBuffer) {
+            const known = new Set(stored.entries.map((e) => `${e.msbtFile}:${e.index}`));
+            const fresh = extractMother3Entries(new Uint8Array(romBuffer)).entries;
+            const missing = fresh.filter((e) => !known.has(`${e.msbtFile}:${e.index}`));
+            if (missing.length > 0) {
+              stored.entries = [...stored.entries, ...missing];
+            }
+          }
+        }
         const isFreshExtraction = !!(stored as { freshExtraction?: unknown }).freshExtraction;
         
         if (isFreshExtraction) {

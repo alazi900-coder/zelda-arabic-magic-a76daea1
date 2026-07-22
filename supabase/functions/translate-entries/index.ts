@@ -2156,7 +2156,8 @@ Deno.serve(async (req) => {
     const msg = error instanceof Error ? error.message : 'خطأ غير متوقع';
     const isRateLimit = msg.includes('تجاوزت') || msg.includes('quota') || msg.includes('429') || msg.includes('rate');
     const isAuthError = msg.includes('غير صالح') || msg.includes('محظور') || msg.includes('401') || msg.includes('403');
-    const status = isRateLimit ? 429 : isAuthError ? 401 : 500;
+    const isUpstream = msg.includes('⚠️') || msg.includes('⏳') || msg.includes('تعذّر الاتصال') || /\b5\d{2}\b/.test(msg);
+    const status = isRateLimit ? 429 : isAuthError ? 401 : isUpstream ? 502 : 500;
     return new Response(
       JSON.stringify({ error: msg }),
       { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.109.0",
+    date: "2026-07-22",
+    changes: [
+      { kind: "added", text: "أُضيفت بطاقة كاملة لأداة Metroid Prime Remastered في الصفحة الرئيسية (كانت الأداة موجودة سابقاً لكن بدون رابط ظاهر — لا تُفتح إلا بكتابة الرابط مباشرة). خلفية البطاقة لقطة حقيقية من أطلس خط اللعبة نفسه (شبكة رموز الخط الكوري) مستخرجة عبر الأداة ذاتها." },
+    ],
+  },
+  {
     version: "1.108.0",
     date: "2026-07-22",
     changes: [

@@ -4,6 +4,7 @@ import { APP_VERSION } from "@/lib/version";
 import ChangelogCard from "@/components/ChangelogCard";
 import xc3Bg from "@/assets/xc3-hero-bg.jpg";
 import risenBg from "@/assets/risen-hero-bg.jpg";
+import metroidPrimeBg from "@/assets/metroid-prime-hero-bg.jpg";
 
 const games = [
   {
@@ -41,6 +42,18 @@ const games = [
     formatClass: "bg-[hsl(0,60%,45%)]/20 text-[hsl(0,70%,62%)] border-[hsl(0,60%,45%)]/30",
     subtitleClass: "text-[hsl(0,70%,62%)]",
     arrowClass: "text-[hsl(0,70%,62%)]",
+  },
+  {
+    title: "Metroid Prime Remastered",
+    subtitle: "أداة خطوط ميترويد برايم ريماسترد",
+    desc: "استخراج وعرض خطوط ملفات .pak (RFRM/TXTR/FONT) ورسم حروف عربية حقيقية بواسطة Canvas 2D وإدراجها في أطلس الخط — دعم أولي",
+    link: "/metroid-prime/font",
+    image: metroidPrimeBg,
+    formats: [".pak", "FONT/TXTR"],
+    cardClass: "border-[hsl(270,50%,55%)]/30 hover:border-[hsl(270,50%,55%)]/60",
+    formatClass: "bg-[hsl(270,50%,55%)]/20 text-[hsl(270,70%,70%)] border-[hsl(270,50%,55%)]/30",
+    subtitleClass: "text-[hsl(270,70%,70%)]",
+    arrowClass: "text-[hsl(270,70%,70%)]",
   },
 ];
 

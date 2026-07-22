@@ -8,6 +8,7 @@ import {
   listGlyphs,
   buildFontGlyphs,
   editFontGlyphs,
+  listFontPages,
   type MetroidPrimeAssetInfo,
   type MetroidPrimeGlyph,
 } from "@/lib/metroid-prime/mp-wasm";
@@ -146,6 +147,7 @@ export default function MetroidPrimeFont() {
   const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null);
   const [decoding, setDecoding] = useState(false);
   const [selectedFontId, setSelectedFontId] = useState<string | null>(null);
+  const [primaryPageId, setPrimaryPageId] = useState<string | null>(null);
   const [glyphs, setGlyphs] = useState<MetroidPrimeGlyph[] | null>(null);
   const baselineGlyphsRef = useRef<MetroidPrimeGlyph[] | null>(null);
   const [hasEdits, setHasEdits] = useState(false);
@@ -165,6 +167,8 @@ export default function MetroidPrimeFont() {
   const [fontSizePx, setFontSizePx] = useState(32);
   const [altFontEntryId, setAltFontEntryId] = useState<string | null>(null);
   const [altLetters, setAltLetters] = useState("");
+  const [customMainFont, setCustomMainFont] = useState<{ name: string; bytes: ArrayBuffer } | null>(null);
+  const [customAltFont, setCustomAltFont] = useState<{ name: string; bytes: ArrayBuffer } | null>(null);
   const [rendering, setRendering] = useState(false);
   const [previewGlyphs, setPreviewGlyphs] = useState<RenderedMpGlyph[] | null>(null);
   const [existingCodes, setExistingCodes] = useState<Set<number> | null>(null);
@@ -221,6 +225,7 @@ export default function MetroidPrimeFont() {
       setSelectedId(null);
       setImageBitmap(null);
       setSelectedFontId(null);
+      setPrimaryPageId(null);
       setGlyphs(null);
       baselineGlyphsRef.current = null;
       setHasEdits(false);
@@ -228,6 +233,8 @@ export default function MetroidPrimeFont() {
       setExistingCodes(null);
       setAuditReport(null);
       setRoundTrip(null);
+      setCustomMainFont(null);
+      setCustomAltFont(null);
       setSelectedCode(null);
       toast.success(`تم العثور على ${textureList.length} نسيجاً و${fontList.length} خط من أصل ${list.length} أصلاً`);
     } catch (e) {
@@ -261,18 +268,28 @@ export default function MetroidPrimeFont() {
     async (fontId: string) => {
       if (!pakBytes) return;
       try {
-        const g = await refreshGlyphs(pakBytes, fontId);
+        const [g, pages] = await Promise.all([refreshGlyphs(pakBytes, fontId), listFontPages(pakBytes, fontId)]);
         setSelectedFontId(fontId);
+        const primary = pages[0] ?? null;
+        setPrimaryPageId(primary);
         baselineGlyphsRef.current = g;
         setAuditReport(null);
         setRoundTrip(null);
-        toast.success(`${g.length} حرفاً في هذا الخط (${g.filter((x) => x.flag === 0).length} منها في الصفحة الأساسية)`);
+        toast.success(`${g.length} حرفاً في هذا الخط (${g.filter((x) => x.flag === 0).length} منها في الصفحة الأساسية) — تم اختيارها تلقائياً (باللون الأخضر)`);
+        if (primary) void selectTexture(primary);
       } catch (e) {
         toast.error((e as Error).message);
       }
     },
-    [pakBytes, refreshGlyphs]
+    [pakBytes, refreshGlyphs, selectTexture]
   );
+
+  const sortedTextures = useMemo(() => {
+    if (!primaryPageId) return textures;
+    const primary = textures.filter((t) => t.id === primaryPageId);
+    const rest = textures.filter((t) => t.id !== primaryPageId);
+    return [...primary, ...rest];
+  }, [textures, primaryPageId]);
 
   const selectPair = useCallback((code: number) => {
     setSelectedCode(code);
@@ -334,8 +351,8 @@ export default function MetroidPrimeFont() {
   }, [auditReport]);
 
   const altOverride = useMemo((): MpAlternateFontOverride | undefined => {
-    if (!altFontEntryId || !altLetters.trim()) return undefined;
-    const bytes = fontBytesCache.current.get(altFontEntryId);
+    if (!altLetters.trim()) return undefined;
+    const bytes = customAltFont?.bytes ?? (altFontEntryId ? fontBytesCache.current.get(altFontEntryId) : undefined);
     if (!bytes) return undefined;
     const codepoints = new Set<number>();
     for (const ch of altLetters.trim()) {
@@ -343,15 +360,26 @@ export default function MetroidPrimeFont() {
       for (const cp of getMpPresentationForms(ch)) codepoints.add(cp);
     }
     return { fontBytes: bytes, codepoints };
-  }, [altFontEntryId, altLetters]);
+  }, [altFontEntryId, altLetters, customAltFont]);
+
+  const handleMainFontUpload = useCallback(async (file: File) => {
+    const bytes = await file.arrayBuffer();
+    setCustomMainFont({ name: file.name, bytes });
+    toast.success(`سيُستخدم ${file.name} كخط أساسي`);
+  }, []);
+
+  const handleAltFontUpload = useCallback(async (file: File) => {
+    const bytes = await file.arrayBuffer();
+    setCustomAltFont({ name: file.name, bytes });
+    toast.success(`سيُستخدم ${file.name} كخط بديل`);
+  }, []);
 
   const handlePreview = useCallback(async () => {
     if (!inputText.trim()) { toast.error("اكتب نصاً عربياً أولاً"); return; }
     if (!pakBytes || !selectedFontId) { toast.error("اختر خطاً من القائمة أعلاه أولاً"); return; }
     setRendering(true);
     try {
-      if (altFontEntryId) await loadFontBytesFor(altFontEntryId);
-      const bytes = await loadFontBytesFor(fontEntryId);
+      const bytes = customMainFont?.bytes ?? (await loadFontBytesFor(fontEntryId));
       const [{ glyphs: rendered }, existing] = await Promise.all([
         renderArabicGlyphsForMp(bytes, inputText, fontSizePx, altOverride),
         listGlyphs(pakBytes, selectedFontId),
@@ -363,7 +391,7 @@ export default function MetroidPrimeFont() {
     } finally {
       setRendering(false);
     }
-  }, [inputText, fontEntryId, fontSizePx, pakBytes, selectedFontId, altFontEntryId, altOverride, loadFontBytesFor]);
+  }, [inputText, fontEntryId, fontSizePx, pakBytes, selectedFontId, altOverride, loadFontBytesFor, customMainFont]);
 
   const handleMerge = useCallback(async () => {
     if (!pakBytes || !selectedId || !selectedFontId || !previewGlyphs || !existingCodes) return;
@@ -653,15 +681,21 @@ export default function MetroidPrimeFont() {
         {textures.length > 0 && (
           <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-3">
             <div className="md:col-span-1 max-h-[70vh] overflow-y-auto rounded-lg border">
-              {textures.map((a, i) => (
-                <button
-                  key={`${a.id}-${i}`}
-                  onClick={() => void selectTexture(a.id)}
-                  className={`block w-full border-b px-3 py-2 text-right text-sm hover:bg-muted ${selectedId === a.id ? "bg-primary/10 font-medium" : ""}`}
-                >
-                  {a.names.length > 0 ? a.names.join(", ") : a.id}
-                </button>
-              ))}
+              {sortedTextures.map((a, i) => {
+                const isPrimary = a.id === primaryPageId;
+                return (
+                  <button
+                    key={`${a.id}-${i}`}
+                    onClick={() => void selectTexture(a.id)}
+                    className={`block w-full border-b px-3 py-2 text-right text-sm hover:bg-muted ${
+                      isPrimary ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500 font-bold" : ""
+                    } ${selectedId === a.id ? "bg-primary/10 font-medium" : ""}`}
+                  >
+                    {isPrimary && "⭐ الصفحة الأساسية (أضف الحروف العربية هنا) — "}
+                    {a.names.length > 0 ? a.names.join(", ") : a.id}
+                  </button>
+                );
+              })}
             </div>
             <div className="md:col-span-2 flex flex-col gap-3">
               <div className="flex min-h-[300px] items-center justify-center overflow-auto rounded-lg border bg-muted/20 p-4">
@@ -757,8 +791,8 @@ export default function MetroidPrimeFont() {
                     entry={entry}
                     onUse={async (e, role) => {
                       await loadFontBytesFor(e.id);
-                      if (role === "main") { setFontEntryId(e.id); toast.success(`${e.name} هو الخط الأساسي الآن`); }
-                      else { setAltFontEntryId(e.id); toast.success(`${e.name} هو الخط البديل الآن`); }
+                      if (role === "main") { setFontEntryId(e.id); setCustomMainFont(null); toast.success(`${e.name} هو الخط الأساسي الآن`); }
+                      else { setAltFontEntryId(e.id); setCustomAltFont(null); toast.success(`${e.name} هو الخط البديل الآن`); }
                     }}
                   />
                 ))}
@@ -770,11 +804,30 @@ export default function MetroidPrimeFont() {
         {selectedId && selectedFontId && (
           <div className="mt-6 flex flex-col gap-3 rounded-lg border p-4">
             <h2 className="text-sm font-bold">توليد ودمج حروف عربية في هذا الخط</h2>
+            <p className="text-xs text-muted-foreground">
+              الخطوات: (١) اختر خطاً عربياً — من المكتبة أدناه أو ارفع ملف TTF/OTF من جهازك — (٢) اكتب نصاً عربياً واضغط "معاينة الحروف" — (٣) سيظهر بعدها زر "دمج هذه الحروف بالخط".
+            </p>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">خط الرسم الأساسي</label>
-              <select value={fontEntryId} onChange={(e) => setFontEntryId(e.target.value)} className="rounded border bg-background px-2 py-1.5 text-sm">
-                {FREE_ARABIC_FONTS.map((f) => <option key={f.id} value={f.id}>{f.name} — {f.style}</option>)}
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={fontEntryId}
+                  onChange={(e) => { setFontEntryId(e.target.value); setCustomMainFont(null); }}
+                  className="rounded border bg-background px-2 py-1.5 text-sm"
+                  disabled={!!customMainFont}
+                >
+                  {FREE_ARABIC_FONTS.map((f) => <option key={f.id} value={f.id}>{f.name} — {f.style}</option>)}
+                </select>
+                <span className="text-xs text-muted-foreground">أو</span>
+                <label className="flex cursor-pointer items-center gap-1.5 rounded border border-dashed px-3 py-1.5 text-xs hover:bg-muted">
+                  <Upload className="h-3.5 w-3.5" />
+                  {customMainFont ? customMainFont.name : "ارفع خط TTF/OTF من جهازك"}
+                  <input type="file" accept=".ttf,.otf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleMainFontUpload(f); }} />
+                </label>
+                {customMainFont && (
+                  <button onClick={() => setCustomMainFont(null)} className="text-xs text-muted-foreground underline hover:text-foreground">إزالة (عودة للمكتبة)</button>
+                )}
+              </div>
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">النص العربي</label>
@@ -785,11 +838,17 @@ export default function MetroidPrimeFont() {
               <input type="range" min={16} max={64} value={fontSizePx} onChange={(e) => setFontSizePx(Number(e.target.value))} />
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded border border-dashed p-2">
-              <span className="text-xs text-muted-foreground">خط بديل (اختياري): {altFontEntryId ? FREE_ARABIC_FONTS.find((f) => f.id === altFontEntryId)?.name : "—"}</span>
+              <span className="text-xs text-muted-foreground">
+                خط بديل (اختياري): {customAltFont ? customAltFont.name : altFontEntryId ? FREE_ARABIC_FONTS.find((f) => f.id === altFontEntryId)?.name : "—"}
+              </span>
+              <label className="flex cursor-pointer items-center gap-1.5 rounded border border-dashed px-2 py-1 text-xs hover:bg-muted">
+                <Upload className="h-3.5 w-3.5" /> ارفع خطاً بديلاً
+                <input type="file" accept=".ttf,.otf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleAltFontUpload(f); }} />
+              </label>
               <input type="text" dir="rtl" value={altLetters} onChange={(e) => setAltLetters(e.target.value)} placeholder="حروف من البديل مثل: ع غ" className="flex-1 rounded border bg-background px-2 py-1 text-sm" />
               {altOverride && <span className="text-xs text-emerald-500">سيُؤخذ {altOverride.codepoints.size} شكلاً من البديل</span>}
             </div>
-            <button onClick={() => void handlePreview()} disabled={rendering} className="self-start rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
+            <button onClick={() => void handlePreview()} disabled={rendering || !inputText.trim()} className="self-start rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
               {rendering ? "جارٍ الرسم..." : "معاينة الحروف"}
             </button>
             {previewGlyphs && existingCodes && (
@@ -799,7 +858,7 @@ export default function MetroidPrimeFont() {
                 </div>
                 <p className="text-xs text-muted-foreground">الحروف المظللة بالبرتقالي موجودة مسبقاً ولن تُضاف مجدداً.</p>
                 <button onClick={() => void handleMerge()} disabled={building} className="self-start rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium hover:bg-primary/20 disabled:opacity-50">
-                  {building ? "جارٍ الدمج..." : "دمج هذه الحروف بالخط"}
+                  {building ? "جارٍ الدمج..." : "✅ دمج هذه الحروف بالخط (تركيب اللغة العربية)"}
                 </button>
               </div>
             )}

@@ -70,6 +70,7 @@ interface MpWasmModule {
   list_glyphs(data: Uint8Array, id: string): string;
   build_font_glyphs(data: Uint8Array, txtrId: string, fontId: string, glyphsMetaJson: string, pixelsConcat: Uint8Array): Uint8Array;
   edit_font_glyphs(data: Uint8Array, fontId: string, opsJson: string): Uint8Array;
+  list_font_pages(data: Uint8Array, id: string): string;
 }
 
 let modPromise: Promise<MpWasmModule> | null = null;
@@ -136,4 +137,15 @@ export async function buildFontGlyphs(
 export async function editFontGlyphs(data: Uint8Array, fontId: string, ops: MpGlyphEditOp[]): Promise<Uint8Array> {
   const mod = await loadModule();
   return mod.edit_font_glyphs(data, fontId, JSON.stringify(ops));
+}
+
+/**
+ * Returns a FONT asset's ordered texture-page GUID list. Index 0 is the
+ * only page confirmed to correspond to `flag=0` glyphs (see
+ * MetroidPrimeGlyph docblock) — used to highlight the correct TXTR to
+ * select/edit, since a real .pak has ~190 unlabeled textures.
+ */
+export async function listFontPages(data: Uint8Array, fontId: string): Promise<string[]> {
+  const mod = await loadModule();
+  return JSON.parse(mod.list_font_pages(data, fontId)) as string[];
 }

@@ -24,6 +24,17 @@ export function init(): void;
 export function list_assets(data: Uint8Array): string;
 
 /**
+ * Parse a FONT asset's texture-page GUID list — content starts with a u32
+ * page count followed by that many 16-byte GUIDs (see find_glyph_table_start
+ * docblock). Page index 0 is the only one confirmed (by comparing a real
+ * community mod against the original) to correspond to `flag=0` glyphs, so
+ * callers use this to highlight the correct TXTR to select/edit — with ~190
+ * unlabeled textures in a real .pak, there's no other way for a user to
+ * know which one is actually the font atlas.
+ */
+export function list_font_pages(data: Uint8Array, id: string): string;
+
+/**
  * Parse a FONT asset (by UUID) from a PACK file and return its glyph table as JSON.
  */
 export function list_glyphs(data: Uint8Array, id: string): string;
@@ -36,6 +47,7 @@ export interface InitOutput {
   readonly decode_texture_png: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly edit_font_glyphs: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
   readonly list_assets: (a: number, b: number) => [number, number, number, number];
+  readonly list_font_pages: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly list_glyphs: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly init: () => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;

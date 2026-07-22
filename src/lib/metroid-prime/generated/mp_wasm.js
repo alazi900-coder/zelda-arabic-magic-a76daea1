@@ -208,6 +208,41 @@ export function list_assets(data) {
 }
 
 /**
+ * Parse a FONT asset's texture-page GUID list — content starts with a u32
+ * page count followed by that many 16-byte GUIDs (see find_glyph_table_start
+ * docblock). Page index 0 is the only one confirmed (by comparing a real
+ * community mod against the original) to correspond to `flag=0` glyphs, so
+ * callers use this to highlight the correct TXTR to select/edit — with ~190
+ * unlabeled textures in a real .pak, there's no other way for a user to
+ * know which one is actually the font atlas.
+ * @param {Uint8Array} data
+ * @param {string} id
+ * @returns {string}
+ */
+export function list_font_pages(data, id) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.list_font_pages(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
  * Parse a FONT asset (by UUID) from a PACK file and return its glyph table as JSON.
  * @param {Uint8Array} data
  * @param {string} id

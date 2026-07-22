@@ -1376,28 +1376,63 @@ async function translateWithOpenAICompat(
   // keeps the old "reasoner" (thinking) behavior, V4 Flash the old "chat" one.
   const deepSeekThinking = providerName === 'DeepSeek' ? { thinking: { type: model === 'deepseek-v4-pro' ? 'enabled' : 'disabled' } } : {};
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      ...deepSeekThinking,
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ],
-    }),
+  const body = JSON.stringify({
+    model,
+    ...deepSeekThinking,
+    temperature: 0.3,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    if (response.status === 401) throw new Error(`مفتاح ${providerName} غير صالح — تحقق منه في الإعدادات`);
-    if (response.status === 402) throw new Error(`رصيد ${providerName} غير كافٍ — أضف رصيداً للحساب`);
-    if (response.status === 429) throw new Error(`تجاوزت حد الطلبات لـ ${providerName} — انتظر قليلاً ثم حاول مجدداً`);
-    if (response.status === 403) throw new Error(`مفتاح ${providerName} محظور أو لا يملك الصلاحية`);
-    throw new Error(`${model} error ${response.status}: ${err.slice(0, 300)}`);
+  // Retry transient upstream failures (5xx / network / timeout) up to 2 extra
+  // times before surfacing a 5xx to the client. Many "500" errors the user
+  // sees during auto-translate are one-off provider hiccups.
+  let response!: Response;
+  let lastNetErr: unknown = null;
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body,
+        signal: AbortSignal.timeout(90_000),
+      });
+      if (response.ok) break;
+      // Non-retryable → stop immediately.
+      if ([400, 401, 402, 403, 429].includes(response.status)) break;
+      // Retryable server error → wait and retry.
+      if (attempt < MAX_ATTEMPTS && response.status >= 500) {
+        await new Promise(r => setTimeout(r, 800 * attempt));
+        continue;
+      }
+      break;
+    } catch (e) {
+      lastNetErr = e;
+      if (attempt >= MAX_ATTEMPTS) {
+        const name = (e as Error)?.name || '';
+        const msg = (e as Error)?.message || String(e);
+        if (name === 'TimeoutError' || /timeout/i.test(msg)) {
+          throw new Error(`⏳ ${providerName} لم يستجب خلال 90 ثانية — جرّب مرة أخرى أو قلّل حجم الدفعة`);
+        }
+        throw new Error(`تعذّر الاتصال بـ ${providerName}: ${msg.slice(0, 200)}`);
+      }
+      await new Promise(r => setTimeout(r, 800 * attempt));
+    }
+  }
+
+  if (!response || !response.ok) {
+    const err = response ? await response.text().catch(() => '') : String(lastNetErr || '');
+    const status = response?.status ?? 0;
+    if (status === 401) throw new Error(`مفتاح ${providerName} غير صالح — تحقق منه في الإعدادات`);
+    if (status === 402) throw new Error(`رصيد ${providerName} غير كافٍ — أضف رصيداً للحساب`);
+    if (status === 429) throw new Error(`تجاوزت حد الطلبات لـ ${providerName} — انتظر قليلاً ثم حاول مجدداً`);
+    if (status === 403) throw new Error(`مفتاح ${providerName} محظور أو لا يملك الصلاحية`);
+    if (status >= 500) throw new Error(`⚠️ ${providerName} يواجه مشكلة مؤقتة (${status}) — أعد المحاولة بعد قليل`);
+    throw new Error(`${model} error ${status}: ${err.slice(0, 300)}`);
   }
 
   const data = await response.json();

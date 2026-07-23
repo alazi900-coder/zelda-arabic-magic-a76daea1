@@ -530,7 +530,29 @@ export function useEditorTranslation({
     }
 
     setTranslating(true);
-    const totalBatches = Math.ceil(needsAI.length / aiBatchSize);
+    // Build batches with BOTH a count cap (aiBatchSize) and a char budget
+    // (MAX_BATCH_CHARS). Long tag-heavy entries (e.g. Mother 3 dialogue banks)
+    // used to be crammed into a single batch and silently truncated / dropped
+    // by the model; now they get their own batch (or a small one) so the model
+    // has room to return every translation.
+    const MAX_BATCH_CHARS = 2000;
+    const batches: (typeof needsAI)[] = [];
+    {
+      let cur: typeof needsAI = [];
+      let curChars = 0;
+      for (const e of needsAI) {
+        const len = (e.original || '').length;
+        if (cur.length > 0 && (cur.length >= aiBatchSize || curChars + len > MAX_BATCH_CHARS)) {
+          batches.push(cur);
+          cur = [];
+          curChars = 0;
+        }
+        cur.push(e);
+        curChars += len;
+      }
+      if (cur.length > 0) batches.push(cur);
+    }
+    const totalBatches = batches.length;
     let allTranslations: Record<string, string> = {};
     const totalGlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
     const freeCount = Object.keys(freeTranslations).length;

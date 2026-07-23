@@ -444,6 +444,7 @@ export function useEditorTranslation({
       return categorizeBdatTable(e.label, sourceFile, e.original);
     }
     if (/\.tab$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
+    if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile)) return categorizeMother3Entry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

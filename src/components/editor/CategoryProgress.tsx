@@ -162,8 +162,8 @@ const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, f
             }`}
           >
             <div className="flex items-center justify-between mb-1">
-              {cat.icon && ICON_MAP[cat.icon] ? (
-                React.createElement(ICON_MAP[cat.icon], { className: `w-4 h-4 ${cat.color || 'text-muted-foreground'}` })
+              {('icon' in cat) && (cat as { icon?: string }).icon && ICON_MAP[(cat as { icon: string }).icon] ? (
+                React.createElement(ICON_MAP[(cat as { icon: string }).icon], { className: `w-4 h-4 ${(cat as { color?: string }).color || 'text-muted-foreground'}` })
               ) : (
                 <span>{cat.emoji}</span>
               )}

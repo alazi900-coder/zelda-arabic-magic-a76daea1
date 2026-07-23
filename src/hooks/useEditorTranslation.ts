@@ -4,6 +4,7 @@ import {
   ExtractedEntry, EditorState, PAGE_SIZE,
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, isTechnicalText, hasTechnicalTags,
 } from "@/components/editor/types";
+import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
@@ -443,6 +444,7 @@ export function useEditorTranslation({
       return categorizeBdatTable(e.label, sourceFile, e.original);
     }
     if (/\.tab$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
+    if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile)) return categorizeMother3Entry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

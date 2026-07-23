@@ -252,7 +252,7 @@ export function buildMother3Rom(
       }
       continue;
     }
-    out = applyNamesRebuild(out, res);
+    out = applyNamesRebuild(out, res) as Uint8Array<ArrayBuffer>;
     changedBanks++;
   }
 
@@ -279,7 +279,7 @@ export function buildMother3Rom(
       }
       continue;
     }
-    out = applyMenuRebuild(out, res);
+    out = applyMenuRebuild(out, res) as Uint8Array<ArrayBuffer>;
     changedBanks++;
   }
 

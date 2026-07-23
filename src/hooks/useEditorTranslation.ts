@@ -733,7 +733,7 @@ export function useEditorTranslation({
             catch { break; } // aborted during throttle wait
           }
         }
-        const batch = needsAI.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
+        const batch = batches[b];
         setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
         const entries = batch.map(e => ({

@@ -17,6 +17,7 @@
 
 import { reshapeArabic, hasArabicChars } from "@/lib/arabic-processing";
 import { ARABIC_CHAR_TO_CODE } from "./m3-arabic-table";
+import { normalizeMother3EditableText } from "./m3-text-normalize";
 
 /** Terminator code that ends a string in these tables. */
 export const NAMES_END_CODE = 0xffff;
@@ -114,13 +115,14 @@ export function decodeNamesString(
  *  to codes. Arabic runs are reshaped first. Throws on characters with no
  *  font code. */
 export function encodeNamesString(text: string): number[] {
+  const normalizedText = normalizeMother3EditableText(text, "names");
   const out: number[] = [];
   let i = 0;
-  while (i < text.length) {
-    if (text[i] === "{") {
-      const end = text.indexOf("}", i);
+  while (i < normalizedText.length) {
+    if (normalizedText[i] === "{") {
+      const end = normalizedText.indexOf("}", i);
       if (end > i) {
-        const body = text.slice(i + 1, end);
+        const body = normalizedText.slice(i + 1, end);
         if (/^[0-9A-Fa-f]{2}$/.test(body)) {
           out.push(parseInt(body, 16));
           i = end + 1;
@@ -128,10 +130,10 @@ export function encodeNamesString(text: string): number[] {
         }
       }
     }
-    if (text[i] === "[") {
-      const end = text.indexOf("]", i);
+    if (normalizedText[i] === "[") {
+      const end = normalizedText.indexOf("]", i);
       if (end > i) {
-        const body = text.slice(i + 1, end);
+        const body = normalizedText.slice(i + 1, end);
         const m = /^([0-9A-Fa-f]{2}) ([0-9A-Fa-f]{2})$/.exec(body);
         if (m) {
           const lo = parseInt(m[1], 16);
@@ -143,10 +145,10 @@ export function encodeNamesString(text: string): number[] {
       }
     }
     // Reshape a maximal run of Arabic chars together so joining forms are correct.
-    if (hasArabicChars(text[i])) {
+    if (hasArabicChars(normalizedText[i])) {
       let j = i;
-      while (j < text.length && text[j] !== "{" && hasArabicChars(text[j])) j++;
-      const shaped = reshapeArabic(text.slice(i, j));
+      while (j < normalizedText.length && normalizedText[j] !== "{" && hasArabicChars(normalizedText[j])) j++;
+      const shaped = reshapeArabic(normalizedText.slice(i, j));
       for (const ch of shaped) {
         if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue;
         const code = charToCode(ch);
@@ -160,7 +162,7 @@ export function encodeNamesString(text: string): number[] {
       i = j;
       continue;
     }
-    const ch = text[i];
+    const ch = normalizedText[i];
     const code = charToCode(ch);
     if (code === undefined) {
       throw new Error(

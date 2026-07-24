@@ -23,6 +23,7 @@
 
 import { reshapeArabic, hasArabicChars } from "@/lib/arabic-processing";
 import { ARABIC_CHAR_TO_CODE } from "./m3-arabic-table";
+import { normalizeMother3EditableText } from "./m3-text-normalize";
 
 export const ROM_BASE = 0x08000000;
 
@@ -148,7 +149,8 @@ function charToCode(ch: string): number | undefined {
  *  render patch handles visual right-to-left order, so text stays in logical
  *  order here. */
 function encodeTextRun(run: string): number[] {
-  const shaped = hasArabicChars(run) ? reshapeArabic(run) : run;
+  const normalized = normalizeMother3EditableText(run, "script");
+  const shaped = hasArabicChars(normalized) ? reshapeArabic(normalized) : normalized;
   const out: number[] = [];
   for (const ch of shaped) {
     if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue; // bidi/joiners
@@ -156,7 +158,7 @@ function encodeTextRun(run: string): number[] {
     if (code === undefined) {
       throw new Error(
         `حرف غير قابل للترميز في نص Mother 3: ${JSON.stringify(ch)} (U+${ch
-          .charCodeAt(0)
+          .codePointAt(0)
           .toString(16)
           .toUpperCase()}) — غير موجود في جدول خط اللعبة`
       );

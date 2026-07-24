@@ -156,9 +156,9 @@ function encodeTextRun(run: string): number[] {
     if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue; // bidi/joiners
     const code = charToCode(ch);
     if (code === undefined) {
+      const cp = ch.codePointAt(0) ?? 0;
       throw new Error(
-        `حرف غير قابل للترميز في نص Mother 3: ${JSON.stringify(ch)} (U+${ch
-          .codePointAt(0)
+        `حرف غير قابل للترميز في نص Mother 3: ${JSON.stringify(ch)} (U+${cp
           .toString(16)
           .toUpperCase()}) — غير موجود في جدول خط اللعبة`
       );

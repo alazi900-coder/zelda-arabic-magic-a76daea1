@@ -49,6 +49,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [mpBuilding, setMpBuilding] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
+  const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
+  const [showSkippedDialog, setShowSkippedDialog] = useState(false);
 
   const handleMother3Build = async () => {
     setM3Building(true);

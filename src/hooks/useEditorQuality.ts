@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasTechnicalTags } from "@/components/editor/types";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
+import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 

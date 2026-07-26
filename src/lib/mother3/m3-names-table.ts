@@ -148,6 +148,8 @@ export function rebuildNamesTable(
 
   const tooLong: number[] = [];
   let skippedEncoding = 0;
+  const skippedDetails: NamesSkippedDetail[] = [];
+  const maxChars = (spec.stride - 2) / 2;
   for (const entry of entries) {
     if (!editedText.has(entry.index)) continue;
     const txt = editedText.get(entry.index)!;
@@ -158,6 +160,7 @@ export function rebuildNamesTable(
       if (opts.lossy) {
         // force mode: keep original bytes for this entry (don't drop chars)
         skippedEncoding++;
+        skippedDetails.push({ index: entry.index, reason: (e as Error).message });
         continue;
       }
       return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
@@ -167,6 +170,10 @@ export function rebuildNamesTable(
       if (opts.lossy) {
         // force mode: keep original (don't truncate — user asked to not delete)
         skippedEncoding++;
+        skippedDetails.push({
+          index: entry.index,
+          reason: `النص أطول من الحد المسموح (${maxChars} حرفاً) — تم الإبقاء على الأصل`,
+        });
         continue;
       }
       tooLong.push(entry.index);
@@ -185,15 +192,15 @@ export function rebuildNamesTable(
   }
 
   if (tooLong.length > 0) {
-    const maxChars = (spec.stride - 2) / 2;
     return {
       error: `${tooLong.length} عنصر في جدول ${spec.label} أطول من الحد المسموح (${maxChars} حرفاً) — قصّر النص`,
       overflowBy: tooLong.length,
     };
   }
 
-  return { bytes: out, start: spec.start, skippedEncoding };
+  return { bytes: out, start: spec.start, skippedEncoding, skippedDetails };
 }
+
 
 /** Apply a rebuilt table into a copy of the ROM and return the new ROM bytes. */
 export function applyNamesRebuild(rom: Uint8Array, result: NamesRebuildResult): Uint8Array {

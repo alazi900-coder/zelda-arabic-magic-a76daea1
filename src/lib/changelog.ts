@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.117.3",
+    date: "2026-07-26",
+    changes: [
+      { kind: "fixed", text: "إجبار المتصفح على تحديث كاش أداة خط Metroid Prime بعد الرجوع من History — رفع رقم الإصدار لتشغيل التحديث الصلب (hard reload)." },
+    ],
+  },
+  {
     version: "1.117.1",
     date: "2026-07-22",
     changes: [

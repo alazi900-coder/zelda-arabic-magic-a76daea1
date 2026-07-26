@@ -156,6 +156,8 @@ export interface RebuildResult {
   bytes: Uint8Array;
   /** file offset where these bytes are written */
   regionStart: number;
+  /** how many edited lines were skipped (kept original) due to encoding errors in force mode */
+  skippedEncoding?: number;
 }
 
 export interface RebuildError {

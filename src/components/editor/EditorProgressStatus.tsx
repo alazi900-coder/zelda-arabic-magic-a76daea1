@@ -81,12 +81,14 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         isFixing={editor.translating}
         onRedistributeTags={editor.handleRedistributeTags}
         tagsCount={editor.tagsCount}
-        isBdat={!isRisen && !isMother3 && editor.bdatTableNames.length > 0}
-        isDanganronpa={!isRisen && !isMother3 && isDanganronpa}
+        isBdat={!isRisen && !isMother3 && !isMetroidPrime && editor.bdatTableNames.length > 0}
+        isDanganronpa={!isRisen && !isMother3 && !isMetroidPrime && isDanganronpa}
         isRisen={isRisen}
         risenCategories={risenCategories}
         isMother3={isMother3}
         mother3Categories={mother3Categories}
+        isMetroidPrime={isMetroidPrime}
+        metroidPrimeCategories={metroidPrimeCategories}
       />
 
       {isRisen && (

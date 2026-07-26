@@ -5,6 +5,7 @@ import {
   categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, isTechnicalText, hasTechnicalTags,
 } from "@/components/editor/types";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
+import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";

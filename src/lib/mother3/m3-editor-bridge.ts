@@ -212,6 +212,7 @@ export function buildMother3Rom(
   let translatedLines = 0;
   let changedBanks = 0;
   let skippedForOverflow = 0;
+  let skippedForEncoding = 0;
 
   for (const bank of parsedBanks) {
     const edits = new Map<number, string>();

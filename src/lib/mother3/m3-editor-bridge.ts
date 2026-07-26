@@ -239,6 +239,7 @@ export function buildMother3Rom(
       continue;
     }
     out = applyRebuild(out, res) as Uint8Array<ArrayBuffer>;
+    if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
     changedBanks++;
   }
 

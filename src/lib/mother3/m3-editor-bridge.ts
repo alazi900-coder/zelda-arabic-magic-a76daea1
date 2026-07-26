@@ -302,6 +302,7 @@ export function buildMother3Rom(
       continue;
     }
     out = applyMenuRebuild(out, res) as Uint8Array<ArrayBuffer>;
+    if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
     changedBanks++;
   }
 

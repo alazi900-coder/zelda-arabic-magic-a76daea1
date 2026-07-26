@@ -59,9 +59,11 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const entries = editor.state?.entries;
   const isRisen = !!entries?.some((e) => /\.tab$/i.test(e.msbtFile));
   const isMother3 = !isRisen && !!entries?.some((e) => /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile));
+  const isMetroidPrime = !isRisen && !isMother3 && !!entries?.some((e) => /^TEXT_/.test(e.msbtFile));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
   const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
   const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);
+  const metroidPrimeCategories = useMemo(() => (isMetroidPrime && entries ? buildMetroidPrimeCategories(entries) : []), [isMetroidPrime, entries]);
   if (!editor.state) return null;
   const state = editor.state;
   return (

@@ -321,6 +321,6 @@ export function buildMother3Rom(
   }
 
   installArabicFontAndRtl(out);
-  return { rom: out, translatedLines, changedBanks, skippedForOverflow };
+  return { rom: out, translatedLines, changedBanks, skippedForOverflow, skippedForEncoding };
 }
 

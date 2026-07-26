@@ -72,9 +72,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       a.click();
       URL.revokeObjectURL(url);
       const skipNote = result.skippedForOverflow ? ` | ⚠️ ${result.skippedForOverflow} بنك/جدول تم تخطيه لتجاوزه المساحة (تم الإبقاء على الأصل)` : "";
+      const encNote = result.skippedForEncoding ? ` | ℹ️ ${result.skippedForEncoding} سطر/عنصر تم الإبقاء على نصه الأصلي بسبب حرف غير مدعوم (لم يُحذف أي حرف من الترجمة)` : "";
       toast({
         title: m3ForceBuild ? "✅ تم بناء ROM معرّب (وضع البناء القسري)" : "✅ تم بناء ROM معرّب",
-        description: `${result.translatedLines} سطر مترجم | ${result.changedBanks} بنك معدّل${skipNote}`,
+        description: `${result.translatedLines} سطر مترجم | ${result.changedBanks} بنك معدّل${skipNote}${encNote}`,
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");

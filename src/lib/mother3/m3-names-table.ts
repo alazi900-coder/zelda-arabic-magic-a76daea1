@@ -113,6 +113,8 @@ export function parseNamesTable(rom: Uint8Array, spec: NamesTableSpec): NamesEnt
 export interface NamesRebuildResult {
   bytes: Uint8Array; // length === spec.end - spec.start
   start: number;
+  /** entries skipped (kept original) due to encoding/length issues in force mode */
+  skippedEncoding?: number;
 }
 export interface NamesRebuildError {
   error: string;
@@ -138,25 +140,30 @@ export function rebuildNamesTable(
   const out = new Uint8Array(rom.subarray(spec.start, spec.end)); // start from the original bytes
 
   const tooLong: number[] = [];
+  let skippedEncoding = 0;
   for (const entry of entries) {
     if (!editedText.has(entry.index)) continue;
     const txt = editedText.get(entry.index)!;
     let codes: number[];
     try {
-      codes = encodeNamesString(txt, opts.lossy);
+      codes = encodeNamesString(txt, false);
     } catch (e) {
+      if (opts.lossy) {
+        // force mode: keep original bytes for this entry (don't drop chars)
+        skippedEncoding++;
+        continue;
+      }
       return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
     }
     const neededBytes = codes.length * 2 + 2; // + terminator
     if (neededBytes > spec.stride) {
       if (opts.lossy) {
-        // truncate to fit
-        const maxCodes = (spec.stride - 2) / 2;
-        codes = codes.slice(0, maxCodes);
-      } else {
-        tooLong.push(entry.index);
+        // force mode: keep original (don't truncate — user asked to not delete)
+        skippedEncoding++;
         continue;
       }
+      tooLong.push(entry.index);
+      continue;
     }
     const slotStart = entry.offset - spec.start;
     out.fill(0xff, slotStart, slotStart + spec.stride);
@@ -178,7 +185,7 @@ export function rebuildNamesTable(
     };
   }
 
-  return { bytes: out, start: spec.start };
+  return { bytes: out, start: spec.start, skippedEncoding };
 }
 
 /** Apply a rebuilt table into a copy of the ROM and return the new ROM bytes. */

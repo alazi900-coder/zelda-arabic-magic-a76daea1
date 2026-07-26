@@ -135,6 +135,10 @@ export interface Mother3BuildOk {
   changedBanks: number;
   /** number of banks/tables whose edits were dropped because they overflowed (force build only) */
   skippedForOverflow?: number;
+  /** number of individual lines/entries kept as ORIGINAL because their translation
+   *  contained characters the game font can't encode (force build only — no
+   *  characters are dropped from the translation; the whole edit is skipped) */
+  skippedForEncoding?: number;
 }
 export interface Mother3BuildError {
   error: string;
@@ -208,6 +212,7 @@ export function buildMother3Rom(
   let translatedLines = 0;
   let changedBanks = 0;
   let skippedForOverflow = 0;
+  let skippedForEncoding = 0;
 
   for (const bank of parsedBanks) {
     const edits = new Map<number, string>();
@@ -234,6 +239,7 @@ export function buildMother3Rom(
       continue;
     }
     out = applyRebuild(out, res) as Uint8Array<ArrayBuffer>;
+    if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
     changedBanks++;
   }
 
@@ -265,6 +271,7 @@ export function buildMother3Rom(
       continue;
     }
     out = applyNamesRebuild(out, res) as Uint8Array<ArrayBuffer>;
+    if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
     changedBanks++;
   }
 
@@ -295,6 +302,7 @@ export function buildMother3Rom(
       continue;
     }
     out = applyMenuRebuild(out, res) as Uint8Array<ArrayBuffer>;
+    if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
     changedBanks++;
   }
 
@@ -313,6 +321,6 @@ export function buildMother3Rom(
   }
 
   installArabicFontAndRtl(out);
-  return { rom: out, translatedLines, changedBanks, skippedForOverflow };
+  return { rom: out, translatedLines, changedBanks, skippedForOverflow, skippedForEncoding };
 }
 

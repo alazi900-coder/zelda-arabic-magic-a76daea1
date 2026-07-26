@@ -156,6 +156,8 @@ export interface RebuildResult {
   bytes: Uint8Array;
   /** file offset where these bytes are written */
   regionStart: number;
+  /** how many edited lines were skipped (kept original) due to encoding errors in force mode */
+  skippedEncoding?: number;
 }
 
 export interface RebuildError {
@@ -181,14 +183,25 @@ export function rebuildBank(
   const count = bank.lines.length;
 
   // Re-encode each line into obfuscation-free decoded codes + terminator.
+  // In force mode, if a single line can't be encoded (unsupported character in
+  // the translation), we KEEP that line's ORIGINAL codes verbatim — nothing is
+  // deleted from the translated string, the whole edit is just skipped for
+  // that line so the translator can revisit it later.
   const decodedLines: number[][] = [];
+  let skippedEncoding = 0;
   for (const line of bank.lines) {
-    const txt = editedText.has(line.index) ? editedText.get(line.index)! : line.text;
+    const hasEdit = editedText.has(line.index);
+    const txt = hasEdit ? editedText.get(line.index)! : line.text;
     let codes: number[];
     try {
-      codes = editedText.has(line.index) ? textToCodes(txt, opts.lossy) : line.codes.slice();
+      codes = hasEdit ? textToCodes(txt, false) : line.codes.slice();
     } catch (e) {
-      return { error: `سطر ${line.index}: ${(e as Error).message}` };
+      if (opts.lossy && hasEdit) {
+        codes = line.codes.slice();
+        skippedEncoding++;
+      } else {
+        return { error: `سطر ${line.index}: ${(e as Error).message}` };
+      }
     }
     decodedLines.push([...codes, END_BYTE]);
   }
@@ -233,7 +246,7 @@ export function rebuildBank(
       cursor++;
     }
   }
-  return { bytes: out, regionStart: bank.regionStart };
+  return { bytes: out, regionStart: bank.regionStart, skippedEncoding };
 }
 
 /** Apply a rebuilt bank into a copy of the ROM and return the new ROM bytes. */

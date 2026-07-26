@@ -61,7 +61,9 @@ ${e.translation}`;
   }).join("\n\n");
 
   const gameNameLabel = isMetroidPrime ? "Metroid Prime Remastered" : isMother3 ? "MOTHER 3" : isRisen ? "Risen" : "Xenoblade Chronicles 1";
-  const forgetOtherGame = isMother3
+  const forgetOtherGame = isMetroidPrime
+    ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
+    : isMother3
     ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
     : isRisen
     ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n`

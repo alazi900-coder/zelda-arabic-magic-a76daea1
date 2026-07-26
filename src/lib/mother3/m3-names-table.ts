@@ -140,25 +140,30 @@ export function rebuildNamesTable(
   const out = new Uint8Array(rom.subarray(spec.start, spec.end)); // start from the original bytes
 
   const tooLong: number[] = [];
+  let skippedEncoding = 0;
   for (const entry of entries) {
     if (!editedText.has(entry.index)) continue;
     const txt = editedText.get(entry.index)!;
     let codes: number[];
     try {
-      codes = encodeNamesString(txt, opts.lossy);
+      codes = encodeNamesString(txt, false);
     } catch (e) {
+      if (opts.lossy) {
+        // force mode: keep original bytes for this entry (don't drop chars)
+        skippedEncoding++;
+        continue;
+      }
       return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
     }
     const neededBytes = codes.length * 2 + 2; // + terminator
     if (neededBytes > spec.stride) {
       if (opts.lossy) {
-        // truncate to fit
-        const maxCodes = (spec.stride - 2) / 2;
-        codes = codes.slice(0, maxCodes);
-      } else {
-        tooLong.push(entry.index);
+        // force mode: keep original (don't truncate — user asked to not delete)
+        skippedEncoding++;
         continue;
       }
+      tooLong.push(entry.index);
+      continue;
     }
     const slotStart = entry.offset - spec.start;
     out.fill(0xff, slotStart, slotStart + spec.stride);

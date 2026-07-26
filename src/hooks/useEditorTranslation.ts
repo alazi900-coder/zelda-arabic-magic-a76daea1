@@ -446,6 +446,7 @@ export function useEditorTranslation({
     }
     if (/\.tab$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
     if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile)) return categorizeMother3Entry(e);
+    if (/^TEXT_/.test(e.msbtFile)) return categorizeMetroidPrimeEntry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

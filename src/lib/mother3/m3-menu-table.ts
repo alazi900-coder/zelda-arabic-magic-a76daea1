@@ -143,34 +143,34 @@ export function rebuildMenuTable(
   }
 
   const packedChunks: Uint8Array[] = [];
-  // Gap of raw, unaccounted bytes between one entry's terminator and the
-  // NEXT entry's data start (index n = gap after entry n). Real tables
-  // aren't always packed with zero slack — menus2 has a 60-byte gap between
-  // two entries near its end, likely leftover/unused space, not decodable
-  // text. For the LAST entry, "next start" is the table's own declared end
-  // (spec.end) — menus1's real entries stop ~2.3KB before its declared end,
-  // and that trailing space is NOT blank padding, it's unrelated live ROM
-  // data (previously silently overwritten with 0xFF fill, corrupting it).
-  // Every gap is preserved verbatim (never re-derived, never assumed blank)
-  // so a no-op rebuild matches the original exactly and nothing outside the
-  // edited entries' own bytes is ever touched.
+  let skippedEncoding = 0;
   const gapsAfter: Uint8Array[] = [];
   for (let n = 0; n < entries.length; n++) {
     const entry = entries[n];
     const origEnd = rawSpan(entry.offset).end; // original content end, regardless of edits
     if (editedText.has(entry.index)) {
-      let codes: number[];
+      let codes: number[] | null = null;
       try {
-        codes = encodeNamesString(editedText.get(entry.index)!, opts.lossy);
+        codes = encodeNamesString(editedText.get(entry.index)!, false);
       } catch (e) {
-        return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
+        if (opts.lossy) {
+          // force mode: keep original bytes for this entry (don't drop chars)
+          codes = null;
+          skippedEncoding++;
+        } else {
+          return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
+        }
       }
-      const bytes = new Uint8Array(codes.length * 2);
-      for (let k = 0; k < codes.length; k++) {
-        bytes[k * 2] = codes[k] & 0xff;
-        bytes[k * 2 + 1] = (codes[k] >>> 8) & 0xff;
+      if (codes !== null) {
+        const bytes = new Uint8Array(codes.length * 2);
+        for (let k = 0; k < codes.length; k++) {
+          bytes[k * 2] = codes[k] & 0xff;
+          bytes[k * 2 + 1] = (codes[k] >>> 8) & 0xff;
+        }
+        packedChunks.push(bytes);
+      } else {
+        packedChunks.push(rom.slice(entry.offset, origEnd));
       }
-      packedChunks.push(bytes);
     } else {
       packedChunks.push(rom.slice(entry.offset, origEnd));
     }

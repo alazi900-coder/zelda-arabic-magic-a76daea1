@@ -246,7 +246,7 @@ export function rebuildBank(
       cursor++;
     }
   }
-  return { bytes: out, regionStart: bank.regionStart };
+  return { bytes: out, regionStart: bank.regionStart, skippedEncoding };
 }
 
 /** Apply a rebuilt bank into a copy of the ROM and return the new ROM bytes. */

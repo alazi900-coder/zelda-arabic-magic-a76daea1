@@ -322,7 +322,8 @@ Deno.serve(async (req) => {
     // about XC3 PUA/bracket tags, not Risen's <Tag> format, so without masking
     // an AI-mangled <Exit> would slip through unnoticed.
     const isRisen = body.game === "risen" || body.game === "risen1" || body.game === "risen2";
-    const isMother3 = body.game === "mother3" | "metroidprime";
+    const isMother3 = body.game === "mother3";
+    const isMetroidPrime = body.game === "metroidprime";
     const risenTagsByKey = new Map<string, string[]>();
     const promptEntries: SmartFixEntry[] = isRisen
       ? body.entries.map((e) => {

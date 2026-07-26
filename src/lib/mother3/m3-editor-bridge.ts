@@ -174,8 +174,10 @@ function installArabicFontAndRtl(rom: Uint8Array): void {
  */
 export function buildMother3Rom(
   rom: Uint8Array,
-  translations: Record<string, string>
+  translations: Record<string, string>,
+  opts: { force?: boolean } = {}
 ): Mother3BuildOk | Mother3BuildError {
+  const force = !!opts.force;
   // 1) Resolve each translated representative to its original text, then map
   //    original-text -> Arabic so every duplicate line gets the same translation.
   const regions = parseBankTable(rom).filter(

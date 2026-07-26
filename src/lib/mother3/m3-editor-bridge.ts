@@ -228,6 +228,7 @@ export function buildMother3Rom(
   let changedBanks = 0;
   let skippedForOverflow = 0;
   let skippedForEncoding = 0;
+  const skippedDetails: M3SkippedItem[] = [];
 
   for (const bank of parsedBanks) {
     const edits = new Map<number, string>();
@@ -248,6 +249,12 @@ export function buildMother3Rom(
         // force: skip this bank's edits, keep original English, continue build
         overflows.push({ bank: bank.index, overflowBy: res.overflowBy });
         skippedForOverflow++;
+        skippedDetails.push({
+          file: `bank_${bank.index}`,
+          index: -1,
+          reason: `تجاوز مساحة البنك بعد الترجمة (+${res.overflowBy} بايت) — تم الإبقاء على الأصل`,
+          kind: "overflow",
+        });
       } else {
         overflows.push({ bank: bank.index, overflowBy: res.overflowBy });
       }
@@ -255,6 +262,11 @@ export function buildMother3Rom(
     }
     out = applyRebuild(out, res) as Uint8Array<ArrayBuffer>;
     if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
+    if (res.skippedDetails) {
+      for (const d of res.skippedDetails) {
+        skippedDetails.push({ file: `bank_${bank.index}`, index: d.index, reason: d.reason, kind: "encoding" });
+      }
+    }
     changedBanks++;
   }
 
@@ -280,6 +292,12 @@ export function buildMother3Rom(
       } else if (force) {
         overflows.push({ bank: -1, overflowBy: res.overflowBy });
         skippedForOverflow++;
+        skippedDetails.push({
+          file: spec.id,
+          index: -1,
+          reason: `تجاوز حد الجدول بعد الترجمة (+${res.overflowBy}) — تم الإبقاء على الأصل`,
+          kind: "overflow",
+        });
       } else {
         overflows.push({ bank: -1, overflowBy: res.overflowBy });
       }
@@ -287,6 +305,12 @@ export function buildMother3Rom(
     }
     out = applyNamesRebuild(out, res) as Uint8Array<ArrayBuffer>;
     if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
+    if (res.skippedDetails) {
+      for (const d of res.skippedDetails) {
+        const kind: "encoding" | "length" = /أطول من الحد/.test(d.reason) ? "length" : "encoding";
+        skippedDetails.push({ file: spec.id, index: d.index, reason: d.reason, kind });
+      }
+    }
     changedBanks++;
   }
 
@@ -311,6 +335,12 @@ export function buildMother3Rom(
       } else if (force) {
         overflows.push({ bank: -1, overflowBy: res.overflowBy });
         skippedForOverflow++;
+        skippedDetails.push({
+          file: spec.id,
+          index: -1,
+          reason: `تجاوز حد الجدول بعد الترجمة (+${res.overflowBy}) — تم الإبقاء على الأصل`,
+          kind: "overflow",
+        });
       } else {
         overflows.push({ bank: -1, overflowBy: res.overflowBy });
       }
@@ -318,6 +348,11 @@ export function buildMother3Rom(
     }
     out = applyMenuRebuild(out, res) as Uint8Array<ArrayBuffer>;
     if (res.skippedEncoding) skippedForEncoding += res.skippedEncoding;
+    if (res.skippedDetails) {
+      for (const d of res.skippedDetails) {
+        skippedDetails.push({ file: spec.id, index: d.index, reason: d.reason, kind: "encoding" });
+      }
+    }
     changedBanks++;
   }
 
@@ -336,6 +371,7 @@ export function buildMother3Rom(
   }
 
   installArabicFontAndRtl(out);
-  return { rom: out, translatedLines, changedBanks, skippedForOverflow, skippedForEncoding };
+  return { rom: out, translatedLines, changedBanks, skippedForOverflow, skippedForEncoding, skippedDetails };
 }
+
 

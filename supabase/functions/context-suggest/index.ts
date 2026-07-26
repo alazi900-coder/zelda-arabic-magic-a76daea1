@@ -52,6 +52,7 @@ const GAME_LABELS: Record<string, string> = {
   risen: 'لعبة Risen 1 (محرك Genome — عالم RPG مفتوح بطابع قروسطي)',
   risen2: 'لعبة Risen 2: Dark Waters (محرك Genome — عالم قراصنة مفتوح في الكاريبي)',
   mother3: 'لعبة MOTHER 3 (سلسلة MOTHER/EarthBound لـ Shigesato Itoi ونينتندو — أسلوب بسيط دافئ طريف)',
+  metroidprime: 'لعبة Metroid Prime Remastered (سلسلة Metroid لـ Nintendo/Retro Studios — استكشاف/إطلاق نار من منظور شخصي في عالم خيال علمي)',
 };
 
 function buildSystemPrompt(game?: string): string {

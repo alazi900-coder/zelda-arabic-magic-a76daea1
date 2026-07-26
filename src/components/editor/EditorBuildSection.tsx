@@ -76,6 +76,9 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       URL.revokeObjectURL(url);
       const skipNote = result.skippedForOverflow ? ` | ⚠️ ${result.skippedForOverflow} بنك/جدول تم تخطيه لتجاوزه المساحة (تم الإبقاء على الأصل)` : "";
       const encNote = result.skippedForEncoding ? ` | ℹ️ ${result.skippedForEncoding} سطر/عنصر تم الإبقاء على نصه الأصلي بسبب حرف غير مدعوم (لم يُحذف أي حرف من الترجمة)` : "";
+      const details = result.skippedDetails ?? [];
+      setM3SkippedItems(details.length > 0 ? details : null);
+      if (details.length > 0) setShowSkippedDialog(true);
       toast({
         title: m3ForceBuild ? "✅ تم بناء ROM معرّب (وضع البناء القسري)" : "✅ تم بناء ROM معرّب",
         description: `${result.translatedLines} سطر مترجم | ${result.changedBanks} بنك معدّل${skipNote}${encNote}`,

@@ -32,6 +32,7 @@ import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix, type RisenSectionFilterValue } from "@/lib/risen/categories";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
+import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
 

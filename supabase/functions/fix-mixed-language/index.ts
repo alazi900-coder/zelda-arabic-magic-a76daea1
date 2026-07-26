@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     // this function's whole job is "translate remaining English words", and
     // without masking it would happily "translate" a bare tag too.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-    const isMother3 = game === 'mother3' | 'metroidprime';
+    const isMother3 = game === 'mother3';
     const risenTagsByIndex: string[][] = [];
     const promptEntries = isRisen
       ? entries.map((e) => {

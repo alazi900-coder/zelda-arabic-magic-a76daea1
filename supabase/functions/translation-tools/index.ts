@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     // single combined string (per-entry masking isn't needed), so one shared
     // masker for the whole request is enough; unmask the final result once.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-    const isMother3 = game === 'mother3' | 'metroidprime';
+    const isMother3 = game === 'mother3';
     const masker = isRisen ? createRisenMasker() : null;
     const pt = (s: string): string => (masker && typeof s === 'string' ? masker.mask(s) : s);
 

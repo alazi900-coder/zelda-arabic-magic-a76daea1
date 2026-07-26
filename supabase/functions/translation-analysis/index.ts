@@ -277,7 +277,7 @@ Deno.serve(async (req) => {
     // (index-aligned with `entries`, since the model echoes back an `index`
     // field), used to unmask whichever result field references that index.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-    const isMother3 = game === 'mother3' | 'metroidprime';
+    const isMother3 = game === 'mother3';
     const risenTagsByIndex: string[][] = [];
     const promptEntries: AnalysisEntry[] = isRisen
       ? entries.map((e) => {

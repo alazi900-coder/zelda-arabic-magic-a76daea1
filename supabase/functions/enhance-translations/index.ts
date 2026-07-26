@@ -427,7 +427,7 @@ Deno.serve(async (req) => {
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
 
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-    const isMother3 = game === 'mother3' | 'metroidprime';
+    const isMother3 = game === 'mother3';
     const gameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isMother3
       ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`

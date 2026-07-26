@@ -25,10 +25,12 @@ const gatewayModelMap: Record<string, string> = {
   'gpt-5': 'openai/gpt-5',
 };
 
-function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean, isMother3?: boolean): string {
+function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean, isMother3?: boolean, isMetroidPrime?: boolean): string {
   const glossarySection = glossary ? `\nالقاموس المعتمد (التزم بهذه المصطلحات):\n${glossary.split('\n').slice(0, 100).join('\n')}` : '';
-  const gameNameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
-  const forgetOtherGame = isMother3
+  const gameNameLabel = isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
+  const forgetOtherGame = isMetroidPrime
+    ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
+    : isMother3
     ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
     : isRisen
     ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n`
@@ -278,6 +280,7 @@ Deno.serve(async (req) => {
     // field), used to unmask whichever result field references that index.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const isMother3 = game === 'mother3';
+    const isMetroidPrime = game === 'metroidprime';
     const risenTagsByIndex: string[][] = [];
     const promptEntries: AnalysisEntry[] = isRisen
       ? entries.map((e) => {
@@ -287,7 +290,7 @@ Deno.serve(async (req) => {
         })
       : entries;
 
-    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide, isRisen, isMother3);
+    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide, isRisen, isMother3, isMetroidPrime);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',

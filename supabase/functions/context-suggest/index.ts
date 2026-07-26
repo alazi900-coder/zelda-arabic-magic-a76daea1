@@ -57,11 +57,14 @@ const GAME_LABELS: Record<string, string> = {
 function buildSystemPrompt(game?: string): string {
   const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
   const isMother3 = game === 'mother3';
+  const isMetroidPrime = game === 'metroidprime';
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
   const risenTagRule = isRisen
     ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'
     : '';
-  const forgetOtherGame = isMother3
+  const forgetOtherGame = isMetroidPrime
+    ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
+    : isMother3
     ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
     : isRisen
     ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n`

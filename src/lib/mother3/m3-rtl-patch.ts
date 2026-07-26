@@ -70,3 +70,31 @@ export function flipGlyphsInPlace(font: Uint8Array, widths: Uint8Array): void {
     }
   }
 }
+
+/**
+ * Remap Arabic glyphs that originally sat in slots the game engine uses as
+ * control bytes (0x01..0x0D, 0x1B..0x1E, 0x20) into empty high slots
+ * (0xA0..0xB0). Each pair: copy the 32-byte glyph and 1-byte width to the new
+ * slot, then zero the old slot so any raw control byte the engine emits renders
+ * as an invisible blank instead of a stray Arabic glyph. Must run BEFORE
+ * `flipGlyphsInPlace` so the flip reads the width at the new location.
+ */
+export const M3_CONTROL_SLOT_REMAP: ReadonlyArray<readonly [number, number]> = [
+  [0x01, 0xa0], [0x02, 0xa1], [0x04, 0xa2], [0x05, 0xa3], [0x06, 0xa4],
+  [0x07, 0xa5], [0x08, 0xa6], [0x09, 0xa7], [0x0a, 0xa8], [0x0b, 0xa9],
+  [0x0c, 0xaa], [0x0d, 0xab], [0x1b, 0xac], [0x1c, 0xad], [0x1d, 0xae],
+  [0x1e, 0xaf], [0x20, 0xb0],
+];
+
+export function blankControlSlots(font: Uint8Array, widths: Uint8Array): void {
+  for (const [oldCode, newCode] of M3_CONTROL_SLOT_REMAP) {
+    const oldOff = oldCode * 0x20;
+    const newOff = newCode * 0x20;
+    // move glyph bitmap
+    for (let i = 0; i < 0x20; i++) font[newOff + i] = font[oldOff + i];
+    for (let i = 0; i < 0x20; i++) font[oldOff + i] = 0;
+    // move width
+    widths[newCode] = widths[oldCode];
+    widths[oldCode] = 0;
+  }
+}

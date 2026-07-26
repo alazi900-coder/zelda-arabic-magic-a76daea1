@@ -224,8 +224,9 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           const sourceFile = entry.msbtFile.startsWith('bdat-bin:') ? entry.msbtFile.split(':')[1] : entry.msbtFile.startsWith('bdat:') ? entry.msbtFile.slice(5) : undefined;
           const isRisen = !isBdat && /\.tab$/i.test(entry.msbtFile);
           const isMother3 = !isBdat && !isRisen && /^(bank_\d+|names_\w+|menu_\w+)$/.test(entry.msbtFile);
-          const isDr = !isBdat && !isRisen && !isMother3 && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
-          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
+          const isMetroidPrime = !isBdat && !isRisen && !isMother3 && /^TEXT_/.test(entry.msbtFile);
+          const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
+          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
 
           const cached = cache.get(key);
           let result: EntryCacheResult;

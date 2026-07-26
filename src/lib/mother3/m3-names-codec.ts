@@ -151,6 +151,11 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
       let j = i;
       while (j < normalizedText.length && normalizedText[j] !== "{" && hasArabicChars(normalizedText[j])) j++;
       const shaped = reshapeArabic(normalizedText.slice(i, j));
+      // Names/menus/cutscenes render text LTR (no RTL hook like dialogue) — so we
+      // emit the shaped Arabic codes in REVERSE order. The pre-flipped glyphs
+      // then read right-to-left visually. Dialogue uses m3-codec.ts, not this
+      // path, and is unaffected.
+      const runCodes: number[] = [];
       for (const ch of shaped) {
         if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue;
         const code = charToCode(ch);
@@ -159,8 +164,9 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
             `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
           );
         }
-        out.push(code);
+        runCodes.push(code);
       }
+      for (let k = runCodes.length - 1; k >= 0; k--) out.push(runCodes[k]);
       i = j;
       continue;
     }

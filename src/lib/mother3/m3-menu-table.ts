@@ -98,11 +98,18 @@ export function parseMenuTable(rom: Uint8Array, spec: MenuTableSpec): MenuTable 
   return { spec, addrOfFFFF, entries };
 }
 
+export interface MenuSkippedDetail {
+  index: number;
+  reason: string;
+}
+
 export interface MenuRebuildResult {
   bytes: Uint8Array; // length === spec.end - spec.start
   start: number;
   /** entries skipped (kept original) due to encoding issues in force mode */
   skippedEncoding?: number;
+  /** per-entry detail for the skipped items above */
+  skippedDetails?: MenuSkippedDetail[];
 }
 export interface MenuRebuildError {
   error: string;
@@ -144,6 +151,7 @@ export function rebuildMenuTable(
 
   const packedChunks: Uint8Array[] = [];
   let skippedEncoding = 0;
+  const skippedDetails: MenuSkippedDetail[] = [];
   const gapsAfter: Uint8Array[] = [];
   for (let n = 0; n < entries.length; n++) {
     const entry = entries[n];
@@ -157,6 +165,7 @@ export function rebuildMenuTable(
           // force mode: keep original bytes for this entry (don't drop chars)
           codes = null;
           skippedEncoding++;
+          skippedDetails.push({ index: entry.index, reason: (e as Error).message });
         } else {
           return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
         }
@@ -214,7 +223,7 @@ export function rebuildMenuTable(
     cursor += gapsAfter[n].length;
   }
 
-  return { bytes: out, start: spec.start, skippedEncoding };
+  return { bytes: out, start: spec.start, skippedEncoding, skippedDetails };
 }
 
 /** Apply a rebuilt table into a copy of the ROM and return the new ROM bytes. */

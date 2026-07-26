@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download, ListChecks } from "lucide-react";
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
-import { buildMother3Rom, MOTHER3_BUFFER_KEY } from "@/lib/mother3/m3-editor-bridge";
+import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
@@ -48,6 +49,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [mpBuilding, setMpBuilding] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
+  const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
+  const [showSkippedDialog, setShowSkippedDialog] = useState(false);
 
   const handleMother3Build = async () => {
     setM3Building(true);
@@ -73,6 +76,9 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       URL.revokeObjectURL(url);
       const skipNote = result.skippedForOverflow ? ` | ⚠️ ${result.skippedForOverflow} بنك/جدول تم تخطيه لتجاوزه المساحة (تم الإبقاء على الأصل)` : "";
       const encNote = result.skippedForEncoding ? ` | ℹ️ ${result.skippedForEncoding} سطر/عنصر تم الإبقاء على نصه الأصلي بسبب حرف غير مدعوم (لم يُحذف أي حرف من الترجمة)` : "";
+      const details = result.skippedDetails ?? [];
+      setM3SkippedItems(details.length > 0 ? details : null);
+      if (details.length > 0) setShowSkippedDialog(true);
       toast({
         title: m3ForceBuild ? "✅ تم بناء ROM معرّب (وضع البناء القسري)" : "✅ تم بناء ROM معرّب",
         description: `${result.translatedLines} سطر مترجم | ${result.changedBanks} بنك معدّل${skipNote}${encNote}`,
@@ -175,9 +181,101 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                 🛠️ البناء القسري (تجاهل تحذيرات الأحرف والبنوك الممتلئة)
               </label>
             )}
+            {isMother3 && m3SkippedItems && m3SkippedItems.length > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowSkippedDialog(true)}
+                className="font-body gap-1 shrink-0"
+                title="عرض قائمة العناصر التي تم الإبقاء عليها في آخر بناء قسري"
+              >
+                <ListChecks className="w-4 h-4" />
+                ملخص الإبقاء ({m3SkippedItems.length})
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Force-build summary dialog — lists every line/entry whose translation
+          was kept as ORIGINAL, with its file, index and reason. */}
+      <Dialog open={showSkippedDialog} onOpenChange={setShowSkippedDialog}>
+        <DialogContent className="max-w-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              🛠️ ملخص البناء القسري — العناصر المُبقاة على الأصل
+            </DialogTitle>
+            <DialogDescription className="font-body">
+              {m3SkippedItems && m3SkippedItems.length > 0
+                ? `${m3SkippedItems.length} عنصر لم تُطبَّق ترجمته وأُبقي النص الأصلي بدلاً منها. لم يُحذف أي حرف من الترجمة — يمكنك تعديل النصوص أدناه وإعادة البناء.`
+                : "لا توجد عناصر مُبقاة في آخر بناء."}
+            </DialogDescription>
+          </DialogHeader>
+          {m3SkippedItems && m3SkippedItems.length > 0 && (
+            <div className="max-h-[55vh] overflow-y-auto rounded-md border border-border">
+              <table className="w-full text-xs font-body">
+                <thead className="sticky top-0 bg-muted/80 backdrop-blur">
+                  <tr className="text-right">
+                    <th className="px-3 py-2 font-display font-bold">النوع</th>
+                    <th className="px-3 py-2 font-display font-bold">الملف</th>
+                    <th className="px-3 py-2 font-display font-bold">الفهرس</th>
+                    <th className="px-3 py-2 font-display font-bold">السبب</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {m3SkippedItems.map((it, i) => {
+                    const kindLabel = it.kind === "encoding"
+                      ? "حرف غير مدعوم"
+                      : it.kind === "length"
+                      ? "أطول من الحد"
+                      : "تجاوز المساحة";
+                    const kindColor = it.kind === "encoding"
+                      ? "text-amber-500"
+                      : it.kind === "length"
+                      ? "text-orange-500"
+                      : "text-destructive";
+                    return (
+                      <tr key={i} className="border-t border-border/60 align-top">
+                        <td className={`px-3 py-2 font-bold whitespace-nowrap ${kindColor}`}>{kindLabel}</td>
+                        <td className="px-3 py-2 font-mono text-[11px]">{it.file}</td>
+                        <td className="px-3 py-2 font-mono text-[11px]">{it.index >= 0 ? it.index : "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{it.reason}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            {m3SkippedItems && m3SkippedItems.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="font-body"
+                onClick={() => {
+                  const lines = ["kind\tfile\tindex\treason"];
+                  for (const it of m3SkippedItems) {
+                    lines.push(`${it.kind}\t${it.file}\t${it.index}\t${it.reason.replace(/\s+/g, " ")}`);
+                  }
+                  const blob = new Blob([lines.join("\n")], { type: "text/tab-separated-values" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `mother3-force-build-skipped-${Date.now()}.tsv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="w-4 h-4 ml-1" /> تصدير TSV
+              </Button>
+            )}
+            <Button size="sm" onClick={() => setShowSkippedDialog(false)} className="font-body">إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Arabic Unprocessed Warning Banner — meaningless for Risen: its Arabic
           is expected to stay unshaped in the editor by design (shapeArabicForRisen

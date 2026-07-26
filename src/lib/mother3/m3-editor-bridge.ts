@@ -163,6 +163,7 @@ function b64ToBytes(b64: string): Uint8Array {
 function installArabicFontAndRtl(rom: Uint8Array): void {
   const font = b64ToBytes(M3_ARABIC_FONT_B64);
   const widths = b64ToBytes(M3_ARABIC_WIDTHS_B64);
+  blankControlSlots(font, widths);
   flipGlyphsInPlace(font, widths);
   rom.set(font, M3_FONT_OFFSET);
   rom.set(widths, M3_WIDTHS_OFFSET);

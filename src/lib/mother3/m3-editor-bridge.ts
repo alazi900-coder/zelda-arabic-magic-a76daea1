@@ -135,6 +135,10 @@ export interface Mother3BuildOk {
   changedBanks: number;
   /** number of banks/tables whose edits were dropped because they overflowed (force build only) */
   skippedForOverflow?: number;
+  /** number of individual lines/entries kept as ORIGINAL because their translation
+   *  contained characters the game font can't encode (force build only — no
+   *  characters are dropped from the translation; the whole edit is skipped) */
+  skippedForEncoding?: number;
 }
 export interface Mother3BuildError {
   error: string;

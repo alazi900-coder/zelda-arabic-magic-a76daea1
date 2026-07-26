@@ -7,6 +7,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
 import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
+import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-persona-guard.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -412,7 +413,7 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
@@ -426,7 +427,7 @@ Deno.serve(async (req) => {
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
 
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-    const isMother3 = game === 'mother3';
+    const isMother3 = game === 'mother3' | 'metroidprime';
     const gameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isMother3
       ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`

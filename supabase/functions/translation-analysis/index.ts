@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
 import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
+import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-persona-guard.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -258,7 +259,7 @@ Deno.serve(async (req) => {
       glossary?: string;
       aiModel?: string;
       styleGuide?: string;
-      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
+      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -276,7 +277,7 @@ Deno.serve(async (req) => {
     // (index-aligned with `entries`, since the model echoes back an `index`
     // field), used to unmask whichever result field references that index.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-    const isMother3 = game === 'mother3';
+    const isMother3 = game === 'mother3' | 'metroidprime';
     const risenTagsByIndex: string[][] = [];
     const promptEntries: AnalysisEntry[] = isRisen
       ? entries.map((e) => {

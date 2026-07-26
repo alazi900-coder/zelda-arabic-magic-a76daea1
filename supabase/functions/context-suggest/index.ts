@@ -5,6 +5,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { maskRisenTags, unmaskRisenTags } from '../_shared/risen-tag-mask.ts';
 import { RISEN_FORGET_OTHER_GAME_RULE } from '../_shared/risen-persona-guard.ts';
 import { MOTHER3_FORGET_OTHER_GAME_RULE } from '../_shared/mother3-persona-guard.ts';
+import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-persona-guard.ts';
 
 interface ContextEntry {
   original: string;
@@ -35,7 +36,7 @@ interface RequestBody {
   /** Which game this entry is from — the system prompt names it correctly instead
    * of always assuming Xenoblade. Defaults to Xenoblade for backward compatibility
    * with callers that don't send it yet. */
-  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
+  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
   /** Risen: the speaking NPC (Owner/Role fields from infos.tab), when known. */
   speaker?: Speaker;
   /** Risen: the entry's raw id/key (e.g. "HUD2_Damage_Edge") — grounds the model instead of it guessing from a bare filename. */
@@ -55,7 +56,7 @@ const GAME_LABELS: Record<string, string> = {
 
 function buildSystemPrompt(game?: string): string {
   const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-  const isMother3 = game === 'mother3';
+  const isMother3 = game === 'mother3' | 'metroidprime';
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
   const risenTagRule = isRisen
     ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'

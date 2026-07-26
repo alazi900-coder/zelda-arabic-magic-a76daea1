@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts";
 import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
+import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-persona-guard.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
         action?: 'review' | 'suggest-short' | 'improve' | 'smart-review' | 'grammar-check' | 'context-review' | 'quick-alternatives' | 'auto-correct' | 'detect-weak' | 'context-retranslate';
         aiModel?: string;
         contextEntries?: { key: string; original: string; translation: string }[];
-        game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3';
+        game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
       };
 
       // Mask Risen tags before ANY prompt text is built, across every action
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
       // masked original/translation to embed in prompt strings only, and
       // `unmaskFor(key, text)` restores a model-returned string afterward.
       const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
-      const isMother3 = game === 'mother3';
+      const isMother3 = game === 'mother3' | 'metroidprime';
       const risenTagsByKey = new Map<string, string[]>();
       const maskedByKey = new Map<string, { original: string; translation: string }>();
       if (isRisen) {
@@ -195,7 +196,7 @@ ${tooLongEntries.map((e, i) => {
 
           const gameNameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
           const prompt = `أنت مدقق لغوي متخصص في ترجمة ألعاب الفيديو (${gameNameLabel}). حلّل كل ترجمة وأبلغ عن المشاكل الواضحة فقط:
-${isMother3 ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n` : isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
+${isMetroidPrime ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n` : isMother3 ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n` : isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
 
 ⚠️ تعليمات حاسمة:
 - أبلغ فقط عن المشاكل الواضحة والمؤكدة — لا تقترح تغييرات ذوقية أو تفضيلات شخصية
@@ -831,7 +832,7 @@ ${e.maxBytes > 0 ? `الحد: ${e.maxBytes} بايت` : ''}`; }).join('\n\n')}
 
           const gameNameLabel2 = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
           const prompt = `أنت مترجم ألعاب فيديو محترف متخصص في ${gameNameLabel2}. مهمتك: إعادة صياغة وتحسين كل ترجمة عربية بشكل ملحوظ.
-${isMother3 ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n` : isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
+${isMetroidPrime ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n` : isMother3 ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n` : isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
 قواعد صارمة:
 - يجب أن تقدم صياغة مختلفة وأفضل لكل نص — لا تُعِد نفس النص أبداً
 - أعد صياغة الجملة بالكامل بأسلوب عربي طبيعي وسلس كأنها كُتبت بالعربية أصلاً

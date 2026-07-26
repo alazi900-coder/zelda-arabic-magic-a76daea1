@@ -129,6 +129,17 @@ export function extractMother3Entries(rom: Uint8Array): Mother3ExtractResult {
   return { entries, bankCount: usedBanks, lineCount };
 }
 
+export interface M3SkippedItem {
+  /** where it came from: bank id (`bank_<N>`) or table id (`names_...`, `menu_...`). */
+  file: string;
+  /** line/entry index within that file. */
+  index: number;
+  /** why the edit was kept-original in force mode. */
+  reason: string;
+  /** category — encoding=unsupported char, length=too long for fixed slot, overflow=whole bank overflowed. */
+  kind: "encoding" | "length" | "overflow";
+}
+
 export interface Mother3BuildOk {
   rom: Uint8Array;
   translatedLines: number;
@@ -139,6 +150,9 @@ export interface Mother3BuildOk {
    *  contained characters the game font can't encode (force build only — no
    *  characters are dropped from the translation; the whole edit is skipped) */
   skippedForEncoding?: number;
+  /** per-item detail for every skipped edit above (encoding + overflow) — powers
+   *  the force-build summary dialog in the UI. */
+  skippedDetails?: M3SkippedItem[];
 }
 export interface Mother3BuildError {
   error: string;

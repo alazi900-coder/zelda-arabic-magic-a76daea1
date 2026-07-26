@@ -214,7 +214,7 @@ export function rebuildMenuTable(
     cursor += gapsAfter[n].length;
   }
 
-  return { bytes: out, start: spec.start };
+  return { bytes: out, start: spec.start, skippedEncoding };
 }
 
 /** Apply a rebuilt table into a copy of the ROM and return the new ROM bytes. */

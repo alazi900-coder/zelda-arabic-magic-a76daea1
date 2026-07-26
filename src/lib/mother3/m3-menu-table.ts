@@ -98,11 +98,18 @@ export function parseMenuTable(rom: Uint8Array, spec: MenuTableSpec): MenuTable 
   return { spec, addrOfFFFF, entries };
 }
 
+export interface MenuSkippedDetail {
+  index: number;
+  reason: string;
+}
+
 export interface MenuRebuildResult {
   bytes: Uint8Array; // length === spec.end - spec.start
   start: number;
   /** entries skipped (kept original) due to encoding issues in force mode */
   skippedEncoding?: number;
+  /** per-entry detail for the skipped items above */
+  skippedDetails?: MenuSkippedDetail[];
 }
 export interface MenuRebuildError {
   error: string;

@@ -151,6 +151,11 @@ export function parseBankRegion(rom: Uint8Array, region: BankRegion): M3Bank | n
   return { index: region.index, regionStart: region.start, regionEnd: region.end, addrOfFFFF, lines };
 }
 
+export interface SkippedLineDetail {
+  index: number;
+  reason: string;
+}
+
 export interface RebuildResult {
   /** the full new bank region bytes (length === regionEnd - regionStart) */
   bytes: Uint8Array;
@@ -158,6 +163,8 @@ export interface RebuildResult {
   regionStart: number;
   /** how many edited lines were skipped (kept original) due to encoding errors in force mode */
   skippedEncoding?: number;
+  /** per-line detail for the skipped entries above */
+  skippedDetails?: SkippedLineDetail[];
 }
 
 export interface RebuildError {
@@ -189,6 +196,7 @@ export function rebuildBank(
   // that line so the translator can revisit it later.
   const decodedLines: number[][] = [];
   let skippedEncoding = 0;
+  const skippedDetails: SkippedLineDetail[] = [];
   for (const line of bank.lines) {
     const hasEdit = editedText.has(line.index);
     const txt = hasEdit ? editedText.get(line.index)! : line.text;
@@ -199,12 +207,14 @@ export function rebuildBank(
       if (opts.lossy && hasEdit) {
         codes = line.codes.slice();
         skippedEncoding++;
+        skippedDetails.push({ index: line.index, reason: (e as Error).message });
       } else {
         return { error: `سطر ${line.index}: ${(e as Error).message}` };
       }
     }
     decodedLines.push([...codes, END_BYTE]);
   }
+
 
   // Layout: [pointer table (count * 2) + 0xFFFF (2)] then line data back-to-back.
   const ptrTableBytes = count * 2 + 2;

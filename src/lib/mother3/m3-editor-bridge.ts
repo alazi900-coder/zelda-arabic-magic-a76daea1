@@ -23,7 +23,7 @@ import {
   type M3Bank,
 } from "./m3-script";
 import { M3_ARABIC_FONT_B64, M3_ARABIC_WIDTHS_B64, M3_FONT_OFFSET, M3_WIDTHS_OFFSET } from "./m3-arabic-font";
-import { applyRtlPatch, flipGlyphsInPlace } from "./m3-rtl-patch";
+import { applyRtlPatch, flipGlyphsInPlace, blankControlSlots } from "./m3-rtl-patch";
 import { NAMES_TABLES, parseNamesTable, rebuildNamesTable, applyNamesRebuild } from "./m3-names-table";
 import { MENU_TABLES, parseMenuTable, rebuildMenuTable, applyMenuRebuild } from "./m3-menu-table";
 

@@ -2,6 +2,7 @@ import React from "react";
 import { FILE_CATEGORIES, BDAT_CATEGORIES, DR_CATEGORIES } from "./types";
 import type { RisenCategory } from "@/lib/risen/categories";
 import type { Mother3Category } from "@/lib/mother3/categories";
+import type { MetroidPrimeCategory } from "@/lib/metroid-prime/mp-categories";
 import {
   AlertTriangle, Wrench, Loader2, Sparkles, RefreshCw,
   Monitor, Swords, Users, Skull, ScrollText, MapPin, BookOpen,

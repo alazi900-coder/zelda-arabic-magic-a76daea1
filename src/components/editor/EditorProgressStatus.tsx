@@ -12,6 +12,7 @@ import BdatBuildReport from "@/components/editor/BdatBuildReport";
 import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
 import { buildRisenCategories } from "@/lib/risen/categories";
 import { buildMother3Categories } from "@/lib/mother3/categories";
+import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<

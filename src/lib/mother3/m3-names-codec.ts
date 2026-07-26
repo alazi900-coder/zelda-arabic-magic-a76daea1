@@ -114,7 +114,7 @@ export function decodeNamesString(
 /** Encode a display string (control tokens `{XX}` and `[XX YY]` pass through)
  *  to codes. Arabic runs are reshaped first. Throws on characters with no
  *  font code. */
-export function encodeNamesString(text: string): number[] {
+export function encodeNamesString(text: string, lossy = false): number[] {
   const normalizedText = normalizeMother3EditableText(text, "names");
   const out: number[] = [];
   let i = 0;
@@ -153,6 +153,7 @@ export function encodeNamesString(text: string): number[] {
         if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue;
         const code = charToCode(ch);
         if (code === undefined) {
+          if (lossy) continue;
           throw new Error(
             `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
           );
@@ -165,6 +166,10 @@ export function encodeNamesString(text: string): number[] {
     const ch = normalizedText[i];
     const code = charToCode(ch);
     if (code === undefined) {
+      if (lossy) {
+        i++;
+        continue;
+      }
       throw new Error(
         `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
       );

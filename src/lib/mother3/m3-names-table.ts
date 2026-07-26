@@ -131,7 +131,8 @@ export function rebuildNamesTable(
   rom: Uint8Array,
   spec: NamesTableSpec,
   entries: NamesEntry[],
-  editedText: Map<number, string>
+  editedText: Map<number, string>,
+  opts: { lossy?: boolean } = {}
 ): NamesRebuildResult | NamesRebuildError {
   const regionSize = spec.end - spec.start;
   const out = new Uint8Array(rom.subarray(spec.start, spec.end)); // start from the original bytes
@@ -142,14 +143,20 @@ export function rebuildNamesTable(
     const txt = editedText.get(entry.index)!;
     let codes: number[];
     try {
-      codes = encodeNamesString(txt);
+      codes = encodeNamesString(txt, opts.lossy);
     } catch (e) {
       return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
     }
     const neededBytes = codes.length * 2 + 2; // + terminator
     if (neededBytes > spec.stride) {
-      tooLong.push(entry.index);
-      continue;
+      if (opts.lossy) {
+        // truncate to fit
+        const maxCodes = (spec.stride - 2) / 2;
+        codes = codes.slice(0, maxCodes);
+      } else {
+        tooLong.push(entry.index);
+        continue;
+      }
     }
     const slotStart = entry.offset - spec.start;
     out.fill(0xff, slotStart, slotStart + spec.stride);

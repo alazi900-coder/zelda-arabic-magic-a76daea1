@@ -118,7 +118,8 @@ export interface MenuRebuildError {
 export function rebuildMenuTable(
   rom: Uint8Array,
   table: MenuTable,
-  editedText: Map<number, string>
+  editedText: Map<number, string>,
+  opts: { lossy?: boolean } = {}
 ): MenuRebuildResult | MenuRebuildError {
   const { spec, entries } = table;
   const regionSize = spec.end - spec.start;
@@ -158,7 +159,7 @@ export function rebuildMenuTable(
     if (editedText.has(entry.index)) {
       let codes: number[];
       try {
-        codes = encodeNamesString(editedText.get(entry.index)!);
+        codes = encodeNamesString(editedText.get(entry.index)!, opts.lossy);
       } catch (e) {
         return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
       }

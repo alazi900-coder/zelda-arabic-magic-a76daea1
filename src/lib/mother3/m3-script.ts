@@ -174,7 +174,8 @@ export interface RebuildError {
 export function rebuildBank(
   rom: Uint8Array,
   bank: M3Bank,
-  editedText: Map<number, string>
+  editedText: Map<number, string>,
+  opts: { lossy?: boolean } = {}
 ): RebuildResult | RebuildError {
   const regionSize = bank.regionEnd - bank.regionStart;
   const count = bank.lines.length;
@@ -185,7 +186,7 @@ export function rebuildBank(
     const txt = editedText.has(line.index) ? editedText.get(line.index)! : line.text;
     let codes: number[];
     try {
-      codes = editedText.has(line.index) ? textToCodes(txt) : line.codes.slice();
+      codes = editedText.has(line.index) ? textToCodes(txt, opts.lossy) : line.codes.slice();
     } catch (e) {
       return { error: `سطر ${line.index}: ${(e as Error).message}` };
     }

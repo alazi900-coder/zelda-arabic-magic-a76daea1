@@ -133,6 +133,8 @@ export interface Mother3BuildOk {
   rom: Uint8Array;
   translatedLines: number;
   changedBanks: number;
+  /** number of banks/tables whose edits were dropped because they overflowed (force build only) */
+  skippedForOverflow?: number;
 }
 export interface Mother3BuildError {
   error: string;
@@ -174,8 +176,10 @@ function installArabicFontAndRtl(rom: Uint8Array): void {
  */
 export function buildMother3Rom(
   rom: Uint8Array,
-  translations: Record<string, string>
+  translations: Record<string, string>,
+  opts: { force?: boolean } = {}
 ): Mother3BuildOk | Mother3BuildError {
+  const force = !!opts.force;
   // 1) Resolve each translated representative to its original text, then map
   //    original-text -> Arabic so every duplicate line gets the same translation.
   const regions = parseBankTable(rom).filter(
@@ -203,6 +207,7 @@ export function buildMother3Rom(
   let encodingMsg = "";
   let translatedLines = 0;
   let changedBanks = 0;
+  let skippedForOverflow = 0;
 
   for (const bank of parsedBanks) {
     const edits = new Map<number, string>();
@@ -214,11 +219,15 @@ export function buildMother3Rom(
       }
     }
     if (edits.size === 0) continue;
-    const res = rebuildBank(out, bank, edits);
+    const res = rebuildBank(out, bank, edits, { lossy: force });
     if ("error" in res) {
       if (res.overflowBy == null) {
         encodingFailure = true;
         encodingMsg = res.error;
+      } else if (force) {
+        // force: skip this bank's edits, keep original English, continue build
+        overflows.push({ bank: bank.index, overflowBy: res.overflowBy });
+        skippedForOverflow++;
       } else {
         overflows.push({ bank: bank.index, overflowBy: res.overflowBy });
       }
@@ -242,11 +251,14 @@ export function buildMother3Rom(
       }
     }
     if (edits.size === 0) continue;
-    const res = rebuildNamesTable(out, spec, tableEntries, edits);
+    const res = rebuildNamesTable(out, spec, tableEntries, edits, { lossy: force });
     if ("error" in res) {
       if (res.overflowBy == null) {
         encodingFailure = true;
         encodingMsg = res.error;
+      } else if (force) {
+        overflows.push({ bank: -1, overflowBy: res.overflowBy });
+        skippedForOverflow++;
       } else {
         overflows.push({ bank: -1, overflowBy: res.overflowBy });
       }
@@ -269,11 +281,14 @@ export function buildMother3Rom(
       }
     }
     if (edits.size === 0) continue;
-    const res = rebuildMenuTable(out, table, edits);
+    const res = rebuildMenuTable(out, table, edits, { lossy: force });
     if ("error" in res) {
       if (res.overflowBy == null) {
         encodingFailure = true;
         encodingMsg = res.error;
+      } else if (force) {
+        overflows.push({ bank: -1, overflowBy: res.overflowBy });
+        skippedForOverflow++;
       } else {
         overflows.push({ bank: -1, overflowBy: res.overflowBy });
       }
@@ -283,14 +298,14 @@ export function buildMother3Rom(
     changedBanks++;
   }
 
-  if (encodingFailure) {
+  if (encodingFailure && !force) {
     return {
       error: `تعذّر ترميز بعض النص: ${encodingMsg}`,
       overflows,
       hasEncodingError: true,
     };
   }
-  if (overflows.length > 0) {
+  if (overflows.length > 0 && !force) {
     return {
       error: `${overflows.length} بنك تجاوز مساحته بعد الترجمة — قصّر النص في هذه البنوك`,
       overflows,
@@ -298,5 +313,6 @@ export function buildMother3Rom(
   }
 
   installArabicFontAndRtl(out);
-  return { rom: out, translatedLines, changedBanks };
+  return { rom: out, translatedLines, changedBanks, skippedForOverflow };
 }
+

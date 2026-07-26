@@ -147,9 +147,10 @@ function charToCode(ch: string): number | undefined {
 /** Encode one run of plain text (no control tokens) to codes. Arabic runs are
  *  reshaped to presentation forms first so they match the font/table; the RTL
  *  render patch handles visual right-to-left order, so text stays in logical
- *  order here. When `lossy` is true, un-encodable characters are silently
- *  dropped instead of throwing (used by force-build). */
-function encodeTextRun(run: string, lossy = false): number[] {
+ *  order here. Always throws on un-encodable characters — the `lossy` flag no
+ *  longer drops characters (force-build skips the whole edit instead, keeping
+ *  the original text intact rather than corrupting the translated string). */
+function encodeTextRun(run: string, _lossy = false): number[] {
   const normalized = normalizeMother3EditableText(run, "script");
   const shaped = hasArabicChars(normalized) ? reshapeArabic(normalized) : normalized;
   const out: number[] = [];
@@ -157,7 +158,6 @@ function encodeTextRun(run: string, lossy = false): number[] {
     if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue; // bidi/joiners
     const code = charToCode(ch);
     if (code === undefined) {
-      if (lossy) continue;
       const cp = ch.codePointAt(0) ?? 0;
       throw new Error(
         `حرف غير قابل للترميز في نص Mother 3: ${JSON.stringify(ch)} (U+${cp

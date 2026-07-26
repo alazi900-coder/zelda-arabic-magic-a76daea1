@@ -2,6 +2,7 @@ import React from "react";
 import { FILE_CATEGORIES, BDAT_CATEGORIES, DR_CATEGORIES } from "./types";
 import type { RisenCategory } from "@/lib/risen/categories";
 import type { Mother3Category } from "@/lib/mother3/categories";
+import type { MetroidPrimeCategory } from "@/lib/metroid-prime/mp-categories";
 import {
   AlertTriangle, Wrench, Loader2, Sparkles, RefreshCw,
   Monitor, Swords, Users, Skull, ScrollText, MapPin, BookOpen,
@@ -42,10 +43,13 @@ interface CategoryProgressProps {
   isMother3?: boolean;
   /** Built dynamically from the loaded file's tables (see src/lib/mother3/categories.ts). */
   mother3Categories?: Mother3Category[];
+  isMetroidPrime?: boolean;
+  /** Built dynamically from the loaded file's tables (see src/lib/metroid-prime/mp-categories.ts). */
+  metroidPrimeCategories?: MetroidPrimeCategory[];
 }
 
-const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [] }) => {
-  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
+const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [] }) => {
+  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
   const activeCats = categories.filter(cat => categoryProgress[cat.id]);
   if (activeCats.length === 0 && !categoryProgress['other']) return null;
 

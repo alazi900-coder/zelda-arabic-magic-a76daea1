@@ -32,6 +32,7 @@ import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix, type RisenSectionFilterValue } from "@/lib/risen/categories";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
+import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
 
@@ -755,9 +756,10 @@ export function useEditorState() {
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
       const isRisen = !isBdat && /\.tab$/i.test(e.msbtFile);
       const isMother3 = !isBdat && !isRisen && /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile);
-      const isDr = !isBdat && !isRisen && !isMother3 && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isMetroidPrime = !isBdat && !isRisen && !isMother3 && /^TEXT_/.test(e.msbtFile);
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||

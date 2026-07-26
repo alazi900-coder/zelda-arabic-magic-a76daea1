@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 import { RISEN_FORGET_OTHER_GAME_RULE_EN } from "../_shared/risen-persona-guard.ts";
 import { MOTHER3_FORGET_OTHER_GAME_RULE_EN } from "../_shared/mother3-persona-guard.ts";
+import { METROID_PRIME_FORGET_OTHER_GAME_RULE_EN } from '../_shared/metroid-prime-persona-guard.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,7 +83,7 @@ Rules:
       const glossaryContext = glossary ? `\nGame glossary for reference:\n${glossary.slice(0, 3000)}` : '';
       const gameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
       systemPrompt = `You are a professional video game localization QA reviewer for ${gameLabel} Arabic translation.
-${isMother3 ? MOTHER3_FORGET_OTHER_GAME_RULE_EN + '\n' : isRisen ? RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}Review each translation for contextual accuracy in the game's universe.
+${isMetroidPrime ? METROID_PRIME_FORGET_OTHER_GAME_RULE_EN + '\n' : isMother3 ? MOTHER3_FORGET_OTHER_GAME_RULE_EN + '\n' : isRisen ? RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}Review each translation for contextual accuracy in the game's universe.
 Check for:
 1. Character names used correctly and consistently
 2. Game terminology matching the glossary

@@ -17,7 +17,7 @@ interface ReqBody {
   model?: string;
   apiKey?: string;
   entries: ReqEntry[];
-  game?: "xenoblade" | "risen" | "risen2" | "mother3";
+  game?: "xenoblade" | "risen" | "risen2" | "mother3" | "metroidprime";
 }
 
 /** يبني توجيه AI صارم لإعادة التقسيم فقط بدون تغيير المحتوى. */

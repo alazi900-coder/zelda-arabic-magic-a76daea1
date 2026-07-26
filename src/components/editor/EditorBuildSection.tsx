@@ -47,13 +47,14 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [m3Building, setM3Building] = useState(false);
   const [mpBuilding, setMpBuilding] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
+  const [m3ForceBuild, setM3ForceBuild] = useState(false);
 
   const handleMother3Build = async () => {
     setM3Building(true);
     try {
       const buf = await idbGet<ArrayBuffer>(MOTHER3_BUFFER_KEY);
       if (!buf) throw new Error("لم يُعثر على ملف الـ ROM — أعد فتحه من صفحة Mother 3");
-      const result = buildMother3Rom(new Uint8Array(buf), editor.state?.translations || {});
+      const result = buildMother3Rom(new Uint8Array(buf), editor.state?.translations || {}, { force: m3ForceBuild });
       const { toast } = await import("@/hooks/use-toast");
       if ("error" in result) {
         const list = result.overflows
@@ -70,9 +71,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       a.download = "Mother3_ar.gba";
       a.click();
       URL.revokeObjectURL(url);
+      const skipNote = result.skippedForOverflow ? ` | ⚠️ ${result.skippedForOverflow} بنك/جدول تم تخطيه لتجاوزه المساحة (تم الإبقاء على الأصل)` : "";
       toast({
-        title: "✅ تم بناء ROM معرّب",
-        description: `${result.translatedLines} سطر مترجم | ${result.changedBanks} بنك معدّل`,
+        title: m3ForceBuild ? "✅ تم بناء ROM معرّب (وضع البناء القسري)" : "✅ تم بناء ROM معرّب",
+        description: `${result.translatedLines} سطر مترجم | ${result.changedBanks} بنك معدّل${skipNote}`,
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");
@@ -164,6 +166,12 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               <label className="flex items-center gap-2 cursor-pointer text-sm font-body">
                 <input type="checkbox" checked={shapeArabic} onChange={(e) => setShapeArabic(e.target.checked)} disabled={risenBuilding} className="rounded border-border" />
                 تحويل النص العربي لأشكال العرض (مطلوب للعبة)
+              </label>
+            )}
+            {isMother3 && (
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-body" title="يتجاهل الأحرف غير المدعومة (يحذفها بدل الفشل) ويحتفظ بالإنجليزية للبنوك التي تجاوزت مساحتها بدلاً من إيقاف البناء">
+                <input type="checkbox" checked={m3ForceBuild} onChange={(e) => setM3ForceBuild(e.target.checked)} disabled={m3Building} className="rounded border-border" />
+                🛠️ البناء القسري (تجاهل تحذيرات الأحرف والبنوك الممتلئة)
               </label>
             )}
           </div>

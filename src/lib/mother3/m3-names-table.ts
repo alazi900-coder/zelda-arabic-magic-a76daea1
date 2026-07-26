@@ -113,6 +113,8 @@ export function parseNamesTable(rom: Uint8Array, spec: NamesTableSpec): NamesEnt
 export interface NamesRebuildResult {
   bytes: Uint8Array; // length === spec.end - spec.start
   start: number;
+  /** entries skipped (kept original) due to encoding/length issues in force mode */
+  skippedEncoding?: number;
 }
 export interface NamesRebuildError {
   error: string;

@@ -125,11 +125,11 @@ export function codesToText(codes: number[]): string {
  * for ط/ظ the four forms are near-identical, so the word stays readable.
  */
 const ARABIC_FALLBACK_CHAR_TO_CODE: Record<string, number> = {
-  "ﻃ": 0x08, // ط initial  → ط isolated (U+FEC1)
-  "ﻄ": 0x09, // ط medial   → ط final    (U+FEC2)
-  "ﻇ": 0x0c, // ظ initial  → ظ isolated (U+FEC5)
-  "ﻈ": 0x92, // ظ medial   → ظ final    (U+FEC6)
-  "ﺁ": 0x90, // آ isolated → آ final    (U+FE82)
+  "ﻃ": 0xA6, // ط initial  → ط isolated (U+FEC1, remapped 0x08→0xA6)
+  "ﻄ": 0xA7, // ط medial   → ط final    (U+FEC2, remapped 0x09→0xA7)
+  "ﻇ": 0xAA, // ظ initial  → ظ isolated (U+FEC5, remapped 0x0C→0xAA)
+  "ﻈ": 0x92, // ظ medial   → ظ final    (U+FEC6, already high slot)
+  "ﺁ": 0x90, // آ isolated → آ final    (U+FE82, already high slot)
   "?": 0x1f, //      Latin ?     → ؟          (U+061F)
 };
 

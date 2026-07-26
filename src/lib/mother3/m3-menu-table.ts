@@ -151,6 +151,7 @@ export function rebuildMenuTable(
 
   const packedChunks: Uint8Array[] = [];
   let skippedEncoding = 0;
+  const skippedDetails: MenuSkippedDetail[] = [];
   const gapsAfter: Uint8Array[] = [];
   for (let n = 0; n < entries.length; n++) {
     const entry = entries[n];
@@ -164,6 +165,7 @@ export function rebuildMenuTable(
           // force mode: keep original bytes for this entry (don't drop chars)
           codes = null;
           skippedEncoding++;
+          skippedDetails.push({ index: entry.index, reason: (e as Error).message });
         } else {
           return { error: `عنصر ${entry.index}: ${(e as Error).message}` };
         }

@@ -110,11 +110,18 @@ export function parseNamesTable(rom: Uint8Array, spec: NamesTableSpec): NamesEnt
   return entries;
 }
 
+export interface NamesSkippedDetail {
+  index: number;
+  reason: string;
+}
+
 export interface NamesRebuildResult {
   bytes: Uint8Array; // length === spec.end - spec.start
   start: number;
   /** entries skipped (kept original) due to encoding/length issues in force mode */
   skippedEncoding?: number;
+  /** per-entry detail for the skipped items above */
+  skippedDetails?: NamesSkippedDetail[];
 }
 export interface NamesRebuildError {
   error: string;

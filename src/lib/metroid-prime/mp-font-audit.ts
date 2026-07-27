@@ -41,15 +41,16 @@ export interface MpFontAuditReport {
 }
 
 /**
- * A handful of records in the real glyph table are corrupted/garbage —
- * confirmed by inspection: code=0x0000 entries and duplicate-looking
- * records for real letters (e.g. a second 'A' record) with denormalized
- * float fields like width=8e-39, height=-0.78. These sit past wherever the
- * legitimate glyph table actually ends; our table-length heuristic (see
- * find_glyph_table_start in mp-wasm/src/lib.rs) can't yet tell where that
- * is, so `list_glyphs` returns them mixed in with real records. Filtering
- * them out here keeps the UI (table/atlas overlay/click-select) and the
- * audit's per-glyph checks from being swamped by ~90 nonsense rows.
+ * Guard against records whose numbers can't describe a real glyph.
+ *
+ * This used to fire on ~126 rows of every font, which turned out not to be
+ * corruption at all: the glyph table stores each record's kerning pairs
+ * inline right after it, and reading the table as a flat 48-byte array
+ * decoded those kerning bytes as extra glyphs. Now that `list_glyphs` walks
+ * the table properly (see `FontTable` in mp-wasm/src/lib.rs), both shipped
+ * fonts come back with zero implausible records. The check stays as a
+ * cheap tripwire — if it ever fires again it means the walk desynced, which
+ * is worth surfacing rather than silently rendering nonsense.
  */
 export function isPlausibleMpGlyph(g: MetroidPrimeGlyph): boolean {
   if (g.code === 0) return false;
@@ -101,7 +102,7 @@ export function auditMpFont(
   if (garbageCount > 0) {
     headerIssues.push({
       severity: "warning",
-      message: `${garbageCount} سجلاً غريباً/تالفاً (رمز 0 أو قيم غير منطقية) تم تجاهلها في العرض والفحص — على الأرجح تقع خارج نهاية جدول الحروف الحقيقي، لم تُفهم بعد (انظر توثيق mp-wasm/src/lib.rs)`,
+      message: `${garbageCount} سجلاً بقيم غير منطقية تم تجاهلها في العرض والفحص — الخطوط الأصلية تعطي صفراً هنا، فظهور رقم يعني أن قراءة جدول الحروف اختلّت (انظر FontTable في mp-wasm/src/lib.rs)`,
     });
   }
   const plausible = glyphs.filter(isPlausibleMpGlyph);

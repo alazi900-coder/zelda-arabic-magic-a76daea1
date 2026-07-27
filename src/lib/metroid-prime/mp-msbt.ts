@@ -31,6 +31,8 @@
  *   (mirrors the bracket-tag convention already used for Xenoblade).
  */
 
+import { shapeArabicForMp, mpTagPlaceholderIndex } from "./mp-arabic-shaper";
+
 function readU32(b: Uint8Array, off: number): number {
   return b[off] | (b[off + 1] << 8) | (b[off + 2] << 16) | (b[off + 3] << 24);
 }
@@ -71,29 +73,62 @@ function decodeMsbtString(bytes: Uint8Array): string {
   return out;
 }
 
-/** Inverse of decodeMsbtString — re-encodes bracket placeholders back to
- *  their exact original binary tag form, and literal text as UTF-16LE. */
+/** Encode one `[TAG:…]` bracket string back to its exact original binary
+ *  form, appending to `bytes`. Returns false if it isn't a well-formed tag. */
+function pushTagBytes(bytes: number[], tag: string): boolean {
+  const m = /^\[TAG:([0-9a-fA-F]{4}):([0-9a-fA-F]{4}):([0-9a-fA-F]{4}):([0-9a-fA-F]*)\]$/.exec(tag);
+  if (!m) return false;
+  const pushU16 = (v: number) => { bytes.push(v & 0xff, (v >>> 8) & 0xff); };
+  const hex = m[4];
+  pushU16(parseInt(m[1], 16));
+  pushU16(parseInt(m[2], 16));
+  pushU16(parseInt(m[3], 16));
+  pushU16(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  return true;
+}
+
+/**
+ * Inverse of decodeMsbtString — re-encodes bracket placeholders back to
+ * their exact original binary tag form, and literal text as UTF-16LE.
+ *
+ * Arabic values are first shaped into presentation forms and visually
+ * reordered (see mp-arabic-shaper.ts): the engine draws each stored codepoint
+ * literally, left-to-right, with no shaping and no BiDi, so logical Arabic
+ * would find no glyph in the font at all and render as boxes. Non-Arabic
+ * values take the original path unchanged.
+ */
 function encodeMsbtString(text: string): Uint8Array {
   const bytes: number[] = [];
+  const pushU16 = (v: number) => { bytes.push(v & 0xff, (v >>> 8) & 0xff); };
+
+  const { text: shapedText, tags } = shapeArabicForMp(text);
+
+  if (tags.length > 0) {
+    // Shaped path: every tag is now a single placeholder character whose
+    // position the reversal has already put where it belongs.
+    for (const ch of shapedText) {
+      const slot = mpTagPlaceholderIndex(ch);
+      if (slot !== null && slot < tags.length) {
+        if (pushTagBytes(bytes, tags[slot])) continue;
+      }
+      pushU16(ch.charCodeAt(0));
+    }
+    pushU16(0); // null terminator, matches the convention observed on every real string
+    return new Uint8Array(bytes);
+  }
+
+  // No tags to shield (either plain text, or non-Arabic left untouched).
   let last = 0;
   TAG_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
-  const pushU16 = (v: number) => { bytes.push(v & 0xff, (v >>> 8) & 0xff); };
   const pushText = (s: string) => { for (const ch of s) pushU16(ch.charCodeAt(0)); };
-  while ((m = TAG_RE.exec(text)) !== null) {
-    pushText(text.slice(last, m.index));
-    const marker = parseInt(m[1], 16);
-    const group = parseInt(m[2], 16);
-    const type = parseInt(m[3], 16);
-    const hex = m[4];
-    pushU16(marker);
-    pushU16(group);
-    pushU16(type);
-    pushU16(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  while ((m = TAG_RE.exec(shapedText)) !== null) {
+    pushText(shapedText.slice(last, m.index));
+    pushTagBytes(bytes, m[0]);
     last = TAG_RE.lastIndex;
   }
-  pushText(text.slice(last));
+  pushText(shapedText.slice(last));
   pushU16(0); // null terminator, matches the convention observed on every real string
   return new Uint8Array(bytes);
 }

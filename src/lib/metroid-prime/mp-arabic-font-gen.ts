@@ -80,7 +80,24 @@ export async function renderArabicGlyphsForMp(
   const shaped = reshapeArabic(text);
   const codepoints = [...new Set([...shaped].map((ch) => ch.charCodeAt(0)))].filter((cp) => cp !== 0x20);
   if (codepoints.length === 0) throw new Error("لا توجد حروف قابلة للرسم في هذا النص");
+  const glyphs = await renderMpGlyphsForCodepoints(fontBytes, codepoints, fontSizePx, override);
+  return { shapedText: shaped, glyphs };
+}
 
+/**
+ * Rasterizes an explicit list of codepoints — the same drawing path
+ * `renderArabicGlyphsForMp` uses, but without deriving the list from sample
+ * text. Used to insert the COMPLETE Arabic set in one go (every presentation
+ * form the build-time shaper can emit), so a translation can never hit a
+ * codepoint the font happens to lack just because it wasn't in whatever
+ * sample the user typed.
+ */
+export async function renderMpGlyphsForCodepoints(
+  fontBytes: ArrayBuffer,
+  codepoints: number[],
+  fontSizePx: number,
+  override?: MpAlternateFontOverride
+): Promise<RenderedMpGlyph[]> {
   const fontFace = new FontFace("MpArabicGen", fontBytes);
   await fontFace.load();
   document.fonts.add(fontFace);
@@ -140,7 +157,7 @@ export async function renderArabicGlyphsForMp(
         pixels,
       });
     }
-    return { shapedText: shaped, glyphs };
+    return glyphs;
   } finally {
     document.fonts.delete(fontFace);
     if (altFace) document.fonts.delete(altFace);

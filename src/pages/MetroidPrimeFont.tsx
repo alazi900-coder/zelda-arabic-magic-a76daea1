@@ -13,7 +13,8 @@ import {
   type MetroidPrimeAssetInfo,
   type MetroidPrimeGlyph,
 } from "@/lib/metroid-prime/mp-wasm";
-import { renderArabicGlyphsForMp, getMpPresentationForms, type RenderedMpGlyph, type MpAlternateFontOverride } from "@/lib/metroid-prime/mp-arabic-font-gen";
+import { renderArabicGlyphsForMp, renderMpGlyphsForCodepoints, getMpPresentationForms, type RenderedMpGlyph, type MpAlternateFontOverride } from "@/lib/metroid-prime/mp-arabic-font-gen";
+import { getMpArabicGlyphCodepoints, shapeArabicForMp } from "@/lib/metroid-prime/mp-arabic-shaper";
 import { auditMpFont, formatMpAuditReportText, buildMpDiagnosticJson, isPlausibleMpGlyph, type MpFontAuditReport } from "@/lib/metroid-prime/mp-font-audit";
 import { FREE_ARABIC_FONTS, fetchFreeFontBytes, type FreeFontEntry } from "@/lib/risen2-free-fonts";
 import { APP_VERSION } from "@/lib/version";
@@ -46,6 +47,18 @@ function parseCharOrCodeInput(input: string): number | null {
   }
   if ([...trimmed].length === 1) return trimmed.codePointAt(0) ?? null;
   return null;
+}
+
+/**
+ * Codepoints the font already carries on ANY page — not just the primary one.
+ * `build_font_glyphs` refuses to insert a codepoint that exists anywhere in
+ * the record table, so filtering only by `flag === 0` would let the UI offer
+ * glyphs (e.g. the Arabic-Indic digits, which the CJK pages already have)
+ * whose insertion then aborts the whole merge. A codepoint present on another
+ * page still renders in-game — it just isn't ours to add again.
+ */
+function collectExistingCodes(glyphs: MetroidPrimeGlyph[]): Set<number> {
+  return new Set(glyphs.filter(isPlausibleMpGlyph).map((g) => g.code));
 }
 
 /** Small canvas preview of one rasterized glyph's coverage bitmap. */
@@ -386,13 +399,34 @@ export default function MetroidPrimeFont() {
         listGlyphs(pakBytes, selectedFontId),
       ]);
       setPreviewGlyphs(rendered);
-      setExistingCodes(new Set(existing.filter((g) => g.flag === 0).map((g) => g.code)));
+      setExistingCodes(collectExistingCodes(existing));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setRendering(false);
     }
   }, [inputText, fontEntryId, fontSizePx, pakBytes, selectedFontId, altOverride, loadFontBytesFor, customMainFont]);
+
+  /** Render EVERY presentation form the build-time shaper can emit, rather
+   *  than only the letters present in the sample text — a translation hits
+   *  forms the sample never contained, and a missing form draws as a box. */
+  const handlePreviewFullSet = useCallback(async () => {
+    if (!pakBytes || !selectedFontId) { toast.error("اختر خطاً من القائمة أعلاه أولاً"); return; }
+    setRendering(true);
+    try {
+      const bytes = customMainFont?.bytes ?? (await loadFontBytesFor(fontEntryId));
+      const [rendered, existing] = await Promise.all([
+        renderMpGlyphsForCodepoints(bytes, getMpArabicGlyphCodepoints(), fontSizePx, altOverride),
+        listGlyphs(pakBytes, selectedFontId),
+      ]);
+      setPreviewGlyphs(rendered);
+      setExistingCodes(collectExistingCodes(existing));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRendering(false);
+    }
+  }, [fontEntryId, fontSizePx, pakBytes, selectedFontId, altOverride, loadFontBytesFor, customMainFont]);
 
   const handleMerge = useCallback(async () => {
     if (!pakBytes || !selectedId || !selectedFontId || !previewGlyphs || !existingCodes) return;
@@ -590,16 +624,22 @@ export default function MetroidPrimeFont() {
   // Text-preview simulator: blit each shaped char's real atlas box, or a red
   // placeholder box for missing codepoints, using the same live-pending
   // field overrides as the atlas canvas.
+  // Exactly what the build will store — logical Arabic is shaped into
+  // presentation forms and reversed, because the engine draws stored
+  // codepoints literally with no shaping and no BiDi. Checking the raw typed
+  // text instead would report every Arabic letter as "missing" even when the
+  // font carries the right forms.
+  const simShaped = useMemo(() => shapeArabicForMp(simText).text, [simText]);
+
   const missingInSim = useMemo(() => {
-    const shaped = [...simText].filter((ch) => ch.charCodeAt(0) >= 0x0600 || /[a-zA-Z0-9 .,!?]/.test(ch));
     const missing: number[] = [];
-    for (const ch of simText) {
+    for (const ch of simShaped) {
       const cp = ch.charCodeAt(0);
       if (cp === 0x20) continue;
       if (!primaryFlagZero.some((g) => g.code === cp)) missing.push(cp);
     }
     return missing;
-  }, [simText, primaryFlagZero]);
+  }, [simShaped, primaryFlagZero]);
 
   useEffect(() => {
     const canvas = previewCanvasRef.current;
@@ -626,7 +666,7 @@ export default function MetroidPrimeFont() {
     let penX = 4;
     const hits: { x0: number; x1: number; code: number }[] = [];
     const widths: number[] = [];
-    for (const ch of simText) {
+    for (const ch of simShaped) {
       const cp = ch.charCodeAt(0);
       if (cp === 0x20) { penX += 8; continue; }
       const g = byCode.get(cp);
@@ -652,7 +692,7 @@ export default function MetroidPrimeFont() {
     // Redraw after resize (canvas resizing clears content).
     ctx.imageSmoothingEnabled = false;
     penX = 4;
-    for (const ch of simText) {
+    for (const ch of simShaped) {
       const cp = ch.charCodeAt(0);
       if (cp === 0x20) { penX += 8; continue; }
       const g = byCode.get(cp);
@@ -671,7 +711,7 @@ export default function MetroidPrimeFont() {
       }
     }
     previewHitsRef.current = hits;
-  }, [simText, primaryFlagZero, imageBitmap, selectedGlyph, editX0, editY0, editAdvance]);
+  }, [simShaped, primaryFlagZero, imageBitmap, selectedGlyph, editX0, editY0, editAdvance]);
 
   const handlePreviewClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = previewCanvasRef.current;
@@ -896,9 +936,17 @@ export default function MetroidPrimeFont() {
               <input type="text" dir="rtl" value={altLetters} onChange={(e) => setAltLetters(e.target.value)} placeholder="حروف من البديل مثل: ع غ" className="flex-1 rounded border bg-background px-2 py-1 text-sm" />
               {altOverride && <span className="text-xs text-emerald-500">سيُؤخذ {altOverride.codepoints.size} شكلاً من البديل</span>}
             </div>
-            <button onClick={() => void handlePreview()} disabled={rendering || !inputText.trim()} className="self-start rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
-              {rendering ? "جارٍ الرسم..." : "معاينة الحروف"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => void handlePreview()} disabled={rendering || !inputText.trim()} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                {rendering ? "جارٍ الرسم..." : "معاينة الحروف"}
+              </button>
+              <button onClick={() => void handlePreviewFullSet()} disabled={rendering} className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium hover:bg-primary/20 disabled:opacity-50">
+                {rendering ? "جارٍ الرسم..." : "🅰️ معاينة كل الحروف العربية (المجموعة الكاملة)"}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              المجموعة الكاملة تشمل كل شكل قد يحتاجه أي نص مترجم (أول/وسط/آخر/منفرد + لام-ألف + الأرقام والعلامات) — استخدمها لتضمن ألّا يظهر أي مربع في اللعبة بسبب شكل ناقص.
+            </p>
             {previewGlyphs && existingCodes && (
               <div className="flex flex-col gap-3 border-t pt-3">
                 <div className="flex flex-wrap gap-2">

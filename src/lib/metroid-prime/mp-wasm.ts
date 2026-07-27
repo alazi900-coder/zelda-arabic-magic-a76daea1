@@ -9,6 +9,7 @@
  * dev-mode Vite refuses to import .js modules straight out of /public.
  */
 import init, * as mpWasm from "./generated/mp_wasm.js";
+import { APP_VERSION } from "@/lib/version";
 
 export interface MetroidPrimeAssetInfo {
   id: string;
@@ -80,7 +81,11 @@ let modPromise: Promise<MpWasmModule> | null = null;
 async function loadModule(): Promise<MpWasmModule> {
   if (!modPromise) {
     modPromise = (async () => {
-      await init({ module_or_path: "/wasm/metroid-prime/mp_wasm_bg.wasm" });
+      // Cache-busted with the app version: unlike Vite's own bundled JS/CSS
+      // (auto-hashed per build), this .wasm file lives under public/ with a
+      // constant filename, so browsers/CDNs can keep serving a stale cached
+      // copy after a rebuild unless the URL itself changes.
+      await init({ module_or_path: `/wasm/metroid-prime/mp_wasm_bg.wasm?v=${APP_VERSION}` });
       return mpWasm as unknown as MpWasmModule;
     })();
   }

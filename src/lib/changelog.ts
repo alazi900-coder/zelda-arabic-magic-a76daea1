@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.117.4",
+    date: "2026-07-27",
+    changes: [
+      { kind: "fixed", text: "أداة خط Metroid Prime كانت قد تبقى على نسخة قديمة مخزّنة مؤقتاً بعد نشر تحديث جديد (فتختفي ميزات مضافة) — لأن ملف WASM يُحمَّل من رابط ثابت لا يتغيّر بين الإصدارات. أصبح الرابط نفسه يحمل رقم الإصدار فيُجلب من جديد تلقائياً مع كل تحديث." },
+    ],
+  },
+  {
     version: "1.117.3",
     date: "2026-07-26",
     changes: [

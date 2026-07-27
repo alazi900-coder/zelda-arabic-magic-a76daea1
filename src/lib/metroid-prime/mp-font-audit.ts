@@ -13,7 +13,10 @@
  */
 import type { MetroidPrimeGlyph } from "./mp-wasm";
 
-export type MpAuditSeverity = "error" | "warning";
+/** "info" states something the tool did on purpose — it is reported so the
+ *  translator can see it happened, and deliberately does not count as a
+ *  problem. */
+export type MpAuditSeverity = "error" | "warning" | "info";
 
 export interface MpAuditIssue {
   severity: MpAuditSeverity;
@@ -66,6 +69,10 @@ export function isPlausibleMpGlyph(g: MetroidPrimeGlyph): boolean {
   return true;
 }
 
+function severityLabel(s: MpAuditSeverity): string {
+  return s === "error" ? "خطأ" : s === "warning" ? "تحذير" : "معلومة";
+}
+
 function charLabelOf(code: number): string {
   if (code >= 0x21 && code <= 0x7e) return String.fromCharCode(code);
   if (code === 0x20) return "مسافة";
@@ -112,34 +119,106 @@ export function auditMpFont(
   // repeated Japanese kana entries at different table positions) but their
   // page semantics aren't understood, so flagging those would be noise, not
   // a fixable finding. ---
+  // Duplicates that the stock fonts already ship (U+005F appears twice on
+  // page 0 of every font checked) are worth stating, but they are not a
+  // finding about this edit — reporting them as errors sends the translator
+  // hunting for a problem the tool did not create.
+  const preExistingCodes = new Set(
+    (original ?? []).filter((g) => g.flag === 0).map((g) => g.code)
+  );
   const seenPairs = new Map<string, number>();
   plausible.forEach((g, i) => {
     if (g.flag !== 0) return;
     const key = `${g.code}:${g.flag}`;
     const prev = seenPairs.get(key);
     if (prev !== undefined) {
-      headerIssues.push({ severity: "error", message: `الحرف ${charLabelOf(g.code)} (flag=0) مكرر — مرتين في الجدول` });
+      const stock = original ? preExistingCodes.has(g.code) : false;
+      headerIssues.push({
+        severity: stock ? "warning" : "error",
+        message: stock
+          ? `الحرف ${charLabelOf(g.code)} (flag=0) مكرر مرتين — وهذا موجود في الخط الأصلي نفسه، ليس من صنع الأداة`
+          : `الحرف ${charLabelOf(g.code)} (flag=0) مكرر — مرتين في الجدول`,
+      });
     }
     seenPairs.set(key, i);
   });
 
-  // --- diff vs baseline: every flag=0 original glyph must survive
-  // byte-identical (field-identical) unless it was deliberately edited. ---
+  // --- diff vs baseline ---
+  //
+  // Growing the atlas moves every page-0 glyph in V space on purpose: V is
+  // `row / height`, so when the page gets taller each glyph's v0/v1 must be
+  // multiplied by old_height/new_height to keep pointing at the same pixels.
+  // Reporting that per glyph buried a real report under ~125 identical
+  // "changed unintentionally" errors. What actually needs checking is that the
+  // rescale is *uniform*: one glyph left behind, or scaled by a different
+  // factor, is a genuine defect, and it shows up as a mismatch against the
+  // ratio the majority agree on.
   if (original) {
-    const byKey = new Map(plausible.map((g) => [`${g.code}:${g.flag}`, g]));
+    // Key on the occurrence index too: the stock fonts contain a codepoint
+    // twice on page 0, and a plain code→glyph map would collapse the pair and
+    // then report the one it dropped as "changed".
+    const occurrence = new Map<string, number>();
+    const byKey = new Map<string, MetroidPrimeGlyph>();
+    for (const g of plausible) {
+      const base = `${g.code}:${g.flag}`;
+      const n = occurrence.get(base) ?? 0;
+      occurrence.set(base, n + 1);
+      byKey.set(`${base}:${n}`, g);
+    }
+    const seenOriginal = new Map<string, number>();
+    const ratios: number[] = [];
+    const pairs: { og: MetroidPrimeGlyph; now: MetroidPrimeGlyph }[] = [];
     for (const og of original.filter(isPlausibleMpGlyph)) {
       if (og.flag !== 0) continue;
-      const now = byKey.get(`${og.code}:${og.flag}`);
+      const base = `${og.code}:${og.flag}`;
+      const n = seenOriginal.get(base) ?? 0;
+      seenOriginal.set(base, n + 1);
+      const now = byKey.get(`${base}:${n}`);
       if (!now) {
         headerIssues.push({ severity: "warning", message: `الحرف الأصلي ${charLabelOf(og.code)} (flag=0) حُذف` });
         continue;
       }
-      const changed =
-        now.x0 !== og.x0 || now.y0 !== og.y0 || now.width !== og.width || now.height !== og.height ||
-        now.advance !== og.advance || now.u0 !== og.u0 || now.v0 !== og.v0 || now.u1 !== og.u1 || now.v1 !== og.v1;
-      if (changed) {
-        headerIssues.push({ severity: "error", message: `الحرف الأصلي ${charLabelOf(og.code)} (flag=0) تغيّرت حقوله دون قصد` });
+      pairs.push({ og, now });
+      if (og.v0 > 0) ratios.push(now.v0 / og.v0);
+      if (og.v1 > 0) ratios.push(now.v1 / og.v1);
+    }
+
+    // The expected factor is whatever the bulk of the glyphs agree on; taking
+    // the median rather than an average keeps a handful of odd records from
+    // dragging it off.
+    const sorted = [...ratios].sort((a, b) => a - b);
+    const vScale = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 1;
+    const rescaled = Math.abs(vScale - 1) > 1e-6;
+    const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(1e-5, Math.abs(b) * 1e-4);
+
+    let offPattern = 0;
+    for (const { og, now } of pairs) {
+      const geometryChanged =
+        now.x0 !== og.x0 || now.y0 !== og.y0 || now.width !== og.width ||
+        now.height !== og.height || now.advance !== og.advance ||
+        now.u0 !== og.u0 || now.u1 !== og.u1;
+      const vFollowsScale = near(now.v0, og.v0 * vScale) && near(now.v1, og.v1 * vScale);
+      if (geometryChanged || !vFollowsScale) {
+        offPattern++;
+        if (offPattern <= 10) {
+          headerIssues.push({
+            severity: "error",
+            message: `الحرف الأصلي ${charLabelOf(og.code)} (flag=0) تغيّرت حقوله دون قصد`,
+          });
+        }
       }
+    }
+    if (offPattern > 10) {
+      headerIssues.push({
+        severity: "error",
+        message: `و${offPattern - 10} حرفاً أصلياً آخر تغيّرت حقوله دون قصد (عُرضت أول 10 فقط)`,
+      });
+    }
+    if (rescaled && offPattern === 0) {
+      headerIssues.push({
+        severity: "info",
+        message: `أُعيد قياس إحداثي V لـ${pairs.length} حرفاً أصلياً بنسبة ${vScale.toFixed(6)} — وهذا مقصود بعد تكبير الأطلس، وجميعها بنفس النسبة بلا استثناء`,
+      });
     }
   }
 
@@ -209,7 +288,7 @@ export function formatMpAuditReportText(report: MpFontAuditReport): string {
   lines.push("");
   if (report.headerIssues.length) {
     lines.push("--- مشاكل عامة ---");
-    for (const i of report.headerIssues) lines.push(`[${i.severity === "error" ? "خطأ" : "تحذير"}] ${i.message}`);
+    for (const i of report.headerIssues) lines.push(`[${severityLabel(i.severity)}] ${i.message}`);
     lines.push("");
   }
   const problemRows = report.glyphs.filter((r) => r.issues.length > 0);
@@ -218,7 +297,7 @@ export function formatMpAuditReportText(report: MpFontAuditReport): string {
     const inkStr = r.inkBounds ? `[${r.inkBounds.x0},${r.inkBounds.y0}]-[${r.inkBounds.x1},${r.inkBounds.y1}]` : "لا حبر/غير محسوب";
     lines.push(
       `${r.charLabel} (U+${r.code.toString(16).toUpperCase().padStart(4, "0")}, flag=${r.flag}) | حبر ${inkStr} | ` +
-      r.issues.map((i) => `[${i.severity === "error" ? "خطأ" : "تحذير"}] ${i.message}`).join(" ؛ ")
+      r.issues.map((i) => `[${severityLabel(i.severity)}] ${i.message}`).join(" ؛ ")
     );
   }
   return lines.join("\n");

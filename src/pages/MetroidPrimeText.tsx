@@ -30,7 +30,7 @@ export default function MetroidPrimeText() {
       setBusy(true);
       try {
         const pak = new Uint8Array(await file.arrayBuffer());
-        const { entries, assetCount } = await extractMetroidPrimeEntries(pak);
+        const { entries, assetCount, arabicTranslations } = await extractMetroidPrimeEntries(pak);
         if (entries.length === 0) {
           throw new Error("لم يُعثر على نصوص Metroid Prime في هذا الملف");
         }
@@ -47,9 +47,16 @@ export default function MetroidPrimeText() {
         // every translation the front-end pak didn't happen to contain. They
         // are parked in a side store and merged back on every later upload,
         // so no upload can ever lose work again.
+        // A .pak whose strings are already Arabic IS the translation — when the
+        // browser's saved state is gone it can be the only copy left, so its
+        // Arabic goes in as the base layer. Anything saved since outranks it.
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
         const parked = (await idbGet<Record<string, string>>(METROID_PRIME_PARKED_KEY)) || {};
-        const known: Record<string, string> = { ...parked, ...(existing?.translations || {}) };
+        const known: Record<string, string> = {
+          ...arabicTranslations,
+          ...parked,
+          ...(existing?.translations || {}),
+        };
 
         const validKeys = new Set(entries.map((e) => `${e.msbtFile}:${e.index}`));
 
@@ -74,16 +81,27 @@ export default function MetroidPrimeText() {
         await idbSet("editor-source-game", METROID_PRIME_SOURCE_GAME);
         await idbSet(METROID_PRIME_BUFFER_KEY, pak.buffer.slice(0));
 
-        const originals: Record<string, string> = {};
-        for (const e of entries) originals[`${e.msbtFile}:${e.index}`] = e.original;
+        // Keep the English source for any key whose text in THIS .pak is
+        // already Arabic — otherwise re-opening a translated .pak would
+        // overwrite the originals with the translation and leave nothing to
+        // compare against.
+        const previousOriginals = (await idbGet<Record<string, string>>("originalTexts")) || {};
+        const originals: Record<string, string> = { ...previousOriginals };
+        for (const e of entries) {
+          const key = `${e.msbtFile}:${e.index}`;
+          if (arabicTranslations[key] && previousOriginals[key]) continue;
+          originals[key] = e.original;
+        }
         await idbSet("originalTexts", originals);
 
         const restoredCount = Object.keys(translations).length;
+        const arabicCount = Object.keys(arabicTranslations).length;
         const parkedCount = Object.keys(stillParked).length;
         toast.success(
           `تم استخراج ${entries.length} نص من ${assetCount} ملف نصوص` +
             (restoredCount > 0 ? ` — تم استرجاع ${restoredCount} ترجمة محفوظة` : "") +
             (recovered > 0 ? ` (منها ${recovered} استُعيدت من نسخة البناء الاحتياطية)` : "") +
+            (arabicCount > 0 ? ` — قُرئت ${arabicCount} ترجمة من الحزمة نفسها لأنها معرَّبة مسبقاً` : "") +
             (parkedCount > 0 ? ` — و${parkedCount} ترجمة أخرى محفوظة لملفات .pak غير هذا الملف` : "")
         );
         navigate("/editor");

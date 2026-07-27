@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { partitionTranslations } from "@/lib/metroid-prime/mp-editor-bridge";
+import { partitionTranslations, isTranslatable, isArabicText } from "@/lib/metroid-prime/mp-editor-bridge";
 
 describe("Metroid Prime opener — no upload may lose a translation", () => {
   const known = {
@@ -33,5 +33,28 @@ describe("Metroid Prime opener — no upload may lose a translation", () => {
     const { active, parked } = partitionTranslations({ "A:0": "", "B:0": "نص" }, new Set(["A:0"]));
     expect(active).toEqual({});
     expect(parked).toEqual({ "B:0": "نص" });
+  });
+});
+
+describe("Metroid Prime opener — an already-translated .pak must stay visible", () => {
+  const TAG = "[TAG:0001:0002:0003:ffff]";
+
+  it("shows an Arabic-only line (re-opening your own translated .pak used to hide it)", () => {
+    expect(isTranslatable("مرحبا بك في تالون الرابع")).toBe(true);
+  });
+
+  it("still shows English lines", () => {
+    expect(isTranslatable(`Press ${TAG} to start`)).toBe(true);
+  });
+
+  it("still skips a line that is nothing but control tags", () => {
+    expect(isTranslatable(`${TAG}${TAG}`)).toBe(false);
+    expect(isTranslatable("  ")).toBe(false);
+  });
+
+  it("recognises Arabic text so it can be offered back as a translation", () => {
+    expect(isArabicText("ابدأ اللعبة")).toBe(true);
+    expect(isArabicText("ﺍﺑﺪﺃ")).toBe(true); // presentation forms, as a built .pak stores them
+    expect(isArabicText(`Press A ${TAG}`)).toBe(false);
   });
 });

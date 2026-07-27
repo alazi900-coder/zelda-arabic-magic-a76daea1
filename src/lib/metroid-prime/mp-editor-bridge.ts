@@ -43,13 +43,27 @@ export function partitionTranslations(
   return { active, parked };
 }
 
-const LETTER = /[A-Za-z]/;
+const LETTER = /\p{L}/u;
+const ARABIC = /[؀-ۿﭐ-﷿ﹰ-﻿]/;
 const TAG_RE = /\[TAG:[0-9a-fA-F]{4}:[0-9a-fA-F]{4}:[0-9a-fA-F]{4}:[0-9a-fA-F]*\]/g;
 
-/** An entry is worth showing in the editor only if it has at least one real
- *  letter once its [TAG:...] control-tag placeholders are stripped. */
-function isTranslatable(text: string): boolean {
+/**
+ * An entry is worth showing in the editor only if it has at least one real
+ * letter once its [TAG:...] control-tag placeholders are stripped.
+ *
+ * The letter test has to accept every script, not just Latin: re-opening a
+ * .pak you already translated used to hide almost all of it, because an
+ * Arabic string contains no A-Z and so looked like a tags-only line. The
+ * point of the check is to skip lines with no words in them at all.
+ */
+export function isTranslatable(text: string): boolean {
   return LETTER.test(text.replace(TAG_RE, ""));
+}
+
+/** Is this string already Arabic — i.e. a translation someone made earlier,
+ *  now sitting where the English source used to be? */
+export function isArabicText(text: string): boolean {
+  return ARABIC.test(text.replace(TAG_RE, ""));
 }
 
 function preview(text: string): string {
@@ -60,6 +74,11 @@ function preview(text: string): string {
 export interface MetroidPrimeExtractResult {
   entries: ExtractedEntry[];
   assetCount: number;
+  /** Entries whose USEN string is already Arabic, keyed `<msbtFile>:<index>`.
+   *  Uploading a .pak you translated earlier is the only surviving copy of
+   *  that work when the browser's saved state is gone, so it is offered back
+   *  as translations rather than treated as source text. */
+  arabicTranslations: Record<string, string>;
 }
 
 /** Decode every MSBT text asset's USEN strings into editor entries. */
@@ -67,6 +86,7 @@ export async function extractMetroidPrimeEntries(pakBytes: Uint8Array): Promise<
   const assets = await listPakAssets(pakBytes);
   const msbtAssets = assets.filter((a) => a.kind === "MSBT");
   const entries: ExtractedEntry[] = [];
+  const arabicTranslations: Record<string, string> = {};
   let assetCount = 0;
   for (const asset of msbtAssets) {
     const name = asset.names[0] || asset.id;
@@ -93,9 +113,12 @@ export async function extractMetroidPrimeEntries(pakBytes: Uint8Array): Promise<
         original: e.original,
         maxBytes: 0x7fff, // no real per-string limit — TXT2 grows to fit; generous soft bound
       });
+      if (isArabicText(e.original)) {
+        arabicTranslations[`${name}:${e.index}`] = e.original;
+      }
     }
   }
-  return { entries, assetCount };
+  return { entries, assetCount, arabicTranslations };
 }
 
 export interface MetroidPrimeBuildOk {

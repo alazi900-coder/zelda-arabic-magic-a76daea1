@@ -16,6 +16,32 @@ import { parseMsbtUsenEntries, rebuildMsbtUsenAsset } from "./mp-msbt";
 
 export const METROID_PRIME_BUFFER_KEY = "metroidPrimeSourceBuffer";
 export const METROID_PRIME_SOURCE_GAME = "metroidprime";
+/** Translations belonging to .pak files other than the one currently open. */
+export const METROID_PRIME_PARKED_KEY = "metroidPrimeParkedTranslations";
+
+/**
+ * Splits every translation known so far into the ones this .pak can show and
+ * the ones it can't.
+ *
+ * The game's text is spread over several .pak files, so a key that the open
+ * .pak doesn't contain is not stale — it belongs to a different .pak. Dropping
+ * those (which the opener used to do) silently deleted the translator's work
+ * the moment they opened a second .pak. Keeping them lets any later upload
+ * restore them.
+ */
+export function partitionTranslations(
+  known: Record<string, string>,
+  validKeys: Set<string>
+): { active: Record<string, string>; parked: Record<string, string> } {
+  const active: Record<string, string> = {};
+  const parked: Record<string, string> = {};
+  for (const [key, value] of Object.entries(known)) {
+    if (!value) continue;
+    if (validKeys.has(key)) active[key] = value;
+    else parked[key] = value;
+  }
+  return { active, parked };
+}
 
 const LETTER = /[A-Za-z]/;
 const TAG_RE = /\[TAG:[0-9a-fA-F]{4}:[0-9a-fA-F]{4}:[0-9a-fA-F]{4}:[0-9a-fA-F]*\]/g;

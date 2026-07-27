@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import JSZip from "jszip";
 import {
   listPakAssets,
+  getAssetData,
   decodeTextureToPng,
   listGlyphs,
   buildFontGlyphs,
@@ -15,7 +16,7 @@ import {
 } from "@/lib/metroid-prime/mp-wasm";
 import { renderArabicGlyphsForMp, renderMpGlyphsForCodepoints, getMpPresentationForms, type RenderedMpGlyph, type MpAlternateFontOverride } from "@/lib/metroid-prime/mp-arabic-font-gen";
 import { getMpArabicGlyphCodepoints, shapeArabicForMp } from "@/lib/metroid-prime/mp-arabic-shaper";
-import { auditMpFont, formatMpAuditReportText, buildMpDiagnosticJson, isPlausibleMpGlyph, type MpFontAuditReport } from "@/lib/metroid-prime/mp-font-audit";
+import { auditMpFont, formatMpAuditReportText, buildMpDiagnosticJson, isPlausibleMpGlyph, collectArabicTextCodepoints, type MpFontAuditReport } from "@/lib/metroid-prime/mp-font-audit";
 import { FREE_ARABIC_FONTS, fetchFreeFontBytes, type FreeFontEntry } from "@/lib/risen2-free-fonts";
 import { APP_VERSION } from "@/lib/version";
 
@@ -339,18 +340,35 @@ export default function MetroidPrimeFont() {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       const rgba = ctx ? ctx.getImageData(0, 0, canvas.width, canvas.height).data : undefined;
+      // The .pak's own text decides whether this font is usable: a font can be
+      // structurally perfect and still draw dashes for every letter the text
+      // asks for.
+      let textCodepoints: Map<number, number> | undefined;
+      if (pakBytes) {
+        const msbt: Uint8Array[] = [];
+        const allAssets = await listPakAssets(pakBytes);
+        for (const asset of allAssets.filter((a) => a.kind === "MSBT")) {
+          try {
+            msbt.push(await getAssetData(pakBytes, asset.id));
+          } catch {
+            // an unreadable asset just means less coverage evidence
+          }
+        }
+        if (msbt.length > 0) textCodepoints = collectArabicTextCodepoints(msbt);
+      }
       const report = auditMpFont(glyphs, {
         fontLabel: fonts.find((f) => f.id === selectedFontId)?.names[0] ?? selectedFontId ?? "",
         primaryPageRgba: rgba,
         primaryPageWidth: imageBitmap.width,
         primaryPageHeight: imageBitmap.height,
         original: baselineGlyphsRef.current ?? undefined,
+        textCodepoints,
       });
       setAuditReport(report);
     } finally {
       setAuditBusy(false);
     }
-  }, [glyphs, imageBitmap, fonts, selectedFontId]);
+  }, [glyphs, imageBitmap, fonts, selectedFontId, pakBytes]);
 
   const handleDownloadAuditReport = useCallback(() => {
     if (!auditReport) return;

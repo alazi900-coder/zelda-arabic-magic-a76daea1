@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { auditMpFont } from "@/lib/metroid-prime/mp-font-audit";
+import { auditMpFont, collectArabicTextCodepoints } from "@/lib/metroid-prime/mp-font-audit";
 import type { MetroidPrimeGlyph } from "@/lib/metroid-prime/mp-wasm";
 
 /** A page-0 glyph with sensible metrics; only what a test varies is passed in. */
@@ -79,5 +79,47 @@ describe("Metroid Prime font audit — atlas growth", () => {
   it("treats a duplicate the edit introduced as a real error", () => {
     const report = auditMpFont([glyph(0x630, 0.8, 0.7), glyph(0x630, 0.6, 0.5)], { original: [] });
     expect(report.errorCount).toBeGreaterThan(0);
+  });
+});
+
+/** Encodes a string the way MSBT stores it, so the scanner is exercised on
+ *  the same shape it meets in a real asset. */
+function utf16le(text: string): Uint8Array {
+  const out = new Uint8Array(text.length * 2);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    out[i * 2] = c & 0xff;
+    out[i * 2 + 1] = c >> 8;
+  }
+  return out;
+}
+
+describe("Metroid Prime font audit — does the font cover the pak's text?", () => {
+  it("passes when every Arabic codepoint the text uses has a glyph", () => {
+    const text = collectArabicTextCodepoints([utf16le("Start ﺍﻠ")]);
+    const font = [glyph(0xfe8d, 0.8, 0.7), glyph(0xfee0, 0.6, 0.5)];
+    const report = auditMpFont(font, { textCodepoints: text });
+    expect(report.errorCount).toBe(0);
+    expect(report.headerIssues.some((i) => i.severity === "info" && /يغطيها كلها/.test(i.message))).toBe(true);
+  });
+
+  it("reports the missing codepoints and how often the text uses them", () => {
+    const text = collectArabicTextCodepoints([utf16le("ابا")]);
+    const report = auditMpFont([glyph(0x0627, 0.8, 0.7)], { textCodepoints: text });
+    expect(report.errorCount).toBeGreaterThan(0);
+    expect(report.headerIssues.some((i) => /1 رمزاً عربياً لا يملكها الخط \(1 ظهوراً\)/.test(i.message))).toBe(true);
+  });
+
+  it("names the real cause when the text is unshaped but the font holds presentation forms", () => {
+    // What actually shipped: base letters in the text, joined forms in the font.
+    const text = collectArabicTextCodepoints([utf16le("مرحبا")]);
+    const font = [glyph(0xfee3, 0.8, 0.7), glyph(0xfeae, 0.6, 0.5), glyph(0xfea4, 0.4, 0.3)];
+    const report = auditMpFont(font, { textCodepoints: text });
+    expect(report.headerIssues.some((i) => /قبل إضافة التشكيل العربي/.test(i.message))).toBe(true);
+  });
+
+  it("stays silent when the pak carries no Arabic text at all", () => {
+    const report = auditMpFont([glyph(0x41, 0.8, 0.7)], { textCodepoints: collectArabicTextCodepoints([utf16le("Press A")]) });
+    expect(report.headerIssues).toHaveLength(0);
   });
 });

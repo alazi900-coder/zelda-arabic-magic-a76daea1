@@ -5,7 +5,9 @@ import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
 import {
   extractMetroidPrimeEntries,
+  partitionTranslations,
   METROID_PRIME_BUFFER_KEY,
+  METROID_PRIME_PARKED_KEY,
   METROID_PRIME_SOURCE_GAME,
 } from "@/lib/metroid-prime/mp-editor-bridge";
 
@@ -38,14 +40,36 @@ export default function MetroidPrimeText() {
         // mirroring how Xenoblade's opener avoids wiping the user's work on
         // re-upload. `freshExtraction: true` tells the editor to load this
         // merged state directly instead of showing the recovery-dialog.
+        //
+        // Translations whose key isn't in THIS .pak are not stale work to be
+        // thrown away: a .pak carries only part of the game's text, so opening
+        // the front-end pak after translating the main one used to delete
+        // every translation the front-end pak didn't happen to contain. They
+        // are parked in a side store and merged back on every later upload,
+        // so no upload can ever lose work again.
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
-        const existingTranslations = existing?.translations || {};
+        const parked = (await idbGet<Record<string, string>>(METROID_PRIME_PARKED_KEY)) || {};
+        const known: Record<string, string> = { ...parked, ...(existing?.translations || {}) };
+
         const validKeys = new Set(entries.map((e) => `${e.msbtFile}:${e.index}`));
-        const translations: Record<string, string> = {};
-        for (const [key, value] of Object.entries(existingTranslations)) {
-          if (validKeys.has(key) && value) translations[key] = value;
+
+        // Last-resort recovery: the build step keeps a snapshot of everything
+        // it wrote. Anything this .pak needs that the live state no longer has
+        // is pulled back from there — that snapshot is the only surviving copy
+        // of work an earlier upload discarded. Only keys this .pak actually
+        // contains are taken, so snapshots left by other games stay out.
+        const buildSnapshot = (await idbGet<Record<string, string>>("buildTranslations")) || {};
+        let recovered = 0;
+        for (const [key, value] of Object.entries(buildSnapshot)) {
+          if (value && validKeys.has(key) && !known[key]) {
+            known[key] = value;
+            recovered++;
+          }
         }
 
+        const { active: translations, parked: stillParked } = partitionTranslations(known, validKeys);
+
+        await idbSet(METROID_PRIME_PARKED_KEY, stillParked);
         await idbSet("editorState", { entries, translations, freshExtraction: true });
         await idbSet("editor-source-game", METROID_PRIME_SOURCE_GAME);
         await idbSet(METROID_PRIME_BUFFER_KEY, pak.buffer.slice(0));
@@ -55,9 +79,12 @@ export default function MetroidPrimeText() {
         await idbSet("originalTexts", originals);
 
         const restoredCount = Object.keys(translations).length;
+        const parkedCount = Object.keys(stillParked).length;
         toast.success(
           `تم استخراج ${entries.length} نص من ${assetCount} ملف نصوص` +
-            (restoredCount > 0 ? ` — تم استرجاع ${restoredCount} ترجمة محفوظة` : "")
+            (restoredCount > 0 ? ` — تم استرجاع ${restoredCount} ترجمة محفوظة` : "") +
+            (recovered > 0 ? ` (منها ${recovered} استُعيدت من نسخة البناء الاحتياطية)` : "") +
+            (parkedCount > 0 ? ` — و${parkedCount} ترجمة أخرى محفوظة لملفات .pak غير هذا الملف` : "")
         );
         navigate("/editor");
       } catch (e) {

@@ -69,6 +69,35 @@ export function isPlausibleMpGlyph(g: MetroidPrimeGlyph): boolean {
   return true;
 }
 
+const isArabicCode = (c: number) =>
+  // U+FEFF sits at the top of the presentation-forms block but is a
+  // zero-width no-break space, never drawn — counting it would report a
+  // missing glyph for something no font is supposed to have.
+  c !== 0xfeff &&
+  ((c >= 0x0600 && c <= 0x06ff) || (c >= 0xfb50 && c <= 0xfdff) || (c >= 0xfe70 && c <= 0xfeff));
+
+/**
+ * Which Arabic codepoints does the .pak's text actually ask the font to draw,
+ * and how often?
+ *
+ * MSBT stores its strings as UTF-16LE, so scanning every 2-byte unit of the
+ * raw asset finds them wherever they live — in any of the 13 bundled locale
+ * sub-chunks, without having to parse the container. Stray matches from
+ * binary header fields are possible but harmless: this feeds a coverage
+ * check, and a handful of noise codepoints cannot mask thousands of real
+ * ones.
+ */
+export function collectArabicTextCodepoints(msbtAssets: Uint8Array[]): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const data of msbtAssets) {
+    for (let i = 0; i + 1 < data.length; i += 2) {
+      const code = data[i] | (data[i + 1] << 8);
+      if (isArabicCode(code)) counts.set(code, (counts.get(code) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 function severityLabel(s: MpAuditSeverity): string {
   return s === "error" ? "خطأ" : s === "warning" ? "تحذير" : "معلومة";
 }
@@ -98,11 +127,12 @@ export function auditMpFont(
     primaryPageWidth?: number;
     primaryPageHeight?: number;
     original?: MetroidPrimeGlyph[];
+    textCodepoints?: Map<number, number>;
   } = {}
 ): MpFontAuditReport {
   const headerIssues: MpAuditIssue[] = [];
   const rows: MpGlyphAuditRow[] = [];
-  const { primaryPageRgba, primaryPageWidth, primaryPageHeight, original } = options;
+  const { primaryPageRgba, primaryPageWidth, primaryPageHeight, original, textCodepoints } = options;
   const primaryPage = primaryPageWidth && primaryPageHeight ? { width: primaryPageWidth, height: primaryPageHeight } : null;
 
   const garbageCount = glyphs.filter((g) => !isPlausibleMpGlyph(g)).length;
@@ -113,6 +143,51 @@ export function auditMpFont(
     });
   }
   const plausible = glyphs.filter(isPlausibleMpGlyph);
+
+  // --- does the font actually cover the text that ships in this .pak? ---
+  //
+  // A font can be structurally perfect and still draw nothing but the
+  // fallback dash, because the text asks for codepoints the font has no
+  // record for. That is exactly what happened when the text was built before
+  // Arabic shaping existed: the strings stayed in base letters (U+0627 ا …)
+  // while the font carried presentation forms (U+FE80 …), so 3371 of 3388
+  // Arabic characters had no glyph. Comparing the two sets answers in one
+  // step what took days to find by inspection.
+  if (textCodepoints && textCodepoints.size > 0) {
+    const have = new Set(plausible.map((g) => g.code));
+    const missing = [...textCodepoints.entries()].filter(([code]) => !have.has(code));
+    if (missing.length === 0) {
+      headerIssues.push({
+        severity: "info",
+        message: `النص داخل الحزمة يطلب ${textCodepoints.size} رمزاً عربياً، والخط يغطيها كلها`,
+      });
+    } else {
+      const occurrences = missing.reduce((sum, [, n]) => sum + n, 0);
+      const missingBase = missing.filter(([c]) => c <= 0x06ff).length;
+      const fontHasForms = [...have].some((c) => c >= 0xfe70 && c <= 0xfeff);
+      // Show the ones the text leans on most — a codepoint used 400 times
+      // matters more to the translator than one that appears once.
+      const sample = [...missing]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+        .map(([c]) => `${charLabelOf(c)} (U+${c.toString(16).toUpperCase().padStart(4, "0")})`)
+        .join("، ");
+      headerIssues.push({
+        severity: "error",
+        message:
+          `النص داخل الحزمة يطلب ${missing.length} رمزاً عربياً لا يملكها الخط ` +
+          `(${occurrences} ظهوراً) — ستُرسم شرطة بديلة مكان كل واحد منها. أمثلة: ${sample}`,
+      });
+      if (missingBase > missing.length / 2 && fontHasForms) {
+        headerIssues.push({
+          severity: "error",
+          message:
+            "معظم الرموز الناقصة أحرف عربية أساسية بينما الخط يحمل أشكال العرض المتّصلة — " +
+            "أي أن النصوص بُنيت بإصدار سابق قبل إضافة التشكيل العربي. أعد بناء النصوص بالإصدار الحالي ثم ركّب الخط.",
+        });
+      }
+    }
+  }
 
   // --- duplicate (code, flag=0) pairs — scoped to flag=0 (the only page we
   // edit/understand). Duplicates DO exist in other flags (e.g. flag=1 has

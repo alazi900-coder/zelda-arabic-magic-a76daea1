@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseWolfFont, serialiseWolfFont, wolfCellOrigin, drawGlyphIntoCell, wolfInkRamp,
+  parseWolfFont, serialiseWolfFont, wolfCellOrigin, drawGlyphIntoCell, wolfInkStyle,
   WOLF_GRID_COLS, WOLF_GRID_ROWS,
 } from "@/lib/wolfrpg/wolf-font";
 
@@ -66,10 +66,9 @@ describe("Wolfenstein RPG bitmap font", () => {
   it("draws a glyph inside its own cell and nowhere else", () => {
     const font = parseWolfFont(makeFont(13, 18));
     const glyph = { width: 13, height: 18, coverage: new Uint8Array(13 * 18).fill(255) };
-    drawGlyphIntoCell(font, 20, glyph, [1, 8, 15]);
+    drawGlyphIntoCell(font, 20, glyph, { body: 1, outline: 15 });
     const { x, y } = wolfCellOrigin(font, 20);
-    expect(font.pixels[(y + 5) * font.width + x + 5]).toBe(15);
-    // The neighbouring cell must be untouched.
+    expect(font.pixels[(y + 5) * font.width + x + 5]).toBe(1);
     const n = wolfCellOrigin(font, 21);
     expect(font.pixels[(n.y + 5) * font.width + n.x + 5]).toBe(0);
   });
@@ -78,35 +77,54 @@ describe("Wolfenstein RPG bitmap font", () => {
     const font = parseWolfFont(makeFont(13, 18));
     const { x, y } = wolfCellOrigin(font, 3);
     font.pixels[(y + 2) * font.width + x + 2] = 15;
-    drawGlyphIntoCell(font, 3, { width: 1, height: 1, coverage: new Uint8Array([255]) }, [15]);
+    drawGlyphIntoCell(font, 3, { width: 1, height: 1, coverage: new Uint8Array([255]) }, { body: 1, outline: 15 });
     expect(font.pixels[(y + 2) * font.width + x + 2]).toBe(0);
   });
 
-  it("maps coverage onto the font's own ink ramp", () => {
+  it("gives the glyph the outline the game's own letters have", () => {
+    // A single solid pixel must come out as body surrounded by outline —
+    // without it, new letters read as flat blobs next to the originals.
     const font = parseWolfFont(makeFont(13, 18));
-    const glyph = { width: 3, height: 1, coverage: new Uint8Array([0, 128, 255]) };
-    drawGlyphIntoCell(font, 0, glyph, [4, 9, 15]);
-    const row = font.pixels.slice(Math.floor((18 - 1) / 2) * font.width + 5, Math.floor((18 - 1) / 2) * font.width + 8);
-    expect(row[0]).toBe(0);   // no coverage stays transparent
-    expect(row[1]).toBe(9);   // half coverage picks the middle of the ramp
-    expect(row[2]).toBe(15);  // full coverage picks the darkest ink
+    drawGlyphIntoCell(font, 4, { width: 1, height: 1, coverage: new Uint8Array([255]) }, { body: 7, outline: 12 });
+    const { x, y } = wolfCellOrigin(font, 4);
+    const cx = x + Math.floor((13 - 1) / 2);
+    const cy = y + Math.floor((18 - 1) / 2);
+    expect(font.pixels[cy * font.width + cx]).toBe(7);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      expect(font.pixels[(cy + dy) * font.width + cx + dx]).toBe(12);
+    }
+    // Diagonals stay clear, so the outline is one pixel and not a blob.
+    expect(font.pixels[(cy + 1) * font.width + cx + 1]).toBe(0);
+  });
+
+  it("treats faint coverage as nothing rather than smearing the cell", () => {
+    const font = parseWolfFont(makeFont(13, 18));
+    drawGlyphIntoCell(font, 6, { width: 1, height: 1, coverage: new Uint8Array([40]) }, { body: 7, outline: 12 });
+    const { x, y } = wolfCellOrigin(font, 6);
+    let painted = 0;
+    for (let yy = 0; yy < 18; yy++) for (let xx = 0; xx < 13; xx++) if (font.pixels[(y + yy) * font.width + x + xx]) painted++;
+    expect(painted).toBe(0);
   });
 
   it("never writes outside the cell, even for an oversized glyph", () => {
     const font = parseWolfFont(makeFont(13, 18));
     const glyph = { width: 40, height: 40, coverage: new Uint8Array(40 * 40).fill(255) };
-    drawGlyphIntoCell(font, 0, glyph, [15]);
+    drawGlyphIntoCell(font, 0, glyph, { body: 1, outline: 15 });
     const n = wolfCellOrigin(font, 1);
     expect(font.pixels[n.y * font.width + n.x]).toBe(0);
-    expect(font.pixels[18 * font.width]).toBe(0); // the cell below
+    expect(font.pixels[18 * font.width]).toBe(0);
   });
 
-  it("reports the ink shades the font already uses", () => {
+  it("finds the body and outline colours a real font is drawn with", () => {
+    // A glyph shaped the way the game draws them: a filled block with a ring.
     const font = parseWolfFont(makeFont(13, 18));
-    // Cell 5, so the marker pixel in cell 0 survives and shows that reading
-    // the ramp looks at the whole font, not just what was drawn.
-    drawGlyphIntoCell(font, 5, { width: 3, height: 1, coverage: new Uint8Array([255, 128, 40]) }, [3, 9, 12]);
-    expect(wolfInkRamp(font)).toEqual([3, 9, 12]);
+    for (let y = 3; y <= 9; y++) {
+      for (let x = 3; x <= 9; x++) {
+        const edge = y === 3 || y === 9 || x === 3 || x === 9;
+        font.pixels[y * font.width + x] = edge ? 31 : 7;
+      }
+    }
+    expect(wolfInkStyle(font)).toEqual({ body: 7, outline: 31 });
   });
 
   it("refuses a bitmap that is not a whole grid of cells", () => {

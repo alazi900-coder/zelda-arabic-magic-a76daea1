@@ -106,56 +106,100 @@ export interface WolfGlyphBitmap {
 }
 
 /**
- * Draws a glyph into a cell, replacing whatever was there.
+ * The two palette entries a glyph is made of.
  *
- * `inkIndex` is the palette entry to use for a fully covered pixel and
- * `rampIndices` the darker-to-lighter entries for partial coverage; the fonts
- * carry an anti-aliasing ramp and using it keeps new glyphs looking like the
- * old ones instead of hard-edged. Coverage below the first ramp step is left
- * transparent (index 0), which is the colour key.
+ * Every font here draws each glyph as a solid body with a contrasting outline
+ * — that is what gives the game's text its cut-out look — so a new glyph has
+ * to be built the same way or it does not belong on the screen. Treating the
+ * whole palette as one brightness ramp instead produced letters speckled with
+ * outline colours, which is what the first Arabic build looked like in-game.
+ *
+ * Both entries are measured from the font rather than assumed: a pixel whose
+ * four neighbours are all painted is inside a glyph, so the commonest such
+ * index is the body; the commonest index on a glyph's edge is the outline.
+ * That reads correctly for the light fonts, the dark one and the title font
+ * alike, none of which share a palette layout.
+ */
+export interface WolfInkStyle {
+  body: number;
+  outline: number;
+}
+
+export function wolfInkStyle(font: WolfFontImage): WolfInkStyle {
+  const inner = new Map<number, number>();
+  const edge = new Map<number, number>();
+  const at = (x: number, y: number) => font.pixels[y * font.width + x];
+  for (let y = 1; y < font.height - 1; y++) {
+    for (let x = 1; x < font.width - 1; x++) {
+      const v = at(x, y);
+      if (v === 0) continue;
+      const surrounded = at(x, y - 1) !== 0 && at(x, y + 1) !== 0 && at(x - 1, y) !== 0 && at(x + 1, y) !== 0;
+      const bucket = surrounded ? inner : edge;
+      bucket.set(v, (bucket.get(v) ?? 0) + 1);
+    }
+  }
+  const ranked = (m: Map<number, number>) => [...m].sort((a, b) => b[1] - a[1]).map(([i]) => i);
+  const bodies = ranked(inner);
+  const edges = ranked(edge);
+  const body = bodies[0] ?? edges[0] ?? 1;
+  // A font whose body and edge agree (the dark one does) still has a second
+  // edge colour, and that is its outline.
+  const outline = edges.find((i) => i !== body) ?? body;
+  return { body, outline };
+}
+
+/**
+ * Draws a glyph into a cell, replacing whatever was there, in the game's own
+ * two-tone style: a solid body with a one-pixel outline around it.
+ *
+ * Coverage is thresholded rather than dithered across the palette. The cells
+ * are 10 to 13 pixels wide, so there is no room for a smooth ramp, and the
+ * palette is not ordered as one anyway — mixing entries by index number is
+ * what speckled the first build.
  */
 export function drawGlyphIntoCell(
   font: WolfFontImage,
   slot: number,
   glyph: WolfGlyphBitmap,
-  ramp: readonly number[]
+  ink: WolfInkStyle
 ): void {
-  if (ramp.length === 0) throw new Error("no palette ramp given");
   const { x: ox, y: oy } = wolfCellOrigin(font, slot);
   for (let y = 0; y < font.cellHeight; y++) {
     for (let x = 0; x < font.cellWidth; x++) {
       font.pixels[(oy + y) * font.width + ox + x] = 0;
     }
   }
-  // Centre horizontally, and sit on the same baseline the cell implies by
-  // centring vertically too — the engine advances by the whole cell, so a
-  // glyph drawn off-centre looks misaligned against its neighbours.
+  // Centre in the cell: the engine advances by the whole cell, so a glyph
+  // drawn off-centre looks misaligned against its neighbours.
   const offX = Math.max(0, Math.floor((font.cellWidth - glyph.width) / 2));
   const offY = Math.max(0, Math.floor((font.cellHeight - glyph.height) / 2));
+  const solid: boolean[] = new Array(font.cellWidth * font.cellHeight).fill(false);
   for (let y = 0; y < glyph.height; y++) {
-    const dy = oy + offY + y;
-    if (dy < oy || dy >= oy + font.cellHeight) continue;
+    const cy = offY + y;
+    if (cy < 0 || cy >= font.cellHeight) continue;
     for (let x = 0; x < glyph.width; x++) {
-      const dx = ox + offX + x;
-      if (dx < ox || dx >= ox + font.cellWidth) continue;
-      const cov = glyph.coverage[y * glyph.width + x];
-      if (cov === 0) continue;
-      const step = Math.min(ramp.length - 1, Math.floor((cov / 256) * ramp.length));
-      font.pixels[dy * font.width + dx] = ramp[step];
+      const cx = offX + x;
+      if (cx < 0 || cx >= font.cellWidth) continue;
+      if (glyph.coverage[y * glyph.width + x] >= 128) solid[cy * font.cellWidth + cx] = true;
+    }
+  }
+  for (let y = 0; y < font.cellHeight; y++) {
+    for (let x = 0; x < font.cellWidth; x++) {
+      const i = y * font.cellWidth + x;
+      let value: number;
+      if (solid[i]) {
+        value = ink.body;
+      } else {
+        const touchesBody =
+          (y > 0 && solid[i - font.cellWidth]) ||
+          (y < font.cellHeight - 1 && solid[i + font.cellWidth]) ||
+          (x > 0 && solid[i - 1]) ||
+          (x < font.cellWidth - 1 && solid[i + 1]);
+        if (!touchesBody) continue;
+        value = ink.outline;
+      }
+      font.pixels[(oy + y) * font.width + ox + x] = value;
     }
   }
 }
 
-/**
- * The palette indices the font already uses for ink, darkest first.
- *
- * Reading them from the file rather than hard-coding keeps a rebuilt font
- * consistent with the original's look, and works for the dark and light
- * variants without special-casing either. Index 0 is the colour key and is
- * never part of the ramp.
- */
-export function wolfInkRamp(font: WolfFontImage): number[] {
-  const used = new Set<number>();
-  for (const p of font.pixels) if (p !== 0) used.add(p);
-  return [...used].sort((a, b) => a - b);
-}

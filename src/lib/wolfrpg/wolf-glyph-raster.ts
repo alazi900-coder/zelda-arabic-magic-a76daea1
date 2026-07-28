@@ -23,7 +23,9 @@
  * across the cell, which is exactly what the second in-game build showed.
  *
  * Height is fitted to the union ink box of the Arabic forms rather than to the
- * font's ascent+descent, which carries Latin room this text never uses.
+ * font's ascent+descent, which carries Latin room this text never uses — and
+ * the descenders keep only part of their room (WOLF_DEFAULT_DESCENDER_SCALE)
+ * so the baseline core can grow into what they give up.
  */
 
 import {
@@ -37,6 +39,28 @@ import { wolfFontSlots } from "./wolf-charmap";
 
 /** How much wider than its natural proportions a glyph is drawn. */
 export const WOLF_DEFAULT_WIDTH_FACTOR = 1.6;
+
+/**
+ * How much of their natural room the descenders keep.
+ *
+ * Fitting the whole ink box — the top of ا down to the tail of ج — into 14 px
+ * leaves the baseline core too small to read. A pixel-font designer shortens
+ * the tails so the core can grow, and 0.7 does the same here: it made the
+ * letters about 40% taller in-game at no cost to legibility.
+ */
+export const WOLF_DEFAULT_DESCENDER_SCALE = 0.7;
+
+/**
+ * Blank left on a side that does not join.
+ *
+ * Centring a glyph puts half the spare cell on each side, and since the
+ * joining side is filled by its connector anyway, all of that blank ends up on
+ * the side that does not join. Two such sides meeting — ب then ا in "متابعة" —
+ * left 8 px of a 12 px cell empty and read as a word space in-game. Pushing
+ * each glyph toward its non-joining side and leaving one pixel there cut that
+ * to 3 px, which reads as a letter break instead.
+ */
+const EDGE_MARGIN = 1;
 
 /** Ink low enough to catch the thin end of an antialiased connector. */
 const EDGE_INK = 64;
@@ -94,8 +118,12 @@ export function findConnector(
 }
 
 /**
- * Centres a scaled glyph in its cell and runs its joining strokes out to the
+ * Places a scaled glyph in its cell and runs its joining strokes out to the
  * cell edges. Kept free of canvas so the join rule can be tested directly.
+ *
+ * A glyph that joins on one side only is pushed toward the other side, leaving
+ * EDGE_MARGIN there; the joining side needs no room because its connector runs
+ * to the cell edge. A glyph joining on both sides, or on neither, is centred.
  *
  * `glyph` is `w * h` coverage values; `h` is the cell height minus the one-row
  * margin kept top and bottom for the outline the font style adds later.
@@ -109,19 +137,24 @@ export function placeGlyphInCell(
   baseline: number
 ): WolfGlyphBitmap {
   const coverage = new Uint8Array(cellW * cellH);
-  const ox = Math.max(0, Math.floor((cellW - w) / 2));
+  const left = findConnector(glyph, w, h, 0, baseline);
+  const right = findConnector(glyph, w, h, w - 1, baseline);
+  const spare = Math.max(0, cellW - w);
+  let ox: number;
+  if (left && !right) ox = Math.max(0, spare - EDGE_MARGIN);
+  else if (right && !left) ox = Math.min(spare, EDGE_MARGIN);
+  else ox = Math.floor(spare / 2);
+
   for (let y = 0; y < h && y + 1 < cellH; y++) {
     for (let x = 0; x < w && ox + x < cellW; x++) {
       coverage[(y + 1) * cellW + ox + x] = glyph[y * w + x];
     }
   }
-  const left = findConnector(glyph, w, h, 0, baseline);
   if (left) {
     for (let y = left[0]; y <= left[1] && y + 1 < cellH; y++) {
       for (let x = 0; x < ox; x++) coverage[(y + 1) * cellW + x] = 255;
     }
   }
-  const right = findConnector(glyph, w, h, w - 1, baseline);
   if (right) {
     for (let y = right[0]; y <= right[1] && y + 1 < cellH; y++) {
       for (let x = ox + w; x < cellW; x++) coverage[(y + 1) * cellW + x] = 255;
@@ -165,7 +198,8 @@ export async function rasteriseWolfGlyphs(
   fontBytes: ArrayBuffer,
   cells: CellSize[],
   codepoints: number[],
-  widthFactor = WOLF_DEFAULT_WIDTH_FACTOR
+  widthFactor = WOLF_DEFAULT_WIDTH_FACTOR,
+  descenderScale = WOLF_DEFAULT_DESCENDER_SCALE
 ): Promise<Map<string, WolfGlyphBitmap>> {
   const family = `WolfArabicSrc${familyCounter++}`;
   const face = new FontFace(family, fontBytes);
@@ -181,12 +215,19 @@ export async function rasteriseWolfGlyphs(
 
     for (const cell of cells) {
       const innerH = Math.max(1, cell.height - 2);
-      const size = Math.max(8, Math.round((PROBE_SIZE * innerH * SS) / probeHeight));
+      const probeCore = probeUnion.ascent + descenderScale * probeUnion.descent;
+      const size = Math.max(8, Math.round((PROBE_SIZE * innerH * SS) / probeCore));
       const measurer = context(1, 1);
       measurer.font = `${size}px "${family}"`;
       const union = measureUnion(measurer, codepoints);
       const boxH = Math.ceil(union.ascent + union.descent);
-      const scale = innerH / (union.ascent + union.descent);
+      // The core — everything above the baseline plus the shortened tails — is
+      // what has to fit the cell. Drawing the full box that tall and keeping
+      // only the cell's worth from the top gives up exactly the tail length
+      // `descenderScale` decided to give up.
+      const core = union.ascent + descenderScale * union.descent;
+      const tall = Math.max(innerH, Math.round((innerH * boxH) / core));
+      const scale = tall / boxH;
       const baseline = Math.round(union.ascent * scale);
 
       for (const cp of codepoints) {
@@ -207,8 +248,9 @@ export async function rasteriseWolfGlyphs(
         small.imageSmoothingQuality = "high";
         // The advance box, not the ink box: the connecting stroke runs to the
         // edge of the advance, and trimming to ink would cut off the very
-        // thing that joins.
-        small.drawImage(big.canvas, PAD, PAD, adv, boxH, 0, 0, w, innerH);
+        // thing that joins. Drawn `tall` into a canvas only `innerH` high, so
+        // the surrendered part of the tails falls off the bottom.
+        small.drawImage(big.canvas, PAD, PAD, adv, boxH, 0, 0, w, tall);
 
         const data = small.getImageData(0, 0, w, innerH).data;
         const glyph = new Uint8Array(w * innerH);
@@ -230,7 +272,8 @@ export async function rasteriseWolfGlyphs(
 export async function buildWolfArabicFonts(
   originals: Record<string, Uint8Array>,
   fontBytes: ArrayBuffer,
-  widthFactor = WOLF_DEFAULT_WIDTH_FACTOR
+  widthFactor = WOLF_DEFAULT_WIDTH_FACTOR,
+  descenderScale = WOLF_DEFAULT_DESCENDER_SCALE
 ): Promise<Record<string, Uint8Array>> {
   const slots = wolfFontSlots();
   const codepoints = slots.filter((cp): cp is number => cp !== null);
@@ -242,7 +285,7 @@ export async function buildWolfArabicFonts(
     if (!cells.some((c) => c.width === cell.width && c.height === cell.height)) cells.push(cell);
   }
 
-  const glyphs = await rasteriseWolfGlyphs(fontBytes, cells, codepoints, widthFactor);
+  const glyphs = await rasteriseWolfGlyphs(fontBytes, cells, codepoints, widthFactor, descenderScale);
   const out: Record<string, Uint8Array> = {};
   for (const { name, font } of parsed) {
     const ink = wolfInkStyle(font);

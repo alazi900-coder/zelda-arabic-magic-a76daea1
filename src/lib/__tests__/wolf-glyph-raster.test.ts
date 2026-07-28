@@ -78,6 +78,43 @@ describe("Wolfenstein RPG glyph placement", () => {
     ]);
   });
 
+  it("pushes a one-sided form toward the side it does not join", () => {
+    // ـا: joins on the right, nothing on the left. Centring it put half the
+    // spare cell on its left, and the initial ب beside it did the same on its
+    // right, so 8 px of a 12 px cell sat empty between them and the word read
+    // as two. One pixel of margin on the non-joining side is enough to show a
+    // letter break without opening a gap that reads as a space.
+    const g = glyph([
+      "..##..",
+      "..##..",
+      "..####", // joins right only
+    ]);
+    const cell = placeGlyphInCell(g.cov, g.w, g.h, 10, 5, 2);
+    expect(picture(cell.coverage, 10, 5)).toEqual([
+      "..........",
+      "...##.....",
+      "...##.....",
+      "...#######",
+      "..........",
+    ]);
+  });
+
+  it("mirrors that for a form joining on the left only", () => {
+    const g = glyph([
+      "..##..",
+      "..##..",
+      "####..",
+    ]);
+    const cell = placeGlyphInCell(g.cov, g.w, g.h, 10, 5, 2);
+    expect(picture(cell.coverage, 10, 5)).toEqual([
+      "..........",
+      ".....##...",
+      ".....##...",
+      "#######...",
+      "..........",
+    ]);
+  });
+
   it("picks the run on the baseline when a column has several", () => {
     const g = glyph([
       "#.....",

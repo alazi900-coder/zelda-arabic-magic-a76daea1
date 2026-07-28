@@ -6,7 +6,7 @@ import {
   Replace, Undo2, Search, ImageOff, ZoomIn, ZoomOut, Maximize,
 } from "lucide-react";
 import {
-  listTextures, decodeTextureToPng, replaceTexture,
+  listTextures, listPakAssets, decodeTextureToPng, replaceTexture,
   type MetroidPrimeTextureInfo,
 } from "@/lib/metroid-prime/mp-wasm";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
@@ -112,6 +112,10 @@ export default function MetroidPrimeImages() {
   const [fileName, setFileName] = useState<string>("");
   const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
   const [textures, setTextures] = useState<MetroidPrimeTextureInfo[]>([]);
+  /** Every asset kind in the package with its count. A .pak that is 100 MB
+   *  but shows two dozen images is either mostly models and audio, or being
+   *  read wrong — and only the full breakdown tells the two apart. */
+  const [assetKinds, setAssetKinds] = useState<{ kind: string; count: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -121,6 +125,8 @@ export default function MetroidPrimeImages() {
   const [decoding, setDecoding] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [search, setSearch] = useState("");
+  const [sortBySize, setSortBySize] = useState(true);
+  const [largeOnly, setLargeOnly] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -140,6 +146,10 @@ export default function MetroidPrimeImages() {
     try {
       const list = await listTextures(bytes);
       if (list.length === 0) throw new Error("لا توجد صور (TXTR) في هذا الملف");
+      const assets = await listPakAssets(bytes);
+      const counts = new Map<string, number>();
+      for (const a of assets) counts.set(a.kind, (counts.get(a.kind) ?? 0) + 1);
+      setAssetKinds([...counts.entries()].map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count));
       setPakBytes(bytes);
       setFileName(name);
       setFileHandle(handle);
@@ -212,6 +222,8 @@ export default function MetroidPrimeImages() {
     }
   }, [decodeToDataUrl]);
 
+  const totalAssets = useMemo(() => assetKinds.reduce((n, k) => n + k.count, 0), [assetKinds]);
+
   const selected = useMemo(
     () => textures.find((t) => t.id === selectedId) ?? null,
     [textures, selectedId]
@@ -219,11 +231,18 @@ export default function MetroidPrimeImages() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return textures;
-    return textures.filter(
-      (t) => t.names.some((n) => n.toLowerCase().includes(q)) || t.id.includes(q) || `${t.width}x${t.height}`.includes(q)
-    );
-  }, [textures, search]);
+    let list = textures;
+    if (q) {
+      list = list.filter(
+        (t) => t.names.some((n) => n.toLowerCase().includes(q)) || t.id.includes(q) || `${t.width}x${t.height}`.includes(q)
+      );
+    }
+    // A logo is one large image among hundreds of 36x36 button icons, so
+    // package order buries it. Sorting by area puts it in the first row.
+    if (largeOnly) list = list.filter((t) => t.width > 256 || t.height > 256);
+    if (sortBySize) list = [...list].sort((a, b) => b.width * b.height - a.width * a.height);
+    return list;
+  }, [textures, search, sortBySize, largeOnly]);
 
   const handleReplaceFile = useCallback(async (file: File) => {
     if (!pakBytes || !selected) return;
@@ -399,6 +418,9 @@ export default function MetroidPrimeImages() {
         <span className="font-display font-bold">🖼️ صور Metroid Prime</span>
         <span className="text-sm text-muted-foreground font-mono">{fileName}</span>
         <span className="text-xs text-muted-foreground">({textures.length} صورة{modified.size > 0 ? ` · ${modified.size} معدَّلة` : ""})</span>
+        <span className="text-[11px] text-muted-foreground font-mono truncate max-w-[38ch]" title={assetKinds.map((k) => `${k.kind}: ${k.count}`).join("  ")}>
+          {totalAssets} أصلاً — {assetKinds.slice(0, 5).map((k) => `${k.kind}:${k.count}`).join(" · ")}
+        </span>
         <div className="flex-1" />
         <Button size="sm" onClick={handleSave} disabled={modified.size === 0 || busy === "save"} style={modified.size > 0 ? { backgroundColor: ACCENT, color: "white" } : undefined}>
           {busy === "save" ? <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> : <Download className="w-3.5 h-3.5 ml-1" />}
@@ -423,6 +445,17 @@ export default function MetroidPrimeImages() {
               placeholder="ابحث بالاسم أو المقاس..."
               className="w-full pr-7 pl-2 py-1.5 rounded bg-background border border-border text-xs"
             />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={sortBySize} onChange={(e) => setSortBySize(e.target.checked)} />
+              الأكبر أولاً
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={largeOnly} onChange={(e) => setLargeOnly(e.target.checked)} />
+              الكبيرة فقط (أكثر من 256)
+            </label>
+            <span className="text-muted-foreground">{filtered.length} من {textures.length}</span>
           </div>
           <div className="flex-1 min-h-[240px] overflow-y-auto grid grid-cols-3 gap-1.5 content-start">
             {filtered.map((t) => (

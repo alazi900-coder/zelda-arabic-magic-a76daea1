@@ -15,6 +15,7 @@ import { FILE_CATEGORIES, BDAT_CATEGORIES } from "@/components/editor/types";
 import { buildRisenCategories } from "@/lib/risen/categories";
 import { buildMother3Categories } from "@/lib/mother3/categories";
 import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
+import { buildWolfCategories } from "@/lib/wolfrpg/wolf-categories";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
@@ -125,6 +126,7 @@ const Editor = () => {
   const isRisenEntries = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isMother3Entries = /^(bank_\d+|names_\w+|menu_\w+)$/.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isMetroidPrimeEntries = /^TEXT_/.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isWolfensteinEntries = /^wolf_b\d+_s\d+$/.test(editor.state?.entries?.[0]?.msbtFile || "");
   // "Back" link target — must match whichever tool actually loaded the
   // entries, not just default to Xenoblade's /process for every game that
   // isn't Risen (Mother 3 and Metroid Prime were falling through to it).
@@ -132,6 +134,8 @@ const Editor = () => {
     ? "/mother3"
     : isMetroidPrimeEntries
     ? "/metroid-prime/text"
+    : isWolfensteinEntries
+    ? "/wolfenstein/text"
     : isRisen
     ? "/risen/process"
     : "/process";
@@ -145,9 +149,10 @@ const Editor = () => {
     if (isRisenEntries) return buildRisenCategories(entries);
     if (isMother3Entries) return buildMother3Categories(entries);
     if (isMetroidPrimeEntries) return buildMetroidPrimeCategories(entries);
+    if (isWolfensteinEntries) return buildWolfCategories(entries);
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -635,6 +640,7 @@ const Editor = () => {
             isRisen={isRisenEntries}
             isMother3={isMother3Entries}
             isMetroidPrime={isMetroidPrimeEntries}
+            isWolfenstein={isWolfensteinEntries}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

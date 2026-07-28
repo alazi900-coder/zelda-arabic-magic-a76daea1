@@ -8,6 +8,7 @@ import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
+import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -26,6 +27,7 @@ interface EditorBuildSectionProps {
   isRisen?: boolean;
   isMother3?: boolean;
   isMetroidPrime?: boolean;
+  isWolfenstein?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -38,6 +40,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isRisen = false,
   isMother3 = false,
   isMetroidPrime = false,
+  isWolfenstein = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -47,6 +50,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [risenBuilding, setRisenBuilding] = useState(false);
   const [m3Building, setM3Building] = useState(false);
   const [mpBuilding, setMpBuilding] = useState(false);
+  const [wolfBuilding, setWolfBuilding] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
@@ -118,6 +122,49 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setMpBuilding(false);
+    }
+  };
+
+  const handleWolfensteinBuild = async () => {
+    setWolfBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(WOLF_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على ملف .ipa — أعد فتحه من صفحة نصوص Wolfenstein RPG");
+      // The Arabic font is what makes the bytes readable; without it the game
+      // draws the translation with its original Latin glyphs, so a build with
+      // no font is worth saying out loud rather than silently shipping.
+      const storedFonts = await idbGet<Record<string, ArrayBuffer>>(WOLF_FONTS_KEY);
+      const fonts = storedFonts
+        ? Object.fromEntries(Object.entries(storedFonts).map(([n, b]) => [n, new Uint8Array(b)]))
+        : undefined;
+      const result = await buildWolfIpa(new Uint8Array(buf), editor.state?.translations || {}, fonts);
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.ipa as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "WolfensteinRPG_ar.ipa";
+      a.click();
+      URL.revokeObjectURL(url);
+      const usage = result.bankUsage
+        .map((b) => `الملف ${b.bank}: ${b.bytes} من ${b.limit} بايت`)
+        .join(" | ");
+      toast({
+        title: "✅ تم بناء ملف .ipa معرّب",
+        description:
+          `${result.translatedLines} نص مترجم | ${usage}` +
+          (result.fontsIncluded > 0 ? ` | ${result.fontsIncluded} خطوط عربية` : " | ⚠️ بلا خط عربي — ابنه من أداة الخط") +
+          (result.unmapped.length > 0 ? ` | حروف بلا خانة: ${result.unmapped.join(" ")}` : ""),
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setWolfBuilding(false);
     }
   };
 
@@ -368,6 +415,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isMetroidPrime ? (
           <Button size="lg" onClick={handleMetroidPrimeBuild} disabled={mpBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {mpBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف .pak معرّب وتنزيله
+          </Button>
+        ) : isWolfenstein ? (
+          <Button size="lg" onClick={handleWolfensteinBuild} disabled={wolfBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {wolfBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف .ipa معرّب وتنزيله
           </Button>
         ) : isRisen ? (
           <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">

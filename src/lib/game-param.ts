@@ -6,9 +6,10 @@
  *   - `bank_<N>` / `names_<id>` → MOTHER 3 (m3-editor-bridge keys entries this way)
  *   - `*.tab`                   → Risen     (variant chosen by the session: risen1 | risen2)
  *   - `TEXT_*`                  → Metroid Prime Remastered (mp-editor-bridge keys entries this way)
+ *   - `wolf_b<N>_s<M>`          → Wolfenstein RPG (wolf-editor-bridge keys entries this way)
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
-export type GameParam = "xenoblade" | "risen1" | "risen2" | "mother3" | "metroidprime";
+export type GameParam = "xenoblade" | "risen1" | "risen2" | "mother3" | "metroidprime" | "wolfenstein";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -18,5 +19,6 @@ export function resolveGameParam(
   if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(f)) return "mother3";
   if (/\.tab$/i.test(f)) return risenVariant;
   if (/^TEXT_/.test(f)) return "metroidprime";
+  if (/^wolf_b\d+_s\d+$/.test(f)) return "wolfenstein";
   return "xenoblade";
 }

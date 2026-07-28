@@ -55,6 +55,18 @@ const games = [
     subtitleClass: "text-[hsl(270,70%,70%)]",
     arrowClass: "text-[hsl(270,70%,70%)]",
   },
+  {
+    title: "Wolfenstein RPG",
+    subtitle: "عرّب ولفنشتاين RPG",
+    desc: "استخراج نصوص اللعبة من strings.idx وبنوكها، ورسم الحروف العربية داخل خطوطها النقطية الخمسة، ثم بناء ملف .ipa معرّب",
+    link: "/wolfenstein",
+    image: risenBg,
+    formats: [".ipa", "BMP/strings"],
+    cardClass: "border-[hsl(0,60%,45%)]/30 hover:border-[hsl(0,60%,45%)]/60",
+    formatClass: "bg-[hsl(0,60%,45%)]/20 text-[hsl(20,70%,55%)] border-[hsl(0,60%,45%)]/30",
+    subtitleClass: "text-[hsl(20,70%,55%)]",
+    arrowClass: "text-[hsl(20,70%,55%)]",
+  },
 ];
 
 const Home = () => {

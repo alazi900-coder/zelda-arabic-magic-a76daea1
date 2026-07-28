@@ -87,6 +87,23 @@ export function serialiseWolfFont(font: WolfFontImage): Uint8Array {
   return out;
 }
 
+/**
+ * The BMP's colour table, as `[r, g, b]` per palette index.
+ *
+ * A preview has to use the game's own palette or it shows colours the player
+ * will never see — these fonts are two-tone by design and judging them in
+ * black and white would hide exactly the defects worth catching.
+ */
+export function wolfPalette(font: WolfFontImage): [number, number, number][] {
+  const start = u32(font.header, 14) + 14; // file header + info header size
+  const out: [number, number, number][] = [];
+  for (let i = 0; start + i * 4 + 2 < font.header.length; i++) {
+    const o = start + i * 4;
+    out.push([font.header[o + 2], font.header[o + 1], font.header[o]]); // stored BGRA
+  }
+  return out;
+}
+
 /** Top-left pixel of a cell, by slot index (`byte - 0x21`). */
 export function wolfCellOrigin(font: WolfFontImage, slot: number): { x: number; y: number } {
   if (slot < 0 || slot >= WOLF_GRID_COLS * WOLF_GRID_ROWS) {

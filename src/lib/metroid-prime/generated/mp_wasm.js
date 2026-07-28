@@ -296,6 +296,38 @@ export function list_glyphs(data, id) {
 }
 
 /**
+ * Every TXTR asset in the PACK with its dimensions and pixel format, as JSON.
+ *
+ * `list_assets` gives only ids and names, and most textures in a real .pak
+ * carry no name at all — so an image tool has no way to tell a 4096x4096 BC7
+ * logo from a 4x4 solid-colour swatch without this. A texture whose header
+ * won't parse is still listed, with `readable: false`, rather than dropped:
+ * a missing entry looks like the tool lost the image.
+ * @param {Uint8Array} data
+ * @returns {string}
+ */
+export function list_textures(data) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.list_textures(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Replaces MANY assets' raw bytes at once (by UUID) and rebuilds the whole
  * PACK file in a single pass — used to swap in every edited MSBT text
  * asset for a translation build. `ids_json` is a JSON array of UUID
@@ -325,6 +357,38 @@ export function replace_assets_data(data, ids_json, lengths_json, concat_data) {
     var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v5;
+}
+
+/**
+ * Replaces one TXTR asset's pixels with a new RGBA8 image, re-encoding into
+ * the texture's original format and regenerating its mip chain.
+ *
+ * Dimensions must match the original: a texture's size is baked into
+ * whatever references it (font UV rects, UI layout), so silently resizing
+ * would break the very screen the user is trying to translate. Everything
+ * else about the asset — format, sampler settings, mip count, and every
+ * other asset in the .pak — is preserved.
+ * @param {Uint8Array} data
+ * @param {string} id
+ * @param {Uint8Array} rgba
+ * @param {number} width
+ * @param {number} height
+ * @returns {Uint8Array}
+ */
+export function replace_texture(data, id, rgba, width, height) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(rgba, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.replace_texture(ptr0, len0, ptr1, len1, ptr2, len2, width, height);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
 }
 
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);

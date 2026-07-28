@@ -42,6 +42,7 @@ const RisenFonts = lazyWithIgnoredRef(() => import("./pages/RisenFonts"));
 const MetroidPrime = lazyWithIgnoredRef(() => import("./pages/MetroidPrime"));
 const MetroidPrimeFont = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeFont"));
 const MetroidPrimeText = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeText"));
+const MetroidPrimeImages = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeImages"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
@@ -84,6 +85,7 @@ const App = () => (
                 <Route path="/metroid-prime" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Metroid Prime"><MetroidPrime /></ErrorBoundary>} />
                 <Route path="/metroid-prime/font" element={<ErrorBoundary fallbackTitle="خطأ في عارض خطوط Metroid Prime"><MetroidPrimeFont /></ErrorBoundary>} />
                 <Route path="/metroid-prime/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Metroid Prime"><MetroidPrimeText /></ErrorBoundary>} />
+                <Route path="/metroid-prime/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Metroid Prime"><MetroidPrimeImages /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />

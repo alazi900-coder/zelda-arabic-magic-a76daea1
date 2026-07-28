@@ -49,6 +49,17 @@ export function list_font_pages(data: Uint8Array, id: string): string;
 export function list_glyphs(data: Uint8Array, id: string): string;
 
 /**
+ * Every TXTR asset in the PACK with its dimensions and pixel format, as JSON.
+ *
+ * `list_assets` gives only ids and names, and most textures in a real .pak
+ * carry no name at all — so an image tool has no way to tell a 4096x4096 BC7
+ * logo from a 4x4 solid-colour swatch without this. A texture whose header
+ * won't parse is still listed, with `readable: false`, rather than dropped:
+ * a missing entry looks like the tool lost the image.
+ */
+export function list_textures(data: Uint8Array): string;
+
+/**
  * Replaces MANY assets' raw bytes at once (by UUID) and rebuilds the whole
  * PACK file in a single pass — used to swap in every edited MSBT text
  * asset for a translation build. `ids_json` is a JSON array of UUID
@@ -58,6 +69,18 @@ export function list_glyphs(data: Uint8Array, id: string): string;
  * build_font_glyphs's pixel buffer).
  */
 export function replace_assets_data(data: Uint8Array, ids_json: string, lengths_json: string, concat_data: Uint8Array): Uint8Array;
+
+/**
+ * Replaces one TXTR asset's pixels with a new RGBA8 image, re-encoding into
+ * the texture's original format and regenerating its mip chain.
+ *
+ * Dimensions must match the original: a texture's size is baked into
+ * whatever references it (font UV rects, UI layout), so silently resizing
+ * would break the very screen the user is trying to translate. Everything
+ * else about the asset — format, sampler settings, mip count, and every
+ * other asset in the .pak — is preserved.
+ */
+export function replace_texture(data: Uint8Array, id: string, rgba: Uint8Array, width: number, height: number): Uint8Array;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -70,7 +93,9 @@ export interface InitOutput {
   readonly list_assets: (a: number, b: number) => [number, number, number, number];
   readonly list_font_pages: (a: number, b: number, c: number, d: number) => [number, number, number, number];
   readonly list_glyphs: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+  readonly list_textures: (a: number, b: number) => [number, number, number, number];
   readonly replace_assets_data: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+  readonly replace_texture: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
   readonly init: () => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;

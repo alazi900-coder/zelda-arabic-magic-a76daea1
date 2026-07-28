@@ -65,8 +65,27 @@ export type MpGlyphEditOp =
   | { op: "delete"; code: number }
   | { op: "set_fields"; code: number; x0: number; y0: number; advance: number };
 
+/** A TXTR asset described well enough to pick it out of ~190 unlabeled
+ *  textures and to know whether the tool can write it back. */
+export interface MetroidPrimeTextureInfo {
+  id: string;
+  names: string[];
+  width: number;
+  height: number;
+  /** retrolib's format name, e.g. "BptcUnorm" (BC7) or "R8Unorm". */
+  format: string;
+  mips: number;
+  layers: number;
+  data_len: number;
+  /** false when the header would not parse — listed anyway, so a texture the
+   *  tool cannot read never just silently disappears from the list. */
+  readable: boolean;
+}
+
 interface MpWasmModule {
   list_assets(data: Uint8Array): string;
+  list_textures(data: Uint8Array): string;
+  replace_texture(data: Uint8Array, id: string, rgba: Uint8Array, width: number, height: number): Uint8Array;
   decode_texture_png(data: Uint8Array, id: string): Uint8Array;
   list_glyphs(data: Uint8Array, id: string): string;
   build_font_glyphs(data: Uint8Array, txtrId: string, fontId: string, glyphsMetaJson: string, pixelsConcat: Uint8Array): Uint8Array;
@@ -96,6 +115,29 @@ async function loadModule(): Promise<MpWasmModule> {
 export async function listPakAssets(data: Uint8Array): Promise<MetroidPrimeAssetInfo[]> {
   const mod = await loadModule();
   return JSON.parse(mod.list_assets(data)) as MetroidPrimeAssetInfo[];
+}
+
+/** Every TXTR asset in a .pak with its dimensions and pixel format. */
+export async function listTextures(data: Uint8Array): Promise<MetroidPrimeTextureInfo[]> {
+  const mod = await loadModule();
+  return JSON.parse(mod.list_textures(data)) as MetroidPrimeTextureInfo[];
+}
+
+/**
+ * Replaces one texture's pixels with a new RGBA8 image, re-encoding into the
+ * texture's original format (BC7 for the game's UI art) and regenerating its
+ * mip chain. Dimensions must match the original — a texture's size is
+ * referenced by whatever draws it, so resizing would break that screen.
+ */
+export async function replaceTexture(
+  data: Uint8Array,
+  id: string,
+  rgba: Uint8Array,
+  width: number,
+  height: number
+): Promise<Uint8Array> {
+  const mod = await loadModule();
+  return mod.replace_texture(data, id, rgba, width, height);
 }
 
 /** Decode a TXTR asset (by UUID) from a .pak file into PNG bytes. */

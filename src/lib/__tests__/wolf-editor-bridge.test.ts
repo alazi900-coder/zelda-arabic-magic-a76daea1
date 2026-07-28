@@ -8,7 +8,8 @@ import {
   parseWolfEntryFile,
 } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { WOLF_PACKAGES_PREFIX, openIpa, readPackagesFile } from "@/lib/wolfrpg/wolf-ipa";
-import { decodeWolfBytes } from "@/lib/wolfrpg/wolf-charmap";
+import { decodeWolfBytes, encodeArabicForWolf } from "@/lib/wolfrpg/wolf-charmap";
+import { processArabicText } from "@/lib/arabic-processing";
 
 const rec = (flags: number, bank: number, off: number) => [flags & 0xff, flags >> 8, bank, off & 0xff, off >> 8];
 
@@ -111,5 +112,17 @@ describe("Wolfenstein RPG editor bridge", () => {
     // is the worst outcome here.
     const result = await buildWolfIpa(src, { "wolf_b0_s0:0": "متابعة" }, { "Font.bmp": font });
     expect("error" in result && result.error).toMatch(/Font\.bmp/);
+  });
+
+  it("would reverse the line if the editor had already shaped it", async () => {
+    // The build shapes and reverses on its own, so text put through the
+    // editor's Arabic processing first comes out backwards — measured, not
+    // assumed. This is why the processing button is hidden for Wolfenstein;
+    // the day someone re-enables it, this test says what it costs.
+    const plain = "متابعة";
+    const direct = encodeArabicForWolf(plain).text;
+    const preShaped = encodeArabicForWolf(processArabicText(plain)).text;
+    expect([...preShaped].reverse().join("")).toBe(direct);
+    expect(preShaped).not.toBe(direct);
   });
 });

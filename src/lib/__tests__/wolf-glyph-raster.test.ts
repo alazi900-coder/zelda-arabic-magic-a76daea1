@@ -132,12 +132,22 @@ describe("Wolfenstein RPG glyph placement", () => {
 });
 
 describe("Wolfenstein RPG categories", () => {
-  it("labels a section by its bank and number, never by a guess", () => {
-    // The index file names nothing — it has banks and numbered sections — so a
-    // plain label costs a translator less than a wrong one.
+  it("names a section from what it was measured to hold", () => {
+    // The index file names nothing, so each section was named by reading the
+    // shipped strings: bank 1 section 4 opens with "Paderborn" and holds that
+    // map's quests, prison and dialogue.
     expect(categorizeWolfSection("wolf_b1_s4")).toEqual({
       id: "wolf-b1-s4",
-      label: "الملف 1 — القسم 5",
+      label: "بادربورن",
+      emoji: "🗺️",
+    });
+  });
+
+  it("keeps the numbers for a section this build has never seen", () => {
+    // A name that might be wrong costs a translator more than a plain one.
+    expect(categorizeWolfSection("wolf_b3_s7")).toEqual({
+      id: "wolf-b3-s7",
+      label: "الملف 3 — القسم 8",
       emoji: "📄",
     });
   });

@@ -186,6 +186,27 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
  * first-person action-adventure. Terse HUD strings, technical Scan Visor logs, and
  * exploration prose. Absolutely NOT Xenoblade/Risen/MOTHER — no swapping cast or
  * lore between franchises. */
+const WOLFENSTEIN_SYSTEM_PROMPT = `You are a professional video game text translator working on Wolfenstein RPG (id Software / EA Mobile, 2009) — a turn-based role-playing game set in the Wolfenstein universe of the Second World War, where B.J. Blazkowicz fights Nazi soldiers, occult experiments and the undead. The tone is pulpy and knowingly funny, not solemn war drama. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3 and NOT Metroid Prime — never import their terminology, characters, or lore.
+
+GAME-SPECIFIC RULES:
+- | is the engine's line break. Keep every one of them, in place. Never add or remove one.
+- %01, %02… are values the game substitutes at run time. Copy them exactly.
+- English source words arrive pre-hyphenated for the narrow screen ("Cat-a-combs", "To-wer"). Those hyphens are line-breaking hints, not part of the word: translate the word, and do not carry the hyphens into Arabic.
+- Keep person names in their English form; translate ranks and titles into their normal Arabic equivalents.
+- Place and level names must stay consistent everywhere they appear — the same map is named in several sections.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, TAG_2, ... (technical MSBT control tags)
+   - NEWLINE_0, NEWLINE_1, ... (line breaks — NOT words, do NOT translate to "سطر جديد")
+   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   Treat these as opaque tokens.
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end. Do NOT cluster tags together. Tag position carries game meaning (icons, colors, line markers).
+5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
+6. Metroid proper nouns (Samus Aran → ساموس آران, Chozo → تشوزو, Space Pirates → قراصنة الفضاء, Metroids → ميترويدات, Phazon → فيزون, Tallon IV → تالون 4, Galactic Federation → الاتحاد المجرّي, Varia Suit → بدلة فاريا, Morph Ball → كرة التحول, Scan Visor → ماسح الرؤية, Ice/Wave/Plasma/Power Beam → شعاع جليدي/موجي/بلازما/الطاقة, Missile → صاروخ, Grapple Beam → شعاع الخطاف). NEVER substitute names from other games (Monado/Ether/PSI have NO meaning here). Tone is terse and technical — HUD/pickup names stay very short; Scan Visor entries mimic a research/military log; do NOT add literary flourish absent from the English source.`;
+
 const METROIDPRIME_SYSTEM_PROMPT = `You are a professional video game text translator working on Metroid Prime Remastered (Nintendo / Retro Studios — the Metroid series). This is NOT Xenoblade Chronicles, NOT the Risen series, and NOT MOTHER 3 — never import their terminology, characters, or lore.
 
 STRICT OUTPUT RULES (highest priority — violations are hard failures):
@@ -493,7 +514,7 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' = 'xenoblade';
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -1401,7 +1422,7 @@ async function translateWithOpenAICompat(
     temperature: 0.3,
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+      { role: 'system', content: _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
       { role: 'user', content: prompt },
     ],
   });
@@ -1840,7 +1861,7 @@ async function translateWithAI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
           generationConfig: { temperature: 0.3 },
         }),
       });
@@ -1937,7 +1958,7 @@ async function translateWithAI(
           body: JSON.stringify({
             model: lovableModel,
             messages: [
-              { role: 'system', content: _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+              { role: 'system', content: _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
               { role: 'user', content: aiPrompt },
             ],
           }),
@@ -2053,7 +2074,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

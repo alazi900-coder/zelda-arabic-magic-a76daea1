@@ -9,6 +9,7 @@ import { openIpa, readPackagesFile } from "@/lib/wolfrpg/wolf-ipa";
 import { parseWolfFont, wolfCellOrigin, wolfPalette } from "@/lib/wolfrpg/wolf-font";
 import { encodeArabicForWolf, WOLF_FIRST_CODE, WOLF_LAST_CODE } from "@/lib/wolfrpg/wolf-charmap";
 import { buildWolfArabicFonts, WOLF_DEFAULT_WIDTH_FACTOR } from "@/lib/wolfrpg/wolf-glyph-raster";
+import { buildWolfM3Fonts, type WolfM3Fit } from "@/lib/wolfrpg/wolf-m3-glyphs";
 import { WOLF_BUFFER_KEY, WOLF_FONTS_KEY, WOLF_FONT_FILES } from "@/lib/wolfrpg/wolf-editor-bridge";
 
 const SAMPLES = ["متابعة", "لعبة جديدة", "خيارات", "استيقظت في زنزانة مظلمة.", "اضغط على الزر لفتح الباب"];
@@ -61,6 +62,13 @@ export default function WolfensteinFont() {
   const [ttf, setTtf] = useState<ArrayBuffer | null>(null);
   const [ttfName, setTtfName] = useState("");
   const [saved, setSaved] = useState(false);
+  // Where the glyphs come from. Mother 3's Arabic is drawn by hand on the
+  // pixel grid, and its ink is 9x13 — so the 12x16 and 13x18 cells take it
+  // untouched, which is the whole reason to prefer it over rasterising an
+  // outline at a size where the pen is thinner than a pixel. The 10x12 menu
+  // font and the 22x25 title cannot take it whole; `m3-mixed` leaves those two
+  // to the .ttf, `m3-all` scales the drawing into them as well.
+  const [source, setSource] = useState<"ttf" | "m3-mixed" | "m3-all">("m3-mixed");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const readFonts = useCallback(async (ipaBytes: Uint8Array) => {
@@ -102,11 +110,19 @@ export default function WolfensteinFont() {
   );
 
   const build = useCallback(async () => {
-    if (!originals || !ttf) return;
+    if (!originals) return;
+    if (source !== "m3-all" && !ttf) return;
     setBusy(true);
     setSaved(false);
     try {
-      const result = await buildWolfArabicFonts(originals, ttf.slice(0), widthFactor);
+      const result =
+        source === "ttf"
+          ? await buildWolfArabicFonts(originals, ttf!.slice(0), widthFactor)
+          : await buildWolfM3Fonts(originals, {
+              fit: (source === "m3-all" ? "scale" : "skip") as WolfM3Fit,
+              fontBytes: ttf?.slice(0),
+              widthFactor,
+            });
       setBuilt(result);
       toast.success(`رُسمت الأشكال العربية في ${Object.keys(result).length} خطوط`);
     } catch (e) {
@@ -114,7 +130,7 @@ export default function WolfensteinFont() {
     } finally {
       setBusy(false);
     }
-  }, [originals, ttf, widthFactor]);
+  }, [originals, ttf, widthFactor, source]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -190,6 +206,25 @@ export default function WolfensteinFont() {
 
           <section className="rounded-xl border p-5">
             <h2 className="mb-3 font-semibold">٢ · الخط العربي</h2>
+            <div className="mb-4 grid gap-2 sm:grid-cols-3">
+              {([
+                ["m3-mixed", "ماذر٣ + TTF للمقاسين الصغير والعنوان", "الأشكال المرسومة يدوياً بحجمها الأصلي في خانتَي ١٢×١٦ و١٣×١٨، وخطّك للمقاسين اللذين لا يسعانها"],
+                ["m3-all", "ماذر٣ لكل المقاسات", "بلا حاجة إلى ‎.ttf‎؛ المقاسان الآخران يُحجَّم لهما الرسم وتفقد الحروف بعض حدّتها"],
+                ["ttf", "خطّك وحده", "السلوك السابق: رسم ملف ‎.ttf‎ في كل الخانات"],
+              ] as const).map(([id, label, hint]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => { setSource(id); setBuilt(null); }}
+                  className={`rounded-lg border p-3 text-right text-sm transition-colors ${
+                    source === id ? "border-primary bg-primary/10" : "border-border/60 hover:border-primary/40"
+                  }`}
+                >
+                  <span className="block font-semibold">{label}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
+                </button>
+              ))}
+            </div>
             <label className="flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed p-6">
               <Upload className="h-6 w-6 text-muted-foreground" />
               <span>{ttfName || "اختر ملف .ttf أو .otf"}</span>
@@ -225,7 +260,11 @@ export default function WolfensteinFont() {
                 اللعبة.
               </span>
             </div>
-            <Button className="mt-4" onClick={() => void build()} disabled={!originals || !ttf || busy}>
+            <Button
+              className="mt-4"
+              onClick={() => void build()}
+              disabled={!originals || (source !== "m3-all" && !ttf) || busy}
+            >
               {busy ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}
               ارسم الأشكال العربية
             </Button>

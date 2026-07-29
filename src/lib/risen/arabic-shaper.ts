@@ -314,6 +314,31 @@ function reverseShapedLine(line: string): string {
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/** Which neighbours a presentation form is drawn to connect to.
+ *
+ * The shaping tables already say this — a form listed as `final` or `medial`
+ * was chosen because the letter before it joins, and `initial` or `medial`
+ * because the letter after it does — so reading it back off the same tables
+ * cannot disagree with what the shaper emitted. A bitmap font needs it to
+ * know which edge of the cell a glyph's connecting stroke belongs on; probing
+ * the drawing for ink at its edge answers a different question and gets ا and
+ * ل wrong, because their stems sit at the edge without joining there. */
+export function arabicFormJoining(codepoint: number): { before: boolean; after: boolean } {
+  for (const forms of Object.values(ARABIC_FORMS)) {
+    const [iso, fin, ini, med] = forms;
+    // Isolated first: ء and its kin list the same code as both isolated and
+    // final, and that code joins nothing.
+    if (codepoint === iso) return { before: false, after: false };
+    if (codepoint === med) return { before: true, after: true };
+    if (codepoint === fin) return { before: true, after: false };
+    if (codepoint === ini) return { before: false, after: true };
+  }
+  for (const lig of Object.values(LAM_ALEF_LIGATURES)) {
+    if (codepoint === lig[1]) return { before: true, after: false };
+  }
+  return { before: false, after: false };
+}
+
 /** Every Unicode codepoint `shapeArabicForRisen` can ever emit: all
  * contextual presentation forms + lam-alef ligatures from the tables above,
  * tatweel, Arabic-Indic digits (passed through unshaped), and the Arabic

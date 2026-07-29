@@ -1,0 +1,64 @@
+<!doctype html><html><body style="background:#181818;margin:0">
+<canvas id="c"></canvas>
+<script type="module">
+import { parseWolfFont, wolfInkStyle, drawGlyphIntoCell } from "/src/lib/wolfrpg/wolf-font.ts";
+import { buildM3WolfGlyphs } from "/src/lib/wolfrpg/wolf-m3-glyphs.ts";
+import { rasteriseWolfGlyphs } from "/src/lib/wolfrpg/wolf-glyph-raster.ts";
+import { wolfFontSlots, encodeArabicForWolf } from "/src/lib/wolfrpg/wolf-charmap.ts";
+
+const WORDS = ["لعبة جديدة", "متابعة", "الخيارات", "صديقي", "أنت في القبو"];
+const slots = wolfFontSlots();
+const cps = slots.filter((c) => c !== null);
+const ZOOM = 5;
+
+async function run() {
+  const fontsToShow = ["Font.bmp", "WarFont.bmp"];
+  const ttf = await (await fetch("/tmpfonts/arabic.ttf")).arrayBuffer();
+  const rows = [];
+  for (const name of fontsToShow) {
+    const orig = new Uint8Array(await (await fetch("/tmpfonts/" + name)).arrayBuffer());
+    for (const source of ["ttf", "m3"]) {
+      const font = parseWolfFont(orig.slice());
+      const cell = { width: font.cellWidth, height: font.cellHeight };
+      const glyphs = source === "m3"
+        ? buildM3WolfGlyphs([cell], cps, "scale")
+        : await rasteriseWolfGlyphs(ttf, [cell], cps);
+      const ink = wolfInkStyle(font);
+      slots.forEach((cp, slot) => {
+        if (cp === null) return;
+        const g = glyphs.get(`${cell.width}x${cell.height}:${cp}`);
+        if (g) drawGlyphIntoCell(font, slot, g, ink);
+      });
+      for (const w of WORDS) {
+        const { text } = encodeArabicForWolf(w);
+        rows.push({ label: `${name} ${cell.width}x${cell.height} — ${source === "m3" ? "ماذر٣ (٢)" : "TTF (١)"} — ${w}`, font, cell, text });
+      }
+    }
+  }
+  const canvas = document.getElementById("c");
+  const rowH = Math.max(...rows.map((r) => r.cell.height)) * ZOOM + 22;
+  canvas.width = 900; canvas.height = rows.length * rowH + 10;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#181818"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  rows.forEach((r, i) => {
+    const y0 = 8 + i * rowH;
+    ctx.fillStyle = "#7a7a7a"; ctx.font = "12px sans-serif"; ctx.direction = "rtl";
+    ctx.fillText(r.label, 880, y0 + 10);
+    let x0 = 10;
+    for (const ch of r.text) {
+      const slot = ch.charCodeAt(0) - 0x21;
+      if (slot >= 0 && slot < 144) {
+        const ox = (slot % 16) * r.cell.width, oy = Math.floor(slot / 16) * r.cell.height;
+        for (let y = 0; y < r.cell.height; y++) for (let x = 0; x < r.cell.width; x++) {
+          const v = r.font.pixels[(oy + y) * r.font.width + ox + x];
+          ctx.fillStyle = v === 0 ? "#282828" : v === 1 ? "#fff" : "#bbb";
+          ctx.fillRect(x0 + x * ZOOM, y0 + 14 + y * ZOOM, ZOOM, ZOOM);
+        }
+      }
+      x0 += r.cell.width * ZOOM;
+    }
+  });
+  document.title = "ready";
+}
+run().catch((e) => { document.title = "ERR " + e.message; });
+</script></body></html>

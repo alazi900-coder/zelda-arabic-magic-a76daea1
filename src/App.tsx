@@ -46,6 +46,9 @@ const MetroidPrimeImages = lazyWithIgnoredRef(() => import("./pages/MetroidPrime
 const Wolfenstein = lazyWithIgnoredRef(() => import("./pages/Wolfenstein"));
 const WolfensteinFont = lazyWithIgnoredRef(() => import("./pages/WolfensteinFont"));
 const WolfensteinText = lazyWithIgnoredRef(() => import("./pages/WolfensteinText"));
+const Pokemon = lazyWithIgnoredRef(() => import("./pages/Pokemon"));
+const PokemonFont = lazyWithIgnoredRef(() => import("./pages/PokemonFont"));
+const PokemonText = lazyWithIgnoredRef(() => import("./pages/PokemonText"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
@@ -92,6 +95,9 @@ const App = () => (
                 <Route path="/wolfenstein" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Wolfenstein RPG"><Wolfenstein /></ErrorBoundary>} />
                 <Route path="/wolfenstein/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Wolfenstein RPG"><WolfensteinFont /></ErrorBoundary>} />
                 <Route path="/wolfenstein/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Wolfenstein RPG"><WolfensteinText /></ErrorBoundary>} />
+                <Route path="/pokemon" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Pokémon Ruby Destiny"><Pokemon /></ErrorBoundary>} />
+                <Route path="/pokemon/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Pokémon Ruby Destiny"><PokemonFont /></ErrorBoundary>} />
+                <Route path="/pokemon/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Ruby Destiny"><PokemonText /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />

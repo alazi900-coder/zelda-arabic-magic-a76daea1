@@ -207,6 +207,18 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
 6. Metroid proper nouns (Samus Aran → ساموس آران, Chozo → تشوزو, Space Pirates → قراصنة الفضاء, Metroids → ميترويدات, Phazon → فيزون, Tallon IV → تالون 4, Galactic Federation → الاتحاد المجرّي, Varia Suit → بدلة فاريا, Morph Ball → كرة التحول, Scan Visor → ماسح الرؤية, Ice/Wave/Plasma/Power Beam → شعاع جليدي/موجي/بلازما/الطاقة, Missile → صاروخ, Grapple Beam → شعاع الخطاف). NEVER substitute names from other games (Monado/Ether/PSI have NO meaning here). Tone is terse and technical — HUD/pickup names stay very short; Scan Visor entries mimic a research/military log; do NOT add literary flourish absent from the English source.`;
 
+const POKEMON_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Ruby Destiny: Reign of Legends — a fan-made ROM hack of Pokémon Ruby (Game Boy Advance). It keeps Pokémon's world and vocabulary: trainers, Gyms, badges, Poké Balls, Pokémon Centers, moves, types and items, in a story about the legendary Pokémon and the orbs that control them. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime and NOT Wolfenstein — never import their terminology, characters, or lore.
+
+Voice: everyday, warm and plain. The audience is young. Sentences are short. Avoid literary or archaic Arabic; write the way a friendly person actually speaks.
+
+Hard constraints, because of how this game stores its text:
+
+1. Every line is written back into the exact bytes it came from. A translation longer than the English original is REFUSED, not truncated. Always prefer the shorter Arabic wording. Drop filler before you drop meaning.
+2. Sequences like {FD:01} are values the game substitutes at run time — most often the player's or a character's name. Copy them EXACTLY, same braces, same digits, same position relative to the sentence. Losing one costs a character their name.
+3. Keep line breaks where they are. The dialogue box is two lines tall and the game does not re-wrap.
+4. Names written in CAPITALS in the English text (towns, characters, Pokémon, items) are the game's own proper nouns. Leave them in Latin script unless Arabic has a settled, widely used equivalent, and then use that same equivalent everywhere.
+5. Numbers and digits stay as they are.`;
+
 const METROIDPRIME_SYSTEM_PROMPT = `You are a professional video game text translator working on Metroid Prime Remastered (Nintendo / Retro Studios — the Metroid series). This is NOT Xenoblade Chronicles, NOT the Risen series, and NOT MOTHER 3 — never import their terminology, characters, or lore.
 
 STRICT OUTPUT RULES (highest priority — violations are hard failures):
@@ -514,7 +526,7 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' = 'xenoblade';
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -1422,7 +1434,7 @@ async function translateWithOpenAICompat(
     temperature: 0.3,
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+      { role: 'system', content: _game === 'pokemon' ? POKEMON_SYSTEM_PROMPT : _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
       { role: 'user', content: prompt },
     ],
   });
@@ -1861,7 +1873,7 @@ async function translateWithAI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: _game === 'pokemon' ? POKEMON_SYSTEM_PROMPT : _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
           generationConfig: { temperature: 0.3 },
         }),
       });
@@ -1958,7 +1970,7 @@ async function translateWithAI(
           body: JSON.stringify({
             model: lovableModel,
             messages: [
-              { role: 'system', content: _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+              { role: 'system', content: _game === 'pokemon' ? POKEMON_SYSTEM_PROMPT : _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
               { role: 'user', content: aiPrompt },
             ],
           }),
@@ -2074,7 +2086,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

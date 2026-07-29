@@ -67,6 +67,18 @@ const games = [
     subtitleClass: "text-[hsl(20,70%,55%)]",
     arrowClass: "text-[hsl(20,70%,55%)]",
   },
+  {
+    title: "Pokémon Ruby Destiny",
+    subtitle: "عرّب بوكيمون روبي ديستني",
+    desc: "التعرّف على كل سطر نصّ داخل الروم وفتحه في المحرر، وكتابة ١٢٩ شكلاً عربياً في خانات الكانا، ثم بناء روم ‎.gba‎ معرّب",
+    link: "/pokemon",
+    image: risenBg,
+    formats: [".gba", "GBA/kana"],
+    cardClass: "border-[hsl(0,72%,50%)]/30 hover:border-[hsl(0,72%,50%)]/60",
+    formatClass: "bg-[hsl(0,72%,50%)]/20 text-[hsl(210,70%,55%)] border-[hsl(0,72%,50%)]/30",
+    subtitleClass: "text-[hsl(210,70%,55%)]",
+    arrowClass: "text-[hsl(210,70%,55%)]",
+  },
 ];
 
 const Home = () => {

@@ -9,6 +9,7 @@ import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
+import { buildPkmRom, PKM_BUFFER_KEY } from "@/lib/pokemon/pkm-editor-bridge";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -28,6 +29,7 @@ interface EditorBuildSectionProps {
   isMother3?: boolean;
   isMetroidPrime?: boolean;
   isWolfenstein?: boolean;
+  isPokemon?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -41,6 +43,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isMother3 = false,
   isMetroidPrime = false,
   isWolfenstein = false,
+  isPokemon = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -51,6 +54,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [m3Building, setM3Building] = useState(false);
   const [mpBuilding, setMpBuilding] = useState(false);
   const [wolfBuilding, setWolfBuilding] = useState(false);
+  const [pkmBuilding, setPkmBuilding] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
@@ -165,6 +169,45 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setWolfBuilding(false);
+    }
+  };
+
+  const handlePokemonBuild = async () => {
+    setPkmBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(PKM_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة نصوص Pokémon");
+      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "RubyDestiny_ar.gba";
+      a.click();
+      URL.revokeObjectURL(url);
+      // Lines that did not fit are named rather than trimmed: every line is
+      // written where it was found, so a silent truncation would cut a
+      // sentence in half inside the game with nothing to show for it.
+      const over = result.tooLong.length;
+      toast({
+        title: over > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : "✅ تم بناء روم معرّب",
+        description:
+          `${result.translatedLines} سطر مترجم` +
+          (result.fontApplied ? " | كُتب الخط العربي" : " | الخط العربي موجود مسبقاً") +
+          (over > 0 ? ` | ${over} سطراً أطول من مكانه ولم يُكتب — اختصرها` : "") +
+          (result.unmapped.length > 0 ? ` | حروف بلا خانة: ${result.unmapped.join(" ")}` : ""),
+        variant: over > 0 ? "destructive" : undefined,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setPkmBuilding(false);
     }
   };
 
@@ -333,7 +376,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -363,7 +406,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -419,6 +462,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isMetroidPrime ? (
           <Button size="lg" onClick={handleMetroidPrimeBuild} disabled={mpBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {mpBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف .pak معرّب وتنزيله
+          </Button>
+        ) : isPokemon ? (
+          <Button size="lg" onClick={handlePokemonBuild} disabled={pkmBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {pkmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم معرّب وتنزيله
           </Button>
         ) : isWolfenstein ? (
           <Button size="lg" onClick={handleWolfensteinBuild} disabled={wolfBuilding} className="flex-1 min-w-[200px] font-display font-bold">

@@ -72,18 +72,32 @@ describe("Pokémon rules in the AI enhancement tool", () => {
 });
 
 describe("the two rule catalogues agree", () => {
-  /**
-   * `no_added_terminal_dot` is on the client and not in the edge function —
-   * the toggle is drawn, saved and sent, and nothing on the other side has a
-   * prompt for it, so turning it on or off changes nothing. That predates the
-   * Pokémon work and is left as it is rather than quietly changing what every
-   * other game's prompt says; it is pinned here so it stays a known gap and
-   * any *new* drift fails this test.
-   */
-  const KNOWN_CLIENT_ONLY = ["no_added_terminal_dot"];
-
   it("has an edge-side entry for every built-in toggle", () => {
+    // `no_added_terminal_dot` used to fail this: the toggle was drawn, saved
+    // and sent, and no prompt on the other side answered to it, so it changed
+    // nothing whichever way it was set.
     const missing = BUILTIN_RULES.filter((r) => !EDGE_SOURCE.includes(`id: '${r.id}'`));
-    expect(missing.map((r) => r.id)).toEqual(KNOWN_CLIENT_ONLY);
+    expect(missing.map((r) => r.id)).toEqual([]);
+  });
+
+  /**
+   * Two protect rules differ between the sides on purpose or by an older
+   * oversight, and neither is this change's business:
+   *   protect_proper_nouns — the edge copy is a template filled per game, so
+   *     the two texts can never be identical by construction.
+   *   protect_tech_tags — the client copy ends with one more sentence ("لا
+   *     تَحذف أو تُضِف أيّ رمز من هذه النطاقات") that the edge copy has never
+   *     carried, so the model is not told it. Pre-existing; pinned so it does
+   *     not grow.
+   */
+  const KNOWN_TEXT_DRIFT = ["protect_proper_nouns", "protect_tech_tags"];
+
+  it("declares the same prompt text on both sides for every protect rule", () => {
+    // A protect rule is a promise about what the model will not do; the label
+    // in the panel is only true if the text behind it is the text sent.
+    const drifted = BUILTIN_RULES.filter(
+      (r) => r.kind === "protect" && !EDGE_SOURCE.includes(r.prompt.replace(/\\/g, "\\\\"))
+    );
+    expect(drifted.map((r) => r.id)).toEqual(KNOWN_TEXT_DRIFT);
   });
 });

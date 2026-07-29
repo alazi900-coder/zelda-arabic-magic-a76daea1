@@ -236,7 +236,7 @@ export function useAutoPilot({
 
       for (const e of allEntries) {
         const key = `${e.msbtFile}:${e.index}`;
-        if (!e.original.trim() || arabicRe.test(e.original) || isTechnicalText(e.original)) continue;
+        if (!e.original.trim() || arabicRe.test(e.original) || isTechnicalText(e.original, e.msbtFile)) continue;
         if (state.translations[key]?.trim()) { stats.alreadyTranslated++; continue; }
         untranslated.push(e);
       }

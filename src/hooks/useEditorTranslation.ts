@@ -462,7 +462,7 @@ export function useEditorTranslation({
       if (!matchCategory) { skipCategory++; return false; }
       if (!e.original.trim()) { skipEmpty++; return false; }
       if (arabicRegex.test(e.original)) { skipArabic++; return false; }
-      if (isTechnicalText(e.original) && !state.technicalBypass?.has(key)) { skipTechnical++; return false; }
+      if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) { skipTechnical++; return false; }
       if (state.translations[key]?.trim()) { skipTranslated++; return false; }
       return true;
     });
@@ -814,7 +814,7 @@ export function useEditorTranslation({
     if (!state) return;
     const entriesToRetranslate = paginatedEntries.filter(e => {
       const key = `${e.msbtFile}:${e.index}`;
-      return state.translations[key]?.trim() && !isTechnicalText(e.original);
+      return state.translations[key]?.trim() && !isTechnicalText(e.original, e.msbtFile);
     });
     if (entriesToRetranslate.length === 0) {
       setTranslateProgress("⚠️ لا توجد ترجمات في هذه الصفحة لإعادة ترجمتها");
@@ -935,7 +935,7 @@ export function useEditorTranslation({
       const key = `${e.msbtFile}:${e.index}`;
       if (!e.original.trim()) { skipEmpty++; return false; }
       if (arabicRegex.test(e.original)) { skipArabic++; return false; }
-      if (isTechnicalText(e.original) && !state.technicalBypass?.has(key)) { skipTechnical++; return false; }
+      if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) { skipTechnical++; return false; }
       if (!forceRetranslate && state.translations[key]?.trim()) { skipTranslated++; return false; }
       return true;
     });
@@ -1152,7 +1152,7 @@ export function useEditorTranslation({
         const key = `${e.msbtFile}:${e.index}`;
         if (!e.original.trim()) continue;
         if (arabicRegex.test(e.original)) continue;
-        if (isTechnicalText(e.original) && !state.technicalBypass?.has(key)) continue;
+        if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) continue;
         if (!forceRetranslate && state.translations[key]?.trim()) { totalSkippedTranslated++; continue; }
         totalCandidates++;
       }
@@ -1184,7 +1184,7 @@ export function useEditorTranslation({
         const key = `${e.msbtFile}:${e.index}`;
         if (!e.original.trim()) continue;
         if (arabicRegex.test(e.original)) continue;
-        if (isTechnicalText(e.original) && !state.technicalBypass?.has(key)) continue;
+        if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) continue;
         if (!forceRetranslate && state.translations[key]?.trim()) continue;
         oldTrans[key] = state.translations[key] || '';
         originalsMap[key] = e.original;
@@ -1205,7 +1205,7 @@ export function useEditorTranslation({
           const key = `${e.msbtFile}:${e.index}`;
           if (!e.original.trim()) return false;
           if (arabicRegex.test(e.original)) return false;
-          if (isTechnicalText(e.original) && !state.technicalBypass?.has(key)) return false;
+          if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) return false;
           if (!forceRetranslate && state.translations[key]?.trim()) return false;
           return true;
         });
@@ -1378,7 +1378,7 @@ export function useEditorTranslation({
       const key = `${e.msbtFile}:${e.index}`;
       if (!e.original.trim()) { skipEmpty++; continue; }
       if (arabicRegex.test(e.original)) { skipArabic++; continue; }
-      if (isTechnicalText(e.original) && !state.technicalBypass?.has(key)) { skipTechnical++; continue; }
+      if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) { skipTechnical++; continue; }
 
       const norm = e.original.trim().toLowerCase();
       const existingTranslation = state.translations[key]?.trim() || '';

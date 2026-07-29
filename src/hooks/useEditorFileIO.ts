@@ -264,7 +264,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     let skippedTechnical = 0;
     for (const entry of entriesToExport) {
       // Skip technical/code entries from export
-      if (isTechnicalText(entry.original)) { skippedTechnical++; continue; }
+      if (isTechnicalText(entry.original, entry.msbtFile)) { skippedTechnical++; continue; }
       // Skip any entry whose source/original text already contains Arabic.
       // "Export English Only" should never include Arabic or mixed Arabic-source lines,
       // even if their translation field is empty.

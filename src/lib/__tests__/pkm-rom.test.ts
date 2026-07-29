@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { scanPkmStrings, applyPkmTranslations } from "@/lib/pokemon/pkm-rom";
+import { scanPkmStrings, applyPkmTranslations, pkmLineLimit, PKM_SHORT_LINE_LIMIT } from "@/lib/pokemon/pkm-rom";
+import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
 import { encodeArabicForPkm, decodePkmBytes, pkmArabicSlots, pkmCodepointForByte, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
 import { categorizePkmLine, buildPkmCategories } from "@/lib/pokemon/pkm-categories";
 import { maskPkmTags, unmaskPkmTags, diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
@@ -377,5 +378,56 @@ describe("Pokémon Ruby Destiny editor bridge", () => {
     expect(entries[0].index).toBe(1);
     // 11 characters plus the terminator, and the terminator is not writable.
     expect(entries[0].maxBytes).toBe(11);
+  });
+});
+
+describe("lines that may not be text at all", () => {
+  it("flags a run of bytes that only looks like letters", () => {
+    // Straight out of the ROM: graphics data whose bytes fall in the letter
+    // range and happen to end at a terminator.
+    expect(pkmLooksNonLinguistic("lzz lzz")).toBe(true);
+    expect(pkmLooksNonLinguistic("zzjTzzjT")).toBe(true);
+    expect(pkmLooksNonLinguistic("jjzj")).toBe(true);
+  });
+
+  it("misses the ones with a y in them, and that is the price", () => {
+    // `y` counts as a vowel so «Gyaaaah!» and «Kyuuu...» survive, and «STVYZ»
+    // slips through with them. Catching it would cost real lines, which is the
+    // trade this whole check is built around.
+    expect(pkmLooksNonLinguistic("STVYZ")).toBe(false);
+  });
+
+  it("leaves the game's own odd noises alone", () => {
+    // These are printed on screen, and the letter-frequency test that would
+    // have caught the data above threw all of them away.
+    for (const cry of ["Pika pika!", "Gau gau!", "Oops!", "Fffnyaaaah...", "Guguu?"]) {
+      expect(pkmLooksNonLinguistic(cry)).toBe(false);
+    }
+  });
+
+  it("says nothing about a line with no words in it", () => {
+    expect(pkmLooksNonLinguistic("123 456")).toBe(false);
+    expect(pkmLooksNonLinguistic("{FD:01}")).toBe(false);
+  });
+});
+
+describe("how much room a short Pokémon line really has", () => {
+  it("lets a short line reach the floor measured in the emulator", () => {
+    // «Sun Ford Town» sits in fourteen bytes and ran at twenty, wherever the
+    // bytes were stored; it crashed at twenty-one. So twenty is what a short
+    // line may ask for, and its own slot is no longer the ceiling.
+    const rom = new Uint8Array(0x1000);
+    rom.set([...gameBytes("Sun Ford"), PKM_TERMINATOR], 0x20);
+    const s = scanPkmStrings(rom)[0];
+    expect(s.capacity).toBe(9);
+    expect(pkmLineLimit(s)).toBe(PKM_SHORT_LINE_LIMIT);
+  });
+
+  it("keeps a bigger slot's own room", () => {
+    const rom = new Uint8Array(0x1000);
+    rom.set([...gameBytes("PROF BIRCHS POKEMON LAB"), PKM_TERMINATOR], 0x20);
+    const s = scanPkmStrings(rom)[0];
+    expect(pkmLineLimit(s)).toBe(s.capacity - 1);
+    expect(pkmLineLimit(s)).toBeGreaterThan(PKM_SHORT_LINE_LIMIT);
   });
 });

@@ -12,7 +12,7 @@
  */
 
 import type { ExtractedEntry } from "@/components/editor/types";
-import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, type PkmString } from "./pkm-rom";
+import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, pkmLineLimit, type PkmString } from "./pkm-rom";
 import { applyPkmArabicFont, hasPkmArabicFont } from "./pkm-font";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
@@ -60,7 +60,14 @@ export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
     index: s.offset,
     label: preview(s.text),
     original: s.text,
-    maxBytes: canRelocatePkmString(s, pointers) ? PKM_RELOCATED_LIMIT : s.capacity - 1,
+    // Dialogue that can be moved has the ROM's limit lifted entirely; a short
+    // line that can be moved reaches the measured floor; anything the game
+    // finds by index keeps its slot.
+    maxBytes: canRelocatePkmString(s, pointers)
+      ? PKM_RELOCATED_LIMIT
+      : pointers.to(s.offset).length > 0
+      ? pkmLineLimit(s)
+      : s.capacity - 1,
   }));
   return { entries, strings, textBytes: strings.reduce((n, s) => n + s.capacity, 0) };
 }

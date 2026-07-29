@@ -7,6 +7,7 @@ import { measureEntryBytes } from "@/lib/entry-bytes";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
+import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { RISEN_TAG_REGEX, hasRisenTags, diffRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
@@ -229,7 +230,12 @@ const EntryCard: React.FC<EntryCardProps> = ({
   const key = `${entry.msbtFile}:${entry.index}`;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
   const gameParam = resolveGameParam(entry.msbtFile, risenVariant);
-  const isTech = isTechnicalText(entry.original);
+  const isTech = isTechnicalText(entry.original, entry.msbtFile);
+  // A run of bytes out of a graphics table can end in the terminator and read
+  // as letters, so it reaches the editor looking like a line. It is flagged
+  // rather than hidden: every rule tried for telling the two apart threw away
+  // real text as well (see pkm-junk.ts).
+  const looksLikeData = /^pkm_/.test(entry.msbtFile) && pkmLooksNonLinguistic(entry.original);
   const isSingleLineOriginal = countEffectiveLines(entry.original) <= 1;
   const [backTranslation, setBackTranslation] = useState<string | null>(null);
   const [backTranslating, setBackTranslating] = useState(false);
@@ -345,6 +351,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
             </p>
           )}
           {isTech && <p className="text-xs text-accent mb-2">⚠️ نص تقني - تحتاج حذر في الترجمة</p>}
+          {looksLikeData && (
+            <p className="text-xs text-amber-500 mb-2">
+              ⚠️ قد تكون بيانات لا نصاً (رسوم أو شيفرة قرأها الماسح كحروف) — ترجمتها قد تُفسد ما تحتها
+            </p>
+          )}
           {hasProblem && (
             <p className="text-xs text-destructive mb-2 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" /> يحتاج مراجعة

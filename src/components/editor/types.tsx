@@ -695,7 +695,20 @@ export function categorizeFile(filePath: string): string {
 // Re-export from canonical source to avoid duplication
 export { isArabicChar, hasArabicChars, reverseBidi as unReverseBidi } from "@/lib/arabic-processing";
 
-export function isTechnicalText(text: string): boolean {
+/**
+ * Games whose ordinary text is written the way an identifier looks.
+ *
+ * The short-code rule below reads any word of six letters or fewer that is not
+ * Capitalised as a technical token — true of `zY1` in Xenoblade, and true of
+ * ABSORB, RAGE and TOXIC in Pokémon, where every move, item and ability name
+ * is stored in capitals. The warning stopped the translator and the AI skipped
+ * the line, so about nine hundred move names were unreachable.
+ */
+function usesUppercaseNames(msbtFile?: string): boolean {
+  return !!msbtFile && /^pkm_/.test(msbtFile);
+}
+
+export function isTechnicalText(text: string, msbtFile?: string): boolean {
   const t = text.trim();
   if (!t) return true;
   // Pure hex/numeric/path-like identifiers (e.g. "a1b2c3", "path/to/file")
@@ -703,7 +716,7 @@ export function isTechnicalText(text: string): boolean {
   // camelCase or snake_case identifiers (e.g. "getItemName", "item_name")
   if (/^[a-z]+([A-Z][a-z]*)+$|^[a-z]+(_[a-z]+)+$/.test(t)) return true;
   // Short alphanumeric codes (e.g. zY1, yY1, xA3) — not real sentences
-  if (/^[a-zA-Z0-9]{1,6}$/.test(t) && !/^[A-Z][a-z]{2,}$/.test(t)) return true;
+  if (!usesUppercaseNames(msbtFile) && /^[a-zA-Z0-9]{1,6}$/.test(t) && !/^[A-Z][a-z]{2,}$/.test(t)) return true;
   // File paths (e.g. \path\to\file or /path/to/file)
   if (/[\\/][\w\-]+[\\/]/i.test(t) && !/\s/.test(t)) return true;
   // Text that is ONLY tags with no real translatable content

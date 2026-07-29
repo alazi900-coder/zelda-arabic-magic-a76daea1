@@ -166,7 +166,7 @@ export default function TranslationProgressDashboard({ state, qualityStats, glos
       if (state.translations[key]?.trim()) c.translated++;
     }
     
-    const technical = state.entries.filter(e => isTechnicalText(e.original)).length;
+    const technical = state.entries.filter(e => isTechnicalText(e.original, e.msbtFile)).length;
     const withTags = state.entries.filter(e => hasTechnicalTags(e.original)).length;
     
     return { total, translated, untranslated, percentage, categories, technical, withTags };

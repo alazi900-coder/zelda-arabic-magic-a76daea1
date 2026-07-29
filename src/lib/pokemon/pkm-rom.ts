@@ -307,6 +307,29 @@ function fontRegion() {
  */
 const RELOCATABLE_MIN_CAPACITY = 40;
 
+/**
+ * How far a short line may grow past its slot.
+ *
+ * Measured one line at a time in the emulator. «Sun Ford Town» — a town name
+ * the region map copies into RAM — runs at 20 bytes and crashes the game at
+ * 21, wherever the bytes are stored. Three other short lines («WALLY'S HOUSE»,
+ * «CUTTER'S HOUSE», «BIKE PARKING») took 21 without complaint, and «PROF.
+ * BIRCH'S POKéMON LAB» took 25 in a 26-byte slot.
+ *
+ * Nothing in the bytes says which line the region map will copy, so 20 is the
+ * number every short line is allowed to reach: a real gain for the many whose
+ * slot is smaller, and it stops exactly where the one measured crash begins. A
+ * line whose own slot is already larger keeps that larger room, which is what
+ * it has always had.
+ */
+export const PKM_SHORT_LINE_LIMIT = 20;
+
+/** The bytes this line may hold — its slot, or the measured floor above it. */
+export function pkmLineLimit(s: PkmString): number {
+  if (s.table) return s.capacity - 1;
+  return Math.max(s.capacity - 1, PKM_SHORT_LINE_LIMIT);
+}
+
 /** True when this line may be moved out of its slot — see the constant above. */
 export function canRelocatePkmString(s: PkmString, pointers: PkmPointerIndex): boolean {
   return looksRelocatable(s) && pointers.to(s.offset).length > 0;
@@ -364,7 +387,13 @@ export function applyPkmTranslations(
     if (needed > s.capacity) {
       // The slot is too small. If the game finds this line through a pointer,
       // the line can go somewhere roomier and the pointer can follow it.
-      const at = looksRelocatable(s) ? pointers?.to(s.offset) ?? [] : [];
+      // A dialogue line may grow to whatever the caller allowed; a short one
+      // only to the floor measured in the emulator, because past that the
+      // buffer the game copies it into is the thing that gives way.
+      const roomy = looksRelocatable(s);
+      const allowed = roomy ? Number.POSITIVE_INFINITY : pkmLineLimit(s) + 1;
+      const movable = !s.table && needed <= allowed;
+      const at = movable ? pointers?.to(s.offset) ?? [] : [];
       const to = at.length > 0 ? free?.take(needed) ?? null : null;
       if (to === null) {
         tooLong.push({ offset: s.offset, needed, capacity: s.capacity, text: value });

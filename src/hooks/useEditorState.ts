@@ -748,7 +748,7 @@ export function useEditorState() {
       const key = `${e.msbtFile}:${e.index}`;
       const translation = state.translations[key] || '';
       const isTranslated = translation.trim() !== '';
-      const isTechnical = isTechnicalText(e.original);
+      const isTechnical = isTechnicalText(e.original, e.msbtFile);
       const matchSearch = !search ||
         e.original.toLowerCase().includes(search.toLowerCase()) ||
         e.label.includes(search) ||

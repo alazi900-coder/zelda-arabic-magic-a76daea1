@@ -102,7 +102,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
               {(() => {
                 const count = editor.paginatedEntries.filter(e => {
                   const key = `${e.msbtFile}:${e.index}`;
-                  return editor.state?.translations[key]?.trim() && !isTechnicalText(e.original);
+                  return editor.state?.translations[key]?.trim() && !isTechnicalText(e.original, e.msbtFile);
                 }).length;
                 return `سيتم استبدال ${count} ترجمة موجودة في هذه الصفحة بترجمات جديدة. يمكنك التراجع عن هذا الإجراء لاحقاً.`;
               })()}

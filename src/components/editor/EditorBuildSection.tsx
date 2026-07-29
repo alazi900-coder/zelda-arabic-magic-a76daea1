@@ -177,7 +177,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     try {
       const buf = await idbGet<ArrayBuffer>(PKM_BUFFER_KEY);
       if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة نصوص Pokémon");
-      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {});
+      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {}, { relocate: true });
       const { toast } = await import("@/hooks/use-toast");
       if ("error" in result) {
         toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
@@ -202,7 +202,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         description:
           `${result.translatedLines} سطر مترجم` +
           (result.fontApplied ? " | كُتب الخط العربي" : " | الخط العربي موجود مسبقاً") +
-          (over > 0 ? ` | ${over} سطراً أطول من مكانه — اختصرها` : "") +
+          (result.relocated > 0 ? ` | ${result.relocated} سطراً نُقل إلى مساحة فارغة وأُعيد توجيه اللعبة إليه` : "") +
+          (over > 0 ? ` | ${over} سطراً أطول من مكانه ولا مؤشّر له — اختصرها` : "") +
           (broken > 0 ? ` | ${broken} سطراً فُقدت منه قيمة تضعها اللعبة ({FD:xx}) — أصلحها بالفحص العميق` : "") +
           (result.unmapped.length > 0 ? ` | حروف بلا خانة: ${result.unmapped.join(" ")}` : ""),
         variant: over + broken > 0 ? "destructive" : undefined,

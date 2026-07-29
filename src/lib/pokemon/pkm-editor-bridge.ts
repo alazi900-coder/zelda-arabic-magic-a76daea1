@@ -12,8 +12,9 @@
  */
 
 import type { ExtractedEntry } from "@/components/editor/types";
-import { scanPkmStrings, applyPkmTranslations, type PkmString } from "./pkm-rom";
+import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, type PkmString } from "./pkm-rom";
 import { applyPkmArabicFont, hasPkmArabicFont } from "./pkm-font";
+import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
 export const PKM_BUFFER_KEY = "pokemonSourceBuffer";
@@ -37,16 +38,29 @@ export interface PkmExtractResult {
   textBytes: number;
 }
 
+/**
+ * How long a relocated line may be.
+ *
+ * Once a line lives in free space its length is bounded by what the engine
+ * will hold, not by the ROM, and that buffer's size was not measured — so this
+ * is a deliberate ceiling rather than a limit read off the game. 250 bytes is
+ * roughly five times the two-line box and far under any plausible buffer,
+ * which keeps a runaway translation from being the thing that breaks a save.
+ */
+export const PKM_RELOCATED_LIMIT = 250;
+
 export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
   const strings = scanPkmStrings(rom);
+  // A line the game reaches through a pointer can be moved somewhere roomier
+  // at build time, so its slot is not its limit. One that is found by index —
+  // every name in a fixed-stride list — keeps the slot it was born in.
+  const pointers = indexPkmPointers(rom);
   const entries: ExtractedEntry[] = strings.map((s) => ({
     msbtFile: pkmEntryFile(s.table?.kind),
     index: s.offset,
     label: preview(s.text),
     original: s.text,
-    // The line is written back where it was found, so its own space is the
-    // limit — one byte is kept for the terminator.
-    maxBytes: s.capacity - 1,
+    maxBytes: canRelocatePkmString(s, pointers) ? PKM_RELOCATED_LIMIT : s.capacity - 1,
   }));
   return { entries, strings, textBytes: strings.reduce((n, s) => n + s.capacity, 0) };
 }
@@ -87,6 +101,10 @@ export interface PkmBuildOk {
   rom: Uint8Array;
   translatedLines: number;
   tooLong: { offset: number; needed: number; capacity: number; text: string }[];
+  /** Lines moved into free space because they outgrew their slot. */
+  relocated: number;
+  /** Free bytes left in the ROM after the move. */
+  freeSpaceLeft: number;
   unmapped: string[];
   fontApplied: boolean;
 }
@@ -115,7 +133,8 @@ const PKM_KEY_RE = /^pkm_[a-z0-9]+:(\d+)$/;
  */
 export function buildPkmRom(
   rom: Uint8Array,
-  translations: Record<string, string>
+  translations: Record<string, string>,
+  options: { relocate?: boolean } = {}
 ): PkmBuildOk | PkmBuildError {
   if (!looksLikePkmRom(rom)) {
     return { error: "الملف لا يبدو روم GBA — تحقّق من أنك رفعت ملف ‎.gba‎ الصحيح" };
@@ -128,7 +147,7 @@ export function buildPkmRom(
     if (m) byOffset[m[1]] = value;
   }
 
-  const written = applyPkmTranslations(rom, strings, byOffset);
+  const written = applyPkmTranslations(rom, strings, byOffset, { relocate: options.relocate });
   if (written.written === 0 && written.tooLong.length === 0) {
     return { error: "لا توجد ترجمات محفوظة لبنائها" };
   }
@@ -147,6 +166,8 @@ export function buildPkmRom(
     rom: out,
     translatedLines: written.written,
     tooLong: written.tooLong,
+    relocated: written.relocated.length,
+    freeSpaceLeft: written.freeSpaceLeft,
     unmapped: written.unmapped,
     fontApplied,
   };

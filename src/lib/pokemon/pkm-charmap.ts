@@ -34,8 +34,28 @@ export const PKM_VARIABLE = 0xfd;
 
 /** First and last kana code Arabic is allowed to occupy. */
 export const PKM_FIRST_SLOT = 0x01;
-export const PKM_LAST_SLOT = 0x81;
-export const PKM_SLOT_COUNT = PKM_LAST_SLOT - PKM_FIRST_SLOT + 1; // 129
+export const PKM_LAST_SLOT = 0x82;
+
+/**
+ * The one code in that range the English build does prints: `é`.
+ *
+ * Measured, not assumed: the byte between "POK" and "MON" is 0x1B in 2017
+ * places in this ROM, and a sweep of every verified English string found no
+ * other code below 0x82 used inside a word. Taking it for Arabic put an Arabic
+ * letter in the middle of every POKéMON the game had not yet had translated.
+ */
+export const PKM_RESERVED_SLOT = 0x1b;
+
+/** Codes Arabic may occupy, in order — 0x01..0x82 with `é` left alone. */
+export function pkmArabicSlots(): number[] {
+  const out: number[] = [];
+  for (let b = PKM_FIRST_SLOT; b <= PKM_LAST_SLOT; b++) {
+    if (b !== PKM_RESERVED_SLOT) out.push(b);
+  }
+  return out;
+}
+
+export const PKM_SLOT_COUNT = pkmArabicSlots().length; // 129
 
 /** Latin, digits and punctuation, all confirmed against the shipped strings. */
 const LATIN_TO_BYTE = new Map<string, number>();
@@ -52,6 +72,7 @@ const BYTE_TO_LATIN = new Map<number, string>();
   add("!", 0xab);
   add("?", 0xac);
   add(".", 0xad);
+  add("é", PKM_RESERVED_SLOT);
   add("’", 0xb4);
   add("'", 0xb4);
   add(",", 0xb8);
@@ -73,12 +94,12 @@ function buildMap(): { toByte: Map<number, number>; toCodepoint: Map<number, num
   if (needed.length !== PKM_SLOT_COUNT) {
     throw new Error(`Arabic needs ${needed.length} slots but ${PKM_SLOT_COUNT} are free`);
   }
+  const slots = pkmArabicSlots();
   const toByte = new Map<number, number>();
   const toCodepoint = new Map<number, number>();
   needed.forEach((cp, i) => {
-    const byte = PKM_FIRST_SLOT + i;
-    toByte.set(cp, byte);
-    toCodepoint.set(byte, cp);
+    toByte.set(cp, slots[i]);
+    toCodepoint.set(slots[i], cp);
   });
   return { toByte, toCodepoint };
 }
@@ -101,9 +122,7 @@ export function pkmCodepointForByte(byte: number): number | null {
  * the font and the encoder cannot disagree about which slot holds which letter.
  */
 export function pkmFontSlots(): number[] {
-  const out: number[] = [];
-  for (let b = PKM_FIRST_SLOT; b <= PKM_LAST_SLOT; b++) out.push(MAP.toCodepoint.get(b)!);
-  return out;
+  return pkmArabicSlots().map((b) => MAP.toCodepoint.get(b)!);
 }
 
 /** Normalises what the shaper emits into what actually has a slot. */

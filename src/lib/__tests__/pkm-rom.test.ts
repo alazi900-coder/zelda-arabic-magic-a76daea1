@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { scanPkmStrings, applyPkmTranslations } from "@/lib/pokemon/pkm-rom";
-import { encodeArabicForPkm, decodePkmBytes, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
+import { encodeArabicForPkm, decodePkmBytes, pkmArabicSlots, pkmCodepointForByte, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
 import { categorizePkmLine, buildPkmCategories } from "@/lib/pokemon/pkm-categories";
 import { maskPkmTags, unmaskPkmTags, diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
 import { extractPkmEntries, restorePkmTranslations, buildPkmRom } from "@/lib/pokemon/pkm-editor-bridge";
@@ -181,6 +181,28 @@ describe("Pokémon Ruby Destiny categories", () => {
       { msbtFile: "pkm_species", original: "BULBASAUR" },
     ]);
     expect(cats.map((c) => c.id)).toEqual(["pkm-dialogue", "pkm-species", "pkm-items"]);
+  });
+});
+
+describe("the one code the English text still needs", () => {
+  it("keeps é out of the Arabic slots", () => {
+    // The byte between "POK" and "MON" is 0x1B in 2017 places in this ROM.
+    // Taking it for Arabic put an Arabic letter inside every POKéMON the
+    // translator had not reached yet.
+    expect(pkmArabicSlots()).not.toContain(0x1b);
+    expect(pkmArabicSlots()).toHaveLength(129);
+    expect(pkmCodepointForByte(0x1b)).toBeNull();
+  });
+
+  it("reads a line straight through é instead of cutting it there", () => {
+    const rom = Uint8Array.from([...gameBytes("Six "), 0xca, 0xc9, 0xc5, 0x1b, 0xc7, 0xc9, 0xc8, PKM_TERMINATOR]);
+    const found = scanPkmStrings(rom);
+    expect(found).toHaveLength(1);
+    expect(found[0].text).toBe("Six POKéMON");
+  });
+
+  it("writes é back as the byte the game draws it with", () => {
+    expect([...encodeArabicForPkm("é").bytes]).toEqual([0x1b]);
   });
 });
 

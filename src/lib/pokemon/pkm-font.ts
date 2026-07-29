@@ -20,7 +20,7 @@
  * ص first came out as a small circle.
  */
 
-import { PKM_FIRST_SLOT, PKM_SLOT_COUNT } from "./pkm-charmap";
+import { PKM_SLOT_COUNT, pkmArabicSlots } from "./pkm-charmap";
 
 /** Where the font starts in the ROM. */
 export const PKM_FONT_OFFSET = 0xea2c40;
@@ -50,22 +50,31 @@ export function applyPkmArabicFont(rom: Uint8Array): Uint8Array {
   if (glyphs.length !== expected) {
     throw new Error(`الخط العربي حجمه ${glyphs.length} بايت والمتوقّع ${expected}`);
   }
-  const at = PKM_FONT_OFFSET + PKM_FIRST_SLOT * PKM_GLYPH_BYTES;
-  if (at + glyphs.length > rom.length) {
+  const slots = pkmArabicSlots();
+  const last = PKM_FONT_OFFSET + (slots[slots.length - 1] + 1) * PKM_GLYPH_BYTES;
+  if (last > rom.length) {
     throw new Error("الملف أصغر من أن يحوي خط اللعبة — هل هذا روم Ruby Destiny؟");
   }
+  // Slot by slot rather than one block: the run has a hole in it at `é`, whose
+  // cell the game still draws inside every POKéMON it has not translated yet.
   const out = new Uint8Array(rom);
-  out.set(glyphs, at);
+  slots.forEach((slot, i) => {
+    out.set(glyphs.subarray(i * PKM_GLYPH_BYTES, (i + 1) * PKM_GLYPH_BYTES), PKM_FONT_OFFSET + slot * PKM_GLYPH_BYTES);
+  });
   return out;
 }
 
 /** True when a ROM already carries the Arabic glyphs. */
 export function hasPkmArabicFont(rom: Uint8Array): boolean {
   const glyphs = decodeGlyphs();
-  const at = PKM_FONT_OFFSET + PKM_FIRST_SLOT * PKM_GLYPH_BYTES;
-  if (at + glyphs.length > rom.length) return false;
-  for (let i = 0; i < glyphs.length; i++) {
-    if (rom[at + i] !== glyphs[i]) return false;
-  }
-  return true;
+  const slots = pkmArabicSlots();
+  const last = PKM_FONT_OFFSET + (slots[slots.length - 1] + 1) * PKM_GLYPH_BYTES;
+  if (last > rom.length) return false;
+  return slots.every((slot, i) => {
+    const at = PKM_FONT_OFFSET + slot * PKM_GLYPH_BYTES;
+    for (let k = 0; k < PKM_GLYPH_BYTES; k++) {
+      if (rom[at + k] !== glyphs[i * PKM_GLYPH_BYTES + k]) return false;
+    }
+    return true;
+  });
 }

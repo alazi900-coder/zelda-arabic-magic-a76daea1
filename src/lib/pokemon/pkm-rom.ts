@@ -9,15 +9,20 @@
  * stretches of 0x00 padding — 0x00 is the space, so padding reads as an
  * endless line of spaces otherwise.
  *
- * Everything is written back **in place**. Moving a line would mean finding and
- * fixing every pointer to it, and those pointers are formed in code, not stored
- * in a table we could rewrite; a translation that is one byte too long is
- * refused with its number rather than silently truncated or relocated.
+ * A line is written back **in place** by default, because the bytes after it
+ * belong to the next line. When that is too small for the translation and the
+ * game reaches the line through a pointer, the line is moved into the ROM's
+ * free space and every pointer to it is corrected — see pkm-pointers.ts, and
+ * the rules there about which four-byte matches are worth believing. What can
+ * be neither written nor moved is refused with its numbers rather than
+ * silently truncated.
  */
 
-import { decodePkmBytes, encodeArabicForPkm, PKM_TERMINATOR, PKM_VARIABLE } from "./pkm-charmap";
+import { decodePkmBytes, encodeArabicForPkm, PKM_RESERVED_SLOT, PKM_TERMINATOR, PKM_VARIABLE } from "./pkm-charmap";
 import { diffPkmTags } from "./pkm-tag-mask";
 import type { PkmListKind } from "./pkm-categories";
+import { indexPkmPointers, writePkmPointer, PkmFreeSpace, type PkmPointerIndex } from "./pkm-pointers";
+import { PKM_FONT_OFFSET, PKM_GLYPH_BYTES } from "./pkm-font";
 
 /** A line found in the ROM. `capacity` counts the terminator. */
 export interface PkmString {
@@ -49,6 +54,10 @@ function isTextByte(b: number): boolean {
   if (b >= 0xa1 && b <= 0xee) return true; // digits, punctuation, letters
   if (b === 0xfa || b === 0xfb || b === 0xfe) return true; // scroll, paragraph, newline
   if (b === PKM_VARIABLE) return true;
+  // `é`, and only that one: the game writes POKéMON 2017 times, and cutting
+  // the run there left the line recorded as "MON TRAINERS do when…", starting
+  // four characters after the pointer that reaches it.
+  if (b === PKM_RESERVED_SLOT) return true;
   return false;
 }
 
@@ -260,6 +269,52 @@ export interface PkmWriteResult {
   brokenTags: { offset: number; missing: string[]; extra: string[]; text: string }[];
   /** Characters with no slot in the font, for reporting. */
   unmapped: string[];
+  /** Lines that outgrew their slot and were moved into free space. */
+  relocated: { offset: number; to: number; pointers: number; unaligned: number }[];
+  /** Free bytes left after the build, for judging how much room remains. */
+  freeSpaceLeft: number;
+}
+
+export interface PkmWriteOptions {
+  /**
+   * Move a line that no longer fits into free space and repoint the game at
+   * it, instead of refusing it.
+   *
+   * Off by default: it rewrites bytes outside the line, and a four-byte value
+   * that only looks like a pointer would be rewritten with it.
+   */
+  relocate?: boolean;
+}
+
+/** The font's own cells, so a relocated line is never written over them. */
+function fontRegion() {
+  return [{ start: PKM_FONT_OFFSET, length: 0x83 * PKM_GLYPH_BYTES }];
+}
+
+/**
+ * The shortest slot a line may sit in and still be moved.
+ *
+ * Free ROM space lifts the limit the neighbouring bytes impose; it does not
+ * lift the one the engine imposes. A map name is copied into a small buffer in
+ * RAM, and "Sun Ford Town" — fourteen bytes of slot — was measured taking a
+ * 16-byte translation without complaint and crashing the game on a 21-byte
+ * one, wherever it was stored. Dialogue has no such ceiling: all 2674 dialogue
+ * lines in this ROM took a 180-byte translation at once and the game ran.
+ *
+ * What separates them is not readable from the bytes, so the proxy is size and
+ * shape: a line with a break in it, or a slot big enough that no label would
+ * need it, is speech. A short one keeps the room it was born with.
+ */
+const RELOCATABLE_MIN_CAPACITY = 40;
+
+/** True when this line may be moved out of its slot — see the constant above. */
+export function canRelocatePkmString(s: PkmString, pointers: PkmPointerIndex): boolean {
+  return looksRelocatable(s) && pointers.to(s.offset).length > 0;
+}
+
+function looksRelocatable(s: PkmString): boolean {
+  if (s.table) return false; // read by index, and always a name
+  return s.capacity >= RELOCATABLE_MIN_CAPACITY || /[\n]/.test(s.text);
 }
 
 /**
@@ -272,13 +327,25 @@ export interface PkmWriteResult {
 export function applyPkmTranslations(
   rom: Uint8Array,
   strings: PkmString[],
-  translations: Record<string, string>
+  translations: Record<string, string>,
+  options: PkmWriteOptions = {}
 ): PkmWriteResult {
   const out = new Uint8Array(rom);
   const tooLong: PkmWriteResult["tooLong"] = [];
   const brokenTags: PkmWriteResult["brokenTags"] = [];
+  const relocated: PkmWriteResult["relocated"] = [];
   const unmapped = new Set<string>();
   let written = 0;
+
+  // Both are built from the ROM as it came in, before a single byte is
+  // written, so an allocation can never land on a line this same build is
+  // still going to move.
+  let pointers: PkmPointerIndex | null = null;
+  let free: PkmFreeSpace | null = null;
+  if (options.relocate) {
+    pointers = indexPkmPointers(rom);
+    free = new PkmFreeSpace(rom, fontRegion());
+  }
 
   for (const s of strings) {
     const value = translations[String(s.offset)];
@@ -295,7 +362,21 @@ export function applyPkmTranslations(
     encoded.unmapped.forEach((c) => unmapped.add(c));
     const needed = encoded.bytes.length + 1; // + terminator
     if (needed > s.capacity) {
-      tooLong.push({ offset: s.offset, needed, capacity: s.capacity, text: value });
+      // The slot is too small. If the game finds this line through a pointer,
+      // the line can go somewhere roomier and the pointer can follow it.
+      const at = looksRelocatable(s) ? pointers?.to(s.offset) ?? [] : [];
+      const to = at.length > 0 ? free?.take(needed) ?? null : null;
+      if (to === null) {
+        tooLong.push({ offset: s.offset, needed, capacity: s.capacity, text: value });
+        continue;
+      }
+      out.set(encoded.bytes, to);
+      out[to + encoded.bytes.length] = PKM_TERMINATOR;
+      for (const p of at) writePkmPointer(out, p, to);
+      // The old bytes are left as they were: something else may still read
+      // them, and blanking them would be a guess about what does.
+      relocated.push({ offset: s.offset, to, pointers: at.length, unaligned: at.filter((p) => p % 4 !== 0).length });
+      written++;
       continue;
     }
     out.set(encoded.bytes, s.offset);
@@ -303,5 +384,13 @@ export function applyPkmTranslations(
     written++;
   }
 
-  return { rom: out, written, tooLong, brokenTags, unmapped: [...unmapped] };
+  return {
+    rom: out,
+    written,
+    tooLong,
+    brokenTags,
+    unmapped: [...unmapped],
+    relocated,
+    freeSpaceLeft: free?.remaining ?? 0,
+  };
 }

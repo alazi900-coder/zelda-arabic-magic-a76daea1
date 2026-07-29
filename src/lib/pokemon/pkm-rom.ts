@@ -18,7 +18,7 @@
  * silently truncated.
  */
 
-import { decodePkmBytes, encodeArabicForPkm, PKM_RESERVED_SLOT, PKM_TERMINATOR, PKM_VARIABLE } from "./pkm-charmap";
+import { decodePkmBytes, encodeArabicForPkm, pkmFormatLength, PKM_FORMAT, PKM_RESERVED_SLOTS, PKM_TERMINATOR, PKM_VARIABLE } from "./pkm-charmap";
 import { diffPkmTags } from "./pkm-tag-mask";
 import type { PkmListKind } from "./pkm-categories";
 import { indexPkmPointers, writePkmPointer, PkmFreeSpace, type PkmPointerIndex } from "./pkm-pointers";
@@ -55,11 +55,12 @@ function isTextByte(b: number): boolean {
   if (b === 0x00) return true; // space
   if (b >= 0xa1 && b <= 0xee) return true; // digits, punctuation, letters
   if (b === 0xfa || b === 0xfb || b === 0xfe) return true; // scroll, paragraph, newline
-  if (b === PKM_VARIABLE) return true;
-  // `é`, and only that one: the game writes POKéMON 2017 times, and cutting
-  // the run there left the line recorded as "MON TRAINERS do when…", starting
-  // four characters after the pointer that reaches it.
-  if (b === PKM_RESERVED_SLOT) return true;
+  if (b === PKM_VARIABLE || b === PKM_FORMAT) return true;
+  // The characters the game still prints from the low range: `é`, and the four
+  // arrows. Cutting the run at them recorded a line starting in its own middle
+  // — "MON TRAINERS do when…", "HEAT PATH" — at an address nothing points to,
+  // so it could never be found again, moved, or grown.
+  if (PKM_RESERVED_SLOTS.includes(b)) return true;
   return false;
 }
 
@@ -89,6 +90,7 @@ export function scanPkmStrings(rom: Uint8Array, options: ScanOptions = {}): PkmS
       const b = rom[i];
       if (b >= LETTER_START && b <= LETTER_END) letters++;
       if (b === PKM_VARIABLE) i++; // its argument byte is not text
+      else if (b === PKM_FORMAT) i += pkmFormatLength(rom[i + 1] ?? 0) - 1;
       i++;
     }
     // 0x00 is the space, so the run swallows whatever padding precedes the

@@ -469,3 +469,48 @@ describe("a list of pointers is not a list read by index", () => {
     expect(pkmLineLimit(strings[0], pointers)).toBe(strings[0].capacity - 1);
   });
 });
+
+describe("the codes the scan used to stop at", () => {
+  it("keeps a line whole across the formatting code", () => {
+    // Thousands of lines open with `FC 01 0F` (set colour). The scan stopped
+    // there and recorded the line starting after it, at an address nothing
+    // points to — so it could never be found, moved, or grown.
+    const rom = Uint8Array.from([0xfc, 0x01, 0x0f, ...gameBytes("Hello there"), PKM_TERMINATOR]);
+    const found = scanPkmStrings(rom);
+    expect(found).toHaveLength(1);
+    expect(found[0].offset).toBe(0);
+    expect(found[0].text).toBe("{FC:01:0f}Hello there");
+  });
+
+  it("keeps a line whole across an arrow", () => {
+    // «Bug Forest⏎<79> Pass Path» is one string; cutting at the arrow made
+    // «Pass Path» a line of its own with no pointer and no room to grow.
+    const rom = Uint8Array.from([...gameBytes("Bug Forest"), 0xfe, 0x79, ...gameBytes(" Pass Path"), PKM_TERMINATOR]);
+    const found = scanPkmStrings(rom);
+    expect(found).toHaveLength(1);
+    expect(found[0].text).toContain("↑");
+  });
+
+  it("writes every one of them back byte for byte", () => {
+    for (const text of ["{FC:01:0f}Hello", "Bug Forest\n↑ Pass Path", "Hi{fb}Bye", "POKéMON"]) {
+      const bytes = encodeArabicForPkm(text).bytes;
+      expect(decodePkmBytes(bytes)).toBe(text);
+    }
+  });
+
+  it("keeps the paragraph code out of the plain line breaks", () => {
+    // `FB` waits for the player and clears the box; `FE` just breaks the line.
+    // Reading both as `\n` and writing `\n` back turned 2734 paragraph codes
+    // into plain breaks, and a message that used to page ran off the box.
+    expect(decodePkmBytes(Uint8Array.from([...gameBytes("Hi"), 0xfb, ...gameBytes("Bye")]))).toBe("Hi{fb}Bye");
+    expect(decodePkmBytes(Uint8Array.from([...gameBytes("Hi"), 0xfe, ...gameBytes("Bye")]))).toBe("Hi\nBye");
+    expect([...encodeArabicForPkm("Hi{fb}Bye").bytes]).toContain(0xfb);
+  });
+
+  it("leaves the arrows and é out of the Arabic slots", () => {
+    for (const reserved of [0x1b, 0x79, 0x7a, 0x7b, 0x7c]) {
+      expect(pkmArabicSlots()).not.toContain(reserved);
+    }
+    expect(pkmArabicSlots()).toHaveLength(129);
+  });
+});

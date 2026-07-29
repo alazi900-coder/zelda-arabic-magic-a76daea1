@@ -32,25 +32,65 @@ export const PKM_TERMINATOR = 0xff;
 /** 0xFD is followed by one byte naming the value to substitute. */
 export const PKM_VARIABLE = 0xfd;
 
+/**
+ * The formatting code, and how many bytes follow it.
+ *
+ * Thousands of lines open with it — «<fc><1><f>» sets the colour, «<fc><2>»
+ * the highlight — and the scan used to stop dead at 0xFC, so the line was
+ * recorded starting after the code, at an address no pointer names. Reading
+ * the code and its arguments keeps the line whole and keeps its address.
+ *
+ * The lengths are the engine's own (pokeemerald's `text.h`); anything not
+ * listed takes one argument, which is the common case.
+ */
+export const PKM_FORMAT = 0xfc;
+
+const PKM_FORMAT_ARGS: Record<number, number> = {
+  0x04: 3, // colour + highlight + shadow
+  0x07: 0, // reset size
+  0x09: 0, // wait for button
+  0x0a: 0, // wait for sound
+  0x0b: 2, // play music
+  0x0f: 0, // fill window
+  0x10: 2, // play sound effect
+  0x15: 0, // Japanese
+  0x16: 0, // Latin
+  0x17: 0, // pause music
+  0x18: 0, // resume music
+};
+
+/** Total length of a formatting code, the 0xFC byte included. */
+export function pkmFormatLength(kind: number): number {
+  return 2 + (PKM_FORMAT_ARGS[kind] ?? 1);
+}
+
 /** First and last kana code Arabic is allowed to occupy. */
 export const PKM_FIRST_SLOT = 0x01;
-export const PKM_LAST_SLOT = 0x82;
+export const PKM_LAST_SLOT = 0x86;
 
 /**
- * The one code in that range the English build does prints: `é`.
+ * Codes in that range the English build still prints, so Arabic may not have
+ * them.
  *
- * Measured, not assumed: the byte between "POK" and "MON" is 0x1B in 2017
- * places in this ROM, and a sweep of every verified English string found no
- * other code below 0x82 used inside a word. Taking it for Arabic put an Arabic
- * letter in the middle of every POKéMON the game had not yet had translated.
+ * Each was found by decoding text the ROM itself points at, not by guessing:
+ *
+ *   0x1B  `é`. The byte between "POK" and "MON" in 2017 places. Taking it put
+ *         an Arabic letter inside every POKéMON not yet translated.
+ *   0x79–0x7C  the four arrows. They sit inside real lines — «Bug Forest⏎
+ *         <79> Pass Path<fa><7b> Green Path» is one string, and cutting the
+ *         scan at them recorded «HEAT PATH» as a line of its own, at an
+ *         address nothing points to, so it could never be moved or grown.
  */
+export const PKM_RESERVED_SLOTS = [0x1b, 0x79, 0x7a, 0x7b, 0x7c];
+
+/** Kept for the older name; `é` is the one this file refers to by itself. */
 export const PKM_RESERVED_SLOT = 0x1b;
 
-/** Codes Arabic may occupy, in order — 0x01..0x82 with `é` left alone. */
+/** Codes Arabic may occupy, in order — the range minus what the game prints. */
 export function pkmArabicSlots(): number[] {
   const out: number[] = [];
   for (let b = PKM_FIRST_SLOT; b <= PKM_LAST_SLOT; b++) {
-    if (b !== PKM_RESERVED_SLOT) out.push(b);
+    if (!PKM_RESERVED_SLOTS.includes(b)) out.push(b);
   }
   return out;
 }
@@ -72,7 +112,11 @@ const BYTE_TO_LATIN = new Map<number, string>();
   add("!", 0xab);
   add("?", 0xac);
   add(".", 0xad);
-  add("é", PKM_RESERVED_SLOT);
+  add("é", 0x1b);
+  add("↑", 0x79);
+  add("↓", 0x7a);
+  add("←", 0x7b);
+  add("→", 0x7c);
   add("’", 0xb4);
   add("'", 0xb4);
   add(",", 0xb8);
@@ -150,7 +194,7 @@ export interface PkmEncodeResult {
 }
 
 /** `{FD:01}` — a value the game substitutes — and `{7f}` — a byte we cannot name. */
-const TOKEN_RE = /\{(FD:([0-9a-fA-F]{2})|([0-9a-fA-F]{2}))\}/g;
+const TOKEN_RE = /\{(?:FD:([0-9a-fA-F]{2})|FC:((?:[0-9a-fA-F]{2})(?::[0-9a-fA-F]{2})*)|([0-9a-fA-F]{2}))\}/g;
 /** Private-use characters that stand in for a token while the line is shaped. */
 const TOKEN_BASE = 0xe200;
 const TOKEN_LIMIT = 64;
@@ -166,9 +210,11 @@ const TOKEN_LIMIT = 64;
  */
 function liftTokens(line: string): { text: string; tokens: number[][] } {
   const tokens: number[][] = [];
-  const text = line.replace(TOKEN_RE, (whole, _all, variable?: string, raw?: string) => {
+  const text = line.replace(TOKEN_RE, (whole, variable?: string, format?: string, raw?: string) => {
     if (tokens.length >= TOKEN_LIMIT) return whole;
-    tokens.push(variable ? [PKM_VARIABLE, parseInt(variable, 16)] : [parseInt(raw!, 16)]);
+    if (variable) tokens.push([PKM_VARIABLE, parseInt(variable, 16)]);
+    else if (format) tokens.push([PKM_FORMAT, ...format.split(":").map((h) => parseInt(h, 16))]);
+    else tokens.push([parseInt(raw!, 16)]);
     return String.fromCharCode(TOKEN_BASE + tokens.length - 1);
   });
   return { text, tokens };
@@ -222,14 +268,33 @@ export function decodePkmBytes(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i];
     if (b === PKM_TERMINATOR) break;
-    if (b === PKM_NEWLINE || b === PKM_PARAGRAPH || b === PKM_SCROLL) {
+    if (b === PKM_NEWLINE) {
       out += "\n";
+      continue;
+    }
+    // The paragraph and scroll codes are not line breaks: one waits for the
+    // player and clears the box, the other waits and scrolls it. Rendering
+    // both as `\n` and writing `\n` back turned every one of them into a
+    // plain break — 2734 lines in this ROM — so a message that used to page
+    // properly would run off the two-line box instead.
+    if (b === PKM_PARAGRAPH || b === PKM_SCROLL) {
+      out += `{${b.toString(16)}}`;
       continue;
     }
     if (b === PKM_VARIABLE) {
       const arg = bytes[i + 1];
       out += `{FD:${(arg ?? 0).toString(16).padStart(2, "0")}}`;
       i++;
+      continue;
+    }
+    if (b === PKM_FORMAT) {
+      const len = pkmFormatLength(bytes[i + 1] ?? 0);
+      const parts: string[] = [];
+      for (let k = 1; k < len && i + k < bytes.length; k++) {
+        parts.push(bytes[i + k].toString(16).padStart(2, "0"));
+      }
+      out += `{FC:${parts.join(":")}}`;
+      i += len - 1;
       continue;
     }
     const cp = MAP.toCodepoint.get(b);

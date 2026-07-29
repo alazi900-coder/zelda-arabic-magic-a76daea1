@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Clock, AlertTriangle, BookOpen, BarChart3, TrendingUp, Zap } from "lucide-react";
 import type { EditorState, ExtractedEntry } from "./types";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import { hasTechnicalTags, isTechnicalText, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "./types";
 
 export interface QualityStats {
@@ -70,7 +71,7 @@ export function computeConfidence(entry: ExtractedEntry, translation: string, gl
 
   // Byte overflow penalty
   if (entry.maxBytes > 0) {
-    const bytes = new TextEncoder().encode(translation).length;
+    const bytes = measureEntryBytes(entry.msbtFile, translation);
     if (bytes > entry.maxBytes) score -= 20;
   }
 

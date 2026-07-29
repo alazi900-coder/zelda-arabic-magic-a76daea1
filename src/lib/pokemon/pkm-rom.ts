@@ -107,7 +107,31 @@ export function scanPkmStrings(rom: Uint8Array, options: ScanOptions = {}): PkmS
     i++;
   }
   markTables(out);
+  growTableCapacities(out);
   return out;
+}
+
+/**
+ * Gives a list entry the whole slot it sits in.
+ *
+ * A line's capacity is otherwise measured from the line itself — "Bulbasaur"
+ * plus its terminator, ten bytes — because that is all a free-standing line
+ * can be sure of. But an entry in a fixed-stride array owns its slot: the next
+ * entry begins exactly `stride` bytes later, and everything in between is that
+ * entry's own padding. In this ROM the species slots are eleven bytes, so the
+ * measured-from-the-word limit was costing every name a byte it already had.
+ *
+ * The last entry of a run is left alone: nothing says where it ends, since
+ * there is no following entry to measure against.
+ */
+function growTableCapacities(strings: PkmString[]): void {
+  for (let i = 0; i < strings.length - 1; i++) {
+    const s = strings[i];
+    const next = strings[i + 1];
+    if (!s.table || next.table !== s.table) continue;
+    const slot = next.offset - s.offset;
+    if (slot > s.capacity) s.capacity = slot;
+  }
 }
 
 /** Shortest run that counts as a list rather than a coincidence. */

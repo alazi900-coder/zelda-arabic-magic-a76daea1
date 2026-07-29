@@ -5,6 +5,7 @@ import { categorizePkmLine, buildPkmCategories } from "@/lib/pokemon/pkm-categor
 import { maskPkmTags, unmaskPkmTags, diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
 import { extractPkmEntries, restorePkmTranslations, buildPkmRom } from "@/lib/pokemon/pkm-editor-bridge";
 import { processArabicText } from "@/lib/arabic-processing";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 
 /** English text in the game's own character set, the way the ROM stores it. */
 function gameBytes(text: string): number[] {
@@ -180,6 +181,55 @@ describe("Pokémon Ruby Destiny categories", () => {
       { msbtFile: "pkm_species", original: "BULBASAUR" },
     ]);
     expect(cats.map((c) => c.id)).toEqual(["pkm-dialogue", "pkm-species", "pkm-items"]);
+  });
+});
+
+describe("how long a Pokémon translation is", () => {
+  it("counts the bytes the ROM stores, not UTF-8", () => {
+    // «بلباصور» is seven glyphs and seven bytes in the game. Measured in UTF-8
+    // it reads fourteen, which is how a name that fits with room to spare came
+    // to be reported as five bytes over its limit.
+    expect(measureEntryBytes("pkm_species", "بلباصور")).toBe(7);
+    expect(measureEntryBytes("pkm_species", "إيفي")).toBe(4);
+  });
+
+  it("counts a substituted value as the two bytes it is", () => {
+    expect(measureEntryBytes("pkm_rom", "{FD:01}")).toBe(2);
+  });
+
+  it("leaves every other game on UTF-8", () => {
+    expect(measureEntryBytes("common.msbt", "بلباصور")).toBe(14);
+    expect(measureEntryBytes(undefined, "abc")).toBe(3);
+  });
+});
+
+describe("how much room a Pokémon line has", () => {
+  it("gives a list entry the whole slot it sits in", () => {
+    // The name is measured from the word — "NAMEA" plus a terminator — but the
+    // slot is what the entry owns, and the next entry starts exactly a stride
+    // later. Anything less costs the translator bytes that are already theirs.
+    const stride = 12;
+    const rom = new Uint8Array(stride * 10).fill(PKM_TERMINATOR);
+    for (let i = 0; i < 10; i++) {
+      rom.set(gameBytes("NAME" + String.fromCharCode(65 + i)), i * stride);
+    }
+    const found = scanPkmStrings(rom);
+    expect(found[0].capacity).toBe(stride);
+    // The last entry has nothing after it to measure against, so it keeps what
+    // its own text proves.
+    expect(found[9].capacity).toBe("NAMEJ".length + 1);
+  });
+
+  it("still refuses a line that will not fit its slot", () => {
+    const stride = 12;
+    const rom = new Uint8Array(stride * 10).fill(PKM_TERMINATOR);
+    for (let i = 0; i < 10; i++) {
+      rom.set(gameBytes("NAME" + String.fromCharCode(65 + i)), i * stride);
+    }
+    const strings = scanPkmStrings(rom);
+    const result = applyPkmTranslations(rom, strings, { "0": "اثنا عشر حرفا" });
+    expect(result.written).toBe(0);
+    expect(result.tooLong[0].capacity).toBe(stride);
   });
 });
 

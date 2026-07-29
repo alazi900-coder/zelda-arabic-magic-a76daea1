@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { ExtractedEntry, displayOriginal, PAGE_SIZE } from "./types";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import PaginationControls from "./PaginationControls";
 
 interface DiffViewProps {
@@ -73,7 +74,7 @@ const DiffView: React.FC<DiffViewProps> = ({ entries, translations, onClose }) =
         {paginatedEntries.map((entry) => {
           const key = `${entry.msbtFile}:${entry.index}`;
           const translation = translations[key] || "";
-          const byteUsed = translation ? new Blob([translation], { type: 'text/plain;charset=utf-16le' }).size : 0;
+          const byteUsed = translation ? measureEntryBytes(entry.msbtFile, translation) : 0;
           const ratio = entry.maxBytes > 0 ? byteUsed / entry.maxBytes : 0;
 
           return (

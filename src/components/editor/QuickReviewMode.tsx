@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Eye, AlertTriangle, ChevronRight, Check, X, Table2, Columns3 } from "lucide-react";
 import DebouncedInput from "./DebouncedInput";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import { ExtractedEntry, displayOriginal } from "./types";
 
 interface QuickReviewModeProps {
@@ -27,7 +28,7 @@ const QuickReviewMode: React.FC<QuickReviewModeProps> = ({
   const key = `${entry.msbtFile}:${entry.index}`;
   const translation = translations[key] || '';
   const hasProblem = qualityProblemKeys.has(key);
-  const byteUsed = entry.maxBytes > 0 ? new TextEncoder().encode(translation).length : 0;
+  const byteUsed = entry.maxBytes > 0 ? measureEntryBytes(entry.msbtFile, translation) : 0;
 
   return (
     <Card className="mb-6 border-primary/30">

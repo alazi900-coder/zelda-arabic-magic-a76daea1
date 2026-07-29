@@ -18,6 +18,7 @@ import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -169,7 +170,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
 
   // 3. Byte overflow
   if (entry.maxBytes > 0) {
-    const byteLen = encoder.encode(trimmed).length;
+    const byteLen = measureEntryBytes(entry.msbtFile, trimmed);
     if (byteLen > entry.maxBytes) {
       issues.push({ ...base, severity: "critical", category: "byte_overflow",
         message: `${byteLen} بايت من حد أقصى ${entry.maxBytes} (تجاوز ${byteLen - entry.maxBytes})` });
@@ -265,8 +266,11 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   }
 
   // 14. Byte budget
-  const origBytes = encoder.encode(entry.original).length;
-  const transBytes = encoder.encode(trimmed).length;
+  // Measured in the game's own encoding, like the hard limit above: comparing
+  // an Arabic translation to an English original in UTF-8 doubles one side and
+  // not the other, so a line that fits reads as twice its budget.
+  const origBytes = measureEntryBytes(entry.msbtFile, entry.original);
+  const transBytes = measureEntryBytes(entry.msbtFile, trimmed);
   if (origBytes > 10 && transBytes > origBytes * 2) {
     const pct = Math.round((transBytes / origBytes) * 100);
     issues.push({ ...base, severity: "warning", category: "byte_budget",

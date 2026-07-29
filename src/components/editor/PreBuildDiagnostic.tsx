@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import {
   Dialog,
   DialogContent,
@@ -95,7 +96,7 @@ const PreBuildDiagnostic = ({ open, onOpenChange, state, onProceedToBuild }: Pre
       const key = `${entry.msbtFile}:${entry.index}`;
       const trans = state.translations[key];
       if (!trans?.trim()) continue;
-      const byteLen = new TextEncoder().encode(trans).length;
+      const byteLen = measureEntryBytes(entry.msbtFile, trans);
       if (byteLen > entry.maxBytes) overflowCount++;
     }
     results[3] = overflowCount === 0

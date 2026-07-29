@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered, Shield, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
@@ -848,7 +849,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
           )}
           {/* Byte usage progress bar — uses UTF-8 to match max_utf8_bytes from parser/inspector */}
           {entry.maxBytes > 0 && translation && (() => {
-            const byteUsed = new TextEncoder().encode(translation).length;
+            const byteUsed = measureEntryBytes(entry.msbtFile, translation);
             const ratio = byteUsed / entry.maxBytes;
             const pct = Math.round(ratio * 100);
             const barWidth = Math.min(ratio * 100, 100);

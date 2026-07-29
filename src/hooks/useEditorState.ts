@@ -34,6 +34,7 @@ import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix, type RisenSectionFilt
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
 
@@ -660,7 +661,7 @@ export function useEditorState() {
       const key = `${e.msbtFile}:${e.index}`;
       const translation = state.translations[key] || '';
       if (!translation.trim()) continue;
-      const byteUsed = new TextEncoder().encode(translation).length;
+      const byteUsed = measureEntryBytes(e.msbtFile, translation);
       if (byteUsed > e.maxBytes) count++;
     }
     return count;
@@ -783,7 +784,7 @@ export function useEditorState() {
         (filterStatus === "damaged-tags" && qualityStats.damagedTagKeys.has(key)) ||
         (filterStatus === "missing-tags" && qualityStats.missingTagKeys.has(key)) ||
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
-        (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && new TextEncoder().encode(translation).length > e.maxBytes) ||
+        (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && measureEntryBytes(e.msbtFile, translation) > e.maxBytes) ||
         (filterStatus === "has-newlines" && e.original.includes('\n')) ||
         // ترجمات تحوي حرف \n (literal newline). يفحص الترجمة فقط،
         // لا يتفاعل مع [XENO:n] (8 أحرف ASCII). يعرض أي ترجمة فيها السهم ↵.

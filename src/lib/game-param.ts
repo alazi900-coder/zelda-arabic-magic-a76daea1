@@ -7,9 +7,12 @@
  *   - `*.tab`                   → Risen     (variant chosen by the session: risen1 | risen2)
  *   - `TEXT_*`                  → Metroid Prime Remastered (mp-editor-bridge keys entries this way)
  *   - `wolf_b<N>_s<M>`          → Wolfenstein RPG (wolf-editor-bridge keys entries this way)
- *   - `pkm_rom`                 → Pokémon Ruby Destiny (pkm-editor-bridge keys every line this way)
+ *   - `pkm_rom` / `pkm_<kind>`  → Pokémon Ruby Destiny (pkm-editor-bridge keys lines this way;
+ *                                 the `<kind>` form marks which name list a line sits in)
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
+import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+
 export type GameParam =
   | "xenoblade"
   | "risen1"
@@ -28,6 +31,6 @@ export function resolveGameParam(
   if (/\.tab$/i.test(f)) return risenVariant;
   if (/^TEXT_/.test(f)) return "metroidprime";
   if (/^wolf_b\d+_s\d+$/.test(f)) return "wolfenstein";
-  if (f === "pkm_rom") return "pokemon";
+  if (PKM_FILE_RE.test(f)) return "pokemon";
   return "xenoblade";
 }

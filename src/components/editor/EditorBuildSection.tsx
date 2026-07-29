@@ -194,14 +194,18 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       // written where it was found, so a silent truncation would cut a
       // sentence in half inside the game with nothing to show for it.
       const over = result.tooLong.length;
+      // A line whose `{FD:01}` went missing is refused, not written: the name
+      // would simply be absent in game and nothing on screen would say why.
+      const broken = result.brokenTags.length;
       toast({
-        title: over > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : "✅ تم بناء روم معرّب",
+        title: over + broken > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : "✅ تم بناء روم معرّب",
         description:
           `${result.translatedLines} سطر مترجم` +
           (result.fontApplied ? " | كُتب الخط العربي" : " | الخط العربي موجود مسبقاً") +
-          (over > 0 ? ` | ${over} سطراً أطول من مكانه ولم يُكتب — اختصرها` : "") +
+          (over > 0 ? ` | ${over} سطراً أطول من مكانه — اختصرها` : "") +
+          (broken > 0 ? ` | ${broken} سطراً فُقدت منه قيمة تضعها اللعبة ({FD:xx}) — أصلحها بالفحص العميق` : "") +
           (result.unmapped.length > 0 ? ` | حروف بلا خانة: ${result.unmapped.join(" ")}` : ""),
-        variant: over > 0 ? "destructive" : undefined,
+        variant: over + broken > 0 ? "destructive" : undefined,
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");

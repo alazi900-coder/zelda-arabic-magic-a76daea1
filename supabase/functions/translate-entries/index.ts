@@ -207,6 +207,10 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
 6. Metroid proper nouns (Samus Aran → ساموس آران, Chozo → تشوزو, Space Pirates → قراصنة الفضاء, Metroids → ميترويدات, Phazon → فيزون, Tallon IV → تالون 4, Galactic Federation → الاتحاد المجرّي, Varia Suit → بدلة فاريا, Morph Ball → كرة التحول, Scan Visor → ماسح الرؤية, Ice/Wave/Plasma/Power Beam → شعاع جليدي/موجي/بلازما/الطاقة, Missile → صاروخ, Grapple Beam → شعاع الخطاف). NEVER substitute names from other games (Monado/Ether/PSI have NO meaning here). Tone is terse and technical — HUD/pickup names stay very short; Scan Visor entries mimic a research/military log; do NOT add literary flourish absent from the English source.`;
 
+// Pokémon's substituted values need no masking of their own: protectTags
+// already shields `{TAG:Value}` and `{variable}`, and `{FD:01}` and `{7f}`
+// match both, so the model never sees them. The prompt still names them
+// because a model that infers one from context could otherwise invent one.
 const POKEMON_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Ruby Destiny: Reign of Legends — a fan-made ROM hack of Pokémon Ruby (Game Boy Advance). It keeps Pokémon's world and vocabulary: trainers, Gyms, badges, Poké Balls, Pokémon Centers, moves, types and items, in a story about the legendary Pokémon and the orbs that control them. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime and NOT Wolfenstein — never import their terminology, characters, or lore.
 
 Voice: everyday, warm and plain. The audience is young. Sentences are short. Avoid literary or archaic Arabic; write the way a friendly person actually speaks.

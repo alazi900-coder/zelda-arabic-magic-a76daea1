@@ -14,10 +14,11 @@
 import type { ExtractedEntry } from "@/components/editor/types";
 import { scanPkmStrings, applyPkmTranslations, type PkmString } from "./pkm-rom";
 import { applyPkmArabicFont, hasPkmArabicFont } from "./pkm-font";
+import { pkmEntryFile } from "./pkm-categories";
 
 export const PKM_BUFFER_KEY = "pokemonSourceBuffer";
 export const PKM_SOURCE_GAME = "pokemon";
-export const PKM_ENTRY_FILE = "pkm_rom";
+export { PKM_ENTRY_FILE, pkmEntryFile } from "./pkm-categories";
 
 /** A ROM byte holds a line only if the file is a 16 MB GBA image. */
 export function looksLikePkmRom(rom: Uint8Array): boolean {
@@ -39,7 +40,7 @@ export interface PkmExtractResult {
 export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
   const strings = scanPkmStrings(rom);
   const entries: ExtractedEntry[] = strings.map((s) => ({
-    msbtFile: PKM_ENTRY_FILE,
+    msbtFile: pkmEntryFile(s.table?.kind),
     index: s.offset,
     label: preview(s.text),
     original: s.text,
@@ -62,7 +63,7 @@ export interface PkmBuildError {
 }
 
 /**
- * Rebuilds a translated ROM. `translations` is keyed `pkm_rom:<offset>`.
+ * Rebuilds a translated ROM. `translations` is keyed `<entry file>:<offset>`.
  *
  * The Arabic font is written unless the ROM already carries it, because a ROM
  * with Arabic bytes and the original Latin glyphs prints nothing readable —
@@ -79,7 +80,7 @@ export function buildPkmRom(
   const { strings } = extractPkmEntries(rom);
   const byOffset: Record<string, string> = {};
   for (const [key, value] of Object.entries(translations)) {
-    const m = /^pkm_rom:(\d+)$/.exec(key);
+    const m = /^pkm_(?:rom|species|moves|items|people|list):(\d+)$/.exec(key);
     if (m) byOffset[m[1]] = value;
   }
 

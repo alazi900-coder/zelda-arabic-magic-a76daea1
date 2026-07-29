@@ -16,6 +16,8 @@
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
+import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
+import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -81,6 +83,7 @@ const SPECIFIC_TECHNICAL_ISSUE_CATEGORIES = new Set([
   "placeholder_mismatch",
   "corrupted_vars",
   "missing_vars",
+  "pkm_var_mismatch",
 ]);
 
 type TechnicalTagKind = "bracket" | "brace";
@@ -308,7 +311,27 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     }
   }
 
-  // 18. Technical multiset mismatch
+  // 18. Pokémon substituted values
+  //
+  // The generic technical check below would catch a missing `{FD:01}` too, but
+  // it would call it "a technical token" and leave the translator to work out
+  // what that costs. It costs a character their name in every line that
+  // greeted them by it, so it is worth naming.
+  if (PKM_FILE_RE.test(entry.msbtFile)) {
+    const pkmDiff = diffPkmTags(entry.original, trimmed);
+    if (pkmDiff.missing.length > 0 || pkmDiff.extra.length > 0) {
+      const parts: string[] = [];
+      if (pkmDiff.missing.length > 0) parts.push(`مفقود: ${pkmDiff.missing.join("، ")}`);
+      if (pkmDiff.extra.length > 0) parts.push(`زائد أو مختلف: ${pkmDiff.extra.join("، ")}`);
+      issues.push({ ...base, severity: "critical", category: "pkm_var_mismatch",
+        message: `${parts.join(" — ")} — قيمة تضعها اللعبة (اسم اللاعب مثلاً)، حذفها يُفقد الشخصية اسمها` });
+    } else if (!pkmDiff.sameOrder) {
+      issues.push({ ...base, severity: "critical", category: "pkm_var_mismatch",
+        message: "ترتيب القيم التي تضعها اللعبة مختلف عن الأصل — سيظهر كل اسم في موضع الآخر" });
+    }
+  }
+
+  // 19. Technical multiset mismatch
   const technicalDiff = diffTechnicalTags(entry.original, trimmed);
   const hasSpecificTechnicalIssue = issues.some(issue => SPECIFIC_TECHNICAL_ISSUE_CATEGORIES.has(issue.category));
   if (!technicalDiff.exactTagMatch && !hasSpecificTechnicalIssue) {

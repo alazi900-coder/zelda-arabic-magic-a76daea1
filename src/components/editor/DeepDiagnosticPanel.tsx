@@ -91,6 +91,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "under_split", label: "أسطر ناقصة (تحتاج تقسيم)", icon: "✂️", severity: "warning", description: "الأصل متعدد الأسطر لكن الترجمة جُمعت في سطر/أسطر أقل — يتم تقسيمها تلقائياً مع احترام [XENO:n ]" },
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
+  { id: "pkm_var_mismatch", label: "قيم بوكيمون المفقودة", icon: "🚫", severity: "critical", description: "رمز مثل {FD:01} حُذف أو تغيّر أو انتقل — تفقد الشخصية اسمها في كل سطر يناديها به" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
   { id: "missing_rlm_isolation", label: "وسوم بدون عزل اتجاهي", icon: "🧭", severity: "warning", description: "وسوم تقنية ([XENO]/[System]/[ML]/[Event]/{var}/$N) غير محاطة بعلامة RLM — يخلط محرك اللعبة ترتيب الكلمات حولها" },
@@ -139,7 +140,7 @@ const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", 
 // Categories fixable by repairing $N variables
 const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
-const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars", "technical_mismatch", "format_specifier_mismatch", "format_specifier_reordered"]);
+const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars", "pkm_var_mismatch", "technical_mismatch", "format_specifier_mismatch", "format_specifier_reordered"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]

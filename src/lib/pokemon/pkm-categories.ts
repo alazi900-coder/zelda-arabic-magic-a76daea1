@@ -1,20 +1,45 @@
 /**
  * Grouping Pokémon Ruby Destiny's lines for the editor.
  *
- * The ROM names nothing: lines are found by reading the bytes, so there is no
- * table that says "these are the item names". Rather than invent labels that
- * might be wrong, the grouping uses only what each line demonstrably is:
+ * The ROM names nothing, so the first version sorted lines by what the text
+ * looked like — length, punctuation. That is guesswork: "POTION" and "SNOW
+ * SOFT" read exactly alike, and a translator filtering to "names" got a mix.
  *
- *   حوار      it breaks a line, substitutes a value, or ends in sentence
- *             punctuation — all things only spoken text does here;
- *   أسماء     short, no punctuation, no spaces: the shape of an item, move or
- *             place name;
- *   واجهة     everything else — menu labels, prompts, short notices.
+ * The real signal is in the file. Gen 3 keeps its lists — species, moves,
+ * items, trainers — in arrays of equal-sized slots, so those lines sit an exact
+ * distance apart, while dialogue is packed end to end at whatever length each
+ * line happens to be. pkm-rom.ts measures that spacing, then names each list by
+ * the entries at its head: a list holding Bulbasaur and Charmander is the
+ * species list, whatever else is in it. This file only reads the result.
  *
- * A translator working a category therefore knows what the rows have in common,
- * which is the point of the grouping, without being told a provenance nobody
- * measured.
+ * Lists nothing recognised — the hack's own trainer names, its decorations —
+ * keep the kind `list`, and only those fall back to reading the text. That
+ * fallback is a guess and is used nowhere else.
  */
+
+/** What a fixed-stride list turned out to hold. `list` = measured, unnamed. */
+export type PkmListKind = "species" | "moves" | "items" | "people" | "list";
+
+/** `pkm_rom` for a free-standing line, `pkm_<kind>` for a list entry. */
+export const PKM_FILE_RE = /^pkm_(?:rom|species|moves|items|people|list)$/;
+
+export const PKM_ENTRY_FILE = "pkm_rom";
+
+/**
+ * The entry's file name carries the one thing the editor cannot re-derive.
+ *
+ * Which list a line belongs to is measured while scanning the ROM. The editor
+ * stores entries and reloads them later, so the fact has to travel inside a
+ * field that survives the round trip.
+ */
+export function pkmEntryFile(kind?: PkmListKind): string {
+  return kind ? `pkm_${kind}` : PKM_ENTRY_FILE;
+}
+
+export function pkmKindOf(msbtFile: string): PkmListKind | null {
+  const m = /^pkm_(species|moves|items|people|list)$/.exec(msbtFile);
+  return m ? (m[1] as PkmListKind) : null;
+}
 
 export interface PkmCategory {
   id: string;
@@ -23,33 +48,53 @@ export interface PkmCategory {
 }
 
 interface PkmCategoryEntry {
+  msbtFile: string;
   original: string;
 }
 
 const CATEGORIES: Record<string, PkmCategory> = {
   "pkm-dialogue": { id: "pkm-dialogue", label: "حوار", emoji: "💬" },
-  "pkm-names": { id: "pkm-names", label: "أسماء وأغراض", emoji: "🏷️" },
-  "pkm-ui": { id: "pkm-ui", label: "واجهة وقوائم", emoji: "🖥️" },
+  "pkm-species": { id: "pkm-species", label: "أسماء بوكيمون", emoji: "🐾" },
+  "pkm-items": { id: "pkm-items", label: "أغراض وأدوات", emoji: "🎒" },
+  "pkm-moves": { id: "pkm-moves", label: "مهارات وقدرات", emoji: "⚔️" },
+  "pkm-places": { id: "pkm-places", label: "أماكن وشخصيات", emoji: "📍" },
+  "pkm-ui": { id: "pkm-ui", label: "قوائم وأزرار", emoji: "🖥️" },
+};
+
+/** Fixed display order, so the filter cards never shuffle between loads. */
+const ORDER = ["pkm-dialogue", "pkm-species", "pkm-items", "pkm-moves", "pkm-places", "pkm-ui"];
+
+const KIND_CATEGORY: Record<Exclude<PkmListKind, "list">, string> = {
+  species: "pkm-species",
+  items: "pkm-items",
+  moves: "pkm-moves",
+  people: "pkm-places",
 };
 
 const SENTENCE_END = /[.!?…]\s*$/;
+const HAS_TAG = /\{[0-9a-fA-F]{2}\}|\{FD:[0-9a-fA-F]{2}\}/;
 
-export function categorizePkmText(text: string): PkmCategory {
-  if (text.includes("\n") || text.includes("{FD:") || SENTENCE_END.test(text)) {
+export function categorizePkmLine(text: string, kind: PkmListKind | null): PkmCategory {
+  // A named list decides on its own. It is a fact about the file, so it beats
+  // anything the text might suggest — "Exp. Share" ends like a sentence and is
+  // still an item.
+  if (kind && kind !== "list") return CATEGORIES[KIND_CATEGORY[kind]];
+  // Everything else: a line that breaks, carries a substituted value or closes
+  // a sentence is speech; a short single word is a place or a person; the rest
+  // is what the interface says.
+  if (text.includes("\n") || HAS_TAG.test(text) || SENTENCE_END.test(text)) {
     return CATEGORIES["pkm-dialogue"];
   }
-  if (text.length <= 14 && !/\s/.test(text)) {
-    return CATEGORIES["pkm-names"];
-  }
+  if (text.length <= 14 && !/\s/.test(text)) return CATEGORIES["pkm-places"];
   return CATEGORIES["pkm-ui"];
 }
 
 export function categorizePkmEntry(entry: PkmCategoryEntry): string {
-  return categorizePkmText(entry.original).id;
+  return categorizePkmLine(entry.original, pkmKindOf(entry.msbtFile)).id;
 }
 
 /** The categories actually present in the loaded entries, in a fixed order. */
 export function buildPkmCategories(entries: PkmCategoryEntry[]): PkmCategory[] {
-  const present = new Set(entries.map((e) => categorizePkmText(e.original).id));
-  return Object.values(CATEGORIES).filter((c) => present.has(c.id));
+  const present = new Set(entries.map((e) => categorizePkmEntry(e)));
+  return ORDER.filter((id) => present.has(id)).map((id) => CATEGORIES[id]);
 }

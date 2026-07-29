@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { scanPkmStrings, applyPkmTranslations } from "@/lib/pokemon/pkm-rom";
 import { encodeArabicForPkm, decodePkmBytes, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
-import { categorizePkmText, buildPkmCategories } from "@/lib/pokemon/pkm-categories";
+import { categorizePkmLine, buildPkmCategories } from "@/lib/pokemon/pkm-categories";
+import { maskPkmTags, unmaskPkmTags, diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
 import { extractPkmEntries } from "@/lib/pokemon/pkm-editor-bridge";
 import { processArabicText } from "@/lib/arabic-processing";
 
@@ -145,16 +146,126 @@ describe("Pokémon Ruby Destiny encoding", () => {
 
 describe("Pokémon Ruby Destiny categories", () => {
   it("calls a line with a substituted value dialogue", () => {
-    expect(categorizePkmText("Hi {FD:01}").id).toBe("pkm-dialogue");
+    expect(categorizePkmLine("Hi {FD:01}", null).id).toBe("pkm-dialogue");
   });
 
-  it("calls a short single word a name", () => {
-    expect(categorizePkmText("POTION").id).toBe("pkm-names");
+  it("files a line by the list it was measured into, not by how it reads", () => {
+    // The text alone cannot do this — "POTION" and "TACKLE" read the same.
+    // What separates them is which array the line sits in, recognised while
+    // scanning the ROM and carried here.
+    expect(categorizePkmLine("POTION", "items").id).toBe("pkm-items");
+    expect(categorizePkmLine("TACKLE", "moves").id).toBe("pkm-moves");
+    expect(categorizePkmLine("BULBASAUR", "species").id).toBe("pkm-species");
+    expect(categorizePkmLine("Youngster", "people").id).toBe("pkm-places");
   });
 
-  it("lists only the categories actually present", () => {
-    const cats = buildPkmCategories([{ original: "POTION" }, { original: "Wait." }]);
-    expect(cats.map((c) => c.id)).toEqual(["pkm-dialogue", "pkm-names"]);
+  it("keeps an item in its list even when it ends like a sentence", () => {
+    // "Exp. Share" is an item name; the sentence test would call it speech.
+    expect(categorizePkmLine("Exp. Share", "items").id).toBe("pkm-items");
+  });
+
+  it("calls a short free-standing name a place", () => {
+    expect(categorizePkmLine("PETALBURG", null).id).toBe("pkm-places");
+  });
+
+  it("reads an unnamed list entry the only way left — by its text", () => {
+    expect(categorizePkmLine("ALVIN", "list").id).toBe("pkm-places");
+    expect(categorizePkmLine("1st round", "list").id).toBe("pkm-ui");
+  });
+
+  it("lists the categories present in a fixed order", () => {
+    const cats = buildPkmCategories([
+      { msbtFile: "pkm_items", original: "POTION" },
+      { msbtFile: "pkm_rom", original: "Wait." },
+      { msbtFile: "pkm_species", original: "BULBASAUR" },
+    ]);
+    expect(cats.map((c) => c.id)).toEqual(["pkm-dialogue", "pkm-species", "pkm-items"]);
+  });
+});
+
+describe("Pokémon Ruby Destiny technical codes", () => {
+  it("hides a substituted value from the model and puts it back", () => {
+    const { text, tags } = maskPkmTags("Hi {FD:01}, welcome");
+    expect(text).not.toContain("FD");
+    expect(unmaskPkmTags(text, tags)).toBe("Hi {FD:01}, welcome");
+  });
+
+  it("restores a code the model spaced out inside its placeholder", () => {
+    const { tags } = maskPkmTags("Hi {FD:01}");
+    expect(unmaskPkmTags("مرحبا 〖 0 〗", tags)).toBe("مرحبا {FD:01}");
+  });
+
+  it("reports a code the translation lost, and one it invented", () => {
+    expect(diffPkmTags("Hi {FD:01}", "مرحبا").missing).toEqual(["{FD:01}"]);
+    expect(diffPkmTags("Hi", "مرحبا {FD:02}").extra).toEqual(["{FD:02}"]);
+  });
+
+  it("reports two codes that came back swapped", () => {
+    const d = diffPkmTags("{FD:01} and {FD:02}", "{FD:02} و {FD:01}");
+    expect(d.missing).toEqual([]);
+    expect(d.extra).toEqual([]);
+    expect(d.sameOrder).toBe(false);
+  });
+
+  it("refuses to write a line whose substituted value went missing", () => {
+    // The name would simply not be there, in a place no test can see. The
+    // build says which line and what it lost instead of shipping it.
+    const rom = Uint8Array.from([...gameBytes("Hi "), 0xfd, 0x01, ...gameBytes(" there now"), PKM_TERMINATOR]);
+    const strings = scanPkmStrings(rom);
+    const result = applyPkmTranslations(rom, strings, { "0": "مرحبا" });
+    expect(result.written).toBe(0);
+    expect(result.brokenTags).toHaveLength(1);
+    expect(result.brokenTags[0].missing).toEqual(["{FD:01}"]);
+    expect(result.rom).toEqual(rom);
+  });
+});
+
+describe("Pokémon Ruby Destiny name lists", () => {
+  it("marks lines that sit an equal distance apart as one list", () => {
+    // Gen 3 pads each name into a slot of its own size, so consecutive
+    // entries are an exact stride apart; dialogue never is.
+    const stride = 12;
+    const rom = new Uint8Array(stride * 10).fill(PKM_TERMINATOR);
+    for (let i = 0; i < 10; i++) {
+      rom.set(gameBytes("NAME" + String.fromCharCode(65 + i)), i * stride);
+    }
+    const found = scanPkmStrings(rom);
+    expect(found).toHaveLength(10);
+    expect(found.every((s) => s.table?.stride === stride)).toBe(true);
+    expect(found[0].table?.count).toBe(10);
+    // Nothing in it is recognisable, so it stays a list and nothing more.
+    expect(found[0].table?.kind).toBe("list");
+  });
+
+  it("names a list by entries this engine cannot have renamed", () => {
+    // A hack rewrites most of the dex, but the first few species keep their
+    // names and their order — so the list can be recognised without reading
+    // any single line as if its wording proved something.
+    const names = ["Bulbasaur", "Ivysaur", "Venusaur", "Charmander", "Squirtle", "Caterpie", "Weedle", "Pidgey"];
+    const stride = 11;
+    const rom = new Uint8Array(stride * names.length).fill(PKM_TERMINATOR);
+    names.forEach((n, i) => rom.set(gameBytes(n), i * stride));
+    const found = scanPkmStrings(rom);
+    expect(found).toHaveLength(names.length);
+    expect(found.every((s) => s.table?.kind === "species")).toBe(true);
+  });
+
+  it("does not rename a list because one entry happens to match", () => {
+    // Two hits are required, so a move called "Potion" cannot turn the move
+    // list into the item list.
+    const names = ["Potion", "Ember", "Splash", "Growth", "Rest", "Wish", "Roar", "Bite"];
+    const stride = 13;
+    const rom = new Uint8Array(stride * names.length).fill(PKM_TERMINATOR);
+    names.forEach((n, i) => rom.set(gameBytes(n), i * stride));
+    expect(scanPkmStrings(rom)[0].table?.kind).toBe("list");
+  });
+
+  it("leaves unevenly spaced lines out of any list", () => {
+    const rom = Uint8Array.from([
+      ...gameBytes("Hello there"), PKM_TERMINATOR,
+      ...gameBytes("A much longer line here"), PKM_TERMINATOR,
+    ]);
+    expect(scanPkmStrings(rom).every((s) => s.table === undefined)).toBe(true);
   });
 });
 

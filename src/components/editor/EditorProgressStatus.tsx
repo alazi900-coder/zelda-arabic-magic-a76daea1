@@ -13,6 +13,7 @@ import TranslationStatsPanel from "@/components/editor/TranslationStatsPanel";
 import { buildRisenCategories } from "@/lib/risen/categories";
 import { buildMother3Categories } from "@/lib/mother3/categories";
 import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
+import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -60,10 +61,12 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const isRisen = !!entries?.some((e) => /\.tab$/i.test(e.msbtFile));
   const isMother3 = !isRisen && !!entries?.some((e) => /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile));
   const isMetroidPrime = !isRisen && !isMother3 && !!entries?.some((e) => /^TEXT_/.test(e.msbtFile));
+  const isPokemon = !isRisen && !isMother3 && !isMetroidPrime && !!entries?.some((e) => PKM_FILE_RE.test(e.msbtFile));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
   const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
   const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);
   const metroidPrimeCategories = useMemo(() => (isMetroidPrime && entries ? buildMetroidPrimeCategories(entries) : []), [isMetroidPrime, entries]);
+  const pokemonCategories = useMemo(() => (isPokemon && entries ? buildPkmCategories(entries) : []), [isPokemon, entries]);
   if (!editor.state) return null;
   const state = editor.state;
   return (
@@ -81,14 +84,16 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         isFixing={editor.translating}
         onRedistributeTags={editor.handleRedistributeTags}
         tagsCount={editor.tagsCount}
-        isBdat={!isRisen && !isMother3 && !isMetroidPrime && editor.bdatTableNames.length > 0}
-        isDanganronpa={!isRisen && !isMother3 && !isMetroidPrime && isDanganronpa}
+        isBdat={!isRisen && !isMother3 && !isMetroidPrime && !isPokemon && editor.bdatTableNames.length > 0}
+        isDanganronpa={!isRisen && !isMother3 && !isMetroidPrime && !isPokemon && isDanganronpa}
         isRisen={isRisen}
         risenCategories={risenCategories}
         isMother3={isMother3}
         mother3Categories={mother3Categories}
         isMetroidPrime={isMetroidPrime}
         metroidPrimeCategories={metroidPrimeCategories}
+        isPokemon={isPokemon}
+        pokemonCategories={pokemonCategories}
       />
 
       {isRisen && (

@@ -3,7 +3,7 @@ import { scanPkmStrings, applyPkmTranslations } from "@/lib/pokemon/pkm-rom";
 import { encodeArabicForPkm, decodePkmBytes, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
 import { categorizePkmLine, buildPkmCategories } from "@/lib/pokemon/pkm-categories";
 import { maskPkmTags, unmaskPkmTags, diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
-import { extractPkmEntries } from "@/lib/pokemon/pkm-editor-bridge";
+import { extractPkmEntries, restorePkmTranslations, buildPkmRom } from "@/lib/pokemon/pkm-editor-bridge";
 import { processArabicText } from "@/lib/arabic-processing";
 
 /** English text in the game's own character set, the way the ROM stores it. */
@@ -180,6 +180,33 @@ describe("Pokémon Ruby Destiny categories", () => {
       { msbtFile: "pkm_species", original: "BULBASAUR" },
     ]);
     expect(cats.map((c) => c.id)).toEqual(["pkm-dialogue", "pkm-species", "pkm-items"]);
+  });
+});
+
+describe("Pokémon Ruby Destiny saved work", () => {
+  it("finds a translation saved before the lists were renamed", () => {
+    // `pkm_t11` was what a species line was called in the first version. The
+    // line has not moved — its offset is the same — so its translation has to
+    // come back with it, or renaming the lists costs the translator the work.
+    const entries = [
+      { msbtFile: "pkm_species", index: 100, label: "", original: "Bulbasaur", maxBytes: 10 },
+      { msbtFile: "pkm_items", index: 200, label: "", original: "Potion", maxBytes: 10 },
+    ];
+    const restored = restorePkmTranslations(entries, {
+      "pkm_t11:100": "بولباصور",
+      "pkm_rom:200": "دواء",
+      "pkm_rom:999": "سطر لم يعد موجوداً",
+    });
+    expect(restored).toEqual({ "pkm_species:100": "بولباصور", "pkm_items:200": "دواء" });
+  });
+
+  it("builds a ROM from translations keyed the old way", () => {
+    // buildPkmRom checks the file is a GBA image before it writes anything.
+    const rom = new Uint8Array(0x1000000);
+    rom.set([...gameBytes("Hello there"), PKM_TERMINATOR], 0);
+    const out = buildPkmRom(rom, { "pkm_t13:0": "مرحبا" });
+    expect("error" in out).toBe(false);
+    if (!("error" in out)) expect(out.translatedLines).toBe(1);
   });
 });
 

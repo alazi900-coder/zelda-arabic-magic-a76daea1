@@ -20,8 +20,16 @@
 /** What a fixed-stride list turned out to hold. `list` = measured, unnamed. */
 export type PkmListKind = "species" | "moves" | "items" | "people" | "list";
 
-/** `pkm_rom` for a free-standing line, `pkm_<kind>` for a list entry. */
-export const PKM_FILE_RE = /^pkm_(?:rom|species|moves|items|people|list)$/;
+/**
+ * `pkm_rom` for a free-standing line, `pkm_<kind>` for a list entry.
+ *
+ * `pkm_t<stride>` is the older naming, from when a line carried the slot size
+ * of its list rather than what the list held. Sessions saved then are still on
+ * disk, and refusing to recognise them would drop those lines out of the
+ * Pokémon paths entirely — no category cards, no diagnostics, and the wrong
+ * translation prompt.
+ */
+export const PKM_FILE_RE = /^pkm_(?:rom|species|moves|items|people|list|t\d+)$/;
 
 export const PKM_ENTRY_FILE = "pkm_rom";
 

@@ -6,6 +6,7 @@ import { idbSet, idbGet } from "@/lib/idb-storage";
 import {
   extractPkmEntries,
   looksLikePkmRom,
+  restorePkmTranslations,
   PKM_BUFFER_KEY,
   PKM_SOURCE_GAME,
 } from "@/lib/pokemon/pkm-editor-bridge";
@@ -34,15 +35,12 @@ export default function PokemonText() {
           throw new Error("لم يُعثر على نصوص في هذا الروم");
         }
 
-        // Keep whatever is already translated for the same keys. A key is the
-        // line's offset in the ROM, so it stays valid for the same ROM and
-        // re-opening never costs the translator their work.
+        // Keep whatever is already translated. A line is identified by its
+        // offset in the ROM, not by the name of the list it sits in — that
+        // name has changed once already, and matching on it dropped every
+        // saved translation for a renamed list.
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
-        const validKeys = new Set(entries.map((e) => `${e.msbtFile}:${e.index}`));
-        const translations: Record<string, string> = {};
-        for (const [k, v] of Object.entries(existing?.translations || {})) {
-          if (v && validKeys.has(k)) translations[k] = v;
-        }
+        const translations = restorePkmTranslations(entries, existing?.translations || {});
 
         await idbSet("editorState", { entries, translations, freshExtraction: true });
         await idbSet("editor-source-game", PKM_SOURCE_GAME);

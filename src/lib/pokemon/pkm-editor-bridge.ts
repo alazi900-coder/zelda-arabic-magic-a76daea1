@@ -51,6 +51,38 @@ export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
   return { entries, strings, textBytes: strings.reduce((n, s) => n + s.capacity, 0) };
 }
 
+/**
+ * Carries saved translations onto a freshly scanned set of entries.
+ *
+ * Re-opening the same ROM must never cost the translator their work, and it
+ * did: the key is `<file>:<offset>`, and when the lists were renamed —
+ * `pkm_t11` became `pkm_species`, and a wider stride ceiling moved thousands
+ * of lines out of `pkm_rom` — every one of those keys stopped matching, so
+ * the translations were dropped without a word.
+ *
+ * The offset is the identity, so that is what is matched on. A key that still
+ * agrees exactly wins, which keeps two entries at the same offset (there are
+ * none, but nothing here relies on that) from stealing each other's text.
+ */
+export function restorePkmTranslations(
+  entries: ExtractedEntry[],
+  saved: Record<string, string>
+): Record<string, string> {
+  const byOffset = new Map<string, string>();
+  for (const [key, value] of Object.entries(saved)) {
+    if (!value) continue;
+    const m = PKM_KEY_RE.exec(key);
+    if (m) byOffset.set(m[1], value);
+  }
+  const out: Record<string, string> = {};
+  for (const entry of entries) {
+    const key = `${entry.msbtFile}:${entry.index}`;
+    const value = saved[key] || byOffset.get(String(entry.index));
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
 export interface PkmBuildOk {
   rom: Uint8Array;
   translatedLines: number;
@@ -61,6 +93,18 @@ export interface PkmBuildOk {
 export interface PkmBuildError {
   error: string;
 }
+
+/**
+ * The offset in `<entry file>:<offset>`, for any name this tool has ever used.
+ *
+ * A line's identity is where it sits in the ROM; the file name in front of it
+ * only says which list it belongs to, and that name changed when the lists
+ * were given their real names. Reading the offset out of whatever name is
+ * there keeps a session translated under the old naming buildable — matching
+ * the exact name instead dropped those lines silently, which is worse than
+ * refusing them.
+ */
+const PKM_KEY_RE = /^pkm_[a-z0-9]+:(\d+)$/;
 
 /**
  * Rebuilds a translated ROM. `translations` is keyed `<entry file>:<offset>`.
@@ -80,7 +124,7 @@ export function buildPkmRom(
   const { strings } = extractPkmEntries(rom);
   const byOffset: Record<string, string> = {};
   for (const [key, value] of Object.entries(translations)) {
-    const m = /^pkm_(?:rom|species|moves|items|people|list):(\d+)$/.exec(key);
+    const m = PKM_KEY_RE.exec(key);
     if (m) byOffset[m[1]] = value;
   }
 

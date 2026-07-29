@@ -65,6 +65,16 @@ const RULES: RuleDef[] = [
   // the request's game === 'risen' (see RISEN_ONLY_RULE_IDS below) — no effect on Xenoblade.
   { id: 'detect_risen_gendered_pickup', kind: 'detect', prompt: '**accuracy** — [خاص بـ Risen] ضمير مذكّر/مؤنث ثابت (عليها/عليه/فيها/منه...) مرتبط باسم عنصر أو غرض مجهول الجنس في جملة قصيرة مثل إشعارات الحصول على غرض (مثال: "<amount> x <name> obtained!") — الصياغة الصحيحة محايدة الجنس (مثل "تم الحصول على" بدل "تم الحصول عليها/عليه")' },
   { id: 'detect_risen_line_structure', kind: 'detect', prompt: '**line_breaks** — [خاص بـ Risen] بنية الأسطر جزء من التنسيق في المستندات والرسائل الطويلة: قارن عدد ومواضع الأسطر الفارغة (بما فيها الفارغة في البداية) بين الأصل والترجمة — إن دُمجت أو حُذفت أعِد ضبطها لتطابق الأصل تماماً دون تغيير الكلمات' },
+  // Pokémon-only rules: same mechanism as the Risen ones above — the text is
+  // declared here but only reaches the prompt when the request's game is
+  // 'pokemon' (see PKM_ONLY_RULE_IDS). Each of the four states a fact about
+  // the ROM, not a preference: the substituted values, the space a line is
+  // written back into, the two-line box that never re-wraps, and the fixed
+  // slots the name lists sit in.
+  { id: 'detect_pkm_var', kind: 'detect', prompt: '**accuracy** — [خاص ببوكيمون] الرموز مثل `{FD:01}` قيم تضعها اللعبة وقت التشغيل (اسم اللاعب أو شخصية)، وليست نصّاً: يجب أن تبقى بنفس العدد ونفس الترتيب حرفاً بحرف. حذف واحد منها يُفقد الشخصية اسمها في كل سطر يناديها به، وتغيير رقمه يضع اسماً في موضع اسم آخر.' },
+  { id: 'detect_pkm_overflow', kind: 'detect', prompt: '**split_and_tags** — [خاص ببوكيمون] السطر يُكتب في موضعه نفسه داخل الروم ولا يمكن تحريكه، فما زاد عن طول الأصل يرفضه البناء ولا يظهر في اللعبة أصلاً: لا تجعل اقتراحك أطول من الترجمة الحالية إلا إذا كان الأصل الإنجليزي أطول منها فعلاً. عند الضرورة اختصر الحشو والتكرار، لا المعنى.' },
+  { id: 'detect_pkm_linebreaks', kind: 'detect', prompt: '**line_breaks** — [خاص ببوكيمون] صندوق الحوار سطران ولا يعيد لفّ النصّ: عدد فواصل الأسطر (`\\n`) ومواضعها في الترجمة يجب أن تطابق النصّ الإنجليزي الأصلي. سطر بلا فاصل حيث للأصل فاصل يخرج نصفه خارج الصندوق. لا تستعمل أي وسم تقسيم آخر — لا وجود لوسوم في هذه اللعبة غير قيم `{FD:xx}`.' },
+  { id: 'detect_pkm_name_consistency', kind: 'detect', prompt: '**consistency** — [خاص ببوكيمون] أسماء البوكيمون والمهارات والأغراض تسكن خانات ثابتة الحجم: كل واحد اسم مفرد بلا نقطة ولا جملة وصفية، ويجب أن يُكتب بنفس الصورة في كل المواضع. اسم واحد بصورتين في اللعبة نفسها خطأ حتى لو كانت الصورتان صحيحتين لغوياً.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -77,6 +87,17 @@ const RULES: RuleDef[] = [
 const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
 /** Rules whose prompt text only makes sense for Risen — excluded from the prompt entirely for Xenoblade, regardless of enabled state. */
 const RISEN_ONLY_RULE_IDS = new Set(['detect_risen_gendered_pickup', 'detect_risen_line_structure']);
+/** Rules whose prompt text only makes sense for Pokémon — never injected elsewhere. */
+const PKM_ONLY_RULE_IDS = new Set(['detect_pkm_var', 'detect_pkm_overflow', 'detect_pkm_linebreaks', 'detect_pkm_name_consistency']);
+/**
+ * Rules that teach the model Xenoblade's tag syntax, withheld from Pokémon.
+ *
+ * They instruct it to add `[XENO:n]` and `[System:PageBreak]`. Pokémon has no
+ * such tags — the engine draws every character it is given — so a suggestion
+ * carrying one writes those eight ASCII characters straight into the ROM, in
+ * a line that is already too short to hold them.
+ */
+const XENOBLADE_TAG_RULE_IDS = new Set(['detect_line_breaks', 'detect_split_and_tags']);
 
 // ─── Rule-disable enforcement ────────────────────────────────────────────────
 // القواعد أعلاه كانت تعتمد فقط على التزام النموذج بتعليمات الـ prompt: تعطيل
@@ -97,10 +118,26 @@ const TYPE_TO_RULE_ID: Record<string, string> = {
   split_and_tags: 'detect_split_and_tags',
 };
 
+/**
+ * Types a Pokémon-only rule may answer with.
+ *
+ * The enforcement map above rejects a result whose type belongs to a disabled
+ * rule. The Pokémon rules reuse the existing type names — a lost `{FD:01}` is
+ * an accuracy problem — so when Xenoblade's own rule for that type is off but
+ * the Pokémon one is on, the result must still be allowed through.
+ */
+const PKM_TYPE_TO_RULE_ID: Record<string, string> = {
+  accuracy: 'detect_pkm_var',
+  line_breaks: 'detect_pkm_linebreaks',
+  split_and_tags: 'detect_pkm_overflow',
+  consistency: 'detect_pkm_name_consistency',
+};
+
 function isTypeEnabled(type: string | undefined, enabledSet: Set<string>): boolean {
   const ruleId = TYPE_TO_RULE_ID[type || ''];
-  if (!ruleId) return true; // نوع غير معروف/مخصّص — لا نحظره احتياطاً.
-  return enabledSet.has(ruleId);
+  const pkmRuleId = PKM_TYPE_TO_RULE_ID[type || ''];
+  if (!ruleId && !pkmRuleId) return true; // نوع غير معروف/مخصّص — لا نحظره احتياطاً.
+  return (!!ruleId && enabledSet.has(ruleId)) || (!!pkmRuleId && enabledSet.has(pkmRuleId));
 }
 
 // وضع "القواعد" (grammar) يُرجع فئة خشنة فقط (wrong/reorder/weak) لا نوعاً دقيقاً،
@@ -185,6 +222,7 @@ function buildRuleSections(
   customRules: RuleDef[] | undefined,
   builtinOverrides: Record<string, { prompt?: string }> | undefined,
   isRisen: boolean,
+  isPokemon = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -212,8 +250,13 @@ function buildRuleSections(
   const enabled = (enabledIds && Array.isArray(enabledIds))
     ? new Set(enabledIds)
     : DEFAULT_RULE_IDS;
-  // القواعد الخاصّة بـ Risen لا تُحقَن في الـ prompt إطلاقاً عند Xenoblade، حتى لو كانت مُفعَّلة.
-  const isActive = (r: RuleDef) => enabled.has(r.id) && (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen);
+  // القواعد الخاصّة بلعبة بعينها لا تُحقَن في الـ prompt إطلاقاً عند غيرها، حتى
+  // لو كانت مُفعَّلة — ووسوم Xenoblade تُحجَب عن بوكيمون لأنها لا وجود لها فيه.
+  const isActive = (r: RuleDef) =>
+    enabled.has(r.id) &&
+    (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen) &&
+    (!PKM_ONLY_RULE_IDS.has(r.id) || isPokemon) &&
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || !isPokemon);
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -413,7 +456,7 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
@@ -429,7 +472,10 @@ Deno.serve(async (req) => {
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const isMother3 = game === 'mother3';
     const isMetroidPrime = game === 'metroidprime';
-    const gameLabel = isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
+    const isPokemon = game === 'pokemon';
+    const gameLabel = isPokemon
+      ? 'Pokémon Ruby Destiny: Reign of Legends (تعديل على Pokémon Ruby)'
+      : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isMetroidPrime
       ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
       : isMother3
@@ -465,13 +511,23 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
-    const properNounsSection = isRisen || isMother3
+    // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
+    // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
+    const properNounsSection = isRisen || isMother3 || isPokemon
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
+    // نفس الشيء في قاعدة حماية الوسوم: قائمة وسوم Xenoblade تُبقي النموذج
+    // يظنّ أن [XENO:n] موجود هنا. الرمز الوحيد في بوكيمون هو {FD:xx}.
+    if (isPokemon) {
+      ruleSections.protect = ruleSections.protect.replace(
+        '[Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC',
+        'من نوع {FD:xx} — وهي قيم تضعها اللعبة وقت التشغيل مثل اسم اللاعب. لا وسوم أخرى في هذه اللعبة، فلا تُضِف وسماً من لعبة أخرى'
+      );
+    }
     if (ruleSections.detectCount === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

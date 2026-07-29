@@ -43,6 +43,8 @@ export interface PkmTable {
   start: number;
   /** What the run turned out to hold; `list` when nothing named it. */
   kind: PkmListKind;
+  /** How many of its entries something in the ROM points at. */
+  pointed?: number;
 }
 
 const LETTER_START = 0xbb; // 'A'
@@ -324,19 +326,63 @@ const RELOCATABLE_MIN_CAPACITY = 40;
  */
 export const PKM_SHORT_LINE_LIMIT = 20;
 
+/**
+ * Fraction of a list's entries that must be pointed at for the list to count
+ * as a table of pointers rather than an array read by index.
+ *
+ * Measured: the place-name lists in this ROM are pointed 11/11, 12/12, 10/10
+ * and 8/8, while the berry list is 1/8 and the species list none at all. The
+ * first kind can be moved entry by entry, because the pointer is how the game
+ * finds it; the second cannot, because the game counts from the start of the
+ * array and would count straight past a relocated name.
+ */
+const POINTED_TABLE_RATIO = 0.8;
+
+/**
+ * Counts, for each list, how many of its entries the ROM points at.
+ *
+ * Done once against the pointer index and stored on the table, because both
+ * the editor's limit and the build's decision to move a line ask the same
+ * question about the same list.
+ */
+export function markPointedTables(strings: PkmString[], pointers: PkmPointerIndex): void {
+  const counted = new Set<PkmTable>();
+  for (const s of strings) {
+    if (!s.table) continue;
+    if (!counted.has(s.table)) {
+      s.table.pointed = 0;
+      counted.add(s.table);
+    }
+  }
+  for (const s of strings) {
+    if (s.table && pointers.to(s.offset).length > 0) s.table.pointed = (s.table.pointed ?? 0) + 1;
+  }
+}
+
+/** True when the list this line sits in is reached through pointers. */
+function inPointedTable(s: PkmString, pointers: PkmPointerIndex): boolean {
+  const t = s.table;
+  if (!t) return false;
+  if (t.pointed === undefined) return false;
+  return t.pointed >= t.count * POINTED_TABLE_RATIO;
+}
+
 /** The bytes this line may hold — its slot, or the measured floor above it. */
-export function pkmLineLimit(s: PkmString): number {
-  if (s.table) return s.capacity - 1;
+export function pkmLineLimit(s: PkmString, pointers?: PkmPointerIndex): number {
+  const movable = !s.table || (pointers ? inPointedTable(s, pointers) : false);
+  if (!movable) return s.capacity - 1;
   return Math.max(s.capacity - 1, PKM_SHORT_LINE_LIMIT);
 }
 
 /** True when this line may be moved out of its slot — see the constant above. */
 export function canRelocatePkmString(s: PkmString, pointers: PkmPointerIndex): boolean {
-  return looksRelocatable(s) && pointers.to(s.offset).length > 0;
+  return looksRelocatable(s, pointers) && pointers.to(s.offset).length > 0;
 }
 
-function looksRelocatable(s: PkmString): boolean {
-  if (s.table) return false; // read by index, and always a name
+function looksRelocatable(s: PkmString, pointers: PkmPointerIndex): boolean {
+  // A list read by index cannot be moved: the game counts from the start of
+  // the array. A list of pointers can, entry by entry.
+  if (s.table && !inPointedTable(s, pointers)) return false;
   return s.capacity >= RELOCATABLE_MIN_CAPACITY || /[\n]/.test(s.text);
 }
 
@@ -367,6 +413,7 @@ export function applyPkmTranslations(
   let free: PkmFreeSpace | null = null;
   if (options.relocate) {
     pointers = indexPkmPointers(rom);
+    markPointedTables(strings, pointers);
     free = new PkmFreeSpace(rom, fontRegion());
   }
 
@@ -390,9 +437,9 @@ export function applyPkmTranslations(
       // A dialogue line may grow to whatever the caller allowed; a short one
       // only to the floor measured in the emulator, because past that the
       // buffer the game copies it into is the thing that gives way.
-      const roomy = looksRelocatable(s);
-      const allowed = roomy ? Number.POSITIVE_INFINITY : pkmLineLimit(s) + 1;
-      const movable = !s.table && needed <= allowed;
+      const roomy = pointers ? looksRelocatable(s, pointers) : false;
+      const allowed = roomy ? Number.POSITIVE_INFINITY : pkmLineLimit(s, pointers ?? undefined) + 1;
+      const movable = (!s.table || (pointers ? inPointedTable(s, pointers) : false)) && needed <= allowed;
       const at = movable ? pointers?.to(s.offset) ?? [] : [];
       const to = at.length > 0 ? free?.take(needed) ?? null : null;
       if (to === null) {

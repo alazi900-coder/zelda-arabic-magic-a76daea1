@@ -12,7 +12,7 @@
  */
 
 import type { ExtractedEntry } from "@/components/editor/types";
-import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, pkmLineLimit, type PkmString } from "./pkm-rom";
+import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, markPointedTables, pkmLineLimit, type PkmString } from "./pkm-rom";
 import { applyPkmArabicFont, hasPkmArabicFont } from "./pkm-font";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
@@ -55,6 +55,9 @@ export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
   // at build time, so its slot is not its limit. One that is found by index —
   // every name in a fixed-stride list — keeps the slot it was born in.
   const pointers = indexPkmPointers(rom);
+  // A list whose entries are reached by pointer can have its entries moved one
+  // by one; one the game counts through by index cannot.
+  markPointedTables(strings, pointers);
   const entries: ExtractedEntry[] = strings.map((s) => ({
     msbtFile: pkmEntryFile(s.table?.kind),
     index: s.offset,
@@ -66,7 +69,7 @@ export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
     maxBytes: canRelocatePkmString(s, pointers)
       ? PKM_RELOCATED_LIMIT
       : pointers.to(s.offset).length > 0
-      ? pkmLineLimit(s)
+      ? pkmLineLimit(s, pointers)
       : s.capacity - 1,
   }));
   return { entries, strings, textBytes: strings.reduce((n, s) => n + s.capacity, 0) };

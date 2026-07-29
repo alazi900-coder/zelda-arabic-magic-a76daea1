@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { scanPkmStrings, applyPkmTranslations, pkmLineLimit, PKM_SHORT_LINE_LIMIT } from "@/lib/pokemon/pkm-rom";
+import { scanPkmStrings, applyPkmTranslations, markPointedTables, pkmLineLimit, PKM_SHORT_LINE_LIMIT } from "@/lib/pokemon/pkm-rom";
+import { indexPkmPointers, GBA_ROM_BASE } from "@/lib/pokemon/pkm-pointers";
 import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
 import { encodeArabicForPkm, decodePkmBytes, pkmArabicSlots, pkmCodepointForByte, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
 import { categorizePkmLine, buildPkmCategories } from "@/lib/pokemon/pkm-categories";
@@ -429,5 +430,42 @@ describe("how much room a short Pokémon line really has", () => {
     const s = scanPkmStrings(rom)[0];
     expect(pkmLineLimit(s)).toBe(s.capacity - 1);
     expect(pkmLineLimit(s)).toBeGreaterThan(PKM_SHORT_LINE_LIMIT);
+  });
+});
+
+describe("a list of pointers is not a list read by index", () => {
+  /** Ten short names a stride apart, each with its own pointer in a table. */
+  function pointedList(withPointers: boolean) {
+    const rom = new Uint8Array(0x2000);
+    const stride = 10;
+    for (let i = 0; i < 10; i++) {
+      rom.set([...gameBytes("NAME" + String.fromCharCode(65 + i)), PKM_TERMINATOR], 0x100 + i * stride);
+      if (withPointers) {
+        const v = GBA_ROM_BASE + 0x100 + i * stride;
+        rom.set([v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff], 0x800 + i * 4);
+      }
+    }
+    rom.fill(0xff, 0x1000, 0x2000);
+    return rom;
+  }
+
+  it("lets an entry reached by pointer grow past its slot", () => {
+    // Measured in this ROM: the place-name lists are pointed 11/11 and 12/12,
+    // so the game finds each name by its address and the name can move. The
+    // berry list is 1/8 — counted through by index — and cannot.
+    const rom = pointedList(true);
+    const strings = scanPkmStrings(rom);
+    const pointers = indexPkmPointers(rom);
+    markPointedTables(strings, pointers);
+    expect(strings[0].table).toBeDefined();
+    expect(pkmLineLimit(strings[0], pointers)).toBe(PKM_SHORT_LINE_LIMIT);
+  });
+
+  it("keeps an index-read list inside its slots", () => {
+    const rom = pointedList(false);
+    const strings = scanPkmStrings(rom);
+    const pointers = indexPkmPointers(rom);
+    markPointedTables(strings, pointers);
+    expect(pkmLineLimit(strings[0], pointers)).toBe(strings[0].capacity - 1);
   });
 });

@@ -118,7 +118,28 @@ export function decodeNamesString(
  *  whole edit so nothing gets silently deleted from the translation). */
 export function encodeNamesString(text: string, _lossy = false): number[] {
   const normalizedText = normalizeMother3EditableText(text, "names");
-  const out: number[] = [];
+
+  // Segments in LOGICAL order. `rtl` segments are Arabic runs (already shaped);
+  // `ltr` segments are Latin/digits/control tokens/neutral punctuation that must
+  // keep their internal order even inside an RTL line.
+  type Seg = { rtl: boolean; codes: number[] };
+  const segs: Seg[] = [];
+  const pushLtr = (code: number) => {
+    const last = segs[segs.length - 1];
+    if (last && !last.rtl) last.codes.push(code);
+    else segs.push({ rtl: false, codes: [code] });
+  };
+  const encodeChar = (ch: string): number => {
+    const code = charToCode(ch);
+    if (code === undefined) {
+      throw new Error(
+        `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
+      );
+    }
+    return code;
+  };
+
+  let hasRtl = false;
   let i = 0;
   while (i < normalizedText.length) {
     if (normalizedText[i] === "{") {
@@ -126,7 +147,7 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
       if (end > i) {
         const body = normalizedText.slice(i + 1, end);
         if (/^[0-9A-Fa-f]{2}$/.test(body)) {
-          out.push(parseInt(body, 16));
+          pushLtr(parseInt(body, 16));
           i = end + 1;
           continue;
         }
@@ -140,7 +161,7 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
         if (m) {
           const lo = parseInt(m[1], 16);
           const hi = parseInt(m[2], 16);
-          out.push((hi << 8) | lo);
+          pushLtr((hi << 8) | lo);
           i = end + 1;
           continue;
         }
@@ -151,34 +172,45 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
       let j = i;
       while (j < normalizedText.length && normalizedText[j] !== "{" && hasArabicChars(normalizedText[j])) j++;
       const shaped = reshapeArabic(normalizedText.slice(i, j));
-      // Names/menus/cutscenes render text LTR (no RTL hook like dialogue) — so we
-      // emit the shaped Arabic codes in REVERSE order. The pre-flipped glyphs
-      // then read right-to-left visually. Dialogue uses m3-codec.ts, not this
-      // path, and is unaffected.
       const runCodes: number[] = [];
       for (const ch of shaped) {
         if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue;
-        const code = charToCode(ch);
-        if (code === undefined) {
-          throw new Error(
-            `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
-          );
-        }
-        runCodes.push(code);
+        runCodes.push(encodeChar(ch));
       }
-      for (let k = runCodes.length - 1; k >= 0; k--) out.push(runCodes[k]);
+      segs.push({ rtl: true, codes: runCodes });
+      hasRtl = true;
       i = j;
       continue;
     }
-    const ch = normalizedText[i];
-    const code = charToCode(ch);
-    if (code === undefined) {
-      throw new Error(
-        `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
-      );
-    }
-    out.push(code);
+    pushLtr(encodeChar(normalizedText[i]));
     i++;
+  }
+
+  // Names/menus/cutscenes render text LTR (no RTL hook like dialogue), so for a
+  // line containing Arabic we emit the whole line in VISUAL order: segments in
+  // reverse, Arabic codes reversed, Latin/digit/tag runs kept forward. This
+  // fixes mixed lines like "سرعة النص: 2" where reversing only the Arabic run
+  // left the colon and the number on the wrong side. Dialogue uses m3-codec.ts
+  // and is unaffected.
+  const out: number[] = [];
+  if (!hasRtl) {
+    for (const s of segs) out.push(...s.codes);
+    return out;
+  }
+  const MIRROR = new Map<number, number>();
+  const paren = charToCode("("), parenClose = charToCode(")");
+  if (paren !== undefined && parenClose !== undefined) {
+    MIRROR.set(paren, parenClose);
+    MIRROR.set(parenClose, paren);
+  }
+  for (let s = segs.length - 1; s >= 0; s--) {
+    const seg = segs[s];
+    if (seg.rtl) {
+      for (let k = seg.codes.length - 1; k >= 0; k--) out.push(seg.codes[k]);
+    } else {
+      for (const c of seg.codes) out.push(MIRROR.get(c) ?? c);
+    }
   }
   return out;
 }
+

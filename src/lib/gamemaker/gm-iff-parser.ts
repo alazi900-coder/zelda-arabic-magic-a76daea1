@@ -9,9 +9,6 @@
  *   - بيانات القسم
  * 
  * القسم المهم للترجمة: STRG (النصوص)
- * - عدد النصوص (4 بايت)
- * - مؤشرات النصوص (4 بايت لكل نص)
- * - بيانات النصوص (طول + محتوى لكل نص)
  */
 
 import type { ExtractedEntry } from "@/components/editor/types";
@@ -19,10 +16,11 @@ import type { ExtractedEntry } from "@/components/editor/types";
 export interface GameMakerString {
   offset: number;
   value: string;
+  index: number;
 }
 
 export interface GameMakerIFFDocument {
-  headerMagic: string; // "FORM"
+  headerMagic: string;
   totalSize: number;
   chunks: Map<string, Uint8Array>;
   strings: GameMakerString[];
@@ -68,36 +66,11 @@ function isTranslatable(text: string): boolean {
 }
 
 /**
- * قراءة سلسلة نصية بصيغة UTF-8 من موضع محدد
- */
-function readString(view: DataView, offset: number): { value: string; length: number } {
-  const length = view.getUint32(offset, true);
-  if (length === 0) return { value: "", length: 4 };
-  
-  const bytes = new Uint8Array(view.buffer, offset + 4, length);
-  const value = new TextDecoder("utf-8").decode(bytes);
-  return { value, length: 4 + length };
-}
-
-/**
- * كتابة سلسلة نصية بصيغة UTF-8 إلى موضع محدد
- */
-function writeString(view: DataView, offset: number, text: string): number {
-  const encoded = new TextEncoder().encode(text);
-  view.setUint32(offset, encoded.length, true);
-  const bytes = new Uint8Array(view.buffer, offset + 4, encoded.length);
-  bytes.set(encoded);
-  return 4 + encoded.length;
-}
-
-/**
  * محلل ملفات IFF GEN8
  */
 export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
-  
-  let offset = 0;
   
   // قراءة رأس الملف
   const headerMagic = new TextDecoder("ascii").decode(bytes.subarray(0, 4));
@@ -106,11 +79,10 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
   }
   
   const totalSize = view.getUint32(4, true);
-  offset = 8;
+  let offset = 8;
   
   // قراءة الأقسام
   const chunks = new Map<string, Uint8Array>();
-  const strings: GameMakerString[] = [];
   
   while (offset < buffer.byteLength && offset < totalSize + 8) {
     if (offset + 8 > buffer.byteLength) break;
@@ -121,23 +93,53 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     if (chunkSize < 0 || offset + 8 + chunkSize > buffer.byteLength) break;
     
     const chunkData = bytes.subarray(offset + 8, offset + 8 + chunkSize);
-    chunks.set(chunkId, chunkData);
+    chunks.set(chunkId, new Uint8Array(chunkData)); // نسخ البيانات
     
     offset += 8 + chunkSize;
   }
   
   // استخراج النصوص من قسم STRG
+  const strings: GameMakerString[] = [];
+  
   if (chunks.has("STRG")) {
     const strgData = chunks.get("STRG")!;
     const strgView = new DataView(strgData.buffer, strgData.byteOffset, strgData.byteLength);
     
-    const stringCount = strgView.getUint32(0, true);
-    let stringOffset = 4 + stringCount * 4; // تخطي عدد النصوص والمؤشرات
-    
-    for (let i = 0; i < stringCount; i++) {
-      const { value, length } = readString(strgView, stringOffset);
-      strings.push({ offset: stringOffset, value });
-      stringOffset += length;
+    try {
+      const stringCount = strgView.getUint32(0, true);
+      
+      // قراءة جميع النصوص
+      for (let i = 0; i < stringCount; i++) {
+        try {
+          // موضع المؤشر لهذا النص
+          const pointerOffset = 4 + i * 4;
+          if (pointerOffset + 4 > strgData.byteLength) break;
+          
+          const stringPointer = strgView.getUint32(pointerOffset, true);
+          
+          // قراءة النص من الموضع المشار إليه
+          if (stringPointer + 4 > strgData.byteLength) continue;
+          
+          const stringLength = strgView.getUint32(stringPointer, true);
+          
+          if (stringLength < 0 || stringPointer + 4 + stringLength > strgData.byteLength) continue;
+          
+          // فك تشفير النص
+          const stringBytes = strgData.subarray(stringPointer + 4, stringPointer + 4 + stringLength);
+          const value = new TextDecoder("utf-8").decode(stringBytes);
+          
+          strings.push({
+            offset: stringPointer,
+            value,
+            index: i,
+          });
+        } catch (e) {
+          console.warn(`خطأ في قراءة النص ${i}:`, e);
+          continue;
+        }
+      }
+    } catch (e) {
+      console.warn("خطأ في قراءة قسم STRG:", e);
     }
   }
   
@@ -157,19 +159,17 @@ export function extractGameMakerEntries(doc: GameMakerIFFDocument): GameMakerExt
   const entries: ExtractedEntry[] = [];
   let translatableCount = 0;
   
-  for (let i = 0; i < doc.strings.length; i++) {
-    const str = doc.strings[i];
-    
+  for (const str of doc.strings) {
     if (!isTranslatable(str.value)) continue;
     
     translatableCount++;
     
     entries.push({
-      msbtFile: "STRG", // جميع النصوص من قسم STRG
-      index: i,
-      label: str.value.length > 50 ? str.value.slice(0, 50) + "…" : str.value,
+      msbtFile: "STRG",
+      index: str.index,
+      label: str.value.length > 60 ? str.value.slice(0, 60) + "…" : str.value,
       original: str.value,
-      maxBytes: 1024, // حد أقصى تقريبي
+      maxBytes: 1024,
     });
   }
   
@@ -191,32 +191,33 @@ export function buildGameMakerIFF(
   translations: Record<string, string>
 ): { buffer: ArrayBuffer; translatedCount: number } {
   // نسخ الملف الأصلي
-  const originalBytes = new Uint8Array(doc.originalBuffer);
-  const newBuffer = new ArrayBuffer(originalBytes.byteLength);
+  const newBuffer = new ArrayBuffer(doc.originalBuffer.byteLength);
   const newBytes = new Uint8Array(newBuffer);
-  newBytes.set(originalBytes);
+  newBytes.set(new Uint8Array(doc.originalBuffer));
   
   const newView = new DataView(newBuffer);
   
   // تطبيق الترجمات على النصوص
   let translatedCount = 0;
   
-  for (let i = 0; i < doc.strings.length; i++) {
-    const key = `STRG:${i}`;
+  for (const str of doc.strings) {
+    const key = `STRG:${str.index}`;
     const translation = translations[key];
     
     if (translation && translation.trim()) {
-      const stringOffset = doc.strings[i].offset;
-      
-      // حساب الحجم الجديد للنص
-      const oldLength = newView.getUint32(stringOffset, true);
-      const newLength = new TextEncoder().encode(translation).length;
-      
-      // إذا كان الحجم الجديد مختلفاً، قد نحتاج إلى إعادة ترتيب الملف بالكامل
-      // للآن، نفترض أن الحجم الجديد لا يتجاوز الحد الأقصى
-      if (newLength <= oldLength) {
-        writeString(newView, stringOffset, translation);
-        translatedCount++;
+      try {
+        const encoded = new TextEncoder().encode(translation);
+        const oldLength = newView.getUint32(str.offset, true);
+        
+        // تحديث الطول والنص فقط إذا كان الحجم الجديد لا يتجاوز الحد القديم
+        if (encoded.length <= oldLength) {
+          newView.setUint32(str.offset, encoded.length, true);
+          const targetBytes = new Uint8Array(newBuffer, str.offset + 4, encoded.length);
+          targetBytes.set(encoded);
+          translatedCount++;
+        }
+      } catch (e) {
+        console.warn(`خطأ في تطبيق ترجمة النص ${str.index}:`, e);
       }
     }
   }

@@ -177,7 +177,7 @@ const GameMakerProcess = () => {
           <p className="text-sm text-muted-foreground mb-4">
             اسحب ملف <code className="bg-muted px-2 py-1 rounded">game.droid</code> أو أي ملف GameMaker آخر هنا
           </p>
-          <label>
+          <label className="cursor-pointer inline-block">
             <input
               type="file"
               accept=".droid,.win,.unx,.gml"
@@ -187,10 +187,13 @@ const GameMakerProcess = () => {
               }}
               disabled={busy}
               className="hidden"
+              id="file-input"
             />
-            <Button disabled={busy} className="gap-2">
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {busy ? "جاري التحميل..." : "اختر ملفاً"}
+            <Button asChild disabled={busy} className="gap-2">
+              <label htmlFor="file-input" className="cursor-pointer">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {busy ? "جاري التحميل..." : "اختر ملفاً"}
+              </label>
             </Button>
           </label>
         </div>

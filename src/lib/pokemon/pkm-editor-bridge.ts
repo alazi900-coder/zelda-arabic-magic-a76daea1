@@ -111,6 +111,8 @@ export interface PkmBuildOk {
   rom: Uint8Array;
   translatedLines: number;
   tooLong: { offset: number; needed: number; capacity: number; text: string }[];
+  /** Lines refused because a `{FD:xx}` placeholder went missing in translation. */
+  brokenTags: { offset: number; missing: string[]; extra: string[]; text: string }[];
   /** Lines moved into free space because they outgrew their slot. */
   relocated: number;
   /** Free bytes left in the ROM after the move. */

@@ -178,6 +178,7 @@ export function buildPkmRom(
     rom: out,
     translatedLines: written.written,
     tooLong: written.tooLong,
+    brokenTags: written.brokenTags,
     relocated: written.relocated.length,
     freeSpaceLeft: written.freeSpaceLeft,
     unmapped: written.unmapped,

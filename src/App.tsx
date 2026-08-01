@@ -49,6 +49,7 @@ const WolfensteinText = lazyWithIgnoredRef(() => import("./pages/WolfensteinText
 const Pokemon = lazyWithIgnoredRef(() => import("./pages/Pokemon"));
 const PokemonFont = lazyWithIgnoredRef(() => import("./pages/PokemonFont"));
 const PokemonText = lazyWithIgnoredRef(() => import("./pages/PokemonText"));
+const GameMaker = lazyWithIgnoredRef(() => import("./pages/GameMakerProcess"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
@@ -99,6 +100,7 @@ const App = () => (
                 <Route path="/pokemon/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Pokémon Ruby Destiny"><PokemonFont /></ErrorBoundary>} />
                 <Route path="/pokemon/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Ruby Destiny"><PokemonText /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
+                <Route path="/gamemaker" element={<ErrorBoundary fallbackTitle="خطأ في صفحة GameMaker"><GameMaker /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

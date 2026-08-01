@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download, ListChecks } from "lucide-react";
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
+import { buildGameMakerFromState, GM_BUFFER_KEY } from "@/lib/gamemaker/gm-editor-bridge";
 import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
@@ -30,6 +31,7 @@ interface EditorBuildSectionProps {
   isMetroidPrime?: boolean;
   isWolfenstein?: boolean;
   isPokemon?: boolean;
+  isGameMaker?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -44,6 +46,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isMetroidPrime = false,
   isWolfenstein = false,
   isPokemon = false,
+  isGameMaker = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -55,6 +58,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [mpBuilding, setMpBuilding] = useState(false);
   const [wolfBuilding, setWolfBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
+  const [gmBuilding, setGmBuilding] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
@@ -213,6 +217,34 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setPkmBuilding(false);
+    }
+  };
+
+  const handleGameMakerBuild = async () => {
+    setGmBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(GM_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على ملف GameMaker — أعد فتحه من صفحة GameMaker");
+      const result = await buildGameMakerFromState(editor.state?.translations || {}, editor.state?.entries);
+      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      const delta = result.buffer.byteLength - result.originalSize;
+      const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
+      toast({
+        title: "✅ تم بناء ملف GameMaker معرّب",
+        description: `${result.translatedCount} ترجمة | حجم ${result.buffer.byteLength.toLocaleString()} بايت (${deltaStr})`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setGmBuilding(false);
     }
   };
 
@@ -479,6 +511,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isRisen ? (
           <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {risenBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف Risen وتنزيله
+          </Button>
+        ) : isGameMaker ? (
+          <Button size="lg" onClick={handleGameMakerBuild} disabled={gmBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {gmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف GameMaker معرّب وتنزيله
           </Button>
         ) : (
           <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 min-w-[200px] font-display font-bold">

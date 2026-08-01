@@ -79,6 +79,18 @@ const games = [
     subtitleClass: "text-[hsl(210,70%,55%)]",
     arrowClass: "text-[hsl(210,70%,55%)]",
   },
+  {
+    title: "GameMaker Studio",
+    subtitle: "عرّب ألعاب GameMaker",
+    desc: "استخراج النصوص من ملفات GameMaker (IFF GEN8) مثل game.droid وألعاب المحرك الأخرى، تحريرها في المحرر، وإعادة بناء الملف معرّب بالعربية",
+    link: "/gamemaker",
+    image: risenBg,
+    formats: [".droid", "IFF GEN8"],
+    cardClass: "border-[hsl(45,90%,50%)]/30 hover:border-[hsl(45,90%,50%)]/60",
+    formatClass: "bg-[hsl(45,90%,50%)]/20 text-[hsl(45,100%,60%)] border-[hsl(45,90%,50%)]/30",
+    subtitleClass: "text-[hsl(45,100%,60%)]",
+    arrowClass: "text-[hsl(45,100%,60%)]",
+  },
 ];
 
 const Home = () => {

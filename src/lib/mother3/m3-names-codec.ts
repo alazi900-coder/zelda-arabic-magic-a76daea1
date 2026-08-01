@@ -111,14 +111,36 @@ export function decodeNamesString(
   return null;
 }
 
+/** Characters that swap when a line is laid out visually right-to-left. */
+const MIRRORED_CHARS: Record<string, string> = {
+  "(": ")",
+  ")": "(",
+};
+
+type Seg = { rtl: boolean; codes: number[] };
+
 /** Encode a display string (control tokens `{XX}` and `[XX YY]` pass through)
  *  to codes. Arabic runs are reshaped first. Always throws on un-encodable
  *  characters — the `lossy` flag is retained for signature compatibility but
  *  no longer drops characters (force-build handles failures by skipping the
- *  whole edit so nothing gets silently deleted from the translation). */
+ *  whole edit so nothing gets silently deleted from the translation).
+ *
+ *  Names/menus/cutscenes render LTR (no RTL hook like dialogue), so when the
+ *  line contains Arabic we lay it out visually: segment order is reversed and
+ *  Arabic runs are internally flipped, while Latin/digit/tag runs keep their
+ *  own order (so "سرعة النص: 2" still shows "2" correctly). Dialogue uses
+ *  m3-codec.ts, not this path, and is unaffected. */
 export function encodeNamesString(text: string, _lossy = false): number[] {
   const normalizedText = normalizeMother3EditableText(text, "names");
-  const out: number[] = [];
+  const segs: Seg[] = [];
+  let hasRtl = false;
+
+  const pushCode = (rtl: boolean, code: number) => {
+    const last = segs[segs.length - 1];
+    if (last && last.rtl === rtl) last.codes.push(code);
+    else segs.push({ rtl, codes: [code] });
+  };
+
   let i = 0;
   while (i < normalizedText.length) {
     if (normalizedText[i] === "{") {
@@ -126,7 +148,7 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
       if (end > i) {
         const body = normalizedText.slice(i + 1, end);
         if (/^[0-9A-Fa-f]{2}$/.test(body)) {
-          out.push(parseInt(body, 16));
+          pushCode(false, parseInt(body, 16));
           i = end + 1;
           continue;
         }
@@ -140,7 +162,7 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
         if (m) {
           const lo = parseInt(m[1], 16);
           const hi = parseInt(m[2], 16);
-          out.push((hi << 8) | lo);
+          pushCode(false, (hi << 8) | lo);
           i = end + 1;
           continue;
         }
@@ -151,22 +173,17 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
       let j = i;
       while (j < normalizedText.length && normalizedText[j] !== "{" && hasArabicChars(normalizedText[j])) j++;
       const shaped = reshapeArabic(normalizedText.slice(i, j));
-      // Names/menus/cutscenes render text LTR (no RTL hook like dialogue) — so we
-      // emit the shaped Arabic codes in REVERSE order. The pre-flipped glyphs
-      // then read right-to-left visually. Dialogue uses m3-codec.ts, not this
-      // path, and is unaffected.
-      const runCodes: number[] = [];
+      hasRtl = true;
       for (const ch of shaped) {
-        if (ch === "‏" || ch === "‎" || ch === "‍" || ch === "‌") continue;
+        if (ch === "\u200f" || ch === "\u200e" || ch === "\u200d" || ch === "\u200c") continue;
         const code = charToCode(ch);
         if (code === undefined) {
           throw new Error(
             `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
           );
         }
-        runCodes.push(code);
+        pushCode(true, code);
       }
-      for (let k = runCodes.length - 1; k >= 0; k--) out.push(runCodes[k]);
       i = j;
       continue;
     }
@@ -177,8 +194,27 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
         `حرف غير قابل للترميز: ${JSON.stringify(ch)} (U+${ch.charCodeAt(0).toString(16).toUpperCase()})`
       );
     }
-    out.push(code);
+    pushCode(false, code);
     i++;
+  }
+
+  if (!hasRtl) return segs.flatMap((s) => s.codes);
+
+  // Visual (RTL) layout: reverse segment order, flip Arabic runs internally,
+  // and mirror bracket-like characters.
+  const mirrorCode = (code: number): number => {
+    const ch = codeToChar(code);
+    const m = ch !== undefined ? MIRRORED_CHARS[ch] : undefined;
+    if (m === undefined) return code;
+    return charToCode(m) ?? code;
+  };
+
+  const out: number[] = [];
+  for (let s = segs.length - 1; s >= 0; s--) {
+    const seg = segs[s];
+    const codes = seg.rtl ? [...seg.codes].reverse() : seg.codes;
+    for (const c of codes) out.push(mirrorCode(c));
   }
   return out;
 }
+

@@ -9,6 +9,7 @@
  *   - بيانات القسم
  * 
  * القسم المهم للترجمة: STRG (النصوص)
+ * المؤشرات في STRG هي مؤشرات مطلقة في الملف
  */
 
 import type { ExtractedEntry } from "@/components/editor/types";
@@ -25,6 +26,7 @@ export interface GameMakerIFFDocument {
   chunks: Map<string, Uint8Array>;
   strings: GameMakerString[];
   originalBuffer: ArrayBuffer;
+  strgChunkStart: number;
 }
 
 export interface GameMakerExtractResult {
@@ -40,14 +42,15 @@ export interface GameMakerExtractResult {
 const SKIP_PATTERNS = [
   /^[0-9.]+$/, // أرقام فقط
   /^[{}()\[\]<>]+$/, // أقواس وعلامات فقط
-  /^[a-zA-Z0-9_]*$/, // معرّفات برمجية فقط
+  /^[a-zA-Z0-9_]*$/, // معرّفات برمجية فقط (متغيرات)
   /^(true|false|null|undefined)$/, // قيم برمجية
-  /^(scr_|spr_|obj_|rm_|fnt_)/, // معرّفات داخلية
+  /^(scr_|spr_|obj_|rm_|fnt_|ds_|gml_)/, // معرّفات داخلية
+  /^@@/, // معرّفات خاصة
 ];
 
 function isTranslatable(text: string): boolean {
   if (!text || text.length === 0) return false;
-  if (text.length > 500) return false; // نصوص طويلة جداً غالباً ما تكون بيانات
+  if (text.length > 500) return false;
   
   // تخطي النصوص التي تطابق الأنماط المحظورة
   for (const pattern of SKIP_PATTERNS) {
@@ -62,7 +65,11 @@ function isTranslatable(text: string): boolean {
     }
   }
   
-  return true;
+  // يجب أن يحتوي النص على كلمات حقيقية (حروف وأرقام وعلامات ترقيم)
+  const hasLetters = /[a-zA-Z]/.test(text);
+  const hasWords = /\b[a-zA-Z]{2,}\b/.test(text); // كلمات بحد أدنى حرفين
+  
+  return hasLetters || hasWords;
 }
 
 /**
@@ -83,6 +90,7 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
   
   // قراءة الأقسام
   const chunks = new Map<string, Uint8Array>();
+  let strgChunkStart = 0;
   
   while (offset < buffer.byteLength && offset < totalSize + 8) {
     if (offset + 8 > buffer.byteLength) break;
@@ -93,7 +101,11 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     if (chunkSize < 0 || offset + 8 + chunkSize > buffer.byteLength) break;
     
     const chunkData = bytes.subarray(offset + 8, offset + 8 + chunkSize);
-    chunks.set(chunkId, new Uint8Array(chunkData)); // نسخ البيانات
+    chunks.set(chunkId, new Uint8Array(chunkData));
+    
+    if (chunkId === "STRG") {
+      strgChunkStart = offset + 8; // موضع بداية بيانات STRG
+    }
     
     offset += 8 + chunkSize;
   }
@@ -103,33 +115,36 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
   
   if (chunks.has("STRG")) {
     const strgData = chunks.get("STRG")!;
-    const strgView = new DataView(strgData.buffer, strgData.byteOffset, strgData.byteLength);
     
     try {
+      const strgView = new DataView(strgData.buffer, strgData.byteOffset, strgData.byteLength);
       const stringCount = strgView.getUint32(0, true);
       
-      // قراءة جميع النصوص
+      // قراءة جميع النصوص باستخدام المؤشرات المطلقة
       for (let i = 0; i < stringCount; i++) {
         try {
-          // موضع المؤشر لهذا النص
+          // قراءة المؤشر (مؤشر مطلق في الملف)
           const pointerOffset = 4 + i * 4;
           if (pointerOffset + 4 > strgData.byteLength) break;
           
-          const stringPointer = strgView.getUint32(pointerOffset, true);
+          const absolutePointer = strgView.getUint32(pointerOffset, true);
           
-          // قراءة النص من الموضع المشار إليه
-          if (stringPointer + 4 > strgData.byteLength) continue;
+          // تحويل المؤشر المطلق إلى موضع نسبي في الملف الكامل
+          const relativePointer = absolutePointer - strgChunkStart;
           
-          const stringLength = strgView.getUint32(stringPointer, true);
+          if (relativePointer < 0 || relativePointer + 4 > strgData.byteLength) continue;
           
-          if (stringLength < 0 || stringPointer + 4 + stringLength > strgData.byteLength) continue;
+          // قراءة طول النص
+          const stringLength = strgView.getUint32(relativePointer, true);
+          
+          if (stringLength < 0 || relativePointer + 4 + stringLength > strgData.byteLength) continue;
           
           // فك تشفير النص
-          const stringBytes = strgData.subarray(stringPointer + 4, stringPointer + 4 + stringLength);
+          const stringBytes = strgData.subarray(relativePointer + 4, relativePointer + 4 + stringLength);
           const value = new TextDecoder("utf-8").decode(stringBytes);
           
           strings.push({
-            offset: stringPointer,
+            offset: absolutePointer,
             value,
             index: i,
           });
@@ -149,6 +164,7 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     chunks,
     strings,
     originalBuffer: buffer,
+    strgChunkStart,
   };
 }
 

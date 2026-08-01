@@ -33,7 +33,7 @@ export default function PokemonFont() {
       }
       const already = hasPkmArabicFont(rom);
       const out = applyPkmArabicFont(rom);
-      const url = URL.createObjectURL(new Blob([out], { type: "application/octet-stream" }));
+      const url = URL.createObjectURL(new Blob([out.slice().buffer as ArrayBuffer], { type: "application/octet-stream" }));
       const name = file.name.replace(/\.gba$/i, "") + "-arabic.gba";
       setResult((prev) => {
         if (prev) URL.revokeObjectURL(prev.url);

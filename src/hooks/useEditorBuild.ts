@@ -9,6 +9,7 @@ import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
 import { diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
+import { buildRisen3OutputFromState } from "@/lib/risen3-extractor";
 
 // Yields to the browser event loop for one frame so React can flush state updates (progress messages).
 const yieldToUI = () => new Promise<void>(r => setTimeout(r, 16));
@@ -57,9 +58,12 @@ interface UseEditorBuildProps {
  * format. Detected from the loaded entries themselves (same `.tab` heuristic
  * used everywhere else in the editor) rather than a passed-in flag, so this
  * never drifts out of sync with what's actually loaded. */
-export function detectGameType(entries: EditorState["entries"]): "xenoblade" | "risen" | "unknown" {
+export function detectGameType(entries: EditorState["entries"]): "xenoblade" | "risen" | "risen3" | "unknown" {
   if (entries.length === 0) return "unknown";
-  return /\.tab$/i.test(entries[0]?.msbtFile || "") ? "risen" : "xenoblade";
+  const f = entries[0]?.msbtFile || "";
+  if (/\.gar3$/i.test(f)) return "risen3";
+  if (/\.tab$/i.test(f)) return "risen";
+  return "xenoblade";
 }
 
 export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, forceSaveRef, onBuildSuccessRef }: UseEditorBuildProps) {
@@ -1312,6 +1316,26 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       setBuilding(true); setBuildProgress("جاري بناء ملف Risen...");
       try {
         const result = await buildRisenOutputFromState(currentState.translations, currentState.entries);
+        const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = result.filename;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+        setBuildProgress(`✅ تم البناء! ${result.translatedCount} ترجمة${result.tagRepairCount > 0 ? ` | ⚠️ ${result.tagRepairCount} وسم Risen أُلحق تلقائياً — راجعها` : ""}`);
+      } catch (err) {
+        setBuildProgress(`❌ ${err instanceof Error ? err.message : 'خطأ غير معروف'}`);
+      } finally {
+        setBuilding(false);
+      }
+      return;
+    }
+
+    if (detected === "risen3") {
+      setBuilding(true); setBuildProgress("جاري بناء ملف Risen 3...");
+      try {
+        const result = await buildRisen3OutputFromState(currentState.translations, currentState.entries);
         const blob = new Blob([result.buffer], { type: "application/octet-stream" });
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");

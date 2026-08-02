@@ -10,6 +10,12 @@ import {
   DEFAULT_ARABIC_TARGET_FIELD,
   STAGEDIR_TARGET_FIELD,
 } from "@/lib/risen-extractor";
+import {
+  extractEntriesFromP00Gar5,
+  buildRisen3OutputFromState,
+  DEFAULT_ARABIC_TARGET_FIELD_GAR5,
+  RISEN3_MSBT_SUFFIX,
+} from "@/lib/risen3-extractor";
 import type { EditorState } from "@/components/editor/types";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
@@ -31,7 +37,7 @@ const RisenProcess = () => {
   const [includeStageDir, setIncludeStageDir] = useState(false);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [dragOver, setDragOver] = useState(false);
-  const [risenGame, setRisenGame] = useState<"risen1" | "risen2">("risen1");
+  const [risenGame, setRisenGame] = useState<"risen1" | "risen2" | "risen3">("risen1");
 
   const addLog = useCallback((msg: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString("ar-SA")}] ${msg}`]);
@@ -46,6 +52,7 @@ const RisenProcess = () => {
       // reset to Risen 1 and risk a mislabeled re-upload later.
       const g = await idbGet<string>("editor-source-game");
       if (g === "risen2") setRisenGame("risen2");
+      else if (g === "risen3") setRisenGame("risen3");
     })();
   }, []);
 
@@ -57,14 +64,28 @@ const RisenProcess = () => {
       const buffer = await file.arrayBuffer();
       addLog("تم تحميل الملف في الذاكرة، جاري تحليل الجداول...");
 
-      const result = extractEntriesFromP00(buffer, DEFAULT_ARABIC_TARGET_FIELD, { includeStageDir });
-      addLog(`تم تحليل ${result.doc.tables.length} جدول: ${result.doc.tables.map((t) => t.name).join("، ")}`);
-      addLog(`المصدر: English_Text فقط (fallback إلى German_Text للصفوف الفاضية)${includeStageDir ? " + StageDir" : ""}`);
-      for (const s of result.stats.perTable) {
-        addLog(`  ${s.table}: ${s.rows} صف، ${s.translatable} قابل للترجمة`);
+      const isGar5 = risenGame === "risen3";
+      let entries: EditorState["entries"];
+      let perTableStats: { table: string; rows: number; translatable: number }[];
+
+      if (isGar5) {
+        const r = extractEntriesFromP00Gar5(buffer, DEFAULT_ARABIC_TARGET_FIELD_GAR5, { includeStageDir });
+        entries = r.entries;
+        perTableStats = [{ table: "w_strings.bin", rows: r.stats.totalRows, translatable: r.stats.translatable }];
+        addLog(`تم تحليل أرشيف GAR5/STB الداخلي: ${r.stats.totalRows} صف`);
+        addLog(`المصدر: English_Text فقط (fallback إلى German_Text للصفوف الفاضية)${includeStageDir ? " + StageDir" : ""}`);
+      } else {
+        const r = extractEntriesFromP00(buffer, DEFAULT_ARABIC_TARGET_FIELD, { includeStageDir });
+        entries = r.entries;
+        perTableStats = r.stats.perTable;
+        addLog(`تم تحليل ${r.doc.tables.length} جدول: ${r.doc.tables.map((t) => t.name).join("، ")}`);
+        addLog(`المصدر: English_Text فقط (fallback إلى German_Text للصفوف الفاضية)${includeStageDir ? " + StageDir" : ""}`);
+        for (const s of r.stats.perTable) {
+          addLog(`  ${s.table}: ${s.rows} صف، ${s.translatable} قابل للترجمة`);
+        }
       }
 
-      if (result.entries.length === 0) {
+      if (entries.length === 0) {
         addLog("خطأ: لم يتم العثور على أي نص قابل للترجمة");
         toast.error("لم يتم العثور على أي نص قابل للترجمة في هذا الملف");
         return;
@@ -78,15 +99,15 @@ const RisenProcess = () => {
       const newMeta: RisenMeta = {
         filename: file.name,
         extractedAt: new Date().toISOString(),
-        stats: result.stats.perTable,
-        targetField: DEFAULT_ARABIC_TARGET_FIELD,
+        stats: perTableStats,
+        targetField: isGar5 ? `${DEFAULT_ARABIC_TARGET_FIELD_GAR5}${RISEN3_MSBT_SUFFIX}` : DEFAULT_ARABIC_TARGET_FIELD,
       };
       await idbSet(RISEN_META_KEY, newMeta);
       setMeta(newMeta);
 
       // Load into editor state (compatible with existing /editor UI)
       const editorState: EditorState = {
-        entries: result.entries,
+        entries,
         translations: {},
         protectedEntries: new Set(),
         glossary: "",
@@ -96,14 +117,14 @@ const RisenProcess = () => {
       };
       await idbSet("editorState", editorState);
       await idbSet("editor-source-game", risenGame);
-      addLog(`تم تحميل ${result.entries.length} نص في المحرر`);
+      addLog(`تم تحميل ${entries.length} نص في المحرر`);
 
       // Store originals map so editor "detectPreTranslated" behaves sanely
       const originals: Record<string, string> = {};
-      for (const e of result.entries) originals[`${e.msbtFile}:${e.index}`] = e.original;
+      for (const e of entries) originals[`${e.msbtFile}:${e.index}`] = e.original;
       await idbSet("originalTexts", originals);
 
-      toast.success(`تم استخراج ${result.entries.length} نص من ${result.stats.perTable.length} جدول`);
+      toast.success(`تم استخراج ${entries.length} نص من ${perTableStats.length} جدول`);
       addLog("جاري التوجيه إلى المحرر...");
       // Navigate to editor
       navigate("/editor");
@@ -137,7 +158,10 @@ const RisenProcess = () => {
       }
 
       addLog("جاري تحليل الملف الأصلي وتطبيق الترجمات...");
-      const result = await buildRisenOutputFromState(editorState.translations, editorState.entries, { shapeArabic });
+      const isGar5Build = (editorState.entries[0]?.msbtFile || "").endsWith(RISEN3_MSBT_SUFFIX);
+      const result = isGar5Build
+        ? await buildRisen3OutputFromState(editorState.translations, editorState.entries, { shapeArabic })
+        : await buildRisenOutputFromState(editorState.translations, editorState.entries, { shapeArabic });
       addLog(`تم جمع ${result.translatedCount} ترجمة وإعادة بناء الملف`);
       if (result.tagRepairCount > 0) {
         addLog(`⚠️ ${result.tagRepairCount} ترجمة كان ينقصها وسم Risen — أُلحق تلقائياً، يُنصح بمراجعتها`);
@@ -180,7 +204,7 @@ const RisenProcess = () => {
         {/* Game selector — determines which AI prompts/lore/labels apply (Risen 1 vs Risen 2) */}
         <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
           <p className="text-sm font-display font-bold mb-3">اختر إصدار اللعبة قبل الرفع:</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
               disabled={busy}
@@ -199,6 +223,15 @@ const RisenProcess = () => {
               <div className="font-display font-bold text-lg">Risen 2</div>
               <div className="text-xs text-muted-foreground">عالم قراصنة (Dark Waters)</div>
             </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setRisenGame("risen3")}
+              className={`rounded-lg border-2 p-4 text-center transition-colors ${risenGame === "risen3" ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
+            >
+              <div className="font-display font-bold text-lg">Risen 3</div>
+              <div className="text-xs text-muted-foreground">جزيرة Taranis — صيغة ملف مختلفة (localization.p00)</div>
+            </button>
           </div>
         </div>
 
@@ -209,7 +242,9 @@ const RisenProcess = () => {
               <Upload className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="font-display font-bold">1. ارفع strings.p00 أو strings.pak</h2>
+              <h2 className="font-display font-bold">
+                1. ارفع {risenGame === "risen3" ? "localization.p00" : "strings.p00 أو strings.pak"}
+              </h2>
               <p className="text-sm text-muted-foreground">من مسار <code className="font-mono">_work/Data/Strings/</code></p>
             </div>
           </div>

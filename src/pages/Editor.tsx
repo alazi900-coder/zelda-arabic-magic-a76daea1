@@ -120,12 +120,12 @@ const Editor = () => {
     }
   }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.aiModel]);
 
-  const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2";
+  const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";
   const isGameMaker = sourceGame === "gamemaker";
   // Derived from the actually-loaded entries (not the "editor-source-game" idb
   // flag above, which is never reset and can go stale across projects) — used
   // wherever entries already exist, so it can't disagree with what's loaded.
-  const isRisenEntries = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isRisenEntries = /\.(tab|gar3)$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isMother3Entries = /^(bank_\d+|names_\w+|menu_\w+)$/.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isMetroidPrimeEntries = /^TEXT_/.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isWolfensteinEntries = /^wolf_b\d+_s\d+$/.test(editor.state?.entries?.[0]?.msbtFile || "");

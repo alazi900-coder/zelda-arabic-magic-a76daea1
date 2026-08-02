@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download, ListChecks } from "lucide-react";
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
+import { buildRisen3OutputFromState, RISEN3_MSBT_SUFFIX } from "@/lib/risen3-extractor";
 import { buildGameMakerFromState, GM_BUFFER_KEY } from "@/lib/gamemaker/gm-editor-bridge";
 import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
@@ -251,7 +252,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const handleRisenBuild = async () => {
     setRisenBuilding(true);
     try {
-      const result = await buildRisenOutputFromState(editor.state?.translations || {}, editor.state?.entries, { shapeArabic });
+      const isRisen3 = (editor.state?.entries?.[0]?.msbtFile || "").endsWith(RISEN3_MSBT_SUFFIX);
+      const result = isRisen3
+        ? await buildRisen3OutputFromState(editor.state?.translations || {}, editor.state?.entries, { shapeArabic })
+        : await buildRisenOutputFromState(editor.state?.translations || {}, editor.state?.entries, { shapeArabic });
       const blob = new Blob([result.buffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

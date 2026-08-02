@@ -1,15 +1,8 @@
 /**
  * محلل ومُعيد بناء ملفات GameMaker IFF GEN8 (.droid, .win, .unx)
  * 
- * هيكل الملف:
- * - FORM (4 بايت) + الحجم الكلي (4 بايت)
- * - أقسام (Chunks) متعددة، كل قسم يبدأ بـ:
- *   - معرّف القسم (4 بايت، مثل "GEN8", "STRG", "CODE")
- *   - حجم القسم (4 بايت)
- *   - بيانات القسم
- * 
- * القسم المهم للترجمة: STRG (النصوص)
- * المؤشرات في STRG هي مؤشرات مطلقة في الملف
+ * يستخرج فقط النصوص المهمة للترجمة (الحوارات والرسائل والقوائم)
+ * ويستبعد المعرّفات البرمجية والبيانات العشوائية
  */
 
 import type { ExtractedEntry } from "@/components/editor/types";
@@ -38,14 +31,33 @@ export interface GameMakerExtractResult {
   };
 }
 
-// تصفية النصوص غير المهمة للترجمة
+// كلمات مفتاحية تشير إلى نصوص مهمة للترجمة
+const IMPORTANT_KEYWORDS = [
+  // كلمات إنجليزية شائعة
+  'the', 'you', 'your', 'hello', 'welcome', 'please', 'press', 'game', 'level', 'world',
+  'stage', 'congratulations', 'game over', 'thanks', 'made', 'by', 'engine', 'edition', 'demo',
+  'mario', 'enemy', 'power', 'jump', 'run', 'block', 'coin', 'fire', 'water', 'ice',
+  'castle', 'walljump', 'hug', 'wall', 'throwable', 'bricks', 'grab', 'key', 'switch',
+  'palace', 'dig', 'chest', 'cheat', 'code', 'warning', 'enter', 'menu', 'select',
+  'start', 'continue', 'quit', 'save', 'load', 'delete', 'new', 'game',
+  // كلمات إسبانية شائعة
+  'felicidades', 'ganando', 'holaa', 'bienvenido', 'jugando', 'menú', 'escojiendo',
+  'principal', 'mapa', 'mundo', 'poder', 'casa', 'toad', 'power-up',
+];
+
+// أنماط يجب تخطيها
 const SKIP_PATTERNS = [
   /^[0-9.]+$/, // أرقام فقط
   /^[{}()\[\]<>]+$/, // أقواس وعلامات فقط
-  /^[a-zA-Z0-9_]*$/, // معرّفات برمجية فقط (متغيرات)
+  /^[a-zA-Z_][a-zA-Z0-9_]*$/, // معرّفات برمجية (متغير واحد)
   /^(true|false|null|undefined)$/, // قيم برمجية
-  /^(scr_|spr_|obj_|rm_|fnt_|ds_|gml_)/, // معرّفات داخلية
+  /^(scr_|spr_|obj_|rm_|fnt_|ds_|gml_|px_|vk_)/, // معرّفات داخلية
   /^@@/, // معرّفات خاصة
+  /^\$\$/, // معرّفات خاصة
+  /^(prototype|arguments|instance_exists|keyboard_check|draw_self)$/, // دوال شهيرة
+  /^(numpad|caps|lock|page|print|screen|windows|scroll)/, // مفاتيح لوحة المفاتيح
+  /^(0|1|2|3|4|5|6|7|8|9)$/, // أرقام مفردة
+  /^(FPS:|settings\.dat|discord_rich_presence\.dll|0123456789)$/, // ملفات وإعدادات
 ];
 
 function isTranslatable(text: string): boolean {
@@ -57,19 +69,27 @@ function isTranslatable(text: string): boolean {
     if (pattern.test(text)) return false;
   }
   
-  // تخطي النصوص التي تحتوي على أحرف غير مطبوعة
+  // تخطي النصوص التي تحتوي على أحرف غير مطبوعة (باستثناء الحركات)
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i);
+    // السماح بـ: حروف، أرقام، مسافات، علامات ترقيم، حركات عربية
     if (code < 32 && code !== 10 && code !== 13 && code !== 9) {
       return false;
     }
   }
   
-  // يجب أن يحتوي النص على كلمات حقيقية (حروف وأرقام وعلامات ترقيم)
+  // يجب أن يحتوي على كلمات حقيقية (حروف متعددة)
   const hasLetters = /[a-zA-Z]/.test(text);
-  const hasWords = /\b[a-zA-Z]{2,}\b/.test(text); // كلمات بحد أدنى حرفين
+  const hasWords = /\b[a-zA-Z]{2,}\b/.test(text);
   
-  return hasLetters || hasWords;
+  if (!hasLetters && !hasWords) return false;
+  
+  // البحث عن كلمات مفتاحية مهمة
+  const lowerText = text.toLowerCase();
+  const hasImportantKeyword = IMPORTANT_KEYWORDS.some(keyword => lowerText.includes(keyword));
+  
+  // النصوص التي تحتوي على كلمات مفتاحية مهمة أو طول معقول مع كلمات
+  return hasImportantKeyword || (text.length > 15 && hasWords);
 }
 
 /**
@@ -104,7 +124,7 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     chunks.set(chunkId, new Uint8Array(chunkData));
     
     if (chunkId === "STRG") {
-      strgChunkStart = offset + 8; // موضع بداية بيانات STRG
+      strgChunkStart = offset + 8;
     }
     
     offset += 8 + chunkSize;
@@ -120,26 +140,20 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
       const strgView = new DataView(strgData.buffer, strgData.byteOffset, strgData.byteLength);
       const stringCount = strgView.getUint32(0, true);
       
-      // قراءة جميع النصوص باستخدام المؤشرات المطلقة
       for (let i = 0; i < stringCount; i++) {
         try {
-          // قراءة المؤشر (مؤشر مطلق في الملف)
           const pointerOffset = 4 + i * 4;
           if (pointerOffset + 4 > strgData.byteLength) break;
           
           const absolutePointer = strgView.getUint32(pointerOffset, true);
-          
-          // تحويل المؤشر المطلق إلى موضع نسبي في الملف الكامل
           const relativePointer = absolutePointer - strgChunkStart;
           
           if (relativePointer < 0 || relativePointer + 4 > strgData.byteLength) continue;
           
-          // قراءة طول النص
           const stringLength = strgView.getUint32(relativePointer, true);
           
           if (stringLength < 0 || relativePointer + 4 + stringLength > strgData.byteLength) continue;
           
-          // فك تشفير النص
           const stringBytes = strgData.subarray(relativePointer + 4, relativePointer + 4 + stringLength);
           const value = new TextDecoder("utf-8").decode(stringBytes);
           
@@ -149,7 +163,6 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
             index: i,
           });
         } catch (e) {
-          console.warn(`خطأ في قراءة النص ${i}:`, e);
           continue;
         }
       }
@@ -206,14 +219,12 @@ export function buildGameMakerIFF(
   doc: GameMakerIFFDocument,
   translations: Record<string, string>
 ): { buffer: ArrayBuffer; translatedCount: number } {
-  // نسخ الملف الأصلي
   const newBuffer = new ArrayBuffer(doc.originalBuffer.byteLength);
   const newBytes = new Uint8Array(newBuffer);
   newBytes.set(new Uint8Array(doc.originalBuffer));
   
   const newView = new DataView(newBuffer);
   
-  // تطبيق الترجمات على النصوص
   let translatedCount = 0;
   
   for (const str of doc.strings) {
@@ -225,7 +236,6 @@ export function buildGameMakerIFF(
         const encoded = new TextEncoder().encode(translation);
         const oldLength = newView.getUint32(str.offset, true);
         
-        // تحديث الطول والنص فقط إذا كان الحجم الجديد لا يتجاوز الحد القديم
         if (encoded.length <= oldLength) {
           newView.setUint32(str.offset, encoded.length, true);
           const targetBytes = new Uint8Array(newBuffer, str.offset + 4, encoded.length);

@@ -112,11 +112,11 @@ export function extractEntriesFromP00Gar5(
   const entries: ExtractedEntry[] = [];
 
   const msbtFile = `${targetField}${RISEN3_MSBT_SUFFIX}`;
-  let translatable = extractColumnGroup(doc, TEXT_SOURCE_PREFERENCE, msbtFile, entries);
+  let translatable = extractColumnGroup(doc, TEXT_SOURCE_PREFERENCE, msbtFile, entries, options.keyMap);
 
   if (options.includeStageDir) {
     const stageDirMsbtFile = `${STAGEDIR_TARGET_FIELD_GAR5}${STAGEDIR_MSBT_MARKER}${RISEN3_MSBT_SUFFIX}`;
-    translatable += extractColumnGroup(doc, STAGEDIR_SOURCE_PREFERENCE, stageDirMsbtFile, entries);
+    translatable += extractColumnGroup(doc, STAGEDIR_SOURCE_PREFERENCE, stageDirMsbtFile, entries, options.keyMap);
   }
 
   return {

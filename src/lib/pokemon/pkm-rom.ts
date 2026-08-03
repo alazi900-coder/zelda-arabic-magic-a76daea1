@@ -18,11 +18,11 @@
  * silently truncated.
  */
 
-import { decodePkmBytes, encodeArabicForPkm, pkmFormatLength, PKM_FORMAT, PKM_RESERVED_SLOTS, PKM_TERMINATOR, PKM_VARIABLE } from "./pkm-charmap";
+import { decodeBytesWithTables, encodeArabicWithTables, pkmFormatLength, PKM_FORMAT, PKM_RESERVED_SLOTS, PKM_TERMINATOR, PKM_VARIABLE } from "./pkm-charmap";
+import { pkmCodecFor, type PkmCodec } from "./pkm-codec";
 import { diffPkmTags } from "./pkm-tag-mask";
 import type { PkmListKind } from "./pkm-categories";
 import { indexPkmPointers, writePkmPointer, PkmFreeSpace, type PkmPointerIndex } from "./pkm-pointers";
-import { PKM_FONT_OFFSET, PKM_GLYPH_BYTES } from "./pkm-font";
 
 /** A line found in the ROM. `capacity` counts the terminator. */
 export interface PkmString {
@@ -80,6 +80,8 @@ export interface ScanOptions {
    * line, and no counting of letters can say it as well.
    */
   pointers?: PkmPointerIndex;
+  /** Which game this ROM is. Read from its header when not given. */
+  codec?: PkmCodec;
 }
 
 /**
@@ -90,6 +92,7 @@ export interface ScanOptions {
  */
 export function scanPkmStrings(rom: Uint8Array, options: ScanOptions = {}): PkmString[] {
   const minLetters = options.minLetters ?? 4;
+  const codec = options.codec ?? pkmCodecFor(rom);
   const out: PkmString[] = [];
   let i = 0;
   while (i < rom.length) {
@@ -135,7 +138,7 @@ export function scanPkmStrings(rom: Uint8Array, options: ScanOptions = {}): PkmS
       out.push({
         offset: start,
         capacity: end - start,
-        text: decodePkmBytes(rom.subarray(start, i)),
+        text: decodeBytesWithTables(rom.subarray(start, i), codec.tables),
       });
     }
     i++;
@@ -309,11 +312,8 @@ export interface PkmWriteOptions {
    * that only looks like a pointer would be rewritten with it.
    */
   relocate?: boolean;
-}
-
-/** The font's own cells, so a relocated line is never written over them. */
-function fontRegion() {
-  return [{ start: PKM_FONT_OFFSET, length: 0x83 * PKM_GLYPH_BYTES }];
+  /** Which game this ROM is. Read from its header when not given. */
+  codec?: PkmCodec;
 }
 
 /**
@@ -422,6 +422,7 @@ export function applyPkmTranslations(
   translations: Record<string, string>,
   options: PkmWriteOptions = {}
 ): PkmWriteResult {
+  const codec = options.codec ?? pkmCodecFor(rom);
   const out = new Uint8Array(rom);
   const tooLong: PkmWriteResult["tooLong"] = [];
   const brokenTags: PkmWriteResult["brokenTags"] = [];
@@ -437,7 +438,7 @@ export function applyPkmTranslations(
   if (options.relocate) {
     pointers = indexPkmPointers(rom);
     markPointedTables(strings, pointers);
-    free = new PkmFreeSpace(rom, fontRegion());
+    free = new PkmFreeSpace(rom, codec.fontRegion(rom));
   }
 
   for (const s of strings) {
@@ -451,7 +452,7 @@ export function applyPkmTranslations(
       brokenTags.push({ offset: s.offset, missing: tagDiff.missing, extra: tagDiff.extra, text: value });
       continue;
     }
-    const encoded = encodeArabicForPkm(value);
+    const encoded = encodeArabicWithTables(value, codec.tables);
     encoded.unmapped.forEach((c) => unmapped.add(c));
     const needed = encoded.bytes.length + 1; // + terminator
     if (needed > s.capacity) {

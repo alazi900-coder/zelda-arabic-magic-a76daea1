@@ -11,12 +11,18 @@ import {
   PKM_BUFFER_KEY,
   PKM_SOURCE_GAME,
 } from "@/lib/pokemon/pkm-editor-bridge";
+import { pkmCodecFor } from "@/lib/pokemon/pkm-codec";
 
 /**
- * Pokémon Ruby Destiny opener: reads the .gba ROM, recognises every line of
- * text in it, and loads them into the shared translation editor (`/editor`).
- * The ROM bytes are stashed in IndexedDB so the editor's build step can write
- * a translated ROM.
+ * Gen 3 Pokémon opener: reads the .gba ROM, recognises every line of text in
+ * it, and loads them into the shared translation editor (`/editor`). The ROM
+ * bytes are stashed in IndexedDB so the editor's build step can write a
+ * translated ROM.
+ *
+ * Two games come through here — Ruby Destiny and Emerald — and the ROM's own
+ * header says which. They share an engine, so they share everything but the
+ * codes Arabic takes and where the font sits; the translator is told which
+ * game was recognised rather than left to guess from the lines.
  */
 export default function PokemonText() {
   const [busy, setBusy] = useState(false);
@@ -40,6 +46,7 @@ export default function PokemonText() {
             "هذا روم مبني (يحمل الخط العربي) — افتح الروم الأصلي. الأسطر المكتوبة بالعربية لا يقرأها المستخرِج، وفتحه هنا كان يمسح ترجماتها."
           );
         }
+        const codec = pkmCodecFor(rom);
         const { entries, textBytes } = extractPkmEntries(rom);
         if (entries.length === 0) {
           throw new Error("لم يُعثر على نصوص في هذا الروم");
@@ -64,7 +71,7 @@ export default function PokemonText() {
 
         const restored = Object.keys(translations).length;
         toast.success(
-          `تم استخراج ${entries.length} سطراً (${Math.round(textBytes / 1024)} ك.ب من النص)` +
+          `${codec.name}: استُخرج ${entries.length} سطراً (${Math.round(textBytes / 1024)} ك.ب من النص)` +
             (restored > 0 ? ` — واسترجاع ${restored} ترجمة محفوظة` : "")
         );
         navigate("/editor");
@@ -81,7 +88,7 @@ export default function PokemonText() {
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">تعريب نصوص Pokémon Ruby Destiny</h1>
+          <h1 className="text-2xl font-bold">تعريب نصوص Pokémon</h1>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <Link to="/pokemon/font" className="hover:underline">أداة الخط</Link>
             <Link to="/pokemon" className="hover:underline">
@@ -113,7 +120,7 @@ export default function PokemonText() {
           )}
           <span className="text-lg font-medium">افتح ملف ‎.gba‎</span>
           <span className="text-sm text-muted-foreground">
-            روم اللعبة الأصلي — يُفتح مباشرة في المحرر الرئيسي
+            روم Ruby Destiny أو Emerald الأصلي — يُفتح مباشرة في المحرر الرئيسي
           </span>
           <input
             type="file"
@@ -137,8 +144,8 @@ export default function PokemonText() {
             يعرض لك الحدّ، والبناء يرفض ما يتجاوزه ويسمّيه لك بدل أن يقصّه.
           </p>
           <p>
-            العربية تسكن خانات الكانا التي لا تستعملها النسخة الإنجليزية، فالحروف اللاتينية والأرقام تبقى كما هي — تستطيع
-            ترك ما شئت بالإنجليزية.
+            العربية تسكن خانات لا تطبعها النسخة الإنجليزية — الكانا في Ruby Destiny، و١٢٨ خانةً فارغةً أو لحروفٍ مشكولة
+            في Emerald — فالحروف اللاتينية والأرقام تبقى كما هي، وتستطيع ترك ما شئت بالإنجليزية.
           </p>
         </div>
       </div>

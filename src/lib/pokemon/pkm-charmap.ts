@@ -318,6 +318,33 @@ function liftTokens(line: string): { text: string; tokens: number[][] } {
 }
 
 /**
+ * Which byte draws which character.
+ *
+ * Everything else about reading and writing a Gen 3 line — the terminator, the
+ * line break, the paragraph and scroll codes, the variables and the formatting
+ * codes and how many bytes each one carries — belongs to the engine and is the
+ * same in every game built on it. Only these four tables differ, because only
+ * the choice of which codes Arabic may take differs. So the two games share the
+ * machinery below and hand it their own tables.
+ */
+export interface PkmCharTables {
+  arabicToByte: Map<number, number>;
+  byteToArabic: Map<number, number>;
+  latinToByte: Map<string, number>;
+  byteToLatin: Map<number, string>;
+}
+
+/** Ruby Destiny's own tables — what this file has always used. */
+export function pkmCharTables(): PkmCharTables {
+  return {
+    arabicToByte: MAP.toByte,
+    byteToArabic: MAP.toCodepoint,
+    latinToByte: LATIN_TO_BYTE,
+    byteToLatin: BYTE_TO_LATIN,
+  };
+}
+
+/**
  * Turns one line of logical Arabic into the bytes this engine draws: shaped
  * into presentation forms, reversed, then mapped onto the kana slots.
  *
@@ -326,6 +353,11 @@ function liftTokens(line: string): { text: string; tokens: number[][] } {
  * must survive a round trip untouched, or a character loses their name.
  */
 export function encodeArabicForPkm(text: string): PkmEncodeResult {
+  return encodeArabicWithTables(text, pkmCharTables());
+}
+
+/** The same, for a game whose Arabic sits in different codes. */
+export function encodeArabicWithTables(text: string, tables: PkmCharTables): PkmEncodeResult {
   const unmapped: string[] = [];
   const out: number[] = [];
   // A break directly after `{fa}` or `{fb}` is the one the decoder added so the
@@ -341,12 +373,12 @@ export function encodeArabicForPkm(text: string): PkmEncodeResult {
         out.push(...lifted.tokens[cp - TOKEN_BASE]);
         continue;
       }
-      const slot = MAP.toByte.get(cp);
+      const slot = tables.arabicToByte.get(cp);
       if (slot !== undefined) {
         out.push(slot);
         continue;
       }
-      const latin = LATIN_TO_BYTE.get(ch);
+      const latin = tables.latinToByte.get(ch);
       if (latin !== undefined) {
         out.push(latin);
         continue;
@@ -364,6 +396,11 @@ export function encodeArabicForPkm(text: string): PkmEncodeResult {
  * back byte for byte.
  */
 export function decodePkmBytes(bytes: Uint8Array): string {
+  return decodeBytesWithTables(bytes, pkmCharTables());
+}
+
+/** The same, for a game whose Arabic sits in different codes. */
+export function decodeBytesWithTables(bytes: Uint8Array, tables: PkmCharTables): string {
   let out = "";
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i];
@@ -403,12 +440,12 @@ export function decodePkmBytes(bytes: Uint8Array): string {
       i += len - 1;
       continue;
     }
-    const cp = MAP.toCodepoint.get(b);
+    const cp = tables.byteToArabic.get(b);
     if (cp !== undefined) {
       out += String.fromCodePoint(cp);
       continue;
     }
-    const latin = BYTE_TO_LATIN.get(b);
+    const latin = tables.byteToLatin.get(b);
     out += latin ?? `{${b.toString(16).padStart(2, "0")}}`;
   }
   return out;

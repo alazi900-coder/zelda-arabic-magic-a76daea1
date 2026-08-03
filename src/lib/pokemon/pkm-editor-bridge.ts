@@ -1,5 +1,5 @@
 /**
- * Bridge between a Pokémon Ruby Destiny ROM and the shared translation editor.
+ * Bridge between a Gen 3 Pokémon ROM and the shared translation editor.
  *
  * Entry identity is the line's offset in the ROM, because that is the only
  * thing the game gives us — there is no index to number lines by. `msbtFile`
@@ -13,7 +13,7 @@
 
 import type { ExtractedEntry } from "@/components/editor/types";
 import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, markPointedTables, pkmLineLimit, type PkmString } from "./pkm-rom";
-import { applyPkmArabicFont, hasPkmArabicFont } from "./pkm-font";
+import { pkmCodecFor } from "./pkm-codec";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
@@ -41,7 +41,7 @@ export function looksLikePkmRom(rom: Uint8Array): boolean {
  * refuse the file and say which one to open instead.
  */
 export function isBuiltPkmRom(rom: Uint8Array): boolean {
-  return hasPkmArabicFont(rom);
+  return pkmCodecFor(rom).hasFont(rom);
 }
 
 function preview(text: string): string {
@@ -73,8 +73,9 @@ export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
   // every name in a fixed-stride list — keeps the slot it was born in. The
   // scan wants the same index for a different reason: a pointer is what makes
   // a two-letter line like «On» believable.
+  const codec = pkmCodecFor(rom);
   const pointers = indexPkmPointers(rom);
-  const strings = scanPkmStrings(rom, { pointers });
+  const strings = scanPkmStrings(rom, { pointers, codec });
   // A list whose entries are reached by pointer can have its entries moved one
   // by one; one the game counts through by index cannot.
   markPointedTables(strings, pointers);
@@ -179,16 +180,17 @@ export function buildPkmRom(
     if (m) byOffset[m[1]] = value;
   }
 
-  const written = applyPkmTranslations(rom, strings, byOffset, { relocate: options.relocate });
+  const codec = pkmCodecFor(rom);
+  const written = applyPkmTranslations(rom, strings, byOffset, { relocate: options.relocate, codec });
   if (written.written === 0 && written.tooLong.length === 0) {
     return { error: "لا توجد ترجمات محفوظة لبنائها" };
   }
 
   let out = written.rom;
-  const fontApplied = !hasPkmArabicFont(out);
+  const fontApplied = !codec.hasFont(out);
   if (fontApplied) {
     try {
-      out = applyPkmArabicFont(out);
+      out = codec.applyFont(out);
     } catch (err) {
       return { error: (err as Error).message };
     }

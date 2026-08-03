@@ -30,13 +30,19 @@
  */
 
 import { PKM_ARABIC_GLYPHS_B64, PKM_GLYPH_BYTES } from "@/lib/pokemon/pkm-font";
-import { pkmGlyphCodepoints } from "@/lib/pokemon/pkm-charmap";
-import { shapeArabicForRisen, RISEN_ARABIC_QMARK_ALIAS } from "@/lib/risen/arabic-shaper";
+import {
+  decodeBytesWithTables,
+  encodeArabicWithTables,
+  pkmGlyphCodepoints,
+  type PkmCharTables,
+  type PkmEncodeResult,
+} from "@/lib/pokemon/pkm-charmap";
 import {
   EMERALD_GLYPH_SIZE,
   EMERALD_GLYPH_LAST_ROW,
   findEmeraldFont,
   isEmeraldGlyphBlank,
+  readEmeraldGlyph,
   writeEmeraldGlyph,
   type EmeraldFont,
 } from "./emerald-font";
@@ -74,11 +80,6 @@ export const EMERALD_CARRIER_CODES: readonly number[] = [
   ...SPARE_CODES,
 ];
 
-/** Tatweel only stretches a join, and the digits have Latin codes already. */
-const ARABIC_INDIC_ZERO = 0x0660;
-const TATWEEL = 0x0640;
-const TASHKEEL_RE = /[ً-ْٰٟ]/g;
-
 /** Every shape the shaper emits, ascending — see `pkm-charmap` for the same list. */
 function arabicCodepoints(): number[] {
   return pkmGlyphCodepoints().filter((cp) => cp !== 0x0621);
@@ -111,11 +112,38 @@ const BYTE_TO_LATIN = new Map<number, string>();
   "0123456789".split("").forEach((c, i) => add(c, 0xa1 + i));
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((c, i) => add(c, 0xbb + i));
   "abcdefghijklmnopqrstuvwxyz".split("").forEach((c, i) => add(c, 0xd5 + i));
+  // The marks between 0xAB and 0xBA, read off the ROM's own cells rather than
+  // remembered. Naming them matters: 3703 of this game's lines carry `…` and
+  // 1111 carry `-`, and an unnamed byte reaches the translator as `{b0}`.
   add("!", 0xab);
   add("?", 0xac);
   add(".", 0xad);
-  add("'", 0xb4);
+  add("-", 0xae);
+  add("·", 0xaf);
+  add("…", 0xb0);
+  add("“", 0xb1);
+  add("”", 0xb2);
+  add("‘", 0xb3);
+  add("♂", 0xb5);
+  add("♀", 0xb6);
   add(",", 0xb8);
+  add("×", 0xb9);
+  add("/", 0xba);
+  // The low codes the English build still prints, which is exactly why Arabic
+  // was kept out of them: `é` sits between POK and MON in 2984 of this game's
+  // lines, and the arrows sit inside real sentences.
+  add("é", 0x1b);
+  add("↑", 0x79);
+  add("↓", 0x7a);
+  add("←", 0x7b);
+  add("→", 0x7c);
+  // Both apostrophes write 0xB4; the curly one is what it reads back as, so a
+  // line that came out of the ROM goes back into it unchanged.
+  add("'", 0xb4);
+  add("’", 0xb4);
+  // 0xB7 is the game's own money sign, which no character stands for. It is
+  // left unnamed rather than given a wrong one: the translator sees `{b7}`,
+  // keeps it, and it goes back as the byte it was.
 }
 
 /** The engine's own line break. */
@@ -123,10 +151,14 @@ export const EMERALD_NEWLINE = 0xfe;
 /** The byte that ends a string. */
 export const EMERALD_TERMINATOR = 0xff;
 
-export interface EmeraldEncodeResult {
-  bytes: Uint8Array;
-  /** Characters no code draws, for reporting rather than silent loss. */
-  unmapped: string[];
+/** This game's four tables, for the shared Gen 3 reader and writer. */
+export function emeraldCharTables(): PkmCharTables {
+  return {
+    arabicToByte: ARABIC_TO_CODE,
+    byteToArabic: CODE_TO_ARABIC,
+    latinToByte: LATIN_TO_BYTE,
+    byteToLatin: BYTE_TO_LATIN,
+  };
 }
 
 /**
@@ -134,41 +166,13 @@ export interface EmeraldEncodeResult {
  *
  * The engine has no bidi and no shaping: it takes bytes left to right and
  * draws whatever each one holds. So the text is shaped into its presentation
- * forms and reversed here, at build time, and the editor keeps holding plain
- * logical Arabic.
+ * forms and reversed at build time, and the editor keeps holding plain logical
+ * Arabic. The shaping, the reversal and the handling of the game's own codes
+ * are the same work Ruby Destiny needs, so they are done in one place — only
+ * the tables above are this game's.
  */
-export function encodeArabicForEmerald(text: string): EmeraldEncodeResult {
-  const unmapped: string[] = [];
-  const out: number[] = [];
-  text
-    .replace(TASHKEEL_RE, "")
-    .split("\n")
-    .forEach((line, i) => {
-      if (i > 0) out.push(EMERALD_NEWLINE);
-      for (const ch of shapeArabicForRisen(line)) {
-        const cp = ch.codePointAt(0)!;
-        if (cp === TATWEEL) continue;
-        const wanted =
-          cp === RISEN_ARABIC_QMARK_ALIAS
-            ? 0x061f
-            : cp >= ARABIC_INDIC_ZERO && cp <= ARABIC_INDIC_ZERO + 9
-              ? null
-              : cp;
-        if (wanted === null) {
-          out.push(LATIN_TO_BYTE.get(String.fromCharCode(0x30 + (cp - ARABIC_INDIC_ZERO)))!);
-          continue;
-        }
-        const carrier = ARABIC_TO_CODE.get(wanted);
-        if (carrier !== undefined) {
-          out.push(carrier);
-          continue;
-        }
-        const latin = LATIN_TO_BYTE.get(ch);
-        if (latin !== undefined) out.push(latin);
-        else unmapped.push(ch);
-      }
-    });
-  return { bytes: Uint8Array.from(out), unmapped };
+export function encodeArabicForEmerald(text: string): PkmEncodeResult {
+  return encodeArabicWithTables(text, emeraldCharTables());
 }
 
 /**
@@ -176,21 +180,7 @@ export function encodeArabicForEmerald(text: string): EmeraldEncodeResult {
  * for checking a build, not for the editor, which holds logical Arabic.
  */
 export function decodeEmeraldBytes(bytes: Uint8Array): string {
-  let out = "";
-  for (const b of bytes) {
-    if (b === EMERALD_TERMINATOR) break;
-    if (b === EMERALD_NEWLINE) {
-      out += "\n";
-      continue;
-    }
-    const cp = CODE_TO_ARABIC.get(b);
-    if (cp !== undefined) {
-      out += String.fromCodePoint(cp);
-      continue;
-    }
-    out += BYTE_TO_LATIN.get(b) ?? `{${b.toString(16).padStart(2, "0")}}`;
-  }
-  return out;
+  return decodeBytesWithTables(bytes, emeraldCharTables());
 }
 
 /** The 4-bit drawings, as shipped. */
@@ -227,6 +217,37 @@ function toEmeraldCell(source: Uint8Array): Uint8Array {
   return cell;
 }
 
+/** The cell this codepoint's drawing becomes, or null when there is none. */
+function arabicCell(cp: number): Uint8Array | null {
+  const index = pkmGlyphCodepoints().indexOf(cp);
+  if (index < 0) return null;
+  const glyphs = pkmGlyphBytes();
+  return toEmeraldCell(glyphs.subarray(index * PKM_GLYPH_BYTES, (index + 1) * PKM_GLYPH_BYTES));
+}
+
+/**
+ * True when this ROM already carries the Arabic glyphs — it came out of a build.
+ *
+ * Worth asking before anything else is read from it. The scanner recognises a
+ * line by the game's own character set, and Arabic lives in codes that set does
+ * not contain, so a line already written in Arabic is invisible to it: opening
+ * a built ROM in the editor would quietly drop every translation belonging to a
+ * line that had vanished.
+ *
+ * The test is one cell against the drawing that would be written into it —
+ * cheaper than reading them all, and decisive, because no unrelated ROM has
+ * that exact 64 bytes in that exact code.
+ */
+export function hasEmeraldArabicFont(rom: Uint8Array): boolean {
+  const font = findEmeraldFont(rom);
+  if (!font) return false;
+  const [cp, code] = [...ARABIC_TO_CODE][0];
+  const expected = arabicCell(cp);
+  if (!expected) return false;
+  const found = readEmeraldGlyph(rom, font, code);
+  return expected.every((v, i) => v === found[i]);
+}
+
 /**
  * Draws Arabic into a copy of the ROM.
  *
@@ -245,14 +266,11 @@ export function applyEmeraldArabicFont(rom: Uint8Array): { rom: Uint8Array; font
     throw new Error(`خانات كان يجب أن تكون فارغة وفيها رسمٌ الآن: ${list} — الروم مُعدَّل مسبقاً`);
   }
 
-  const glyphs = pkmGlyphBytes();
-  const order = pkmGlyphCodepoints();
   const out = new Uint8Array(rom);
   for (const [cp, code] of ARABIC_TO_CODE) {
-    const index = order.indexOf(cp);
-    if (index < 0) throw new Error(`لا رسم للحرف U+${cp.toString(16).toUpperCase()}`);
-    const source = glyphs.subarray(index * PKM_GLYPH_BYTES, (index + 1) * PKM_GLYPH_BYTES);
-    writeEmeraldGlyph(out, font, code, toEmeraldCell(source));
+    const cell = arabicCell(cp);
+    if (!cell) throw new Error(`لا رسم للحرف U+${cp.toString(16).toUpperCase()}`);
+    writeEmeraldGlyph(out, font, code, cell);
     out[font.widths + code] = EMERALD_ARABIC_WIDTH;
   }
   return { rom: out, font };

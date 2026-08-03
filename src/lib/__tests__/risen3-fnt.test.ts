@@ -175,3 +175,31 @@ describe("Risen 3 — the archive index", () => {
     expect(() => patchRisen3FontDb(db, "Nope", 100)).toThrow();
   });
 });
+
+describe("Risen 3 — the charmap must stay in order", () => {
+  it("sorts by character code when writing, whatever order it was given", () => {
+    // Not tidiness. All seven shipped fonts are strictly ascending, and a build
+    // that appended Arabic after the last existing code — «… 8250, 8364, 1548 …»
+    // — made the game show no text at all, Latin included: the engine
+    // binary-searches this table, so one step out of order loses every
+    // character, not only the ones added.
+    const doc = parseRisen3Fnt(fixture({ pairs: 4, glyphs: 4, opaque: 4, width: 64, height: 64 }));
+    doc.charmap = [
+      { charCode: 0x20ac, glyphIndex: 0 },
+      { charCode: 0x0621, glyphIndex: 1 },
+      { charCode: 0x0041, glyphIndex: 2 },
+      { charCode: 0xfe8d, glyphIndex: 3 },
+    ];
+    const out = parseRisen3Fnt(buildRisen3Fnt(doc));
+    expect(out.charmap.map((p) => p.charCode)).toEqual([0x0041, 0x0621, 0x20ac, 0xfe8d]);
+    // Sorting must not change which glyph a character draws.
+    for (const pair of doc.charmap) {
+      expect(out.charmap.find((p) => p.charCode === pair.charCode)!.glyphIndex).toBe(pair.glyphIndex);
+    }
+  });
+
+  it("keeps a font that was already in order byte for byte", () => {
+    const bytes = fixture({ pairs: 209, glyphs: 209, opaque: 4, width: 256, height: 256 });
+    expect(buildRisen3Fnt(parseRisen3Fnt(bytes))).toEqual(bytes);
+  });
+});

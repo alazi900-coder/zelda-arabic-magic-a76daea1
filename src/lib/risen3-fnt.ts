@@ -150,9 +150,22 @@ export function parseRisen3Fnt(bytes: Uint8Array): Risen3FntDocument {
   };
 }
 
+/**
+ * Writes a font object back out.
+ *
+ * The charmap is sorted by character code first, and that is not tidiness. All
+ * seven shipped fonts are strictly ascending, without one exception, and a
+ * build that appended Arabic after the last existing code — «… 8250, 8364,
+ * 1548 …» — made the game show no text at all: not the Arabic, not the Latin.
+ * The engine binary-searches this table, the same way Risen 3 searches its
+ * string archive, so a single step out of order loses every character rather
+ * than the ones added. (Risen 2 tolerated an unsorted charmap; this one does
+ * not, which is why the note in risen2-xgfn.ts does not carry over.)
+ */
 export function buildRisen3Fnt(doc: Risen3FntDocument): Uint8Array {
-  const charmapBytes = new Uint8Array(4 * doc.charmap.length);
-  doc.charmap.forEach((pair, i) => {
+  const sorted = [...doc.charmap].sort((a, b) => a.charCode - b.charCode);
+  const charmapBytes = new Uint8Array(4 * sorted.length);
+  sorted.forEach((pair, i) => {
     charmapBytes[4 * i] = pair.charCode & 0xff;
     charmapBytes[4 * i + 1] = (pair.charCode >> 8) & 0xff;
     charmapBytes[4 * i + 2] = pair.glyphIndex & 0xff;
@@ -171,7 +184,7 @@ export function buildRisen3Fnt(doc: Risen3FntDocument): Uint8Array {
   };
 
   put(doc.headerPrefix);
-  view.setUint32(p, doc.charmap.length, true);
+  view.setUint32(p, sorted.length, true);
   p += 4;
   put(charmapBytes);
   view.setUint32(p, doc.glyphs.length, true);

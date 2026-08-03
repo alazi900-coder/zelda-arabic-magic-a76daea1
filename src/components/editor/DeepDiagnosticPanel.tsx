@@ -11,6 +11,7 @@ import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-buil
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
+import { splitPkmLines } from "@/lib/pokemon/pkm-line-split";
 import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
 import { detectIssues as detectIssuesPure, type DiagnosticIssue as PureDiagnosticIssue, type Severity as PureSeverity } from "@/lib/diagnostic-detect";
 import { Collapsible as InnerCollapsible, CollapsibleContent as InnerCollapsibleContent, CollapsibleTrigger as InnerCollapsibleTrigger } from "@/components/ui/collapsible";
@@ -92,6 +93,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "pkm_var_mismatch", label: "قيم بوكيمون المفقودة", icon: "🚫", severity: "critical", description: "رمز مثل {FD:01} حُذف أو تغيّر أو انتقل — تفقد الشخصية اسمها في كل سطر يناديها به" },
+  { id: "pkm_line_too_wide", label: "سطر أعرض من صندوق الحوار (بوكيمون)", icon: "📐", severity: "critical", description: "المحرّك لا يلفّ السطر: ما يتجاوز ١٩٨ بكسل يُرسم خارج الصندوق ولا يُمسح، فيبقى فوق الرسائل التالية — الإصلاح يضع فاصل سطر" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
   { id: "missing_rlm_isolation", label: "وسوم بدون عزل اتجاهي", icon: "🧭", severity: "warning", description: "وسوم تقنية ([XENO]/[System]/[ML]/[Event]/{var}/$N) غير محاطة بعلامة RLM — يخلط محرك اللعبة ترتيب الكلمات حولها" },
@@ -154,8 +156,14 @@ const LINE_REBALANCE_CATEGORIES = new Set(["newline_mismatch", "excessive_lines"
 // the whole translation back to English, which would destroy an otherwise-good
 // Risen translation just to recover one tag. This only ever appends.
 const RISEN_TAG_FIXABLE_CATEGORIES = new Set(["risen_tag_mismatch"]);
+
+/**
+ * A Pokémon line wider than its box. Fixed by re-breaking with `\n` and
+ * nothing else — see pkm-line-split.ts for why a `{fb}` may not be invented.
+ */
+const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -387,6 +395,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       };
     }
 
+    if (PKM_WIDTH_FIXABLE_CATEGORIES.has(issue.category)) {
+      const split = splitPkmLines(trans);
+      return {
+        fixResult: split.text,
+        reason: split.changed
+          ? '📐 سيُعاد كسر السطر ليدخل في الصندوق'
+          : `⚠️ ${split.unfittable} صفحة لا يكفيها سطران — اختصرها أو أضف {fb} بنفسك`,
+      };
+    }
+
     if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
       const englishLineCount = countEffectiveLines(entry.original);
       const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;
@@ -486,6 +504,17 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       toast({ title: '🧭 عزل اتجاهي', description: 'تم إحاطة الوسوم التقنية بـ RLM لمنع خلط الكلمات في اللعبة' });
       return;
     }
+    if (PKM_WIDTH_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const split = splitPkmLines(issue.translation);
+      if (split.changed) {
+        onApplyFix(issue.key, split.text);
+        toast({ title: '📐 كسر السطر', description: 'أُعيد توزيع الكلمات لتدخل في صندوق الحوار' });
+      } else {
+        toast({ title: '⚠️ لا يكفيه سطران', description: 'الصندوق سطران — اختصر النص أو أضف {fb} بنفسك' });
+      }
+      return;
+    }
+
     if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
       const englishLineCount = countEffectiveLines(entry.original);
       const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;
@@ -620,6 +649,24 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       applyBatchUpdates(updates);
       toast({ title: '🧭 عزل اتجاهي جماعي', description: `تم عزل وسوم التحكم في ${count} نص` });
       setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    if (PKM_WIDTH_FIXABLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
+      let stuck = 0;
+      for (const issue of categoryIssues) {
+        const trans = state.translations[issue.key];
+        if (!trans) continue;
+        const split = splitPkmLines(trans);
+        if (split.changed) updates[issue.key] = split.text;
+        else stuck++;
+      }
+      const count = applyBatchUpdates(updates);
+      toast({
+        title: count > 0 ? '📐 كسر جماعي' : '⚠️ لم يتغيّر شيء',
+        description: `${count} سطراً أُعيد كسره` + (stuck > 0 ? ` | ${stuck} لا يكفيه سطران — اختصرها` : ''),
+      });
       return;
     }
 
@@ -778,6 +825,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🧭 تم عزل الوسوم التقنية بـ RLM', before: trans, after: fixed });
             } else {
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ الوسوم معزولة بالفعل أو لا تحتوي عربية', before: trans, after: trans });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
+
+        if (PKM_WIDTH_FIXABLE_CATEGORIES.has(issue.category)) {
+          const trans = state.translations[issue.key];
+          if (trans) {
+            const split = splitPkmLines(trans);
+            if (split.changed) {
+              updates[issue.key] = split.text;
+              counters.xenoN++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '📐 أُعيد كسر السطر ليدخل في صندوق الحوار', before: trans, after: split.text });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لا يكفيه سطران — يحتاج اختصاراً', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);

@@ -9,6 +9,11 @@
  * printing; an earlier candidate at 0xEAAB80 turned out to be dead data that
  * nothing reads.
  *
+ * The glyphs are held in codepoint order and placed in whichever code the
+ * encoder assigned to that codepoint — see pkm-metrics.ts, which hands the
+ * codes out by how far they advance so a wide letter does not end up in a
+ * narrow code and lose its last columns under the next one.
+ *
  * The glyphs themselves are not rasterised from a TTF. At 8x13 a typeface's
  * strokes are thinner than a pixel, and the rounding drops whichever ones it
  * likes — the stem of ك, the bowl of ف — leaving letters that look torn. These
@@ -20,7 +25,7 @@
  * ص first came out as a small circle.
  */
 
-import { PKM_SLOT_COUNT, pkmArabicSlots } from "./pkm-charmap";
+import { PKM_SLOT_COUNT, pkmArabicSlots, pkmFontSlots } from "./pkm-charmap";
 
 /** Where the font starts in the ROM. */
 export const PKM_FONT_OFFSET = 0xea2c40;
@@ -50,15 +55,17 @@ export function applyPkmArabicFont(rom: Uint8Array): Uint8Array {
   if (glyphs.length !== expected) {
     throw new Error(`الخط العربي حجمه ${glyphs.length} بايت والمتوقّع ${expected}`);
   }
-  const slots = pkmArabicSlots();
-  const last = PKM_FONT_OFFSET + (slots[slots.length - 1] + 1) * PKM_GLYPH_BYTES;
+  const all = pkmArabicSlots();
+  const last = PKM_FONT_OFFSET + (all[all.length - 1] + 1) * PKM_GLYPH_BYTES;
   if (last > rom.length) {
     throw new Error("الملف أصغر من أن يحوي خط اللعبة — هل هذا روم Ruby Destiny؟");
   }
-  // Slot by slot rather than one block: the run has a hole in it at `é`, whose
-  // cell the game still draws inside every POKéMON it has not translated yet.
+  // Glyph by glyph rather than one block, and to the code the encoder gives it
+  // — the codes are handed out by width now, not in order, so the `i`-th glyph
+  // does not belong to the `i`-th code. (The run also has a hole in it at `é`,
+  // whose cell the game still draws inside every POKéMON not yet translated.)
   const out = new Uint8Array(rom);
-  slots.forEach((slot, i) => {
+  pkmFontSlots().forEach((slot, i) => {
     out.set(glyphs.subarray(i * PKM_GLYPH_BYTES, (i + 1) * PKM_GLYPH_BYTES), PKM_FONT_OFFSET + slot * PKM_GLYPH_BYTES);
   });
   return out;
@@ -67,8 +74,9 @@ export function applyPkmArabicFont(rom: Uint8Array): Uint8Array {
 /** True when a ROM already carries the Arabic glyphs. */
 export function hasPkmArabicFont(rom: Uint8Array): boolean {
   const glyphs = decodeGlyphs();
-  const slots = pkmArabicSlots();
-  const last = PKM_FONT_OFFSET + (slots[slots.length - 1] + 1) * PKM_GLYPH_BYTES;
+  const slots = pkmFontSlots();
+  const all = pkmArabicSlots();
+  const last = PKM_FONT_OFFSET + (all[all.length - 1] + 1) * PKM_GLYPH_BYTES;
   if (last > rom.length) return false;
   return slots.every((slot, i) => {
     const at = PKM_FONT_OFFSET + slot * PKM_GLYPH_BYTES;

@@ -31,6 +31,7 @@
  */
 
 import { shapeArabicForRisen, RISEN_ARABIC_QMARK_ALIAS } from "@/lib/risen/arabic-shaper";
+import { pkmSlotsByWidth, PKM_SLOT_ADVANCES } from "./pkm-metrics";
 
 export const PKM_SPACE = 0x00;
 export const PKM_NEWLINE = 0xfe;
@@ -147,11 +148,16 @@ function buildMap(): { toByte: Map<number, number>; toCodepoint: Map<number, num
     throw new Error(`Arabic needs ${needed.length} slots but ${PKM_SLOT_COUNT} are free`);
   }
   const slots = pkmArabicSlots();
+  // Not in order: by width. The codes advance 4 to 8 pixels and the glyphs are
+  // drawn 8 wide, so handing them out in codepoint order clipped 37 forms under
+  // their neighbour and left a two-pixel gap after 42 others — the reason the
+  // letters looked torn and disjoined. See pkm-metrics.ts.
+  const byWidth = pkmSlotsByWidth(slots);
   const toByte = new Map<number, number>();
   const toCodepoint = new Map<number, number>();
   needed.forEach((cp, i) => {
-    toByte.set(cp, slots[i]);
-    toCodepoint.set(slots[i], cp);
+    toByte.set(cp, byWidth[i]);
+    toCodepoint.set(byWidth[i], cp);
   });
   return { toByte, toCodepoint };
 }
@@ -169,12 +175,15 @@ export function pkmCodepointForByte(byte: number): number | null {
 }
 
 /**
- * What the font must contain, slot by slot: `slots()[i]` is the codepoint drawn
- * by byte `PKM_FIRST_SLOT + i`. The font writer walks this and nothing else, so
- * the font and the encoder cannot disagree about which slot holds which letter.
+ * Where each glyph goes: `pkmFontSlots()[i]` is the byte that must hold the
+ * glyph for the `i`-th codepoint, in the order `neededCodepoints()` gives.
+ *
+ * The font writer walks this and nothing else, so the font and the encoder
+ * cannot disagree about which code holds which letter — which matters now that
+ * the codes are handed out by width rather than in order.
  */
 export function pkmFontSlots(): number[] {
-  return pkmArabicSlots().map((b) => MAP.toCodepoint.get(b)!);
+  return neededCodepoints().map((cp) => MAP.toByte.get(cp)!);
 }
 
 /** Normalises what the shaper emits into what actually has a slot. */
@@ -219,21 +228,6 @@ export interface PkmEncodeResult {
  */
 export const PKM_DIALOGUE_LINE_PIXELS = 198;
 
-/**
- * How far the pen moves after each Arabic code, in slot order.
- *
- * Not one number: the codes Arabic borrowed carry the widths the game already
- * had for them, and they run from 4 to 8. Counting characters instead was wrong
- * in both directions — twenty letters spaced apart fit easily, while a
- * thirty-three character sentence spilled.
- *
- * Read straight out of the emulator rather than guessed. Every Arabic glyph was
- * temporarily replaced by a one-pixel bar down the left of its cell, so the ink
- * on screen sits exactly where the pen was; a line of the codes then gives every
- * advance at once as the distance between neighbouring bars. Both runs of the
- * measurement returned the same 129 numbers.
- */
-const PKM_SLOT_WIDTHS = "666666666866666666666668666648666666666666666888888888888888888888888888888888764888788466448888888888678778847888887877877777777";
 
 /** The space: 3 pixels, measured the same way — a bar, a space, a bar. */
 const PKM_SPACE_WIDTH = 3;
@@ -252,7 +246,7 @@ const PKM_LATIN_WIDTH = 6;
 const PKM_VARIABLE_WIDTH = 7 * PKM_LATIN_WIDTH;
 
 const SLOT_WIDTH = new Map<number, number>();
-pkmArabicSlots().forEach((slot, i) => SLOT_WIDTH.set(slot, PKM_SLOT_WIDTHS.charCodeAt(i) - 48));
+pkmArabicSlots().forEach((slot, i) => SLOT_WIDTH.set(slot, PKM_SLOT_ADVANCES.charCodeAt(i) - 48));
 
 /**
  * How many pixels this line takes on screen.
@@ -324,7 +318,10 @@ function liftTokens(line: string): { text: string; tokens: number[][] } {
 export function encodeArabicForPkm(text: string): PkmEncodeResult {
   const unmapped: string[] = [];
   const out: number[] = [];
-  const lines = text.replace(TASHKEEL_RE, "").split("\n");
+  // A break directly after `{fa}` or `{fb}` is the one the decoder added so the
+  // message reads in its real shape on screen. The code already ends the line;
+  // writing 0xFE as well would open the new page with an empty first line.
+  const lines = text.replace(TASHKEEL_RE, "").replace(/(\{f[ab]\})\n/g, "$1").split("\n");
   lines.forEach((line, i) => {
     if (i > 0) out.push(PKM_NEWLINE);
     const lifted = liftTokens(line);
@@ -370,8 +367,14 @@ export function decodePkmBytes(bytes: Uint8Array): string {
     // both as `\n` and writing `\n` back turned every one of them into a
     // plain break — 2734 lines in this ROM — so a message that used to page
     // properly would run off the two-line box instead.
+    //
+    // They do end the line on screen, though, so a break is put after the code
+    // for the translator to read the message in its real shape. That break is
+    // layout, not content: `encodeArabicForPkm` drops the one that follows
+    // either code, and the bytes come back exactly as they were.
     if (b === PKM_PARAGRAPH || b === PKM_SCROLL) {
       out += `{${b.toString(16)}}`;
+      if (bytes[i + 1] !== undefined && bytes[i + 1] !== PKM_TERMINATOR) out += "\n";
       continue;
     }
     if (b === PKM_VARIABLE) {

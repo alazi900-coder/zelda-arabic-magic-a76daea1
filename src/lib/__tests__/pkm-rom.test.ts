@@ -9,6 +9,10 @@ import { extractPkmEntries, isBuiltPkmRom, restorePkmTranslations, buildPkmRom }
 import { detectIssues } from "@/lib/diagnostic-detect";
 import { processArabicText } from "@/lib/arabic-processing";
 import { measureEntryBytes } from "@/lib/entry-bytes";
+import { splitPkmLines } from "@/lib/pokemon/pkm-line-split";
+import { pkmFontSlots, PKM_SLOT_COUNT } from "@/lib/pokemon/pkm-charmap";
+import { PKM_ARABIC_GLYPHS_B64, PKM_GLYPH_BYTES } from "@/lib/pokemon/pkm-font";
+import { PKM_GLYPH_INK_WIDTHS, PKM_SLOT_ADVANCES } from "@/lib/pokemon/pkm-metrics";
 
 /** English text in the game's own character set, the way the ROM stores it. */
 function gameBytes(text: string): number[] {
@@ -493,7 +497,7 @@ describe("the codes the scan used to stop at", () => {
   });
 
   it("writes every one of them back byte for byte", () => {
-    for (const text of ["{FC:01:0f}Hello", "Bug Forest\n↑ Pass Path", "Hi{fb}Bye", "POKéMON"]) {
+    for (const text of ["{FC:01:0f}Hello", "Bug Forest\n↑ Pass Path", "Hi{fb}\nBye", "POKéMON"]) {
       const bytes = encodeArabicForPkm(text).bytes;
       expect(decodePkmBytes(bytes)).toBe(text);
     }
@@ -503,9 +507,17 @@ describe("the codes the scan used to stop at", () => {
     // `FB` waits for the player and clears the box; `FE` just breaks the line.
     // Reading both as `\n` and writing `\n` back turned 2734 paragraph codes
     // into plain breaks, and a message that used to page ran off the box.
-    expect(decodePkmBytes(Uint8Array.from([...gameBytes("Hi"), 0xfb, ...gameBytes("Bye")]))).toBe("Hi{fb}Bye");
+    // The break after `{fb}` is layout: the editor shows the message in the
+    // shape the player sees, and the encoder drops that break again — the code
+    // already ends the line, and writing 0xFE as well would open the new page
+    // with an empty first line. Measured on the shipped ROM: all 2734 lines
+    // carrying these codes come back byte for byte.
+    expect(decodePkmBytes(Uint8Array.from([...gameBytes("Hi"), 0xfb, ...gameBytes("Bye")]))).toBe("Hi{fb}\nBye");
     expect(decodePkmBytes(Uint8Array.from([...gameBytes("Hi"), 0xfe, ...gameBytes("Bye")]))).toBe("Hi\nBye");
-    expect([...encodeArabicForPkm("Hi{fb}Bye").bytes]).toContain(0xfb);
+    const back = [...encodeArabicForPkm("Hi{fb}\nBye").bytes];
+    expect(back).toEqual([...gameBytes("Hi"), 0xfb, ...gameBytes("Bye")]);
+    // A break the translator puts on the next line of their own still counts.
+    expect([...encodeArabicForPkm("Hi{fb}\n\nBye").bytes]).toContain(0xfe);
   });
 
   it("leaves the arrows and é out of the Arabic slots", () => {
@@ -580,59 +592,132 @@ describe("Pokémon Ruby Destiny — the shortest lines", () => {
 
 describe("Pokémon Ruby Destiny — the width of the box", () => {
   it("measures a line in pixels, from the codes the build would write", () => {
-    // Every Arabic code carries the width the game already had for it, 4 to 8,
-    // so a character count says nothing. These are the measured numbers.
-    expect(pkmLineWidth("ا")).toBe(6);
-    expect(pkmLineWidth("ا ا")).toBe(15); // ٦ + مسافة ٣ + ٦
+    // Every code carries the width the game already had for it, 4 to 8, so a
+    // character count says nothing. Isolated alef sits in a four-pixel code.
+    expect(pkmLineWidth("ا")).toBe(4);
+    expect(pkmLineWidth("ا ا")).toBe(11); // ٤ + مسافة ٣ + ٤
     // A value the game fills in is counted as a seven-character name.
     expect(pkmLineWidth("{FD:01}")).toBe(42);
     // A colour or a pause draws nothing.
-    expect(pkmLineWidth("{FC:05:0f}ا")).toBe(6);
-  });
-
-  it("passes 33 of a six-pixel letter and refuses 34", () => {
-    // Measured in the emulator one length at a time: up to 33 nothing leaves
-    // the box, and from 34 the window spills past its own frame.
-    expect(pkmLineWidth("ا".repeat(33))).toBe(PKM_DIALOGUE_LINE_PIXELS);
-    expect(pkmOverlongLines("ا".repeat(33))).toEqual([]);
-    expect(pkmOverlongLines("ا".repeat(34))).toEqual([{ line: 1, width: 204 }]);
+    expect(pkmLineWidth("{FC:05:0f}ا")).toBe(4);
   });
 
   it("agrees with the sentences that were run in the emulator", () => {
-    // Both of these were built into the ROM and watched. The first is one long
-    // line and spilled. The second breaks after 33 characters — and spilled
-    // too, which is the whole point: 33 characters is not 33 cells. The check
-    // says so, 209 pixels against the box's 198.
+    // Both were built into the ROM and watched. The first is one long line and
+    // spilled; the second breaks after 33 characters — and spilled too, which
+    // is the point: 33 characters is not 33 cells.
     const oneLine = "مرحبا بك في عالم البوكيمون الواسع المليء بالمخلوقات العجيبة";
     const brokenAt33 = "مرحبا بك في عالم البوكيمون الواسع\nالمليء بالمخلوقات العجيبة";
     expect(pkmOverlongLines(oneLine).length).toBeGreaterThan(0);
     expect([..."مرحبا بك في عالم البوكيمون الواسع"]).toHaveLength(33);
-    expect(pkmOverlongLines(brokenAt33)).toEqual([{ line: 1, width: 209 }]);
+    expect(pkmOverlongLines(brokenAt33)).toEqual([{ line: 1, width: 206 }]);
     // Break it where the pixels say, and nothing is over.
-    const fitted = "مرحبا بك في عالم البوكيمون\nالواسع المليء بالمخلوقات العجيبة";
-    expect(pkmLineWidth("مرحبا بك في عالم البوكيمون")).toBe(163);
-    expect(pkmLineWidth("الواسع المليء بالمخلوقات العجيبة")).toBe(206);
-    // 206 is still over — the second half has to give up a word too.
-    expect(pkmOverlongLines(fitted)).toEqual([{ line: 2, width: 206 }]);
     expect(pkmOverlongLines("مرحبا بك في عالم البوكيمون\nالواسع المليء بالمخلوقات")).toEqual([]);
   });
 
   it("measures each line of a message on its own", () => {
     // The break codes start a fresh line, so a long message that breaks in the
     // right places is fine and one long line is not.
-    const wrapped = `${"ا".repeat(30)}\n${"ب".repeat(30)}{fb}${"ت".repeat(30)}`;
-    expect(pkmOverlongLines(wrapped)).toEqual([]);
-    expect(pkmOverlongLines(`${"ا".repeat(40)}\n${"ا".repeat(50)}`)).toEqual([
-      { line: 2, width: 300 },
+    expect(pkmOverlongLines(`${"ا".repeat(40)}\n${"ا".repeat(40)}{fb}${"ا".repeat(40)}`)).toEqual([]);
+    expect(pkmOverlongLines(`${"ا".repeat(60)}\n${"ا".repeat(50)}`)).toEqual([
       { line: 1, width: 240 },
+      { line: 2, width: 200 },
     ]);
   });
 
   it("reports the overflow as a critical issue on a Pokémon entry", () => {
     const issues = detectIssues(
       { msbtFile: "pkm_rom", index: 0, label: "", original: "Hello there\nfriend", maxBytes: 250 },
-      "ا".repeat(40)
+      "ا".repeat(60)
     );
     expect(issues.some((i) => i.category === "pkm_line_too_wide" && i.severity === "critical")).toBe(true);
+  });
+});
+
+describe("Pokémon Ruby Destiny — re-breaking a line to fit the box", () => {
+  it("wraps a long line onto two that fit", () => {
+    const long = "مرحبا بك في عالم البوكيمون الواسع المليء بالمخلوقات";
+    const out = splitPkmLines(long);
+    expect(out.changed).toBe(true);
+    expect(out.unfittable).toBe(0);
+    expect(pkmOverlongLines(out.text)).toEqual([]);
+    expect(out.text.split("\n")).toHaveLength(2);
+    // Not one word moved, added or dropped.
+    expect(out.text.split(/[ \n]+/)).toEqual(long.split(" "));
+  });
+
+  it("leaves a line that already fits alone", () => {
+    const ok = "مرحبا بك";
+    expect(splitPkmLines(ok)).toEqual({ text: ok, changed: false, unfittable: 0 });
+  });
+
+  it("refuses a page that two lines cannot hold, instead of guessing", () => {
+    // The box shows two lines. Inventing a `{fb}` for a third would add a
+    // technical code the build refuses, and the line would stay English in the
+    // game without a word said. Shortening is the translator's call.
+    const huge = Array(30).fill("بالمخلوقات").join(" ");
+    const out = splitPkmLines(huge);
+    expect(out.changed).toBe(false);
+    expect(out.unfittable).toBe(1);
+  });
+
+  it("never moves a page code, and keeps the break the decoder put after it", () => {
+    const text = `مرحبا بك في عالم البوكيمون الواسع المليء بالمخلوقات{fb}\nوداعا`;
+    const out = splitPkmLines(text);
+    expect(out.changed).toBe(true);
+    expect(out.text.match(/\{fb\}/g)).toHaveLength(1);
+    expect(out.text).toContain("{fb}\n");
+    expect(pkmOverlongLines(out.text)).toEqual([]);
+  });
+
+  it("wraps each page of a message on its own", () => {
+    const page = "مرحبا بك في عالم البوكيمون الواسع المليء بالمخلوقات";
+    const out = splitPkmLines(`${page}{fb}\n${page}`);
+    expect(pkmOverlongLines(out.text)).toEqual([]);
+    expect(out.unfittable).toBe(0);
+  });
+});
+
+describe("Pokémon Ruby Destiny — the font's own measurements", () => {
+  it("the recorded ink widths still match the shipped glyphs", () => {
+    // The codes are handed out by width, so a glyph edited without updating
+    // this string would quietly land in a code too narrow for it.
+    const glyphs = Uint8Array.from(atob(PKM_ARABIC_GLYPHS_B64), (c) => c.charCodeAt(0));
+    const measured: number[] = [];
+    for (let i = 0; i < PKM_SLOT_COUNT; i++) {
+      let max = -1;
+      for (let row = 0; row < 16; row++) {
+        for (let px = 0; px < 8; px++) {
+          const byte = glyphs[i * PKM_GLYPH_BYTES + row * 4 + (px >> 1)];
+          const v = px % 2 === 0 ? byte & 0x0f : byte >> 4;
+          if (v !== 0 && px > max) max = px;
+        }
+      }
+      measured.push(max + 1);
+    }
+    expect(measured.join("")).toBe(PKM_GLYPH_INK_WIDTHS);
+  });
+
+  it("gives every glyph its own code, and none of them twice", () => {
+    const slots = pkmFontSlots();
+    expect(slots).toHaveLength(PKM_SLOT_COUNT);
+    expect(new Set(slots).size).toBe(PKM_SLOT_COUNT);
+    for (const s of slots) expect(pkmArabicSlots()).toContain(s);
+  });
+
+  it("puts far more glyphs in a code exactly as wide as they are", () => {
+    // Measured: handing the codes out in codepoint order clipped 37 forms and
+    // left a gap after 42; by width it is 14 and 20, and 95 land exactly.
+    const ink = [...PKM_GLYPH_INK_WIDTHS].map(Number);
+    const slots = pkmArabicSlots();
+    const assigned = pkmFontSlots();
+    let exact = 0, clipped = 0;
+    assigned.forEach((slot, i) => {
+      const advance = PKM_SLOT_ADVANCES.charCodeAt(slots.indexOf(slot)) - 48;
+      if (ink[i] === advance) exact++;
+      else if (ink[i] > advance) clipped++;
+    });
+    expect(exact).toBe(95);
+    expect(clipped).toBe(14);
   });
 });

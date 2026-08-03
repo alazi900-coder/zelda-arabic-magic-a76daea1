@@ -85,7 +85,38 @@ const EMERALD: PkmCodec = {
   hasFont: hasEmeraldArabicFont,
 };
 
-/** The codec this ROM needs, read from its header. */
+export type PkmGame = PkmCodec["game"];
+
+/** The two games, for a page that asks rather than guesses. */
+export const PKM_CODECS: readonly PkmCodec[] = [EMERALD, RUBY_DESTINY];
+
+/** The codec for a game the translator named. */
+export function pkmCodecByGame(game: PkmGame): PkmCodec {
+  const found = PKM_CODECS.find((c) => c.game === game);
+  if (!found) throw new Error(`لا أعرف لعبةً باسم ${game}`);
+  return found;
+}
+
+/**
+ * The codec this ROM needs, read from its header.
+ *
+ * Kept for the ROM that arrives without anyone saying which game it is. It is
+ * a guess, though — a hack or a trimmed dump can carry any header — and a
+ * wrong guess writes the text in one game's codes under the other game's font,
+ * which puts real Arabic letters on screen in the wrong order and looks like
+ * the font is broken. So the page asks, and this is only the fallback.
+ */
 export function pkmCodecFor(rom: Uint8Array): PkmCodec {
   return pkmRomTitle(rom).startsWith("POKEMON EMER") ? EMERALD : RUBY_DESTINY;
+}
+
+/**
+ * The other game's Arabic font, if this ROM is carrying it.
+ *
+ * This is the one mistake that cannot be seen until the game runs: the letters
+ * appear, they are Arabic, and every one of them is wrong. Naming it before a
+ * byte is written costs nothing and saves a build.
+ */
+export function pkmForeignFont(rom: Uint8Array, chosen: PkmCodec): PkmCodec | null {
+  return PKM_CODECS.find((c) => c.game !== chosen.game && c.hasFont(rom)) ?? null;
 }

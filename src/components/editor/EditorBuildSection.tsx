@@ -11,7 +11,8 @@ import { buildGameMakerFromState, GM_BUFFER_KEY } from "@/lib/gamemaker/gm-edito
 import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
-import { buildPkmRom, PKM_BUFFER_KEY } from "@/lib/pokemon/pkm-editor-bridge";
+import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
+import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -182,7 +183,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     try {
       const buf = await idbGet<ArrayBuffer>(PKM_BUFFER_KEY);
       if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة نصوص Pokémon");
-      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {}, { relocate: true });
+      // The game the translator chose when the ROM was opened, not a guess at
+      // its header: the two games write the same letter into different codes.
+      const game = await idbGet<PkmGame>(PKM_GAME_KEY);
+      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {}, { relocate: true, game });
       const { toast } = await import("@/hooks/use-toast");
       if ("error" in result) {
         toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
@@ -192,7 +196,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "RubyDestiny_ar.gba";
+      a.download = game === "emerald" ? "Emerald_ar.gba" : "RubyDestiny_ar.gba";
       a.click();
       URL.revokeObjectURL(url);
       // Lines that did not fit are named rather than trimmed: every line is

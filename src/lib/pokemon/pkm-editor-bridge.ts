@@ -13,11 +13,13 @@
 
 import type { ExtractedEntry } from "@/components/editor/types";
 import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, markPointedTables, pkmLineLimit, type PkmString } from "./pkm-rom";
-import { pkmCodecFor } from "./pkm-codec";
+import { pkmCodecByGame, pkmCodecFor, pkmForeignFont, type PkmGame } from "./pkm-codec";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
 export const PKM_BUFFER_KEY = "pokemonSourceBuffer";
+/** Which of the two games the translator said this ROM is. */
+export const PKM_GAME_KEY = "pokemonSourceGameId";
 export const PKM_SOURCE_GAME = "pokemon";
 export { PKM_ENTRY_FILE, pkmEntryFile } from "./pkm-categories";
 
@@ -40,8 +42,9 @@ export function looksLikePkmRom(rom: Uint8Array): boolean {
  * most of the ROM's code and data look like text — so the honest move is to
  * refuse the file and say which one to open instead.
  */
-export function isBuiltPkmRom(rom: Uint8Array): boolean {
-  return pkmCodecFor(rom).hasFont(rom);
+export function isBuiltPkmRom(rom: Uint8Array, game?: PkmGame): boolean {
+  const codec = game ? pkmCodecByGame(game) : pkmCodecFor(rom);
+  return codec.hasFont(rom) || pkmForeignFont(rom, codec) !== null;
 }
 
 function preview(text: string): string {
@@ -67,13 +70,13 @@ export interface PkmExtractResult {
  */
 export const PKM_RELOCATED_LIMIT = 250;
 
-export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
+export function extractPkmEntries(rom: Uint8Array, game?: PkmGame): PkmExtractResult {
   // A line the game reaches through a pointer can be moved somewhere roomier
   // at build time, so its slot is not its limit. One that is found by index —
   // every name in a fixed-stride list — keeps the slot it was born in. The
   // scan wants the same index for a different reason: a pointer is what makes
   // a two-letter line like «On» believable.
-  const codec = pkmCodecFor(rom);
+  const codec = game ? pkmCodecByGame(game) : pkmCodecFor(rom);
   const pointers = indexPkmPointers(rom);
   const strings = scanPkmStrings(rom, { pointers, codec });
   // A list whose entries are reached by pointer can have its entries moved one
@@ -167,20 +170,30 @@ const PKM_KEY_RE = /^pkm_[a-z0-9]+:(\d+)$/;
 export function buildPkmRom(
   rom: Uint8Array,
   translations: Record<string, string>,
-  options: { relocate?: boolean } = {}
+  options: { relocate?: boolean; game?: PkmGame } = {}
 ): PkmBuildOk | PkmBuildError {
   if (!looksLikePkmRom(rom)) {
     return { error: "الملف لا يبدو روم GBA — تحقّق من أنك رفعت ملف ‎.gba‎ الصحيح" };
   }
 
-  const { strings } = extractPkmEntries(rom);
+  const codec = options.game ? pkmCodecByGame(options.game) : pkmCodecFor(rom);
+  // The one mistake that only shows up once the game runs: text written in one
+  // game's codes under the other game's font. Every letter is real Arabic and
+  // every letter is the wrong one, which reads as a broken font.
+  const foreign = pkmForeignFont(rom, codec);
+  if (foreign) {
+    return {
+      error: `هذا الروم يحمل خطّ ${foreign.name} العربي، وأنت تبني بجدول ${codec.name} — الحروف ستظهر عربيةً وكلّها خاطئة. ارفع الروم الأصلي، أو اختر ${foreign.name}.`,
+    };
+  }
+
+  const { strings } = extractPkmEntries(rom, codec.game);
   const byOffset: Record<string, string> = {};
   for (const [key, value] of Object.entries(translations)) {
     const m = PKM_KEY_RE.exec(key);
     if (m) byOffset[m[1]] = value;
   }
 
-  const codec = pkmCodecFor(rom);
   const written = applyPkmTranslations(rom, strings, byOffset, { relocate: options.relocate, codec });
   if (written.written === 0 && written.tooLong.length === 0) {
     return { error: "لا توجد ترجمات محفوظة لبنائها" };

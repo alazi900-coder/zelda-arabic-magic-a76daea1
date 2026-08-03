@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { pkmCodecFor, pkmRomTitle } from "@/lib/pokemon/pkm-codec";
+import { pkmCodecByGame, pkmCodecFor, pkmForeignFont, pkmRomTitle } from "@/lib/pokemon/pkm-codec";
+import { buildPkmRom, isBuiltPkmRom } from "@/lib/pokemon/pkm-editor-bridge";
+import { applyEmeraldArabicFont, EMERALD_BLANK_CODES } from "@/lib/gba/emerald-arabic";
+import { EMERALD_GLYPH_COUNT, EMERALD_GLYPH_SIZE, writeEmeraldGlyph } from "@/lib/gba/emerald-font";
 import { decodeBytesWithTables, encodeArabicWithTables } from "@/lib/pokemon/pkm-charmap";
 
 /** A ROM that is nothing but its cartridge header. */
@@ -34,6 +37,51 @@ describe("Gen 3 — telling the two games apart", () => {
     for (const kept of [0x34, 0x53, 0x1b]) {
       expect([...emerald.arabicToByte.values()]).not.toContain(kept);
     }
+  });
+});
+
+describe("Gen 3 — refusing the mix that only shows up in the emulator", () => {
+  /** An 8 MB ROM carrying Emerald's font, and Arabic drawn into it. */
+  function emeraldRomWithArabic(): Uint8Array {
+    const rom = new Uint8Array(0x800000);
+    const widths = 0x1000;
+    const glyphs = widths + 0x200;
+    const font = { glyphs, widths };
+    for (let code = 0; code < EMERALD_GLYPH_COUNT; code++) {
+      if (EMERALD_BLANK_CODES.includes(code) || code === 0) {
+        rom[widths + code] = 3;
+        continue;
+      }
+      const width = 3 + (code % 6);
+      rom[widths + code] = width;
+      const cell = new Uint8Array(EMERALD_GLYPH_SIZE * EMERALD_GLYPH_SIZE);
+      for (let y = 2; y < 13; y++) {
+        for (let x = 0; x < width; x++) {
+          cell[y * EMERALD_GLYPH_SIZE + x] = x === width - 1 || (y + code + x) % 3 === 0 ? 1 : 3;
+        }
+      }
+      writeEmeraldGlyph(rom, font, code, cell);
+    }
+    return applyEmeraldArabicFont(rom).rom;
+  }
+
+  it("stops a build that would put the wrong letter in every letter's place", () => {
+    // This is the one mistake nothing on screen explains: the text goes in as
+    // one game's codes and comes out drawn with the other game's font, so the
+    // letters are real Arabic and all of them wrong. It reads as a broken font
+    // and it is not one — so it is named before a byte is written.
+    const rom = emeraldRomWithArabic();
+    const result = buildPkmRom(rom, { "pkm_rom:100": "مرحباً" }, { game: "ruby-destiny" });
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toContain("Emerald");
+  });
+
+  it("names the other game's font when it finds it", () => {
+    const rom = emeraldRomWithArabic();
+    expect(pkmForeignFont(rom, pkmCodecByGame("ruby-destiny"))?.game).toBe("emerald");
+    expect(pkmForeignFont(rom, pkmCodecByGame("emerald"))).toBeNull();
+    // And the opener refuses it for the same reason.
+    expect(isBuiltPkmRom(rom, "ruby-destiny")).toBe(true);
   });
 });
 

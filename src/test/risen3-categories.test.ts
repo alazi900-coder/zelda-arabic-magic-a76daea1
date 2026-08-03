@@ -7,11 +7,12 @@ import {
 } from "@/lib/risen3/categories";
 import { categorizeRisenEntry, buildRisenCategories } from "@/lib/risen/categories";
 
-const SAMPLE = `\uFEFFinfo:Info_Test_001|deadbeef|pc
-item:It_1H_Sword|00ff00ff|pc
-hud3:HUD_Options|12345678|pc
-NoPrefixKey|abcdef01|pc
+const SAMPLE = `\uFEFFdeadbeef|info:Info_Test_001
+00ff00ff|item:It_1H_Sword
+12345678|hud3:HUD_Options
+abcdef01|NoPrefixKey
 `;
+
 
 describe("risen3 key map", () => {
   it("parses hash -> prefix/id lines", () => {

@@ -16,7 +16,9 @@ import {
   DEFAULT_ARABIC_TARGET_FIELD_GAR5,
   RISEN3_MSBT_SUFFIX,
 } from "@/lib/risen3-extractor";
+import { loadRisen3KeyMap, buildRisen3Categories } from "@/lib/risen3/categories";
 import type { EditorState } from "@/components/editor/types";
+
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";

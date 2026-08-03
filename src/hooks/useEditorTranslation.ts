@@ -444,7 +444,7 @@ export function useEditorTranslation({
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
       return categorizeBdatTable(e.label, sourceFile, e.original);
     }
-    if (/\.tab$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
+    if (/\.(tab|gar3)$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
     if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile)) return categorizeMother3Entry(e);
     if (/^TEXT_/.test(e.msbtFile)) return categorizeMetroidPrimeEntry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');

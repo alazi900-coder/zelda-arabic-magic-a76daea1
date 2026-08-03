@@ -25,6 +25,7 @@ import { idbGet } from "./idb-storage";
 import { hasRisenTags, restoreRisenTags, extractRisenTags } from "./risen-tag-guard";
 import { extractFormatSpecifiers } from "./format-specifier-guard";
 import { shapeArabicForRisen } from "./risen/arabic-shaper";
+import { categorizeRisen3Prefix, RISEN3_UNKNOWN_CATEGORY, type Risen3KeyMap } from "./risen3/categories";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";
@@ -59,13 +60,18 @@ export interface Risen3ExtractResult {
 
 export interface Risen3ExtractOptions {
   includeStageDir?: boolean;
+  /** Key map (hash -> original ID + source csv prefix) used to label and
+   * categorize rows — see src/lib/risen3/categories.ts. Optional: without it
+   * rows keep their hash label and stay uncategorized. */
+  keyMap?: Risen3KeyMap;
 }
 
 function extractColumnGroup(
   doc: RisenP00Gar5Document,
   sourcePreference: string[],
   msbtFile: string,
-  entries: ExtractedEntry[]
+  entries: ExtractedEntry[],
+  keyMap?: Risen3KeyMap
 ): number {
   const candidates = sourcePreference
     .map((name) => doc.gar5.columns.find((c) => c.name === name))
@@ -83,16 +89,19 @@ function extractColumnGroup(
     translatableCount++;
 
     const idHex = (doc.gar5.rowIds[r] >>> 0).toString(16).padStart(8, "0");
+    const key = keyMap?.get(idHex);
     entries.push({
       msbtFile,
       index: r,
-      label: `0x${idHex}`,
+      label: key ? key.id : `0x${idHex}`,
       original,
       maxBytes: RISEN_MAX_BYTES,
+      risen3Cat: key ? categorizeRisen3Prefix(key.prefix).id : RISEN3_UNKNOWN_CATEGORY.id,
     });
   }
   return translatableCount;
 }
+
 
 export function extractEntriesFromP00Gar5(
   buffer: ArrayBuffer,
@@ -103,11 +112,11 @@ export function extractEntriesFromP00Gar5(
   const entries: ExtractedEntry[] = [];
 
   const msbtFile = `${targetField}${RISEN3_MSBT_SUFFIX}`;
-  let translatable = extractColumnGroup(doc, TEXT_SOURCE_PREFERENCE, msbtFile, entries);
+  let translatable = extractColumnGroup(doc, TEXT_SOURCE_PREFERENCE, msbtFile, entries, options.keyMap);
 
   if (options.includeStageDir) {
     const stageDirMsbtFile = `${STAGEDIR_TARGET_FIELD_GAR5}${STAGEDIR_MSBT_MARKER}${RISEN3_MSBT_SUFFIX}`;
-    translatable += extractColumnGroup(doc, STAGEDIR_SOURCE_PREFERENCE, stageDirMsbtFile, entries);
+    translatable += extractColumnGroup(doc, STAGEDIR_SOURCE_PREFERENCE, stageDirMsbtFile, entries, options.keyMap);
   }
 
   return {

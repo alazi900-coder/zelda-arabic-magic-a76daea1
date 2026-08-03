@@ -58,7 +58,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   setShowTagRepair,
 }) => {
   const entries = editor.state?.entries;
-  const isRisen = !!entries?.some((e) => /\.tab$/i.test(e.msbtFile));
+  const isRisen = !!entries?.some((e) => /\.(tab|gar3)$/i.test(e.msbtFile));
   const isMother3 = !isRisen && !!entries?.some((e) => /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile));
   const isMetroidPrime = !isRisen && !isMother3 && !!entries?.some((e) => /^TEXT_/.test(e.msbtFile));
   const isPokemon = !isRisen && !isMother3 && !isMetroidPrime && !!entries?.some((e) => PKM_FILE_RE.test(e.msbtFile));

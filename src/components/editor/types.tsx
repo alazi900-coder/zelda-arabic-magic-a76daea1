@@ -16,7 +16,10 @@ export interface ExtractedEntry {
   risenRole?: string;
   /** Risen 1: Owner field (NPC name) for infos.tab rows. */
   risenOwner?: string;
+  /** Risen 3: category id resolved from the string-key map at extraction time. */
+  risen3Cat?: string;
 }
+
 
 export interface EditorState {
   entries: ExtractedEntry[];

@@ -16,7 +16,9 @@ import {
   DEFAULT_ARABIC_TARGET_FIELD_GAR5,
   RISEN3_MSBT_SUFFIX,
 } from "@/lib/risen3-extractor";
+import { loadRisen3KeyMap, buildRisen3Categories } from "@/lib/risen3/categories";
 import type { EditorState } from "@/components/editor/types";
+
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";
@@ -69,12 +71,23 @@ const RisenProcess = () => {
       let perTableStats: { table: string; rows: number; translatable: number }[];
 
       if (isGar5) {
-        const r = extractEntriesFromP00Gar5(buffer, DEFAULT_ARABIC_TARGET_FIELD_GAR5, { includeStageDir });
+        const keyMap = await loadRisen3KeyMap();
+        addLog(
+          keyMap.size > 0
+            ? `تم تحميل خريطة معرّفات النصوص (${keyMap.size.toLocaleString()} مفتاح) — سيتم تصنيف الصفوف تلقائياً`
+            : "تعذّر تحميل خريطة المعرّفات — ستظهر الصفوف بدون تصنيف"
+        );
+        const r = extractEntriesFromP00Gar5(buffer, DEFAULT_ARABIC_TARGET_FIELD_GAR5, { includeStageDir, keyMap });
         entries = r.entries;
         perTableStats = [{ table: "w_strings.bin", rows: r.stats.totalRows, translatable: r.stats.translatable }];
         addLog(`تم تحليل أرشيف GAR5/STB الداخلي: ${r.stats.totalRows} صف`);
         addLog(`المصدر: English_Text فقط (fallback إلى German_Text للصفوف الفاضية)${includeStageDir ? " + StageDir" : ""}`);
+        for (const cat of buildRisen3Categories(entries)) {
+          const count = entries.filter((e) => e.risen3Cat === cat.id).length;
+          addLog(`  ${cat.emoji} ${cat.label}: ${count.toLocaleString()} نص`);
+        }
       } else {
+
         const r = extractEntriesFromP00(buffer, DEFAULT_ARABIC_TARGET_FIELD, { includeStageDir });
         entries = r.entries;
         perTableStats = r.stats.perTable;

@@ -24,6 +24,13 @@ export interface GbaGlyphLayout {
   height: number;
   /** بتات اللون الواحد: ١ أو ٢ أو ٤. */
   bpp: number;
+  /**
+   * جدولٌ مُشرَّك: نصف الحرف الأعلى هنا، ونصفه الأسفل بعد هذا العدد من
+   * البلاطات. تُخزَّن خطوط الجيل الثالث هكذا — أنصافٌ علوية متتابعة ثمّ
+   * أنصافٌ سفلية — فقراءتها متتابعةً تُلصق نصف حرفٍ بنصف آخر ولا تُرى
+   * حروفاً. وهذا ما أخفى خطّ Emerald عن الأداة أوّل مرّة.
+   */
+  interleaveTiles?: number;
 }
 
 export interface GbaFontCandidate {
@@ -50,10 +57,22 @@ export const GBA_GLYPH_LAYOUTS: GbaGlyphLayout[] = [
   { width: 8, height: 8, bpp: 1 },
   { width: 8, height: 16, bpp: 1 },
   { width: 16, height: 16, bpp: 1 },
+  // جداول مُشرَّكة: أنصافٌ علوية ثمّ سفلية، وعدد الحروف بينهما يُجرَّب.
+  { width: 8, height: 16, bpp: 4, interleaveTiles: 64 },
+  { width: 8, height: 16, bpp: 4, interleaveTiles: 96 },
+  { width: 8, height: 16, bpp: 4, interleaveTiles: 128 },
+  { width: 8, height: 16, bpp: 4, interleaveTiles: 256 },
+  { width: 8, height: 16, bpp: 2, interleaveTiles: 128 },
 ];
 
 function glyphBytes(layout: GbaGlyphLayout): number {
   return (layout.width * layout.height * layout.bpp) / 8;
+}
+
+/** ما تتقدّمه القراءة من خليّة إلى التي تليها. */
+function glyphStride(layout: GbaGlyphLayout): number {
+  // في الجدول المُشرَّك تتقدّم القراءة نصف حرفٍ فقط، لأنّ نصفه الآخر بعيد.
+  return layout.interleaveTiles ? glyphBytes(layout) / 2 : glyphBytes(layout);
 }
 
 /** بكسلات خليّة واحدة، صفّاً صفّاً. */
@@ -62,9 +81,15 @@ function readGlyph(rom: Uint8Array, at: number, layout: GbaGlyphLayout): Uint8Ar
   const out = new Uint8Array(width * height);
   const perByte = 8 / bpp;
   const mask = (1 << bpp) - 1;
+  const half = (width * (height / 2) * bpp) / 8;
+  const apart = layout.interleaveTiles ? layout.interleaveTiles * half : 0;
   for (let i = 0; i < width * height; i++) {
-    const byte = rom[at + Math.floor(i / perByte)];
-    const shift = (i % perByte) * bpp;
+    // النصف الأسفل يُقرأ من موضعه البعيد حين يكون الجدول مُشرَّكاً.
+    const lower = apart > 0 && i >= (width * height) / 2;
+    const index = lower ? i - (width * height) / 2 : i;
+    const base = at + (lower ? apart : 0);
+    const byte = rom[base + Math.floor(index / perByte)];
+    const shift = (index % perByte) * bpp;
     out[i] = (byte >> shift) & mask;
   }
   return out;
@@ -119,7 +144,7 @@ function median(values: number[]): number {
  * الأخير فارغاً ليفصلها عمّا بعدها.
  */
 function scoreRun(rom: Uint8Array, at: number, layout: GbaGlyphLayout, glyphs: number): GbaFontCandidate | null {
-  const size = glyphBytes(layout);
+  const stride = glyphStride(layout);
   const { width, height } = layout;
   const rows = new Float64Array(height);
   const inks: number[] = [];
@@ -130,7 +155,7 @@ function scoreRun(rom: Uint8Array, at: number, layout: GbaGlyphLayout, glyphs: n
   const shapes = new Set<string>();
 
   for (let g = 0; g < glyphs; g++) {
-    const pixels = readGlyph(rom, at + g * size, layout);
+    const pixels = readGlyph(rom, at + g * stride, layout);
     let ink = 0;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -236,13 +261,14 @@ export function findGbaFonts(rom: Uint8Array, options: GbaFontSearchOptions = {}
   const found: GbaFontCandidate[] = [];
   for (const run of runs) {
     for (const layout of layouts) {
-      const size = glyphBytes(layout);
-      const fits = Math.floor((run.end - run.start) / size);
+      const stride = glyphStride(layout);
+      const reach = layout.interleaveTiles ? glyphBytes(layout) / 2 * layout.interleaveTiles : 0;
+      const fits = Math.floor((run.end - run.start - reach) / stride);
       if (fits < minGlyphs) continue;
       // يُجرّب مبدأ السلسلة وما يليه بخطوة خليّة، فقد تبدأ قبل حدّ الكتلة.
       for (let shift = 0; shift < Math.min(4, fits); shift++) {
-        const at = run.start + shift * size;
-        const glyphs = Math.min(Math.floor((run.end - at) / size), 128);
+        const at = run.start + shift * stride;
+        const glyphs = Math.min(Math.floor((run.end - at - reach) / stride), 128);
         if (glyphs < minGlyphs) break;
         const candidate = scoreRun(rom, at, layout, glyphs);
         if (candidate) {
@@ -259,8 +285,9 @@ export function findGbaFonts(rom: Uint8Array, options: GbaFontSearchOptions = {}
       const data = decompressGbaLz77(rom, block.at);
       if (!data) continue;
       for (const layout of layouts) {
-        const size = glyphBytes(layout);
-        const glyphs = Math.min(Math.floor(data.length / size), 128);
+        const stride = glyphStride(layout);
+        const reach = layout.interleaveTiles ? (glyphBytes(layout) / 2) * layout.interleaveTiles : 0;
+        const glyphs = Math.min(Math.floor((data.length - reach) / stride), 128);
         if (glyphs < minGlyphs) continue;
         const candidate = scoreRun(data, 0, layout, glyphs);
         if (candidate) {
@@ -282,10 +309,10 @@ export function renderGbaFontCandidate(
   columns = 32
 ): { width: number; height: number; rgba: Uint8ClampedArray } {
   const { layout } = candidate;
+  const stride = glyphStride(layout);
   // المضغوط يُفكّ عند الرسم، فلا تُحمل الكتل المفكوكة كلّها في الذاكرة.
   const source = candidate.compressedAt === undefined ? rom : decompressGbaLz77(rom, candidate.compressedAt);
   if (!source) throw new Error("تعذّر فكّ ضغط هذا المرشّح");
-  const size = glyphBytes(layout);
   const rows = Math.ceil(candidate.glyphs / columns);
   const width = columns * (layout.width + 1);
   const height = rows * (layout.height + 1);
@@ -299,7 +326,7 @@ export function renderGbaFontCandidate(
   }
   const levels = (1 << layout.bpp) - 1;
   for (let g = 0; g < candidate.glyphs; g++) {
-    const pixels = readGlyph(source, candidate.offset + g * size, layout);
+    const pixels = readGlyph(source, candidate.offset + g * stride, layout);
     const gx = (g % columns) * (layout.width + 1);
     const gy = Math.floor(g / columns) * (layout.height + 1);
     for (let y = 0; y < layout.height; y++) {

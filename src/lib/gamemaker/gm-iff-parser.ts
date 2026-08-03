@@ -20,6 +20,8 @@ export interface GameMakerIFFDocument {
   strings: GameMakerString[];
   originalBuffer: ArrayBuffer;
   strgChunkStart: number;
+  /** موضع كل قسم في الملف وحجمه، بالترتيب — تحتاجه إعادة البناء. */
+  chunkLayout: { id: string; start: number; size: number }[];
   /** فهارس النصوص التي تدفعها شيفرة اللعبة ثابتةً — هذه وحدها كلام اللاعب. */
   constantIndices: Set<number>;
   /** كم دالّة قُرئت، وكم منها لم تنتهِ عند طولها المذكور. */
@@ -150,6 +152,7 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
   
   // قراءة الأقسام
   const chunks = new Map<string, Uint8Array>();
+  const chunkLayout: { id: string; start: number; size: number }[] = [];
   let strgChunkStart = 0;
   let codeChunkStart = 0;
 
@@ -163,6 +166,7 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     
     const chunkData = bytes.subarray(offset + 8, offset + 8 + chunkSize);
     chunks.set(chunkId, new Uint8Array(chunkData));
+    chunkLayout.push({ id: chunkId, start: offset + 8, size: chunkSize });
     
     if (chunkId === "STRG") {
       strgChunkStart = offset + 8;
@@ -229,6 +233,7 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     strings,
     originalBuffer: buffer,
     strgChunkStart,
+    chunkLayout,
     constantIndices: code.indices,
     codeStats: { functions: code.functions, misaligned: code.misaligned },
   };
@@ -275,45 +280,159 @@ export function extractGameMakerEntries(doc: GameMakerIFFDocument): GameMakerExt
 }
 
 /**
- * إعادة بناء ملف GameMaker مع التطبيق الترجمات
+ * محاذاة بيانات صفحات النسيج، مقروءةً من الملف لا مفترضة.
+ *
+ * بيانات كل صفحة تبدأ عند مضاعف عددٍ ثابت — ١٢٨ في لعبة Mario هذه. فإن
+ * كبر قسم النصوص بمقدار لا يقبل القسمة عليه انزاحت كل صفحة عن محاذاتها.
+ * فيؤخذ أكبر قوّة اثنين تقسم مواضع الصفحات جميعاً، ويُكبَّر القسم بمضاعفٍ
+ * لها.
+ */
+function measureTextureAlignment(view: DataView, layout: GameMakerIFFDocument["chunkLayout"]): number {
+  const txtr = layout.find((c) => c.id === "TXTR");
+  if (!txtr) return 1;
+  const count = view.getUint32(txtr.start, true);
+  let common = 0;
+  for (let i = 0; i < count; i++) {
+    const entry = view.getUint32(txtr.start + 4 + 4 * i, true);
+    common |= view.getUint32(entry + 4, true);
+  }
+  // أقلّ بت مضاء في اجتماع المواضع هو محاذاتها المشتركة.
+  return common === 0 ? 1 : common & -common;
+}
+
+/**
+ * إعادة بناء الملف بعد تطبيق الترجمات
+ *
+ * الترجمة العربية أطول من أصلها دائماً تقريباً: الحرف العربي بايتان في
+ * UTF-8 والإنجليزي بايت. وكانت هذه الدالّة تكتب الترجمة **فقط إن كانت
+ * أقصر أو مساوية** وتُسقط ما عداها بلا كلمة، فكان أكثر عمل المترجم يضيع
+ * صامتاً.
+ *
+ * وما يمنع التمديد أنّ مواضع النصوص في هذا الملف **عناوين مطلقة**: تكبير
+ * قسم النصوص يزيح كل ما بعده فتفسد العناوين التي تشير إليه. غير أنّ
+ * الإزاحة هنا محدودة ومعروفة:
+ *
+ *   - بايتات مترجم اللعبة تشير إلى النصّ **بفهرسه** لا بموضعه، فلا يتأثّر
+ *     شيء منها بنقل نصّ.
+ *   - النصوص التي لم تتغيّر تبقى في مواضعها بالضبط، فتبقى كل إشارة إليها
+ *     من أسماء الموارد والدوالّ صحيحة.
+ *   - النصّ الذي طال يُكتب في نهاية القسم ويُحدَّث موضعه في جدول المواضع
+ *     وحده.
+ *   - ما بعد القسم — صفحات النسيج والأصوات — يُزاح بمقدار الزيادة،
+ *     وتُصحَّح جداول مواضعها.
+ *
+ * ويُتحقّق قبل النقل أنّ النصّ المنقول لا يشير إليه شيء خارج جدول المواضع،
+ * فإن أشار رُفض البناء بدل إخراج ملفٍّ يفتح على عنوان خاطئ.
  */
 export function buildGameMakerIFF(
   doc: GameMakerIFFDocument,
   translations: Record<string, string>
-): { buffer: ArrayBuffer; translatedCount: number } {
-  const newBuffer = new ArrayBuffer(doc.originalBuffer.byteLength);
-  const newBytes = new Uint8Array(newBuffer);
-  newBytes.set(new Uint8Array(doc.originalBuffer));
-  
-  const newView = new DataView(newBuffer);
-  
-  let translatedCount = 0;
-  
+): { buffer: ArrayBuffer; translatedCount: number; movedCount: number; grewBy: number } {
+  const original = new Uint8Array(doc.originalBuffer);
+  const originalView = new DataView(doc.originalBuffer);
+  const strg = doc.chunkLayout.find((c) => c.id === "STRG");
+  if (!strg) throw new Error("لا قسم نصوص (STRG) في هذا الملف");
+  const strgEnd = strg.start + strg.size;
+
+  const rewritten: { str: GameMakerString; bytes: Uint8Array }[] = [];
+  const moved: { str: GameMakerString; bytes: Uint8Array }[] = [];
   for (const str of doc.strings) {
-    const key = `STRG:${str.index}`;
-    const translation = translations[key];
-    
-    if (translation && translation.trim()) {
-      try {
-        const encoded = new TextEncoder().encode(translation);
-        const oldLength = newView.getUint32(str.offset, true);
-        
-        if (encoded.length <= oldLength) {
-          newView.setUint32(str.offset, encoded.length, true);
-          const targetBytes = new Uint8Array(newBuffer, str.offset + 4, encoded.length);
-          targetBytes.set(encoded);
-          translatedCount++;
-        }
-      } catch (e) {
-        console.warn(`خطأ في تطبيق ترجمة النص ${str.index}:`, e);
-      }
+    const translation = translations[`STRG:${str.index}`];
+    if (!translation || !translation.trim()) continue;
+    const bytes = new TextEncoder().encode(translation);
+    const oldLength = originalView.getUint32(str.offset, true);
+    (bytes.length <= oldLength ? rewritten : moved).push({ str, bytes });
+  }
+
+  const applyInPlace = (out: Uint8Array, view: DataView) => {
+    for (const { str, bytes } of rewritten) {
+      const oldLength = view.getUint32(str.offset, true);
+      view.setUint32(str.offset, bytes.length, true);
+      out.set(bytes, str.offset + 4);
+      if (bytes.length < oldLength) out[str.offset + 4 + bytes.length] = 0;
+    }
+  };
+
+  if (moved.length === 0) {
+    // لا شيء يتحرّك، فالملف يبقى بحجمه — وبلا ترجمات يخرج مطابقاً للأصل.
+    const buffer = doc.originalBuffer.slice(0);
+    applyInPlace(new Uint8Array(buffer), new DataView(buffer));
+    return { buffer, translatedCount: rewritten.length, movedCount: 0, grewBy: 0 };
+  }
+
+  // لا يُنقل نصّ يشير إليه شيء غير جدول المواضع. الأقسام كلّها تبدأ عند
+  // مضاعفات أربعة، والعناوين داخلها كذلك، فيكفي المرور بخطوة أربعة.
+  const referenced = new Set(moved.map((m) => m.str.offset + 4));
+  for (let p = 0; p + 4 <= strg.start; p += 4) {
+    if (referenced.has(originalView.getUint32(p, true))) {
+      throw new Error(
+        `نصّ طويل يشير إليه عنوانٌ خارج جدول المواضع (عند ${p}) — لا أنقله ولا أُخرج ملفاً بعنوان خاطئ`
+      );
     }
   }
-  
+
+  let appended = 0;
+  for (const { bytes } of moved) appended += 4 + bytes.length + 1;
+  const alignment = measureTextureAlignment(originalView, doc.chunkLayout);
+  const grewBy = Math.ceil(appended / alignment) * alignment;
+
+  const buffer = new ArrayBuffer(original.length + grewBy);
+  const out = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  out.set(original.subarray(0, strgEnd), 0);
+  out.set(original.subarray(strgEnd), strgEnd + grewBy);
+
+  view.setUint32(4, buffer.byteLength - 8, true);
+  view.setUint32(strg.start - 4, strg.size + grewBy, true);
+
+  let at = strgEnd;
+  for (const { str, bytes } of moved) {
+    view.setUint32(at, bytes.length, true);
+    out.set(bytes, at + 4);
+    out[at + 4 + bytes.length] = 0;
+    view.setUint32(strg.start + 4 + 4 * str.index, at, true);
+    at += 4 + bytes.length + 1;
+  }
+  applyInPlace(out, view);
+
+  for (const chunk of doc.chunkLayout) {
+    if (chunk.start < strgEnd) continue;
+    shiftChunkPointers(view, chunk.id, chunk.start + grewBy, grewBy);
+  }
+
   return {
-    buffer: newBuffer,
-    translatedCount,
+    buffer,
+    translatedCount: rewritten.length + moved.length,
+    movedCount: moved.length,
+    grewBy,
   };
+}
+
+/**
+ * تصحيح جداول المواضع في قسمٍ أُزيح.
+ *
+ * القسمان الوحيدان اللذان يليان النصوص هما صفحات النسيج والأصوات، وكلاهما
+ * جدول مواضع. وقسمٌ غير معروف بعدها يوقف البناء: مواضعه ستبقى تشير إلى ما
+ * قبل الإزاحة، وذلك ملفٌ معطوب لا يقول شيئاً عن عطبه.
+ */
+function shiftChunkPointers(view: DataView, id: string, start: number, delta: number): void {
+  if (id !== "TXTR" && id !== "AUDO") {
+    throw new Error(`قسم «${id}» يلي النصوص ولا أعرف مواضعه — لا أبني ملفاً قد تفسد عناوينه`);
+  }
+  const count = view.getUint32(start, true);
+  if (id === "TXTR" && count > 1) {
+    const stride = view.getUint32(start + 8, true) - view.getUint32(start + 4, true);
+    if (stride !== 8) {
+      throw new Error(`مدخلات صفحات النسيج بطول ${stride} لا ٨ — بنية لا أعرفها`);
+    }
+  }
+  for (let i = 0; i < count; i++) {
+    const at = start + 4 + 4 * i;
+    const entry = view.getUint32(at, true) + delta;
+    view.setUint32(at, entry, true);
+    // مدخلة صفحة نسيج: علمٌ ثمّ موضع بياناتها.
+    if (id === "TXTR") view.setUint32(entry + 4, view.getUint32(entry + 4, true) + delta, true);
+  }
 }
 
 /**

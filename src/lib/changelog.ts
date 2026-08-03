@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.155.0",
+    date: "2026-08-03",
+    changes: [
+      { kind: "changed", text: "إعادة إرسال إصلاح 1.154.0 — بناء ملفّ GameMaker كان يتوقّف بخطأ «نصّ طويل يشير إليه عنوانٌ خارج جدول المواضع». التعديل كان على `main` ولم يلتقطه البناء، فلا شيء في الشيفرة تغيّر هنا سوى رقم النسخة. إن قرأتَ هذا السطر فالإصلاح عندك." },
+    ],
+  },
+  {
     version: "1.154.0",
     date: "2026-08-03",
     changes: [

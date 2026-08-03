@@ -25,6 +25,7 @@ import { idbGet } from "./idb-storage";
 import { hasRisenTags, restoreRisenTags, extractRisenTags } from "./risen-tag-guard";
 import { extractFormatSpecifiers } from "./format-specifier-guard";
 import { shapeArabicForRisen } from "./risen/arabic-shaper";
+import { categorizeRisen3Prefix, RISEN3_UNKNOWN_CATEGORY, type Risen3KeyMap } from "./risen3/categories";
 
 const RISEN_BUFFER_KEY = "risenSourceBuffer";
 const RISEN_META_KEY = "risenMeta";

@@ -91,6 +91,18 @@ const games = [
     subtitleClass: "text-[hsl(45,100%,60%)]",
     arrowClass: "text-[hsl(45,100%,60%)]",
   },
+  {
+    title: "أين خطّ هذه اللعبة؟",
+    subtitle: "ابحث عن خطّ أي روم GBA",
+    desc: "يمسح الروم كلّه بحثاً عن مواضع تشبه خطّاً — بلا افتراضٍ لمقاس الحرف ولا لألوانه، وبفكّ الرسوم المضغوطة — ثمّ يرسم لك كل مرشّح لتحكم بعينك",
+    link: "/gba/font",
+    image: risenBg,
+    formats: [".gba", "GBA ROM"],
+    cardClass: "border-[hsl(160,70%,45%)]/30 hover:border-[hsl(160,70%,45%)]/60",
+    formatClass: "bg-[hsl(160,70%,45%)]/20 text-[hsl(160,70%,55%)] border-[hsl(160,70%,45%)]/30",
+    subtitleClass: "text-[hsl(160,70%,55%)]",
+    arrowClass: "text-[hsl(160,70%,55%)]",
+  },
 ];
 
 const Home = () => {

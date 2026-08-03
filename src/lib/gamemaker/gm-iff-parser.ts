@@ -301,6 +301,37 @@ function measureTextureAlignment(view: DataView, layout: GameMakerIFFDocument["c
 }
 
 /**
+ * النصوص التي يحمل بعضُ الملف عنوانَها، لا فهرسها.
+ *
+ * GameMaker يوحّد النصّ المتكرّر: مدخلة واحدة في الجدول تخدم ثابتاً في
+ * الشيفرة **واسمَ متغيّر** في الوقت نفسه. في لعبة Mario ثمانية من نصوصها
+ * المترجَمة كذلك — `left`، `right`، `menu`، `time`، `sprout`، `wait`،
+ * `fade`، و`0` — والشيفرة تصل إليها بالفهرس بينما جدول المتغيّرات يصل
+ * إليها بعنوانها مباشرةً.
+ *
+ * فالكتابة فوق نصٍّ منها تُعيد تسمية متغيّر في اللعبة. والنقل لا يضرّه:
+ * البايتات الأصلية تبقى مكانها لمن يشير إليها، والفهرس وحده يتحوّل إلى
+ * الترجمة.
+ */
+function stringsNamedElsewhere(
+  view: DataView,
+  doc: GameMakerIFFDocument,
+  strg: { start: number; size: number }
+): Set<number> {
+  const byPointer = new Map<number, number>();
+  for (const str of doc.strings) byPointer.set(str.offset + 4, str.index);
+  const out = new Set<number>();
+  const strgEnd = strg.start + strg.size;
+  // الأقسام تبدأ عند مضاعفات أربعة والعناوين داخلها كذلك، فتكفي خطوة أربعة.
+  for (let p = 0; p + 4 <= view.byteLength; p += 4) {
+    if (p >= strg.start && p < strgEnd) continue;
+    const index = byPointer.get(view.getUint32(p, true));
+    if (index !== undefined) out.add(index);
+  }
+  return out;
+}
+
+/**
  * إعادة بناء الملف بعد تطبيق الترجمات
  *
  * الترجمة العربية أطول من أصلها دائماً تقريباً: الحرف العربي بايتان في
@@ -321,8 +352,8 @@ function measureTextureAlignment(view: DataView, layout: GameMakerIFFDocument["c
  *   - ما بعد القسم — صفحات النسيج والأصوات — يُزاح بمقدار الزيادة،
  *     وتُصحَّح جداول مواضعها.
  *
- * ويُتحقّق قبل النقل أنّ النصّ المنقول لا يشير إليه شيء خارج جدول المواضع،
- * فإن أشار رُفض البناء بدل إخراج ملفٍّ يفتح على عنوان خاطئ.
+ * ونصٌّ يحمل في الوقت نفسه اسم متغيّر — وGameMaker يوحّد المتكرّر فيقع ذلك —
+ * يُنقل دائماً ولو كانت ترجمته أقصر: الكتابة فوقه تُعيد تسمية ذلك المتغيّر.
  */
 export function buildGameMakerIFF(
   doc: GameMakerIFFDocument,
@@ -334,6 +365,8 @@ export function buildGameMakerIFF(
   if (!strg) throw new Error("لا قسم نصوص (STRG) في هذا الملف");
   const strgEnd = strg.start + strg.size;
 
+  const shared = stringsNamedElsewhere(originalView, doc, strg);
+
   const rewritten: { str: GameMakerString; bytes: Uint8Array }[] = [];
   const moved: { str: GameMakerString; bytes: Uint8Array }[] = [];
   for (const str of doc.strings) {
@@ -341,7 +374,10 @@ export function buildGameMakerIFF(
     if (!translation || !translation.trim()) continue;
     const bytes = new TextEncoder().encode(translation);
     const oldLength = originalView.getUint32(str.offset, true);
-    (bytes.length <= oldLength ? rewritten : moved).push({ str, bytes });
+    // نصٌّ يحمل اسم متغيّر أو دالّة يُنقل دائماً ولو كان أقصر: الكتابة فوقه
+    // تُعيد تسمية ذلك المتغيّر، والنقل يترك بايتاته سليمةً لمن يشير إليها.
+    const fits = bytes.length <= oldLength && !shared.has(str.index);
+    (fits ? rewritten : moved).push({ str, bytes });
   }
 
   const applyInPlace = (out: Uint8Array, view: DataView) => {
@@ -358,17 +394,6 @@ export function buildGameMakerIFF(
     const buffer = doc.originalBuffer.slice(0);
     applyInPlace(new Uint8Array(buffer), new DataView(buffer));
     return { buffer, translatedCount: rewritten.length, movedCount: 0, grewBy: 0 };
-  }
-
-  // لا يُنقل نصّ يشير إليه شيء غير جدول المواضع. الأقسام كلّها تبدأ عند
-  // مضاعفات أربعة، والعناوين داخلها كذلك، فيكفي المرور بخطوة أربعة.
-  const referenced = new Set(moved.map((m) => m.str.offset + 4));
-  for (let p = 0; p + 4 <= strg.start; p += 4) {
-    if (referenced.has(originalView.getUint32(p, true))) {
-      throw new Error(
-        `نصّ طويل يشير إليه عنوانٌ خارج جدول المواضع (عند ${p}) — لا أنقله ولا أُخرج ملفاً بعنوان خاطئ`
-      );
-    }
   }
 
   let appended = 0;

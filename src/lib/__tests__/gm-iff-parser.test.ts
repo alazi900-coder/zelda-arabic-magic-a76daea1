@@ -209,16 +209,26 @@ describe("GameMaker — writing a translation that does not fit", () => {
     expect(built.grewBy % alignment).toBe(0);
   });
 
-  it("refuses to move a string that something else points at", () => {
-    // A resource's name is reached by its address, not by its index. Moving one
-    // would leave that address pointing at whatever followed it.
+  it("moves a string that something else names, even when the translation is shorter", () => {
+    // GameMaker gives one table entry to a repeated string, so a line of speech
+    // can also be a variable's name — eight of this game's are. The code reaches
+    // it by index and the variable table by address, so writing over it renames
+    // the variable. Moving it leaves the old bytes for whoever points at them.
     const source = original();
     const view = new DataView(source);
     const doc = parseGameMakerIFF(source);
+    const named = doc.strings[0];
     // Put the address of string 0's text where the function's name is read.
-    view.setUint32(24, doc.strings[0].offset + 4, true);
-    expect(() =>
-      buildGameMakerIFF(parseGameMakerIFF(source), { "STRG:0": "a much longer line than before" })
-    ).toThrow(/جدول المواضع/);
+    view.setUint32(24, named.offset + 4, true);
+
+    const built = buildGameMakerIFF(parseGameMakerIFF(source), { "STRG:0": "Hi" });
+    expect(built.movedCount).toBe(1);
+    expect(parseGameMakerIFF(built.buffer).strings[0].value).toBe("Hi");
+
+    // The name still reads what it did.
+    const after = new DataView(built.buffer);
+    const pointer = after.getUint32(24, true);
+    const length = after.getUint32(pointer - 4, true);
+    expect(new TextDecoder().decode(new Uint8Array(built.buffer, pointer, length))).toBe(named.value);
   });
 });

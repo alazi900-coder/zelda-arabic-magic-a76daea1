@@ -21,7 +21,10 @@ export type RisenCategory = FileCategory;
 
 interface RisenCategoryEntry {
   msbtFile: string;
+  /** Risen 3 only — category resolved from the string-key map at extraction time. */
+  risen3Cat?: string;
 }
+
 
 const KNOWN_TABLE_CATEGORIES: Array<{ id: string; label: string; emoji: string; tables: string[] }> = [
   { id: "risen-dialogue", label: "الحوارات", emoji: "💬", tables: ["infos.tab"] },

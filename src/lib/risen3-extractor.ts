@@ -59,13 +59,18 @@ export interface Risen3ExtractResult {
 
 export interface Risen3ExtractOptions {
   includeStageDir?: boolean;
+  /** Key map (hash -> original ID + source csv prefix) used to label and
+   * categorize rows — see src/lib/risen3/categories.ts. Optional: without it
+   * rows keep their hash label and stay uncategorized. */
+  keyMap?: Risen3KeyMap;
 }
 
 function extractColumnGroup(
   doc: RisenP00Gar5Document,
   sourcePreference: string[],
   msbtFile: string,
-  entries: ExtractedEntry[]
+  entries: ExtractedEntry[],
+  keyMap?: Risen3KeyMap
 ): number {
   const candidates = sourcePreference
     .map((name) => doc.gar5.columns.find((c) => c.name === name))
@@ -83,16 +88,19 @@ function extractColumnGroup(
     translatableCount++;
 
     const idHex = (doc.gar5.rowIds[r] >>> 0).toString(16).padStart(8, "0");
+    const key = keyMap?.get(idHex);
     entries.push({
       msbtFile,
       index: r,
-      label: `0x${idHex}`,
+      label: key ? key.id : `0x${idHex}`,
       original,
       maxBytes: RISEN_MAX_BYTES,
+      risen3Cat: key ? categorizeRisen3Prefix(key.prefix).id : RISEN3_UNKNOWN_CATEGORY.id,
     });
   }
   return translatableCount;
 }
+
 
 export function extractEntriesFromP00Gar5(
   buffer: ArrayBuffer,

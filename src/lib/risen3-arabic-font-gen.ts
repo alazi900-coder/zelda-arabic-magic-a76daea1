@@ -71,8 +71,21 @@ function nextPowerOfTwo(n: number): number {
  *
  * `fields[6] + height` therefore lands on the same number for every letter that
  * sits on the writing line — 44 on 171 of that font's glyphs, 54 on the ones
- * with a descender — which is what gives the baseline. Writing zeros into those
- * two fields, as this did at first, hangs every letter at the top of the line.
+ * with a descender. Writing zeros into those two fields, as this did at first,
+ * hangs every letter at the top of the line.
+ *
+ * But that number is the bottom of the **box**, and the box carries the
+ * packer's margin below the ink as well as above it. Taking it for the writing
+ * line put the Arabic exactly one margin too low — measured in the game and
+ * then in the file, on three fonts at once:
+ *
+ *     Gentium Plus          Latin ink ends at 44, the Arabic at 52   (margin 8)
+ *     Linux Biolinum O_30   Latin 35–37, Arabic 44                   (margin 8)
+ *     Linux Biolinum O_40_b Latin 46–48, Arabic 59                   (margin 11)
+ *
+ * The drop equals the margin in each, which is not a coincidence. So the line
+ * is read the same way the margin is — off the font's own pixels, as the last
+ * row of ink inside the box — rather than derived from the box's numbers.
  */
 export interface Risen3Metrics {
   /** Pixels from the top of a line to the writing line. */
@@ -97,11 +110,13 @@ function mode(values: number[], fallback: number): number {
 export function measureRisen3Metrics(doc: Risen3FntDocument): Risen3Metrics {
   const atlas = risen3FntAtlas(doc);
   const drawn = doc.glyphs.filter((g) => g.fields[2] > g.fields[0] && g.fields[3] > g.fields[1]);
-  const baseline = mode(drawn.map((g) => g.fields[6] + (g.fields[3] - g.fields[1])), 44);
   const leftBearing = mode(drawn.map((g) => g.fields[5]), -6);
 
-  // The margin is the blank the packer leaves above the ink inside a box.
+  // Where the ink starts and stops inside each box. The first gives the margin
+  // the packer leaves; the last gives the writing line, which most letters sit
+  // on and a few descend past.
   const tops: number[] = [];
+  const bottoms: number[] = [];
   for (const g of drawn.slice(0, 200)) {
     const [x0, y0, x1, y1] = g.fields;
     let top = -1;
@@ -110,10 +125,20 @@ export function measureRisen3Metrics(doc: Risen3FntDocument): Risen3Metrics {
         if (atlas.pixels[y * atlas.width + x] >= 128) { top = y - y0; break; }
       }
     }
-    if (top >= 0) tops.push(top);
+    if (top < 0) continue;
+    tops.push(top);
+    for (let y = y1 - 1; y >= y0; y--) {
+      let found = false;
+      for (let x = x0; x < x1; x++) {
+        if (atlas.pixels[y * atlas.width + x] >= 128) { found = true; break; }
+      }
+      if (found) { bottoms.push(g.fields[6] + (y - y0 + 1)); break; }
+    }
   }
   return {
-    baseline,
+    // Read off the pixels, not off `fields[6] + height`: that is the bottom of
+    // the box, one margin below where the letters actually stand.
+    baseline: mode(bottoms, mode(drawn.map((g) => g.fields[6] + (g.fields[3] - g.fields[1])), 44)),
     margin: mode(tops, 8),
     leftBearing,
     maxBoxHeight: Math.max(...drawn.map((g) => g.fields[3] - g.fields[1]), 1),

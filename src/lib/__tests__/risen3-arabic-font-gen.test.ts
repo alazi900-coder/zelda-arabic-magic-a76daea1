@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addArabicToRisen3Fnt, probeRisen3Fnt, RISEN3_PROBE_CHAR, type DrawnGlyph } from "@/lib/risen3-arabic-font-gen";
+import { addArabicToRisen3Fnt, measureRisen3Metrics, probeRisen3Fnt, RISEN3_PROBE_CHAR, type DrawnGlyph } from "@/lib/risen3-arabic-font-gen";
 import { parseRisen3Fnt, buildRisen3Fnt, risen3FntAtlas, type Risen3FntDocument } from "@/lib/risen3-fnt";
 import { sdfEdgeCrossings } from "@/lib/risen3-sdf";
 
@@ -271,5 +271,43 @@ describe("Risen 3 — the one-glyph test", () => {
   it("says which character it cannot find rather than writing somewhere else", () => {
     const withoutE = fontWithAtlas(256, 256, 4, [0x41, 0x42, 0x43, 0x44]);
     expect(() => probeRisen3Fnt(withoutE, block(0x0627, 20, 40))).toThrow(String(RISEN3_PROBE_CHAR));
+  });
+});
+
+describe("Risen 3 — where the writing line is", () => {
+  /**
+   * A font whose boxes carry a margin below the ink as well as above it, which
+   * is what every shipped font does — and what made the Arabic sit low in game.
+   */
+  function withMargin(margin: number, inkHeight: number): Risen3FntDocument {
+    const doc = fontWithAtlas(1024, 256, 8, Array.from({ length: 8 }, (_, i) => 0x61 + i));
+    const atlas = risen3FntAtlas(doc);
+    atlas.pixels.fill(0);
+    for (const g of doc.glyphs) {
+      const [x0, y0, x1] = g.fields;
+      for (let y = y0 + margin; y < y0 + margin + inkHeight; y++) {
+        for (let x = x0 + margin; x < x1 - margin; x++) atlas.pixels[y * atlas.width + x] = 255;
+      }
+    }
+    return doc;
+  }
+
+  it("reads the line off the ink, not off the bottom of the box", () => {
+    // The boxes here are 40 tall with 8 blank rows above the ink and 8 below.
+    // The bottom of the box is 40; the ink stops at 32. Taking the box would
+    // drop every Arabic letter eight pixels — exactly what the screenshot
+    // showed, and exactly this font's margin.
+    const doc = withMargin(8, 24);
+    const m = measureRisen3Metrics(doc);
+    expect(m.margin).toBe(8);
+    expect(m.baseline).toBe(32);
+    const boxBottom = doc.glyphs[0].fields[6] + (doc.glyphs[0].fields[3] - doc.glyphs[0].fields[1]);
+    expect(boxBottom - m.baseline).toBe(m.margin);
+  });
+
+  it("moves the line with the margin, since the drop measured equal to it", () => {
+    const m = measureRisen3Metrics(withMargin(11, 20));
+    expect(m.margin).toBe(11);
+    expect(m.baseline).toBe(31);
   });
 });

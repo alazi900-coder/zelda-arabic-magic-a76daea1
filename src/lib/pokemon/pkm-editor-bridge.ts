@@ -26,6 +26,24 @@ export function looksLikePkmRom(rom: Uint8Array): boolean {
   return rom.length >= 0x800000 && rom.length <= 0x2000000;
 }
 
+/**
+ * True when this ROM already carries the Arabic glyphs — it came out of a build.
+ *
+ * Re-opening a built ROM used to cost the translator everything. The scanner
+ * recognises a line by the game's own character set, and Arabic lives in the
+ * kana codes, which that set does not contain: a line already written in Arabic
+ * is invisible to it. The editor then saved the shrunken set of lines over the
+ * session, and every translation belonging to a line that had vanished was
+ * dropped with it.
+ *
+ * The bytes cannot be read back — accepting the low codes as text would make
+ * most of the ROM's code and data look like text — so the honest move is to
+ * refuse the file and say which one to open instead.
+ */
+export function isBuiltPkmRom(rom: Uint8Array): boolean {
+  return hasPkmArabicFont(rom);
+}
+
 function preview(text: string): string {
   const t = text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
   return t.length > 60 ? `${t.slice(0, 57)}…` : t;
@@ -50,11 +68,13 @@ export interface PkmExtractResult {
 export const PKM_RELOCATED_LIMIT = 250;
 
 export function extractPkmEntries(rom: Uint8Array): PkmExtractResult {
-  const strings = scanPkmStrings(rom);
   // A line the game reaches through a pointer can be moved somewhere roomier
   // at build time, so its slot is not its limit. One that is found by index —
-  // every name in a fixed-stride list — keeps the slot it was born in.
+  // every name in a fixed-stride list — keeps the slot it was born in. The
+  // scan wants the same index for a different reason: a pointer is what makes
+  // a two-letter line like «On» believable.
   const pointers = indexPkmPointers(rom);
+  const strings = scanPkmStrings(rom, { pointers });
   // A list whose entries are reached by pointer can have its entries moved one
   // by one; one the game counts through by index cannot.
   markPointedTables(strings, pointers);

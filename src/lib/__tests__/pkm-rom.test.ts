@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import { scanPkmStrings, applyPkmTranslations, markPointedTables, pkmLineLimit, PKM_SHORT_LINE_LIMIT } from "@/lib/pokemon/pkm-rom";
 import { indexPkmPointers, GBA_ROM_BASE } from "@/lib/pokemon/pkm-pointers";
 import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
-import { encodeArabicForPkm, decodePkmBytes, pkmArabicSlots, pkmCodepointForByte, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
+import { encodeArabicForPkm, decodePkmBytes, pkmArabicSlots, pkmCodepointForByte, pkmLineWidth, pkmOverlongLines, PKM_DIALOGUE_LINE_PIXELS, PKM_TERMINATOR } from "@/lib/pokemon/pkm-charmap";
 import { categorizePkmLine, buildPkmCategories } from "@/lib/pokemon/pkm-categories";
 import { maskPkmTags, unmaskPkmTags, diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
-import { extractPkmEntries, restorePkmTranslations, buildPkmRom } from "@/lib/pokemon/pkm-editor-bridge";
+import { extractPkmEntries, isBuiltPkmRom, restorePkmTranslations, buildPkmRom } from "@/lib/pokemon/pkm-editor-bridge";
+import { detectIssues } from "@/lib/diagnostic-detect";
 import { processArabicText } from "@/lib/arabic-processing";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 
@@ -512,5 +513,126 @@ describe("the codes the scan used to stop at", () => {
       expect(pkmArabicSlots()).not.toContain(reserved);
     }
     expect(pkmArabicSlots()).toHaveLength(129);
+  });
+});
+
+describe("Pokémon Ruby Destiny — a built ROM is not an input", () => {
+  it("refuses a ROM that already carries the Arabic font", () => {
+    // The scan reads the game's own character set, and Arabic lives in the kana
+    // codes, which that set does not contain. Opening a built ROM therefore
+    // produced only the lines still in English, and the editor saved that over
+    // the session — every translation whose line had gone invisible went with
+    // it. Proven here: an Arabic line written into a ROM is not found again.
+    const rom = new Uint8Array(0x1000000);
+    rom.set([...gameBytes("Hello there friend"), PKM_TERMINATOR], 0);
+    const built = buildPkmRom(rom, { "pkm_rom:0": "مرحبا بك" });
+    expect("error" in built).toBe(false);
+    if ("error" in built) return;
+
+    expect(scanPkmStrings(built.rom)).toHaveLength(0);
+    expect(isBuiltPkmRom(rom)).toBe(false);
+    expect(isBuiltPkmRom(built.rom)).toBe(true);
+  });
+});
+
+describe("Pokémon Ruby Destiny — the shortest lines", () => {
+  /** A little-endian ROM pointer to `target`, written at `at`. */
+  function pointAt(rom: Uint8Array, at: number, target: number): void {
+    const v = GBA_ROM_BASE + target;
+    rom[at] = v & 0xff;
+    rom[at + 1] = (v >>> 8) & 0xff;
+    rom[at + 2] = (v >>> 16) & 0xff;
+    rom[at + 3] = 0x08;
+  }
+
+  it("finds a three-letter menu entry the game points at", () => {
+    // «Bag» is the START menu, and the letter count that keeps stray bytes out
+    // of the scan kept it out too: measured on the shipped ROM, it was nowhere
+    // in the 15424 lines found. Every entry of that menu has a pointer.
+    const rom = new Uint8Array(0x100);
+    rom.set([...gameBytes("Bag"), PKM_TERMINATOR], 0x40);
+    pointAt(rom, 0x10, 0x40);
+    const pointers = indexPkmPointers(rom);
+
+    expect(scanPkmStrings(rom).map((s) => s.text)).toEqual([]);
+    expect(scanPkmStrings(rom, { pointers }).map((s) => s.text)).toEqual(["Bag"]);
+  });
+
+  it("still refuses three letters nothing points at", () => {
+    // The pointer is the whole evidence. Without it a short run is what it
+    // always was: bytes that happen to read as letters.
+    const rom = new Uint8Array(0x100);
+    rom.set([...gameBytes("Bag"), PKM_TERMINATOR], 0x40);
+    const pointers = indexPkmPointers(rom);
+    expect(scanPkmStrings(rom, { pointers }).map((s) => s.text)).toEqual([]);
+  });
+
+  it("refuses a single pointed letter", () => {
+    // 48 of these turned up on the shipped ROM — «W», «l», «j» — where a value
+    // in the data happens to name one character sitting before a terminator.
+    // There is nothing in them for a translator either way.
+    const rom = new Uint8Array(0x100);
+    rom.set([...gameBytes("W"), PKM_TERMINATOR], 0x40);
+    pointAt(rom, 0x10, 0x40);
+    expect(scanPkmStrings(rom, { pointers: indexPkmPointers(rom) })).toEqual([]);
+  });
+});
+
+describe("Pokémon Ruby Destiny — the width of the box", () => {
+  it("measures a line in pixels, from the codes the build would write", () => {
+    // Every Arabic code carries the width the game already had for it, 4 to 8,
+    // so a character count says nothing. These are the measured numbers.
+    expect(pkmLineWidth("ا")).toBe(6);
+    expect(pkmLineWidth("ا ا")).toBe(15); // ٦ + مسافة ٣ + ٦
+    // A value the game fills in is counted as a seven-character name.
+    expect(pkmLineWidth("{FD:01}")).toBe(42);
+    // A colour or a pause draws nothing.
+    expect(pkmLineWidth("{FC:05:0f}ا")).toBe(6);
+  });
+
+  it("passes 33 of a six-pixel letter and refuses 34", () => {
+    // Measured in the emulator one length at a time: up to 33 nothing leaves
+    // the box, and from 34 the window spills past its own frame.
+    expect(pkmLineWidth("ا".repeat(33))).toBe(PKM_DIALOGUE_LINE_PIXELS);
+    expect(pkmOverlongLines("ا".repeat(33))).toEqual([]);
+    expect(pkmOverlongLines("ا".repeat(34))).toEqual([{ line: 1, width: 204 }]);
+  });
+
+  it("agrees with the sentences that were run in the emulator", () => {
+    // Both of these were built into the ROM and watched. The first is one long
+    // line and spilled. The second breaks after 33 characters — and spilled
+    // too, which is the whole point: 33 characters is not 33 cells. The check
+    // says so, 209 pixels against the box's 198.
+    const oneLine = "مرحبا بك في عالم البوكيمون الواسع المليء بالمخلوقات العجيبة";
+    const brokenAt33 = "مرحبا بك في عالم البوكيمون الواسع\nالمليء بالمخلوقات العجيبة";
+    expect(pkmOverlongLines(oneLine).length).toBeGreaterThan(0);
+    expect([..."مرحبا بك في عالم البوكيمون الواسع"]).toHaveLength(33);
+    expect(pkmOverlongLines(brokenAt33)).toEqual([{ line: 1, width: 209 }]);
+    // Break it where the pixels say, and nothing is over.
+    const fitted = "مرحبا بك في عالم البوكيمون\nالواسع المليء بالمخلوقات العجيبة";
+    expect(pkmLineWidth("مرحبا بك في عالم البوكيمون")).toBe(163);
+    expect(pkmLineWidth("الواسع المليء بالمخلوقات العجيبة")).toBe(206);
+    // 206 is still over — the second half has to give up a word too.
+    expect(pkmOverlongLines(fitted)).toEqual([{ line: 2, width: 206 }]);
+    expect(pkmOverlongLines("مرحبا بك في عالم البوكيمون\nالواسع المليء بالمخلوقات")).toEqual([]);
+  });
+
+  it("measures each line of a message on its own", () => {
+    // The break codes start a fresh line, so a long message that breaks in the
+    // right places is fine and one long line is not.
+    const wrapped = `${"ا".repeat(30)}\n${"ب".repeat(30)}{fb}${"ت".repeat(30)}`;
+    expect(pkmOverlongLines(wrapped)).toEqual([]);
+    expect(pkmOverlongLines(`${"ا".repeat(40)}\n${"ا".repeat(50)}`)).toEqual([
+      { line: 2, width: 300 },
+      { line: 1, width: 240 },
+    ]);
+  });
+
+  it("reports the overflow as a critical issue on a Pokémon entry", () => {
+    const issues = detectIssues(
+      { msbtFile: "pkm_rom", index: 0, label: "", original: "Hello there\nfriend", maxBytes: 250 },
+      "ا".repeat(40)
+    );
+    expect(issues.some((i) => i.category === "pkm_line_too_wide" && i.severity === "critical")).toBe(true);
   });
 });

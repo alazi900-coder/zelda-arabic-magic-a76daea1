@@ -67,6 +67,19 @@ function isTextByte(b: number): boolean {
 export interface ScanOptions {
   /** Smallest number of letters a run must carry to count as text. */
   minLetters?: number;
+  /**
+   * Pointers into the ROM, so a run something points at can be believed on
+   * weaker evidence than a run found by looking at the bytes alone.
+   *
+   * Without it the shortest lines in the game are missing. «Bag», «Save»,
+   * «Exit», «On», «Off», «Set» — the START menu and the options screen — are
+   * three letters or two, and the letter count that keeps stray bytes out
+   * keeps those out with them: measured, «Bag» at 0x42C482 was nowhere in the
+   * 15424 lines this scan produced. Every one of those entries has a pointer
+   * naming its first byte, which is the game itself saying the bytes are a
+   * line, and no counting of letters can say it as well.
+   */
+  pointers?: PkmPointerIndex;
 }
 
 /**
@@ -102,13 +115,21 @@ export function scanPkmStrings(rom: Uint8Array, options: ScanOptions = {}): PkmS
     while (start < i && rom[start] === 0x00) start++;
 
     // The run must be closed by the terminator to be a line the game prints,
-    // and carry enough letters not to be an accident of nearby data.
+    // and carry enough letters not to be an accident of nearby data — unless
+    // something in the ROM points at its first byte, which says the same thing
+    // and says it better. The density rule is dropped for a pointed run too:
+    // «{FC:05:0f}On» is five bytes of which two are letters, and three of the
+    // five are a colour code the player never sees.
     const runLength = i - start;
+    const pointed = options.pointers ? options.pointers.to(start).length > 0 : false;
     if (
       i < rom.length &&
       rom[i] === PKM_TERMINATOR &&
-      letters >= minLetters &&
-      letters * 2 >= runLength
+      // Two bytes at least, even when pointed: a lone letter is nothing a
+      // translator can act on, and 48 of them turned up — «W», «l», «j» — where
+      // a four-byte value in the data happens to name a single character
+      // sitting in front of a terminator.
+      (pointed ? letters >= 1 && runLength >= 2 : letters >= minLetters && letters * 2 >= runLength)
     ) {
       const end = i + 1;
       out.push({

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
 import {
   extractPkmEntries,
+  isBuiltPkmRom,
   looksLikePkmRom,
   restorePkmTranslations,
   PKM_BUFFER_KEY,
@@ -29,6 +30,15 @@ export default function PokemonText() {
         const rom = new Uint8Array(await file.arrayBuffer());
         if (!looksLikePkmRom(rom)) {
           throw new Error("هذا ليس ملف روم GBA — ارفع ملف ‎.gba‎ الأصلي");
+        }
+        // Refused before anything is saved: the Arabic already written into a
+        // built ROM is not readable back, so opening one would replace the
+        // session with the handful of lines still in English and drop every
+        // translation belonging to the rest.
+        if (isBuiltPkmRom(rom)) {
+          throw new Error(
+            "هذا روم مبني (يحمل الخط العربي) — افتح الروم الأصلي. الأسطر المكتوبة بالعربية لا يقرأها المستخرِج، وفتحه هنا كان يمسح ترجماتها."
+          );
         }
         const { entries, textBytes } = extractPkmEntries(rom);
         if (entries.length === 0) {

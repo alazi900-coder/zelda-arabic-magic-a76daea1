@@ -17,6 +17,14 @@
  * inked exactly 32 pixels. The Latin codes advance less (`a` 6, `i` 4), so the
  * Arabic font is drawn to fill 8.
  *
+ * In the dialogue box it advances 6, not 8. Measured the same way and later: a
+ * line of «ااااب» repeated printed the ب every 30 pixels, five glyphs to the
+ * group. So the two numbers are both real and belong to different windows, and
+ * the box the player reads text in is the narrow one. Two things follow: the
+ * line fits 33 cells, not 25 (see PKM_DIALOGUE_LINE_GLYPHS below), and a glyph
+ * drawn to fill 8 loses its last two columns under the next one — thin letters
+ * are unharmed, wide ones (س ش ص) are not.
+ *
  * Direction is handled here, as in the other games: the engine draws bytes left
  * to right with no bidi, so text is shaped into presentation forms and reversed
  * at build time. The editor always holds normal logical Arabic.
@@ -191,6 +199,91 @@ export interface PkmEncodeResult {
   bytes: Uint8Array;
   /** Characters that had no slot and were dropped, for reporting. */
   unmapped: string[];
+}
+
+/**
+ * How wide the dialogue box is inside its frame, in pixels.
+ *
+ * Measured, not reasoned about. A line of N identical Arabic letters was
+ * written over the professor's opening speech and the ROM run for N = 26…38,
+ * checking every frame whether a white window pixel appeared outside the frame
+ * (x = 21…218, read off the same capture): nothing at all up to 33 letters, and
+ * from 34 on the window spills past its own border. That letter advances 6
+ * pixels, so the box holds 33 x 6 = 198.
+ *
+ * The engine does not wrap. Past the last cell it keeps writing into the
+ * background map, which is 256 pixels wide, so the overflow reappears at the
+ * screen's other edge outside the box — and clearing the box never reaches
+ * there, so it stays on screen through the next message and the one after. That
+ * is the debris the player sees around the box, not a drawing fault.
+ */
+export const PKM_DIALOGUE_LINE_PIXELS = 198;
+
+/**
+ * How far the pen moves after each Arabic code, in slot order.
+ *
+ * Not one number: the codes Arabic borrowed carry the widths the game already
+ * had for them, and they run from 4 to 8. Counting characters instead was wrong
+ * in both directions — twenty letters spaced apart fit easily, while a
+ * thirty-three character sentence spilled.
+ *
+ * Read straight out of the emulator rather than guessed. Every Arabic glyph was
+ * temporarily replaced by a one-pixel bar down the left of its cell, so the ink
+ * on screen sits exactly where the pen was; a line of the codes then gives every
+ * advance at once as the distance between neighbouring bars. Both runs of the
+ * measurement returned the same 129 numbers.
+ */
+const PKM_SLOT_WIDTHS = "666666666866666666666668666648666666666666666888888888888888888888888888888888764888788466448888888888678778847888887877877777777";
+
+/** The space: 3 pixels, measured the same way — a bar, a space, a bar. */
+const PKM_SPACE_WIDTH = 3;
+
+/**
+ * A Latin letter, digit or mark. Not measured one by one — the ink of those
+ * glyphs touches the measuring bar, so the trick above cannot separate them —
+ * and 6 is what this ROM's own notes give for the widest of them.
+ */
+const PKM_LATIN_WIDTH = 6;
+
+/**
+ * A value the game substitutes. Its length is only known while the game runs,
+ * so it is counted as a seven-character name, the longest the player can enter.
+ */
+const PKM_VARIABLE_WIDTH = 7 * PKM_LATIN_WIDTH;
+
+const SLOT_WIDTH = new Map<number, number>();
+pkmArabicSlots().forEach((slot, i) => SLOT_WIDTH.set(slot, PKM_SLOT_WIDTHS.charCodeAt(i) - 48));
+
+/**
+ * How many pixels this line takes on screen.
+ *
+ * The line is shaped and mapped to its codes first — the same path the build
+ * takes — because that is what decides the widths: «لا» is one code, not two,
+ * and a letter's width depends on which of its four forms the word calls for.
+ */
+export function pkmLineWidth(line: string): number {
+  let width = 0;
+  const { bytes } = encodeArabicForPkm(line.split("\n")[0]);
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if (b === PKM_SPACE) width += PKM_SPACE_WIDTH;
+    else if (b === PKM_VARIABLE) { width += PKM_VARIABLE_WIDTH; i++; }
+    else if (b === PKM_FORMAT) i += pkmFormatLength(bytes[i + 1] ?? 0) - 1;
+    else width += SLOT_WIDTH.get(b) ?? PKM_LATIN_WIDTH;
+  }
+  return width;
+}
+
+/** Where a message breaks: a newline, or the codes that wait and clear the box. */
+const PKM_LINE_SPLIT = /\n|\{fa\}|\{fb\}/;
+
+/** The lines of this message too wide for the box, widest first. */
+export function pkmOverlongLines(text: string): { line: number; width: number }[] {
+  return text
+    .split(PKM_LINE_SPLIT)
+    .map((line, i) => ({ line: i + 1, width: pkmLineWidth(line) }))
+    .filter((l) => l.width > PKM_DIALOGUE_LINE_PIXELS)
+    .sort((a, b) => b.width - a.width);
 }
 
 /** `{FD:01}` — a value the game substitutes — and `{7f}` — a byte we cannot name. */

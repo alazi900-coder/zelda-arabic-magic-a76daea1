@@ -17,6 +17,7 @@ import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
+import { pkmOverlongLines, PKM_DIALOGUE_LINE_PIXELS } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
@@ -332,6 +333,24 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     } else if (!pkmDiff.sameOrder) {
       issues.push({ ...base, severity: "critical", category: "pkm_var_mismatch",
         message: "ترتيب القيم التي تضعها اللعبة مختلف عن الأصل — سيظهر كل اسم في موضع الآخر" });
+    }
+
+    // 18b. A line wider than the box.
+    //
+    // This engine does not wrap: past the last cell it keeps writing into the
+    // background map, which is wider than the screen, so the tail reappears
+    // outside the box at the opposite edge — and stays there through the next
+    // message, because clearing the box does not reach outside it. Nothing in
+    // the byte count catches this: the line fits the ROM and still breaks the
+    // screen. The fix is a `\n` in the right place, which is the translator's
+    // call, not this tool's.
+    const overlong = pkmOverlongLines(trimmed);
+    if (overlong.length > 0) {
+      const worst = overlong[0];
+      issues.push({ ...base, severity: "critical", category: "pkm_line_too_wide",
+        message: `السطر ${worst.line} عرضه ${worst.width} بكسل والصندوق يسع ${PKM_DIALOGUE_LINE_PIXELS}` +
+          (overlong.length > 1 ? ` (و${overlong.length - 1} سطراً آخر)` : "") +
+          " — أضف فاصل سطر، وإلّا خرج الباقي من الصندوق وبقي على الشاشة" });
     }
   }
 

@@ -48,6 +48,10 @@ export interface GbaFontCandidate {
 
 /** التخطيطات التي تستعملها ألعاب هذا الجهاز عملياً. */
 export const GBA_GLYPH_LAYOUTS: GbaGlyphLayout[] = [
+  // بتّان لكل بكسل: ترميز خطّ Pokémon Emerald، وهو التخطيط الوحيد الذي لم
+  // تكن الأداة تجرّبه — فكانت تقرأ حرفه بأربعة بتات فتراه ضجيجاً. وُجد
+  // بمراقبة الفاكّ في المحاكي: ١٦ بايتاً لكل خليّة ٨×٨، والحرف نصفان.
+  { width: 8, height: 8, bpp: 2 },
   { width: 8, height: 8, bpp: 4 },
   { width: 8, height: 16, bpp: 4 },
   { width: 16, height: 16, bpp: 4 },
@@ -124,7 +128,14 @@ function sparseBlocks(rom: Uint8Array, block: number, maxColours: number): boole
       if (distinct > maxColours) break;
     }
     // كتلة كلّها بايت واحد ليست رسماً بل حشو.
-    out[b] = distinct <= maxColours && same < block * 0.94;
+    // ويُقبل أيضاً ما قلّت قيَمه البايتيّة: رسمُ البتّين تكثر أنصاف بايتاته
+    // (f0، d5، 6a…) فيسقط في عدّ الأنصاف، لكنّ بايتاته نفسها قليلة متكرّرة
+    // لأنّ صفوف الخلفية تتكرّر. وبهذا ينجو خطّ Emerald وهو مخزَّن ببتّين.
+    let bytes = 0;
+    const seenBytes = new Set<number>();
+    for (let i = 0; i < block; i++) seenBytes.add(rom[start + i]);
+    bytes = seenBytes.size;
+    out[b] = (distinct <= maxColours || bytes <= 20) && same < block * 0.94;
   }
   return out;
 }

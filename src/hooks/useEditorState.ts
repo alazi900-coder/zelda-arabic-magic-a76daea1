@@ -756,7 +756,7 @@ export function useEditorState() {
       const matchFile = filterFile === "all" || e.msbtFile === filterFile;
       const isBdat = /^.+?\[\d+\]\./.test(e.label);
       const sourceFile = e.msbtFile.startsWith('bdat-bin:') ? e.msbtFile.split(':')[1] : e.msbtFile.startsWith('bdat:') ? e.msbtFile.slice(5) : undefined;
-      const isRisen = !isBdat && /\.tab$/i.test(e.msbtFile);
+      const isRisen = !isBdat && /\.(tab|gar3)$/i.test(e.msbtFile);
       const isMother3 = !isBdat && !isRisen && /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile);
       const isMetroidPrime = !isBdat && !isRisen && !isMother3 && /^TEXT_/.test(e.msbtFile);
       const isPkm = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && PKM_FILE_RE.test(e.msbtFile);

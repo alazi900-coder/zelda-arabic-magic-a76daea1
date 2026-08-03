@@ -223,7 +223,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           const translation = translations[key] || '';
           const isBdat = RE_BDAT_LABEL.test(entry.label);
           const sourceFile = entry.msbtFile.startsWith('bdat-bin:') ? entry.msbtFile.split(':')[1] : entry.msbtFile.startsWith('bdat:') ? entry.msbtFile.slice(5) : undefined;
-          const isRisen = !isBdat && /\.tab$/i.test(entry.msbtFile);
+          const isRisen = !isBdat && /\.(tab|gar3)$/i.test(entry.msbtFile);
           const isMother3 = !isBdat && !isRisen && /^(bank_\d+|names_\w+|menu_\w+)$/.test(entry.msbtFile);
           const isMetroidPrime = !isBdat && !isRisen && !isMother3 && /^TEXT_/.test(entry.msbtFile);
           const isPkm = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && PKM_FILE_RE.test(entry.msbtFile);

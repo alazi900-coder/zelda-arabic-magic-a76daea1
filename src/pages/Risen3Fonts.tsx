@@ -20,9 +20,11 @@ import {
   risen3FntHashFromPath,
   type Risen3FntDocument,
 } from "@/lib/risen3-fnt";
-import { addArabicToRisen3Fnt, measureRisen3CellMetrics } from "@/lib/risen3-arabic-font-gen";
+import { addArabicToRisen3Fnt, measureRisen3Metrics } from "@/lib/risen3-arabic-font-gen";
 import { renderArabicGlyphsForRisen3 } from "@/lib/risen3-glyph-render";
 import { FREE_ARABIC_FONTS, fetchFreeFontBytes } from "@/lib/risen2-free-fonts";
+import { verifyRisen3Archive, formatRisen3Report, type Risen3ArchiveReport } from "@/lib/risen3-verify";
+import { APP_VERSION } from "@/lib/version";
 
 /**
  * Risen 3 font tool: opens `0_na_fnt.pak`, adds Arabic to a font, writes the
@@ -95,24 +97,19 @@ export default function Risen3Fonts() {
     dbPath: string;
     dbBytes: Uint8Array;
   } | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [fontId, setFontId] = useState(FREE_ARABIC_FONTS[0]?.id ?? "");
-  const [result, setResult] = useState<{
-    path: string;
-    doc: Risen3FntDocument;
-    note: string;
-    grew: boolean;
-    overBudget: boolean;
-  } | null>(null);
+  const [results, setResults] = useState<{ path: string; label: string; doc: Risen3FntDocument; note: string }[]>([]);
+  const [report, setReport] = useState<Risen3ArchiveReport | null>(null);
+  const [built, setBuilt] = useState<Uint8Array | null>(null);
 
-  const current = useMemo(
-    () => archive?.fonts.find((f) => f.path === selected) ?? null,
-    [archive, selected]
-  );
+  const preview = useMemo(() => results.find((r) => r.doc) ?? null, [results]);
 
   const openPak = useCallback(async (file: File) => {
     setBusy("يفكّ الحاوية…");
-    setResult(null);
+    setResults([]);
+    setReport(null);
+    setBuilt(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const header = parseImagesPakHeader(bytes);
@@ -161,7 +158,13 @@ export default function Risen3Fonts() {
         f.dbName = (hash ? byHash.get(hash) : null) ?? null;
       }
       setArchive({ bytes, header, tree, fonts, dbPath, dbBytes });
-      setSelected(fonts[0].path);
+      // The text fonts are ticked to begin with: they are the ones that carry
+      // the whole Russian alphabet, which is what an Arabic build actually
+      // needs and also where its glyphs will live.
+      setChosen(new Set(fonts.filter((f) => f.doc.charmap.filter((p) => p.charCode >= 0x400 && p.charCode <= 0x4ff).length >= 200).map((f) => f.path)));
+      setResults([]);
+      setReport(null);
+      setBuilt(null);
       toast.success(`قُرئ ${fonts.length} خطّاً`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -171,67 +174,86 @@ export default function Risen3Fonts() {
   }, []);
 
   const inject = useCallback(async () => {
-    if (!current) return;
+    if (!archive || chosen.size === 0) return;
     setBusy("يرسم الحروف ويبني الحقول…");
     try {
       const entry = FREE_ARABIC_FONTS.find((f) => f.id === fontId);
       if (!entry) throw new Error("اختر خطّاً عربياً أولاً");
       const fontBytes = await fetchFreeFontBytes(entry);
-      const metrics = measureRisen3CellMetrics(current.doc);
-      const { glyphs, fontSize } = await renderArabicGlyphsForRisen3(fontBytes, metrics);
-      const out = addArabicToRisen3Fnt(current.doc, glyphs);
-      const atlas = risen3FntAtlas(out.document);
-      const grew = out.heightAfter !== out.heightBefore;
-      setResult({
-        path: current.path,
-        doc: out.document,
-        grew,
-        overBudget: atlas.width * out.heightAfter > ATLAS_BUDGET,
-        note:
-          `${out.added} شكلاً أُضيف` +
-          (out.replaced.length > 0 ? ` و${out.replaced.length} أُعيدت كتابته` : "") +
-          ` | ${out.reused} في خلايا الأبجدية الروسية` +
-          (out.appended > 0 ? ` و${out.appended} في صفوف جديدة` : " ولا شيء في صفوف جديدة") +
-          ` | الأطلس ${grew ? `${out.heightBefore} ← ${out.heightAfter}` : "بلا تغيير"}` +
-          ` | الخلية ${metrics.cellHeight} وخط الكتابة ${metrics.baseline} وحجم الرسم ${fontSize}`,
-      });
-      toast.success("تمّ الحقن — عاين الأطلس قبل التنزيل");
+
+      const out: typeof results = [];
+      const refused: string[] = [];
+      const replacements = new Map<string, Uint8Array>();
+      let db = archive.dbBytes;
+      for (const target of archive.fonts.filter((f) => chosen.has(f.path))) {
+        const metrics = measureRisen3Metrics(target.doc);
+        const { glyphs, fontSize } = await renderArabicGlyphsForRisen3(fontBytes, metrics);
+        const label = target.dbName ?? target.name;
+        let injected: ReturnType<typeof addArabicToRisen3Fnt>;
+        try {
+          injected = addArabicToRisen3Fnt(target.doc, glyphs);
+        } catch (e) {
+          // One font that cannot hold the alphabet must not stop the others.
+          refused.push(`«${label}»: ${(e as Error).message}`);
+          continue;
+        }
+        out.push({
+          path: target.path,
+          label,
+          doc: injected.document,
+          note:
+            `${injected.added} شكلاً | ${injected.reused} في خلايا الروسية` +
+            (injected.squeezed > 0 ? ` | ${injected.squeezed} ضُيّق إلى ${Math.round(injected.narrowestScale * 100)}٪ ليدخل` : "") +
+            (injected.appended > 0 ? ` | ${injected.appended} في صفوف جديدة` : "") +
+            ` | الأطلس ${injected.heightBefore === injected.heightAfter ? "بلا تغيير" : `${injected.heightBefore} ← ${injected.heightAfter}`}` +
+            ` | خطّ الكتابة ${metrics.baseline}، الهامش ${metrics.margin}، الحجم ${fontSize}`,
+        });
+
+        const bytes = buildRisen3Fnt(injected.document);
+        replacements.set(target.path, bytes);
+        if (bytes.length !== target.bytes.length) {
+          if (!target.dbName) throw new Error(`لم أجد «${label}» في بيان الخطوط — لا أبني ملفاً يرفضه المحرّك`);
+          db = patchRisen3FontDb(db, target.dbName, bytes.length);
+        }
+      }
+      if (refused.length > 0) toast.error(refused.join(" | "));
+      if (replacements.size === 0) throw new Error(`لم يُحقن أي خطّ. ${refused.join(" | ")}`);
+      if (db !== archive.dbBytes) replacements.set(archive.dbPath, db);
+
+      setBusy("يبني الحاوية ويفحصها…");
+      const archiveOut = buildFontsPakArchive(archive.bytes, archive.header, archive.tree, replacements);
+      // The file is checked as a file, not as an intention: everything that has
+      // broken a build so far is read back out of the bytes just written.
+      const checked = verifyRisen3Archive(archiveOut.bytes, APP_VERSION, archive.bytes);
+      setResults(out.concat(refused.map((r) => ({ path: r, label: "تعذّر", doc: null as never, note: r }))));
+      setReport(checked);
+      setBuilt(checked.problems.length === 0 ? archiveOut.bytes : null);
+      if (checked.problems.length === 0) toast.success("تمّ البناء وسلِم الفحص");
+      else toast.error(`${checked.problems.length} مشكلة — التنزيل موقوف، أرسل لي التقرير`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(null);
     }
-  }, [current, fontId]);
+  }, [archive, chosen, fontId]);
 
   const download = useCallback(() => {
-    if (!archive || !result) return;
-    setBusy("يعيد بناء الحاوية…");
-    try {
-      const font = buildRisen3Fnt(result.doc);
-      const replacements = new Map<string, Uint8Array>([[result.path, font]]);
-      // The index repeats the font's size. Left stale it made the engine drop
-      // the font and the game showed no text at all — so it is rewritten
-      // whenever the size moved, and the entry must be there to rewrite.
-      const entry = archive.fonts.find((f) => f.path === result.path);
-      if (font.length !== entry?.bytes.length) {
-        if (!entry?.dbName) throw new Error("تعذّر إيجاد اسم هذا الخطّ في الفهرس — لا أبني ملفاً يرفضه المحرّك");
-        replacements.set(archive.dbPath, patchRisen3FontDb(archive.dbBytes, entry.dbName, font.length));
-      }
-      const built = buildFontsPakArchive(archive.bytes, archive.header, archive.tree, replacements);
-      const blob = new Blob([built.bytes as unknown as ArrayBuffer], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "0_na_fnt.pak";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("نُزّل 0_na_fnt.pak — ضعه مكان الأصلي بعد أخذ نسخة احتياطية");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }, [archive, result]);
+    if (!built) return;
+    const blob = new Blob([built as unknown as ArrayBuffer], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "0_na_fnt.pak";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("نُزّل 0_na_fnt.pak — ضعه مكان الأصلي بعد أخذ نسخة احتياطية");
+  }, [built]);
+
+  const copyReport = useCallback(() => {
+    if (!report) return;
+    void navigator.clipboard.writeText(formatRisen3Report(report));
+    toast.success("نُسخ التقرير");
+  }, [report]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
@@ -277,42 +299,46 @@ export default function Risen3Fonts() {
 
         {archive && (
           <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-            <h2 className="font-display font-bold">اختر الخطّ</h2>
+            <h2 className="font-display font-bold">اختر الخطوط</h2>
+            <p className="text-sm text-muted-foreground">
+              الخطوط النصّية مؤشَّرة مسبقاً — وهي التي تحمل الأبجدية الروسية كاملة، وهذا ما يميّز خطّ النصّ عن الزخرفي، وفي خلاياها ستسكن العربية.
+            </p>
             <div className="grid gap-2">
               {archive.fonts.map((f) => {
                 const atlas = risen3FntAtlas(f.doc);
                 const cyrillic = f.doc.charmap.filter((p) => p.charCode >= 0x400 && p.charCode <= 0x4ff).length;
+                const on = chosen.has(f.path);
                 return (
                   <button
                     key={f.path}
                     onClick={() => {
-                      setSelected(f.path);
-                      setResult(null);
+                      const next = new Set(chosen);
+                      if (on) next.delete(f.path);
+                      else next.add(f.path);
+                      setChosen(next);
+                      setResults([]);
+                      setReport(null);
+                      setBuilt(null);
                     }}
-                    className={`rounded-lg border p-3 text-right transition ${
-                      selected === f.path ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                    className={`flex items-center gap-3 rounded-lg border p-3 text-right transition ${
+                      on ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                     }`}
                   >
-                    <div className="font-medium">{f.name || f.path}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {f.doc.charmap.length} حرفاً | أطلس {atlas.width}×{atlas.height} |{" "}
-                      {cyrillic >= 200 ? "خطّ نصّ (يحمل الروسية كاملة)" : "زخرفي"}
-                    </div>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                      {on ? "✓" : ""}
+                    </span>
+                    <span>
+                      <span className="block font-medium">{f.dbName ?? f.name ?? f.path}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {f.doc.charmap.length} حرفاً | أطلس {atlas.width}×{atlas.height} |{" "}
+                        {cyrillic >= 200 ? `خطّ نصّ — ${cyrillic} خانة روسية متاحة` : "زخرفي"}
+                      </span>
+                    </span>
                   </button>
                 );
               })}
             </div>
-          </div>
-        )}
 
-        {current && (
-          <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center">
-                <Type className="w-5 h-5 text-primary" />
-              </div>
-              <h2 className="font-display font-bold">أضف العربية إلى «{current.name}»</h2>
-            </div>
             <select
               value={fontId}
               onChange={(e) => setFontId(e.target.value)}
@@ -326,44 +352,63 @@ export default function Risen3Fonts() {
             </select>
             <button
               onClick={() => void inject()}
-              disabled={busy !== null}
+              disabled={busy !== null || chosen.size === 0}
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Type className="w-4 h-4" />}
-              {busy ?? "ارسم واحقن"}
+              {busy ?? `ارسم واحقن في ${chosen.size} خطّاً وابنِ`}
             </button>
-
-            <div>
-              <div className="mb-2 text-sm text-muted-foreground">الأطلس الحالي</div>
-              <AtlasPreview doc={current.doc} />
-            </div>
           </div>
         )}
 
-        {result && (
+        {results.length > 0 && (
           <div className="rounded-xl border border-primary/40 bg-primary/5 p-6 space-y-4">
             <h2 className="font-display font-bold">بعد الحقن</h2>
-            <p className="text-sm text-muted-foreground">{result.note}</p>
-            {result.overBudget && (
-              <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                ⚠️ الأطلس تجاوز ١٠٢٤×٢٠٤٨ — وهو الحدّ الذي قاست الترجمة الصينية بعده بطئاً ملحوظاً في اللعبة.
-              </p>
-            )}
-            {result.grew && !result.overBudget && (
-              <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-                كبر الأطلس، فسيُحدَّث الفهرس <code>w_fnt_0_na.db</code> مع الخطّ عند التنزيل.
-              </p>
-            )}
-            <AtlasPreview doc={result.doc} height={320} />
-            <button
-              onClick={download}
-              disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" /> نزّل 0_na_fnt.pak
-            </button>
+            {results.map((r) => (
+              <div key={r.path} className="text-sm">
+                <span className="font-medium">{r.label}</span>
+                <span className="block text-muted-foreground">{r.note}</span>
+              </div>
+            ))}
+            {preview?.doc && <AtlasPreview doc={preview.doc} height={320} />}
           </div>
         )}
+
+        {report && (
+          <div className={`rounded-xl border p-6 space-y-4 ${report.problems.length === 0 ? "border-border bg-card" : "border-destructive/50 bg-destructive/5"}`}>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-display font-bold">
+                {report.problems.length === 0 ? "الفحص: سليم" : `الفحص: ${report.problems.length} مشكلة`}
+              </h2>
+              <button onClick={copyReport} className="rounded-lg border border-border px-3 py-1.5 text-sm">
+                انسخ التقرير
+              </button>
+            </div>
+            {report.problems.length > 0 && (
+              <ul className="list-disc space-y-1 pr-5 text-sm">
+                {report.problems.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+            <pre className="max-h-72 overflow-auto rounded-lg bg-muted/40 p-3 text-xs" dir="ltr">
+              {formatRisen3Report(report)}
+            </pre>
+            {built ? (
+              <button
+                onClick={download}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground"
+              >
+                <Download className="w-4 h-4" /> نزّل 0_na_fnt.pak
+              </button>
+            ) : (
+              <p className="text-sm">
+                التنزيل موقوف: ملفٌ بهذه المشاكل يرميه المحرّك بلا أن يقول شيئاً، فتظهر اللعبة بلا نصّ. أرسل لي التقرير.
+              </p>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

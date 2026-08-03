@@ -54,16 +54,19 @@ function fontWithAtlas(width: number, height: number, pairs: number, codes?: num
 
 /** A solid block, the simplest thing a rasteriser can hand over. */
 function block(codepoint: number, w: number, h: number, advance = w): DrawnGlyph {
-  return { codepoint, width: w, height: h, coverage: new Uint8Array(w * h).fill(255), advance };
+  return { codepoint, width: w, height: h, coverage: new Uint8Array(w * h).fill(255), advance, leftBearing: -6, topBearing: 2 };
 }
 
-describe("Risen 3 — adding Arabic to a font", () => {
+describe("Risen 3 — adding Arabic when the atlas is allowed to grow", () => {
+  // Growing is off by default — the engine refuses an atlas larger than any it
+  // ships — so these ask for it explicitly to check that path still works.
   const base = fontWithAtlas(256, 256, 8);
+  const grow = { allowGrow: true } as const;
 
   it("grows the atlas instead of writing over the letters already there", () => {
     // Every shipped font is packed to its last row, so there is nowhere inside
     // to put anything: Linux Biolinum O_30 uses row 1022 of 1024.
-    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40), block(0x0628, 24, 40)]);
+    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40), block(0x0628, 24, 40)], grow);
     expect(out.heightBefore).toBe(256);
     expect(out.heightAfter).toBe(512);
     const atlas = risen3FntAtlas(out.document);
@@ -73,7 +76,7 @@ describe("Risen 3 — adding Arabic to a font", () => {
   });
 
   it("gives each new glyph a charmap entry and a record that points at it", () => {
-    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40, 13)]);
+    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40, 13)], grow);
     expect(out.added).toBe(1);
     expect(out.replaced).toEqual([]);
     const pair = out.document.charmap.find((p) => p.charCode === 0x0627)!;
@@ -88,7 +91,7 @@ describe("Risen 3 — adding Arabic to a font", () => {
   });
 
   it("writes the glyph as a field whose edge is where the drawing's edge is", () => {
-    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40)]);
+    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40)], grow);
     const atlas = risen3FntAtlas(out.document);
     const [x0, y0, x1, y1] = out.document.glyphs.at(-1)!.fields;
     const mid = y0 + Math.floor((y1 - y0) / 2);
@@ -104,7 +107,7 @@ describe("Risen 3 — adding Arabic to a font", () => {
   it("rewrites a codepoint the font already has instead of adding a second one", () => {
     // 0x41 is in the fixture's charmap. Adding it again must not leave two
     // entries for one character — the engine would read whichever it met first.
-    const out = addArabicToRisen3Fnt(base, [block(0x41, 12, 20)]);
+    const out = addArabicToRisen3Fnt(base, [block(0x41, 12, 20)], grow);
     expect(out.added).toBe(0);
     expect(out.replaced).toEqual([0x41]);
     expect(out.document.charmap.filter((p) => p.charCode === 0x41)).toHaveLength(1);
@@ -112,7 +115,7 @@ describe("Risen 3 — adding Arabic to a font", () => {
   });
 
   it("comes back out of the serializer readable, with the lengths rebuilt", () => {
-    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40), block(0x0628, 24, 40)]);
+    const out = addArabicToRisen3Fnt(base, [block(0x0627, 20, 40), block(0x0628, 24, 40)], grow);
     const bytes = buildRisen3Fnt(out.document);
     const again = parseRisen3Fnt(bytes);
     expect(again.charmap).toHaveLength(out.document.charmap.length);
@@ -126,7 +129,7 @@ describe("Risen 3 — adding Arabic to a font", () => {
   });
 
   it("refuses a glyph wider than the atlas rather than wrapping it", () => {
-    expect(() => addArabicToRisen3Fnt(base, [block(0x0627, 300, 40)])).toThrow();
+    expect(() => addArabicToRisen3Fnt(base, [block(0x0627, 300, 40)], grow)).toThrow();
   });
 });
 
@@ -178,16 +181,23 @@ describe("Risen 3 — taking over the cells of the Russian alphabet", () => {
     expect(after.pixels[(ny0 + 10) * after.width + (nx0 + 5)]).toBeGreaterThan(128);
   });
 
-  it("appends only what no free cell can hold, and says how many", () => {
-    // A form wider than every cell has nowhere to go but new rows.
+  it("shrinks a form too big for any cell rather than growing the atlas", () => {
+    // Growing is what the engine refuses, so a form that fits nowhere as drawn
+    // is resampled into the roomiest cell left instead.
     const out = addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40), block(0x0628, 900, 40)]);
-    expect(out.reused).toBe(1);
-    expect(out.appended).toBe(1);
-    expect(out.heightAfter).toBeGreaterThan(out.heightBefore);
+    expect(out.squeezed).toBe(1);
+    expect(out.appended).toBe(0);
+    expect(out.heightAfter).toBe(out.heightBefore);
+    expect(out.narrowestScale).toBeLessThan(1);
   });
 
-  it("appends everything when the reuse range is turned off", () => {
-    const out = addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40)], { reuseRange: null });
+  it("refuses rather than grow when nothing can be reused", () => {
+    // Better a named refusal than a file the engine drops without a word.
+    expect(() => addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40)], { reuseRanges: null })).toThrow();
+  });
+
+  it("appends when growing is asked for explicitly", () => {
+    const out = addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40)], { reuseRanges: null, allowGrow: true });
     expect(out.reused).toBe(0);
     expect(out.appended).toBe(1);
   });

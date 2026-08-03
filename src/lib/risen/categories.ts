@@ -65,11 +65,14 @@ export function categorizeRisenTable(tableName: string): RisenCategory {
 }
 
 export function categorizeRisenEntry(entry: RisenCategoryEntry): string {
+  // Risen 3 rows carry their category from the string-key map (no table names).
+  if (entry.risen3Cat) return entry.risen3Cat;
   return categorizeRisenTable(risenTableFromMsbtFile(entry.msbtFile)).id;
 }
 
 /** Build the list of categories actually present in the loaded entries (Level 1). */
 export function buildRisenCategories(entries: RisenCategoryEntry[]): RisenCategory[] {
+  if (entries.some((e) => e.risen3Cat)) return buildRisen3Categories(entries);
   const seen = new Map<string, RisenCategory>();
   for (const e of entries) {
     const cat = categorizeRisenTable(risenTableFromMsbtFile(e.msbtFile));
@@ -77,6 +80,7 @@ export function buildRisenCategories(entries: RisenCategoryEntry[]): RisenCatego
   }
   return Array.from(seen.values());
 }
+
 
 // ============================================================================
 // Level 2a — Owner sub-filter (within الحوارات / infos.tab)

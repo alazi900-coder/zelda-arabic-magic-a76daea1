@@ -6,6 +6,7 @@ import {
   emeraldGlyphInkWidth,
   findEmeraldFont,
   readEmeraldGlyph,
+  renderEmeraldLine,
   writeEmeraldGlyph,
 } from "@/lib/gba/emerald-font";
 import {
@@ -162,6 +163,21 @@ describe("Emerald — drawing Arabic into a ROM", () => {
     // The comma is a real drawing, not an empty cell.
     const comma = readEmeraldGlyph(out, font, EMERALD_CARRIER_CODES[0]);
     expect(comma.some((v) => v === 1)).toBe(true);
+  });
+
+  it("previews a line the way the engine lays it out", () => {
+    // The preview has to advance by each cell's own width, not by the cell —
+    // that is what decides whether Arabic joins, and a picture of the letters
+    // side by side would hide exactly the thing being judged.
+    const { rom: out, font } = applyEmeraldArabicFont(emeraldRom(blanks));
+    const { bytes } = encodeArabicForEmerald("هل");
+    const line = renderEmeraldLine(out, font, bytes, 1);
+    let span = 0;
+    for (const b of bytes) span += out[font.widths + b];
+    expect(line.width).toBe(span);
+    expect(line.height).toBe(EMERALD_GLYPH_SIZE);
+    // And it draws something: the letters are there, not a blank strip.
+    expect([...line.rgba].some((v) => v < 200)).toBe(true);
   });
 
   it("refuses a ROM whose empty cells are no longer empty", () => {

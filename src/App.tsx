@@ -41,6 +41,7 @@ const RisenFileManager = lazyWithIgnoredRef(() => import("./pages/RisenFileManag
 const RisenFonts = lazyWithIgnoredRef(() => import("./pages/RisenFonts"));
 const Risen3Fonts = lazyWithIgnoredRef(() => import("./pages/Risen3Fonts"));
 const GbaFontFinder = lazyWithIgnoredRef(() => import("./pages/GbaFontFinder"));
+const EmeraldArabic = lazyWithIgnoredRef(() => import("./pages/EmeraldArabic"));
 const MetroidPrime = lazyWithIgnoredRef(() => import("./pages/MetroidPrime"));
 const MetroidPrimeFont = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeFont"));
 const MetroidPrimeText = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeText"));
@@ -92,6 +93,7 @@ const App = () => (
                 <Route path="/risen/files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Risen"><RisenFileManager /></ErrorBoundary>} />
                 <Route path="/risen2/fonts" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطوط Risen 2"><RisenFonts /></ErrorBoundary>} />
                 <Route path="/gba/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة إيجاد خطوط GBA"><GbaFontFinder /></ErrorBoundary>} />
+                <Route path="/emerald/arabic" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطّ Emerald"><EmeraldArabic /></ErrorBoundary>} />
                 <Route path="/risen3/fonts" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطوط Risen 3"><Risen3Fonts /></ErrorBoundary>} />
                 <Route path="/metroid-prime" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Metroid Prime"><MetroidPrime /></ErrorBoundary>} />
                 <Route path="/metroid-prime/font" element={<ErrorBoundary fallbackTitle="خطأ في عارض خطوط Metroid Prime"><MetroidPrimeFont /></ErrorBoundary>} />

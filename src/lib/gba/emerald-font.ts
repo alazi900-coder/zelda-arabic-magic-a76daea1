@@ -152,6 +152,54 @@ export function findEmeraldFont(rom: Uint8Array): EmeraldFont | null {
   return null;
 }
 
+/** What the four values look like on screen: letter, shadow, and the box behind. */
+const INK: Record<number, [number, number, number]> = {
+  0: [255, 255, 255],
+  1: [32, 32, 32],
+  2: [168, 168, 168],
+  3: [255, 255, 255],
+};
+
+/**
+ * Draws a line of the game's own bytes the way the engine draws it: each cell
+ * as far as its width, one after the other, left to right.
+ *
+ * This is the only honest preview. A picture of the letters side by side says
+ * nothing about whether they join, and joining is decided by the widths.
+ */
+export function renderEmeraldLine(
+  rom: Uint8Array,
+  font: EmeraldFont,
+  bytes: Uint8Array,
+  scale = 2
+): { rgba: Uint8ClampedArray; width: number; height: number } {
+  let span = 0;
+  for (const b of bytes) span += rom[font.widths + b];
+  const width = Math.max(1, span * scale);
+  const height = EMERALD_GLYPH_SIZE * scale;
+  const rgba = new Uint8ClampedArray(width * height * 4).fill(255);
+  let pen = 0;
+  for (const b of bytes) {
+    const cell = readEmeraldGlyph(rom, font, b);
+    const advance = rom[font.widths + b];
+    for (let y = 0; y < EMERALD_GLYPH_SIZE; y++) {
+      for (let x = 0; x < advance; x++) {
+        const [r, g, bl] = INK[cell[y * EMERALD_GLYPH_SIZE + x]];
+        for (let sy = 0; sy < scale; sy++) {
+          for (let sx = 0; sx < scale; sx++) {
+            const at = (((y * scale + sy) * width) + (pen + x) * scale + sx) * 4;
+            rgba[at] = r;
+            rgba[at + 1] = g;
+            rgba[at + 2] = bl;
+          }
+        }
+      }
+    }
+    pen += advance;
+  }
+  return { rgba, width, height };
+}
+
 function agrees(rom: Uint8Array, font: EmeraldFont): boolean {
   let exact = 0;
   for (let code = 0; code < EMERALD_GLYPH_COUNT; code++) {

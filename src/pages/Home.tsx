@@ -103,6 +103,18 @@ const games = [
     subtitleClass: "text-[hsl(160,70%,55%)]",
     arrowClass: "text-[hsl(160,70%,55%)]",
   },
+  {
+    title: "Pokémon Emerald",
+    subtitle: "احقن الخطّ العربي في الروم",
+    desc: "يجد خطّ اللعبة ببنيته لا بعنوانٍ محفوظ، ويرسم العربية في ١٢٨ خانةً لا يطبعها البناء الإنجليزي — فتبقى الحروف اللاتينية وLv وPK وMN والأقواس والأسهم كما هي",
+    link: "/emerald/arabic",
+    image: risenBg,
+    formats: [".gba", "GBA ROM"],
+    cardClass: "border-[hsl(150,80%,40%)]/30 hover:border-[hsl(150,80%,40%)]/60",
+    formatClass: "bg-[hsl(150,80%,40%)]/20 text-[hsl(150,80%,55%)] border-[hsl(150,80%,40%)]/30",
+    subtitleClass: "text-[hsl(150,80%,55%)]",
+    arrowClass: "text-[hsl(150,80%,55%)]",
+  },
 ];
 
 const Home = () => {

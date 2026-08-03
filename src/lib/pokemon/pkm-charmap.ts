@@ -142,6 +142,16 @@ function neededCodepoints(): number[] {
   return out.sort((a, b) => a - b);
 }
 
+/**
+ * The codepoint each glyph in `PKM_ARABIC_GLYPHS_B64` draws, in the order the
+ * glyphs are stored. Exported because the Emerald font writes the same drawings
+ * into a different set of codes, and reading the order off this one list is
+ * what keeps the two from disagreeing about which glyph is which letter.
+ */
+export function pkmGlyphCodepoints(): number[] {
+  return neededCodepoints();
+}
+
 function buildMap(): { toByte: Map<number, number>; toCodepoint: Map<number, number> } {
   const needed = neededCodepoints();
   if (needed.length !== PKM_SLOT_COUNT) {

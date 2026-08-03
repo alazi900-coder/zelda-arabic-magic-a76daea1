@@ -61,3 +61,29 @@ describe("GBA — finding a font without being told its shape", () => {
     expect([...sheet.rgba].some((v) => v > 200)).toBe(true);
   });
 });
+
+describe("GBA — finding a font the game keeps compressed", () => {
+  it("unpacks LZ77 blocks and judges what comes out", async () => {
+    // Emerald keeps its graphics compressed, and the hand search failed for
+    // eight attempts because there is nothing to read in the raw bytes.
+    const { compressGbaLz77Store } = await import("./gba-lz77-helper");
+    const font = new Uint8Array(64 * 40);
+    let seed = 7;
+    const next = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff);
+    for (let g = 0; g < 40; g++) {
+      const cell = new Uint8Array(8 * 16);
+      for (let y = 4; y < 13; y++) for (let x = 0; x < 6; x++) if (x === 0 || next() % 3 === 0) cell[y * 8 + x] = 5;
+      for (let i = 0; i < cell.length; i += 2) font[g * 64 + i / 2] = cell[i] | (cell[i + 1] << 4);
+    }
+    const packed = compressGbaLz77Store(font);
+    const rom = new Uint8Array(0x20000);
+    for (let i = 0; i < rom.length; i++) rom[i] = (i * 37) & 0xff;
+    rom.set(packed, 0x8000);
+
+    const found = findGbaFonts(rom, { limit: 5, minGlyphs: 32 });
+    const hit = found.find((c) => c.compressedAt === 0x8000);
+    expect(hit).toBeDefined();
+    // ويُرسم من الكتلة المفكوكة لا من بايتات الروم.
+    expect(renderGbaFontCandidate(rom, hit!, 8).rgba.some((v) => v > 200)).toBe(true);
+  });
+});

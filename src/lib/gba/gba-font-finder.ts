@@ -16,6 +16,8 @@
  * فهي تختصر ستّة عشر ميغابايت إلى عشرة مواضع، لا تدّعي اليقين.
  */
 
+import { decompressGbaLz77, findGbaLz77Blocks } from "./gba-lz77";
+
 /** تخطيطٌ محتمل لخليّة حرف. */
 export interface GbaGlyphLayout {
   width: number;
@@ -25,7 +27,10 @@ export interface GbaGlyphLayout {
 }
 
 export interface GbaFontCandidate {
+  /** موضع أوّل خليّة: في الروم للخام، وفي الكتلة المفكوكة للمضغوط. */
   offset: number;
+  /** موضع ترويسة الضغط في الروم، إن كان الخطّ مضغوطاً. */
+  compressedAt?: number;
   layout: GbaGlyphLayout;
   /** كم خليّة متتابعة تحمل هذه الصفة. */
   glyphs: number;
@@ -199,6 +204,8 @@ export interface GbaFontSearchOptions {
   /** كم مرشّحاً يُعاد. */
   limit?: number;
   layouts?: GbaGlyphLayout[];
+  /** يفكّ الرسوم المضغوطة ويفحصها أيضاً. مُفعَّل. */
+  searchCompressed?: boolean;
 }
 
 /**
@@ -246,6 +253,24 @@ export function findGbaFonts(rom: Uint8Array, options: GbaFontSearchOptions = {}
     }
   }
 
+  if (options.searchCompressed !== false) {
+    // ألعابٌ تضغط رسومها، ومنها خطّها: لا يُقرأ منها شيء قبل الفكّ.
+    for (const block of findGbaLz77Blocks(rom, minGlyphs * 16)) {
+      const data = decompressGbaLz77(rom, block.at);
+      if (!data) continue;
+      for (const layout of layouts) {
+        const size = glyphBytes(layout);
+        const glyphs = Math.min(Math.floor(data.length / size), 128);
+        if (glyphs < minGlyphs) continue;
+        const candidate = scoreRun(data, 0, layout, glyphs);
+        if (candidate) {
+          found.push({ ...candidate, compressedAt: block.at });
+          break;
+        }
+      }
+    }
+  }
+
   found.sort((a, b) => b.score - a.score || b.glyphs - a.glyphs);
   return found.slice(0, options.limit ?? 20);
 }
@@ -257,6 +282,9 @@ export function renderGbaFontCandidate(
   columns = 32
 ): { width: number; height: number; rgba: Uint8ClampedArray } {
   const { layout } = candidate;
+  // المضغوط يُفكّ عند الرسم، فلا تُحمل الكتل المفكوكة كلّها في الذاكرة.
+  const source = candidate.compressedAt === undefined ? rom : decompressGbaLz77(rom, candidate.compressedAt);
+  if (!source) throw new Error("تعذّر فكّ ضغط هذا المرشّح");
   const size = glyphBytes(layout);
   const rows = Math.ceil(candidate.glyphs / columns);
   const width = columns * (layout.width + 1);
@@ -271,7 +299,7 @@ export function renderGbaFontCandidate(
   }
   const levels = (1 << layout.bpp) - 1;
   for (let g = 0; g < candidate.glyphs; g++) {
-    const pixels = readGlyph(rom, candidate.offset + g * size, layout);
+    const pixels = readGlyph(source, candidate.offset + g * size, layout);
     const gx = (g % columns) * (layout.width + 1);
     const gy = Math.floor(g / columns) * (layout.height + 1);
     for (let y = 0; y < layout.height; y++) {

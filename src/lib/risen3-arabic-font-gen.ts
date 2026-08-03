@@ -45,6 +45,61 @@ function nextPowerOfTwo(n: number): number {
   return p;
 }
 
+/**
+ * The uniform cell every glyph of this font is drawn into, and where its
+ * writing line sits inside it.
+ *
+ * Both are read off the font's own glyphs rather than chosen. The engine draws
+ * each cell top-aligned on a fixed line, so a new glyph rendered to a
+ * different height hangs at the wrong place — measured the hard way in Risen 2,
+ * where tight-cropped boxes made every letter dangle from the line's top.
+ *
+ * The baseline is taken from characters whose ink stops exactly on it — digits
+ * and flat-bottomed capitals — and in a distance field "ink" means at or above
+ * the edge value, since that is where the letter actually is.
+ */
+export interface Risen3CellMetrics {
+  cellHeight: number;
+  baseline: number;
+}
+
+const BASELINE_REF_CHARS = "0123456789ABDEFHIKLMNPRTUVWXZ";
+
+export function measureRisen3CellMetrics(doc: Risen3FntDocument): Risen3CellMetrics {
+  const heights = new Map<number, number>();
+  for (const g of doc.glyphs) {
+    const h = g.fields[3] - g.fields[1];
+    if (g.fields[2] > g.fields[0] && h > 0) heights.set(h, (heights.get(h) ?? 0) + 1);
+  }
+  let cellHeight = 20;
+  let best = 0;
+  for (const [h, n] of heights) if (n > best) { cellHeight = h; best = n; }
+
+  const atlas = risen3FntAtlas(doc);
+  const byChar = new Map(doc.charmap.map((p) => [p.charCode, p.glyphIndex]));
+  const bottoms = new Map<number, number>();
+  for (const ch of BASELINE_REF_CHARS) {
+    const gi = byChar.get(ch.charCodeAt(0));
+    if (gi === undefined || gi >= doc.glyphs.length) continue;
+    const [x0, y0, x1, y1] = doc.glyphs[gi].fields;
+    if (x1 <= x0 || y1 <= y0) continue;
+    let inkMaxY = -1;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        if (atlas.pixels[y * atlas.width + x] >= 128 && y > inkMaxY) inkMaxY = y;
+      }
+    }
+    if (inkMaxY >= 0) {
+      const rel = inkMaxY - y0 + 1;
+      bottoms.set(rel, (bottoms.get(rel) ?? 0) + 1);
+    }
+  }
+  let baseline = Math.round(cellHeight * 0.8);
+  let bestBottom = 0;
+  for (const [rel, n] of bottoms) if (n > bestBottom) { baseline = rel; bestBottom = n; }
+  return { cellHeight, baseline };
+}
+
 export interface Risen3InjectResult {
   document: Risen3FntDocument;
   /** How many glyphs were written. */

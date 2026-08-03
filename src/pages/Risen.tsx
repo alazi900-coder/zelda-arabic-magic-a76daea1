@@ -153,6 +153,26 @@ const Risen = forwardRef<HTMLDivElement>((_, ref) => {
         </div>
       </section>
 
+      {/* Risen 3 Fonts Tool Section */}
+      <section className="py-16 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="rounded-2xl border p-8 md:p-12 shadow-lg" style={{ borderColor: `${ACCENT}4d` }}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6" style={{ backgroundColor: `${ACCENT}1a` }}>
+              <span className="text-3xl">🅰️</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-display font-bold mb-4">أداة خطوط Risen 3</h2>
+            <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
+              افتح <code>0_na_fnt.pak</code>، اختر خطّاً، وأضف إليه الأشكال العربية. أطالس هذه اللعبة حقول مسافة (SDF) لا صوراً، والأداة تولّدها بالترميز نفسه.
+            </p>
+            <Link to="/risen3/fonts">
+              <Button size="lg" className="font-display font-bold text-xl px-12 py-7 shadow-xl" style={{ backgroundColor: ACCENT, color: "white" }}>
+                🅰️ افتح أداة خطوط Risen 3
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <GameInfoSection
         accentColor={ACCENT}
         secondaryColor={SECONDARY}

@@ -382,7 +382,9 @@ export function buildGameMakerIFF(
   out.set(original.subarray(0, strgEnd), 0);
   out.set(original.subarray(strgEnd), strgEnd + grewBy);
 
-  view.setUint32(4, buffer.byteLength - 8, true);
+  // يُزاح الحجم المذكور بمقدار الزيادة ولا يُعاد حسابه، فيبقى الملف كما وجدناه
+  // فيما عدا ما غيّرناه عمداً.
+  view.setUint32(4, originalView.getUint32(4, true) + grewBy, true);
   view.setUint32(strg.start - 4, strg.size + grewBy, true);
 
   let at = strgEnd;

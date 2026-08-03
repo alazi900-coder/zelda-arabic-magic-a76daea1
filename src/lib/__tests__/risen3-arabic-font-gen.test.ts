@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addArabicToRisen3Fnt, type DrawnGlyph } from "@/lib/risen3-arabic-font-gen";
+import { addArabicToRisen3Fnt, probeRisen3Fnt, RISEN3_PROBE_CHAR, type DrawnGlyph } from "@/lib/risen3-arabic-font-gen";
 import { parseRisen3Fnt, buildRisen3Fnt, risen3FntAtlas, type Risen3FntDocument } from "@/lib/risen3-fnt";
 import { sdfEdgeCrossings } from "@/lib/risen3-sdf";
 
@@ -210,5 +210,64 @@ describe("Risen 3 — taking over the cells of the Russian alphabet", () => {
     const out = addArabicToRisen3Fnt(shared, [block(0x0627, 20, 40)]);
     const arabic = out.document.charmap.find((p) => p.charCode === 0x0627)!;
     expect(arabic.glyphIndex).not.toBe(0);
+  });
+});
+
+describe("Risen 3 — the one-glyph test", () => {
+  const cyrillic = fontWithAtlas(1024, 256, 8, Array.from({ length: 8 }, (_, i) => 0x410 + i));
+
+  it("changes the pixels of one cell and nothing else in the file", () => {
+    // The whole value of this build is that it is the original file with one
+    // cell repainted: if anything else moves, what the game says about it
+    // proves nothing.
+    const before = buildRisen3Fnt(cyrillic);
+    const { document, cell } = probeRisen3Fnt(cyrillic, block(0x0627, 20, 40));
+    const after = buildRisen3Fnt(document);
+
+    expect(after.length).toBe(before.length);
+    expect(document.charmap).toEqual(cyrillic.charmap);
+    expect(document.glyphs.map((g) => g.fields)).toEqual(cyrillic.glyphs.map((g) => g.fields));
+    expect(cell).toEqual({ x: 0, y: 4, width: 26, height: 40 });
+
+    const atlas = risen3FntAtlas(document);
+    const old = risen3FntAtlas(cyrillic);
+    let differing = 0;
+    for (let i = 0; i < atlas.pixels.length; i++) if (atlas.pixels[i] !== old.pixels[i]) differing++;
+    expect(differing).toBeGreaterThan(0);
+    // Everything outside the cell's rows and columns reads exactly as it did.
+    for (let y = 0; y < atlas.height; y++) {
+      for (let x = 0; x < atlas.width; x++) {
+        const inside = x >= cell.x && x < cell.x + cell.width && y >= cell.y && y < cell.y + cell.height;
+        if (!inside) expect(atlas.pixels[y * atlas.width + x]).toBe(old.pixels[y * atlas.width + x]);
+      }
+    }
+  });
+
+  it("writes a field, not a stencil, into the cell", () => {
+    // A stroke down the middle of a cell-sized box, so the row crossing it has
+    // an edge on either side: the atlas is a distance field, and a cell filled
+    // with 0 and 255 alone would draw nothing recognisable.
+    const stroke: DrawnGlyph = {
+      codepoint: 0x0627,
+      width: 26,
+      height: 40,
+      coverage: new Uint8Array(26 * 40),
+      advance: 10,
+      leftBearing: -6,
+      topBearing: 2,
+    };
+    for (let y = 0; y < 40; y++) for (let x = 12; x < 15; x++) stroke.coverage[y * 26 + x] = 255;
+
+    const { document, cell } = probeRisen3Fnt(cyrillic, stroke);
+    const atlas = risen3FntAtlas(document);
+    const row = cell.y + Math.floor(cell.height / 2);
+    const values = new Set<number>();
+    for (let x = cell.x; x < cell.x + cell.width; x++) values.add(atlas.pixels[row * atlas.width + x]);
+    expect(values.size).toBeGreaterThan(2);
+  });
+
+  it("says which character it cannot find rather than writing somewhere else", () => {
+    const latin = fontWithAtlas(256, 256, 4);
+    expect(() => probeRisen3Fnt(latin, block(0x0627, 20, 40))).toThrow(String(RISEN3_PROBE_CHAR));
   });
 });

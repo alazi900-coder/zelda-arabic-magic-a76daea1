@@ -298,6 +298,73 @@ function narrowGlyph(glyph: DrawnGlyph, width: number): DrawnGlyph {
   };
 }
 
+/**
+ * The character the one-glyph test writes over: Cyrillic А.
+ *
+ * Chosen because every text font in the game carries it, an Arabic build never
+ * prints it, and the translator can paste it into a line without a Russian
+ * keyboard.
+ */
+export const RISEN3_PROBE_CHAR = 0x0410;
+
+export interface Risen3ProbeResult {
+  document: Risen3FntDocument;
+  /** The cell that was written over, for the note shown to the translator. */
+  cell: { x: number; y: number; width: number; height: number };
+}
+
+/**
+ * Draws one Arabic letter into one existing cell, and changes nothing else.
+ *
+ * Every build so far has lost the game's text entirely — the English with the
+ * Arabic — which cannot be a drawing fault: injection never touches a Latin
+ * letter's pixels, record or charmap entry. So the engine is refusing the font
+ * as it loads it, and the question is which of the things injection changes it
+ * refuses. Three change at once: pixels, records, and the charmap (about 140
+ * codes leave, 140 arrive, all of them above 0xFE70 — while not one of the
+ * 2698 codes in the seven shipped fonts reaches 0x8000).
+ *
+ * This separates them. The letter is resampled into the cell exactly as it
+ * stands, so the record keeps its own numbers and the file's length, counts,
+ * charmap and every field stay identical to the original — only the pixels of
+ * that one cell differ. If the game then shows an alef where `А` is written and
+ * keeps the rest of its text, the pixel path is proven and the fault is in the
+ * charmap; if the text disappears, it is the pixels, and the charmap is
+ * innocent.
+ */
+export function probeRisen3Fnt(
+  doc: Risen3FntDocument,
+  glyph: DrawnGlyph,
+  options: { spread?: number; charCode?: number } = {}
+): Risen3ProbeResult {
+  const charCode = options.charCode ?? RISEN3_PROBE_CHAR;
+  const pair = doc.charmap.find((p) => p.charCode === charCode);
+  if (!pair) throw new Error(`لا يحمل هذا الخطّ الرمز ${charCode} — جرّب خطّاً نصّياً`);
+  const record = doc.glyphs[pair.glyphIndex];
+  if (!record) throw new Error(`الرمز ${charCode} يشير إلى رسم غير موجود`);
+  const [x0, y0, x1, y1] = record.fields;
+  const width = x1 - x0;
+  const height = y1 - y0;
+  if (width <= 0 || height <= 0) throw new Error(`خليّة الرمز ${charCode} فارغة، فلا شيء يُرسم فيها`);
+
+  const atlas = risen3FntAtlas(doc);
+  const fitted =
+    glyph.width === width && glyph.height === height
+      ? glyph
+      : scaleGlyph(glyph, width, height, measureRisen3Metrics(doc).baseline);
+  const field = coverageToSdf(fitted.coverage, width, height, options.spread ?? RISEN3_SDF_SPREAD);
+
+  const pixels = atlas.pixels.slice();
+  for (let row = 0; row < height; row++) {
+    pixels.set(field.subarray(row * width, (row + 1) * width), (y0 + row) * atlas.width + x0);
+  }
+  const dds = new Uint8Array(128 + pixels.length);
+  dds.set(doc.dds.subarray(0, 128), 0);
+  dds.set(pixels, 128);
+
+  return { document: { ...doc, dds }, cell: { x: x0, y: y0, width, height } };
+}
+
 /** A cell this build may take over, with the character that used to own it. */
 interface FreeCell {
   charCode: number;

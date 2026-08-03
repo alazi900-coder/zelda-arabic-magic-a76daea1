@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Package, Loader2, Download, Type } from "lucide-react";
+import { ArrowRight, Package, Loader2, Download, Type, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import {
   parseImagesPakHeader,
@@ -21,7 +21,7 @@ import {
   risen3FntHashFromPath,
   type Risen3FntDocument,
 } from "@/lib/risen3-fnt";
-import { addArabicToRisen3Fnt, measureRisen3Metrics } from "@/lib/risen3-arabic-font-gen";
+import { addArabicToRisen3Fnt, measureRisen3Metrics, probeRisen3Fnt, RISEN3_PROBE_CHAR } from "@/lib/risen3-arabic-font-gen";
 import { renderArabicGlyphsForRisen3 } from "@/lib/risen3-glyph-render";
 import { FREE_ARABIC_FONTS, fetchFreeFontBytes } from "@/lib/risen2-free-fonts";
 import { verifyRisen3Archive, formatRisen3Report, type Risen3ArchiveReport } from "@/lib/risen3-verify";
@@ -238,6 +238,63 @@ export default function Risen3Fonts() {
     }
   }, [archive, chosen, fontId]);
 
+  /**
+   * The one-glyph test: an alef drawn into the cell of Cyrillic А, and nothing
+   * else changed — same length, same counts, same charmap, same records.
+   *
+   * It is here because injection changes three things at once and the game
+   * says nothing about which one it refuses. What comes back from the game
+   * with this file decides the next step: an alef where `А` is written, with
+   * the rest of the text intact, clears the pixel path and puts the fault in
+   * the charmap; no text at all puts it in the pixels.
+   */
+  const probe = useCallback(async () => {
+    if (!archive || chosen.size === 0) return;
+    setBusy("يرسم حرفاً واحداً…");
+    try {
+      const entry = FREE_ARABIC_FONTS.find((f) => f.id === fontId);
+      if (!entry) throw new Error("اختر خطّاً عربياً أولاً");
+      const fontBytes = await fetchFreeFontBytes(entry);
+
+      const out: typeof results = [];
+      const replacements = new Map<string, Uint8Array>();
+      for (const target of archive.fonts.filter((f) => chosen.has(f.path))) {
+        const label = target.dbName ?? target.name;
+        const metrics = measureRisen3Metrics(target.doc);
+        const { glyphs } = await renderArabicGlyphsForRisen3(fontBytes, metrics, { codepoints: [0x0627] });
+        if (glyphs.length === 0 || glyphs[0].width === 0) throw new Error("لم يرسم الخطّ العربي الألف");
+        const { document, cell } = probeRisen3Fnt(target.doc, glyphs[0]);
+        const bytes = buildRisen3Fnt(document);
+        // The whole point is that nothing but pixels moved; a different length
+        // means something else changed and the test would prove nothing.
+        if (bytes.length !== target.bytes.length) {
+          throw new Error(`«${label}»: تغيّر حجم الخطّ في اختبارٍ لا يُفترض أن يغيّر إلا البكسلات`);
+        }
+        replacements.set(target.path, bytes);
+        out.push({
+          path: target.path,
+          label,
+          doc: document,
+          note: `ألفٌ في خليّة А وحدها — ${cell.width}×${cell.height} عند (${cell.x}, ${cell.y}) | لا حرف زاد ولا نقص، والحجم كما هو`,
+        });
+      }
+      if (replacements.size === 0) throw new Error("لم يُعدَّل أي خطّ");
+
+      setBusy("يبني الحاوية ويفحصها…");
+      const archiveOut = buildRisen3Archive(archive.bytes, archive.header, archive.tree, replacements);
+      const checked = verifyRisen3Archive(archiveOut.bytes, APP_VERSION, archive.bytes);
+      setResults(out);
+      setReport(checked);
+      setBuilt(checked.problems.length === 0 ? archiveOut.bytes : null);
+      if (checked.problems.length === 0) toast.success("بناء تشخيصي جاهز — نزّله وجرّب في اللعبة");
+      else toast.error(`${checked.problems.length} مشكلة — أرسل لي التقرير`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }, [archive, chosen, fontId]);
+
   const download = useCallback(() => {
     if (!built) return;
     const blob = new Blob([built as unknown as ArrayBuffer], { type: "application/octet-stream" });
@@ -387,6 +444,14 @@ export default function Risen3Fonts() {
                 {busy ?? `ارسم واحقن في ${chosen.size} خطّاً وابنِ`}
               </button>
               <button
+                onClick={() => void probe()}
+                disabled={busy !== null || chosen.size === 0}
+                className="inline-flex items-center gap-2 rounded-lg border border-primary/50 px-4 py-2 text-sm disabled:opacity-50"
+                title="يرسم ألفاً في خليّة الحرف الروسي А ولا يغيّر شيئاً غيرها"
+              >
+                <FlaskConical className="w-4 h-4" /> بناء تشخيصي (حرف واحد)
+              </button>
+              <button
                 onClick={downloadUntouched}
                 disabled={busy !== null}
                 className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50"
@@ -395,6 +460,12 @@ export default function Risen3Fonts() {
                 <Download className="w-4 h-4" /> نزّل بلا تعديل (اختبار)
               </button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              البناء التشخيصي يرسم ألفاً واحدة في خليّة الحرف الروسي <code>А</code> ولا يغيّر في الملفّ حرفاً ولا حجماً ولا سجلّاً — البكسلات فقط.
+              نزّله، شغّل اللعبة، والصق <code dir="ltr">ААА</code> في سطر.
+              ظهرت الألفات وبقيت بقيّة النصوص ← الرسم والأطلس سليمان والعلّة في خريطة الحروف.
+              اختفت النصوص ← العلّة في البكسلات، والخريطة بريئة.
+            </p>
           </div>
         )}
 

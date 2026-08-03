@@ -15,6 +15,9 @@ import {
   looksLikeRisen3Fnt,
   risen3FntName,
   risen3FntAtlas,
+  patchRisen3FontDb,
+  readRisen3FontCsv,
+  risen3FntHashFromPath,
   type Risen3FntDocument,
 } from "@/lib/risen3-fnt";
 import { addArabicToRisen3Fnt, measureRisen3CellMetrics } from "@/lib/risen3-arabic-font-gen";
@@ -35,10 +38,19 @@ import { FREE_ARABIC_FONTS, fetchFreeFontBytes } from "@/lib/risen2-free-fonts";
 
 interface FontEntry {
   path: string;
+  /** The name in the file's own header — the one the index records it under. */
   name: string;
   bytes: Uint8Array;
   doc: Risen3FntDocument;
+  /** The name the index uses, e.g. «Linux Biolinum O_30__sdf». */
+  dbName: string | null;
 }
+
+/**
+ * Past this the game slows down noticeably — measured by the Chinese
+ * translation of Risen 3, whose thousands of characters ran into it.
+ */
+const ATLAS_BUDGET = 1024 * 2048;
 
 /** Draws an atlas into a canvas so the translator can see what was written. */
 function AtlasPreview({ doc, height = 260 }: { doc: Risen3FntDocument; height?: number }) {
@@ -80,10 +92,18 @@ export default function Risen3Fonts() {
     header: RisenPakHeader;
     tree: RisenPakNode[];
     fonts: FontEntry[];
+    dbPath: string;
+    dbBytes: Uint8Array;
   } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [fontId, setFontId] = useState(FREE_ARABIC_FONTS[0]?.id ?? "");
-  const [result, setResult] = useState<{ path: string; doc: Risen3FntDocument; note: string } | null>(null);
+  const [result, setResult] = useState<{
+    path: string;
+    doc: Risen3FntDocument;
+    note: string;
+    grew: boolean;
+    overBudget: boolean;
+  } | null>(null);
 
   const current = useMemo(
     () => archive?.fonts.find((f) => f.path === selected) ?? null,
@@ -98,6 +118,9 @@ export default function Risen3Fonts() {
       const header = parseImagesPakHeader(bytes);
       const { tree } = parseImagesPakFileInfoTree(bytes.subarray(header.fileInfoOffset), header);
       const fonts: FontEntry[] = [];
+      let dbPath: string | null = null;
+      let dbBytes: Uint8Array | null = null;
+      let csvBytes: Uint8Array | null = null;
       const walk = (nodes: RisenPakNode[], prefix: string) => {
         for (const node of nodes) {
           const path = prefix ? `${prefix}/${node.name}` : node.name;
@@ -111,13 +134,33 @@ export default function Risen3Fonts() {
           } catch {
             continue;
           }
+          if (path.endsWith(".db")) {
+            dbPath = path;
+            dbBytes = inner;
+            continue;
+          }
+          if (path.endsWith(".csv")) {
+            csvBytes = inner;
+            continue;
+          }
           if (!looksLikeRisen3Fnt(inner)) continue;
-          fonts.push({ path, name: risen3FntName(inner), bytes: inner, doc: parseRisen3Fnt(inner) });
+          fonts.push({ path, name: risen3FntName(inner), bytes: inner, doc: parseRisen3Fnt(inner), dbName: null });
         }
       };
       walk(tree, "");
       if (fonts.length === 0) throw new Error("لا خطوط Risen 3 في هذا الملف — المطلوب 0_na_fnt.pak");
-      setArchive({ bytes, header, tree, fonts });
+      if (!dbBytes || !dbPath) throw new Error("لا فهرس w_fnt_0_na.db في هذا الملف — بدونه لا يمكن تسجيل الحجم الجديد");
+      // The index records a font under its full name («…_30__sdf»), which the
+      // font's own header does not carry — and two of the seven share a family,
+      // so matching on the family would write one font's size into the other's
+      // record. The manifest maps the hash in the filename to the full name,
+      // and that cannot be ambiguous.
+      const byHash = csvBytes ? readRisen3FontCsv(csvBytes) : new Map<string, string>();
+      for (const f of fonts) {
+        const hash = risen3FntHashFromPath(f.path);
+        f.dbName = (hash ? byHash.get(hash) : null) ?? null;
+      }
+      setArchive({ bytes, header, tree, fonts, dbPath, dbBytes });
       setSelected(fonts[0].path);
       toast.success(`قُرئ ${fonts.length} خطّاً`);
     } catch (e) {
@@ -137,14 +180,20 @@ export default function Risen3Fonts() {
       const metrics = measureRisen3CellMetrics(current.doc);
       const { glyphs, fontSize } = await renderArabicGlyphsForRisen3(fontBytes, metrics);
       const out = addArabicToRisen3Fnt(current.doc, glyphs);
+      const atlas = risen3FntAtlas(out.document);
+      const grew = out.heightAfter !== out.heightBefore;
       setResult({
         path: current.path,
         doc: out.document,
+        grew,
+        overBudget: atlas.width * out.heightAfter > ATLAS_BUDGET,
         note:
           `${out.added} شكلاً أُضيف` +
           (out.replaced.length > 0 ? ` و${out.replaced.length} أُعيدت كتابته` : "") +
-          ` | الخلية ${metrics.cellHeight} وخط الكتابة ${metrics.baseline} وحجم الرسم ${fontSize}` +
-          ` | الأطلس ${out.heightBefore} ← ${out.heightAfter}`,
+          ` | ${out.reused} في خلايا الأبجدية الروسية` +
+          (out.appended > 0 ? ` و${out.appended} في صفوف جديدة` : " ولا شيء في صفوف جديدة") +
+          ` | الأطلس ${grew ? `${out.heightBefore} ← ${out.heightAfter}` : "بلا تغيير"}` +
+          ` | الخلية ${metrics.cellHeight} وخط الكتابة ${metrics.baseline} وحجم الرسم ${fontSize}`,
       });
       toast.success("تمّ الحقن — عاين الأطلس قبل التنزيل");
     } catch (e) {
@@ -158,7 +207,16 @@ export default function Risen3Fonts() {
     if (!archive || !result) return;
     setBusy("يعيد بناء الحاوية…");
     try {
-      const replacements = new Map<string, Uint8Array>([[result.path, buildRisen3Fnt(result.doc)]]);
+      const font = buildRisen3Fnt(result.doc);
+      const replacements = new Map<string, Uint8Array>([[result.path, font]]);
+      // The index repeats the font's size. Left stale it made the engine drop
+      // the font and the game showed no text at all — so it is rewritten
+      // whenever the size moved, and the entry must be there to rewrite.
+      const entry = archive.fonts.find((f) => f.path === result.path);
+      if (font.length !== entry?.bytes.length) {
+        if (!entry?.dbName) throw new Error("تعذّر إيجاد اسم هذا الخطّ في الفهرس — لا أبني ملفاً يرفضه المحرّك");
+        replacements.set(archive.dbPath, patchRisen3FontDb(archive.dbBytes, entry.dbName, font.length));
+      }
       const built = buildFontsPakArchive(archive.bytes, archive.header, archive.tree, replacements);
       const blob = new Blob([built.bytes as unknown as ArrayBuffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
@@ -186,10 +244,11 @@ export default function Risen3Fonts() {
         </div>
 
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-          <strong className="font-display block mb-1">لم تُجرَّب داخل اللعبة بعد</strong>
+          <strong className="font-display block mb-1">خذ نسخة احتياطية قبل الاستبدال</strong>
           <p className="text-muted-foreground">
-            الصيغة مفكوكة والخطوط السبعة تُعاد بناءً بايتاً ببايت، والحقول المولّدة تطابق حقول اللعبة نفسها ضمن نصف بكسل.
-            لكن تكبير الأطلس لم يُجرَّب في Risen 3 بعد — خذ نسخة احتياطية من <code>0_na_fnt.pak</code> قبل الاستبدال، وابدأ بخطّ واحد لتعرف أيّها السبب لو حدث خلل.
+            الأداة تضع الأشكال العربية في خلايا الأبجدية الروسية — لا تستعملها نسخة عربية — فلا يكبر الأطلس ولا يتغيّر حجم الخطّ.
+            وإن لم تسع الخلايا كلَّ الأشكال، يكبر الأطلس ويُحدَّث معه الفهرس <code>w_fnt_0_na.db</code>: تركه قديماً هو ما جعل المحرّك يرمي الخطّ كلّه فاختفت النصوص جميعها في أوّل بناء.
+            بعد الاستبدال لن تعرض اللعبة الروسية — وهذا لا يكلّف نسخةً عربية شيئاً.
           </p>
         </div>
 
@@ -285,6 +344,16 @@ export default function Risen3Fonts() {
           <div className="rounded-xl border border-primary/40 bg-primary/5 p-6 space-y-4">
             <h2 className="font-display font-bold">بعد الحقن</h2>
             <p className="text-sm text-muted-foreground">{result.note}</p>
+            {result.overBudget && (
+              <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                ⚠️ الأطلس تجاوز ١٠٢٤×٢٠٤٨ — وهو الحدّ الذي قاست الترجمة الصينية بعده بطئاً ملحوظاً في اللعبة.
+              </p>
+            )}
+            {result.grew && !result.overBudget && (
+              <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                كبر الأطلس، فسيُحدَّث الفهرس <code>w_fnt_0_na.db</code> مع الخطّ عند التنزيل.
+              </p>
+            )}
             <AtlasPreview doc={result.doc} height={320} />
             <button
               onClick={download}

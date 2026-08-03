@@ -16,8 +16,15 @@ import type { DrawnGlyph, Risen3CellMetrics } from "./risen3-arabic-font-gen";
 /** The one codepoint stored under a different character than it draws. */
 const DRAW_AS: Record<number, number> = { [RISEN_ARABIC_QMARK_ALIAS]: 0x061f };
 
-/** Room under the baseline for the tails of ج ح خ ع غ ی and the like. */
-const DESCENT_EXTRA = 4;
+/**
+ * Cells are exactly as tall as the font's own, not a pixel more.
+ *
+ * The room under the baseline is already there — `Linux Biolinum O_30` puts its
+ * line at 33 of 44, leaving 11 for the tails of g and y — and Arabic's tails
+ * use the same room. Adding to the height would also put every glyph out of
+ * reach of the cells this tool reuses, which are the font's own size.
+ */
+const DESCENT_EXTRA = 0;
 /** Blank columns kept on each side so the field has room to fall to zero. */
 const SIDE_PADDING = 3;
 

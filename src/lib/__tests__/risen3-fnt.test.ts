@@ -12,6 +12,9 @@ import {
   looksLikeRisen3Fnt,
   risen3FntName,
   risen3FntAtlas,
+  patchRisen3FontDb,
+  readRisen3FontDbEnd,
+  readRisen3FontDbNames,
 } from "@/lib/risen3-fnt";
 
 const HEADER_END = 0xac;
@@ -117,5 +120,58 @@ describe("Risen 3 font objects", () => {
     for (let k = 0; k < 3; k++) expect(Number(view.getBigInt64(footer + 9 + 9 * k, true))).toBe(footer);
     // And it still reads back.
     expect(risen3FntAtlas(parseRisen3Fnt(out)).height).toBe(512);
+  });
+});
+
+describe("Risen 3 — the archive index", () => {
+  /** The index's record shape, read off a real w_fnt_0_na.db. */
+  function dbFixture(entries: { name: string; end: number }[]): Uint8Array {
+    const parts: number[] = [];
+    for (const e of entries) {
+      const name = [...e.name].map((c) => c.charCodeAt(0));
+      const push32 = (v: number) => parts.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff);
+      push32(name.length);
+      parts.push(...name);
+      push32(44);
+      push32(e.end - 44);
+      parts.push(0);
+      for (let k = 0; k < 3; k++) {
+        push32(e.end);
+        push32(0);
+        parts.push(0);
+      }
+      parts.push(0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    return Uint8Array.from(parts);
+  }
+
+  const db = dbFixture([
+    { name: "Linux Biolinum O_30__sdf", end: 1080204 },
+    { name: "Consolas_14_bo", end: 72540 },
+  ]);
+
+  it("lists the names it knows", () => {
+    // The index knows a font by its full name; the font's own header carries
+    // only the family, and two of the seven share one.
+    expect(readRisen3FontDbNames(db)).toEqual(["Linux Biolinum O_30__sdf", "Consolas_14_bo"]);
+  });
+
+  it("reads back the size it records", () => {
+    expect(readRisen3FontDbEnd(db, "Linux Biolinum O_30__sdf")).toBe(1080204);
+    expect(readRisen3FontDbEnd(db, "Consolas_14_bo")).toBe(72540);
+  });
+
+  it("writes a new size, and touches nobody else's record", () => {
+    // This is the fix for the build that made the game show no text at all: the
+    // atlas grew, the font grew with it, and the index still said the old size,
+    // so the engine dropped the font — Latin letters included.
+    const patched = patchRisen3FontDb(db, "Linux Biolinum O_30__sdf", 2133296);
+    expect(readRisen3FontDbEnd(patched, "Linux Biolinum O_30__sdf")).toBe(2133296 - 36);
+    expect(readRisen3FontDbEnd(patched, "Consolas_14_bo")).toBe(72540);
+    expect(patched.length).toBe(db.length);
+  });
+
+  it("refuses a name it cannot find rather than writing somewhere wrong", () => {
+    expect(() => patchRisen3FontDb(db, "Nope", 100)).toThrow();
   });
 });

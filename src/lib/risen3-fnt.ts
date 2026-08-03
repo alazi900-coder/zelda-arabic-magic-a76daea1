@@ -195,6 +195,107 @@ export function buildRisen3Fnt(doc: Risen3FntDocument): Uint8Array {
   return out;
 }
 
+/**
+ * Writes a font's new size into the archive's index, `w_fnt_0_na.db`.
+ *
+ * The index repeats what the font's own footer says: after the font's name it
+ * carries u32(44), u32(end - 44), a pad byte, then the end offset three times
+ * as int64, each followed by a pad byte — byte for byte the same block. Checked
+ * on all seven fonts of a real archive: every recorded number equalled that
+ * font's length minus 36, exactly.
+ *
+ * Leaving it stale is not a small error. The first build grew an atlas, updated
+ * the font and left the index saying the old size; the engine found the two
+ * disagreeing and dropped the font altogether — the game showed no text at all,
+ * Latin included. Nothing on screen said why.
+ */
+export function patchRisen3FontDb(db: Uint8Array, fontName: string, fontLength: number): Uint8Array {
+  const name = new TextEncoder().encode(fontName);
+  let at = -1;
+  outer: for (let i = 0; i + name.length <= db.length; i++) {
+    for (let k = 0; k < name.length; k++) if (db[i + k] !== name[k]) continue outer;
+    // The name is preceded by its own length, which tells a real record from a
+    // stretch of bytes that happens to read the same way.
+    if (i >= 4 && u32(db, i - 4) === name.length) { at = i; break; }
+  }
+  if (at < 0) throw new Error(`لم أجد «${fontName}» في فهرس الخطوط`);
+  const p = at + name.length;
+  if (u32(db, p) !== 44) throw new Error(`سجلّ «${fontName}» في الفهرس ليس بالشكل المتوقّع`);
+
+  const end = fontLength - FOOTER_SIZE;
+  const out = db.slice();
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+  view.setUint32(p + 4, end - 44, true);
+  for (let k = 0; k < 3; k++) view.setBigInt64(p + 9 + 9 * k, BigInt(end), true);
+  return out;
+}
+
+/**
+ * Every font name the index lists, in order.
+ *
+ * The index knows a font by its full name — «Linux Biolinum O_30__sdf» — while
+ * the font's own header carries only the family, «Linux Biolinum O». Two of the
+ * seven share that family, so the caller matches on the full name and this is
+ * what gives it.
+ */
+export function readRisen3FontDbNames(db: Uint8Array): string[] {
+  const decoder = new TextDecoder("latin1");
+  const out: string[] = [];
+  for (let i = 4; i + 4 < db.length; i++) {
+    const length = u32(db, i - 4);
+    if (length < 4 || length > 64 || i + length + 4 > db.length) continue;
+    if (u32(db, i + length) !== 44) continue;
+    let printable = true;
+    for (let k = 0; k < length; k++) {
+      const c = db[i + k];
+      if (c < 0x20 || c > 0x7e) { printable = false; break; }
+    }
+    if (printable) out.push(decoder.decode(db.subarray(i, i + length)));
+  }
+  return out;
+}
+
+/**
+ * The archive's manifest, `w_fnt_0_na.csv`: which name belongs to which hash.
+ *
+ * Needed because a font's header carries only its family — «Linux Biolinum O» —
+ * and two of the seven share one, while the index knows them apart by their full
+ * names («…_30__sdf» and «…_40_b_sdf»). The hash is in the entry's own filename,
+ * `w_fnt_0_na_7bbf1d60.rom`, so this is the one mapping that cannot be
+ * ambiguous — and writing a size into the wrong font's record would drop that
+ * font in game.
+ */
+export function readRisen3FontCsv(csv: Uint8Array): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of new TextDecoder("latin1").decode(csv).split("\n")) {
+    const parts = line.split("|");
+    if (parts.length < 2) continue;
+    const hash = parts[0].trim().toLowerCase();
+    if (!/^[0-9a-f]{8}$/.test(hash)) continue;
+    out.set(hash, parts[1].trim());
+  }
+  return out;
+}
+
+/** The hash in an entry's filename, e.g. `w_fnt_0_na_7bbf1d60.rom`. */
+export function risen3FntHashFromPath(path: string): string | null {
+  const m = /_([0-9a-f]{8})\.rom$/i.exec(path);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** The end offset the index currently records for a font, for checking. */
+export function readRisen3FontDbEnd(db: Uint8Array, fontName: string): number | null {
+  const name = new TextEncoder().encode(fontName);
+  outer: for (let i = 0; i + name.length <= db.length; i++) {
+    for (let k = 0; k < name.length; k++) if (db[i + k] !== name[k]) continue outer;
+    if (i >= 4 && u32(db, i - 4) === name.length && u32(db, i + name.length) === 44) {
+      const view = new DataView(db.buffer, db.byteOffset, db.byteLength);
+      return Number(view.getBigInt64(i + name.length + 9, true));
+    }
+  }
+  return null;
+}
+
 /** Width, height and pixel bytes of the glyph texture — 8 bits a pixel. */
 export function risen3FntAtlas(doc: Risen3FntDocument): { width: number; height: number; pixels: Uint8Array } {
   const height = u32(doc.dds, 12);

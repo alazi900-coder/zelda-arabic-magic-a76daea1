@@ -8,16 +8,25 @@
  * of here so this can be tested without one, the same split the Risen 2 tool
  * uses.
  *
- * Where the new glyphs go: below the existing atlas, never inside it. Every
- * one of the seven shipped fonts is packed to its last row — `Linux Biolinum
- * O_30` uses row 1022 of 1024 — so the empty 57% of a texture is scattered
- * between letters, not a strip anything can be placed in. The atlas therefore
- * grows, and the two lengths that describe it are rebuilt with it (see
- * buildRisen3Fnt); a stale one makes the engine read a truncated texture and
- * drop the whole font.
+ * Where the new glyphs go: into the cells of letters an Arabic build will never
+ * print. Every text font here carries the whole Russian alphabet — 256 cells,
+ * already packed, already the right height — and an Arabic version of the game
+ * shows none of them. Writing into those costs the atlas nothing.
  *
- * Height is rounded up to a power of two. The engine is DirectX 9-era and
- * every shipped atlas is 256, 512, 1024 or 2048 tall.
+ * That is not only tidier, it is the difference between working and not. The
+ * atlas's size is written down in three places — the texture length inside the
+ * font, the font's own footer, and the archive's index file `w_fnt_0_na.db` —
+ * and the first build missed the third: the engine read an index that disagreed
+ * with the font and dropped the font entirely, Latin letters included, so the
+ * game showed no text at all. A glyph that reuses a cell changes no size, so
+ * none of the three can fall out of step.
+ *
+ * A form too wide for any free cell still has to go somewhere, and for those the
+ * atlas grows: new rows below the last, height rounded up to a power of two (the
+ * engine is DirectX 9-era and every shipped atlas is 256, 512, 1024 or 2048
+ * tall). Growing also has a cost the Chinese translation of this game measured —
+ * past 1024x2048 the game slows down noticeably — so the caller is told how much
+ * was reused and how much was appended.
  */
 
 import { coverageToSdf, RISEN3_SDF_SPREAD } from "./risen3-sdf";
@@ -100,15 +109,64 @@ export function measureRisen3CellMetrics(doc: Risen3FntDocument): Risen3CellMetr
   return { cellHeight, baseline };
 }
 
+/** The block an Arabic build has no use for: the Russian alphabet. */
+export const RISEN3_DEAD_RANGE = { from: 0x0400, to: 0x04ff };
+
 export interface Risen3InjectResult {
   document: Risen3FntDocument;
-  /** How many glyphs were written. */
+  /** How many glyphs were written in total. */
   added: number;
+  /** How many took over the cell of a character the build will not print. */
+  reused: number;
+  /** How many needed new rows, which is what makes the atlas grow. */
+  appended: number;
   /** The atlas height before and after, for reporting. */
   heightBefore: number;
   heightAfter: number;
   /** Codepoints already in the font, whose record was rewritten rather than added. */
   replaced: number[];
+}
+
+export interface Risen3InjectOptions {
+  spread?: number;
+  /**
+   * Take over the cells of characters in this range instead of growing the
+   * atlas. Pass null to always append.
+   */
+  reuseRange?: { from: number; to: number } | null;
+}
+
+/** A cell this build may take over, with the character that used to own it. */
+interface FreeCell {
+  charCode: number;
+  glyphIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Cells whose character will not be printed, largest first.
+ *
+ * A cell is only offered when exactly one character maps to it. Two characters
+ * sharing a glyph is rare, but taking such a cell would put an Arabic letter
+ * where the other character is drawn — a wrong letter rather than a missing one.
+ */
+function freeCells(doc: Risen3FntDocument, range: { from: number; to: number }): FreeCell[] {
+  const users = new Map<number, number>();
+  for (const pair of doc.charmap) users.set(pair.glyphIndex, (users.get(pair.glyphIndex) ?? 0) + 1);
+  const out: FreeCell[] = [];
+  for (const pair of doc.charmap) {
+    if (pair.charCode < range.from || pair.charCode > range.to) continue;
+    if (users.get(pair.glyphIndex) !== 1) continue;
+    const g = doc.glyphs[pair.glyphIndex];
+    if (!g) continue;
+    const [x0, y0, x1, y1] = g.fields;
+    if (x1 <= x0 || y1 <= y0) continue;
+    out.push({ charCode: pair.charCode, glyphIndex: pair.glyphIndex, x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
+  }
+  return out.sort((a, b) => b.width * b.height - a.width * a.height);
 }
 
 /**
@@ -121,8 +179,10 @@ export interface Risen3InjectResult {
 export function addArabicToRisen3Fnt(
   doc: Risen3FntDocument,
   glyphs: DrawnGlyph[],
-  spread: number = RISEN3_SDF_SPREAD
+  options: Risen3InjectOptions = {}
 ): Risen3InjectResult {
+  const spread = options.spread ?? RISEN3_SDF_SPREAD;
+  const range = options.reuseRange === undefined ? RISEN3_DEAD_RANGE : options.reuseRange;
   const atlas = risen3FntAtlas(doc);
   const width = atlas.width;
   const heightBefore = atlas.height;
@@ -132,12 +192,33 @@ export function addArabicToRisen3Fnt(
     throw new Error("حرف أعرض من الأطلس نفسه — قلّل حجم الخطّ");
   }
 
-  // Shelf-pack below the last existing row.
+  // Widest first, so the roomiest cells go to the forms that need them.
+  const queue = [...drawable].sort((a, b) => b.width * b.height - a.width * a.height);
+  const cells = range ? freeCells(doc, range) : [];
+  const taken = new Map<number, FreeCell>();
+  const overwritten = new Set<number>();
+  const leftovers: DrawnGlyph[] = [];
+  for (const g of queue) {
+    // Smallest cell that still holds it, so a big form is not left without one.
+    let best = -1;
+    for (let i = cells.length - 1; i >= 0; i--) {
+      if (cells[i].width >= g.width && cells[i].height >= g.height) { best = i; break; }
+    }
+    if (best < 0) {
+      leftovers.push(g);
+      continue;
+    }
+    const cell = cells.splice(best, 1)[0];
+    taken.set(g.codepoint, cell);
+    overwritten.add(cell.charCode);
+  }
+
+  // Shelf-pack whatever found no cell, below the last existing row.
   const placements = new Map<number, { x: number; y: number }>();
   let cursorX = 0;
   let cursorY = heightBefore + GAP;
   let rowHeight = 0;
-  for (const g of drawable) {
+  for (const g of leftovers) {
     if (cursorX + g.width > width) {
       cursorY += rowHeight + GAP;
       cursorX = 0;
@@ -147,19 +228,31 @@ export function addArabicToRisen3Fnt(
     cursorX += g.width + GAP;
     if (g.height > rowHeight) rowHeight = g.height;
   }
-  const heightAfter = nextPowerOfTwo(cursorY + rowHeight);
+  const heightAfter = leftovers.length > 0 ? nextPowerOfTwo(cursorY + rowHeight) : heightBefore;
 
-  // The new texture: the old pixels untouched, the new rows written into the
-  // space below them. Zero is "far outside a glyph", which is what the unused
-  // remainder should read as, and a fresh array already holds it.
   const pixels = new Uint8Array(width * heightAfter);
-  pixels.set(atlas.pixels.subarray(0, width * heightBefore), 0);
-  for (const g of drawable) {
-    const at = placements.get(g.codepoint)!;
+  pixels.set(atlas.pixels.subarray(0, width * Math.min(heightBefore, heightAfter)), 0);
+
+  const writeField = (g: DrawnGlyph, x: number, y: number) => {
     const field = coverageToSdf(g.coverage, g.width, g.height, spread);
-    for (let y = 0; y < g.height; y++) {
-      pixels.set(field.subarray(y * g.width, (y + 1) * g.width), (at.y + y) * width + at.x);
+    for (let row = 0; row < g.height; row++) {
+      pixels.set(field.subarray(row * g.width, (row + 1) * g.width), (y + row) * width + x);
     }
+  };
+
+  for (const g of drawable) {
+    const cell = taken.get(g.codepoint);
+    if (cell) {
+      // Clear the old letter first: the form may be narrower than the cell, and
+      // zero is what "far outside a glyph" reads as.
+      for (let row = 0; row < cell.height; row++) {
+        pixels.fill(0, (cell.y + row) * width + cell.x, (cell.y + row) * width + cell.x + cell.width);
+      }
+      writeField(g, cell.x, cell.y);
+      continue;
+    }
+    const at = placements.get(g.codepoint);
+    if (at) writeField(g, at.x, at.y);
   }
 
   const dds = new Uint8Array(128 + pixels.length);
@@ -167,38 +260,52 @@ export function addArabicToRisen3Fnt(
   new DataView(dds.buffer).setUint32(12, heightAfter, true); // dwHeight
   dds.set(pixels, 128);
 
-  const charmap: Risen3FntPair[] = doc.charmap.map((p) => ({ ...p }));
+  // The characters whose cells were taken lose their entry, so the game draws
+  // nothing for them rather than an Arabic letter in a Russian word.
+  const charmap: Risen3FntPair[] = doc.charmap
+    .filter((p) => !overwritten.has(p.charCode))
+    .map((p) => ({ ...p }));
   const outGlyphs: Risen3FntGlyph[] = doc.glyphs.map((g) => ({ rawBytes: g.rawBytes.slice(), fields: [...g.fields] }));
   const byCode = new Map(charmap.map((p) => [p.charCode, p]));
   const replaced: number[] = [];
   let added = 0;
 
-  for (const g of drawable) {
-    const at = placements.get(g.codepoint)!;
-    // x0, y0, x1, y1, advance, then the two fields whose meaning is
-    // unresolved — left at zero, as the Risen 2 tool leaves its own.
-    const fields = [at.x, at.y, at.x + g.width, at.y + g.height, g.advance, 0, 0];
+  const record = (fields: number[]) => {
     const rawBytes = new Uint8Array(RECORD_SIZE);
     const view = new DataView(rawBytes.buffer);
     fields.forEach((v, i) => view.setInt32(4 * i, v, true));
+    return { rawBytes, fields };
+  };
+
+  for (const g of drawable) {
+    const cell = taken.get(g.codepoint);
+    const at = cell ? { x: cell.x, y: cell.y } : placements.get(g.codepoint);
+    if (!at) continue;
+    // x0, y0, x1, y1, advance, then the two fields whose meaning is
+    // unresolved — left at zero, as the Risen 2 tool leaves its own.
+    const fields = [at.x, at.y, at.x + g.width, at.y + g.height, g.advance, 0, 0];
 
     const existing = byCode.get(g.codepoint);
     if (existing) {
-      outGlyphs[existing.glyphIndex] = { rawBytes, fields };
+      outGlyphs[existing.glyphIndex] = record(fields);
       replaced.push(g.codepoint);
-    } else {
-      const index = outGlyphs.length;
-      outGlyphs.push({ rawBytes, fields });
-      const pair = { charCode: g.codepoint, glyphIndex: index };
-      charmap.push(pair);
-      byCode.set(g.codepoint, pair);
-      added++;
+      continue;
     }
+    // A reused cell keeps its own glyph index, so nothing else has to move.
+    const index = cell ? cell.glyphIndex : outGlyphs.length;
+    if (cell) outGlyphs[index] = record(fields);
+    else outGlyphs.push(record(fields));
+    const pair = { charCode: g.codepoint, glyphIndex: index };
+    charmap.push(pair);
+    byCode.set(g.codepoint, pair);
+    added++;
   }
 
   return {
     document: { ...doc, charmap, recordCount: outGlyphs.length, glyphs: outGlyphs, dds },
     added,
+    reused: taken.size,
+    appended: leftovers.length,
     heightBefore,
     heightAfter,
     replaced,

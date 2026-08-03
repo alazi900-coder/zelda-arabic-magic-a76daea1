@@ -6,7 +6,8 @@ import { sdfEdgeCrossings } from "@/lib/risen3-sdf";
 const HEADER_END = 0xac;
 const RECORD_SIZE = 28;
 
-function fontWithAtlas(width: number, height: number, pairs: number): Risen3FntDocument {
+function fontWithAtlas(width: number, height: number, pairs: number, codes?: number[]): Risen3FntDocument {
+  codes = codes ?? Array.from({ length: pairs }, (_, i) => 0x41 + i);
   const dds = new Uint8Array(128 + width * height);
   dds.set([0x44, 0x44, 0x53, 0x20], 0);
   const ddsView = new DataView(dds.buffer);
@@ -24,13 +25,22 @@ function fontWithAtlas(width: number, height: number, pairs: number): Risen3FntD
   view.setUint32(p, pairs, true);
   p += 4;
   for (let i = 0; i < pairs; i++) {
-    view.setUint16(p, 0x41 + i, true);
+    view.setUint16(p, codes[i], true);
     view.setUint16(p + 2, i, true);
     p += 4;
   }
   view.setUint32(p, pairs, true);
   p += 4;
-  p += RECORD_SIZE * pairs;
+  // Real cells, laid out in a row near the top so a test can take them over.
+  for (let i = 0; i < pairs; i++) {
+    const x = i * 30;
+    view.setInt32(p, x, true);
+    view.setInt32(p + 4, 4, true);
+    view.setInt32(p + 8, x + 26, true);
+    view.setInt32(p + 12, 4 + 40, true);
+    view.setInt32(p + 16, 20, true);
+    p += RECORD_SIZE;
+  }
   p += 4; // opaque tail
   view.setUint32(p, dds.length, true);
   p += 4;
@@ -117,5 +127,78 @@ describe("Risen 3 — adding Arabic to a font", () => {
 
   it("refuses a glyph wider than the atlas rather than wrapping it", () => {
     expect(() => addArabicToRisen3Fnt(base, [block(0x0627, 300, 40)])).toThrow();
+  });
+});
+
+describe("Risen 3 — taking over the cells of the Russian alphabet", () => {
+  /** A font whose eight cells all belong to Cyrillic letters. */
+  const cyrillic = fontWithAtlas(1024, 256, 8, Array.from({ length: 8 }, (_, i) => 0x410 + i));
+
+  it("adds Arabic without growing the atlas at all", () => {
+    // This is the whole point. Growing changes the font's size, and the size is
+    // written down in the archive's index too — the first build left that stale
+    // and the engine dropped the font, so the game showed no text at all.
+    const out = addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40), block(0x0628, 24, 40)]);
+    expect(out.reused).toBe(2);
+    expect(out.appended).toBe(0);
+    expect(out.heightAfter).toBe(out.heightBefore);
+    expect(risen3FntAtlas(out.document).height).toBe(256);
+  });
+
+  it("takes the Russian letter's entry away instead of leaving it pointing at Arabic", () => {
+    const out = addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40)]);
+    const arabic = out.document.charmap.find((p) => p.charCode === 0x0627)!;
+    expect(arabic).toBeDefined();
+    // Exactly one character was displaced, and it no longer maps anywhere — the
+    // game draws nothing for it rather than an Arabic letter inside a Russian word.
+    const displaced = cyrillic.charmap.filter(
+      (p) => !out.document.charmap.some((q) => q.charCode === p.charCode)
+    );
+    expect(displaced).toHaveLength(1);
+    expect(displaced[0].glyphIndex).toBe(arabic.glyphIndex);
+    // And no character maps to that glyph twice.
+    expect(out.document.charmap.filter((p) => p.glyphIndex === arabic.glyphIndex)).toHaveLength(1);
+  });
+
+  it("writes the Arabic over the old letter's pixels, leaving none of it", () => {
+    const marked = fontWithAtlas(1024, 256, 8, Array.from({ length: 8 }, (_, i) => 0x410 + i));
+    const before = risen3FntAtlas(marked);
+    // Ink every cell, so whichever one is taken would show its leftovers.
+    for (const g of marked.glyphs) {
+      const [x0, y0, x1, y1] = g.fields;
+      for (let y = y0; y < y1; y++) before.pixels.fill(255, y * before.width + x0, y * before.width + x1);
+    }
+    const out = addArabicToRisen3Fnt(marked, [block(0x0627, 10, 20)]);
+    const after = risen3FntAtlas(out.document);
+    const [nx0, ny0] = out.document.glyphs[out.document.charmap.find((p) => p.charCode === 0x0627)!.glyphIndex].fields;
+    // The corner of the old cell the smaller new glyph does not cover reads as
+    // "far outside a letter", not as the leftover of a Russian one.
+    expect(after.pixels[(ny0 + 39) * after.width + (nx0 + 25)]).toBe(0);
+    // And where the new glyph is, the field is inside a letter.
+    expect(after.pixels[(ny0 + 10) * after.width + (nx0 + 5)]).toBeGreaterThan(128);
+  });
+
+  it("appends only what no free cell can hold, and says how many", () => {
+    // A form wider than every cell has nowhere to go but new rows.
+    const out = addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40), block(0x0628, 900, 40)]);
+    expect(out.reused).toBe(1);
+    expect(out.appended).toBe(1);
+    expect(out.heightAfter).toBeGreaterThan(out.heightBefore);
+  });
+
+  it("appends everything when the reuse range is turned off", () => {
+    const out = addArabicToRisen3Fnt(cyrillic, [block(0x0627, 20, 40)], { reuseRange: null });
+    expect(out.reused).toBe(0);
+    expect(out.appended).toBe(1);
+  });
+
+  it("leaves a cell alone when two characters share it", () => {
+    // Taking it would put an Arabic letter where the other character draws,
+    // which is a wrong letter rather than a missing one.
+    const shared = fontWithAtlas(1024, 256, 8, Array.from({ length: 8 }, (_, i) => 0x410 + i));
+    shared.charmap = shared.charmap.map((p, i) => (i === 1 ? { ...p, glyphIndex: 0 } : p));
+    const out = addArabicToRisen3Fnt(shared, [block(0x0627, 20, 40)]);
+    const arabic = out.document.charmap.find((p) => p.charCode === 0x0627)!;
+    expect(arabic.glyphIndex).not.toBe(0);
   });
 });

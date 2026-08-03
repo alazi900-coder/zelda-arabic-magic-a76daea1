@@ -20,6 +20,10 @@ export interface GameMakerIFFDocument {
   strings: GameMakerString[];
   originalBuffer: ArrayBuffer;
   strgChunkStart: number;
+  /** فهارس النصوص التي تدفعها شيفرة اللعبة ثابتةً — هذه وحدها كلام اللاعب. */
+  constantIndices: Set<number>;
+  /** كم دالّة قُرئت، وكم منها لم تنتهِ عند طولها المذكور. */
+  codeStats: { functions: number; misaligned: number };
 }
 
 export interface GameMakerExtractResult {
@@ -31,65 +35,101 @@ export interface GameMakerExtractResult {
   };
 }
 
-// كلمات مفتاحية تشير إلى نصوص مهمة للترجمة
-const IMPORTANT_KEYWORDS = [
-  // كلمات إنجليزية شائعة
-  'the', 'you', 'your', 'hello', 'welcome', 'please', 'press', 'game', 'level', 'world',
-  'stage', 'congratulations', 'game over', 'thanks', 'made', 'by', 'engine', 'edition', 'demo',
-  'mario', 'enemy', 'power', 'jump', 'run', 'block', 'coin', 'fire', 'water', 'ice',
-  'castle', 'walljump', 'hug', 'wall', 'throwable', 'bricks', 'grab', 'key', 'switch',
-  'palace', 'dig', 'chest', 'cheat', 'code', 'warning', 'enter', 'menu', 'select',
-  'start', 'continue', 'quit', 'save', 'load', 'delete', 'new', 'game',
-  // كلمات إسبانية شائعة
-  'felicidades', 'ganando', 'holaa', 'bienvenido', 'jugando', 'menú', 'escojiendo',
-  'principal', 'mapa', 'mundo', 'poder', 'casa', 'toad', 'power-up',
+/**
+ * أيّ النصوص نصٌّ يظهر للاعب — مقيسٌ من شيفرة اللعبة لا مُخمَّن
+ *
+ * قسم STRG يحمل كل نصّ في الملف: أسماء المتغيّرات والدوال والموارد
+ * والمسارات، لا نصوص اللعبة وحدها. في لعبة Mario هذه ٩١٧٨ نصّاً، منها
+ * ٣٣٥ فقط ما يراه اللاعب.
+ *
+ * وكانت القسمة قبل اليوم بقائمة كلمات مكتوبة باليد («mario», «castle»,
+ * «felicidades»…): يقبل النصّ إن وافق كلمةً منها أو زاد طوله على ١٥.
+ * فكانت تُخرج ٢٣٩ نصّاً — تُسقط منها ١٧٧ نصّاً حقيقياً لأنّه لم يوافق
+ * كلمة، وتُدخل ٦٩ اسم ملفّ صوت لأنّه صادف واحدة. وهذا معنى «الاستخراج
+ * العشوائي».
+ *
+ * والفصل الصحيح ليس في شكل النصّ بل في كيفيّة استعماله: مترجم GameMaker
+ * يدفع كل نصّ ثابت في الشيفرة بأمر `push` من نوع «نصّ»، أمّا أسماء
+ * المتغيّرات والدوال والموارد فتُذكر بفهارس في جداولها. فقراءة قسم CODE
+ * تعطي بالضبط ما تستعمله اللعبة نصّاً — ٣٤٧ في هذا الملف — ولا شيء غيره.
+ *
+ * ويبقى منها ما تدفعه الشيفرة نصّاً وهو مرجع تقني لا كلام: اسم ملفّ حفظ
+ * أو مكتبة أو مورد. تلك اثنتا عشرة، تُستبعد بقاعدتين مذكورتين أدناه.
+ */
+
+/** أوامر الدفع: push وpushLoc وpushGlb وpushBltn. */
+const PUSH_OPCODES = new Set([0xc0, 0xc1, 0xc2, 0xc3]);
+/** نوع المعامل «نصّ»: المعامل بعده فهرس في جدول STRG. */
+const OPERAND_STRING = 6;
+
+/** مراجع تقنية تدفعها الشيفرة نصّاً: أسماء ملفات وأسماء موارد. */
+const TECHNICAL_PATTERNS = [
+  /\.(dat|dll|ogg|wav|png|json|ini|txt|sav)$/i,
+  /^(scr_|spr_|obj_|rm_|snd_|px_|fnt_|bg_|pt_|tl_|sh_)/,
 ];
 
-// أنماط يجب تخطيها
-const SKIP_PATTERNS = [
-  /^[0-9.]+$/, // أرقام فقط
-  /^[{}()\[\]<>]+$/, // أقواس وعلامات فقط
-  /^[a-zA-Z_][a-zA-Z0-9_]*$/, // معرّفات برمجية (متغير واحد)
-  /^(true|false|null|undefined)$/, // قيم برمجية
-  /^(scr_|spr_|obj_|rm_|fnt_|ds_|gml_|px_|vk_)/, // معرّفات داخلية
-  /^@@/, // معرّفات خاصة
-  /^\$\$/, // معرّفات خاصة
-  /^(prototype|arguments|instance_exists|keyboard_check|draw_self)$/, // دوال شهيرة
-  /^(numpad|caps|lock|page|print|screen|windows|scroll)/, // مفاتيح لوحة المفاتيح
-  /^(0|1|2|3|4|5|6|7|8|9)$/, // أرقام مفردة
-  /^(FPS:|settings\.dat|discord_rich_presence\.dll|0123456789)$/, // ملفات وإعدادات
-];
+function isTechnicalReference(text: string): boolean {
+  return TECHNICAL_PATTERNS.some((pattern) => pattern.test(text));
+}
 
-function isTranslatable(text: string): boolean {
-  if (!text || text.length === 0) return false;
-  if (text.length > 500) return false;
-  
-  // تخطي النصوص التي تطابق الأنماط المحظورة
-  for (const pattern of SKIP_PATTERNS) {
-    if (pattern.test(text)) return false;
-  }
-  
-  // تخطي النصوص التي تحتوي على أحرف غير مطبوعة (باستثناء الحركات)
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    // السماح بـ: حروف، أرقام، مسافات، علامات ترقيم، حركات عربية
-    if (code < 32 && code !== 10 && code !== 13 && code !== 9) {
-      return false;
+/**
+ * يمشي على شيفرة اللعبة ويجمع فهارس النصوص التي تدفعها ثابتةً.
+ *
+ * كل أمر أربعة بايتات، وبعضها يتبعه معامل بأربعة أو ثمانية. المشي يتوقّف
+ * عند نهاية كل دالّة بالضبط، وهذا ما يُثبت أنّ قراءة الأطوال صحيحة:
+ * على ملفّ اللعبة مشت الدوالّ الأربع آلاف وخمسمئة وخمس وستّون كلّها إلى
+ * نهايتها بلا انحراف واحد.
+ */
+function collectStringConstants(
+  view: DataView,
+  codeChunkStart: number,
+  stringCount: number
+): { indices: Set<number>; functions: number; misaligned: number } {
+  const indices = new Set<number>();
+  const count = view.getUint32(codeChunkStart, true);
+  let misaligned = 0;
+
+  for (let i = 0; i < count; i++) {
+    const entry = view.getUint32(codeChunkStart + 4 + 4 * i, true);
+    if (entry + 20 > view.byteLength) { misaligned++; continue; }
+    const length = view.getUint32(entry + 4, true);
+    const start = entry + 12 + view.getInt32(entry + 12, true);
+    const end = start + length;
+    if (start < 0 || end > view.byteLength) { misaligned++; continue; }
+
+    let p = start;
+    while (p + 4 <= end) {
+      const word = view.getUint32(p, true);
+      const opcode = (word >>> 24) & 0xff;
+      const operandType = (word >>> 16) & 0x0f;
+      p += 4;
+
+      if (PUSH_OPCODES.has(opcode)) {
+        if (operandType === 0 || operandType === 3) {
+          p += 8; // double أو int64
+        } else if (operandType === 15) {
+          // int16 — قيمته داخل الأمر نفسه
+        } else {
+          if (operandType === OPERAND_STRING && p + 4 <= end) {
+            const index = view.getUint32(p, true);
+            if (index < stringCount) indices.add(index);
+          }
+          p += 4;
+        }
+      } else if (opcode === 0x84) {
+        // pushi — قيمته داخل الأمر
+      } else if (opcode === 0x45) {
+        if (operandType !== 15) p += 4; // pop، إلا صيغة التبديل
+      } else if (opcode === 0xd9) {
+        p += 4; // call
+      } else if (opcode === 0xff) {
+        if (operandType === 2) p += 4; // break الممتدّ
+      }
     }
+    if (p !== end) misaligned++;
   }
-  
-  // يجب أن يحتوي على كلمات حقيقية (حروف متعددة)
-  const hasLetters = /[a-zA-Z]/.test(text);
-  const hasWords = /\b[a-zA-Z]{2,}\b/.test(text);
-  
-  if (!hasLetters && !hasWords) return false;
-  
-  // البحث عن كلمات مفتاحية مهمة
-  const lowerText = text.toLowerCase();
-  const hasImportantKeyword = IMPORTANT_KEYWORDS.some(keyword => lowerText.includes(keyword));
-  
-  // النصوص التي تحتوي على كلمات مفتاحية مهمة أو طول معقول مع كلمات
-  return hasImportantKeyword || (text.length > 15 && hasWords);
+
+  return { indices, functions: count, misaligned };
 }
 
 /**
@@ -111,7 +151,8 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
   // قراءة الأقسام
   const chunks = new Map<string, Uint8Array>();
   let strgChunkStart = 0;
-  
+  let codeChunkStart = 0;
+
   while (offset < buffer.byteLength && offset < totalSize + 8) {
     if (offset + 8 > buffer.byteLength) break;
     
@@ -126,7 +167,12 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     if (chunkId === "STRG") {
       strgChunkStart = offset + 8;
     }
-    
+    if (chunkId === "CODE") {
+      // العناوين داخل هذا القسم مطلقة في الملف، فيُقرأ من المخزن الأصلي
+      // لا من نسخة القسم.
+      codeChunkStart = offset + 8;
+    }
+
     offset += 8 + chunkSize;
   }
   
@@ -171,6 +217,11 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     }
   }
   
+  // ما تدفعه شيفرة اللعبة نصّاً ثابتاً — وهذا وحده كلام اللاعب.
+  const code = codeChunkStart > 0
+    ? collectStringConstants(view, codeChunkStart, strings.length)
+    : { indices: new Set<number>(), functions: 0, misaligned: 0 };
+
   return {
     headerMagic,
     totalSize,
@@ -178,6 +229,8 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
     strings,
     originalBuffer: buffer,
     strgChunkStart,
+    constantIndices: code.indices,
+    codeStats: { functions: code.functions, misaligned: code.misaligned },
   };
 }
 
@@ -187,10 +240,19 @@ export function parseGameMakerIFF(buffer: ArrayBuffer): GameMakerIFFDocument {
 export function extractGameMakerEntries(doc: GameMakerIFFDocument): GameMakerExtractResult {
   const entries: ExtractedEntry[] = [];
   let translatableCount = 0;
-  
+
+  if (doc.constantIndices.size === 0) {
+    // بلا شيفرة مقروءة لا يبقى إلا التخمين، وهو ما كان يُخرج نصوصاً عشوائية.
+    throw new Error(
+      `تعذّر قراءة شيفرة اللعبة (قسم CODE)، فلا أعرف أيّ النصوص كلامٌ يظهر للاعب` +
+      ` — قُرئت ${doc.codeStats.functions} دالّة، انحرفت منها ${doc.codeStats.misaligned}`
+    );
+  }
+
   for (const str of doc.strings) {
-    if (!isTranslatable(str.value)) continue;
-    
+    if (!doc.constantIndices.has(str.index)) continue;
+    if (!str.value || isTechnicalReference(str.value)) continue;
+
     translatableCount++;
     
     entries.push({

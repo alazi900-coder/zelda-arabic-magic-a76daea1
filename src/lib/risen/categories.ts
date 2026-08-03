@@ -15,6 +15,7 @@
  */
 
 import type { FileCategory } from "@/components/editor/types";
+import { buildRisen3Categories } from "@/lib/risen3/categories";
 
 /** Same shape as the shared FileCategory (icon/color stay unset — dynamic categories render via emoji). */
 export type RisenCategory = FileCategory;

@@ -239,12 +239,13 @@ export default function Risen3Fonts() {
   }, [archive, chosen, fontId]);
 
   /**
-   * The one-glyph test: an alef drawn into the cell of Cyrillic А, and nothing
-   * else changed — same length, same counts, same charmap, same records.
+   * The one-glyph test: an alef drawn into the cell of the letter `e`, and
+   * nothing else changed — same length, same counts, same charmap, same
+   * records.
    *
    * It is here because injection changes three things at once and the game
    * says nothing about which one it refuses. What comes back from the game
-   * with this file decides the next step: an alef where `А` is written, with
+   * with this file decides the next step: alefs in place of every `e`, with
    * the rest of the text intact, clears the pixel path and puts the fault in
    * the charmap; no text at all puts it in the pixels.
    */
@@ -275,7 +276,7 @@ export default function Risen3Fonts() {
           path: target.path,
           label,
           doc: document,
-          note: `ألفٌ في خليّة А وحدها — ${cell.width}×${cell.height} عند (${cell.x}, ${cell.y}) | لا حرف زاد ولا نقص، والحجم كما هو`,
+          note: `ألفٌ في خليّة الحرف e وحدها — ${cell.width}×${cell.height} عند (${cell.x}, ${cell.y}) | لا حرف زاد ولا نقص، والحجم كما هو`,
         });
       }
       if (replacements.size === 0) throw new Error("لم يُعدَّل أي خطّ");
@@ -447,7 +448,7 @@ export default function Risen3Fonts() {
                 onClick={() => void probe()}
                 disabled={busy !== null || chosen.size === 0}
                 className="inline-flex items-center gap-2 rounded-lg border border-primary/50 px-4 py-2 text-sm disabled:opacity-50"
-                title="يرسم ألفاً في خليّة الحرف الروسي А ولا يغيّر شيئاً غيرها"
+                title="يرسم ألفاً في خليّة الحرف e ولا يغيّر شيئاً غيرها"
               >
                 <FlaskConical className="w-4 h-4" /> بناء تشخيصي (حرف واحد)
               </button>
@@ -461,10 +462,10 @@ export default function Risen3Fonts() {
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
-              البناء التشخيصي يرسم ألفاً واحدة في خليّة الحرف الروسي <code>А</code> ولا يغيّر في الملفّ حرفاً ولا حجماً ولا سجلّاً — البكسلات فقط.
-              نزّله، شغّل اللعبة، والصق <code dir="ltr">ААА</code> في سطر.
-              ظهرت الألفات وبقيت بقيّة النصوص ← الرسم والأطلس سليمان والعلّة في خريطة الحروف.
-              اختفت النصوص ← العلّة في البكسلات، والخريطة بريئة.
+              البناء التشخيصي يرسم ألفاً واحدة في خليّة الحرف <code dir="ltr">e</code> ولا يغيّر في الملفّ حرفاً ولا حجماً ولا سجلّاً — البكسلات فقط.
+              نزّله وضعه مكان الأصلي وشغّل اللعبة — لا تعدّل أي ملفّ نصوص، والقائمة الرئيسية وحدها تكفي للجواب.
+              ظهرت ألفات مكان كل <code dir="ltr">e</code> وبقيت بقيّة الحروف ← الرسم والأطلس سليمان والعلّة في خريطة الحروف.
+              اختفت النصوص ← العلّة في البكسلات، والخريطة بريئة. ثم أعِد الملفّ الأصلي من نسختك الاحتياطية.
             </p>
           </div>
         )}

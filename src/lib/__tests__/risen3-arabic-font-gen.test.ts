@@ -214,23 +214,25 @@ describe("Risen 3 — taking over the cells of the Russian alphabet", () => {
 });
 
 describe("Risen 3 — the one-glyph test", () => {
-  const cyrillic = fontWithAtlas(1024, 256, 8, Array.from({ length: 8 }, (_, i) => 0x410 + i));
+  // Latin letters here, `e` among them: the test borrows the cell of a letter
+  // the game actually prints, so the answer needs no text file changed.
+  const latin = fontWithAtlas(1024, 256, 8, Array.from({ length: 8 }, (_, i) => 0x61 + i));
 
   it("changes the pixels of one cell and nothing else in the file", () => {
     // The whole value of this build is that it is the original file with one
     // cell repainted: if anything else moves, what the game says about it
     // proves nothing.
-    const before = buildRisen3Fnt(cyrillic);
-    const { document, cell } = probeRisen3Fnt(cyrillic, block(0x0627, 20, 40));
+    const before = buildRisen3Fnt(latin);
+    const { document, cell } = probeRisen3Fnt(latin, block(0x0627, 20, 40));
     const after = buildRisen3Fnt(document);
 
     expect(after.length).toBe(before.length);
-    expect(document.charmap).toEqual(cyrillic.charmap);
-    expect(document.glyphs.map((g) => g.fields)).toEqual(cyrillic.glyphs.map((g) => g.fields));
-    expect(cell).toEqual({ x: 0, y: 4, width: 26, height: 40 });
+    expect(document.charmap).toEqual(latin.charmap);
+    expect(document.glyphs.map((g) => g.fields)).toEqual(latin.glyphs.map((g) => g.fields));
+    expect(cell).toEqual({ x: 120, y: 4, width: 26, height: 40 });
 
     const atlas = risen3FntAtlas(document);
-    const old = risen3FntAtlas(cyrillic);
+    const old = risen3FntAtlas(latin);
     let differing = 0;
     for (let i = 0; i < atlas.pixels.length; i++) if (atlas.pixels[i] !== old.pixels[i]) differing++;
     expect(differing).toBeGreaterThan(0);
@@ -258,7 +260,7 @@ describe("Risen 3 — the one-glyph test", () => {
     };
     for (let y = 0; y < 40; y++) for (let x = 12; x < 15; x++) stroke.coverage[y * 26 + x] = 255;
 
-    const { document, cell } = probeRisen3Fnt(cyrillic, stroke);
+    const { document, cell } = probeRisen3Fnt(latin, stroke);
     const atlas = risen3FntAtlas(document);
     const row = cell.y + Math.floor(cell.height / 2);
     const values = new Set<number>();
@@ -267,7 +269,7 @@ describe("Risen 3 — the one-glyph test", () => {
   });
 
   it("says which character it cannot find rather than writing somewhere else", () => {
-    const latin = fontWithAtlas(256, 256, 4);
-    expect(() => probeRisen3Fnt(latin, block(0x0627, 20, 40))).toThrow(String(RISEN3_PROBE_CHAR));
+    const withoutE = fontWithAtlas(256, 256, 4, [0x41, 0x42, 0x43, 0x44]);
+    expect(() => probeRisen3Fnt(withoutE, block(0x0627, 20, 40))).toThrow(String(RISEN3_PROBE_CHAR));
   });
 });

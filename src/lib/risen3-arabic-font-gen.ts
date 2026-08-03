@@ -299,13 +299,19 @@ function narrowGlyph(glyph: DrawnGlyph, width: number): DrawnGlyph {
 }
 
 /**
- * The character the one-glyph test writes over: Cyrillic А.
+ * The character the one-glyph test writes over: the Latin `e`.
  *
- * Chosen because every text font in the game carries it, an Arabic build never
- * prints it, and the translator can paste it into a line without a Russian
- * keyboard.
+ * The first choice was Cyrillic А, on the grounds that an Arabic build never
+ * prints it and nothing would be lost. That made the test useless: the game's
+ * English text holds no Cyrillic letter, so the drawing could never appear
+ * unless the translator first wrote Russian into a line and rebuilt the text
+ * archive — two changes at once, when the point is to change one thing.
+ *
+ * `e` is in nearly every line the game shows, starting with its own menu, so
+ * the answer arrives with no text file touched at all. The letter is only
+ * borrowed: the original archive comes back from the backup afterwards.
  */
-export const RISEN3_PROBE_CHAR = 0x0410;
+export const RISEN3_PROBE_CHAR = 0x65;
 
 export interface Risen3ProbeResult {
   document: Risen3FntDocument;

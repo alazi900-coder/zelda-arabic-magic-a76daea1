@@ -8,7 +8,8 @@ import {
   type RisenPakHeader,
   type RisenPakNode,
 } from "@/lib/risen-images-pak";
-import { inflateFontsPakEntry, buildFontsPakArchive } from "@/lib/risen2-fontspak";
+import { inflateFontsPakEntry } from "@/lib/risen2-fontspak";
+import { buildRisen3Archive } from "@/lib/risen3-archive";
 import {
   parseRisen3Fnt,
   buildRisen3Fnt,
@@ -221,7 +222,7 @@ export default function Risen3Fonts() {
       if (db !== archive.dbBytes) replacements.set(archive.dbPath, db);
 
       setBusy("يبني الحاوية ويفحصها…");
-      const archiveOut = buildFontsPakArchive(archive.bytes, archive.header, archive.tree, replacements);
+      const archiveOut = buildRisen3Archive(archive.bytes, archive.header, archive.tree, replacements);
       // The file is checked as a file, not as an intention: everything that has
       // broken a build so far is read back out of the bytes just written.
       const checked = verifyRisen3Archive(archiveOut.bytes, APP_VERSION, archive.bytes);
@@ -248,6 +249,32 @@ export default function Risen3Fonts() {
     URL.revokeObjectURL(url);
     toast.success("نُزّل 0_na_fnt.pak — ضعه مكان الأصلي بعد أخذ نسخة احتياطية");
   }, [built]);
+
+  /**
+   * Rebuilds the archive without touching a font, so the container can be
+   * tried on its own. If the game loses its text with this, nothing about the
+   * Arabic is at fault — and that is worth knowing before anything else.
+   */
+  const downloadUntouched = useCallback(() => {
+    if (!archive) return;
+    setBusy("يعيد بناء الحاوية بلا تعديل…");
+    try {
+      const out = buildRisen3Archive(archive.bytes, archive.header, archive.tree, new Map());
+      const same = out.bytes.length === archive.bytes.length && out.bytes.every((v, i) => v === archive.bytes[i]);
+      const blob = new Blob([out.bytes as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "0_na_fnt.pak";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(same ? "نُزّل — وهو مطابق للأصل بايتاً ببايت" : "نُزّل — لكنه لا يطابق الأصل، وهذا بحدّ ذاته خلل");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }, [archive]);
 
   const copyReport = useCallback(() => {
     if (!report) return;
@@ -350,14 +377,24 @@ export default function Risen3Fonts() {
                 </option>
               ))}
             </select>
-            <button
-              onClick={() => void inject()}
-              disabled={busy !== null || chosen.size === 0}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-            >
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Type className="w-4 h-4" />}
-              {busy ?? `ارسم واحقن في ${chosen.size} خطّاً وابنِ`}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void inject()}
+                disabled={busy !== null || chosen.size === 0}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Type className="w-4 h-4" />}
+                {busy ?? `ارسم واحقن في ${chosen.size} خطّاً وابنِ`}
+              </button>
+              <button
+                onClick={downloadUntouched}
+                disabled={busy !== null}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50"
+                title="لاختبار الحاوية وحدها: إن اختفى النصّ بهذا الملف فالعلّة ليست في الحروف"
+              >
+                <Download className="w-4 h-4" /> نزّل بلا تعديل (اختبار)
+              </button>
+            </div>
           </div>
         )}
 

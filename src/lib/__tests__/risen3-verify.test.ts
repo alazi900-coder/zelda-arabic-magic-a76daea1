@@ -9,6 +9,7 @@ import { buildRisen3Fnt, parseRisen3Fnt, type Risen3FntDocument } from "@/lib/ri
 import { parseImagesPakHeader, parseImagesPakFileInfoTree } from "@/lib/risen-images-pak";
 import { buildFontsPakArchive } from "@/lib/risen2-fontspak";
 import { deflateSync } from "node:zlib";
+import { buildRisen3Archive } from "@/lib/risen3-archive";
 
 const HEADER_END = 0xac;
 const RECORD_SIZE = 28;
@@ -101,7 +102,10 @@ function archive(font: Uint8Array, recordedEnd: number): Uint8Array {
     t32(e.data.length);
   }
 
-  const total = offset + tree.length;
+  const preamble = new Uint8Array(0x20);
+  preamble[0x1c] = 16; // علامة مجلّد الجذر، كما في الملف الحقيقي
+  preamble[0x1e] = 2;
+  const total = offset + preamble.length + tree.length;
   const out = new Uint8Array(total);
   const view = new DataView(out.buffer);
   view.setUint32(0, 1, true);
@@ -110,14 +114,16 @@ function archive(font: Uint8Array, recordedEnd: number): Uint8Array {
   view.setUint32(20, 0xfeedface, true);
   // dataAddress at 0x18, offset-to-fileinfo at 0x20 (relative to 0x20), size at 0x28
   view.setBigInt64(0x18, BigInt(48), true);
-  view.setBigInt64(0x20, BigInt(offset - 0x20), true);
+  // The stored offset names the 32-byte block; the reader adds 0x20 to reach the tree.
+  view.setBigInt64(0x20, BigInt(offset), true);
   view.setBigInt64(0x28, BigInt(total), true);
   let p = 48;
   for (const part of dataParts) {
     out.set(part, p);
     p += part.length;
   }
-  out.set(Uint8Array.from(tree), offset);
+  out.set(preamble, offset);
+  out.set(Uint8Array.from(tree), offset + preamble.length);
   return out;
 }
 
@@ -190,5 +196,35 @@ describe("Risen 3 — checking a built archive", () => {
     const big = fontBytes(GOOD_PAIRS, CELLS, 64, 128);
     const report = verifyRisen3Archive(archive(big, big.length - 36), "test", archive(small, small.length - 36));
     expect(report.problems.some((p) => p.includes("الأطلس كبر"))).toBe(true);
+  });
+});
+
+describe("Risen 3 — the block before the file tree", () => {
+  it("is kept by a no-op rebuild, byte for byte", () => {
+    // The check that would have caught four broken builds: rebuilding without
+    // changing anything must give back the same file. The Risen 2 builder
+    // dropped 32 bytes here and still parsed, so nothing noticed.
+    const font = fontBytes(GOOD_PAIRS, CELLS, 64, 64);
+    const original = archive(font, font.length - 36);
+    const header = parseImagesPakHeader(original);
+    const { tree } = parseImagesPakFileInfoTree(original.subarray(header.fileInfoOffset), header);
+    const built = buildRisen3Archive(original, header, tree, new Map());
+    expect(built.bytes.length).toBe(original.length);
+    expect(built.bytes).toEqual(original);
+  });
+
+  it("is reported, and its loss is called a problem", () => {
+    const font = fontBytes(GOOD_PAIRS, CELLS, 64, 64);
+    const original = archive(font, font.length - 36);
+    const report = verifyRisen3Archive(original, "test", original);
+    expect(report.preamble.present).toBe(true);
+    expect(report.preamble.matchesOriginal).toBe(true);
+
+    // Corrupt the block and it must be named.
+    const damaged = original.slice();
+    const h = parseImagesPakHeader(damaged);
+    damaged[h.fileInfoOffset - 4] ^= 0xff;
+    const bad = verifyRisen3Archive(damaged, "test", original);
+    expect(bad.problems.some((p) => p.includes("الكتلة"))).toBe(true);
   });
 });

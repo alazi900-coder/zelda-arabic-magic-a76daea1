@@ -59,10 +59,15 @@ export interface Risen3FontCheck {
 export interface Risen3ArchiveReport {
   toolVersion: string;
   archiveBytes: number;
+  /** The block between the data and the tree, which the reader skips. */
+  preamble: { present: boolean; matchesOriginal: boolean | null };
   fonts: Risen3FontCheck[];
   /** Every problem found, across every font. Empty means the file is sound. */
   problems: string[];
 }
+
+/** Bytes the reader skips between the data region and the file tree. */
+const PREAMBLE_SIZE = 0x20;
 
 function walk(tree: RisenPakNode[], prefix: string, out: { path: string; node: RisenPakNode }[]): void {
   for (const node of tree) {
@@ -114,6 +119,28 @@ export function verifyRisen3Archive(
 
   const fonts: Risen3FontCheck[] = [];
   const problems: string[] = [];
+
+  // The stored offset names a 32-byte block and the reader adds 0x20 to reach
+  // the tree. A builder that writes the tree straight after the data and
+  // shifts the offset back parses fine and is still wrong: the engine reads
+  // the tail of the last entry's data where that block should be.
+  const preambleAt = header.fileInfoOffset - PREAMBLE_SIZE;
+  const present = preambleAt >= 0;
+  let matchesOriginal: boolean | null = null;
+  if (present && original) {
+    try {
+      const oh = parseImagesPakHeader(original);
+      const theirs = original.subarray(oh.fileInfoOffset - PREAMBLE_SIZE, oh.fileInfoOffset);
+      const ours = bytes.subarray(preambleAt, header.fileInfoOffset);
+      matchesOriginal = theirs.length === ours.length && theirs.every((v, i) => v === ours[i]);
+      if (!matchesOriginal) {
+        problems.push("الكتلة التي تسبق شجرة الملفات لا تطابق الأصل — المحرّك يقرأ مكانها بيانات خطّ");
+      }
+    } catch {
+      matchesOriginal = null;
+    }
+  }
+  if (!present) problems.push("لا مكان للكتلة التي تسبق شجرة الملفات");
 
   for (const { path, node } of nodes) {
     let inner: Uint8Array;
@@ -187,7 +214,7 @@ export function verifyRisen3Archive(
   }
 
   if (fonts.length === 0) problems.push("لا خطوط في هذا الملف");
-  return { toolVersion, archiveBytes: bytes.length, fonts, problems };
+  return { toolVersion, archiveBytes: bytes.length, preamble: { present, matchesOriginal }, fonts, problems };
 }
 
 /** The report as text, for the translator to copy and send. */
@@ -195,6 +222,8 @@ export function formatRisen3Report(report: Risen3ArchiveReport): string {
   const lines = [
     `تقرير أداة خطوط Risen 3 — نسخة الأداة ${report.toolVersion}`,
     `حجم الحاوية: ${report.archiveBytes} بايت`,
+    `الكتلة قبل شجرة الملفات: ${report.preamble.present ? "موجودة" : "مفقودة"}` +
+      (report.preamble.matchesOriginal === null ? "" : report.preamble.matchesOriginal ? " ومطابقة للأصل" : " ولا تطابق الأصل"),
     "",
   ];
   for (const f of report.fonts) {

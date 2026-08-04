@@ -17,6 +17,7 @@ import { pkmCodecByGame, pkmCodecFor, pkmForeignFont, type PkmGame } from "./pkm
 import { applyEmeraldRtlPatch, type EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { applyEmeraldArabicKeyboard } from "@/lib/gba/emerald-keyboard";
 import { applyEmeraldShapePatch } from "@/lib/gba/emerald-shape";
+import { applyEmeraldNameFieldPatch } from "@/lib/gba/emerald-name-field";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
@@ -238,7 +239,7 @@ export function buildPkmRom(
   }
   if (options.keyboard) {
     try {
-      out = applyEmeraldShapePatch(applyEmeraldArabicKeyboard(out));
+      out = applyEmeraldNameFieldPatch(applyEmeraldShapePatch(applyEmeraldArabicKeyboard(out)));
     } catch (err) {
       return { error: (err as Error).message };
     }

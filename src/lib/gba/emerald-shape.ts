@@ -41,6 +41,15 @@
  *   key, and the grid keeps showing the plain isolated shapes. Which is what a
  *   keyboard should show.
  *
+ * And one rule that follows from all of it: only a letter still in its
+ * isolated shape is shaped here. A letter that already carries a joined shape
+ * was joined by something that knew more than this hook can see — the name
+ * field, which draws each letter on its own and so leaves it here with no
+ * neighbours at all. Without the rule, this hook read that lack of neighbours
+ * as "isolated" and undid the field's work. It costs nothing elsewhere: the
+ * text this tool writes is shaped already, and everywhere it holds an isolated
+ * shape this hook would compute the same one.
+ *
  * The neighbours only mean anything while the text is in logical order, so
  * this goes in together with the direction patch at every window — see
  * `emerald-rtl.ts`. Against text reversed at build time it would read the
@@ -56,17 +65,20 @@ export const EMERALD_SHAPE_HOOK = 0x005b90;
 export const EMERALD_SHAPE_CAVE = 0xf00600;
 
 /**
- * 144 bytes of THUMB and its literals. The three tables follow it, and the
+ * 152 bytes of THUMB and its literals. The three tables follow it, and the
  * literals already point at where they land.
  */
 const CODE_B64 =
-  "N7T/KzDYHU3oXAAoLNAcTAAZACIxaAt461wAKwTQg3gEeKNCANACIkkeAiVMGyN4/CsI0WN4E0wYKwHY41wA4AMjq0IP0G0cBi3v0QtNSR4LeOtcACsG0AlMGxmceBt4nEIA0FIcg1w3vCBoAAcADwgoAdkESQhHBEkIR5AG8AiQB/AINAjwCBFcAAibWwAI";
+  "N7T/KzPYH03oXAAoL9AeTAAZBHicQirRACIxaAt461wAKwTQg3gEeKNCANACIkkeAiVMGyN4/CsI0WN4E0wYKwHY41wA4AMjq0IP0G0cBi3v0QxNSR4LeOtcACsG0ApMGxmceBt4nEIA0FIcg1w3vCBoAAcADwgoAdkFSQhHBUkIRwAAmAbwCJgH8Ag8CPAIEVwACJtbAAg=";
 
 /** The hook: `ldr r0,[pc,#0]; bx r0` and the cave's address. */
 const HOOK_B64 = "AEgARwEG8Ag=";
 
 /** `ldr r0,[r4]; lsls r0,#28; lsrs r0,#28; cmp r0,#8` — what the hook covers. */
 const ORIGINAL = [0x20, 0x68, 0x00, 0x07, 0x00, 0x0f, 0x08, 0x28];
+
+/** Where the code ends and the alphabet table begins, inside the cave. */
+export const EMERALD_SHAPE_TABLES = EMERALD_SHAPE_CAVE + 152;
 
 /** How many bytes of the alphabet table, and of the four-shape table. */
 const LETTER_SIZE = 256;

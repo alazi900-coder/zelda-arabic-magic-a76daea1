@@ -9,9 +9,16 @@ import {
 import {
   EMERALD_SHAPE_CAVE,
   EMERALD_SHAPE_HOOK,
+  EMERALD_SHAPE_TABLES,
   applyEmeraldShapePatch,
   hasEmeraldShapePatch,
 } from "@/lib/gba/emerald-shape";
+import {
+  EMERALD_FIELD_CAVE,
+  EMERALD_FIELD_HOOK,
+  applyEmeraldNameFieldPatch,
+  hasEmeraldNameFieldPatch,
+} from "@/lib/gba/emerald-name-field";
 import { EMERALD_CARRIER_CODES } from "@/lib/gba/emerald-arabic";
 import { encodeArabicForEmerald } from "@/lib/gba/emerald-arabic";
 
@@ -34,6 +41,8 @@ function emeraldish(): Uint8Array {
   // and the five instructions the joining patch hooks
   rom.set([0x20, 0x68, 0x00, 0x07, 0x00, 0x0f, 0x08, 0x28], EMERALD_SHAPE_HOOK);
   rom.fill(0x00, EMERALD_SHAPE_CAVE, EMERALD_SHAPE_CAVE + 0x400);
+  // and the ten bytes the name field's copy is
+  rom.set([0x00, 0x19, 0x00, 0x78, 0x28, 0x70, 0x42, 0x46, 0x6a, 0x70], EMERALD_FIELD_HOOK);
   return rom;
 }
 
@@ -90,8 +99,7 @@ describe("Emerald — an Arabic keyboard on the naming screen", () => {
  * game will run, over the exact bytes this tool writes.
  */
 function shapeLikeTheGame(rom: Uint8Array, bytes: number[]): number[] {
-  const code = 144;
-  const letterAt = EMERALD_SHAPE_CAVE + code;
+  const letterAt = EMERALD_SHAPE_TABLES;
   const formsAt = letterAt + 256;
   const fmtAt = formsAt + 164;
   const letter = (b: number) => rom[letterAt + b];
@@ -101,6 +109,9 @@ function shapeLikeTheGame(rom: Uint8Array, bytes: number[]): number[] {
   return bytes.map((b, i) => {
     const cur = letter(b);
     if (!cur) return b;
+    // Only a letter still in its isolated shape is shaped; anything already
+    // joined was joined by the name field, which knows the neighbours.
+    if (form(cur, 0) !== b) return b;
     let index = 0;
     const next = i + 1 < bytes.length ? letter(bytes[i + 1]) : 0;
     if (next && form(cur, 2) !== form(cur, 0)) index |= 2;
@@ -174,8 +185,12 @@ describe("Emerald — joining the letters as they are drawn", () => {
     // «FC 01 xx» sets the colour, and a colour index of 2 is also the code of
     // an Arabic letter. Without the check, the first letter of every coloured
     // line joined backwards onto it.
+    // The word has to start on a letter the shaper leaves isolated — anything
+    // already joined is skipped for a different reason and would not test this.
     const rom = applyEmeraldShapePatch(emeraldish());
-    const line = [...encodeArabicForEmerald("مرحباً", { reverse: false }).bytes];
+    const line = [...encodeArabicForEmerald("دار الرجل", { reverse: false }).bytes];
+    const letterAt = EMERALD_SHAPE_TABLES;
+    expect(rom[letterAt + 256 + rom[letterAt + line[0]]]).toBe(line[0]);
     const coloured = [0xfc, 0x01, 0x02, ...line];
     expect(shapeLikeTheGame(rom, coloured).slice(3)).toEqual(line);
   });
@@ -190,5 +205,57 @@ describe("Emerald — joining the letters as they are drawn", () => {
     expect(drawn).not.toEqual(typed);
     // The same four letters the build-time shaper would have produced.
     expect(drawn).toEqual([...encodeArabicForEmerald("محمد", { reverse: false }).bytes]);
+  });
+});
+
+describe("Emerald — the name field, where each letter is drawn on its own", () => {
+  it("writes the hook over the copy, and the cave into empty space", () => {
+    const rom = applyEmeraldShapePatch(emeraldish());
+    const out = applyEmeraldNameFieldPatch(rom);
+    expect(hasEmeraldNameFieldPatch(rom)).toBe(false);
+    expect(hasEmeraldNameFieldPatch(out)).toBe(true);
+    for (let i = 0; i < rom.length; i++) {
+      if (rom[i] === out[i]) continue;
+      const inHook = i >= EMERALD_FIELD_HOOK && i < EMERALD_FIELD_HOOK + 10;
+      const inCave = i >= EMERALD_FIELD_CAVE && i < EMERALD_FIELD_CAVE + 0x100;
+      expect(inHook || inCave).toBe(true);
+    }
+  });
+
+  it("points its literals at the tables the drawing patch actually wrote", () => {
+    // They are borrowed, not copied. If the drawing patch's code grows and
+    // these are not moved with it, this one reads an alphabet that is not there.
+    const rom = applyEmeraldNameFieldPatch(applyEmeraldShapePatch(emeraldish()));
+    const word = (at: number) =>
+      rom[at] | (rom[at + 1] << 8) | (rom[at + 2] << 16) | (rom[at + 3] << 24);
+    expect(word(EMERALD_FIELD_CAVE + 80)).toBe(0x08000000 + EMERALD_SHAPE_TABLES);
+    expect(word(EMERALD_FIELD_CAVE + 84)).toBe(0x08000000 + EMERALD_SHAPE_TABLES + 256);
+  });
+
+  it("refuses without the drawing patch, whose tables it reads", () => {
+    expect(() => applyEmeraldNameFieldPatch(emeraldish())).toThrow("جداول");
+  });
+
+  it("refuses a ROM whose copy is not the one it was measured on", () => {
+    const rom = applyEmeraldShapePatch(emeraldish());
+    rom[EMERALD_FIELD_HOOK + 4] = 0x00;
+    expect(() => applyEmeraldNameFieldPatch(rom)).toThrow("حقل الاسم");
+  });
+
+  it("applies once and stays applied", () => {
+    const once = applyEmeraldNameFieldPatch(applyEmeraldShapePatch(emeraldish()));
+    const twice = applyEmeraldNameFieldPatch(once);
+    let differing = 0;
+    for (let i = 0; i < once.length; i++) if (once[i] !== twice[i]) differing++;
+    expect(differing).toBe(0);
+  });
+
+  it("leaves what it shaped alone when the renderer sees it again", () => {
+    // The field's letters reach the drawing hook one at a time, with no
+    // neighbours at all. Before the isolated-only rule, that read as "isolated"
+    // and every one of them was turned back.
+    const rom = applyEmeraldNameFieldPatch(applyEmeraldShapePatch(emeraldish()));
+    const joined = [...encodeArabicForEmerald("محمد", { reverse: false }).bytes];
+    for (const b of joined) expect(shapeLikeTheGame(rom, [b])).toEqual([b]);
   });
 });

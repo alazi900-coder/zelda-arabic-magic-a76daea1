@@ -44,8 +44,8 @@ describe("Gen 3 — refusing the mix that only shows up in the emulator", () => 
   /** An 8 MB ROM carrying Emerald's font, and Arabic drawn into it. */
   function emeraldRomWithArabic(): Uint8Array {
     const rom = new Uint8Array(0x800000);
-    const widths = 0x1000;
-    const glyphs = widths + 0x200;
+    const glyphs = 0x1000;
+    const widths = glyphs + 0x8000;
     const font = { glyphs, widths };
     for (let code = 0; code < EMERALD_GLYPH_COUNT; code++) {
       if (EMERALD_BLANK_CODES.includes(code) || code === 0) {

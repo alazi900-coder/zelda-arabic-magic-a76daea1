@@ -5,6 +5,7 @@ import {
   EMERALD_GLYPH_SIZE,
   emeraldGlyphInkWidth,
   findEmeraldFont,
+  findEmeraldFonts,
   readEmeraldGlyph,
   renderEmeraldLine,
   writeEmeraldGlyph,
@@ -20,9 +21,20 @@ import {
 } from "@/lib/gba/emerald-arabic";
 import { shapeArabicForRisen } from "@/lib/risen/arabic-shaper";
 
-/** Where the font sits in the made-up ROM below. */
-const WIDTHS = 0x1000;
-const GLYPHS = WIDTHS + 0x200;
+/**
+ * Where the fonts sit in the made-up ROM below.
+ *
+ * The widths table is 0x8000 *after* its glyphs — the game's own layout, read
+ * out of its code. Putting it before, where a different font's table happens to
+ * sit, is the mistake this file now guards: that pairing looks right (the fonts
+ * are one alphabet at several sizes, so their widths nearly agree) and quietly
+ * writes every advance into a font that has no Arabic in it.
+ */
+const GLYPHS = 0x1000;
+const WIDTHS = GLYPHS + 0x8000;
+/** A second font, clear of the first's 0x4000 of cells and of its widths. */
+const GLYPHS2 = 0x9200;
+const WIDTHS2 = GLYPHS2 + 0x8000;
 
 /**
  * A ROM shaped like Emerald's: a widths table, then 256 cells, and each cell
@@ -30,25 +42,29 @@ const GLYPHS = WIDTHS + 0x200;
  * the finder looks for, and drawing it by hand is what proves the finder is
  * reading structure rather than remembering an address.
  */
-function emeraldRom(blanks: number[]): Uint8Array {
-  const rom = new Uint8Array(GLYPHS + EMERALD_GLYPH_COUNT * EMERALD_GLYPH_BYTES + 0x400);
-  const font = { glyphs: GLYPHS, widths: WIDTHS };
-  for (let code = 0; code < EMERALD_GLYPH_COUNT; code++) {
-    if (blanks.includes(code) || code === 0) {
-      rom[WIDTHS + code] = 3;
-      continue;
-    }
-    const width = 3 + (code % 6);
-    rom[WIDTHS + code] = width;
-    const cell = new Uint8Array(EMERALD_GLYPH_SIZE * EMERALD_GLYPH_SIZE);
-    for (let y = 2; y < 13; y++) {
-      for (let x = 0; x < width; x++) {
-        // A shape that differs from cell to cell, and reaches the last column
-        // so the ink is exactly as wide as the width claims.
-        cell[y * EMERALD_GLYPH_SIZE + x] = x === width - 1 || (y + code + x) % 3 === 0 ? 1 : 3;
+function emeraldRom(blanks: number[], fonts: { glyphs: number; widths: number }[] = [
+  { glyphs: GLYPHS, widths: WIDTHS },
+  { glyphs: GLYPHS2, widths: WIDTHS2 },
+]): Uint8Array {
+  const rom = new Uint8Array(WIDTHS2 + 0x400);
+  for (const font of fonts) {
+    for (let code = 0; code < EMERALD_GLYPH_COUNT; code++) {
+      if (blanks.includes(code) || code === 0) {
+        rom[font.widths + code] = 3;
+        continue;
       }
+      const width = 3 + ((code + font.glyphs) % 6);
+      rom[font.widths + code] = width;
+      const cell = new Uint8Array(EMERALD_GLYPH_SIZE * EMERALD_GLYPH_SIZE);
+      for (let y = 2; y < 13; y++) {
+        for (let x = 0; x < width; x++) {
+          // A shape that differs from cell to cell, and reaches the last column
+          // so the ink is exactly as wide as the width claims.
+          cell[y * EMERALD_GLYPH_SIZE + x] = x === width - 1 || (y + code + x) % 3 === 0 ? 1 : 3;
+        }
+      }
+      writeEmeraldGlyph(rom, font, code, cell);
     }
-    writeEmeraldGlyph(rom, font, code, cell);
   }
   return rom;
 }
@@ -84,21 +100,36 @@ describe("Emerald — reading and writing one letter", () => {
 });
 
 describe("Emerald — finding the font without being told where it is", () => {
-  it("finds it by the widths agreeing with the drawings", () => {
-    expect(findEmeraldFont(emeraldRom([0x0a]))).toEqual({ glyphs: GLYPHS, widths: WIDTHS });
+  it("finds every font, each paired with its own widths", () => {
+    // Not the first font only: this game has several and a window draws with
+    // whichever it was given, so Arabic has to reach all of them.
+    expect(findEmeraldFonts(emeraldRom([0x0a]))).toEqual([
+      { glyphs: GLYPHS, widths: WIDTHS },
+      { glyphs: GLYPHS2, widths: WIDTHS2 },
+    ]);
   });
 
-  it("refuses when a drawing runs past what its width allows", () => {
+  it("does not pair a font's drawings with a neighbour's widths", () => {
+    // The mistake that cost a round of builds: the wrong table is close enough
+    // to look right, and every advance written into it lands in a font that has
+    // no Arabic. Here the two fonts' widths disagree by construction.
+    const rom = emeraldRom([]);
+    for (const font of findEmeraldFonts(rom)) {
+      expect(font.widths - font.glyphs).toBe(0x8000);
+    }
+  });
+
+  it("refuses when too many drawings run past their width", () => {
     // Two unrelated regions can look like a table and a picture; what they
     // cannot do is agree, cell by cell, about where each drawing ends.
     const rom = emeraldRom([]);
-    rom[WIDTHS + 0x40] = 1;
-    rom[WIDTHS + 0x41] = 1;
+    for (let code = 0x40; code < 0x60; code++) rom[WIDTHS + code] = 1;
+    for (let code = 0x40; code < 0x60; code++) rom[WIDTHS2 + code] = 1;
     expect(findEmeraldFont(rom)).toBeNull();
   });
 
   it("says nothing rather than guess when there is no font", () => {
-    expect(findEmeraldFont(new Uint8Array(0x8000).fill(7))).toBeNull();
+    expect(findEmeraldFont(new Uint8Array(0x20000).fill(7))).toBeNull();
   });
 });
 
@@ -138,10 +169,12 @@ describe("Emerald — Arabic in the codes the game does not print", () => {
 describe("Emerald — drawing Arabic into a ROM", () => {
   const blanks = EMERALD_BLANK_CODES;
 
-  it("fills the carriers, sets their width, and leaves the letters alone", () => {
+  it("fills the carriers in every font, and leaves the letters alone", () => {
     const rom = emeraldRom(blanks);
     const before = new Uint8Array(rom);
-    const { rom: out, font } = applyEmeraldArabicFont(rom);
+    const { rom: out, fonts } = applyEmeraldArabicFont(rom);
+    expect(fonts.length).toBe(2);
+    const font = fonts[0];
 
     // Latin is untouched, byte for byte.
     for (const latin of [0x00, 0xbb, 0xd5, 0xa1, 0x34, 0x53]) {
@@ -179,13 +212,23 @@ describe("Emerald — drawing Arabic into a ROM", () => {
     // The comma is a real drawing, not an empty cell.
     const comma = readEmeraldGlyph(out, font, EMERALD_CARRIER_CODES[0]);
     expect(comma.some((v) => v === 1)).toBe(true);
+
+    // And the second font got the same treatment — a window drawing with it
+    // must not come up blank.
+    for (const other of fonts.slice(1)) {
+      for (const code of EMERALD_CARRIER_CODES) {
+        expect(readEmeraldGlyph(out, other, code)).toEqual(readEmeraldGlyph(out, font, code));
+        expect(out[other.widths + code]).toBe(out[font.widths + code]);
+      }
+    }
   });
 
   it("previews a line the way the engine lays it out", () => {
     // The preview has to advance by each cell's own width, not by the cell —
     // that is what decides whether Arabic joins, and a picture of the letters
     // side by side would hide exactly the thing being judged.
-    const { rom: out, font } = applyEmeraldArabicFont(emeraldRom(blanks));
+    const { rom: out, fonts } = applyEmeraldArabicFont(emeraldRom(blanks));
+    const font = fonts[0];
     const { bytes } = encodeArabicForEmerald("هل");
     const line = renderEmeraldLine(out, font, bytes, 1);
     let span = 0;

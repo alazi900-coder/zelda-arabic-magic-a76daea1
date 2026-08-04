@@ -28,7 +28,7 @@ import {
 import {
   EMERALD_GLYPH_BYTES,
   EMERALD_GLYPH_COUNT,
-  findEmeraldFont,
+  findEmeraldFonts,
 } from "@/lib/gba/emerald-font";
 
 export interface PkmCodec {
@@ -73,14 +73,13 @@ const EMERALD: PkmCodec = {
   game: "emerald",
   name: "Pokémon Emerald",
   tables: emeraldCharTables(),
-  fontRegion: (rom) => {
-    const font = findEmeraldFont(rom);
-    if (!font) return [];
-    return [
+  // Every font, not the first: this game has several and Arabic goes into all
+  // of them, so a relocated line must stay clear of all of them.
+  fontRegion: (rom) =>
+    findEmeraldFonts(rom).flatMap((font) => [
       { start: font.glyphs, length: EMERALD_GLYPH_COUNT * EMERALD_GLYPH_BYTES },
       { start: font.widths, length: EMERALD_GLYPH_COUNT },
-    ];
-  },
+    ]),
   applyFont: (rom) => applyEmeraldArabicFont(rom).rom,
   hasFont: hasEmeraldArabicFont,
 };

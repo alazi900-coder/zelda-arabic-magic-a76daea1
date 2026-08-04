@@ -36,8 +36,22 @@ export const EMERALD_GLYPH_COUNT = 256;
 export const EMERALD_GLYPH_SIZE = 16;
 /** The row the game leaves empty under every letter. */
 export const EMERALD_GLYPH_LAST_ROW = 15;
-/** How far the widths table sits before the glyphs, in both ROMs seen. */
-const WIDTHS_BEFORE_GLYPHS = 0x200;
+/**
+ * How far a font's widths table sits *after* its glyphs.
+ *
+ * Read out of the game's own code, not guessed. The routine at 0x08006840
+ * loads the glyphs at 0x64C2E4, and the width getter beside it at 0x08006908
+ * loads 0x6542E4 — exactly 0x8000 later. The same distance holds for all five
+ * of this game's Latin fonts.
+ *
+ * The first reading of this had the widths 0x200 *before* the glyphs, which is
+ * where a different font's table happens to sit. That pairing passes a loose
+ * look — the five fonts are the same alphabet at similar sizes, so their
+ * widths nearly agree — and it cost a whole round of builds: the Arabic drew
+ * correctly and no change to the widths ever reached the screen, because the
+ * table being written belonged to a font that had no Arabic in it.
+ */
+const WIDTHS_AFTER_GLYPHS = 0x8000;
 /** Where each of the four tiles lands in the cell. */
 const TILE_ORIGINS: readonly (readonly [number, number])[] = [
   [0, 0],
@@ -114,24 +128,34 @@ export function isEmeraldGlyphBlank(rom: Uint8Array, font: EmeraldFont, code: nu
 const MAX_WIDTH = 16;
 /** How many cells must agree with their width before the region is believed. */
 const MIN_EXACT = 100;
+/**
+ * How many cells may ink past their advance before the pairing is disbelieved.
+ *
+ * A few of the game's own do — the blitter simply clips them — and the count is
+ * what separates a real pairing from a wrong one: measured across this ROM's
+ * five fonts, the true partners overshoot in 0, 1, 4, 5 and 7 cells, while
+ * pairing a font's glyphs with a neighbour's widths overshoots in 93 and 115.
+ * Nothing sits in between.
+ */
+const MAX_OVERSHOOT = 12;
 
 /**
- * Finds the font by the one thing a font has and other data does not: a table
- * of widths that agrees, cell by cell, with how far the drawings actually
- * reach.
+ * Every font in the ROM, found by the one thing a font has and other data does
+ * not: a table of widths that agrees, cell by cell, with how far the drawings
+ * actually reach.
  *
- * Two hundred and fifty-six bytes each between 1 and 16 is a cheap first
- * sieve — it throws out the ROM's empty stretches at once — and the agreement
- * test is what no unrelated pair of regions passes. In the English ROM 130
- * cells match their width exactly; a hack that redraws letters keeps that,
- * because the engine reads the same two tables.
+ * This game has five Latin fonts, not one — small, narrow, short and the rest —
+ * and a window draws with whichever it was given. Arabic has to go into all of
+ * them, or a menu drawn with a font that was missed comes up blank.
  *
- * A cell may ink one column past its width — nine of the game's own do, the
- * narrow spacing glyphs among them — but no further, since the blitter would
- * never draw it.
+ * Two hundred and fifty-six bytes each between 1 and 16 is a cheap first sieve
+ * — it throws out the ROM's empty stretches at once — and the agreement test is
+ * what no unrelated pair of regions passes — see MAX_OVERSHOOT for the measured
+ * gap between a real pairing and a wrong one.
  */
-export function findEmeraldFont(rom: Uint8Array): EmeraldFont | null {
+export function findEmeraldFonts(rom: Uint8Array): EmeraldFont[] {
   const span = EMERALD_GLYPH_COUNT * EMERALD_GLYPH_BYTES;
+  const out: EmeraldFont[] = [];
   let run = 0;
   for (let at = 0; at < rom.length; at++) {
     const b = rom[at];
@@ -143,13 +167,22 @@ export function findEmeraldFont(rom: Uint8Array): EmeraldFont | null {
     if (run < EMERALD_GLYPH_COUNT) continue;
     const widths = at - EMERALD_GLYPH_COUNT + 1;
     if (widths % 4 !== 0) continue;
-    const glyphs = widths + WIDTHS_BEFORE_GLYPHS;
-    if (glyphs + span > rom.length) continue;
+    const glyphs = widths - WIDTHS_AFTER_GLYPHS;
+    if (glyphs < 0 || glyphs + span > rom.length) continue;
     const font = { glyphs, widths };
     if (!isEmeraldGlyphBlank(rom, font, 0)) continue;
-    if (agrees(rom, font)) return font;
+    if (!agrees(rom, font)) continue;
+    // A long run of small bytes offers the same table at every offset in it;
+    // one font per glyph block is enough.
+    if (out.some((f) => f.glyphs === glyphs)) continue;
+    out.push(font);
   }
-  return null;
+  return out;
+}
+
+/** The first font in the ROM, for a caller that needs only one. */
+export function findEmeraldFont(rom: Uint8Array): EmeraldFont | null {
+  return findEmeraldFonts(rom)[0] ?? null;
 }
 
 /** What the four values look like on screen: letter, shadow, and the box behind. */
@@ -202,11 +235,12 @@ export function renderEmeraldLine(
 
 function agrees(rom: Uint8Array, font: EmeraldFont): boolean {
   let exact = 0;
+  let over = 0;
   for (let code = 0; code < EMERALD_GLYPH_COUNT; code++) {
     const ink = emeraldGlyphInkWidth(readEmeraldGlyph(rom, font, code));
     if (ink === 0) continue;
     const width = rom[font.widths + code];
-    if (ink > width + 1) return false;
+    if (ink > width && ++over > MAX_OVERSHOOT) return false;
     if (ink === width) exact++;
   }
   return exact >= MIN_EXACT;

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { findEmeraldFont, renderEmeraldLine, type EmeraldFont } from "@/lib/gba/emerald-font";
+import { renderEmeraldLine, type EmeraldFont } from "@/lib/gba/emerald-font";
 import {
   EMERALD_CARRIER_CODES,
   applyEmeraldArabicFont,
@@ -43,7 +43,7 @@ function LinePreview({ rom, font, text }: { rom: Uint8Array; font: EmeraldFont; 
 export default function EmeraldArabic() {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
-  const [patched, setPatched] = useState<{ rom: Uint8Array; font: EmeraldFont } | null>(null);
+  const [patched, setPatched] = useState<{ rom: Uint8Array; font: EmeraldFont; count: number } | null>(null);
   const [text, setText] = useState("أهلاً بك في عالم البوكيمون");
 
   const open = useCallback(async (file: File) => {
@@ -51,12 +51,10 @@ export default function EmeraldArabic() {
     setPatched(null);
     try {
       const rom = new Uint8Array(await file.arrayBuffer());
-      const found = findEmeraldFont(rom);
-      if (!found) throw new Error("لم أجد خطّ اللعبة في هذا الملف — هل هو روم Pokémon Emerald؟");
       const result = applyEmeraldArabicFont(rom);
-      setPatched(result);
+      setPatched({ rom: result.rom, font: result.fonts[0], count: result.fonts.length });
       setName(file.name);
-      toast.success(`الخطّ عند 0x${found.glyphs.toString(16).toUpperCase()} — حُقنت العربية`);
+      toast.success(`${result.fonts.length} خطوطٍ حُقنت فيها العربية`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -113,7 +111,7 @@ export default function EmeraldArabic() {
         {patched && (
           <div className="rounded-xl border border-border bg-card p-6 space-y-4">
             <div className="text-sm">
-              <span className="text-muted-foreground">{name} — الخطّ عند </span>
+              <span className="text-muted-foreground">{name} — {patched.count} خطوط، أوّلها عند </span>
               <span className="font-mono">0x{patched.font.glyphs.toString(16).toUpperCase()}</span>
               <span className="text-muted-foreground"> والعروض عند </span>
               <span className="font-mono">0x{patched.font.widths.toString(16).toUpperCase()}</span>

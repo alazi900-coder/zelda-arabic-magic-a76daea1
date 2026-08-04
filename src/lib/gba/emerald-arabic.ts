@@ -40,7 +40,7 @@ import {
 import {
   EMERALD_GLYPH_SIZE,
   EMERALD_GLYPH_LAST_ROW,
-  findEmeraldFont,
+  findEmeraldFonts,
   isEmeraldGlyphBlank,
   readEmeraldGlyph,
   writeEmeraldGlyph,
@@ -256,39 +256,58 @@ function arabicCell(cp: number): { cell: Uint8Array; width: number } | null {
  * that exact 64 bytes in that exact code.
  */
 export function hasEmeraldArabicFont(rom: Uint8Array): boolean {
-  const font = findEmeraldFont(rom);
-  if (!font) return false;
   const [cp, code] = [...ARABIC_TO_CODE][0];
   const expected = arabicCell(cp);
   if (!expected) return false;
-  const found = readEmeraldGlyph(rom, font, code);
-  return expected.cell.every((v, i) => v === found[i]);
+  return findEmeraldFonts(rom).some((font) => {
+    const found = readEmeraldGlyph(rom, font, code);
+    return expected.cell.every((v, i) => v === found[i]);
+  });
 }
 
 /**
- * Draws Arabic into a copy of the ROM.
+ * Draws Arabic into every font in a copy of the ROM.
  *
- * It refuses rather than guess. If the font cannot be found the ROM is not
- * Emerald as this code understands it; if a cell listed as empty is not, the
- * ROM has been changed and the list of safe codes no longer describes it —
- * writing anyway would quietly cost the game a symbol.
+ * Every font, because this game has five and a window draws with whichever it
+ * was given: the start menu and the dialogue box do not use the same one, and
+ * patching a single font left the others blank wherever they were used.
+ *
+ * It refuses rather than guess. If no font can be found the ROM is not Emerald
+ * as this code understands it; a font whose empty cells are no longer empty is
+ * left alone and named, because writing there would cost the game a symbol —
+ * and if that leaves nothing to write to, the ROM was built once already.
  */
-export function applyEmeraldArabicFont(rom: Uint8Array): { rom: Uint8Array; font: EmeraldFont } {
-  const font = findEmeraldFont(rom);
-  if (!font) throw new Error("لم أجد خطّ اللعبة في هذا الملف — هل هو روم Pokémon Emerald؟");
-
-  const taken = EMERALD_BLANK_CODES.filter((code) => !isEmeraldGlyphBlank(rom, font, code));
-  if (taken.length > 0) {
-    const list = taken.slice(0, 6).map((c) => `0x${c.toString(16).toUpperCase()}`).join("، ");
-    throw new Error(`خانات كان يجب أن تكون فارغة وفيها رسمٌ الآن: ${list} — الروم مُعدَّل مسبقاً`);
-  }
+export function applyEmeraldArabicFont(rom: Uint8Array): {
+  rom: Uint8Array;
+  /** The fonts Arabic was written into. */
+  fonts: EmeraldFont[];
+  /** Fonts left alone, and why — reported rather than silently skipped. */
+  skipped: { font: EmeraldFont; taken: number[] }[];
+} {
+  const found = findEmeraldFonts(rom);
+  if (found.length === 0) throw new Error("لم أجد خطّ اللعبة في هذا الملف — هل هو روم Pokémon Emerald؟");
 
   const out = new Uint8Array(rom);
-  for (const [cp, code] of ARABIC_TO_CODE) {
-    const drawn = arabicCell(cp);
-    if (!drawn) throw new Error(`لا رسم للحرف U+${cp.toString(16).toUpperCase()}`);
-    writeEmeraldGlyph(out, font, code, drawn.cell);
-    out[font.widths + code] = drawn.width;
+  const fonts: EmeraldFont[] = [];
+  const skipped: { font: EmeraldFont; taken: number[] }[] = [];
+  for (const font of found) {
+    const taken = EMERALD_BLANK_CODES.filter((code) => !isEmeraldGlyphBlank(rom, font, code));
+    if (taken.length > 0) {
+      skipped.push({ font, taken });
+      continue;
+    }
+    for (const [cp, code] of ARABIC_TO_CODE) {
+      const drawn = arabicCell(cp);
+      if (!drawn) throw new Error(`لا رسم للحرف U+${cp.toString(16).toUpperCase()}`);
+      writeEmeraldGlyph(out, font, code, drawn.cell);
+      out[font.widths + code] = drawn.width;
+    }
+    fonts.push(font);
   }
-  return { rom: out, font };
+
+  if (fonts.length === 0) {
+    const list = skipped[0].taken.slice(0, 6).map((c) => `0x${c.toString(16).toUpperCase()}`).join("، ");
+    throw new Error(`خانات كان يجب أن تكون فارغة وفيها رسمٌ الآن: ${list} — الروم مُعدَّل مسبقاً`);
+  }
+  return { rom: out, fonts, skipped };
 }

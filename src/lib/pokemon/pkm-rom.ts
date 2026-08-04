@@ -314,6 +314,14 @@ export interface PkmWriteOptions {
   relocate?: boolean;
   /** Which game this ROM is. Read from its header when not given. */
   codec?: PkmCodec;
+  /**
+   * The engine will lay the dialogue out right to left itself, so lines bound
+   * for the message box are written in their ordinary order instead of being
+   * reversed here. The two go together: reversing as well would cancel the
+   * patch out. It applies to the dialogue alone, because that is all the patch
+   * mirrors — see `looksLikeDialogue` and `emerald-rtl.ts`.
+   */
+  rtl?: boolean;
 }
 
 /**
@@ -410,6 +418,24 @@ function looksRelocatable(s: PkmString, pointers: PkmPointerIndex): boolean {
 }
 
 /**
+ * Whether this line is one the game prints in the message box.
+ *
+ * It matters only when the engine has been patched to lay the dialogue out
+ * right to left, because the patch mirrors that one window and nothing else.
+ * A line that goes there must be written in its ordinary order and let the
+ * engine reverse it; every other line still has to be reversed here, or it
+ * comes out backwards in a menu the patch never touches.
+ *
+ * Nothing in the bytes says which is which, so the test is the shape of the
+ * line: speech carries a break, or a page code, or a slot too big for any
+ * label. It is the same signal the relocator already trusts to tell a sentence
+ * from a name.
+ */
+function looksLikeDialogue(s: PkmString): boolean {
+  return s.capacity >= RELOCATABLE_MIN_CAPACITY || /\n|\{f[ab]\}/.test(s.text);
+}
+
+/**
  * Writes translations back into the ROM at the offsets they were read from.
  *
  * `translations` is keyed by the string's offset. A line shorter than its
@@ -452,7 +478,9 @@ export function applyPkmTranslations(
       brokenTags.push({ offset: s.offset, missing: tagDiff.missing, extra: tagDiff.extra, text: value });
       continue;
     }
-    const encoded = encodeArabicWithTables(value, codec.tables);
+    const encoded = encodeArabicWithTables(value, codec.tables, {
+      reverse: !(options.rtl && looksLikeDialogue(s)),
+    });
     encoded.unmapped.forEach((c) => unmapped.add(c));
     const needed = encoded.bytes.length + 1; // + terminator
     if (needed > s.capacity) {

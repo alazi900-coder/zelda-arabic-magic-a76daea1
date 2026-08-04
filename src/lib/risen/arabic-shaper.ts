@@ -376,7 +376,16 @@ function hasArabicLetters(text: string): boolean {
  * Non-Arabic values (no character in 0600–06FF/FB50–FDFF/FE70–FEFF) are
  * returned completely unchanged.
  */
-export function shapeArabicForRisen(text: string): string {
+export function shapeArabicForRisen(
+  text: string,
+  options: { reverse?: boolean } = {}
+): string {
+  // `reverse` is on unless a game says otherwise, because every engine this
+  // tool has met draws left to right and has to be tricked. Pokémon Emerald is
+  // the exception: its renderer is patched to lay glyphs out right to left, so
+  // reversing here as well would cancel that out and the line would read
+  // backwards again. Shaping is never optional — no engine here joins letters.
+  const reverse = options.reverse !== false;
   if (!text || !hasArabicLetters(text)) return text;
 
   // See RISEN_ARABIC_QMARK_ALIAS docblock — swapped in before shaping so it
@@ -393,8 +402,8 @@ export function shapeArabicForRisen(text: string): string {
       if (!part) return part;
       const { shielded, tokens } = shieldProtectedTokens(part);
       const shaped = shapeArabicLetters(shielded);
-      const reversed = reverseShapedLine(shaped);
-      return unshieldProtectedTokens(reversed, tokens);
+      const ordered = reverse ? reverseShapedLine(shaped) : shaped;
+      return unshieldProtectedTokens(ordered, tokens);
     })
     .join('');
 }

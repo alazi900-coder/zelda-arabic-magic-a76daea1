@@ -171,8 +171,11 @@ export function emeraldCharTables(): PkmCharTables {
  * are the same work Ruby Destiny needs, so they are done in one place — only
  * the tables above are this game's.
  */
-export function encodeArabicForEmerald(text: string): PkmEncodeResult {
-  return encodeArabicWithTables(text, emeraldCharTables());
+export function encodeArabicForEmerald(
+  text: string,
+  options: { reverse?: boolean } = {}
+): PkmEncodeResult {
+  return encodeArabicWithTables(text, emeraldCharTables(), options);
 }
 
 /**

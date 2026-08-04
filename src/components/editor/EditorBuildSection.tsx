@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -61,6 +61,15 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [wolfBuilding, setWolfBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
+  const [pkmRtl, setPkmRtl] = useState(false);
+  const [pkmGame, setPkmGame] = useState<PkmGame | undefined>(undefined);
+
+  // Which of the two Gen 3 games is open, so the right-to-left option only
+  // shows for the one whose engine this tool knows how to patch.
+  useEffect(() => {
+    if (!isPokemon) return;
+    void idbGet<PkmGame>(PKM_GAME_KEY).then(setPkmGame);
+  }, [isPokemon]);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
@@ -186,7 +195,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       // The game the translator chose when the ROM was opened, not a guess at
       // its header: the two games write the same letter into different codes.
       const game = await idbGet<PkmGame>(PKM_GAME_KEY);
-      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {}, { relocate: true, game });
+      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {}, {
+        relocate: true,
+        game,
+        rtl: pkmRtl,
+      });
       const { toast } = await import("@/hooks/use-toast");
       if ("error" in result) {
         toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
@@ -211,6 +224,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         description:
           `${result.translatedLines} سطر مترجم` +
           (result.fontApplied ? " | كُتب الخط العربي" : " | الخط العربي موجود مسبقاً") +
+          (result.rtlApplied ? " | الحوار يُرسم من اليمين" : "") +
           (result.relocated > 0 ? ` | ${result.relocated} سطراً نُقل إلى مساحة فارغة وأُعيد توجيه اللعبة إليه` : "") +
           (over > 0 ? ` | ${over} سطراً أطول من مكانه ولا مؤشّر له — اختصرها` : "") +
           (broken > 0 ? ` | ${broken} سطراً فُقدت منه قيمة تضعها اللعبة ({FD:xx}) — أصلحها بالفحص العميق` : "") +
@@ -308,6 +322,15 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               <label className="flex items-center gap-2 cursor-pointer text-sm font-body">
                 <input type="checkbox" checked={shapeArabic} onChange={(e) => setShapeArabic(e.target.checked)} disabled={risenBuilding} className="rounded border-border" />
                 تحويل النص العربي لأشكال العرض (مطلوب للعبة)
+              </label>
+            )}
+            {isPokemon && pkmGame === "emerald" && (
+              <label
+                className="flex items-center gap-2 cursor-pointer text-sm font-body"
+                title="يُرقَع محرّك اللعبة ليرصف حروف صندوق الحوار من اليمين، فيُخزَّن النصّ بترتيبه الطبيعي بدل أن يُعكس. القوائم وأسماء الأماكن لا تتغيّر."
+              >
+                <input type="checkbox" checked={pkmRtl} onChange={(e) => setPkmRtl(e.target.checked)} disabled={pkmBuilding} className="rounded border-border" />
+                اتجاه الحوار من اليمين إلى اليسار (Emerald)
               </label>
             )}
             {isMother3 && (

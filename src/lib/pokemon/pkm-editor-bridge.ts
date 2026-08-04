@@ -14,6 +14,7 @@
 import type { ExtractedEntry } from "@/components/editor/types";
 import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, markPointedTables, pkmLineLimit, type PkmString } from "./pkm-rom";
 import { pkmCodecByGame, pkmCodecFor, pkmForeignFont, type PkmGame } from "./pkm-codec";
+import { applyEmeraldRtlPatch } from "@/lib/gba/emerald-rtl";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
@@ -143,6 +144,8 @@ export interface PkmBuildOk {
   freeSpaceLeft: number;
   unmapped: string[];
   fontApplied: boolean;
+  /** True when the engine was patched to lay the dialogue out right to left. */
+  rtlApplied: boolean;
 }
 export interface PkmBuildError {
   error: string;
@@ -170,7 +173,7 @@ const PKM_KEY_RE = /^pkm_[a-z0-9]+:(\d+)$/;
 export function buildPkmRom(
   rom: Uint8Array,
   translations: Record<string, string>,
-  options: { relocate?: boolean; game?: PkmGame } = {}
+  options: { relocate?: boolean; game?: PkmGame; rtl?: boolean } = {}
 ): PkmBuildOk | PkmBuildError {
   if (!looksLikePkmRom(rom)) {
     return { error: "الملف لا يبدو روم GBA — تحقّق من أنك رفعت ملف ‎.gba‎ الصحيح" };
@@ -194,12 +197,28 @@ export function buildPkmRom(
     if (m) byOffset[m[1]] = value;
   }
 
-  const written = applyPkmTranslations(rom, strings, byOffset, { relocate: options.relocate, codec });
+  if (options.rtl && codec.game !== "emerald") {
+    return { error: "اتجاه الحوار من اليمين مرقوعٌ في Pokémon Emerald وحدها" };
+  }
+  const written = applyPkmTranslations(rom, strings, byOffset, {
+    relocate: options.relocate,
+    codec,
+    rtl: options.rtl,
+  });
   if (written.written === 0 && written.tooLong.length === 0) {
     return { error: "لا توجد ترجمات محفوظة لبنائها" };
   }
 
   let out = written.rom;
+  // The patch and the unreversed text are written together or not at all: one
+  // without the other reads backwards.
+  if (options.rtl) {
+    try {
+      out = applyEmeraldRtlPatch(out);
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  }
   const fontApplied = !codec.hasFont(out);
   if (fontApplied) {
     try {
@@ -218,5 +237,6 @@ export function buildPkmRom(
     freeSpaceLeft: written.freeSpaceLeft,
     unmapped: written.unmapped,
     fontApplied,
+    rtlApplied: options.rtl === true,
   };
 }

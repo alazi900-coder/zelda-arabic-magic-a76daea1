@@ -356,8 +356,18 @@ export function encodeArabicForPkm(text: string): PkmEncodeResult {
   return encodeArabicWithTables(text, pkmCharTables());
 }
 
-/** The same, for a game whose Arabic sits in different codes. */
-export function encodeArabicWithTables(text: string, tables: PkmCharTables): PkmEncodeResult {
+/**
+ * The same, for a game whose Arabic sits in different codes.
+ *
+ * `reverse` is on unless the caller says otherwise. A game whose renderer has
+ * been patched to lay glyphs out right to left must turn it off, or the line
+ * is reversed twice and reads backwards again — see `emerald-rtl.ts`.
+ */
+export function encodeArabicWithTables(
+  text: string,
+  tables: PkmCharTables,
+  options: { reverse?: boolean } = {}
+): PkmEncodeResult {
   const unmapped: string[] = [];
   const out: number[] = [];
   // A break directly after `{fa}` or `{fb}` is the one the decoder added so the
@@ -367,7 +377,7 @@ export function encodeArabicWithTables(text: string, tables: PkmCharTables): Pkm
   lines.forEach((line, i) => {
     if (i > 0) out.push(PKM_NEWLINE);
     const lifted = liftTokens(line);
-    for (const ch of normalise(shapeArabicForRisen(lifted.text))) {
+    for (const ch of normalise(shapeArabicForRisen(lifted.text, options))) {
       const cp = ch.codePointAt(0)!;
       if (cp >= TOKEN_BASE && cp < TOKEN_BASE + lifted.tokens.length) {
         out.push(...lifted.tokens[cp - TOKEN_BASE]);

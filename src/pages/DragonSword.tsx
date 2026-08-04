@@ -19,7 +19,7 @@ import { dsTableLabel } from "@/lib/dragonsword/ds-categories";
 export default function DragonSword() {
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [report, setReport] = useState<{ file: string; rows: number }[] | null>(null);
+  const [report, setReport] = useState<{ file: string; rows: number; source?: string }[] | null>(null);
   const navigate = useNavigate();
 
   const loadPak = useCallback(
@@ -27,21 +27,23 @@ export default function DragonSword() {
       setBusy(true);
       try {
         const pak = new Uint8Array(await file.arrayBuffer());
-        const { entries, tables, skipped } = extractDsEntries(pak);
+        const { entries, tables, skipped, translations: fromPak } = extractDsEntries(pak);
         if (entries.length === 0) {
           throw new Error("لم يُعثر على نصوص داخل الحاوية — تأكّد أنه ملفّ اللغة الصحيح");
         }
-        setReport(tables.map((t) => ({ file: t.file, rows: t.rows })));
+        setReport(tables.map((t) => ({ file: t.file, rows: t.rows, source: t.source })));
 
-        // Translations saved from an earlier upload of the same pak are kept:
-        // a line's key is its own ID, which never moves.
+        // Two sources of work, and the user's own wins: a pak that already
+        // carries a translation fills the column, and anything edited here in
+        // an earlier session is laid over it.
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
         const saved = existing?.translations || {};
         const valid = new Set(entries.map((e) => `${e.msbtFile}:${e.index}`));
-        const translations: Record<string, string> = {};
+        const translations: Record<string, string> = { ...fromPak };
         for (const [key, value] of Object.entries(saved)) {
           if (valid.has(key) && value) translations[key] = value;
         }
+        const carried = Object.keys(fromPak).length;
 
         await idbSet("editorState", { entries, translations, freshExtraction: true });
         await idbSet("editor-source-game", DS_SOURCE_GAME);
@@ -51,10 +53,11 @@ export default function DragonSword() {
         for (const e of entries) originals[`${e.msbtFile}:${e.index}`] = e.original;
         await idbSet("originalTexts", originals);
 
-        const restored = Object.keys(translations).length;
+        const restored = Object.keys(translations).length - carried;
         toast.success(
           `تم استخراج ${entries.length} سطر من ${tables.length} جدول` +
             (skipped > 0 ? ` — تُخطّي ${skipped} سطراً بلا كلمات` : "") +
+            (carried > 0 ? ` — و${carried} سطراً مترجماً داخل الحاوية` : "") +
             (restored > 0 ? ` — استُرجعت ${restored} ترجمة محفوظة` : "")
         );
         navigate("/editor");
@@ -118,8 +121,11 @@ export default function DragonSword() {
             <div className="mb-2 text-sm font-medium">ما وجدته في الحاوية</div>
             <ul className="space-y-1 text-sm text-muted-foreground">
               {report.map((t) => (
-                <li key={t.file} className="flex justify-between">
-                  <span>{dsTableLabel(t.file)}</span>
+                <li key={t.file} className="flex justify-between gap-3">
+                  <span>
+                    {dsTableLabel(t.file)}
+                    {t.source && <span className="text-xs opacity-70"> — الأصل الإنجليزيّ بجانبه</span>}
+                  </span>
                   <span className="tabular-nums">{t.rows} سطر</span>
                 </li>
               ))}

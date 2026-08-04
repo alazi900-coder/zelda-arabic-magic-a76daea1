@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { makePak, type PakFile } from "./dragonsword-pak-helper";
+import { makePak, makeLegacyPak, type PakFile } from "./dragonsword-pak-helper";
 import {
   readDragonSwordPak,
   writeDragonSwordPak,
@@ -93,5 +93,74 @@ describe("dragonsword pak writing", () => {
     const v = new DataView(out.buffer, out.byteOffset, out.byteLength);
     expect(v.getUint32(out.length - 204, true)).toBe(0x5a6f12e1);
     expect(v.getUint32(out.length - 200, true)).toBe(11);
+  });
+});
+
+/**
+ * The layout used before version 10 — what the Arabic mod pak ships. Its index
+ * names each file and repeats its whole header, instead of splitting the same
+ * numbers across a hash index, a directory tree and a run of packed records.
+ */
+describe("dragonsword legacy paks (version 8)", () => {
+  const LEGACY: PakFile[] = [
+    { path: "DS/Content/Design/GameData/StringData_en.table", data: text(4000, "source") },
+    { path: "DS/Content/Design/GameData/StringData_th.table", data: text(5000, "target") },
+    { path: "DS/Config/DefaultGame.ini", data: text(900, "config") },
+    { path: "DS/Content/Editor/Fonts/Arabic.ufont", data: text(70000, "font"), compressed: true },
+  ];
+
+  it("reads every file out of the older index", () => {
+    const files = readDragonSwordPak(makeLegacyPak(LEGACY));
+    expect(files.map((f) => f.path)).toEqual(LEGACY.map((f) => f.path));
+    for (const [i, f] of files.entries()) {
+      expect(Array.from(f.data)).toEqual(Array.from(LEGACY[i].data));
+    }
+  });
+
+  /**
+   * Stronger than the version 11 gate, and it has to be: nothing here is
+   * re-compressed, so an untouched rebuild must come back as the very same
+   * bytes. The real 9.8 MB Arabic mod passes this too.
+   */
+  it("rebuilds an untouched pak byte for byte", () => {
+    const pak = makeLegacyPak(LEGACY.slice(0, 3));
+    const out = writeDragonSwordPak(pak, {});
+    expect(out.length).toBe(pak.length);
+    expect(Array.from(out)).toEqual(Array.from(pak));
+  });
+
+  it("writes a replacement and leaves the rest alone", () => {
+    const pak = makeLegacyPak(LEGACY);
+    const swapped = new TextEncoder().encode("سطرٌ عربيٌّ جديد");
+    const again = readDragonSwordPak(writeDragonSwordPak(pak, { [LEGACY[1].path]: swapped }));
+    expect(Array.from(again[1].data)).toEqual(Array.from(swapped));
+    expect(Array.from(again[0].data)).toEqual(Array.from(LEGACY[0].data));
+    expect(Array.from(again[3].data)).toEqual(Array.from(LEGACY[3].data));
+  });
+
+  it("keeps the version it was given instead of stamping its own", () => {
+    const out = writeDragonSwordPak(makeLegacyPak(LEGACY, { version: 8 }), {});
+    const v = new DataView(out.buffer, out.byteOffset, out.byteLength);
+    expect(v.getUint32(out.length - 200, true)).toBe(8);
+  });
+
+  /** Four method names instead of five, so the footer is 32 bytes shorter. */
+  it("finds a footer written with the shorter method-name table", () => {
+    const pak = makeLegacyPak(LEGACY.slice(0, 2), { methodNames: 4 });
+    expect(looksLikeDragonSwordPak(pak)).toBe(true);
+    expect(readDragonSwordPak(pak)).toHaveLength(2);
+    const out = writeDragonSwordPak(pak, {});
+    expect(Array.from(out)).toEqual(Array.from(pak));
+  });
+
+  /**
+   * An encrypted index is not a corrupt one, and saying so is the difference
+   * between the user going to find the game's AES key and the user thinking
+   * the tool is broken.
+   */
+  it("refuses an encrypted index with a reason, not a parse failure", () => {
+    const pak = makeLegacyPak(LEGACY, { encrypted: true });
+    expect(looksLikeDragonSwordPak(pak)).toBe(true);
+    expect(() => readDragonSwordPak(pak)).toThrow(/مشفَّر|AES/);
   });
 });

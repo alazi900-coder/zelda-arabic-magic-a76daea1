@@ -1,4 +1,10 @@
 import { deflate } from "pako";
+import { createHash } from "node:crypto";
+
+/** Real SHA-1, because the writer computes one and the two must agree. */
+function sha1(data: Uint8Array): Uint8Array {
+  return new Uint8Array(createHash("sha1").update(data).digest());
+}
 
 /**
  * A pak built by hand, to the same layout the shipped `DragonSword_IT.pak`
@@ -152,3 +158,68 @@ export function makePak(files: PakFile[], mount = "../../../DragonSword/Content/
   return join([body, primary, pathHash, dir, footer]);
 }
 
+
+/**
+ * A pak in the layout used before version 10, which is what the Arabic mod
+ * pak ships: no hash index, no directory tree — the index simply names each
+ * file and repeats its whole header, with the real offset in it while the copy
+ * in front of the data reads zero.
+ *
+ * `encrypted` stamps the index-encrypted flag without encrypting anything,
+ * which is enough to check that such a pak is refused with a reason rather
+ * than parsed into nonsense.
+ */
+export function makeLegacyPak(
+  files: PakFile[],
+  { mount = "../../../", version = 8, encrypted = false, methodNames = 5 } = {}
+): Uint8Array {
+  const bodyParts: Uint8Array[] = [];
+  const headers: { path: string; offset: number; header: (at: number) => Uint8Array }[] = [];
+  let bodyLength = 0;
+
+  for (const file of files) {
+    const offset = bodyLength;
+    if (file.compressed === false || file.compressed === undefined) {
+      const hash = sha1(file.data);
+      const header = (at: number) =>
+        join([u64(at), u64(file.data.length), u64(file.data.length), u32(0),
+          hash, Uint8Array.of(0), u32(0)]);
+      bodyParts.push(header(0), file.data);
+      bodyLength += 53 + file.data.length;
+      headers.push({ path: file.path, offset, header });
+      continue;
+    }
+    const chunks: Uint8Array[] = [];
+    for (let at = 0; at < file.data.length; at += BLOCK) {
+      chunks.push(deflate(file.data.subarray(at, Math.min(at + BLOCK, file.data.length))));
+    }
+    if (chunks.length === 0) chunks.push(deflate(new Uint8Array(0)));
+    const packed = join(chunks);
+    const headSize = 8 + 8 + 8 + 4 + 20 + 4 + chunks.length * 16 + 1 + 4;
+    const header = (at: number) => {
+      const table: Uint8Array[] = [];
+      let cursor = headSize;
+      for (const c of chunks) {
+        table.push(u64(cursor), u64(cursor + c.length));
+        cursor += c.length;
+      }
+      return join([u64(at), u64(packed.length), u64(file.data.length), u32(METHOD_ZLIB),
+        sha1(packed), u32(chunks.length), ...table, Uint8Array.of(0), u32(BLOCK)]);
+    };
+    bodyParts.push(header(0), packed);
+    bodyLength += headSize + packed.length;
+    headers.push({ path: file.path, offset, header });
+  }
+
+  const body = join(bodyParts);
+  const index = join([
+    fstr(mount), u32(files.length),
+    ...headers.flatMap((h) => [fstr(h.path), h.header(h.offset)]),
+  ]);
+  const footer = join([
+    new Uint8Array(16), Uint8Array.of(encrypted ? 1 : 0),
+    u32(0x5a6f12e1), u32(version), u64(body.length), u64(index.length),
+    sha1(index), new Uint8Array(32 * methodNames),
+  ]);
+  return join([body, index, footer]);
+}

@@ -122,3 +122,42 @@ describe("dragonsword file ids", () => {
     }
   });
 });
+
+/**
+ * The shipped tables use bare newlines and the Arabic mod's use carriage
+ * returns. Forcing one style on the other would rewrite every line of a file
+ * whose text nobody touched — 5.3 MB of diff for one edited sentence.
+ */
+describe("dragonsword table line endings", () => {
+  // `ignoreBOM` because the default decoder swallows the mark, and a fixture
+  // that quietly lost it would make the rebuild look three bytes too long.
+  function crlf(bytes: Uint8Array): Uint8Array {
+    const text = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);
+    return new TextEncoder().encode(text.replace(/\n/g, "\r\n"));
+  }
+
+  it("rebuilds a carriage-return file byte for byte", () => {
+    const source = crlf(table(ROWS));
+    const out = buildDsTable(source, new Map());
+    expect(out.length).toBe(source.length);
+    expect(Array.from(out)).toEqual(Array.from(source));
+  });
+
+  it("reads the same rows whichever style the file uses", () => {
+    expect(parseDsTable(crlf(table(ROWS)))).toEqual(parseDsTable(table(ROWS)));
+  });
+
+  it("keeps the file's style when a row is replaced", () => {
+    const out = buildDsTable(crlf(table(ROWS)), new Map([[10007011, "أهلاً <orange>{0}</>!"]]));
+    const text = new TextDecoder().decode(out);
+    expect(text).toContain("\r\n");
+    expect(text.replace(/\r\n/g, "\n")).not.toContain("\r");
+    expect(parseDsTable(out)[0].text).toBe("أهلاً <orange>{0}</>!");
+  });
+
+  /** A `\n` inside a translated line is two characters of JSON, not a break. */
+  it("does not mistake an escaped newline in a value for the file's style", () => {
+    const one = table([["1", "سطر\nآخر"]]);
+    expect(new TextDecoder().decode(buildDsTable(one, new Map()))).not.toContain("\r");
+  });
+});

@@ -48,8 +48,20 @@ import { inflate, deflate } from "pako";
 const FOOTER_MAGIC = 0x5a6f12e1;
 /** Magic, version, index offset and size, its hash, and the method names. */
 const FOOTER_AFTER_MAGIC = 4 + 4 + 8 + 8 + 20 + 32 * 5;
+/**
+ * How many bytes follow the magic, longest first.
+ *
+ * The count of 32-byte compression-method names is what differs: five in the
+ * paks this was written against, four in the older layout. The magic is found
+ * by trying each size rather than assumed, because a pak built by a modding
+ * tool may pair either footer with any version number — the 9.8 MB Arabic mod
+ * stamps version 8 and still carries the five-name footer.
+ */
+const FOOTER_SIZES = [FOOTER_AFTER_MAGIC, 4 + 4 + 8 + 8 + 20 + 32 * 4];
 /** The GUID and the encrypted-index flag sit in front of the magic. */
 const FOOTER_BEFORE_MAGIC = 16 + 1;
+/** From this version on, the index is split into the two lookup blobs. */
+const FIRST_SPLIT_INDEX_VERSION = 10;
 
 export interface DsPakEntry {
   /** Path below the pak's mount point, as the index spells it. */
@@ -90,14 +102,22 @@ class Reader {
   }
 }
 
-function findFooter(pak: Uint8Array): number {
-  const at = pak.length - FOOTER_AFTER_MAGIC;
-  if (at < 0) throw new Error("الملفّ أصغر من أن يكون حاوية Unreal");
+interface Footer {
+  magicAt: number;
+  /** Bytes from the magic to the end — the method-name count differs. */
+  size: number;
+}
+
+function findFooter(pak: Uint8Array): Footer {
   const v = new DataView(pak.buffer, pak.byteOffset, pak.byteLength);
-  if (v.getUint32(at, true) !== FOOTER_MAGIC) {
-    throw new Error("لم أجد توقيع حاوية Unreal في نهاية الملفّ");
+  for (const size of FOOTER_SIZES) {
+    const at = pak.length - size;
+    if (at >= FOOTER_BEFORE_MAGIC && v.getUint32(at, true) === FOOTER_MAGIC) {
+      return { magicAt: at, size };
+    }
   }
-  return at;
+  if (pak.length < FOOTER_SIZES[0]) throw new Error("الملفّ أصغر من أن يكون حاوية Unreal");
+  throw new Error("لم أجد توقيع حاوية Unreal في نهاية الملفّ");
 }
 
 /** True when this file looks like the pak this reader was written against. */
@@ -112,7 +132,10 @@ export function looksLikeDragonSwordPak(pak: Uint8Array): boolean {
 
 interface Parsed {
   magicAt: number;
+  footerSize: number;
   version: number;
+  /** True when the index carries the names and full headers inline. */
+  legacy: boolean;
   indexOffset: number;
   indexSize: number;
   mount: string;
@@ -124,13 +147,72 @@ interface Parsed {
   records: Record_[];
 }
 
+/**
+ * Reads one entry header, wherever it sits.
+ *
+ * The same eleven fields appear twice in every pak: once in front of the data
+ * and once — in the older index layout — inside the index, where the offset
+ * field is the real one while the copy in front of the data reads zero.
+ */
+function readHeader(r: Reader): Omit<Record_, "path" | "location" | "flags"> & { offset: number } {
+  const offset = r.u64();
+  const compressed = r.u64();
+  const uncompressed = r.u64();
+  const method = r.u32();
+  r.skip(20);
+  const blockSizes: number[] = [];
+  if (method) {
+    const n = r.u32();
+    for (let i = 0; i < n; i++) {
+      const start = r.u64();
+      blockSizes.push(r.u64() - start);
+    }
+  }
+  r.skip(1);
+  const blockBytes = r.u32();
+  return { offset, compressed, uncompressed, method, blockSizes, blockBytes };
+}
+
+/**
+ * The index of a pak older than version 10: the mount point, a count, and then
+ * every file's name followed by its whole header. No hashes, no directory
+ * tree, nothing to keep in step — which is why this one can be rebuilt exactly.
+ */
+function parseLegacyIndex(pak: Uint8Array, indexOffset: number): { mount: string; records: Record_[] } {
+  const r = new Reader(pak);
+  r.at = indexOffset;
+  const mount = r.str();
+  const count = r.u32();
+  const records: Record_[] = [];
+  for (let i = 0; i < count; i++) {
+    const path = r.str();
+    const location = r.at - indexOffset;
+    const h = readHeader(r);
+    records.push({ path, location, flags: 0, ...h });
+  }
+  return { mount, records };
+}
+
 function parse(pak: Uint8Array): Parsed {
-  const magicAt = findFooter(pak);
+  const { magicAt, size: footerSize } = findFooter(pak);
+  if (pak[magicAt - 1] !== 0) {
+    throw new Error(
+      "فهرس هذه الحاوية مشفَّر (AES) — لا يمكن قراءة أسماء ملفّاتها بلا مفتاح التشفير"
+    );
+  }
   const f = new Reader(pak);
   f.at = magicAt + 4;
   const version = f.u32();
   const indexOffset = f.u64();
   const indexSize = f.u64();
+
+  if (version < FIRST_SPLIT_INDEX_VERSION) {
+    const { mount, records } = parseLegacyIndex(pak, indexOffset);
+    return {
+      magicAt, footerSize, version, legacy: true, indexOffset, indexSize, mount,
+      seed: 0, pathHashOffset: 0, pathHashSize: 0, dirOffset: 0, dirSize: 0, records,
+    };
+  }
 
   const r = new Reader(pak);
   r.at = indexOffset;
@@ -189,7 +271,7 @@ function parse(pak: Uint8Array): Parsed {
     return { path, location, flags, offset, uncompressed, compressed, blockSizes, method, blockBytes };
   });
 
-  return { magicAt, version, indexOffset, indexSize, mount, seed,
+  return { magicAt, footerSize, version, legacy: false, indexOffset, indexSize, mount, seed,
     pathHashOffset, pathHashSize, dirOffset, dirSize, records };
 }
 
@@ -279,6 +361,77 @@ class Writer {
   }
 }
 
+interface Rebuilt {
+  rec: Record_;
+  offset: number;
+  compressed: number;
+  uncompressed: number;
+  blockSizes: number[];
+  /** SHA-1 of the bytes as stored, computed once while writing them. */
+  hash: Uint8Array;
+}
+
+/**
+ * One entry header. `at` is what goes in the offset field: zero for the copy
+ * in front of the data, the real position for the copy inside a legacy index.
+ * Everything else is identical between the two copies.
+ */
+function entryHeader(e: {
+  compressed: number;
+  uncompressed: number;
+  method: number;
+  blockSizes: number[];
+  blockBytes: number;
+  hash: Uint8Array;
+}, at: number): Uint8Array {
+  const h = new Writer();
+  h.u64(at); h.u64(e.compressed); h.u64(e.uncompressed);
+  h.u32(e.method); h.push(e.hash);
+  if (e.method) {
+    h.u32(e.blockSizes.length);
+    let cursor = headerSize(e.blockSizes.length, e.method);
+    for (const n of e.blockSizes) { h.u64(cursor); h.u64(cursor + n); cursor += n; }
+  }
+  h.u8(0); h.u32(e.blockBytes);
+  return h.done();
+}
+
+/** The footer, which is the same shape whichever index came before it. */
+function footerFor(pak: Uint8Array, p: Parsed, indexOffset: number, index: Uint8Array): Uint8Array {
+  const f = new Writer();
+  f.push(new Uint8Array(16));
+  f.u8(0);
+  f.u32(FOOTER_MAGIC);
+  f.u32(p.version);
+  f.u64(indexOffset);
+  f.u64(index.length);
+  f.push(sha1(index));
+  // The compression-method names are carried across rather than written: their
+  // count is what sets the footer's size, and the version stamped in the file
+  // does not reliably say which count this pak uses.
+  f.push(pak.subarray(p.magicAt + 4 + 4 + 8 + 8 + 20, p.magicAt + p.footerSize));
+  return f.done();
+}
+
+/**
+ * Rebuilds a pak older than version 10, whose index holds each file's name and
+ * whole header in one run. There is no hash index and no directory tree to
+ * keep in step, so this path can put the file back exactly as it was.
+ */
+function writeLegacy(pak: Uint8Array, p: Parsed, body: Uint8Array, rebuilt: Rebuilt[]): Uint8Array {
+  const index = new Writer();
+  index.str(p.mount);
+  index.u32(rebuilt.length);
+  for (const r of rebuilt) {
+    index.str(r.rec.path);
+    // The offset field here is the real one; the copy in front of the data
+    // reads zero. Everything else, hash included, is the same header.
+    index.push(entryHeader({ ...r, method: r.rec.method, blockBytes: r.rec.blockBytes }, r.offset));
+  }
+  const built = index.done();
+  return concat([body, built, footerFor(pak, p, body.length, built)]);
+}
+
 /**
  * Writes the pak back with some files replaced.
  *
@@ -294,35 +447,45 @@ export function writeDragonSwordPak(
 ): Uint8Array {
   const p = parse(pak);
   const body = new Writer();
-  const rebuilt = p.records.map((rec) => {
-    const data = replace[rec.path] ?? readOne(pak, rec);
+
+  // Read every file once. The old code re-read the whole pak per entry, which
+  // is fine for four files and quadratic for thirty-four.
+  const source = new Map(readDragonSwordPak(pak).map((e) => [e.path, e.data]));
+
+  /**
+   * The data is laid out in the order it was laid out in, not in index order.
+   * A pak's index does not have to list files in the order they sit on disk —
+   * the Arabic mod's does not — and rebuilding in index order would move every
+   * byte for nothing, which costs an untouched rebuild its byte-for-byte match.
+   */
+  const built = new Map<string, Omit<Rebuilt, "rec">>();
+  for (const rec of [...p.records].sort((a, b) => a.offset - b.offset)) {
+    const data = replace[rec.path] ?? source.get(rec.path);
+    if (!data) throw new Error(`«${rec.path}» غير موجود في الحاوية`);
     const offset = body.length;
-    if (!rec.method) {
-      const head = new Writer();
-      head.u64(0); head.u64(data.length); head.u64(data.length);
-      head.u32(0); head.push(sha1(data)); head.u8(0); head.u32(rec.blockBytes);
-      body.push(head.done()); body.push(data);
-      return { rec, offset, compressed: data.length, uncompressed: data.length, blockSizes: [] as number[] };
+    let stored = data;
+    let blockSizes: number[] = [];
+    if (rec.method) {
+      const per = rec.blockBytes;
+      const chunks: Uint8Array[] = [];
+      for (let at = 0; at < data.length; at += per) {
+        chunks.push(deflate(data.subarray(at, Math.min(at + per, data.length))));
+      }
+      if (chunks.length === 0) chunks.push(deflate(new Uint8Array(0)));
+      stored = concat(chunks);
+      blockSizes = chunks.map((c) => c.length);
     }
-    const per = rec.blockBytes;
-    const chunks: Uint8Array[] = [];
-    for (let at = 0; at < data.length; at += per) {
-      chunks.push(deflate(data.subarray(at, Math.min(at + per, data.length))));
-    }
-    if (chunks.length === 0) chunks.push(deflate(new Uint8Array(0)));
-    const packed = concat(chunks);
-    const head = new Writer();
-    const size = headerSize(chunks.length, rec.method);
-    head.u64(0); head.u64(packed.length); head.u64(data.length);
-    head.u32(rec.method); head.push(sha1(packed));
-    head.u32(chunks.length);
-    let at = size;
-    for (const c of chunks) { head.u64(at); head.u64(at + c.length); at += c.length; }
-    head.u8(0); head.u32(rec.blockBytes);
-    body.push(head.done()); body.push(packed);
-    return { rec, offset, compressed: packed.length, uncompressed: data.length,
-      blockSizes: chunks.map((c) => c.length) };
-  });
+    const entry = {
+      offset, compressed: stored.length, uncompressed: data.length,
+      blockSizes, hash: sha1(stored),
+    };
+    body.push(entryHeader({ ...entry, method: rec.method, blockBytes: rec.blockBytes }, 0));
+    body.push(stored);
+    built.set(rec.path, entry);
+  }
+  const rebuilt: Rebuilt[] = p.records.map((rec) => ({ rec, ...built.get(rec.path)! }));
+
+  if (p.legacy) return writeLegacy(pak, p, body.done(), rebuilt);
 
   // the packed records, in the order the directory index lists them
   const enc = new Writer();
@@ -365,17 +528,7 @@ export function writeDragonSwordPak(
     throw new Error(`حساب حجم الفهرس ${primarySize} والناتج ${primary.length}`);
   }
 
-  const footer = new Writer();
-  footer.push(new Uint8Array(16));
-  footer.u8(0);
-  footer.u32(FOOTER_MAGIC);
-  footer.u32(p.version);
-  footer.u64(indexBase);
-  footer.u64(primary.length);
-  footer.push(sha1(primary));
-  footer.push(pak.subarray(p.magicAt + 4 + 4 + 8 + 8 + 20, p.magicAt + FOOTER_AFTER_MAGIC));
-
-  return concat([body.done(), primary, pathHash, dir, footer.done()]);
+  return concat([body.done(), primary, pathHash, dir, footerFor(pak, p, indexBase, primary)]);
 }
 
 /** How many bytes `Writer.str` will spend on the mount point. */

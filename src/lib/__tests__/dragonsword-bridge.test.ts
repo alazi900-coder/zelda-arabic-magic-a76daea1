@@ -178,3 +178,76 @@ describe("dragonsword categories", () => {
     expect(dsCategories(entries).map((c) => c.id)).toEqual(["ds-dialogue", "ds-speakers"]);
   });
 });
+
+/**
+ * A translated pak ships the English it was made from beside what the game
+ * shows, under one language slot. The editor's two columns are exactly that
+ * pair, and only the right-hand table is ever written back.
+ */
+describe("dragonsword paks that already carry a translation", () => {
+  const EN: [number, string][] = [
+    [1, "Welcome, <orange>{0}</>!"],
+    [2, "Failed to reconnect."],
+    [3, "The sword awaits."],
+  ];
+  const AR: [number, string][] = [
+    [1, "أهلاً بك يا <orange>{0}</>!"],
+    [2, "فشلت إعادة الاتصال."],
+    [3, "The sword awaits."], // still untranslated
+  ];
+
+  function paired(): Uint8Array {
+    return makePak([
+      { path: "DS/Content/Design/GameData/StringData_en.table", data: table(EN) },
+      { path: "DS/Content/Design/GameData/StringData_th.table", data: table(AR) },
+      // A pak carries fonts and configs too, and none of them are JSON.
+      { path: "DS/Config/DefaultGame.ini", data: new TextEncoder().encode("[/Script]\r\nx=1") },
+      { path: "DS/Content/Editor/Fonts/Arabic.ufont", data: new Uint8Array(64).fill(7) },
+    ]);
+  }
+
+  it("shows the English as the original and the existing work as the translation", () => {
+    const { entries, translations, tables } = extractDsEntries(paired());
+    expect(entries.map((e) => e.original)).toEqual(EN.map(([, t]) => t));
+    expect(translations).toEqual({
+      "ds_stringdata:1": AR[0][1],
+      "ds_stringdata:2": AR[1][1],
+    });
+    expect(tables).toHaveLength(1);
+    expect(tables[0].path).toMatch(/_th\.table$/);
+    expect(tables[0].source).toMatch(/_en\.table$/);
+  });
+
+  /** Fonts and configs are not tables, and parsing them as JSON would throw. */
+  it("ignores everything in the pak that is not a table", () => {
+    expect(extractDsEntries(paired()).tables.map((t) => t.file)).toEqual(["ds_stringdata"]);
+  });
+
+  it("writes into the game's table and never into the English one", () => {
+    const out = buildDsPak(paired(), { "ds_stringdata:3": "السيف ينتظر." });
+    if ("error" in out) throw new Error(out.error);
+    expect(out.translatedLines).toBe(1);
+    const again = extractDsEntries(out.pak);
+    // The English column is untouched, and the Arabic one gained the line.
+    expect(again.entries.map((e) => e.original)).toEqual(EN.map(([, t]) => t));
+    expect(again.translations["ds_stringdata:3"]).toBe("السيف ينتظر.");
+    expect(again.translations["ds_stringdata:1"]).toBe(AR[0][1]);
+  });
+
+  /**
+   * Tokens are measured against the English, not against the line already in
+   * the game's table — that line may itself have lost one, and checking a new
+   * translation against a broken neighbour would let the same break through.
+   */
+  it("checks tokens against the English source", () => {
+    const out = buildDsPak(paired(), { "ds_stringdata:1": "أهلاً بك!" });
+    if ("error" in out) throw new Error(out.error);
+    expect(out.translatedLines).toBe(0);
+    expect(out.brokenTags[0].missing.sort()).toEqual(["</>", "<orange>", "{0}"]);
+  });
+
+  it("leaves a line alone when the editor's text equals what is already there", () => {
+    const out = buildDsPak(paired(), { "ds_stringdata:1": AR[0][1] });
+    expect(out).toHaveProperty("error");
+  });
+});

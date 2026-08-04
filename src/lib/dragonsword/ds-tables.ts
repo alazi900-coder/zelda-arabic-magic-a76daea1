@@ -18,6 +18,20 @@
 
 const BOM = "﻿";
 
+/**
+ * The line ending the file itself uses.
+ *
+ * The shipped tables are written with bare newlines and the Arabic mod's with
+ * carriage returns, and a rebuild that forced one style on the other would
+ * rewrite every line of a file whose text nobody touched. Read from the first
+ * break in the structure, where a real byte pair sits — a break inside a
+ * translated line is spelled `\n` in the JSON and is two ordinary characters.
+ */
+function lineEnding(text: string): string {
+  const at = text.indexOf("\n");
+  return at > 0 && text[at - 1] === "\r" ? "\r\n" : "\n";
+}
+
 export interface DsRow {
   /** The key exactly as the file spells it — the order of these is the file's. */
   key: string;
@@ -65,16 +79,17 @@ export function parseDsTable(bytes: Uint8Array): DsRow[] {
  */
 export function buildDsTable(bytes: Uint8Array, replace: Map<number, string>): Uint8Array {
   const rows = parseDsTable(bytes);
+  const nl = lineEnding(new TextDecoder("utf-8").decode(bytes).replace(/^﻿/, ""));
   // Written by hand rather than with `JSON.stringify` on an object: JavaScript
   // reorders integer-like keys into ascending order, and these files are not in
   // that order. Only the value escaping is borrowed from the built-in.
   const body = rows
     .map((row) => {
       const text = JSON.stringify(replace.get(row.id) ?? row.text);
-      return `    ${JSON.stringify(row.key)}: {\n      "ID": ${row.id},\n      "SourceString": ${text}\n    }`;
+      return `    ${JSON.stringify(row.key)}: {${nl}      "ID": ${row.id},${nl}      "SourceString": ${text}${nl}    }`;
     })
-    .join(",\n");
-  return new TextEncoder().encode(`${BOM}{\n  "Data": {\n${body}\n  }\n}`);
+    .join(`,${nl}`);
+  return new TextEncoder().encode(`${BOM}{${nl}  "Data": {${nl}${body}${nl}  }${nl}}`);
 }
 
 /** `StringSceneData_fr.table` → `ds_stringscenedata`, the editor's file id. */

@@ -46,13 +46,20 @@
  * returning, which is why it ends by rebuilding `r2` and `r0` and jumping to
  * 0x08005C1C rather than simply returning.
  *
- * WHY ONLY THE DIALOGUE
+ * HOW MUCH OF THE GAME IT TOUCHES
  *
- * The window is the discriminator, measured in the emulator: the message box
- * is 27 tiles wide and 4 tall, and every window the main menu opens is 26
- * wide. A window that is not 27x4 is drawn exactly as it always was, so menus,
- * the name-entry keyboard and the HUD are untouched. That was checked on
- * screen, not assumed.
+ * Two caves, alike but for one test. `dialogue` mirrors only the message box,
+ * which it recognises by size — 27 tiles wide and 4 tall, measured in the
+ * emulator while Birch was talking, against the 26 every window the main menu
+ * opens turns out to be. `all` drops that test and mirrors every window that
+ * has a width at all.
+ *
+ * `dialogue` is the safe one and stays the default: a window it does not
+ * recognise is drawn exactly as it always was, so menus, the name-entry
+ * keyboard and the HUD cannot be affected by it. `all` was checked on the main
+ * menu and the dialogue and is right on both; the name-entry keyboard, the bag
+ * and the battle screens go through the same printer and will mirror too, and
+ * those were not checked. Which is why the choice is the translator's.
  *
  * The assembly source these bytes came from lives in the session notes; the
  * bytes are kept here rather than an assembler in the browser, and the two
@@ -71,7 +78,14 @@ export const EMERALD_RTL_CAVE = 0xf00000;
 const CAVE_B64 =
   "8LQERiF5ygCLANIYD0vSGNN4FXkbKw7RBC0M0dsAJXoLShJ4WxubGiNyIEYJTwDwDPglcgPgIEYGTwDwBvgyHCAyEHjwvARLGEc4RwQAAgIQMAADoU0ACB1cAAg=";
 
-/** The hook: `ldr r3,[pc,#4]; bx r3` and the cave's address. */
+/** The same, minus the window test: every window is mirrored. */
+const CAVE_ALL_B64 =
+  "8LQERiF5ygCLANIYDkvSGNN4FXkAKwzQ2wAlegtKEnhbG5saI3IgRglPAPAM+CVyA+AgRgZPAPAG+DIcIDIQePC8BEsYRzhHBAACAhAwAAOhTQAIHVwACA==";
+
+/** How much of the game the patch reverses. */
+export type EmeraldRtlScope = "dialogue" | "all";
+
+/** The hook: `ldr r3,[pc,#4]; bx r3` and the cave's address. Both caves share it. */
 const HOOK_B64 = "AUsYRwAAAQDwCA==";
 
 function bytes(b64: string): Uint8Array {
@@ -98,8 +112,11 @@ export function hasEmeraldRtlPatch(rom: Uint8Array): boolean {
  * where either has changed is one this patch was not measured on, and writing
  * into it would break the game somewhere far from here.
  */
-export function applyEmeraldRtlPatch(rom: Uint8Array): Uint8Array {
-  const cave = bytes(CAVE_B64);
+export function applyEmeraldRtlPatch(
+  rom: Uint8Array,
+  scope: EmeraldRtlScope = "dialogue"
+): Uint8Array {
+  const cave = bytes(scope === "all" ? CAVE_ALL_B64 : CAVE_B64);
   const hook = bytes(HOOK_B64);
   if (hasEmeraldRtlPatch(rom)) return new Uint8Array(rom);
 

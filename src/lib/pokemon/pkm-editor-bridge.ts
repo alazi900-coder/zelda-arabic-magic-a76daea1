@@ -14,7 +14,7 @@
 import type { ExtractedEntry } from "@/components/editor/types";
 import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, markPointedTables, pkmLineLimit, type PkmString } from "./pkm-rom";
 import { pkmCodecByGame, pkmCodecFor, pkmForeignFont, type PkmGame } from "./pkm-codec";
-import { applyEmeraldRtlPatch } from "@/lib/gba/emerald-rtl";
+import { applyEmeraldRtlPatch, type EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
@@ -144,8 +144,8 @@ export interface PkmBuildOk {
   freeSpaceLeft: number;
   unmapped: string[];
   fontApplied: boolean;
-  /** True when the engine was patched to lay the dialogue out right to left. */
-  rtlApplied: boolean;
+  /** How much of the game the engine was patched to lay out right to left. */
+  rtlApplied: EmeraldRtlScope | null;
 }
 export interface PkmBuildError {
   error: string;
@@ -173,7 +173,7 @@ const PKM_KEY_RE = /^pkm_[a-z0-9]+:(\d+)$/;
 export function buildPkmRom(
   rom: Uint8Array,
   translations: Record<string, string>,
-  options: { relocate?: boolean; game?: PkmGame; rtl?: boolean } = {}
+  options: { relocate?: boolean; game?: PkmGame; rtl?: EmeraldRtlScope } = {}
 ): PkmBuildOk | PkmBuildError {
   if (!looksLikePkmRom(rom)) {
     return { error: "الملف لا يبدو روم GBA — تحقّق من أنك رفعت ملف ‎.gba‎ الصحيح" };
@@ -214,7 +214,7 @@ export function buildPkmRom(
   // without the other reads backwards.
   if (options.rtl) {
     try {
-      out = applyEmeraldRtlPatch(out);
+      out = applyEmeraldRtlPatch(out, options.rtl);
     } catch (err) {
       return { error: (err as Error).message };
     }
@@ -237,6 +237,6 @@ export function buildPkmRom(
     freeSpaceLeft: written.freeSpaceLeft,
     unmapped: written.unmapped,
     fontApplied,
-    rtlApplied: options.rtl === true,
+    rtlApplied: options.rtl ?? null,
   };
 }

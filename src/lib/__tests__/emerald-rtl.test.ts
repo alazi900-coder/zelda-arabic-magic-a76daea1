@@ -45,6 +45,21 @@ describe("Emerald — patching the engine to lay dialogue out right to left", ()
     expect(() => applyEmeraldRtlPatch(rom)).toThrow("فارغة");
   });
 
+  it("writes a different cave for each reach, over the same hook", () => {
+    // The two differ by one test inside the cave — whether the window has to
+    // be the message box — so the hook is identical and the code is not.
+    const dialogue = applyEmeraldRtlPatch(emeraldish(), "dialogue");
+    const all = applyEmeraldRtlPatch(emeraldish(), "all");
+    for (let i = 0; i < 10; i++) {
+      expect(all[EMERALD_RTL_HOOK + i]).toBe(dialogue[EMERALD_RTL_HOOK + i]);
+    }
+    let differing = 0;
+    for (let i = 0; i < 0x100; i++) {
+      if (all[EMERALD_RTL_CAVE + i] !== dialogue[EMERALD_RTL_CAVE + i]) differing++;
+    }
+    expect(differing).toBeGreaterThan(0);
+  });
+
   it("applies once and stays applied", () => {
     // Building twice must not write the hook over itself: the second pass no
     // longer sees the original call and would refuse.

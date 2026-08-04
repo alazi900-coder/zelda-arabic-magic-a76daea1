@@ -13,6 +13,7 @@ import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-pr
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
+import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -61,7 +62,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [wolfBuilding, setWolfBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
-  const [pkmRtl, setPkmRtl] = useState(false);
+  const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmGame, setPkmGame] = useState<PkmGame | undefined>(undefined);
 
   // Which of the two Gen 3 games is open, so the right-to-left option only
@@ -198,7 +199,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {}, {
         relocate: true,
         game,
-        rtl: pkmRtl,
+        rtl: pkmRtl === "off" ? undefined : pkmRtl,
       });
       const { toast } = await import("@/hooks/use-toast");
       if ("error" in result) {
@@ -224,7 +225,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         description:
           `${result.translatedLines} سطر مترجم` +
           (result.fontApplied ? " | كُتب الخط العربي" : " | الخط العربي موجود مسبقاً") +
-          (result.rtlApplied ? " | الحوار يُرسم من اليمين" : "") +
+          (result.rtlApplied === "all"
+            ? " | كل النصوص تُرسم من اليمين"
+            : result.rtlApplied === "dialogue"
+              ? " | الحوار يُرسم من اليمين"
+              : "") +
           (result.relocated > 0 ? ` | ${result.relocated} سطراً نُقل إلى مساحة فارغة وأُعيد توجيه اللعبة إليه` : "") +
           (over > 0 ? ` | ${over} سطراً أطول من مكانه ولا مؤشّر له — اختصرها` : "") +
           (broken > 0 ? ` | ${broken} سطراً فُقدت منه قيمة تضعها اللعبة ({FD:xx}) — أصلحها بالفحص العميق` : "") +
@@ -325,13 +330,26 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               </label>
             )}
             {isPokemon && pkmGame === "emerald" && (
-              <label
-                className="flex items-center gap-2 cursor-pointer text-sm font-body"
-                title="يُرقَع محرّك اللعبة ليرصف حروف صندوق الحوار من اليمين، فيُخزَّن النصّ بترتيبه الطبيعي بدل أن يُعكس. القوائم وأسماء الأماكن لا تتغيّر."
-              >
-                <input type="checkbox" checked={pkmRtl} onChange={(e) => setPkmRtl(e.target.checked)} disabled={pkmBuilding} className="rounded border-border" />
-                اتجاه الحوار من اليمين إلى اليسار (Emerald)
-              </label>
+              <div className="space-y-1">
+                <span className="text-sm font-body">الرصف من اليمين إلى اليسار (Emerald)</span>
+                {([
+                  ["off", "معطّل — يُعكس النصّ وقت البناء كما كان"],
+                  ["dialogue", "صندوق الحوار فقط — مُجرَّب، والقوائم لا تتغيّر"],
+                  ["all", "كل النوافذ — القوائم أيضاً، وشاشة إدخال الاسم لم تُجرَّب"],
+                ] as const).map(([value, label]) => (
+                  <label key={value} className="flex items-center gap-2 cursor-pointer text-sm font-body">
+                    <input
+                      type="radio"
+                      name="pkm-rtl"
+                      checked={pkmRtl === value}
+                      onChange={() => setPkmRtl(value)}
+                      disabled={pkmBuilding}
+                      className="border-border"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
             )}
             {isMother3 && (
               <label className="flex items-center gap-2 cursor-pointer text-sm font-body" title="يتجاهل الأحرف غير المدعومة (يحذفها بدل الفشل) ويحتفظ بالإنجليزية للبنوك التي تجاوزت مساحتها بدلاً من إيقاف البناء">

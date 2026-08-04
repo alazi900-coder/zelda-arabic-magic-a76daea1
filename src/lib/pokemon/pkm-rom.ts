@@ -20,6 +20,7 @@
 
 import { decodeBytesWithTables, encodeArabicWithTables, pkmFormatLength, PKM_FORMAT, PKM_RESERVED_SLOTS, PKM_TERMINATOR, PKM_VARIABLE } from "./pkm-charmap";
 import { pkmCodecFor, type PkmCodec } from "./pkm-codec";
+import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { diffPkmTags } from "./pkm-tag-mask";
 import type { PkmListKind } from "./pkm-categories";
 import { indexPkmPointers, writePkmPointer, PkmFreeSpace, type PkmPointerIndex } from "./pkm-pointers";
@@ -315,13 +316,16 @@ export interface PkmWriteOptions {
   /** Which game this ROM is. Read from its header when not given. */
   codec?: PkmCodec;
   /**
-   * The engine will lay the dialogue out right to left itself, so lines bound
-   * for the message box are written in their ordinary order instead of being
-   * reversed here. The two go together: reversing as well would cancel the
-   * patch out. It applies to the dialogue alone, because that is all the patch
-   * mirrors — see `looksLikeDialogue` and `emerald-rtl.ts`.
+   * The engine will lay text out right to left itself, so the lines it will
+   * mirror are written in their ordinary order instead of being reversed here.
+   * The two go together: reversing as well would cancel the patch out, and
+   * reversing a line the patch *does* mirror leaves it backwards on screen.
+   *
+   * `"dialogue"` mirrors the message box alone, so only lines bound for it
+   * stop being reversed; everything else still is. `"all"` mirrors every
+   * window, so nothing is reversed here at all.
    */
-  rtl?: boolean;
+  rtl?: EmeraldRtlScope;
 }
 
 /**
@@ -479,7 +483,7 @@ export function applyPkmTranslations(
       continue;
     }
     const encoded = encodeArabicWithTables(value, codec.tables, {
-      reverse: !(options.rtl && looksLikeDialogue(s)),
+      reverse: !(options.rtl === "all" || (options.rtl === "dialogue" && looksLikeDialogue(s))),
     });
     encoded.unmapped.forEach((c) => unmapped.add(c));
     const needed = encoded.bytes.length + 1; // + terminator

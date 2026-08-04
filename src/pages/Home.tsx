@@ -44,6 +44,18 @@ const games = [
     arrowClass: "text-[hsl(0,70%,62%)]",
   },
   {
+    title: "DragonSword Awakening",
+    subtitle: "عرّب دراغون سورد",
+    desc: "يفتح حاوية Unreal‏ (.pak) ويستخرج جداول النصوص الأربعة — ٤٢ ألف سطر — ويعيد بناء الحاوية مترجمة. المحرّك يشكّل العربية ويعكس اتجاهها بنفسه، فلا تحتاج معالجة",
+    link: "/dragonsword",
+    image: risenBg,
+    formats: [".pak", "UE4"],
+    cardClass: "border-[hsl(200,60%,45%)]/30 hover:border-[hsl(200,60%,45%)]/60",
+    formatClass: "bg-[hsl(200,60%,45%)]/20 text-[hsl(200,70%,62%)] border-[hsl(200,60%,45%)]/30",
+    subtitleClass: "text-[hsl(200,70%,62%)]",
+    arrowClass: "text-[hsl(200,70%,62%)]",
+  },
+  {
     title: "Metroid Prime Remastered",
     subtitle: "أداة خطوط ميترويد برايم ريماسترد",
     desc: "استخراج وعرض خطوط ملفات .pak (RFRM/TXTR/FONT) ورسم حروف عربية حقيقية بواسطة Canvas 2D وإدراجها في أطلس الخط، بالإضافة إلى أداة ترجمة نصوص MSBT الكاملة",

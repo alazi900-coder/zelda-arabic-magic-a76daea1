@@ -9,6 +9,7 @@ import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildRisen3OutputFromState, RISEN3_MSBT_SUFFIX } from "@/lib/risen3-extractor";
 import { buildGameMakerFromState, GM_BUFFER_KEY } from "@/lib/gamemaker/gm-editor-bridge";
 import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
+import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
@@ -35,6 +36,7 @@ interface EditorBuildSectionProps {
   isWolfenstein?: boolean;
   isPokemon?: boolean;
   isGameMaker?: boolean;
+  isDragonSword?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -50,6 +52,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isWolfenstein = false,
   isPokemon = false,
   isGameMaker = false,
+  isDragonSword = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -62,6 +65,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [wolfBuilding, setWolfBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
+  const [dsBuilding, setDsBuilding] = useState(false);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
   const [pkmGame, setPkmGame] = useState<PkmGame | undefined>(undefined);
@@ -244,6 +248,43 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setPkmBuilding(false);
+    }
+  };
+
+  const handleDragonSwordBuild = async () => {
+    setDsBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(DS_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على الحاوية — أعد فتحها من صفحة DragonSword");
+      const result = buildDsPak(new Uint8Array(buf), editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.pak as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "DragonSword_AR.pak";
+      a.click();
+      URL.revokeObjectURL(url);
+      // A refused line kept its original text: the tokens it lost are values
+      // the game substitutes, and writing it anyway breaks the sentence in a
+      // way nobody sees until they play that far.
+      const refused = result.brokenTags.length;
+      toast({
+        title: refused > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : "✅ تم بناء حاوية معرّبة",
+        description:
+          `${result.translatedLines} سطر مترجم` +
+          (refused > 0 ? ` | ${refused} سطراً فقد رمزاً تقنياً أو غيّر ترتيبه — أُبقي بلغته الأصلية` : ""),
+        variant: refused > 0 ? "destructive" : undefined,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setDsBuilding(false);
     }
   };
 
@@ -579,6 +620,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isRisen ? (
           <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {risenBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف Risen وتنزيله
+          </Button>
+        ) : isDragonSword ? (
+          <Button size="lg" onClick={handleDragonSwordBuild} disabled={dsBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {dsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء حاوية DragonSword معرّبة
           </Button>
         ) : isGameMaker ? (
           <Button size="lg" onClick={handleGameMakerBuild} disabled={gmBuilding} className="flex-1 min-w-[200px] font-display font-bold">

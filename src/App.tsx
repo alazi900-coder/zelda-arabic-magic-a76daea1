@@ -37,6 +37,7 @@ const Risen = lazyWithIgnoredRef(() => import("./pages/Risen"));
 const RisenProcess = lazyWithIgnoredRef(() => import("./pages/RisenProcess"));
 const RisenImages = lazyWithIgnoredRef(() => import("./pages/RisenImages"));
 const Mother3 = lazyWithIgnoredRef(() => import("./pages/Mother3"));
+const DragonSword = lazyWithIgnoredRef(() => import("./pages/DragonSword"));
 const RisenFileManager = lazyWithIgnoredRef(() => import("./pages/RisenFileManager"));
 const RisenFonts = lazyWithIgnoredRef(() => import("./pages/RisenFonts"));
 const Risen3Fonts = lazyWithIgnoredRef(() => import("./pages/Risen3Fonts"));
@@ -106,6 +107,7 @@ const App = () => (
                 <Route path="/pokemon/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Pokémon Ruby Destiny"><PokemonFont /></ErrorBoundary>} />
                 <Route path="/pokemon/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Ruby Destiny"><PokemonText /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
+                <Route path="/dragonsword" element={<ErrorBoundary fallbackTitle="خطأ في أداة DragonSword Awakening"><DragonSword /></ErrorBoundary>} />
                 <Route path="/gamemaker" element={<ErrorBoundary fallbackTitle="خطأ في صفحة GameMaker"><GameMaker /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />

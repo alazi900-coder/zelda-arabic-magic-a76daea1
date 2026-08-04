@@ -10,11 +10,12 @@ import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTe
 import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
-import { RISEN_TAG_REGEX, hasRisenTags, diffRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
+import { hasRisenTags, diffRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import {
   hasOrphanLines, visualLength, splitEvenlyByLines, splitByOriginalBreaks,
   hasEngineLineBreakTags, mapTranslationToLineSkeleton,
 } from "@/lib/balance-lines";
+import { editorTagPattern } from "@/lib/editor-tag-pattern";
 import { resolveGameParam } from "@/lib/game-param";
 import { countEffectiveLines, countLines } from "@/lib/text-tokens";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
@@ -105,10 +106,7 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
 
 /** Renders text with technical tags highlighted visually */
 function HighlightedOriginal({ text }: { text: string }) {
-  const tagPattern = new RegExp(
-    `(\\[\\s*\\w+\\s*:[^\\]]*?\\](?:\\s*\\([^)]{1,100}\\))?|\\[\\s*\\w+\\s*=\\s*[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*[^}]*\\}|\\{[\\w]+\\}|\\d+\\s*\\[[A-Z]{2,10}\\]|\\[[A-Z]{2,10}\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '\\/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|[\uE000-\uE0FF]+|[\uFFF9-\uFFFC]|${RISEN_TAG_REGEX.source})`,
-    'g'
-  );
+  const tagPattern = editorTagPattern();
 
   const lines = text.split('\n');
 

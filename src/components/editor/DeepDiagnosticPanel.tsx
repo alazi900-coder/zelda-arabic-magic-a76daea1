@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
+import { fixTagNewlines } from "@/lib/tag-newline-anchor";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { splitPkmLines } from "@/lib/pokemon/pkm-line-split";
 import { runRebalanceBatch, runDetectBatch, type RebalanceItem, type DetectItem } from "@/lib/diagnostic-runner";
@@ -96,6 +97,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "pkm_line_too_wide", label: "سطر أعرض من صندوق الحوار (بوكيمون)", icon: "📐", severity: "critical", description: "المحرّك لا يلفّ السطر: ما يتجاوز ١٩٨ بكسل يُرسم خارج الصندوق ولا يُمسح، فيبقى فوق الرسائل التالية — الإصلاح يضع فاصل سطر" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
+  { id: "tag_newline_missing", label: "كسر سطر مفقود بعد وسم", icon: "↵", severity: "warning", description: "الأصل يكسر السطر مباشرةً بعد وسمٍ ({fb} مثلاً) والترجمة تكمل على نفس السطر — العدد قد يتطابق والمواضع لا" },
   { id: "missing_rlm_isolation", label: "وسوم بدون عزل اتجاهي", icon: "🧭", severity: "warning", description: "وسوم تقنية ([XENO]/[System]/[ML]/[Event]/{var}/$N) غير محاطة بعلامة RLM — يخلط محرك اللعبة ترتيب الكلمات حولها" },
   { id: "identical_to_original", label: "ترجمة مطابقة للأصل", icon: "📋", severity: "info", description: "النص لم يُترجم (مطابق للنص الإنجليزي)" },
   { id: "bare_tag_remnant", label: "بقايا وسوم تقنية كنص", icon: "🏚️", severity: "critical", description: "كلمات وسوم تقنية (FAT/XENO/System/ML/Event…) تسرّبت كنص ظاهر بدون أقواس [ ] — تظهر للاعب بدل الأيقونة/الأمر" },
@@ -147,6 +149,8 @@ const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]
 const XENO_N_FIXABLE_CATEGORIES = new Set(["xeno_n_no_newline"]);
+// Fixable by putting back a line break the original had right after a tag
+const TAG_NEWLINE_FIXABLE_CATEGORIES = new Set(["tag_newline_missing"]);
 // Categories fixable by wrapping tech tags with U+200F (RLM)
 const RLM_ISOLATION_CATEGORIES = new Set(["missing_rlm_isolation"]);
 // Categories fixable by re-balancing the line layout (XENO:n / PageBreak aware DP)
@@ -163,7 +167,7 @@ const RISEN_TAG_FIXABLE_CATEGORIES = new Set(["risen_tag_mismatch"]);
  */
 const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -378,6 +382,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return { fixResult: trans, reason: '⚠️ لم يتمكن من إصلاح المتغيرات تلقائياً' };
     }
 
+    if (TAG_NEWLINE_FIXABLE_CATEGORIES.has(issue.category)) {
+      const fixed = fixTagNewlines(entry.original, trans);
+      return { fixResult: fixed, reason: fixed !== trans ? '↵ سيُوضع كسر السطر بعد الوسم كما في الأصل' : '⚠️ لا يوجد كسر سطر ناقص بعد وسم' };
+    }
+
     if (XENO_N_FIXABLE_CATEGORIES.has(issue.category)) {
       let fixed = trans.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
       // Re-balance after adding newlines so the total line count stays reasonable
@@ -490,6 +499,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (TAG_NEWLINE_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const fixed = fixTagNewlines(entry.original, issue.translation);
+      if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
+      toast({ title: '↵ كسر السطر', description: 'أُعيد كسر السطر بعد الوسم كما في النصّ الأصلي' });
+      return;
+    }
+
     if (XENO_N_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
       let fixed = issue.translation.replace(/(\[XENO:n\s*\])(?!\n)/g, '$1\n');
       if (fixed !== issue.translation) fixed = balanceLines(fixed);
@@ -598,6 +614,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       }
       const count = applyBatchUpdates(updates);
       toast({ title: '🧹 تنظيف', description: `تم إزالة الأحرف غير المرئية من ${count} نص` });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    if (TAG_NEWLINE_FIXABLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
+      let count = 0;
+      for (const key of uniqueKeys) {
+        const entry = entryMap.get(key);
+        const trans = state.translations[key];
+        if (!entry || !trans) continue;
+        const fixed = fixTagNewlines(entry.original, trans);
+        if (fixed !== trans) { updates[key] = fixed; count++; }
+      }
+      applyBatchUpdates(updates);
+      toast({ title: '↵ كسر السطر', description: `أُعيد كسر السطر بعد الوسم في ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }

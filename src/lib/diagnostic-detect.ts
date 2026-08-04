@@ -19,6 +19,7 @@ import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
 import { pkmOverlongLines, PKM_DIALOGUE_LINE_PIXELS } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { countMissingTagNewlines } from "@/lib/tag-newline-anchor";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 
@@ -394,6 +395,16 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       issues.push({ ...base, severity: "warning", category: "xeno_n_no_newline",
         message: `${missingNewline.length} وسم [XENO:n ] غير متبوع بسطر جديد (\\n) — يمنع كسر السطر` });
     }
+  }
+
+  // 20b. A line break that sits right after a tag in the original, and does not
+  // in the translation. The count of breaks can match exactly and this still be
+  // wrong — «{fb} هل تعرف» has the same five breaks as the original and none of
+  // them where the original put one. See tag-newline-anchor.ts.
+  const missingTagNewlines = countMissingTagNewlines(entry.original, trimmed);
+  if (missingTagNewlines > 0) {
+    issues.push({ ...base, severity: "warning", category: "tag_newline_missing",
+      message: `${missingTagNewlines} كسر سطر كان بعد وسمٍ في الأصل ومفقود في الترجمة — الأداة تضعه مكانه` });
   }
 
   // 21. Missing RLM-isolation around technical tokens (Arabic + LTR-tag interaction)

@@ -34,6 +34,7 @@ import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix, type RisenSectionFilt
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
@@ -760,9 +761,10 @@ export function useEditorState() {
       const isMother3 = !isBdat && !isRisen && /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile);
       const isMetroidPrime = !isBdat && !isRisen && !isMother3 && /^TEXT_/.test(e.msbtFile);
       const isPkm = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && PKM_FILE_RE.test(e.msbtFile);
-      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isDs = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && DS_FILE_RE.test(e.msbtFile);
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||

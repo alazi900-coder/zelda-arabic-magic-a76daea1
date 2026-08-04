@@ -164,7 +164,7 @@ const Editor = () => {
     if (isWolfensteinEntries) return buildWolfCategories(entries);
     if (isPokemonEntries) return buildPkmCategories(entries);
     if (isGameMakerEntries) return FILE_CATEGORIES;
-    if (isDragonSwordEntries) return dsCategories(entries.map((e) => e.msbtFile));
+    if (isDragonSwordEntries) return dsCategories(entries);
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
   }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, editor.bdatTableNames]);

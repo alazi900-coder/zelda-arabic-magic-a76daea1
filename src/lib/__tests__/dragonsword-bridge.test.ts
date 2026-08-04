@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { makePak } from "./dragonsword-pak-helper";
 import { extractDsEntries, buildDsPak } from "@/lib/dragonsword/ds-editor-bridge";
 import { dsTags, diffDsTags, dsIsTechnicalOnly } from "@/lib/dragonsword/ds-tag-guard";
-import { dsCategories, dsCategoryLabel } from "@/lib/dragonsword/ds-categories";
+import { dsCategories } from "@/lib/dragonsword/ds-categories";
 
 function table(rows: [number, string][]): Uint8Array {
   const body = rows
@@ -167,11 +167,14 @@ describe("dragonsword technical tokens", () => {
 });
 
 describe("dragonsword categories", () => {
-  it("names the four tables and keeps an unknown one filterable", () => {
-    expect(dsCategories(["ds_stringscenedata", "ds_stringdata", "ds_stringscenedata"])).toEqual([
-      { id: "ds_stringdata", label: "الذكريات ورسائل النظام" },
-      { id: "ds_stringscenedata", label: "المهامّ" },
-    ]);
-    expect(dsCategoryLabel("ds_somethingnew")).toBe("somethingnew");
+  /**
+   * The cards come from the lines that were actually extracted, so a pak whose
+   * tables hold only dialogue does not offer a card that filters to nothing.
+   */
+  it("offers only the cards the extracted lines fall into", () => {
+    // The quest rows here are eight digits starting `10`, which is a speaker
+    // name, and the scene table is dialogue — so those two cards and no others.
+    const { entries } = extractDsEntries(pak());
+    expect(dsCategories(entries).map((c) => c.id)).toEqual(["ds-dialogue", "ds-speakers"]);
   });
 });

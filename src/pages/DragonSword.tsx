@@ -4,7 +4,7 @@ import { Upload, Loader2, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
 import { extractDsEntries, DS_BUFFER_KEY, DS_SOURCE_GAME } from "@/lib/dragonsword/ds-editor-bridge";
-import { dsCategoryLabel } from "@/lib/dragonsword/ds-categories";
+import { dsTableLabel } from "@/lib/dragonsword/ds-categories";
 
 /**
  * DragonSword Awakening opener: reads the game's Unreal `.pak`, pulls the four
@@ -119,7 +119,7 @@ export default function DragonSword() {
             <ul className="space-y-1 text-sm text-muted-foreground">
               {report.map((t) => (
                 <li key={t.file} className="flex justify-between">
-                  <span>{dsCategoryLabel(t.file)}</span>
+                  <span>{dsTableLabel(t.file)}</span>
                   <span className="tabular-nums">{t.rows} سطر</span>
                 </li>
               ))}

@@ -63,6 +63,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
+  const [pkmKeyboard, setPkmKeyboard] = useState(false);
   const [pkmGame, setPkmGame] = useState<PkmGame | undefined>(undefined);
 
   // Which of the two Gen 3 games is open, so the right-to-left option only
@@ -200,6 +201,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         relocate: true,
         game,
         rtl: pkmRtl === "off" ? undefined : pkmRtl,
+        keyboard: pkmKeyboard && pkmRtl === "all",
       });
       const { toast } = await import("@/hooks/use-toast");
       if ("error" in result) {
@@ -230,6 +232,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             : result.rtlApplied === "dialogue"
               ? " | الحوار يُرسم من اليمين"
               : "") +
+          (result.keyboardApplied ? " | لوحة إدخال الاسم عربية والأحرف تتّصل" : "") +
           (result.relocated > 0 ? ` | ${result.relocated} سطراً نُقل إلى مساحة فارغة وأُعيد توجيه اللعبة إليه` : "") +
           (over > 0 ? ` | ${over} سطراً أطول من مكانه ولا مؤشّر له — اختصرها` : "") +
           (broken > 0 ? ` | ${broken} سطراً فُقدت منه قيمة تضعها اللعبة ({FD:xx}) — أصلحها بالفحص العميق` : "") +
@@ -335,7 +338,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                 {([
                   ["off", "معطّل — يُعكس النصّ وقت البناء كما كان"],
                   ["dialogue", "صندوق الحوار فقط — مُجرَّب، والقوائم لا تتغيّر"],
-                  ["all", "كل النوافذ — القوائم أيضاً، وشاشة إدخال الاسم لم تُجرَّب"],
+                  ["all", "كل النوافذ — القوائم أيضاً، والحقيبة وشاشات المعركة لم تُجرَّب"],
                 ] as const).map(([value, label]) => (
                   <label key={value} className="flex items-center gap-2 cursor-pointer text-sm font-body">
                     <input
@@ -349,6 +352,22 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                     {label}
                   </label>
                 ))}
+                {/* The name is stored in the order it was typed, so it only
+                    reads correctly where the screen is laid out from that
+                    order — which "all" does and "dialogue" does not. */}
+                <label
+                  className="flex items-center gap-2 cursor-pointer text-sm font-body pt-1"
+                  title={pkmRtl === "all" ? undefined : "يحتاج «كل النوافذ»"}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pkmKeyboard && pkmRtl === "all"}
+                    onChange={(e) => setPkmKeyboard(e.target.checked)}
+                    disabled={pkmBuilding || pkmRtl !== "all"}
+                    className="rounded border-border"
+                  />
+                  لوحة إدخال الاسم بالعربية، والأحرف تتّصل داخل اللعبة
+                </label>
               </div>
             )}
             {isMother3 && (

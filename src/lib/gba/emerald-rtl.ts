@@ -57,9 +57,10 @@
  * `dialogue` is the safe one and stays the default: a window it does not
  * recognise is drawn exactly as it always was, so menus, the name-entry
  * keyboard and the HUD cannot be affected by it. `all` was checked on the main
- * menu and the dialogue and is right on both; the name-entry keyboard, the bag
- * and the battle screens go through the same printer and will mirror too, and
- * those were not checked. Which is why the choice is the translator's.
+ * menu, the dialogue and the naming screen and is right on all three — the
+ * keyboard there is left alone on purpose, see `CAVE_ALL_B64`. The bag and the
+ * battle screens go through the same printer and will mirror too, and those
+ * were not checked. Which is why the choice is the translator's.
  *
  * The assembly source these bytes came from lives in the session notes; the
  * bytes are kept here rather than an assembler in the browser, and the two
@@ -78,9 +79,15 @@ export const EMERALD_RTL_CAVE = 0xf00000;
 const CAVE_B64 =
   "8LQERiF5ygCLANIYD0vSGNN4FXkbKw7RBC0M0dsAJXoLShJ4WxubGiNyIEYJTwDwDPglcgPgIEYGTwDwBvgyHCAyEHjwvARLGEc4RwQAAgIQMAADoU0ACB1cAAg=";
 
-/** The same, minus the window test: every window is mirrored. */
+/**
+ * The same, minus the window test: every window is mirrored — except the
+ * naming screen's keyboard, which is a grid and not a line of text. Its cursor
+ * is a sprite that counts columns from the left, so mirroring the letters
+ * leaves it pointing at the wrong key. That window measured 19x8 in the
+ * emulator and is the only one on the screen with those numbers.
+ */
 const CAVE_ALL_B64 =
-  "8LQERiF5ygCLANIYDkvSGNN4FXkAKwzQ2wAlegtKEnhbG5saI3IgRglPAPAM+CVyA+AgRgZPAPAG+DIcIDIQePC8BEsYRzhHBAACAhAwAAOhTQAIHVwACA==";
+  "8LQERiF5ygCLANIYEEvSGNN4FXkTKwHRCC0O0AArDNDbACV6C0oSeFsbmxojciBGCU8A8Az4JXID4CBGBk8A8Ab4MhwgMhB48LwESxhHOEcEAAICEDAAA6FNAAgdXAAI";
 
 /** How much of the game the patch reverses. */
 export type EmeraldRtlScope = "dialogue" | "all";

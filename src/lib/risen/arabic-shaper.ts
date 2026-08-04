@@ -94,6 +94,24 @@ export function getPresentationFormsForLetter(base: number): number[] {
   return [...out];
 }
 
+/**
+ * The joining table itself.
+ *
+ * Pokémon Emerald joins the player's typed name inside the game, where no
+ * build-time shaper can reach it, and the code that does it carries the same
+ * table as a lookup in the ROM. Reading it off this one list is what keeps the
+ * two from disagreeing about which form a letter takes.
+ */
+export function arabicJoiningForms(): {
+  letters: [number, number, number | null, number | null][];
+  ligatures: [number, number][];
+} {
+  return {
+    letters: Object.values(ARABIC_FORMS).map((f) => [...f] as [number, number, number | null, number | null]),
+    ligatures: Object.values(LAM_ALEF_LIGATURES).map((f) => [...f] as [number, number]),
+  };
+}
+
 function isTashkeelCode(code: number): boolean {
   return (code >= 0x064B && code <= 0x065F) || code === 0x0670;
 }

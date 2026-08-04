@@ -15,6 +15,8 @@ import type { ExtractedEntry } from "@/components/editor/types";
 import { scanPkmStrings, applyPkmTranslations, canRelocatePkmString, markPointedTables, pkmLineLimit, type PkmString } from "./pkm-rom";
 import { pkmCodecByGame, pkmCodecFor, pkmForeignFont, type PkmGame } from "./pkm-codec";
 import { applyEmeraldRtlPatch, type EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
+import { applyEmeraldArabicKeyboard } from "@/lib/gba/emerald-keyboard";
+import { applyEmeraldShapePatch } from "@/lib/gba/emerald-shape";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
@@ -146,6 +148,8 @@ export interface PkmBuildOk {
   fontApplied: boolean;
   /** How much of the game the engine was patched to lay out right to left. */
   rtlApplied: EmeraldRtlScope | null;
+  /** Whether the naming screen was given an Arabic keyboard that joins. */
+  keyboardApplied: boolean;
 }
 export interface PkmBuildError {
   error: string;
@@ -173,7 +177,12 @@ const PKM_KEY_RE = /^pkm_[a-z0-9]+:(\d+)$/;
 export function buildPkmRom(
   rom: Uint8Array,
   translations: Record<string, string>,
-  options: { relocate?: boolean; game?: PkmGame; rtl?: EmeraldRtlScope } = {}
+  options: {
+    relocate?: boolean;
+    game?: PkmGame;
+    rtl?: EmeraldRtlScope;
+    keyboard?: boolean;
+  } = {}
 ): PkmBuildOk | PkmBuildError {
   if (!looksLikePkmRom(rom)) {
     return { error: "الملف لا يبدو روم GBA — تحقّق من أنك رفعت ملف ‎.gba‎ الصحيح" };
@@ -200,6 +209,14 @@ export function buildPkmRom(
   if (options.rtl && codec.game !== "emerald") {
     return { error: "اتجاه الحوار من اليمين مرقوعٌ في Pokémon Emerald وحدها" };
   }
+  // The typed name is stored in the order it was pressed, so the letters only
+  // join correctly while the whole screen is laid out from that order — which
+  // is what "all" does and "dialogue" does not.
+  if (options.keyboard && options.rtl !== "all") {
+    return {
+      error: "لوحة الإدخال العربية تحتاج عكس الاتجاه في «كل النوافذ» — الاسم يُخزَّن بترتيب الكتابة",
+    };
+  }
   const written = applyPkmTranslations(rom, strings, byOffset, {
     relocate: options.relocate,
     codec,
@@ -215,6 +232,13 @@ export function buildPkmRom(
   if (options.rtl) {
     try {
       out = applyEmeraldRtlPatch(out, options.rtl);
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  }
+  if (options.keyboard) {
+    try {
+      out = applyEmeraldShapePatch(applyEmeraldArabicKeyboard(out));
     } catch (err) {
       return { error: (err as Error).message };
     }
@@ -238,5 +262,6 @@ export function buildPkmRom(
     unmapped: written.unmapped,
     fontApplied,
     rtlApplied: options.rtl ?? null,
+    keyboardApplied: options.keyboard === true,
   };
 }

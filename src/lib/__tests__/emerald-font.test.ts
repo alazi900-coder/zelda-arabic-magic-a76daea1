@@ -12,8 +12,9 @@ import {
 import {
   EMERALD_CARRIER_CODES,
   EMERALD_BLANK_CODES,
-  EMERALD_ARABIC_WIDTH,
+  EMERALD_ARABIC_CELL,
   applyEmeraldArabicFont,
+  emeraldCharTables,
   encodeArabicForEmerald,
   decodeEmeraldBytes,
 } from "@/lib/gba/emerald-arabic";
@@ -153,12 +154,27 @@ describe("Emerald — drawing Arabic into a ROM", () => {
 
     for (const code of EMERALD_CARRIER_CODES) {
       const cell = readEmeraldGlyph(out, font, code);
-      expect(out[font.widths + code]).toBe(EMERALD_ARABIC_WIDTH);
-      // Nothing past the width, and the bottom row clear — the two rules every
-      // glyph the game ships obeys, and the blitter enforces the first.
-      expect(emeraldGlyphInkWidth(cell)).toBeLessThanOrEqual(EMERALD_ARABIC_WIDTH);
+      // The advance is the drawing's own width, not the cell's. A fixed 8 left
+      // dead space behind every narrow letter, and in a short word that gap
+      // reads as a break — «ولد» came out looking like half a word.
+      const width = out[font.widths + code];
+      expect(width).toBe(emeraldGlyphInkWidth(cell));
+      expect(width).toBeGreaterThan(0);
+      expect(width).toBeLessThanOrEqual(EMERALD_ARABIC_CELL);
+      // And the bottom row stays clear, as it is under every letter the game ships.
       for (let x = 0; x < EMERALD_GLYPH_SIZE; x++) expect(cell[15 * EMERALD_GLYPH_SIZE + x]).toBe(0);
     }
+
+    // The narrowing must cost no join: a form that connects on both sides has
+    // ink in the last column, so it keeps the full cell. This is the guard —
+    // without it, shrinking the advance would pull letters apart mid-word.
+    const tables = emeraldCharTables();
+    for (const joined of [0xfee0, 0xfe92, 0xfeae]) {
+      const code = tables.arabicToByte.get(joined)!;
+      expect(out[font.widths + code]).toBe(EMERALD_ARABIC_CELL);
+    }
+    // And something narrow really did shrink, or the test above proves nothing.
+    expect(EMERALD_CARRIER_CODES.some((c) => out[font.widths + c] < EMERALD_ARABIC_CELL)).toBe(true);
 
     // The comma is a real drawing, not an empty cell.
     const comma = readEmeraldGlyph(out, font, EMERALD_CARRIER_CODES[0]);

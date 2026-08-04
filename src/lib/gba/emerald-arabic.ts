@@ -24,9 +24,9 @@
  * The drawings are the ones already in this tool — hand-pixelled Arabic from
  * the Mother 3 fan translation, 8 wide and 16 tall — converted from four bits
  * a pixel to Emerald's two, and lifted one row so the bottom row stays clear
- * as it is under every letter the game ships. Every carrier's width is set to
- * 8: the glyphs were drawn to reach both edges of the cell, so at a full-cell
- * advance the joining strokes meet and the letters connect.
+ * as it is under every letter the game ships. Each one advances by its own
+ * drawing's width, the way the game's own alphabet does — see `toEmeraldCell`
+ * for why a fixed advance made short words look broken.
  */
 
 import { PKM_ARABIC_GLYPHS_B64, PKM_GLYPH_BYTES } from "@/lib/pokemon/pkm-font";
@@ -47,8 +47,8 @@ import {
   type EmeraldFont,
 } from "./emerald-font";
 
-/** How far every Arabic carrier advances: the whole cell, so letters join. */
-export const EMERALD_ARABIC_WIDTH = 8;
+/** How wide an Arabic drawing is. The advance is per letter — see `toEmeraldCell`. */
+export const EMERALD_ARABIC_CELL = 8;
 
 /** Codes whose cell the shipped ROM leaves empty — the ROM is checked against this. */
 export const EMERALD_BLANK_CODES = expand([
@@ -192,33 +192,50 @@ function pkmGlyphBytes(): Uint8Array {
 }
 
 /**
- * One Mother 3 glyph as an Emerald cell.
+ * One Mother 3 glyph as an Emerald cell, and how far it advances.
  *
  * The source is 8x16 at four bits a pixel, where 15 is the letter and 14 its
  * shadow. Emerald wants two bits, where 1 is the letter, 2 the shadow, 3 the
  * background inside the letter's width and 0 everything past it. The drawing
  * is lifted one row, because it sits on rows 3..15 and no glyph in the game
  * inks row 15.
+ *
+ * The advance is the drawing's own width, not the cell's. Giving all of them 8
+ * — which is what this did at first — leaves dead space behind every narrow
+ * letter, and in a short word that gap reads as a break: «ولد» came out as «و
+ * لد» and looked like half a word was missing. The game does the same thing
+ * with its own alphabet, where `i` advances 4 and `W` 8.
+ *
+ * It costs no join. A form that connects to its neighbour has ink in the last
+ * column by construction, so its width is 8 and stays 8; only the forms that
+ * connect to nothing shrink, and those are exactly the ones that should.
  */
-function toEmeraldCell(source: Uint8Array): Uint8Array {
+function toEmeraldCell(source: Uint8Array): { cell: Uint8Array; width: number } {
   const cell = new Uint8Array(EMERALD_GLYPH_SIZE * EMERALD_GLYPH_SIZE);
-  for (let y = 0; y < EMERALD_GLYPH_LAST_ROW; y++) {
-    for (let x = 0; x < EMERALD_ARABIC_WIDTH; x++) cell[y * EMERALD_GLYPH_SIZE + x] = 3;
-  }
+  let width = 0;
   for (let y = 0; y < EMERALD_GLYPH_SIZE; y++) {
     const row = y - 1;
     if (row < 0 || row >= EMERALD_GLYPH_LAST_ROW) continue;
-    for (let x = 0; x < EMERALD_ARABIC_WIDTH; x++) {
+    for (let x = 0; x < EMERALD_ARABIC_CELL; x++) {
       const value = (source[y * 4 + (x >> 1)] >> (4 * (x & 1))) & 0xf;
-      if (value === 15) cell[row * EMERALD_GLYPH_SIZE + x] = 1;
-      else if (value === 14) cell[row * EMERALD_GLYPH_SIZE + x] = 2;
+      if (value !== 15 && value !== 14) continue;
+      cell[row * EMERALD_GLYPH_SIZE + x] = value === 15 ? 1 : 2;
+      if (x + 1 > width) width = x + 1;
     }
   }
-  return cell;
+  // The background fills the advance and stops there, as it does under every
+  // letter the game ships: past the width the blitter never looks.
+  for (let y = 0; y < EMERALD_GLYPH_LAST_ROW; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = y * EMERALD_GLYPH_SIZE + x;
+      if (cell[at] === 0) cell[at] = 3;
+    }
+  }
+  return { cell, width: Math.max(width, 1) };
 }
 
 /** The cell this codepoint's drawing becomes, or null when there is none. */
-function arabicCell(cp: number): Uint8Array | null {
+function arabicCell(cp: number): { cell: Uint8Array; width: number } | null {
   const index = pkmGlyphCodepoints().indexOf(cp);
   if (index < 0) return null;
   const glyphs = pkmGlyphBytes();
@@ -245,7 +262,7 @@ export function hasEmeraldArabicFont(rom: Uint8Array): boolean {
   const expected = arabicCell(cp);
   if (!expected) return false;
   const found = readEmeraldGlyph(rom, font, code);
-  return expected.every((v, i) => v === found[i]);
+  return expected.cell.every((v, i) => v === found[i]);
 }
 
 /**
@@ -268,10 +285,10 @@ export function applyEmeraldArabicFont(rom: Uint8Array): { rom: Uint8Array; font
 
   const out = new Uint8Array(rom);
   for (const [cp, code] of ARABIC_TO_CODE) {
-    const cell = arabicCell(cp);
-    if (!cell) throw new Error(`لا رسم للحرف U+${cp.toString(16).toUpperCase()}`);
-    writeEmeraldGlyph(out, font, code, cell);
-    out[font.widths + code] = EMERALD_ARABIC_WIDTH;
+    const drawn = arabicCell(cp);
+    if (!drawn) throw new Error(`لا رسم للحرف U+${cp.toString(16).toUpperCase()}`);
+    writeEmeraldGlyph(out, font, code, drawn.cell);
+    out[font.widths + code] = drawn.width;
   }
   return { rom: out, font };
 }

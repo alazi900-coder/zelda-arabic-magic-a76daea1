@@ -111,6 +111,62 @@ export function hasEmeraldRtlPatch(rom: Uint8Array): boolean {
   return true;
 }
 
+
+/**
+ * The message prompt — the little arrow the game blinks at the end of a line —
+ * and why it needs three more hooks.
+ *
+ * It never goes through `CopyGlyphToWindow`. It is blitted straight into the
+ * window at the printer's own `currentX`, so while the line grows leftward
+ * from the right edge the arrow stays where the line *would* have ended if it
+ * had been drawn left to right — which lands it in the middle of the sentence,
+ * on top of a letter. «creatures known as POKéMON.» came out with the arrow
+ * over the `n` of `known`.
+ *
+ * Three places read that x, all of them an 8x16 rectangle at (currentX,
+ * currentY), and all three are patched:
+ *
+ *   0x0800556C  the fill that clears the box before the arrow is drawn
+ *   0x080055AC  the blit that draws it
+ *   0x08005612  the fill that clears it once the player presses a button
+ *
+ * Mirroring only the drawing would leave the two fills scrubbing the wrong
+ * box, and the arrow would stay on screen as a ghost over the next message.
+ *
+ * The cave applies the same window test as the direction cave, so the arrow
+ * moves exactly where the text moves and nowhere else. Each hook goes through
+ * a register the very next instruction overwrites: r2 at the two fills, r1 at
+ * the blit.
+ */
+export const EMERALD_RTL_ARROW_CAVE = 0xf00b00;
+
+/** The three sites, their entry offsets in the cave, and the ten bytes each is. */
+const ARROW_SITES = [
+  {
+    at: 0x00556c,
+    hook: "AEoQRwEL8Ag=",
+    original: [0x2a, 0x7a, 0x6b, 0x7a, 0x08, 0x24, 0x00, 0x94, 0x10, 0x24],
+  },
+  {
+    at: 0x0055ac,
+    hook: "AEkIRyEL8Ag=",
+    original: [0x29, 0x7a, 0x02, 0x91, 0x69, 0x7a, 0x03, 0x91, 0x04, 0x94],
+  },
+  {
+    at: 0x005612,
+    hook: "AUoQRwAAQQvwCA==",
+    original: [0x2a, 0x7a, 0x6b, 0x7a, 0x08, 0x24, 0x00, 0x94, 0x10, 0x24],
+  },
+] as const;
+
+/** 164 bytes: three entries of 32, then the shared mirror and its literals. */
+const ARROW_CAVE_B64 =
+  "A7QoRgDwLPiERgO8YkZreggkAJQQJAG0H0iERgG8YEcNtChGAPAc+IRGDbxhRgKRaXoDkQSUAbQYSIRGAbxgRwO0KEYA8Az4hEYDvGJGa3oIJACUECQBtBFIhEYBvGBHDrQBecoAiwDSGApL0hjTeBF5GysL0QQpCdECetsAmxoIOwArANoAIxhGDrxwRwB6DrxwRwQAAgJ3VQAIt1UACB1WAAg=";
+
+/** The same, with the all-windows test. Four bytes longer, same entry offsets. */
+const ARROW_CAVE_ALL_B64 =
+  "A7QoRgDwLPiERgO8YkZreggkAJQQJAG0IEiERgG8YEcNtChGAPAc+IRGDbxhRgKRaXoDkQSUAbQZSIRGAbxgRwO0KEYA8Az4hEYDvGJGa3oIJACUECQBtBJIhEYBvGBHDrQBecoAiwDSGAtL0hjTeBF5EysB0QgpC9AAKwnQAnrbAJsaCDsAKwDaACMYRg68cEcAeg68cEcEAAICd1UACLdVAAgdVgAI";
+
 /**
  * Writes the patch into a copy of the ROM.
  *
@@ -141,8 +197,27 @@ export function applyEmeraldRtlPatch(
     }
   }
 
+  // The prompt arrow is blitted straight into the window and never reaches the
+  // hook above, so it needs its own three — see EMERALD_RTL_ARROW_CAVE.
+  const arrow = bytes(scope === "all" ? ARROW_CAVE_ALL_B64 : ARROW_CAVE_B64);
+  for (const site of ARROW_SITES) {
+    for (let i = 0; i < site.original.length; i++) {
+      if (rom[site.at + i] !== site.original[i]) {
+        throw new Error("موضع سهم الرسالة ليس كما في اللعبة الأصلية — لا أكتب في روم لم أقِسه");
+      }
+    }
+  }
+  for (let i = 0; i < arrow.length + 32; i++) {
+    const b = rom[EMERALD_RTL_ARROW_CAVE + i];
+    if (b !== 0x00 && b !== 0xff) {
+      throw new Error(`المساحة عند 0x${EMERALD_RTL_ARROW_CAVE.toString(16).toUpperCase()} ليست فارغة`);
+    }
+  }
+
   const out = new Uint8Array(rom);
   out.set(cave, EMERALD_RTL_CAVE);
   out.set(hook, EMERALD_RTL_HOOK);
+  out.set(arrow, EMERALD_RTL_ARROW_CAVE);
+  for (const site of ARROW_SITES) out.set(bytes(site.hook), site.at);
   return out;
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  EMERALD_RTL_ARROW_CAVE,
   EMERALD_RTL_CAVE,
   EMERALD_RTL_HOOK,
   applyEmeraldRtlPatch,
@@ -12,8 +13,17 @@ import { encodeArabicForEmerald, decodeEmeraldBytes } from "@/lib/gba/emerald-ar
 function emeraldish(): Uint8Array {
   const rom = new Uint8Array(0x1000000).fill(0xff);
   rom.set([0xff, 0xf7, 0xc5, 0xf8], EMERALD_RTL_HOOK); // bl CopyGlyphToWindow
+  // and the three places the message prompt reads its x from
+  rom.set([0x2a, 0x7a, 0x6b, 0x7a, 0x08, 0x24, 0x00, 0x94, 0x10, 0x24], ARROW_FILL_BEFORE);
+  rom.set([0x29, 0x7a, 0x02, 0x91, 0x69, 0x7a, 0x03, 0x91, 0x04, 0x94], ARROW_BLIT);
+  rom.set([0x2a, 0x7a, 0x6b, 0x7a, 0x08, 0x24, 0x00, 0x94, 0x10, 0x24], ARROW_FILL_AFTER);
   return rom;
 }
+
+/** The prompt's three sites, as measured in the shipped ROM. */
+const ARROW_FILL_BEFORE = 0x00556c;
+const ARROW_BLIT = 0x0055ac;
+const ARROW_FILL_AFTER = 0x005612;
 
 describe("Emerald — patching the engine to lay dialogue out right to left", () => {
   it("writes the hook where the call was, and the cave into empty space", () => {
@@ -27,7 +37,12 @@ describe("Emerald — patching the engine to lay dialogue out right to left", ()
       if (rom[i] === out[i]) continue;
       const inHook = i >= EMERALD_RTL_HOOK && i < EMERALD_RTL_HOOK + 10;
       const inCave = i >= EMERALD_RTL_CAVE && i < EMERALD_RTL_CAVE + 0x100;
-      expect(inHook || inCave).toBe(true);
+      const inArrowHook = [ARROW_FILL_BEFORE, ARROW_BLIT, ARROW_FILL_AFTER].some(
+        (at) => i >= at && i < at + 10
+      );
+      const inArrowCave =
+        i >= EMERALD_RTL_ARROW_CAVE && i < EMERALD_RTL_ARROW_CAVE + 0x100;
+      expect(inHook || inCave || inArrowHook || inArrowCave).toBe(true);
     }
   });
 
@@ -43,6 +58,27 @@ describe("Emerald — patching the engine to lay dialogue out right to left", ()
     const rom = emeraldish();
     rom[EMERALD_RTL_CAVE + 4] = 0x42;
     expect(() => applyEmeraldRtlPatch(rom)).toThrow("فارغة");
+  });
+
+  it("moves the message prompt too — it never reaches the glyph hook", () => {
+    // The prompt is blitted straight into the window at the printer's own
+    // currentX, so without these three it stays where the line would have
+    // ended left to right: on top of a letter in the middle of the sentence.
+    const before = emeraldish();
+    const out = applyEmeraldRtlPatch(before);
+    // All three move together — the drawing and both erasers. Leaving one
+    // behind scrubs the wrong box and the arrow stays on as a ghost.
+    for (const at of [ARROW_FILL_BEFORE, ARROW_BLIT, ARROW_FILL_AFTER]) {
+      expect(out.slice(at, at + 4)).not.toEqual(before.slice(at, at + 4));
+      expect(out[at + 3]).toBe(0x47); // bx, the second half of the jump
+    }
+    expect(out[EMERALD_RTL_ARROW_CAVE]).not.toBe(0xff);
+  });
+
+  it("refuses a ROM whose prompt sites are not the ones it was measured on", () => {
+    const rom = emeraldish();
+    rom[ARROW_BLIT + 2] = 0x00;
+    expect(() => applyEmeraldRtlPatch(rom)).toThrow("سهم الرسالة");
   });
 
   it("writes a different cave for each reach, over the same hook", () => {

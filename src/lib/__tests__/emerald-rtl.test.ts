@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   EMERALD_RTL_ARROW_CAVE,
+  EMERALD_RTL_MENU_CAVE,
   EMERALD_RTL_CAVE,
   EMERALD_RTL_HOOK,
   applyEmeraldRtlPatch,
@@ -17,8 +18,13 @@ function emeraldish(): Uint8Array {
   rom.set([0x2a, 0x7a, 0x6b, 0x7a, 0x08, 0x24, 0x00, 0x94, 0x10, 0x24], ARROW_FILL_BEFORE);
   rom.set([0x29, 0x7a, 0x02, 0x91, 0x69, 0x7a, 0x03, 0x91, 0x04, 0x94], ARROW_BLIT);
   rom.set([0x2a, 0x7a, 0x6b, 0x7a, 0x08, 0x24, 0x00, 0x94, 0x10, 0x24], ARROW_FILL_AFTER);
+  // and the fill that erases the menu cursor
+  rom.set([0x48, 0x46, 0x11, 0x21, 0x6b, 0xf6, 0x63, 0xfb, 0x68, 0x79], MENU_CURSOR_ERASE);
   return rom;
 }
+
+/** Where Menu_MoveCursor scrubs the old cursor. */
+const MENU_CURSOR_ERASE = 0x198496;
 
 /** The prompt's three sites, as measured in the shipped ROM. */
 const ARROW_FILL_BEFORE = 0x00556c;
@@ -136,5 +142,27 @@ describe("Emerald — text that the engine will reverse itself", () => {
 
   it("leaves a line with no Arabic in it alone either way", () => {
     expect(shapeArabicForRisen("NEW GAME", { reverse: false })).toBe("NEW GAME");
+  });
+});
+
+describe("Emerald — the menu cursor, under the all-windows reach", () => {
+  it("moves the erase only when the menus are mirrored at all", () => {
+    // Under `dialogue` the menus are untouched, so there is nothing to move —
+    // and touching them there would be a change nobody asked for.
+    const dialogue = applyEmeraldRtlPatch(emeraldish());
+    const all = applyEmeraldRtlPatch(emeraldish(), "all");
+    expect(dialogue[MENU_CURSOR_ERASE]).toBe(0x48); // as it shipped
+    expect(all[MENU_CURSOR_ERASE]).not.toBe(0x48);
+    expect(all[MENU_CURSOR_ERASE + 3]).toBe(0x47); // bx, the jump into the cave
+    expect(all[EMERALD_RTL_MENU_CAVE]).not.toBe(0xff);
+    expect(dialogue[EMERALD_RTL_MENU_CAVE]).toBe(0xff);
+  });
+
+  it("refuses a ROM whose cursor erase is not the one it was measured on", () => {
+    const rom = emeraldish();
+    rom[MENU_CURSOR_ERASE + 1] = 0x00;
+    expect(() => applyEmeraldRtlPatch(rom, "all")).toThrow("مؤشّر القوائم");
+    // and says nothing about it for the reach that does not touch it
+    expect(() => applyEmeraldRtlPatch(rom)).not.toThrow();
   });
 });

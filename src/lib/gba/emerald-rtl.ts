@@ -68,6 +68,13 @@
  * cave only ever goes into free space.
  */
 
+import {
+  EMERALD_GLYPH_SIZE,
+  findEmeraldFonts,
+  readEmeraldGlyph,
+  writeEmeraldGlyph,
+} from "./emerald-font";
+
 /** Where the displaced instructions live, and where the cave is written. */
 export const EMERALD_RTL_HOOK = 0x005c12;
 export const EMERALD_RTL_CAVE = 0xf00000;
@@ -167,6 +174,63 @@ const ARROW_CAVE_B64 =
 const ARROW_CAVE_ALL_B64 =
   "A7QoRgDwLPiERgO8YkZreggkAJQQJAG0IEiERgG8YEcNtChGAPAc+IRGDbxhRgKRaXoDkQSUAbQZSIRGAbxgRwO0KEYA8Az4hEYDvGJGa3oIJACUECQBtBJIhEYBvGBHDrQBecoAiwDSGAtL0hjTeBF5EysB0QgpC9AAKwnQAnrbAJsaCDsAKwDaACMYRg68cEcAeg68cEcEAAICd1UACLdVAAgdVgAI";
 
+
+/**
+ * The menu cursor, and the ghosts it left behind.
+ *
+ * `Menu_MoveCursor` at 0x08198448 erases the old cursor with a rectangle fill
+ * and then redraws it on the new row through the text printer. The redraw goes
+ * through the cave above and lands mirrored; the erase does not, so it scrubs
+ * an empty column on the other side and the old arrow stays. Pressing down
+ * three times left three arrows on screen.
+ *
+ * The site was measured, not read: a cave at `FillWindowPixelRect` recording
+ * the caller of every fill narrower than 17 pixels, then one press of DOWN on
+ * the boy/girl menu. It gave 0x0819849F — the return address of the call at
+ * 0x0819849A — and that is the only one. It serves the classic menus: yes/no,
+ * boy/girl, the START menu, the multichoice boxes.
+ *
+ * The hook covers ten bytes from 0x08198496 and goes through r0, which the
+ * next instruction overwrites. r6 is the scratch: the function saves it and
+ * does not touch it again until 0x081984A8.
+ *
+ * Only the all-windows patch carries this, and the flipped arrow below. Under
+ * `dialogue` the menus are not mirrored at all, so there is nothing to move.
+ *
+ * NOT covered: the bag and the party use `ListMenu`, which has a cursor of its
+ * own. That was not measured and is not patched here.
+ */
+export const EMERALD_RTL_MENU_CAVE = 0xf00d00;
+const MENU_HOOK = 0x198496;
+const MENU_CAVE_B64 =
+  "SEbBAIYAiRkNTokZzngIeRMuAdEIKAnQAC4H0PYAthoAmXYaAC4A2gAmMkZIRhEhBE4A8AP4aHkDTjBHMEcAAAQAAgJlOwAIoYQZCA==";
+const MENU_HOOK_B64 = "AUgARwAAAQ3wCA==";
+const MENU_ORIGINAL = [0x48, 0x46, 0x11, 0x21, 0x6b, 0xf6, 0x63, 0xfb, 0x68, 0x79];
+
+/**
+ * The cursor is one character — the string at 0x085EE498 is just `EF FF` — and
+ * 0xEF is a solid triangle pointing right. In a right-to-left menu it sits to
+ * the right of the word and points away from it, so the glyph is mirrored
+ * inside its own advance width, in every font this ROM carries. No code
+ * changes: the game keeps printing the same character.
+ */
+const MENU_CURSOR_CODE = 0xef;
+
+function flipMenuCursor(rom: Uint8Array): void {
+  for (const font of findEmeraldFonts(rom)) {
+    const width = rom[font.widths + MENU_CURSOR_CODE];
+    if (width === 0 || width > EMERALD_GLYPH_SIZE) continue;
+    const px = readEmeraldGlyph(rom, font, MENU_CURSOR_CODE);
+    const out = new Uint8Array(px);
+    for (let y = 0; y < EMERALD_GLYPH_SIZE; y++) {
+      for (let x = 0; x < width; x++) {
+        out[y * EMERALD_GLYPH_SIZE + x] = px[y * EMERALD_GLYPH_SIZE + (width - 1 - x)];
+      }
+    }
+    writeEmeraldGlyph(rom, font, MENU_CURSOR_CODE, out);
+  }
+}
+
 /**
  * Writes the patch into a copy of the ROM.
  *
@@ -214,10 +278,31 @@ export function applyEmeraldRtlPatch(
     }
   }
 
+  // The menu cursor is only a problem where menus are mirrored at all.
+  const menu = bytes(MENU_CAVE_B64);
+  if (scope === "all") {
+    for (let i = 0; i < MENU_ORIGINAL.length; i++) {
+      if (rom[MENU_HOOK + i] !== MENU_ORIGINAL[i]) {
+        throw new Error("موضع مؤشّر القوائم ليس كما في اللعبة الأصلية — لا أكتب في روم لم أقِسه");
+      }
+    }
+    for (let i = 0; i < menu.length + 32; i++) {
+      const b = rom[EMERALD_RTL_MENU_CAVE + i];
+      if (b !== 0x00 && b !== 0xff) {
+        throw new Error(`المساحة عند 0x${EMERALD_RTL_MENU_CAVE.toString(16).toUpperCase()} ليست فارغة`);
+      }
+    }
+  }
+
   const out = new Uint8Array(rom);
   out.set(cave, EMERALD_RTL_CAVE);
   out.set(hook, EMERALD_RTL_HOOK);
   out.set(arrow, EMERALD_RTL_ARROW_CAVE);
   for (const site of ARROW_SITES) out.set(bytes(site.hook), site.at);
+  if (scope === "all") {
+    out.set(menu, EMERALD_RTL_MENU_CAVE);
+    out.set(bytes(MENU_HOOK_B64), MENU_HOOK);
+    flipMenuCursor(out);
+  }
   return out;
 }

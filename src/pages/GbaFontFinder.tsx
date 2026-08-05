@@ -27,7 +27,7 @@ function CandidateSheet({ rom, candidate }: { rom: Uint8Array; candidate: GbaFon
       canvas.height = sheet.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.putImageData(new ImageData(sheet.rgba, sheet.width, sheet.height), 0, 0);
+      ctx.putImageData(new ImageData(sheet.rgba as unknown as Uint8ClampedArray<ArrayBuffer>, sheet.width, sheet.height), 0, 0);
     },
     [rom, candidate]
   );

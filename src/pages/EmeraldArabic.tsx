@@ -27,7 +27,7 @@ function LinePreview({ rom, font, text }: { rom: Uint8Array; font: EmeraldFont; 
       canvas.height = line.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.putImageData(new ImageData(line.rgba, line.width, line.height), 0, 0);
+      ctx.putImageData(new ImageData(line.rgba as unknown as Uint8ClampedArray<ArrayBuffer>, line.width, line.height), 0, 0);
     },
     [rom, font, bytes]
   );

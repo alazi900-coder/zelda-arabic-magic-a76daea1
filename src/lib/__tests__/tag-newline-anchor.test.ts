@@ -66,7 +66,7 @@ describe("a line break that belongs right after a tag", () => {
 });
 
 describe("the deep diagnostic reports it", () => {
-  const entry = { key: "pkm_rom:100", msbtFile: "pkm_rom", index: 100, original: EMERALD };
+  const entry = { key: "pkm_rom:100", msbtFile: "pkm_rom", index: 100, original: EMERALD, label: "pkm_rom:100", maxBytes: 0 };
 
   it("raises it when the break after a tag is gone", () => {
     const translation =

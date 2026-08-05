@@ -5,6 +5,13 @@ import ChangelogCard from "@/components/ChangelogCard";
 import xc3Bg from "@/assets/xc3-hero-bg.jpg";
 import risenBg from "@/assets/risen-hero-bg.jpg";
 import metroidPrimeBg from "@/assets/metroid-prime-hero-bg.jpg";
+import mother3Bg from "@/assets/mother3-hero-bg.jpg";
+import dragonSwordBg from "@/assets/dragonsword-hero-bg.jpg";
+import wolfensteinBg from "@/assets/wolfenstein-hero-bg.jpg";
+import pokemonBg from "@/assets/pokemon-hero-bg.jpg";
+import gameMakerBg from "@/assets/gamemaker-hero-bg.jpg";
+import gbaFontBg from "@/assets/gba-font-finder-bg.jpg";
+import emeraldFontBg from "@/assets/emerald-font-bg.jpg";
 
 const games = [
   {
@@ -36,7 +43,7 @@ const games = [
     subtitle: "عرّب مذر 3",
     desc: "فكّ تشفير سكربت النسخة الإنجليزية 1.1 (GBA) مباشرة في المتصفح، تحرير الأسطر وإعادة بناء ROM معرّب — مع رقعة عكس اتجاه النص RTL",
     link: "/mother3",
-    image: risenBg,
+    image: mother3Bg,
     formats: ["GBA", "Script"],
     cardClass: "border-[hsl(0,60%,45%)]/30 hover:border-[hsl(0,60%,45%)]/60",
     formatClass: "bg-[hsl(0,60%,45%)]/20 text-[hsl(0,70%,62%)] border-[hsl(0,60%,45%)]/30",
@@ -48,7 +55,7 @@ const games = [
     subtitle: "عرّب دراغون سورد",
     desc: "يفتح حاوية Unreal‏ (.pak) ويستخرج جداول النصوص الأربعة — ٤٢ ألف سطر — ويعيد بناء الحاوية مترجمة. المحرّك يشكّل العربية ويعكس اتجاهها بنفسه، فلا تحتاج معالجة",
     link: "/dragonsword",
-    image: risenBg,
+    image: dragonSwordBg,
     formats: [".pak", "UE4"],
     cardClass: "border-[hsl(200,60%,45%)]/30 hover:border-[hsl(200,60%,45%)]/60",
     formatClass: "bg-[hsl(200,60%,45%)]/20 text-[hsl(200,70%,62%)] border-[hsl(200,60%,45%)]/30",
@@ -72,7 +79,7 @@ const games = [
     subtitle: "عرّب ولفنشتاين RPG",
     desc: "استخراج نصوص اللعبة من strings.idx وبنوكها، ورسم الحروف العربية داخل خطوطها النقطية الخمسة، ثم بناء ملف .ipa معرّب",
     link: "/wolfenstein",
-    image: risenBg,
+    image: wolfensteinBg,
     formats: [".ipa", "BMP/strings"],
     cardClass: "border-[hsl(0,60%,45%)]/30 hover:border-[hsl(0,60%,45%)]/60",
     formatClass: "bg-[hsl(0,60%,45%)]/20 text-[hsl(20,70%,55%)] border-[hsl(0,60%,45%)]/30",
@@ -84,7 +91,7 @@ const games = [
     subtitle: "عرّب Ruby Destiny أو Emerald",
     desc: "يتعرّف على اللعبة من ترويسة الروم، ثمّ على كل سطر نصّ داخلها ويفتحه في المحرر، ويكتب الأشكال العربية في خانات لا تطبعها النسخة الإنجليزية، ثم يبني روم ‎.gba‎ معرّباً",
     link: "/pokemon",
-    image: risenBg,
+    image: pokemonBg,
     formats: [".gba", "GBA ROM"],
     cardClass: "border-[hsl(0,72%,50%)]/30 hover:border-[hsl(0,72%,50%)]/60",
     formatClass: "bg-[hsl(0,72%,50%)]/20 text-[hsl(210,70%,55%)] border-[hsl(0,72%,50%)]/30",
@@ -96,7 +103,7 @@ const games = [
     subtitle: "عرّب ألعاب GameMaker",
     desc: "استخراج النصوص من ملفات GameMaker (IFF GEN8) مثل game.droid وألعاب المحرك الأخرى، تحريرها في المحرر، وإعادة بناء الملف معرّب بالعربية",
     link: "/gamemaker",
-    image: risenBg,
+    image: gameMakerBg,
     formats: [".droid", "IFF GEN8"],
     cardClass: "border-[hsl(45,90%,50%)]/30 hover:border-[hsl(45,90%,50%)]/60",
     formatClass: "bg-[hsl(45,90%,50%)]/20 text-[hsl(45,100%,60%)] border-[hsl(45,90%,50%)]/30",
@@ -108,7 +115,7 @@ const games = [
     subtitle: "ابحث عن خطّ أي روم GBA",
     desc: "يمسح الروم كلّه بحثاً عن مواضع تشبه خطّاً — بلا افتراضٍ لمقاس الحرف ولا لألوانه، وبفكّ الرسوم المضغوطة — ثمّ يرسم لك كل مرشّح لتحكم بعينك",
     link: "/gba/font",
-    image: risenBg,
+    image: gbaFontBg,
     formats: [".gba", "GBA ROM"],
     cardClass: "border-[hsl(160,70%,45%)]/30 hover:border-[hsl(160,70%,45%)]/60",
     formatClass: "bg-[hsl(160,70%,45%)]/20 text-[hsl(160,70%,55%)] border-[hsl(160,70%,45%)]/30",
@@ -120,7 +127,7 @@ const games = [
     subtitle: "احقن الخطّ بلا ترجمة",
     desc: "يجد خطّ اللعبة ببنيته لا بعنوانٍ محفوظ، ويرسم العربية في ١٢٨ خانةً لا يطبعها البناء الإنجليزي — فتبقى الحروف اللاتينية وLv وPK وMN والأقواس والأسهم كما هي",
     link: "/emerald/arabic",
-    image: risenBg,
+    image: emeraldFontBg,
     formats: [".gba", "GBA ROM"],
     cardClass: "border-[hsl(150,80%,40%)]/30 hover:border-[hsl(150,80%,40%)]/60",
     formatClass: "bg-[hsl(150,80%,40%)]/20 text-[hsl(150,80%,55%)] border-[hsl(150,80%,40%)]/30",

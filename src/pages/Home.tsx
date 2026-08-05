@@ -2,16 +2,16 @@ import { Link } from "react-router-dom";
 import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import ChangelogCard from "@/components/ChangelogCard";
-import xc3Bg from "@/assets/xc3-hero-bg.jpg";
-import risenBg from "@/assets/risen-hero-bg.jpg";
-import metroidPrimeBg from "@/assets/metroid-prime-hero-bg.jpg";
-import mother3Bg from "@/assets/mother3-hero-bg.jpg";
+import xc3Bg from "@/assets/covers/xc3-cover.jpg";
+import risenBg from "@/assets/covers/risen-cover.jpg";
+import metroidPrimeBg from "@/assets/covers/metroid-cover.jpg";
+import mother3Bg from "@/assets/covers/mother3-cover.jpg";
 import dragonSwordBg from "@/assets/dragonsword-hero-bg.jpg";
-import wolfensteinBg from "@/assets/wolfenstein-hero-bg.jpg";
-import pokemonBg from "@/assets/pokemon-hero-bg.jpg";
+import wolfensteinBg from "@/assets/covers/wolfenstein-cover.jpg";
+import pokemonBg from "@/assets/covers/pokemon-cover.jpg";
 import gameMakerBg from "@/assets/gamemaker-hero-bg.jpg";
 import gbaFontBg from "@/assets/gba-font-finder-bg.jpg";
-import emeraldFontBg from "@/assets/emerald-font-bg.jpg";
+import emeraldFontBg from "@/assets/covers/pokemon-cover.jpg";
 
 const games = [
   {

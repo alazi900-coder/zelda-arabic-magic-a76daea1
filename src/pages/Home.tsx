@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import ChangelogCard from "@/components/ChangelogCard";
+import CoverUploadButton from "@/components/CoverUploadButton";
+import { readCovers } from "@/lib/game-covers";
 import xc3Bg from "@/assets/covers/xc3-cover.jpg";
 import risenBg from "@/assets/covers/risen-cover.jpg";
 import metroidPrimeBg from "@/assets/covers/metroid-cover.jpg";

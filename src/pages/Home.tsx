@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import ChangelogCard from "@/components/ChangelogCard";
+import CoverUploadButton from "@/components/CoverUploadButton";
+import { readCovers } from "@/lib/game-covers";
 import xc3Bg from "@/assets/covers/xc3-cover.jpg";
 import risenBg from "@/assets/covers/risen-cover.jpg";
 import metroidPrimeBg from "@/assets/covers/metroid-cover.jpg";
@@ -137,6 +140,18 @@ const games = [
 ];
 
 const Home = () => {
+  const [covers, setCovers] = useState<Record<string, string>>(() => readCovers());
+
+  useEffect(() => {
+    const sync = () => setCovers(readCovers());
+    window.addEventListener("game-covers-changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("game-covers-changed", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden max-w-[100vw]">
       {/* Header */}
@@ -162,16 +177,18 @@ const Home = () => {
           {games.map((game) => (
             <Link key={game.title} to={game.link} className="block group">
               <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 shadow-lg hover:shadow-2xl ${game.cardClass}`}>
+                <CoverUploadButton coverKey={game.title} hasCustom={!!covers[game.title]} />
                 {/* Background Image */}
                 <div className="absolute inset-0">
                   <img
-                    src={game.image}
+                    src={covers[game.title] || game.image}
                     alt={game.title}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-black/30" />
                 </div>
+
 
                 {/* Content */}
                 <div className="relative z-10 p-5 md:p-8 min-h-[200px] md:min-h-[240px] flex flex-col justify-end">

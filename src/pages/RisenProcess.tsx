@@ -20,8 +20,8 @@ import { loadRisen3KeyMap, buildRisen3Categories } from "@/lib/risen3/categories
 import type { EditorState } from "@/components/editor/types";
 
 
-export const RISEN_BUFFER_KEY = "risenSourceBuffer";
-export const RISEN_META_KEY = "risenMeta";
+const RISEN_BUFFER_KEY = "risenSourceBuffer";
+const RISEN_META_KEY = "risenMeta";
 
 interface RisenMeta {
   filename: string;

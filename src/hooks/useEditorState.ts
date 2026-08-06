@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
-import { idbSet, idbGet, idbClearExcept, checkAndMigrateSchema } from "@/lib/idb-storage";
+import { idbSet, idbGet, checkAndMigrateSchema } from "@/lib/idb-storage";
 import { APP_VERSION } from "@/lib/version";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
 
@@ -38,8 +38,6 @@ import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
-import { RISEN_META_KEY } from "@/pages/RisenProcess";
-import { DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
 const LONG_TEXT_LINE_THRESHOLD = 35;
@@ -254,25 +252,6 @@ export function useEditorState() {
   const loadSavedState = useCallback(async () => {
     const stored = await idbGet<EditorState>("editorState");
     if (!stored) return null;
-
-    // Fix: Prevent cross-game pollution by verifying source game
-    const storedGame = await idbGet<string>("editor-source-game");
-    const sessionEntries = stored.entries || [];
-    const firstFile = sessionEntries[0]?.msbtFile || "";
-
-    // Heuristics to detect if the data belongs to another game type
-    const isActuallyRisen = /\.(tab|gar3)$/i.test(firstFile);
-    const isActuallyDS = DS_FILE_RE.test(firstFile);
-
-    if (storedGame === "dragonsword" && isActuallyRisen) {
-       console.warn("Detected Risen 3 data in a DragonSword session. Blocking load.");
-       return null;
-    }
-    if (storedGame?.startsWith("risen") && isActuallyDS) {
-       console.warn("Detected DragonSword data in a Risen session. Blocking load.");
-       return null;
-    }
-
     const validKeys = new Set(stored.entries.map(e => `${e.msbtFile}:${e.index}`));
     // Parse clearedKeys FIRST so detectPreTranslated can honor them.
     const storedClearedEarly = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;
@@ -1275,7 +1254,7 @@ export function useEditorState() {
   const [clearUndoBackup, setClearUndoBackup] = useState<Record<string, string> | null>(null);
   const clearUndoTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const handleClearTranslations = useCallback(async (scope: 'all' | 'filtered') => {
+  const handleClearTranslations = useCallback((scope: 'all' | 'filtered') => {
     if (!state) return;
     // Save backup for undo
     const backup = { ...state.translations };
@@ -1292,8 +1271,6 @@ export function useEditorState() {
     let nextState: EditorState | null = null;
     let toastMsg = "";
     if (scope === 'all') {
-      // Complete wipe of all translation data and metadata
-      await idbClearExcept(["userGeminiKey", "userDeepSeekKey", "userTokenRouterKey", "aiModel", "translationProvider", "myMemoryEmail", "myMemoryCharsUsed", "theme", "editor-source-game"]);
       const allCleared = new Set<string>(state.entries.map(e => `${e.msbtFile}:${e.index}`));
       nextState = { ...state, translations: {}, clearedKeys: allCleared };
       toastMsg = `🗑️ تم مسح جميع الترجمات (${Object.keys(state.translations).length})`;

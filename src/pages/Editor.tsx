@@ -122,7 +122,6 @@ const Editor = () => {
   }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.aiModel]);
 
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";
-  const isDragonSword = sourceGame === "dragonsword";
   const isGameMaker = sourceGame === "gamemaker";
   // Derived from the actually-loaded entries (not the "editor-source-game" idb
   // flag above, which is never reset and can go stale across projects) — used

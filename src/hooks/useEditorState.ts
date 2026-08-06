@@ -440,11 +440,13 @@ export function useEditorState() {
             } else if (snapCount > storedCount) {
               // Same game, richer snapshot → merge snapshot translations in
               // without overwriting anything already filled in.
-              stored = {
-                ...stored,
-                translations: { ...snap.translations, ...(stored.translations || {}) },
-              };
+              const merged: Record<string, string> = { ...(snap.translations || {}) };
+              for (const [k, v] of Object.entries(stored.translations || {})) {
+                if (v?.trim()) merged[k] = v;
+              }
+              stored = { ...stored, translations: merged };
             }
+
           }
         }
       } catch (err) {

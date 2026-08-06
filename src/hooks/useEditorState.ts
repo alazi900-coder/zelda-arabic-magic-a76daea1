@@ -577,15 +577,26 @@ export function useEditorState() {
   }, []);
 
   const saveToIDB = useCallback(async (editorState: EditorState) => {
-    await idbSet("editorState", {
+    const payload = {
       entries: editorState.entries,
       translations: editorState.translations,
       protectedEntries: Array.from(editorState.protectedEntries || []),
       technicalBypass: Array.from(editorState.technicalBypass || []),
       clearedKeys: Array.from(editorState.clearedKeys || []),
-    });
+    };
+    await idbSet("editorState", payload);
+    // Per-game snapshot: the shared "editorState" key gets overwritten whenever
+    // another game is opened. Keeping a copy per game means translations are
+    // never lost by switching games.
+    try {
+      const game = await idbGet<string>("editor-source-game");
+      if (game) await idbSet(`editorState:${game}`, payload);
+    } catch (err) {
+      console.error("[idb] per-game snapshot failed:", err);
+    }
     setLastSaved(`آخر حفظ: ${new Date().toLocaleTimeString("ar-SA")}`);
   }, []);
+
 
   // Keep a ref to the latest state for forceSave
   const latestStateRef = useRef<EditorState | null>(null);

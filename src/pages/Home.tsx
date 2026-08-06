@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import ChangelogCard from "@/components/ChangelogCard";
@@ -140,6 +140,7 @@ const games = [
 ];
 
 const Home = () => {
+  const navigate = useNavigate();
   const [covers, setCovers] = useState<Record<string, string>>(() => readCovers());
 
   useEffect(() => {
@@ -151,6 +152,23 @@ const Home = () => {
       window.removeEventListener("storage", sync);
     };
   }, []);
+
+  const handleGameClick = async (e: React.MouseEvent, gameId: string, path: string) => {
+    e.preventDefault();
+    try {
+      const { idbClearExcept, idbSet } = await import("@/lib/idb-storage");
+      await idbClearExcept([
+        "userGeminiKey", "userDeepSeekKey", "userTokenRouterKey", 
+        "aiModel", "translationProvider", "myMemoryEmail", 
+        "myMemoryCharsUsed", "theme"
+      ]);
+      await idbSet("editor-source-game", gameId);
+      navigate(path);
+    } catch (err) {
+      console.error("Failed to navigate to game:", err);
+      navigate(path);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden max-w-[100vw]">
@@ -175,7 +193,7 @@ const Home = () => {
       <section className="flex-1 px-4 pb-8">
         <div className="max-w-4xl mx-auto grid gap-5">
           {games.map((game) => (
-            <Link key={game.title} to={game.link} className="block group">
+            <a key={game.title} href={game.link} onClick={(e) => handleGameClick(e, game.link.split('/').pop() || '', game.link)} className="block group">
               <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 shadow-lg hover:shadow-2xl ${game.cardClass}`}>
                 <CoverUploadButton coverKey={game.title} hasCustom={!!covers[game.title]} />
                 {/* Background Image */}
@@ -221,7 +239,7 @@ const Home = () => {
                   </div>
                 </div>
               </div>
-            </Link>
+            </a>
           ))}
         </div>
       </section>

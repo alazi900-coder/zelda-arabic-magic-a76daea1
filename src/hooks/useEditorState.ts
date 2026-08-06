@@ -424,8 +424,35 @@ export function useEditorState() {
         setHasStoredOriginals(true);
       }
 
-      const stored = await idbGet<EditorState>("editorState");
+      let stored = await idbGet<EditorState>("editorState");
+
+      // Per-game recovery: if the shared "editorState" key was overwritten by
+      // opening another game (or is empty), fall back to this game's snapshot.
+      try {
+        const currentGame = await idbGet<string>("editor-source-game");
+        if (currentGame) {
+          const snap = await idbGet<EditorState>(`editorState:${currentGame}`);
+          if (snap && snap.entries && snap.entries.length > 0) {
+            const snapCount = Object.values(snap.translations || {}).filter(v => v?.trim()).length;
+            const storedCount = Object.values(stored?.translations || {}).filter(v => v?.trim()).length;
+            if (!stored || !stored.entries?.length) {
+              stored = snap;
+            } else if (snapCount > storedCount) {
+              // Same game, richer snapshot → merge snapshot translations in
+              // without overwriting anything already filled in.
+              stored = {
+                ...stored,
+                translations: { ...snap.translations, ...(stored.translations || {}) },
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[idb] per-game recovery failed:", err);
+      }
+
       if (stored && stored.entries && stored.entries.length > 0) {
+
         // Mother3 extraction only ever runs once, at ROM upload — a later code
         // change that adds a new table (e.g. the menus table) would otherwise
         // never surface for an already-saved session, since reload just restores

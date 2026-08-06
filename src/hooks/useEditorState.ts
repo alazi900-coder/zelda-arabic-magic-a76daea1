@@ -1292,6 +1292,8 @@ export function useEditorState() {
     let nextState: EditorState | null = null;
     let toastMsg = "";
     if (scope === 'all') {
+      // Complete wipe of all translation data and metadata
+      await idbClearExcept(["userGeminiKey", "userDeepSeekKey", "userTokenRouterKey", "aiModel", "translationProvider", "myMemoryEmail", "myMemoryCharsUsed", "theme", "editor-source-game"]);
       const allCleared = new Set<string>(state.entries.map(e => `${e.msbtFile}:${e.index}`));
       nextState = { ...state, translations: {}, clearedKeys: allCleared };
       toastMsg = `🗑️ تم مسح جميع الترجمات (${Object.keys(state.translations).length})`;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Sparkles, Activity } from "lucide-react";
 import { APP_VERSION } from "@/lib/version";
 import ChangelogCard from "@/components/ChangelogCard";
@@ -192,7 +192,7 @@ const Home = () => {
       <section className="flex-1 px-4 pb-8">
         <div className="max-w-4xl mx-auto grid gap-5">
           {games.map((game) => (
-            <a key={game.title} href={game.link} onClick={(e) => handleGameClick(e, game.id || game.link.split('/').pop() || '', game.link)} className="block group">
+            <a key={game.title} href={game.link} onClick={(e) => handleGameClick(e, game.link.split('/').pop() || '', game.link)} className="block group">
               <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 shadow-lg hover:shadow-2xl ${game.cardClass}`}>
                 <CoverUploadButton coverKey={game.title} hasCustom={!!covers[game.title]} />
                 {/* Background Image */}

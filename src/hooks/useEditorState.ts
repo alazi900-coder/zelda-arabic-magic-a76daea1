@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
-import { idbSet, idbGet, checkAndMigrateSchema } from "@/lib/idb-storage";
+import { idbSet, idbGet, idbClearExcept, checkAndMigrateSchema } from "@/lib/idb-storage";
 import { APP_VERSION } from "@/lib/version";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
 
@@ -1275,7 +1275,7 @@ export function useEditorState() {
   const [clearUndoBackup, setClearUndoBackup] = useState<Record<string, string> | null>(null);
   const clearUndoTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const handleClearTranslations = useCallback((scope: 'all' | 'filtered') => {
+  const handleClearTranslations = useCallback(async (scope: 'all' | 'filtered') => {
     if (!state) return;
     // Save backup for undo
     const backup = { ...state.translations };

@@ -75,7 +75,7 @@ Please think step-by-step in order to resolve it.
 Edge function returned 500: Error, {"error":"💳 رصيد Lovable AI غير كافٍ — اشحن الرصيد من Settings → Workspace → Usage"}
 
 {
-  "timestamp": 1785990773321,
+  "timestamp": 1785990884871,
   "error_type": "RUNTIME_ERROR",
   "filename": "supabase/functions/translate-entries/index.ts",
   "lineno": 0,

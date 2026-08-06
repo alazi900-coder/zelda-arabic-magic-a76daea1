@@ -424,8 +424,37 @@ export function useEditorState() {
         setHasStoredOriginals(true);
       }
 
-      const stored = await idbGet<EditorState>("editorState");
+      let stored = await idbGet<EditorState>("editorState");
+
+      // Per-game recovery: if the shared "editorState" key was overwritten by
+      // opening another game (or is empty), fall back to this game's snapshot.
+      try {
+        const currentGame = await idbGet<string>("editor-source-game");
+        if (currentGame) {
+          const snap = await idbGet<EditorState>(`editorState:${currentGame}`);
+          if (snap && snap.entries && snap.entries.length > 0) {
+            const snapCount = Object.values(snap.translations || {}).filter(v => v?.trim()).length;
+            const storedCount = Object.values(stored?.translations || {}).filter(v => v?.trim()).length;
+            if (!stored || !stored.entries?.length) {
+              stored = snap;
+            } else if (snapCount > storedCount) {
+              // Same game, richer snapshot → merge snapshot translations in
+              // without overwriting anything already filled in.
+              const merged: Record<string, string> = { ...(snap.translations || {}) };
+              for (const [k, v] of Object.entries(stored.translations || {})) {
+                if (v?.trim()) merged[k] = v;
+              }
+              stored = { ...stored, translations: merged };
+            }
+
+          }
+        }
+      } catch (err) {
+        console.error("[idb] per-game recovery failed:", err);
+      }
+
       if (stored && stored.entries && stored.entries.length > 0) {
+
         // Mother3 extraction only ever runs once, at ROM upload — a later code
         // change that adds a new table (e.g. the menus table) would otherwise
         // never surface for an already-saved session, since reload just restores
@@ -577,15 +606,26 @@ export function useEditorState() {
   }, []);
 
   const saveToIDB = useCallback(async (editorState: EditorState) => {
-    await idbSet("editorState", {
+    const payload = {
       entries: editorState.entries,
       translations: editorState.translations,
       protectedEntries: Array.from(editorState.protectedEntries || []),
       technicalBypass: Array.from(editorState.technicalBypass || []),
       clearedKeys: Array.from(editorState.clearedKeys || []),
-    });
+    };
+    await idbSet("editorState", payload);
+    // Per-game snapshot: the shared "editorState" key gets overwritten whenever
+    // another game is opened. Keeping a copy per game means translations are
+    // never lost by switching games.
+    try {
+      const game = await idbGet<string>("editor-source-game");
+      if (game) await idbSet(`editorState:${game}`, payload);
+    } catch (err) {
+      console.error("[idb] per-game snapshot failed:", err);
+    }
     setLastSaved(`آخر حفظ: ${new Date().toLocaleTimeString("ar-SA")}`);
   }, []);
+
 
   // Keep a ref to the latest state for forceSave
   const latestStateRef = useRef<EditorState | null>(null);

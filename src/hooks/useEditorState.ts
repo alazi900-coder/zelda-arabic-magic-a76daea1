@@ -38,6 +38,8 @@ import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
+import { RISEN_META_KEY } from "@/pages/RisenProcess";
+import { DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
 const LONG_TEXT_LINE_THRESHOLD = 35;

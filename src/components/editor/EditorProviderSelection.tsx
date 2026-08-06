@@ -67,7 +67,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <Key className="w-4 h-4 text-primary" />
-            <span className="text-sm font-display font-bold">🔧 I have approved the plan</span>
+            <span className="text-sm font-display font-bold">🔧 ماذا فعلت لم يعد يحتفض بي الترجمات</span>
           </div>
           <div className="flex gap-2 flex-wrap">
             {[

@@ -67,7 +67,22 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <Key className="w-4 h-4 text-primary" />
-            <span className="text-sm font-display font-bold">🔧 سالتك جاوب ياحيوان</span>
+            <span className="text-sm font-display font-bold">🔧 For the code present, I get the error below.
+
+Please think step-by-step in order to resolve it.
+```
+Edge function returned 500: Error, {"error":"💳 رصيد Lovable AI غير كافٍ — اشحن الرصيد من Settings → Workspace → Usage"}
+
+{
+  "timestamp": 1785990773321,
+  "error_type": "RUNTIME_ERROR",
+  "filename": "supabase/functions/translate-entries/index.ts",
+  "lineno": 0,
+  "colno": 0,
+  "stack": "not_applicable",
+  "has_blank_screen": true
+}
+```</span>
           </div>
           <div className="flex gap-2 flex-wrap">
             {[

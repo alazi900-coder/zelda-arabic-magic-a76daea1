@@ -252,6 +252,25 @@ export function useEditorState() {
   const loadSavedState = useCallback(async () => {
     const stored = await idbGet<EditorState>("editorState");
     if (!stored) return null;
+
+    // Fix: Prevent cross-game pollution by verifying source game
+    const storedGame = await idbGet<string>("editor-source-game");
+    const sessionEntries = stored.entries || [];
+    const firstFile = sessionEntries[0]?.msbtFile || "";
+
+    // Heuristics to detect if the data belongs to another game type
+    const isActuallyRisen = /\.(tab|gar3)$/i.test(firstFile);
+    const isActuallyDS = DS_FILE_RE.test(firstFile);
+
+    if (storedGame === "dragonsword" && isActuallyRisen) {
+       console.warn("Detected Risen 3 data in a DragonSword session. Blocking load.");
+       return null;
+    }
+    if (storedGame?.startsWith("risen") && isActuallyDS) {
+       console.warn("Detected DragonSword data in a Risen session. Blocking load.");
+       return null;
+    }
+
     const validKeys = new Set(stored.entries.map(e => `${e.msbtFile}:${e.index}`));
     // Parse clearedKeys FIRST so detectPreTranslated can honor them.
     const storedClearedEarly = (stored as unknown as { clearedKeys?: unknown }).clearedKeys;

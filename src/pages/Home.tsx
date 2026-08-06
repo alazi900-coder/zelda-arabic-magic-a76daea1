@@ -140,6 +140,7 @@ const games = [
 ];
 
 const Home = () => {
+  const navigate = useNavigate();
   const [covers, setCovers] = useState<Record<string, string>>(() => readCovers());
 
   useEffect(() => {

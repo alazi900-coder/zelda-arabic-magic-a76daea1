@@ -313,14 +313,17 @@ function scoreRun(rom: Uint8Array, at: number, layout: GbaGlyphLayout, glyphs: n
   if (inkMedian < 0.06 || inkMedian > 0.6) return null;
   if (colours.size < 2 || colours.size > 6) return null;
 
-  // سطر الكتابة: أعلى الخليّة وأسفلها أفتح من وسطها بوضوح.
+  // سطر الكتابة: هامشٌ واحدٌ على الأقلّ أفتح من وسط الخليّة بوضوح. واشتراط
+  // الهامشين معاً كان يُسقط خطوط الثماني بكسلات كخطّ Yu-Gi-Oh! WCT 2004:
+  // حروفها تملأ الخليّة من أعلاها ولا تترك فوقها شيئاً، وتترك تحتها سطراً.
   const peak = Math.max(...rows);
   if (peak === 0) return null;
   const top = rows[0] / peak;
   const bottom = rows[height - 1] / peak;
-  if (top > 0.5 || bottom > 0.5) return null;
+  if (top > 0.5 && bottom > 0.5) return null;
   const baselineRows = rows.filter((r) => r > peak * 0.6).length;
-  if (baselineRows < 2 || baselineRows > height - 2) return null;
+  if (baselineRows < 2 || baselineRows > height - 1) return null;
+
 
   const score =
     (1 - top) * 2 +

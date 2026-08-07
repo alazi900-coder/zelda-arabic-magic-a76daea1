@@ -284,9 +284,15 @@ function scoreRun(rom: Uint8Array, at: number, layout: GbaGlyphLayout, glyphs: n
     }
     inks.push(ink / (width * height));
     shapes.add(pixels.join(""));
-    let starts = false;
-    for (let y = 0; y < height; y++) if (pixels[y * width] !== 0 || pixels[y * width + 1] !== 0) starts = true;
-    if (starts) leftAligned++;
+    // أوّل عمودٍ فيه حبر: الخانة تُرصف من اليسار، لكنّ خطوطاً تترك هامشاً
+    // يساريّاً ثابتاً (خطّ Yu-Gi-Oh! WCT 2004 يترك عمودين)، فلا يصحّ اشتراط
+    // الحبر في العمود الأوّل بعينه، بل أن يبدأ الحرف في النصف الأيسر.
+    let first = width;
+    for (let x = 0; x < width && first === width; x++) {
+      for (let y = 0; y < height; y++) if (pixels[y * width + x] !== 0) { first = x; break; }
+    }
+    firstInk.push(first);
+
     let empty = true;
     for (let y = 0; y < height; y++) if (pixels[y * width + width - 1] !== 0) empty = false;
     if (empty) rightMargin++;

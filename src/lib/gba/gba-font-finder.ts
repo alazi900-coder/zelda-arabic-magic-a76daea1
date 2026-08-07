@@ -358,37 +358,37 @@ export function findGbaFonts(rom: Uint8Array, options: GbaFontSearchOptions = {}
 
   const sparse = sparseBlocks(rom, BLOCK, maxColours);
   // سلاسل الكتل المتجاورة: الخطّ جدولٌ متّصل لا كتلة يتيمة.
-  const runs: { start: number; end: number }[] = [];
-  let from = -1;
-  for (let b = 0; b <= sparse.length; b++) {
-    if (b < sparse.length && sparse[b]) {
-      if (from < 0) from = b;
-    } else if (from >= 0) {
-      runs.push({ start: from * BLOCK, end: b * BLOCK });
-      from = -1;
-    }
-  }
+  const runs = blockRuns(sparse, BLOCK);
+  // ولخطوط البتّ الواحد مصفاةٌ أخرى، لأنّ عدّ الألوان يُسقطها ظلماً.
+  const inkRuns = blockRuns(inkSparseBlocks(rom, BLOCK), BLOCK);
 
   const found: GbaFontCandidate[] = [];
-  for (const run of runs) {
-    for (const layout of layouts) {
-      const stride = glyphStride(layout);
-      const reach = layout.interleaveTiles ? glyphBytes(layout) / 2 * layout.interleaveTiles : 0;
-      const fits = Math.floor((run.end - run.start - reach) / stride);
-      if (fits < minGlyphs) continue;
-      // يُجرّب مبدأ السلسلة وما يليه بخطوة خليّة، فقد تبدأ قبل حدّ الكتلة.
-      for (let shift = 0; shift < Math.min(4, fits); shift++) {
-        const at = run.start + shift * stride;
-        const glyphs = Math.min(Math.floor((run.end - at - reach) / stride), 128);
-        if (glyphs < minGlyphs) break;
-        const candidate = scoreRun(rom, at, layout, glyphs);
-        if (candidate) {
+  const seen = new Set<string>();
+  const sweep = (run: { start: number; end: number }, layout: GbaGlyphLayout) => {
+    const stride = glyphStride(layout);
+    const reach = layout.interleaveTiles ? (glyphBytes(layout) / 2) * layout.interleaveTiles : 0;
+    const fits = Math.floor((run.end - run.start - reach) / stride);
+    if (fits < minGlyphs) return;
+    // يُجرّب مبدأ السلسلة وما يليه بخطوة خليّة، فقد تبدأ قبل حدّ الكتلة.
+    for (let shift = 0; shift < Math.min(4, fits); shift++) {
+      const at = run.start + shift * stride;
+      const glyphs = Math.min(Math.floor((run.end - at - reach) / stride), 128);
+      if (glyphs < minGlyphs) break;
+      const candidate = scoreRun(rom, at, layout, glyphs);
+      if (candidate) {
+        const key = `${at}-${layout.width}x${layout.height}x${layout.bpp}${layout.msbFirst ? "m" : ""}`;
+        if (!seen.has(key)) {
+          seen.add(key);
           found.push(candidate);
-          break;
         }
+        break;
       }
     }
-  }
+  };
+
+  for (const run of runs) for (const layout of layouts) sweep(run, layout);
+  for (const run of inkRuns) for (const layout of layouts) if (layout.bpp === 1) sweep(run, layout);
+
 
   if (options.searchCompressed !== false) {
     // ألعابٌ تضغط رسومها، ومنها خطّها: لا يُقرأ منها شيء قبل الفكّ.

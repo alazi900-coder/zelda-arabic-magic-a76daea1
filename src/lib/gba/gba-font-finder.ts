@@ -419,8 +419,38 @@ export function findGbaFonts(rom: Uint8Array, options: GbaFontSearchOptions = {}
     }
   }
 
-  found.sort((a, b) => b.score - a.score || b.glyphs - a.glyphs);
-  return found.slice(0, options.limit ?? 20);
+  // جدول الخطّ الواحد قد ينقسم على عدّة سلاسل فيظهر مرشّحات صغيرة متجاورة
+  // تُغرقها مرشّحات أكبر ليست خطّاً. فتُلحم المتجاورة بتخطيطٍ واحد في مرشّحٍ
+  // واحد يمتدّ على الجدول كلّه — وهكذا يتصدّر الخطّ الحقيقي.
+  const merged: GbaFontCandidate[] = [];
+  const key = (c: GbaFontCandidate) =>
+    `${c.compressedAt ?? "raw"}-${c.layout.width}x${c.layout.height}x${c.layout.bpp}${c.layout.msbFirst ? "m" : ""}${c.layout.interleaveTiles ?? ""}`;
+  for (const group of Object.values(
+    found.reduce<Record<string, GbaFontCandidate[]>>((acc, c) => {
+      (acc[key(c)] ||= []).push(c);
+      return acc;
+    }, {})
+  )) {
+    group.sort((a, b) => a.offset - b.offset);
+    let run = group[0];
+    for (let i = 1; i < group.length; i++) {
+      const next = group[i];
+      const stride = glyphStride(run.layout);
+      const end = run.offset + run.glyphs * stride;
+      if (next.offset >= run.offset && next.offset <= end + stride * 2) {
+        const glyphs = Math.max(run.glyphs, Math.floor((next.offset + next.glyphs * stride - run.offset) / stride));
+        run = { ...run, glyphs, score: Math.max(run.score, next.score) + 0.15 };
+      } else {
+        merged.push(run);
+        run = next;
+      }
+    }
+    merged.push(run);
+  }
+
+  merged.sort((a, b) => b.score - a.score || b.glyphs - a.glyphs);
+  return merged.slice(0, options.limit ?? 20);
+
 }
 
 /** بكسلات معاينةٍ لمرشّح: ورقة حروفٍ بصفوفٍ وأعمدة. */

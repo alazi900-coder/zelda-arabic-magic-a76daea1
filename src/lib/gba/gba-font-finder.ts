@@ -262,7 +262,7 @@ function scoreRun(rom: Uint8Array, at: number, layout: GbaGlyphLayout, glyphs: n
   const colours = new Set<number>();
   let blanks = 0;
   let rightMargin = 0;
-  let leftAligned = 0;
+  const firstInk: number[] = [];
   const shapes = new Set<string>();
 
   for (let g = 0; g < glyphs; g++) {

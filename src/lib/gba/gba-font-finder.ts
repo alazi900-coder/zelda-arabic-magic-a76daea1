@@ -304,9 +304,10 @@ function scoreRun(rom: Uint8Array, at: number, layout: GbaGlyphLayout, glyphs: n
   // الحروف يختلف بعضها عن بعض؛ والنمط المزخرف يتكرّر. وهذا وحده يُسقط
   // البلاطات المكرّرة التي كانت تتصدّر الترتيب وهي ليست خطّاً.
   if (unique / drawn < 0.75) return null;
-  // ويبدأ حبر الحرف عند حافّته اليسرى أو قريباً منها، لأنّ الخانة تُرصف
-  // من اليسار مهما كانت لغة الخطّ.
-  if (leftAligned / drawn < 0.5) return null;
+  // ويبدأ حبر الحرف في النصف الأيسر من خانته، لأنّ الخانة تُرصف من اليسار
+  // مهما كانت لغة الخطّ — ولو تركت هامشاً يساريّاً ثابتاً.
+  if (median(firstInk) >= width * 0.5) return null;
+
 
   const inkMedian = median(inks);
   if (inkMedian < 0.06 || inkMedian > 0.6) return null;

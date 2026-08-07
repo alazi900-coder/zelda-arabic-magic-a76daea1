@@ -68,6 +68,11 @@ export const GBA_GLYPH_LAYOUTS: GbaGlyphLayout[] = [
   { width: 8, height: 8, bpp: 1 },
   { width: 8, height: 16, bpp: 1 },
   { width: 16, height: 16, bpp: 1 },
+  // بتٌّ واحد بترتيبٍ مقلوب: خطّ Yu-Gi-Oh! WCT 2004 مخزَّنٌ هكذا، وقراءته
+  // بالترتيب المعتاد تعكس كلّ حرفٍ أفقياً فلا يُعرف ولا يُقبل.
+  { width: 8, height: 8, bpp: 1, msbFirst: true },
+  { width: 8, height: 16, bpp: 1, msbFirst: true },
+  { width: 16, height: 16, bpp: 1, msbFirst: true },
   // جداول مُشرَّكة: أنصافٌ علوية ثمّ سفلية، وعدد الحروف بينهما يُجرَّب.
   { width: 8, height: 16, bpp: 4, interleaveTiles: 64 },
   { width: 8, height: 16, bpp: 4, interleaveTiles: 96 },
@@ -76,14 +81,29 @@ export const GBA_GLYPH_LAYOUTS: GbaGlyphLayout[] = [
   { width: 8, height: 16, bpp: 2, interleaveTiles: 128 },
 ];
 
-function glyphBytes(layout: GbaGlyphLayout): number {
+export function gbaGlyphBytes(layout: GbaGlyphLayout): number {
   return (layout.width * layout.height * layout.bpp) / 8;
+}
+
+function glyphBytes(layout: GbaGlyphLayout): number {
+  return gbaGlyphBytes(layout);
 }
 
 /** ما تتقدّمه القراءة من خليّة إلى التي تليها. */
 function glyphStride(layout: GbaGlyphLayout): number {
   // في الجدول المُشرَّك تتقدّم القراءة نصف حرفٍ فقط، لأنّ نصفه الآخر بعيد.
   return layout.interleaveTiles ? glyphBytes(layout) / 2 : glyphBytes(layout);
+}
+
+export function gbaGlyphStride(layout: GbaGlyphLayout): number {
+  return glyphStride(layout);
+}
+
+/** موضع البتّات داخل البايت: يختلف بترتيب البتّ. */
+function bitShift(index: number, layout: GbaGlyphLayout): number {
+  const perByte = 8 / layout.bpp;
+  const slot = index % perByte;
+  return (layout.msbFirst ? perByte - 1 - slot : slot) * layout.bpp;
 }
 
 /** بكسلات خليّة واحدة، صفّاً صفّاً. */
@@ -100,11 +120,39 @@ function readGlyph(rom: Uint8Array, at: number, layout: GbaGlyphLayout): Uint8Ar
     const index = lower ? i - (width * height) / 2 : i;
     const base = at + (lower ? apart : 0);
     const byte = rom[base + Math.floor(index / perByte)];
-    const shift = (index % perByte) * bpp;
-    out[i] = (byte >> shift) & mask;
+    out[i] = (byte >> bitShift(index, layout)) & mask;
   }
   return out;
 }
+
+/** قراءة خليّة بعينها من جدولٍ يبدأ عند `at` — للتحرير والمعاينة. */
+export function readGbaGlyph(rom: Uint8Array, at: number, layout: GbaGlyphLayout, index = 0): Uint8Array {
+  return readGlyph(rom, at + index * glyphStride(layout), layout);
+}
+
+/** كتابة خليّة بعينها في نسخةٍ من البايتات — عكس القراءة تماماً. */
+export function writeGbaGlyph(
+  rom: Uint8Array,
+  at: number,
+  layout: GbaGlyphLayout,
+  index: number,
+  pixels: Uint8Array
+): void {
+  const { width, height, bpp } = layout;
+  const perByte = 8 / bpp;
+  const mask = (1 << bpp) - 1;
+  const half = (width * (height / 2) * bpp) / 8;
+  const apart = layout.interleaveTiles ? layout.interleaveTiles * half : 0;
+  const start = at + index * glyphStride(layout);
+  for (let i = 0; i < width * height; i++) {
+    const lower = apart > 0 && i >= (width * height) / 2;
+    const j = lower ? i - (width * height) / 2 : i;
+    const byteAt = start + (lower ? apart : 0) + Math.floor(j / perByte);
+    const shift = bitShift(j, layout);
+    rom[byteAt] = (rom[byteAt] & ~(mask << shift)) | ((pixels[i] & mask) << shift);
+  }
+}
+
 
 /**
  * مرشّحٌ سريع على الروم كلّه: أين تقلّ الألوان؟

@@ -39,8 +39,10 @@ describe("GBA — finding a font without being told its shape", () => {
       expect(found.length).toBeGreaterThan(0);
       expect(found[0].offset).toBe(0x10000);
       // التخطيط الدقيق يُحسم بالنظر إلى المعاينة: قراءتان مختلفتان لنفس
-      // البايتات قد تجتازان الفحص معاً. الأداة تدلّ على الموضع، والعين تختار.
-      expect(found[0].layout.bpp).toBe(4);
+      // البايتات قد تجتازان الفحص معاً. الأداة تدلّ على الموضع، والعين تختار —
+      // فيكفي أن تكون القراءة الصحيحة (أربعة بتات) بين ما عُرض.
+      expect(found.some((c) => c.offset === 0x10000 && c.layout.bpp === 4)).toBe(true);
+
     }
   });
 

@@ -9,7 +9,6 @@ import {
   writeGbaGlyph,
   gbaGlyphStride,
   gbaGlyphBytes,
-  GBA_GLYPH_LAYOUTS,
   type GbaFontCandidate,
   type GbaGlyphLayout,
 } from "@/lib/gba/gba-font-finder";
@@ -32,14 +31,17 @@ function CandidateSheet({
   rom,
   candidate,
   columns,
+  version,
   onPick,
 }: {
   rom: Uint8Array;
   candidate: GbaFontCandidate;
   columns: number;
+  /** يتغيّر مع كلّ تعديل، فتُعاد الرسمة — البايتات تُعدَّل في مكانها. */
+  version: number;
   onPick?: (index: number) => void;
 }) {
-  const sheet = useMemo(() => renderGbaFontCandidate(rom, candidate, columns), [rom, candidate, columns]);
+  const sheet = useMemo(() => renderGbaFontCandidate(rom, candidate, columns), [rom, candidate, columns, version]);
   const draw = useCallback(
     (canvas: HTMLCanvasElement | null) => {
       if (!canvas) return;
@@ -369,6 +371,7 @@ export default function GbaFontFinder() {
                   rom={rom}
                   candidate={c}
                   columns={columns}
+                  version={dirty}
                   onPick={editable ? (index) => setEditing({ key, index }) : undefined}
                 />
                 {editable && (

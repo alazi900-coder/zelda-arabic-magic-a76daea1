@@ -195,6 +195,51 @@ function sparseBlocks(rom: Uint8Array, block: number, maxColours: number): boole
   return out;
 }
 
+/**
+ * مرشّحٌ سريع خاصّ بخطوط البتّ الواحد.
+ *
+ * عدّ الألوان لا معنى له هنا: البتّ الواحد يجعل كلّ بايتٍ نصفين اعتباطيّين،
+ * فتظهر الكتلة كأنّها ستّة عشر لوناً وهي لونان. والوصف الصحيح لها كثافة
+ * الحبر: صفحة حروفٍ بالبتّ الواحد يمتلئ منها جزءٌ يسير، لا نصفها كالشيفرة
+ * والبيانات المضغوطة. وبهذا يظهر خطّ Yu-Gi-Oh! WCT 2004 الذي كان يسقط.
+ */
+function inkSparseBlocks(rom: Uint8Array, block: number): boolean[] {
+  const bits = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) bits[i] = ((i >> 0) & 1) + ((i >> 1) & 1) + ((i >> 2) & 1) + ((i >> 3) & 1) + ((i >> 4) & 1) + ((i >> 5) & 1) + ((i >> 6) & 1) + ((i >> 7) & 1);
+  const count = Math.floor(rom.length / block);
+  const out = new Array<boolean>(count).fill(false);
+  for (let b = 0; b < count; b++) {
+    const start = b * block;
+    let ink = 0;
+    let same = 0;
+    const first = rom[start];
+    for (let i = 0; i < block; i++) {
+      const byte = rom[start + i];
+      ink += bits[byte];
+      if (byte === first) same++;
+    }
+    const density = ink / (block * 8);
+    out[b] = density > 0.02 && density < 0.42 && same < block * 0.94;
+  }
+  return out;
+}
+
+/** سلاسل الكتل المتجاورة المقبولة. */
+function blockRuns(mask: boolean[], block: number): { start: number; end: number }[] {
+  const runs: { start: number; end: number }[] = [];
+  let from = -1;
+  for (let b = 0; b <= mask.length; b++) {
+    if (b < mask.length && mask[b]) {
+      if (from < 0) from = b;
+    } else if (from >= 0) {
+      runs.push({ start: from * block, end: b * block });
+      from = -1;
+    }
+  }
+  return runs;
+}
+
+
 /** الوسيط، لأنّ حرفاً واحداً ممتلئاً لا ينبغي أن يجرّ الحكم. */
 function median(values: number[]): number {
   if (values.length === 0) return 0;

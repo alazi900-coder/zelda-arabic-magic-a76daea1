@@ -131,6 +131,8 @@ const Editor = () => {
   const isMetroidPrimeEntries = /^TEXT_/.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isWolfensteinEntries = /^wolf_b\d+_s\d+$/.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isPokemonEntries = PKM_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isReshefEntries = editor.state?.entries?.[0]?.msbtFile === "ygo_reshef_dialogue";
+  const isWctEntries = editor.state?.entries?.[0]?.msbtFile === "ygo_wct_catalog";
   const isGameMakerEntries = editor.state?.entries?.[0]?.msbtFile === "STRG";
   const isDragonSwordEntries = DS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   // "Back" link target — must match whichever tool actually loaded the
@@ -144,6 +146,8 @@ const Editor = () => {
     ? "/wolfenstein/text"
     : isPokemonEntries
     ? "/pokemon/text"
+    : isReshefEntries || isWctEntries
+    ? "/yugioh"
     : isGameMakerEntries
     ? "/gamemaker"
     : isDragonSwordEntries
@@ -657,6 +661,8 @@ const Editor = () => {
             isMetroidPrime={isMetroidPrimeEntries}
             isWolfenstein={isWolfensteinEntries}
             isPokemon={isPokemonEntries}
+            isReshef={isReshefEntries}
+            isWct={isWctEntries}
             isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}
             unprocessedArabicCount={unprocessedArabicCount}

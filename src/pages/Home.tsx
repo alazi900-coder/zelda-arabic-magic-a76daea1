@@ -102,6 +102,18 @@ const games = [
     arrowClass: "text-[hsl(210,70%,55%)]",
   },
   {
+    title: "Yu-Gi-Oh! — GBA",
+    subtitle: "Reshef of Destruction وWCT 2004",
+    desc: "يرفع ROM محلياً ثم يفتح النصوص داخل المحرر المعتاد نفسه. Reshef يدعم استخراج الحوارات وبناء ROM عربي مع الخط؛ WCT يعرض كتالوج كل النصوص الإنجليزية المرشحة.",
+    link: "/yugioh",
+    image: pokemonBg,
+    formats: [".gba", "GBA ROM"],
+    cardClass: "border-[hsl(48,94%,54%)]/30 hover:border-[hsl(48,94%,54%)]/60",
+    formatClass: "bg-[hsl(48,94%,54%)]/20 text-[hsl(48,94%,68%)] border-[hsl(48,94%,54%)]/30",
+    subtitleClass: "text-[hsl(48,94%,68%)]",
+    arrowClass: "text-[hsl(48,94%,68%)]",
+  },
+  {
     title: "GameMaker Studio",
     subtitle: "عرّب ألعاب GameMaker",
     desc: "استخراج النصوص من ملفات GameMaker (IFF GEN8) مثل game.droid وألعاب المحرك الأخرى، تحريرها في المحرر، وإعادة بناء الملف معرّب بالعربية",

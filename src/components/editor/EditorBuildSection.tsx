@@ -13,6 +13,9 @@ import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
+import { buildReshefRom, RESHEF_BUFFER_KEY } from "@/lib/yugioh/reshef-editor-bridge";
+import { buildWctLabelRom, DEFAULT_WCT_LABELS } from "@/lib/yugioh/wct-label-builder";
+import { WCT_BUFFER_KEY, WCT_ENTRY_FILE } from "@/lib/yugioh/wct-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -35,6 +38,8 @@ interface EditorBuildSectionProps {
   isMetroidPrime?: boolean;
   isWolfenstein?: boolean;
   isPokemon?: boolean;
+  isReshef?: boolean;
+  isWct?: boolean;
   isGameMaker?: boolean;
   isDragonSword?: boolean;
   unprocessedArabicCount: number;
@@ -51,6 +56,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isMetroidPrime = false,
   isWolfenstein = false,
   isPokemon = false,
+  isReshef = false,
+  isWct = false,
   isGameMaker = false,
   isDragonSword = false,
   unprocessedArabicCount,
@@ -64,6 +71,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [mpBuilding, setMpBuilding] = useState(false);
   const [wolfBuilding, setWolfBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
+  const [reshefBuilding, setReshefBuilding] = useState(false);
+  const [wctBuilding, setWctBuilding] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
@@ -248,6 +257,61 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setPkmBuilding(false);
+    }
+  };
+
+  const handleReshefBuild = async () => {
+    setReshefBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(RESHEF_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على ROM Reshef — أعد فتحه من صفحة Yu-Gi-Oh!");
+      const result = buildReshefRom(new Uint8Array(buf), editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        toast({ title: "خطأ في بناء Reshef", description: result.error, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Yu-Gi-Oh-Reshef-of-Destruction-AR.gba";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "✅ تم بناء ROM Reshef عربي", description: `${result.translatedLines} حوار مترجم | حُقن خط Pokémon العربي | ${result.encodedBytes} بايت نص` });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء Reshef", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setReshefBuilding(false);
+    }
+  };
+
+  const handleWctLabelBuild = async () => {
+    setWctBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(WCT_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على ROM WCT — أعد فتحه من صفحة Yu-Gi-Oh!");
+      const translations = editor.state?.translations || {};
+      const fields = DEFAULT_WCT_LABELS.map((field) => ({
+        ...field,
+        text: translations[`${WCT_ENTRY_FILE}:${field.offset}`]?.trim() || field.text,
+      }));
+      const result = buildWctLabelRom(new Uint8Array(buf), fields);
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Yu-Gi-Oh-WCT2004-ARABIC-LABELS.gba";
+      a.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "✅ تم بناء اختبار WCT", description: `${result.labelCount} تسميات لغة عربية | ${result.glyphCount} شكل خط حُقن` });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في اختبار WCT", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setWctBuilding(false);
     }
   };
 
@@ -522,7 +586,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isReshef && !isWct && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -552,7 +616,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isReshef || isWct}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -612,6 +676,14 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isPokemon ? (
           <Button size="lg" onClick={handlePokemonBuild} disabled={pkmBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {pkmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم معرّب وتنزيله
+          </Button>
+        ) : isReshef ? (
+          <Button size="lg" onClick={handleReshefBuild} disabled={reshefBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {reshefBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM Reshef عربي وتنزيله
+          </Button>
+        ) : isWct ? (
+          <Button size="lg" onClick={handleWctLabelBuild} disabled={wctBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يبني تسميات اللغة العربية فقط. حوارات WCT الكاملة تبقى محجوبة حتى توثيق ترميز محركها.">
+            {wctBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء اختبار تسميات WCT العربية
           </Button>
         ) : isWolfenstein ? (
           <Button size="lg" onClick={handleWolfensteinBuild} disabled={wolfBuilding} className="flex-1 min-w-[200px] font-display font-bold">

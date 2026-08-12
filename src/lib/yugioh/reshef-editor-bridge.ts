@@ -11,6 +11,25 @@ const START_OFFSET = 0x0a0000;
 const FONT_TABLE_OFFSET = 0xdf3c00;
 const FONT_GLYPH_START = 0x180;
 const FONT_GLYPH_BYTES = 18;
+const SHADOW_TABLE_OFFSET = 0x183800;
+const TWO_LAYER_HOOK_OFFSET = 0x183624;
+const TWO_LAYER_CALL_OFFSET = 0x0215e4;
+const TWO_LAYER_CALL = Uint8Array.of(0x62, 0xf1, 0x1e, 0xf8);
+/**
+ * Thumb hook verified in mGBA on the live Joey dialogue. It replaces the sole
+ * call at 0x080215E4: normal glyphs branch to Reshef's original 1bpp routine;
+ * injected Arabic slots map the 4bpp Pokémon body (15) and shade (14) masks
+ * to 4bpp palette indices 1 and 2 without collapsing them into one bitplane.
+ */
+const TWO_LAYER_HOOK = Uint8Array.of(
+  0x15,0x4b,0x98,0x42,0x25,0xd3,0x15,0x4b,0x98,0x42,0x22,0xd2,0xf0,0xb5,0x04,0x00,
+  0x0d,0x00,0x11,0x4e,0xa6,0x1b,0x12,0x4f,0xbe,0x19,0x00,0x27,0xe0,0x5d,0xf1,0x5d,
+  0x08,0x22,0x00,0x23,0x40,0x08,0x03,0xd2,0x49,0x08,0x05,0xd2,0x1b,0x01,0x05,0xe0,
+  0x49,0x08,0x1b,0x01,0x01,0x33,0x01,0xe0,0x1b,0x01,0x02,0x33,0x01,0x3a,0xf1,0xd1,
+  0x2b,0x60,0x04,0x35,0x01,0x37,0x08,0x2f,0x00,0xd1,0x20,0x35,0x10,0x2f,0xe5,0xd3,
+  0xf0,0xbd,0x04,0x4b,0x18,0x47,0x00,0x00,0x00,0x57,0xdf,0x08,0x12,0x60,0xdf,0x08,
+  0x00,0x38,0x18,0x08,0xf5,0x15,0x02,0x08,
+);
 
 type Forms = [number, number, number | null, number | null];
 interface ReshefRow { offset: number; capacity: number; source: string; }
@@ -106,9 +125,29 @@ function rtlRenderer(text: string) {
 }
 function decodeToken(token: number) { let c = (token + 0x7ec0) & 0xffff; const o = c; if (c > 0x0400) c = (c - 0x0200) & 0xffff; if (o > 0x0700) c = (c - 0x0100) & 0xffff; if (o > 0x5f00) c = (c - 0xc000) & 0xffff; let i = (c - (c >> 8) * 68) & 0xffff; if ((c & 0xff) > 0x3f) i = (i - 1) & 0xffff; return i; }
 function tokenFor(index: number) { for (let t = 0x8140; t <= 0xffff; t++) if (decodeToken(t) === index) return t; throw new Error("لم يُعثر على رمز نص صالح لخط Reshef."); }
-function sourceGlyphTo1bpp(source: Uint8Array) { const out = new Uint8Array(16); for (let y = 0; y < 16; y++) { for (let x = 0; x < 8; x++) { const p = (source[y * 4 + (x >> 1)] >> (4 * (x & 1))) & 0xf; if (p >= 14) out[y] |= 0x80 >> x; } } return out; }
+function sourceGlyphToMasks(source: Uint8Array) {
+  const body = new Uint8Array(16);
+  const shadow = new Uint8Array(16);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 8; x++) {
+      const p = (source[y * 4 + (x >> 1)] >> (4 * (x & 1))) & 0xf;
+      if (p === 15) body[y] |= 0x80 >> x;
+      if (p === 14) shadow[y] |= 0x80 >> x;
+    }
+  }
+  return { body, shadow };
+}
 function fontBytes() { const bin = atob(PKM_ARABIC_GLYPHS_B64); return Uint8Array.from(bin, (c) => c.charCodeAt(0)); }
-function injectFont(rom: Uint8Array) { const source = fontBytes(); pkmGlyphCodepoints().forEach((_, i) => rom.set(sourceGlyphTo1bpp(source.slice(i * 64, i * 64 + 64)), FONT_TABLE_OFFSET + (FONT_GLYPH_START + i) * FONT_GLYPH_BYTES)); }
+function injectFont(rom: Uint8Array) {
+  const source = fontBytes();
+  pkmGlyphCodepoints().forEach((_, i) => {
+    const { body, shadow } = sourceGlyphToMasks(source.slice(i * 64, i * 64 + 64));
+    rom.set(body, FONT_TABLE_OFFSET + (FONT_GLYPH_START + i) * FONT_GLYPH_BYTES);
+    rom.set(shadow, SHADOW_TABLE_OFFSET + i * 16);
+  });
+  rom.set(TWO_LAYER_HOOK, TWO_LAYER_HOOK_OFFSET);
+  rom.set(TWO_LAYER_CALL, TWO_LAYER_CALL_OFFSET);
+}
 function encode(logical: string) {
   const codepoints = pkmGlyphCodepoints(); const slot = new Map(codepoints.map((c, i) => [c, i])); const out: number[] = [];
   for (const piece of logical.split(/(#[0-5]|%)/g)) {

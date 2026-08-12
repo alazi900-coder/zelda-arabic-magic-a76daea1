@@ -1,7 +1,7 @@
 /** مختبر Yu-Gi-Oh!: يسلّم النصوص للمحرر العام نفسه، ولا ينشئ محرراً منفصلاً. */
 import { useCallback, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Boxes, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { ArrowRight, Boxes, Image, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { idbGet, idbSet } from "@/lib/idb-storage";
 import { extractReshefEntries, looksLikeReshefRom, RESHEF_BUFFER_KEY, RESHEF_SOURCE_GAME } from "@/lib/yugioh/reshef-editor-bridge";
@@ -58,6 +58,7 @@ export default function YuGiOh() {
           <h1 className="text-3xl font-display font-black">تعريب Yu-Gi-Oh!</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">اختر اللعبة وارفع ROM الأصلي. ستنتقل النصوص إلى محرر الأداة المعتاد نفسه: الفلاتر، البحث، حفظ الترجمات، مراجعة السعة، ثم البناء عندما يكون المسار موثقاً.</p>
           <p className="mt-2 text-xs text-muted-foreground">نسخة الأداة {APP_VERSION} · الملف لا يغادر المتصفح</p>
+          <Link to="/yugioh/images" className="mt-4 inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"><Image className="h-4 w-4" />محرر صور Reshef: شاشة العنوان والقوائم</Link>
         </div>
         <Link to="/" className="shrink-0 text-sm text-muted-foreground hover:text-primary">الرجوع <ArrowRight className="inline h-4 w-4" /></Link>
       </header>

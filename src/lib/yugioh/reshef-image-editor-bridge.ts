@@ -1,4 +1,7 @@
-/** Reshef title-art bridge: a local 4bpp sprite editor for verified raw ROM resources. */
+/**
+ * Reshef title-art bridge. Style: preserve the original GBA sprite constraints—crisp pixels,
+ * title-screen palette, and transparent background—while all conversion stays in the browser.
+ */
 import { looksLikeReshefRom } from "@/lib/yugioh/reshef-editor-bridge";
 
 export const RESHEF_IMAGE_BUFFER_KEY = "yugiohReshefImageSourceBuffer";
@@ -68,6 +71,51 @@ export function decodeReshefImage(rom: Uint8Array, resourceId: string): ReshefIm
     pixels.set(rgba, (y * resource.width + x) * 4);
   }
   return { width: resource.width, height: resource.height, pixels };
+}
+
+function rgbDistance(left: Uint8ClampedArray, leftOffset: number, right: Uint8ClampedArray, rightOffset: number) {
+  return Math.abs(left[leftOffset] - right[rightOffset])
+    + Math.abs(left[leftOffset + 1] - right[rightOffset + 1])
+    + Math.abs(left[leftOffset + 2] - right[rightOffset + 2]);
+}
+
+/**
+ * Removes an opaque flat backdrop only when it is connected to the outside edge of the imported
+ * image. This lets users upload an editor-flattened PNG/JPG-like background without accidentally
+ * encoding it as a new title sprite background. Transparent pixels remain transparent.
+ */
+export function normalizeReshefReplacementPixels(resourceId: string, pixels: Uint8ClampedArray) {
+  const resource = getReshefImageResource(resourceId);
+  if (pixels.length !== resource.width * resource.height * 4) throw new Error("أبعاد صورة الاستبدال لا تطابق أبعاد مورد Reshef.");
+
+  const normalized = pixels.slice();
+  const width = resource.width; const height = resource.height;
+  const corners = [0, width - 1, (height - 1) * width, width * height - 1];
+  const backdropCorner = corners.find((pixel) => normalized[pixel * 4 + 3] >= 96);
+  if (backdropCorner === undefined) return normalized;
+
+  const backdropOffset = backdropCorner * 4;
+  const visited = new Uint8Array(width * height);
+  const queue: number[] = [];
+  const isBackdrop = (pixel: number) => {
+    const offset = pixel * 4;
+    return normalized[offset + 3] < 96 || rgbDistance(normalized, offset, normalized, backdropOffset) <= 30;
+  };
+  const addIfBackdrop = (pixel: number) => {
+    if (!visited[pixel] && isBackdrop(pixel)) { visited[pixel] = 1; queue.push(pixel); }
+  };
+
+  for (let x = 0; x < width; x++) { addIfBackdrop(x); addIfBackdrop((height - 1) * width + x); }
+  for (let y = 1; y < height - 1; y++) { addIfBackdrop(y * width); addIfBackdrop(y * width + width - 1); }
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const pixel = queue[cursor]; const x = pixel % width; const y = Math.floor(pixel / width);
+    normalized[pixel * 4 + 3] = 0;
+    if (x > 0) addIfBackdrop(pixel - 1);
+    if (x < width - 1) addIfBackdrop(pixel + 1);
+    if (y > 0) addIfBackdrop(pixel - width);
+    if (y < height - 1) addIfBackdrop(pixel + width);
+  }
+  return normalized;
 }
 
 function nearestTitlePaletteIndex(r: number, g: number, b: number, a: number) {

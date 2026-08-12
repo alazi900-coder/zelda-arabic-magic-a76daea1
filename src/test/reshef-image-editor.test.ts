@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildReshefImagesRom,
   decodeReshefImage,
+  normalizeReshefReplacementPixels,
   RESHEF_IMAGE_RESOURCES,
 } from "@/lib/yugioh/reshef-image-editor-bridge";
 
@@ -33,5 +34,19 @@ describe("Reshef title image editor", () => {
     expect(source[NEW_GAME_TOP]).toBe(0x21);
     expect(result.rom[NEW_GAME_TOP]).toBe(0x20);
     expect(result.rom[NEW_GAME_BOTTOM]).toBe(0x43);
+  });
+
+  it("converts an imported flat edge backdrop to title-screen transparency while retaining artwork", () => {
+    const replacement = new Uint8ClampedArray(64 * 16 * 4);
+    for (let pixel = 0; pixel < 64 * 16; pixel++) replacement.set([12, 12, 12, 255], pixel * 4);
+    const letterOffset = (7 * 64 + 25) * 4;
+    replacement.set([255, 208, 64, 255], letterOffset);
+
+    const normalized = normalizeReshefReplacementPixels("title-new-game", replacement);
+
+    expect(normalized[3]).toBe(0);
+    expect(normalized[letterOffset]).toBe(255);
+    expect(normalized[letterOffset + 1]).toBe(208);
+    expect(normalized[letterOffset + 3]).toBe(255);
   });
 });

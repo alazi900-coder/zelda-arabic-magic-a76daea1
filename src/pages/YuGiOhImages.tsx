@@ -1,11 +1,14 @@
-/** محرر صور Yu-Gi-Oh!: RTL عملي، بخلفية داكنة دافئة ومعاينات بكسلية وكتابة محلية فقط. */
+/**
+ * Style: RTL editor with a warm arcade palette; pixel previews stay crisp and contained on small
+ * screens so the original art remains the focus while all image conversion stays in the browser.
+ */
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Download, ImageDown, Info, Languages, Loader2, Palette, Replace, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  buildReshefImagesRom, decodeReshefImage, getReshefImageResource, RESHEF_IMAGE_RESOURCES,
+  buildReshefImagesRom, decodeReshefImage, getReshefImageResource, normalizeReshefReplacementPixels, RESHEF_IMAGE_RESOURCES,
   type ReshefImageEdits, type ReshefImagePixels,
 } from "@/lib/yugioh/reshef-image-editor-bridge";
 import { looksLikeReshefRom } from "@/lib/yugioh/reshef-editor-bridge";
@@ -44,6 +47,18 @@ function downloadRom(bytes: Uint8Array) {
   const link = document.createElement("a"); link.href = url; link.download = "Yu-Gi-Oh-Reshef-Images-AR.gba"; link.click(); URL.revokeObjectURL(url);
 }
 
+function downloadOriginalPng(image: ReshefImagePixels, name: string) {
+  const canvas = document.createElement("canvas"); canvas.width = image.width; canvas.height = image.height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("تعذّر تجهيز صورة الأصل للتنزيل.");
+  context.putImageData(new ImageData(image.pixels, image.width, image.height), 0, 0);
+  canvas.toBlob((blob) => {
+    if (!blob) { toast.error("تعذّر إنشاء PNG الأصلية."); return; }
+    const url = URL.createObjectURL(blob); const link = document.createElement("a");
+    link.href = url; link.download = `${name}-original-64x16.png`; link.click(); URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
 export default function YuGiOhImages() {
   const romInput = useRef<HTMLInputElement>(null);
   const artInput = useRef<HTMLInputElement>(null);
@@ -70,9 +85,10 @@ export default function YuGiOhImages() {
 
   const replaceSelected = async (file: File) => {
     try {
-      const pixels = await fitReplacement(file, selected.width, selected.height);
+      const fitted = await fitReplacement(file, selected.width, selected.height);
+      const pixels = normalizeReshefReplacementPixels(selected.id, fitted);
       setEdits((previous) => ({ ...previous, [selected.id]: pixels }));
-      toast.success("تمت معاينة الاستبدال؛ سيُكتب داخل ROM فقط عند البناء.");
+      toast.success("حُوّلت الصورة إلى 64×16 وبشفافية وخلفية مورد اللعبة قبل المعاينة.");
     } catch (error) { toast.error((error as Error).message); }
   };
 
@@ -111,8 +127,8 @@ export default function YuGiOhImages() {
           <div className="rounded-2xl border border-[#6c5b32] bg-[#211c12] p-5 sm:p-7">
             <div className="flex flex-col gap-4 border-b border-[#6c5b32]/60 pb-5 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-mono text-xs text-[#d7bd62]">{selected.format} · RAW ROM</p><h2 className="mt-2 text-2xl font-bold">{selected.label}</h2><p className="mt-2 text-sm text-[#c9c0aa]">{selected.summary}</p></div>{edits[selected.id] ? <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#253627] px-3 py-1.5 text-xs text-[#bce0ad]"><CheckCircle2 className="h-4 w-4" />تعديل جاهز للبناء</span> : <span className="rounded-full bg-[#3b3220] px-3 py-1.5 text-xs text-[#c9c0aa]">الأصل دون تعديل</span>}</div>
             <div className="mt-7 grid gap-6 lg:grid-cols-2"><div><p className="mb-3 text-xs font-bold text-[#bcb198]">الأصل من ROM</p>{original && <div className="flex min-h-28 items-center justify-center overflow-hidden rounded-xl border border-[#625631] bg-[#0e0c09] p-5 sm:min-h-40 sm:p-6"><img src={pixelsToUrl(original)} alt="NEW GAME الأصلي" className="h-auto w-[256px] max-w-full object-contain sm:w-[320px]" style={{ imageRendering: "pixelated" }} /></div>}</div><div><p className="mb-3 text-xs font-bold text-[#bcb198]">المعاينة بعد الاستبدال</p>{current && <div className="flex min-h-28 items-center justify-center overflow-hidden rounded-xl border border-dashed border-[#827240] bg-[#17130d] p-5 sm:min-h-40 sm:p-6"><img src={pixelsToUrl(current)} alt="معاينة مورد Reshef" className="h-auto w-[256px] max-w-full object-contain sm:w-[320px]" style={{ imageRendering: "pixelated" }} /></div>}</div></div>
-            <div className="mt-7 flex flex-wrap gap-3"><Button className="bg-[#d1b34a] text-[#19150c] hover:bg-[#e2c660]" onClick={() => artInput.current?.click()}><Replace className="ml-2 h-4 w-4" />استبدل بصورة</Button><Button variant="outline" className="border-[#77683a] text-[#e7ddc5] hover:bg-[#342b19] hover:text-white" disabled={!edits[selected.id]} onClick={() => setEdits((previous) => { const next = { ...previous }; delete next[selected.id]; return next; })}><RotateCcw className="ml-2 h-4 w-4" />استعادة الأصل</Button><Button variant="outline" className="mr-auto border-[#77683a] text-[#e7ddc5] hover:bg-[#342b19] hover:text-white" onClick={build}><Download className="ml-2 h-4 w-4" />بناء ROM</Button></div>
-            <p className="mt-5 flex gap-2 text-xs leading-6 text-[#9f947c]"><ImageDown className="mt-0.5 h-4 w-4 shrink-0" />ارفع PNG أو WEBP أو BMP. تُصغَّر إلى 64×16 بكسل من دون تنعيم، ثم تُكمَّم إلى لوحة ألوان شاشة العنوان الأصلية. احتفظ بكلمة أو صورة قصيرة وواضحة حتى لا تضيع في الحجم الصغير.</p>
+            <div className="mt-7 flex flex-wrap gap-3"><Button variant="outline" className="border-[#77683a] text-[#e7ddc5] hover:bg-[#342b19] hover:text-white" disabled={!original} onClick={() => original && downloadOriginalPng(original, selected.id)}><ImageDown className="ml-2 h-4 w-4" />تحميل الأصل 64×16</Button><Button className="bg-[#d1b34a] text-[#19150c] hover:bg-[#e2c660]" onClick={() => artInput.current?.click()}><Replace className="ml-2 h-4 w-4" />استبدل بصورة عربية</Button><Button variant="outline" className="border-[#77683a] text-[#e7ddc5] hover:bg-[#342b19] hover:text-white" disabled={!edits[selected.id]} onClick={() => setEdits((previous) => { const next = { ...previous }; delete next[selected.id]; return next; })}><RotateCcw className="ml-2 h-4 w-4" />استعادة الأصل</Button><Button variant="outline" className="mr-auto border-[#77683a] text-[#e7ddc5] hover:bg-[#342b19] hover:text-white" disabled={!edits[selected.id]} onClick={build}><Download className="ml-2 h-4 w-4" />بناء ROM</Button></div>
+            <p className="mt-5 flex gap-2 text-xs leading-6 text-[#9f947c]"><ImageDown className="mt-0.5 h-4 w-4 shrink-0" />أولاً حمّل الأصل وعدّل عليه. عند رفع PNG أو WEBP أو BMP، تُصغَّر الصورة تلقائياً بلا تنعيم إلى 64×16، ويُزال لون الخلفية المتصل بحواف الصورة ليعود إلى شفافية شاشة العنوان، ثم تُكمَّم كل الألوان إلى لوحة Reshef الأصلية ذات 16 لوناً وتُكتب كبلاطات GBA 4bpp سليمة.</p>
           </div>
         </section>
       </>}

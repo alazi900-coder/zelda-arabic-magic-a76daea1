@@ -7,7 +7,8 @@ export const RESHEF_BUFFER_KEY = "yugiohReshefSourceBuffer";
 export const RESHEF_SOURCE_GAME = "yugioh-reshef";
 export const RESHEF_ENTRY_FILE = "ygo_reshef_dialogue";
 
-const START_OFFSET = 0x0a0000;
+/** Text includes interface labels stored before the main dialogue/card region. */
+const START_OFFSET = 0x000000;
 const FONT_TABLE_OFFSET = 0xdf3c00;
 const FONT_GLYPH_START = 0x180;
 const FONT_GLYPH_BYTES = 18;
@@ -52,11 +53,33 @@ const LAM_ALEF: Record<number, [number, number]> = { 0x0622:[0xfef5,0xfef6],0x06
 const printable = (v: number) => v >= 0x20 && v <= 0x7e;
 const display = (v: string) => v.replace(/#([0-4])/g, "\n").replace(/#5/g, "{PLAYER}").replace(/%/g, "{PAUSE}");
 const keyFor = (offset: number) => `${RESHEF_ENTRY_FILE}:${offset}`;
-const controls = (v: string) => v.match(/#[0-5]|%/g)?.join("|") ?? "";
+/** Every engine token must be unchanged in a translation, including paired 0x81 controls. */
+const controls = (v: string) => v.match(/#[0-5]|%|\{[0-9A-F]{2}(?::[0-9A-F]{2})?\}/gi)?.map((token) => token.toUpperCase()).join("|") ?? "";
 
 function textStart(rom: Uint8Array, languageStart: number) {
   const candidate = languageStart + 2;
   return rom[candidate] === 0x20 && rom[candidate + 1] === 0x81 && rom[candidate + 2] === 0x84 ? candidate + 3 : candidate;
+}
+
+/** Serialises raw controls so they are visible and round-trip unchanged through the editor. */
+function sourceText(bytes: Uint8Array) {
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    const byte = bytes[i];
+    if (byte === 0x81 && i + 1 < bytes.length) out += `{81:${bytes[++i].toString(16).toUpperCase().padStart(2, "0")}}`;
+    else if (printable(byte)) out += String.fromCharCode(byte);
+    else out += `{${byte.toString(16).toUpperCase().padStart(2, "0")}}`;
+  }
+  return out;
+}
+
+function hasOnlySafeTextControls(bytes: Uint8Array) {
+  for (let i = 0; i < bytes.length; i++) {
+    if (printable(bytes[i])) continue;
+    if (bytes[i] === 0x81 && i + 1 < bytes.length) { i++; continue; }
+    return false;
+  }
+  return true;
 }
 
 function scanRows(rom: Uint8Array): ReshefRow[] {
@@ -71,8 +94,8 @@ function scanRows(rom: Uint8Array): ReshefRow[] {
     }
     if (end < offset + 3) continue;
     const bytes = rom.slice(offset, end);
-    if (!Array.from(bytes).every(printable)) continue;
-    const source = new TextDecoder("latin1").decode(bytes);
+    if (!hasOnlySafeTextControls(bytes)) continue;
+    const source = sourceText(bytes);
     if (!/[A-Za-z]{2}/.test(source)) continue;
     rows.push({ offset, capacity: end - offset, source });
     start = end + 1;
@@ -95,7 +118,8 @@ export function extractReshefEntries(rom: Uint8Array): ExtractedEntry[] {
 function connectsAfter(code: number) { return FORMS[code]?.[2] !== null && FORMS[code] !== undefined; }
 function connectsBefore(code: number) { const f = FORMS[code]; return f !== undefined && f[1] !== f[0]; }
 function shape(text: string) {
-  const chars = Array.from(text);
+  /** Harakat and tatweel have no glyph slots; remove them rather than corrupting the ROM. */
+  const chars = Array.from(text.normalize("NFC").replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, ""));
   const out: string[] = [];
   for (let i = 0; i < chars.length; i++) {
     const cp = chars[i].codePointAt(0)!;
@@ -150,7 +174,11 @@ function injectFont(rom: Uint8Array) {
 }
 function encode(logical: string) {
   const codepoints = pkmGlyphCodepoints(); const slot = new Map(codepoints.map((c, i) => [c, i])); const out: number[] = [];
-  for (const piece of logical.split(/(#[0-5]|%)/g)) {
+  for (const piece of logical.split(/(#[0-5]|%|\{[0-9A-F]{2}(?::[0-9A-F]{2})?\})/gi)) {
+    const paired = piece.match(/^\{([0-9A-F]{2}):([0-9A-F]{2})\}$/i);
+    const raw = piece.match(/^\{([0-9A-F]{2})\}$/i);
+    if (paired) { out.push(parseInt(paired[1], 16), parseInt(paired[2], 16)); continue; }
+    if (raw) { out.push(parseInt(raw[1], 16)); continue; }
     const shaped = /^(#[0-5]|%)$/.test(piece) ? piece : rtlRenderer(shape(piece));
     for (const ch of shaped) { const cp = ch.codePointAt(0)!; const n = slot.get(cp); if (n !== undefined) { const token = tokenFor(FONT_GLYPH_START + n); out.push(token >> 8, token & 0xff); } else if (cp >= 0x20 && cp <= 0x7e) out.push(cp); else throw new Error(`الحرف «${ch}» غير موجود في خط Reshef العربي.`); }
   }

@@ -57,8 +57,9 @@ export default function YuGiOh() {
           <div className="mb-2 flex items-center gap-2 text-xs font-mono text-primary"><Boxes className="h-4 w-4" /> YU-GI-OH / GBA / LOCAL ROM</div>
           <h1 className="text-3xl font-display font-black">تعريب Yu-Gi-Oh!</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">اختر اللعبة وارفع ROM الأصلي. ستنتقل النصوص إلى محرر الأداة المعتاد نفسه: الفلاتر، البحث، حفظ الترجمات، مراجعة السعة، ثم البناء عندما يكون المسار موثقاً.</p>
+          <p className="mt-4 max-w-2xl rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm leading-6 text-foreground"><strong>للتعريب:</strong> اضغط بطاقة <strong>Reshef of Destruction</strong> أدناه، ارفع ROM، اكتب العربية في جدول النصوص الذي يفتح، ثم اختر <strong>بناء ROM</strong>. لا تحتاج صفحة الصور إلا إذا أردت تغيير رسم NEW GAME نفسه.</p>
           <p className="mt-2 text-xs text-muted-foreground">نسخة الأداة {APP_VERSION} · الملف لا يغادر المتصفح</p>
-          <Link to="/yugioh/images" className="mt-4 inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"><Image className="h-4 w-4" />محرر صور Reshef: شاشة العنوان والقوائم</Link>
+          <Link to="/yugioh/images" className="mt-4 inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"><Image className="h-4 w-4" />محرر صورة Reshef: NEW GAME فقط</Link>
         </div>
         <Link to="/" className="shrink-0 text-sm text-muted-foreground hover:text-primary">الرجوع <ArrowRight className="inline h-4 w-4" /></Link>
       </header>

@@ -8,7 +8,7 @@
 import { fixTagBracketsStrict } from './tag-bracket-fix';
 
 /** Unified regex matching ALL technical tag formats */
-const TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+const TAG_REGEX = /#[0-5]|%|[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
 
 /** Regex to detect Arabic text inside bracket-like tag structures (translated tags) */
 const TRANSLATED_TAG_REGEX = /\\?\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\-\/]*\\?\]|\\\[[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\-\/]*\\\]/g;
@@ -35,7 +35,7 @@ function escapeRegex(text: string): string {
 /** Classify a tag token for grouping: only same-type tags can form atomic blocks */
 function getTagType(tag: string): 'pua' | 'control' | 'bracket' | 'brace' {
   if (/^[\uE000-\uE0FF]+$/.test(tag)) return 'pua';
-  if (/^[\uFFF9-\uFFFC]$/.test(tag)) return 'control';
+  if (/^(?:#[0-5]|%|[\uFFF9-\uFFFC])$/.test(tag)) return 'control';
   if (/^\{/.test(tag)) return 'brace';
   return 'bracket';
 }

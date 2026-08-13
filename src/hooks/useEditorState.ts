@@ -322,21 +322,18 @@ export function useEditorState() {
         }
       }
     }
-    // === One-time auto-repair: fix ONLY entries where translation has FEWER tags than original ===
+    // === One-time auto-repair: restore every protected tag family, including Reshef #0–#5 and %.
+    // The restoration routine also corrects reversed tag order and extra control tokens.
     let autoFixCount = 0;
     for (const entry of stored.entries) {
       if (!hasTechnicalTags(entry.original)) continue;
       const key = `${entry.msbtFile}:${entry.index}`;
       const trans = mergedTranslations[key] || '';
       if (!trans.trim()) continue;
-      const origTags = entry.original.match(/[\uFFF9-\uFFFC\uE000-\uF8FF]/g) || [];
-      const transTags = trans.match(/[\uFFF9-\uFFFC\uE000-\uF8FF]/g) || [];
-      if (transTags.length < origTags.length) {
-        const fixed = restoreTagsLocally(entry.original, trans);
-        if (fixed !== trans) {
-          mergedTranslations[key] = fixed;
-          autoFixCount++;
-        }
+      const fixed = restoreTagsLocally(entry.original, trans);
+      if (fixed !== trans) {
+        mergedTranslations[key] = fixed;
+        autoFixCount++;
       }
     }
 

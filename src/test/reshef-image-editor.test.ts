@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
 import {
   buildReshefImagesRom,
   decodeReshefImage,
+  decodeReshefTitleLogo,
   normalizeReshefReplacementPixels,
   RESHEF_IMAGE_RESOURCES,
+  TITLE_OBJ_PALETTE_OFFSET,
 } from "@/lib/yugioh/reshef-image-editor-bridge";
 
 const NEW_GAME_TOP = 0xDB3D8;
@@ -14,6 +17,12 @@ describe("Reshef title image editor", () => {
     const source = new Uint8Array(0xE00000);
     source[NEW_GAME_TOP] = 0x21;
     source[NEW_GAME_BOTTOM] = 0x43;
+    source[TITLE_OBJ_PALETTE_OFFSET + 2] = 0xff;
+    source[TITLE_OBJ_PALETTE_OFFSET + 3] = 0x7f;
+    source[TITLE_OBJ_PALETTE_OFFSET + 6] = 0xe0;
+    source[TITLE_OBJ_PALETTE_OFFSET + 7] = 0x03;
+    source[TITLE_OBJ_PALETTE_OFFSET + 8] = 0x00;
+    source[TITLE_OBJ_PALETTE_OFFSET + 9] = 0x7c;
 
     expect(RESHEF_IMAGE_RESOURCES).toEqual([expect.objectContaining({
       id: "title-new-game",
@@ -49,4 +58,34 @@ describe("Reshef title image editor", () => {
     expect(normalized[letterOffset + 1]).toBe(208);
     expect(normalized[letterOffset + 3]).toBe(255);
   });
+
+  it("writes only the verified 16-word OBJ0 palette when palette editing is requested", () => {
+    const source = new Uint8Array(0xE00000);
+    source[TITLE_OBJ_PALETTE_OFFSET + 2] = 0x11;
+    source[TITLE_OBJ_PALETTE_OFFSET + 3] = 0x22;
+    source[NEW_GAME_TOP] = 0x5a;
+    const palette = new Uint16Array(16);
+    palette[1] = 0x001f;
+    palette[2] = 0x03e0;
+
+    const result = buildReshefImagesRom(source, {}, { "title-new-game": palette });
+
+    expect(source[TITLE_OBJ_PALETTE_OFFSET + 2]).toBe(0x11);
+    expect(result.rom[TITLE_OBJ_PALETTE_OFFSET + 2]).toBe(0x1f);
+    expect(result.rom[TITLE_OBJ_PALETTE_OFFSET + 3]).toBe(0);
+    expect(result.rom[TITLE_OBJ_PALETTE_OFFSET + 4]).toBe(0xe0);
+    expect(result.rom[TITLE_OBJ_PALETTE_OFFSET + 5]).toBe(0x03);
+    expect(result.rom[NEW_GAME_TOP]).toBe(0x5a);
+    expect(result.changed).toEqual(["title-new-game"]);
+  });
+
+  it("re-encodes the locally available original title resource within its fixed ROM capacity", () => {
+    const localRomPath = "/home/ubuntu/upload/Yu-Gi-Oh!-ReshefofDestruction(USA).gba";
+    if (!existsSync(localRomPath)) return;
+    const source = new Uint8Array(readFileSync(localRomPath));
+    const originalTitle = decodeReshefTitleLogo(source);
+    const result = buildReshefImagesRom(source, {}, {}, originalTitle.pixels);
+    expect(result.changed).toEqual(["title-logo"]);
+    expect(result.rom).toHaveLength(source.length);
+  }, 30000);
 });

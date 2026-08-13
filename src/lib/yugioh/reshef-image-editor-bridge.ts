@@ -52,6 +52,11 @@ export const RESHEF_TITLE_LOGO = {
   heightTiles: 20,
 } as const;
 
+/** The title loader reads this full GBA ROM pointer before decompressing the BG3 tiles. */
+const RESHEF_TITLE_LOGO_POINTER_OFFSET = 0xE0CD9C;
+const GBA_ROM_BASE = 0x08000000;
+const GBA_ROM_MAX_BYTES = 0x02000000;
+
 export interface ReshefImagePixels { width: number; height: number; pixels: Uint8ClampedArray; }
 export type ReshefImageEdits = Partial<Record<ReshefImageResource["id"], Uint8ClampedArray>>;
 export type ReshefPaletteEdits = Partial<Record<ReshefImageResource["id"], Uint16Array>>;
@@ -139,6 +144,26 @@ function compressGbaLz77(data: Uint8Array) {
   return Uint8Array.from(output);
 }
 
+function readU32LittleEndian(source: Uint8Array, offset: number) {
+  return (source[offset] | (source[offset + 1] << 8) | (source[offset + 2] << 16) | (source[offset + 3] << 24)) >>> 0;
+}
+
+function writeU32LittleEndian(target: Uint8Array, offset: number, value: number) {
+  target[offset] = value & 0xff;
+  target[offset + 1] = (value >>> 8) & 0xff;
+  target[offset + 2] = (value >>> 16) & 0xff;
+  target[offset + 3] = (value >>> 24) & 0xff;
+}
+
+function titleLogoTileOffset(rom: Uint8Array) {
+  const pointer = readU32LittleEndian(rom, RESHEF_TITLE_LOGO_POINTER_OFFSET);
+  const offset = pointer - GBA_ROM_BASE;
+  if (pointer < GBA_ROM_BASE || offset >= rom.length || rom[offset] !== 0x10) {
+    throw new Error("مرجع بلاطات شعار Reshef غير صالح؛ استخدم ROM USA الأصلي أو ROM مبنياً بالأداة.");
+  }
+  return offset;
+}
+
 function rgbaPalette(words: Uint16Array) { return Array.from(words, (value) => colorFromBgr555(value)); }
 
 function nearestPaletteIndex(r: number, g: number, b: number, palette: ReturnType<typeof rgbaPalette>) {
@@ -152,7 +177,7 @@ function nearestPaletteIndex(r: number, g: number, b: number, palette: ReturnTyp
 
 export function decodeReshefTitleLogo(rom: Uint8Array): ReshefImagePixels {
   if (!looksLikeReshefRom(rom)) throw new Error("هذا ليس ROM Reshef of Destruction (USA) مناسباً.");
-  const tiles = decompressGbaLz77(rom, RESHEF_TITLE_LOGO.tileOffset);
+  const tiles = decompressGbaLz77(rom, titleLogoTileOffset(rom));
   if (tiles.length !== RESHEF_TITLE_LOGO.tileDecompressedBytes) throw new Error("حجم بلاطات شعار Reshef غير متوقع.");
   const palette = rgbaPalette(readReshefTitleLogoPalette(rom));
   const pixels = new Uint8ClampedArray(RESHEF_TITLE_LOGO.width * RESHEF_TITLE_LOGO.height * 4);
@@ -179,7 +204,7 @@ export function quantizeReshefTitleLogoPixels(rom: Uint8Array, replacement: Uint
 export function writeReshefTitleLogo(rom: Uint8Array, pixels: Uint8ClampedArray) {
   const original = decodeReshefTitleLogo(rom);
   if (pixels.length !== original.pixels.length) throw new Error("أبعاد صورة شعار Reshef لا تطابق 240×160.");
-  const tileData = decompressGbaLz77(rom, RESHEF_TITLE_LOGO.tileOffset); const palette = rgbaPalette(readReshefTitleLogoPalette(rom));
+  const tileData = decompressGbaLz77(rom, titleLogoTileOffset(rom)); const palette = rgbaPalette(readReshefTitleLogoPalette(rom));
   for (let y = 0; y < RESHEF_TITLE_LOGO.height; y++) for (let x = 0; x < RESHEF_TITLE_LOGO.width; x++) {
     const pixelOffset = (y * RESHEF_TITLE_LOGO.width + x) * 4;
     const mapIndex = Math.floor(y / 8) * RESHEF_TITLE_LOGO.widthTiles + Math.floor(x / 8);
@@ -188,9 +213,22 @@ export function writeReshefTitleLogo(rom: Uint8Array, pixels: Uint8ClampedArray)
     tileData[tile * 64 + pixelY * 8 + pixelX] = nearestPaletteIndex(pixels[pixelOffset], pixels[pixelOffset + 1], pixels[pixelOffset + 2], palette);
   }
   const compressed = compressGbaLz77(tileData);
-  if (compressed.length > RESHEF_TITLE_LOGO.tileCompressedBytes) throw new Error(`تعديل الشعار يحتاج ${compressed.length} بايت، لكنه يتجاوز سعة المورد الأصلية ${RESHEF_TITLE_LOGO.tileCompressedBytes} بايت.`);
-  rom.fill(0, RESHEF_TITLE_LOGO.tileOffset, RESHEF_TITLE_LOGO.tileOffset + RESHEF_TITLE_LOGO.tileCompressedBytes);
-  rom.set(compressed, RESHEF_TITLE_LOGO.tileOffset);
+  if (compressed.length <= RESHEF_TITLE_LOGO.tileCompressedBytes) {
+    rom.fill(0, RESHEF_TITLE_LOGO.tileOffset, RESHEF_TITLE_LOGO.tileOffset + RESHEF_TITLE_LOGO.tileCompressedBytes);
+    rom.set(compressed, RESHEF_TITLE_LOGO.tileOffset);
+    writeU32LittleEndian(rom, RESHEF_TITLE_LOGO_POINTER_OFFSET, GBA_ROM_BASE + RESHEF_TITLE_LOGO.tileOffset);
+    return rom;
+  }
+
+  const destination = (rom.length + 3) & ~3;
+  const requiredBytes = destination + compressed.length;
+  if (requiredBytes > GBA_ROM_MAX_BYTES) throw new Error("الشعار الجديد يتجاوز الحد الآمن لحجم ROM GBA.");
+  const relocated = new Uint8Array(requiredBytes);
+  relocated.fill(0xff);
+  relocated.set(rom);
+  relocated.set(compressed, destination);
+  writeU32LittleEndian(relocated, RESHEF_TITLE_LOGO_POINTER_OFFSET, GBA_ROM_BASE + destination);
+  return relocated;
 }
 
 export function getReshefImageResource(id: string) {
@@ -318,7 +356,7 @@ export function buildReshefImagesRom(source: Uint8Array, edits: ReshefImageEdits
   const changedImages = Object.entries(edits).filter(([, pixels]) => Boolean(pixels));
   const changedPalettes = Object.entries(paletteEdits).filter(([, words]) => Boolean(words));
   if (!changedImages.length && !changedPalettes.length && !titleLogoEdit) throw new Error("لا توجد صور أو لوحات ألوان معدلة لبنائها.");
-  const rom = source.slice();
+  let rom = source.slice();
   const palettes = new Map<ReshefImageResource["id"], Uint16Array>();
   for (const resource of RESHEF_IMAGE_RESOURCES) {
     const replacement = paletteEdits[resource.id];
@@ -327,7 +365,7 @@ export function buildReshefImagesRom(source: Uint8Array, edits: ReshefImageEdits
     palettes.set(resource.id, palette);
   }
   for (const [id, pixels] of changedImages) writeReshefImage(rom, id, pixels!, palettes.get(id as ReshefImageResource["id"]));
-  if (titleLogoEdit) writeReshefTitleLogo(rom, titleLogoEdit);
+  if (titleLogoEdit) rom = writeReshefTitleLogo(rom, titleLogoEdit);
   return { rom, changed: [...new Set([...changedImages, ...changedPalettes].map(([id]) => id).concat(titleLogoEdit ? [RESHEF_TITLE_LOGO.id] : []))] };
 }
 

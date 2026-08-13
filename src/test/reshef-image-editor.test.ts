@@ -5,6 +5,7 @@ import {
   decodeReshefImage,
   decodeReshefTitleLogo,
   normalizeReshefReplacementPixels,
+  readReshefTitleLogoPalette,
   RESHEF_IMAGE_RESOURCES,
   TITLE_OBJ_PALETTE_OFFSET,
 } from "@/lib/yugioh/reshef-image-editor-bridge";
@@ -88,4 +89,31 @@ describe("Reshef title image editor", () => {
     expect(result.changed).toEqual(["title-logo"]);
     expect(result.rom).toHaveLength(source.length);
   }, 30000);
+
+  it("relocates a title logo whose LZ77 stream exceeds the original resource capacity", () => {
+    const localRomPath = "/home/ubuntu/upload/Yu-Gi-Oh!-ReshefofDestruction(USA).gba";
+    if (!existsSync(localRomPath)) return;
+    const source = new Uint8Array(readFileSync(localRomPath));
+    const palette = readReshefTitleLogoPalette(source);
+    const noisy = decodeReshefTitleLogo(source).pixels.slice();
+    let state = 0x6d2b79f5;
+    for (let pixel = 0; pixel < 240 * 160; pixel++) {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      const color = palette[(state >>> 24) & 0xff];
+      const offset = pixel * 4;
+      noisy[offset] = (color & 0x1f) * 255 / 31;
+      noisy[offset + 1] = ((color >>> 5) & 0x1f) * 255 / 31;
+      noisy[offset + 2] = ((color >>> 10) & 0x1f) * 255 / 31;
+      noisy[offset + 3] = 255;
+    }
+
+    const result = buildReshefImagesRom(source, {}, {}, noisy);
+    const pointerOffset = 0xE0CD9C;
+    const pointer = result.rom[pointerOffset] | (result.rom[pointerOffset + 1] << 8) | (result.rom[pointerOffset + 2] << 16) | (result.rom[pointerOffset + 3] << 24);
+
+    expect(result.changed).toEqual(["title-logo"]);
+    expect(result.rom.length).toBeGreaterThan(source.length);
+    expect(pointer >>> 0).toBeGreaterThan(0x08000000 + source.length - 1);
+    expect(decodeReshefTitleLogo(result.rom).pixels).toHaveLength(240 * 160 * 4);
+  }, 60000);
 });

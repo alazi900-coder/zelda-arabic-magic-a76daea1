@@ -572,9 +572,11 @@ export function categorizeByColumnName(columnName: string): string | null {
   return null;
 }
 
-// Check if text contains technical tag markers (PUA, control chars, [Tag:...], [/Tag:...], N[TAG], [TAG]N, [TAG=Value], {TAG:Value})
+// Check if text contains technical tag markers (PUA, control chars, Reshef #0–#5,
+// [Tag:...], [/Tag:...], N[TAG], [TAG]N, [TAG=Value], {TAG:Value})
 export function hasTechnicalTags(text: string): boolean {
   return /[\uFFF9\uFFFA\uFFFB\uFFFC\uE000-\uE0FF]/.test(text)
+    || /#[0-5]|%/.test(text)
     || /\[\s*\/?\s*\w+\s*:[^\]]*\]/.test(text)
     || /\d+\s*\[[A-Z]{2,10}\]/.test(text)
     || /\[[A-Z]{2,10}\]\s*\d+/.test(text)

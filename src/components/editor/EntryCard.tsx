@@ -32,6 +32,12 @@ function formatTagCounts(tags: string[]): string {
 
 /** Classify a tag token for color-coding */
 function getTagDisplayInfo(tag: string): { label: string; color: string; title: string } {
+  // Reshef's literal hash-number controls are consumed by the game engine.
+  // Their exact action depends on the rendering context, so preserve rather
+  // than translating, reordering, or presenting an unverified label as fact.
+  if (/^#[0-5]$/.test(tag)) {
+    return { label: `⚙ ${tag}`, color: 'bg-sky-500/15 text-sky-400 border-sky-500/25', title: `وسم تحكم Reshef ${tag} — يُحفظ حرفياً وفي الموضع نفسه` };
+  }
   // PUA characters (private use area — game engine icons/glyphs)
   if (/^[\uE000-\uE0FF]+$/.test(tag)) {
     const codes = [...tag].map(c => `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`).join(' ');
@@ -227,6 +233,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
+  const isReshefEntry = entry.msbtFile === "ygo_reshef_dialogue";
+  const hasReshefControls = isReshefEntry && /#[0-5]|%/.test(entry.original);
+  /** 4094 is the documented relocated-text ceiling. A smaller value is a fixed/indirect row. */
+  const hasReshefFixedCapacity = isReshefEntry && entry.maxBytes < 4094;
+  const hasReshefRelocatableCapacity = isReshefEntry && entry.maxBytes === 4094;
   const gameParam = resolveGameParam(entry.msbtFile, risenVariant);
   const isTech = isTechnicalText(entry.original, entry.msbtFile);
   // A run of bytes out of a graphics table can end in the terminator and read
@@ -263,11 +274,11 @@ const EntryCard: React.FC<EntryCardProps> = ({
   }, [entry.original, translation, isRisenEntry]);
 
   const handleCopyTags = () => {
-    const charRegex = /[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
+    const charRegex = /#[0-5]|[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
     const tags = entry.original.match(charRegex);
     if (tags) {
       navigator.clipboard.writeText(tags.join('')).then(() => {
-        toast({ title: "📋 تم النسخ", description: `تم نسخ ${tags.length} رمز تقني — الصقها في الترجمة يدوياً` });
+        toast({ title: "📋 تم النسخ", description: `تم نسخ ${tags.length} رمز تقني — الصقها في الترجمة كما هي` });
       });
     }
   };
@@ -346,6 +357,21 @@ const EntryCard: React.FC<EntryCardProps> = ({
           {hasTechnicalTags(entry.original) && (
             <p className="text-[10px] text-muted-foreground mb-2 leading-relaxed">
               💡 الرموز الملونة (⚙ تحكم • 🎨 تنسيق • 📌 متغير) أكواد خاصة بمحرك اللعبة — <span className="font-semibold text-accent">لا تحذفها من الترجمة</span>
+            </p>
+          )}
+          {hasReshefControls && (
+            <p className="text-[10px] text-sky-400 mb-2 leading-relaxed">
+              ⚙ وسوم Reshef مثل <code dir="ltr">#0</code> و<code dir="ltr">#1</code> و<code dir="ltr">%</code> أوامر للمحرك وليست كلمات. انسخها كما هي وبالترتيب نفسه؛ عرضها كسطر في المحرر للقراءة فقط.
+            </p>
+          )}
+          {hasReshefFixedCapacity && (
+            <p className="text-[10px] text-amber-500 mb-2 leading-relaxed">
+              📦 سعة موضعية: هذا السجل يملك {entry.maxBytes} بايت فقط ولا يُنقل تلقائياً الآن لأن مرجعه غير مباشر. اختصر الصياغة ولا تُزل وسوم التحكم؛ التوسعة الآمنة تحتاج تتبع هذا المرجع داخل اللعبة أولاً.
+            </p>
+          )}
+          {hasReshefRelocatableCapacity && (
+            <p className="text-[10px] text-emerald-500 mb-2 leading-relaxed">
+              📦 سعة موسعة: لهذا السجل مؤشر ROM مباشر مثبت. إذا تجاوزت الترجمة المساحة الأصلية، ينقلها الباني تلقائياً إلى بنك Reshef الموسع بأمان حتى {entry.maxBytes} بايت.
             </p>
           )}
           {isTech && <p className="text-xs text-accent mb-2">⚠️ نص تقني - تحتاج حذر في الترجمة</p>}

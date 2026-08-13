@@ -16,6 +16,24 @@ const SHADOW_TABLE_OFFSET = 0x183800;
 const TWO_LAYER_HOOK_OFFSET = 0x183624;
 const TWO_LAYER_CALL_OFFSET = 0x0215e4;
 const TWO_LAYER_CALL = Uint8Array.of(0x62, 0xf1, 0x1e, 0xf8);
+/** Confirmed unused FF-filled tail of the US ROM; never overlaps injected font data. */
+const TEXT_BANK_START = 0xfe4000;
+const TEXT_BANK_END = 0xfff000;
+const MAX_RELOCATED_TEXT_BYTES = 4094;
+const ONE_BYTE_TABLE_OFFSET = 0x184100;
+const ONE_BYTE_HOOK_OFFSET = 0x184400;
+const ONE_BYTE_CALL_A_OFFSET = 0x02100a;
+const ONE_BYTE_CALL_B_OFFSET = 0x021066;
+/** Live dialogue reader used by the Joey scene; it needs its own one-byte branch. */
+const ONE_BYTE_DIALOGUE_HOOK_OFFSET = 0x184900;
+const ONE_BYTE_DIALOGUE_CALL_OFFSET = 0x052ec8;
+const ONE_BYTE_CALL_A = Uint8Array.of(0x63, 0xf1, 0xf9, 0xf9);
+/** Second reader enters the B stub at hook+4, which loads its own return address. */
+const ONE_BYTE_CALL_B = Uint8Array.of(0x63, 0xf1, 0xcd, 0xf9);
+/** Replaces eight Thumb bytes and returns to the original counter increment at 0x08052F06. */
+const ONE_BYTE_DIALOGUE_CALL = Uint8Array.of(0x00, 0x4b, 0x18, 0x47, 0x01, 0x49, 0x18, 0x08);
+/** 129 presentation forms: three low codes plus 0x82..0xFF; 0x80/0x81 keep their legacy roles. */
+const ONE_BYTE_ARABIC_CODES = [0x01, 0x02, 0x03, ...Array.from({ length: 126 }, (_, i) => 0x82 + i)];
 /**
  * Thumb hook verified in mGBA on the live Joey dialogue. It replaces the sole
  * call at 0x080215E4: normal glyphs branch to Reshef's original 1bpp routine;
@@ -31,10 +49,43 @@ const TWO_LAYER_HOOK = Uint8Array.of(
   0xf0,0xbd,0x04,0x4b,0x18,0x47,0x00,0x00,0x00,0x57,0xdf,0x08,0x12,0x60,0xdf,0x08,
   0x00,0x38,0x18,0x08,0xf5,0x15,0x02,0x08,
 );
+/**
+ * Replaces the two reader sites that currently classify every high-bit code as
+ * a two-byte token. Arabic single-byte codes resolve through the table at
+ * ONE_BYTE_TABLE_OFFSET; legacy ASCII and 0x80/0x81 controls retain Reshef's
+ * original decoder path exactly.
+ */
+const ONE_BYTE_HOOK = Uint8Array.of(
+  0x12,0x4b,0x01,0xe0,0x12,0x4b,0xff,0xe7,0x20,0x78,0x01,0x28,0x05,0xdb,0x03,0x28,
+  0x12,0xdd,0x82,0x28,0x12,0xd2,0x80,0x28,0x09,0xd2,0x20,0x38,0x80,0x00,0x40,0x44,
+  0x00,0x68,0x01,0x78,0x09,0x02,0x40,0x78,0x01,0x43,0x01,0x34,0x18,0x47,0x00,0x02,
+  0x61,0x78,0x01,0x43,0x02,0x34,0x18,0x47,0x01,0x38,0x00,0xe0,0x7f,0x38,0x40,0x00,
+  0x04,0x4a,0x80,0x18,0x01,0x88,0x01,0x34,0x18,0x47,0x00,0x00,0x37,0x10,0x02,0x08,
+  0x93,0x10,0x02,0x08,0x00,0x41,0x18,0x08,
+);
+/**
+ * Direct dialogue reader at 0x08052EC8. Arabic one-byte values resolve to
+ * the same 16-bit Reshef glyph token used by the verified two-byte stream;
+ * all legacy bytes retain the original table lookup and counter advance.
+ */
+const ONE_BYTE_DIALOGUE_HOOK = Uint8Array.of(
+  0x30,0x69,0x71,0x68,0x40,0x18,0x02,0x78,0x01,0x2a,0x03,0xd3,0x03,0x2a,0x0d,0xd9,
+  0x82,0x2a,0x09,0xd2,0x20,0x23,0xd0,0x1a,0x80,0x00,0x09,0x4a,0x10,0x58,0x43,0x78,
+  0x1b,0x02,0x00,0x78,0x03,0x43,0x06,0xe0,0x7f,0x3a,0x00,0xe0,0x01,0x3a,0x52,0x00,
+  0x04,0x4b,0x9b,0x18,0x1b,0x88,0x01,0x31,0x71,0x60,0x03,0x48,0x00,0x47,0x00,0x00,
+  0x30,0x0e,0xe0,0x08,0x00,0x41,0x18,0x08,0x07,0x2f,0x05,0x08,
+);
 
 type Forms = [number, number, number | null, number | null];
 interface ReshefRow { offset: number; capacity: number; source: string; }
-export interface ReshefBuildOk { rom: Uint8Array; translatedLines: number; encodedBytes: number; fontApplied: boolean; }
+export interface ReshefBuildOk {
+  rom: Uint8Array;
+  translatedLines: number;
+  encodedBytes: number;
+  fontApplied: boolean;
+  relocatedLines: number;
+  textBankBytesUsed: number;
+}
 export interface ReshefBuildError { error: string; }
 
 const FORMS: Record<number, Forms> = {
@@ -103,15 +154,38 @@ function scanRows(rom: Uint8Array): ReshefRow[] {
   return rows;
 }
 
+/** Finds only aligned 32-bit ROM pointers to a string's $0 header. */
+function indexedHeaderPointers(rom: Uint8Array, rows: ReshefRow[]) {
+  const wanted = new Set(rows.map((row) => row.offset - 2));
+  const found = new Map<number, number[]>();
+  for (let at = 0; at + 4 <= rom.length; at += 4) {
+    if (rom[at + 3] !== 0x08) continue;
+    const target = rom[at] | (rom[at + 1] << 8) | (rom[at + 2] << 16);
+    if (!wanted.has(target)) continue;
+    const sites = found.get(target) ?? [];
+    sites.push(at); found.set(target, sites);
+  }
+  return found;
+}
+
+function writeRomPointer(rom: Uint8Array, at: number, target: number) {
+  const value = 0x08000000 + target;
+  rom[at] = value & 0xff; rom[at + 1] = (value >>> 8) & 0xff;
+  rom[at + 2] = (value >>> 16) & 0xff; rom[at + 3] = value >>> 24;
+}
+
 export function looksLikeReshefRom(rom: Uint8Array) { return rom.length >= 0xe00000 && rom.length <= 0x2000000; }
 
 export function extractReshefEntries(rom: Uint8Array): ExtractedEntry[] {
-  return scanRows(rom).map((row) => ({
+  const rows = scanRows(rom);
+  const pointers = indexedHeaderPointers(rom, rows);
+  return rows.map((row) => ({
     msbtFile: RESHEF_ENTRY_FILE,
     index: row.offset,
     label: display(row.source).replace(/\s+/g, " ").trim().slice(0, 60),
     original: row.source,
-    maxBytes: row.capacity - 2,
+    /** Only entries with a proven ROM pointer can move into the enlarged bank. */
+    maxBytes: pointers.has(row.offset - 2) ? MAX_RELOCATED_TEXT_BYTES : row.capacity - 2,
   }));
 }
 
@@ -172,15 +246,40 @@ function injectFont(rom: Uint8Array) {
   rom.set(TWO_LAYER_HOOK, TWO_LAYER_HOOK_OFFSET);
   rom.set(TWO_LAYER_CALL, TWO_LAYER_CALL_OFFSET);
 }
+function injectOneByteDecoder(rom: Uint8Array) {
+  const codepoints = pkmGlyphCodepoints();
+  if (codepoints.length !== ONE_BYTE_ARABIC_CODES.length) throw new Error("عدد فتحات العربية الأحادية لا يطابق خط Pokémon.");
+  const table = new Uint8Array(codepoints.length * 2);
+  codepoints.forEach((_, i) => {
+    const token = tokenFor(FONT_GLYPH_START + i);
+    /**
+     * The injected Thumb hook loads this entry with `ldrh`; GBA memory is
+     * little-endian, therefore the low token byte must be stored first.  The
+     * original text stream itself is big-endian, but this lookup table is not
+     * read by that original stream.
+     */
+    table[i * 2] = token & 0xff; table[i * 2 + 1] = token >>> 8;
+  });
+  rom.set(table, ONE_BYTE_TABLE_OFFSET);
+  rom.set(ONE_BYTE_HOOK, ONE_BYTE_HOOK_OFFSET);
+  rom.set(ONE_BYTE_DIALOGUE_HOOK, ONE_BYTE_DIALOGUE_HOOK_OFFSET);
+  rom.set(ONE_BYTE_CALL_A, ONE_BYTE_CALL_A_OFFSET);
+  rom.set(ONE_BYTE_CALL_B, ONE_BYTE_CALL_B_OFFSET);
+  rom.set(ONE_BYTE_DIALOGUE_CALL, ONE_BYTE_DIALOGUE_CALL_OFFSET);
+}
 function encode(logical: string) {
   const codepoints = pkmGlyphCodepoints(); const slot = new Map(codepoints.map((c, i) => [c, i])); const out: number[] = [];
   for (const piece of logical.split(/(#[0-5]|%|\{[0-9A-F]{2}(?::[0-9A-F]{2})?\})/gi)) {
     const paired = piece.match(/^\{([0-9A-F]{2}):([0-9A-F]{2})\}$/i);
     const raw = piece.match(/^\{([0-9A-F]{2})\}$/i);
     if (paired) { out.push(parseInt(paired[1], 16), parseInt(paired[2], 16)); continue; }
-    if (raw) { out.push(parseInt(raw[1], 16)); continue; }
+    if (raw) {
+      const value = parseInt(raw[1], 16);
+      if (ONE_BYTE_ARABIC_CODES.includes(value)) throw new Error(`الرمز {${raw[1].toUpperCase()}} محجوز للعربية الأحادية.`);
+      out.push(value); continue;
+    }
     const shaped = /^(#[0-5]|%)$/.test(piece) ? piece : rtlRenderer(shape(piece));
-    for (const ch of shaped) { const cp = ch.codePointAt(0)!; const n = slot.get(cp); if (n !== undefined) { const token = tokenFor(FONT_GLYPH_START + n); out.push(token >> 8, token & 0xff); } else if (cp >= 0x20 && cp <= 0x7e) out.push(cp); else throw new Error(`الحرف «${ch}» غير موجود في خط Reshef العربي.`); }
+    for (const ch of shaped) { const cp = ch.codePointAt(0)!; const n = slot.get(cp); if (n !== undefined) out.push(ONE_BYTE_ARABIC_CODES[n]); else if (cp >= 0x20 && cp <= 0x7e) out.push(cp); else throw new Error(`الحرف «${ch}» غير موجود في خط Reshef العربي.`); }
   }
   return Uint8Array.from(out);
 }
@@ -188,17 +287,41 @@ function encode(logical: string) {
 export function buildReshefRom(source: Uint8Array, translations: Record<string, string>): ReshefBuildOk | ReshefBuildError {
   if (!looksLikeReshefRom(source)) return { error: "الملف لا يبدو ROM Yu-Gi-Oh! Reshef of Destruction (USA) صحيحاً." };
   try {
-    const prepared = scanRows(source).flatMap((row) => {
+    const rows = scanRows(source);
+    const pointers = indexedHeaderPointers(source, rows);
+    const prepared = rows.flatMap((row) => {
       const translation = translations[keyFor(row.offset)]?.trim();
       if (!translation) return [];
       if (controls(translation) !== controls(row.source)) throw new Error(`السجل 0x${row.offset.toString(16).toUpperCase()}: رموز التحكم #0–#5 و% يجب أن تبقى كما هي.`);
       const bytes = encode(translation);
-      if (bytes.length + 2 > row.capacity) throw new Error(`السجل 0x${row.offset.toString(16).toUpperCase()}: الترجمة تحتاج ${bytes.length + 2} بايت، والسعة الآمنة ${row.capacity} بايت.`);
-      return [{ row, bytes }];
+      const required = bytes.length + 2;
+      if (required <= row.capacity) return [{ row, bytes, relocate: false, sites: [] as number[] }];
+      const sites = pointers.get(row.offset - 2) ?? [];
+      if (!sites.length) throw new Error(`السجل 0x${row.offset.toString(16).toUpperCase()}: يحتاج ${required} بايت. لا توجد له مؤشرات ROM مباشرة مثبتة، لذلك لا يمكن نقله بأمان.`);
+      if (required > MAX_RELOCATED_TEXT_BYTES) throw new Error(`السجل 0x${row.offset.toString(16).toUpperCase()}: الحد الآمن للنص المنقول هو ${MAX_RELOCATED_TEXT_BYTES} بايت.`);
+      return [{ row, bytes, relocate: true, sites }];
     });
     if (!prepared.length) return { error: "لا توجد ترجمات محفوظة لبنائها." };
-    const rom = source.slice(); injectFont(rom);
-    for (const { row, bytes } of prepared) { rom.fill(0, row.offset, row.offset + row.capacity); rom.set(bytes, row.offset); rom.set([0x24, 0x31], row.offset + bytes.length); }
-    return { rom, translatedLines: prepared.length, encodedBytes: prepared.reduce((n, v) => n + v.bytes.length, 0), fontApplied: true };
+    const bankBytes = prepared.filter((v) => v.relocate).reduce((n, v) => n + v.bytes.length + 4, 0);
+    if (bankBytes && source.length < TEXT_BANK_END) throw new Error("ROM Reshef هذا لا يحتوي بنك النصوص الموسع الموثق لإصدار USA.");
+    if (TEXT_BANK_START + bankBytes > TEXT_BANK_END) throw new Error(`النصوص الطويلة تحتاج ${bankBytes} بايت، لكن بنك Reshef الموسع المتاح ${TEXT_BANK_END - TEXT_BANK_START} بايت.`);
+    if (bankBytes && source.slice(TEXT_BANK_START, TEXT_BANK_END).some((byte) => byte !== 0xff)) throw new Error("بنك النصوص المتوقع ليس فارغاً؛ تم إيقاف البناء لحماية ROM غير معروف.");
+    const rom = source.slice(); injectFont(rom); injectOneByteDecoder(rom);
+    let bankCursor = TEXT_BANK_START;
+    for (const { row, bytes, relocate, sites } of prepared) {
+      if (!relocate) { rom.fill(0, row.offset, row.offset + row.capacity); rom.set(bytes, row.offset); rom.set([0x24, 0x31], row.offset + bytes.length); continue; }
+      const header = bankCursor;
+      rom.set([0x24, 0x30], header); rom.set(bytes, header + 2); rom.set([0x24, 0x31], header + 2 + bytes.length);
+      sites.forEach((site) => writeRomPointer(rom, site, header));
+      bankCursor += bytes.length + 4;
+    }
+    return {
+      rom,
+      translatedLines: prepared.length,
+      encodedBytes: prepared.reduce((n, v) => n + v.bytes.length, 0),
+      fontApplied: true,
+      relocatedLines: prepared.filter((v) => v.relocate).length,
+      textBankBytesUsed: bankCursor - TEXT_BANK_START,
+    };
   } catch (error) { return { error: (error as Error).message }; }
 }

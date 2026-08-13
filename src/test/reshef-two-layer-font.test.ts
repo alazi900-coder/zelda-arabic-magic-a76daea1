@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildReshefRom, extractReshefEntries } from "@/lib/yugioh/reshef-editor-bridge";
+import { buildReshefRom, extractReshefEntries, measureReshefTextBytes } from "@/lib/yugioh/reshef-editor-bridge";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 
 const DIALOGUE_START = 0x0A0000;
 const FONT_TABLE_ARABIC_START = 0xDF5700;
@@ -115,5 +116,14 @@ describe("Reshef two-layer Pokémon Arabic font", () => {
     expect(arabic.length).toBe(64);
     expect(Array.from(arabic).every((byte) => byte !== 0x81)).toBe(true);
     expect(Array.from(result.rom.slice(TEXT_BANK_START + 66, TEXT_BANK_START + 68))).toEqual([0x24, 0x31]);
+  });
+
+  it("uses the ROM's one-byte Arabic codec for Reshef editor capacity warnings", () => {
+    const translation = "لا نعم سيؤدي الحفظ إلى استبدال البيانات المحفوظة. هل هذا مناسب؟";
+    const actualRomBytes = measureReshefTextBytes(translation);
+
+    expect(actualRomBytes).toBeLessThan(new TextEncoder().encode(translation).length);
+    expect(measureEntryBytes("ygo_reshef_dialogue", translation)).toBe(actualRomBytes);
+    expect(measureEntryBytes("ygo_reshef_dialogue", "ن".repeat(71))).toBe(71);
   });
 });

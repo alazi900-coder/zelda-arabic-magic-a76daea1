@@ -284,6 +284,19 @@ function encode(logical: string) {
   return Uint8Array.from(out);
 }
 
+/**
+ * The editor must budget text with the exact same codec used by the ROM
+ * builder: Arabic presentation glyphs occupy one byte, controls keep their
+ * encoded width, and stripped diacritics do not consume ROM space.
+ * Unsupported input keeps the conservative UTF-8 fallback so diagnostics do
+ * not crash while the builder still reports its specific unsupported glyph.
+ */
+export function measureReshefTextBytes(text: string): number {
+  if (!text) return 0;
+  try { return encode(text).length; }
+  catch { return new TextEncoder().encode(text).length; }
+}
+
 export function buildReshefRom(source: Uint8Array, translations: Record<string, string>): ReshefBuildOk | ReshefBuildError {
   if (!looksLikeReshefRom(source)) return { error: "الملف لا يبدو ROM Yu-Gi-Oh! Reshef of Destruction (USA) صحيحاً." };
   try {

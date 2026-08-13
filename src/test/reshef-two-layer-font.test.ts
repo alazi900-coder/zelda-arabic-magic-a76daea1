@@ -118,6 +118,24 @@ describe("Reshef two-layer Pokémon Arabic font", () => {
     expect(Array.from(result.rom.slice(TEXT_BANK_START + 66, TEXT_BANK_START + 68))).toEqual([0x24, 0x31]);
   });
 
+  it("keeps an unpointed fixed record protected instead of relocating it unsafely", () => {
+    const source = new Uint8Array(0x1000000);
+    source.fill(0xff, TEXT_BANK_START, 0xfff000);
+    const header = 0xE1A792;
+    const offset = header + 2;
+    source.set([0x24, 0x30, ...new TextEncoder().encode("This card... It's a video#0card.#1"), 0x24, 0x31], header);
+
+    const entry = extractReshefEntries(source).find((row) => row.index === offset);
+    expect(entry?.maxBytes).toBe(32);
+
+    const result = buildReshefRom(source, {
+      [`ygo_reshef_dialogue:${offset}`]: "ن".repeat(33) + "#0" + "ن".repeat(33) + "#1",
+    });
+
+    expect("error" in result).toBe(true);
+    if ("error" in result) expect(result.error).toContain("لا توجد له مؤشرات ROM مباشرة مثبتة");
+  });
+
   it("uses the ROM's one-byte Arabic codec for Reshef editor capacity warnings", () => {
     const translation = "لا نعم سيؤدي الحفظ إلى استبدال البيانات المحفوظة. هل هذا مناسب؟";
     const actualRomBytes = measureReshefTextBytes(translation);

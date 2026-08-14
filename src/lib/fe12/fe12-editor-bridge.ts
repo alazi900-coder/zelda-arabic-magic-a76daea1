@@ -45,7 +45,7 @@ const SHIFT_JIS_LEAD = (value: number) => (value >= 0x81 && value <= 0x9f) || (v
 const SHIFT_JIS_TRAIL = (value: number) => (value >= 0x40 && value <= 0x7e) || (value >= 0x80 && value <= 0xfc);
 const textDecoder = new TextDecoder("shift_jis", { fatal: false });
 
-type Compression = "raw" | "lz11" | "rle";
+type Compression = "raw" | "lz10" | "lz11" | "rle";
 
 interface NitroFile {
   id: number;
@@ -237,6 +237,7 @@ function readNitroLayout(rom: Uint8Array): NitroLayout {
 
 function compressionOf(data: Uint8Array): Compression {
   if (data[0] === 0x11) return "lz11";
+  if (data[0] === 0x10) return "lz10";
   if (data[0] === 0x30) return "rle";
   return "raw";
 }
@@ -275,20 +276,25 @@ export function decompressNitro(data: Uint8Array): Uint8Array {
     return out;
   }
   while (written < size) {
-    if (cursor >= data.length) throw new Error("LZ11 منتهٍ قبل اكتمال المورد");
+    if (cursor >= data.length) throw new Error(`${type === "lz10" ? "LZ10" : "LZ11"} منتهٍ قبل اكتمال المورد`);
     const flags = data[cursor++];
     for (let bit = 7; bit >= 0 && written < size; bit--) {
       if (!(flags & (1 << bit))) {
-        if (cursor >= data.length) throw new Error("LZ11 حرفي مقطوع");
+        if (cursor >= data.length) throw new Error(`${type === "lz10" ? "LZ10" : "LZ11"} حرفي مقطوع`);
         out[written++] = data[cursor++];
         continue;
       }
-      if (cursor >= data.length) throw new Error("مرجع LZ11 مقطوع");
+      if (cursor >= data.length) throw new Error(`مرجع ${type === "lz10" ? "LZ10" : "LZ11"} مقطوع`);
       const first = data[cursor++];
       const form = first >>> 4;
       let length: number;
       let distance: number;
-      if (form === 0) {
+      if (type === "lz10") {
+        if (cursor >= data.length) throw new Error("مرجع LZ10 قصير مقطوع");
+        const second = data[cursor++];
+        length = form + 3;
+        distance = (((first & 0x0f) << 8) | second) + 1;
+      } else if (form === 0) {
         if (cursor + 2 > data.length) throw new Error("مرجع LZ11 قصير مقطوع");
         const second = data[cursor++];
         const third = data[cursor++];
@@ -379,6 +385,51 @@ export function compressLz11(input: Uint8Array): Uint8Array {
   return Uint8Array.from(output);
 }
 
+/** LZ10 is used by the small 4bpp title/menu tile resources in Beta 2. */
+export function compressLz10(input: Uint8Array): Uint8Array {
+  const output: number[] = [0x10, input.length & 0xff, (input.length >>> 8) & 0xff, (input.length >>> 16) & 0xff];
+  const recent = new Map<number, number[]>();
+  const keyAt = (offset: number) => offset + 2 < input.length ? (input[offset] << 16) | (input[offset + 1] << 8) | input[offset + 2] : -1;
+  const remember = (offset: number) => {
+    const key = keyAt(offset);
+    if (key < 0) return;
+    const candidates = recent.get(key) || [];
+    candidates.push(offset);
+    while (candidates.length > 24 || (candidates.length && offset - candidates[0] > 0x1000)) candidates.shift();
+    recent.set(key, candidates);
+  };
+  let cursor = 0;
+  while (cursor < input.length) {
+    const flagsAt = output.length;
+    output.push(0);
+    let flags = 0;
+    for (let bit = 7; bit >= 0 && cursor < input.length; bit--) {
+      let bestLength = 0;
+      let bestDistance = 0;
+      const candidates = recent.get(keyAt(cursor)) || [];
+      for (let index = candidates.length - 1; index >= 0; index--) {
+        const distance = cursor - candidates[index];
+        if (distance < 1 || distance > 0x1000) continue;
+        const limit = Math.min(18, input.length - cursor);
+        let length = 0;
+        while (length < limit && input[candidates[index] + length] === input[cursor + length]) length++;
+        if (length > bestLength) { bestLength = length; bestDistance = distance; }
+      }
+      if (bestLength < 3) {
+        output.push(input[cursor]);
+        remember(cursor++);
+        continue;
+      }
+      flags |= 1 << bit;
+      const displacement = bestDistance - 1;
+      output.push(((bestLength - 3) << 4) | (displacement >>> 8), displacement & 0xff);
+      for (let index = 0; index < bestLength; index++) remember(cursor++);
+    }
+    output[flagsAt] = flags;
+  }
+  return Uint8Array.from(output);
+}
+
 function parseMessage(bytes: Uint8Array): ParsedMessage | null {
   if (bytes.length < HEADER_SIZE) return null;
   const declaredBytes = u32(bytes, 0);
@@ -413,12 +464,45 @@ function preview(text: string): string {
   return compact.length > 58 ? `${compact.slice(0, 55)}…` : compact || "رموز تحكم";
 }
 
-function primaryRecords(message: ParsedMessage): { start: number; end: number; visible: string; controls: string[] }[] {
-  const records: { start: number; end: number; visible: string; controls: string[] }[] = [];
+interface MessageRecord {
+  index: number;
+  start: number;
+  end: number;
+  visible: string;
+  controls: string[];
+}
+
+const MESSAGE_METADATA_BYTES = 0x20;
+const MESSAGE_TABLE_RECORD_BYTES = 8;
+
+function primaryRecords(message: ParsedMessage): MessageRecord[] {
+  const tableStart = message.metadataOffset + MESSAGE_METADATA_BYTES;
+  const tableEnd = tableStart + message.declaredRecords * MESSAGE_TABLE_RECORD_BYTES;
+  if (message.declaredRecords > 0 && tableEnd <= message.bytes.length) {
+    const records: MessageRecord[] = [];
+    for (let index = 0; index < message.declaredRecords; index++) {
+      const tableAt = tableStart + index * MESSAGE_TABLE_RECORD_BYTES;
+      const relativeStart = message.bytes[tableAt] | (message.bytes[tableAt + 1] << 8) | (message.bytes[tableAt + 2] << 16);
+      const start = HEADER_SIZE + relativeStart;
+      if (start < HEADER_SIZE || start >= tableStart) return fallbackPrimaryRecords(message);
+      let end = start;
+      while (end < tableStart && message.bytes[end] !== 0) end++;
+      if (end >= tableStart) return fallbackPrimaryRecords(message);
+      records.push({ index, start, end, ...describeString(message.bytes.subarray(start, end)) });
+    }
+    return records;
+  }
+  return fallbackPrimaryRecords(message);
+}
+
+/** Older resources without a valid pointer table remain readable, but English
+ * Beta 2 uses the table above for menus and for stable message identities. */
+function fallbackPrimaryRecords(message: ParsedMessage): MessageRecord[] {
+  const records: MessageRecord[] = [];
   let start = HEADER_SIZE;
   for (let cursor = HEADER_SIZE; cursor < message.metadataOffset; cursor++) {
     if (message.bytes[cursor] !== 0) continue;
-    if (cursor > start) records.push({ start, end: cursor, ...describeString(message.bytes.subarray(start, cursor)) });
+    if (cursor > start) records.push({ index: records.length, start, end: cursor, ...describeString(message.bytes.subarray(start, cursor)) });
     start = cursor + 1;
   }
   return records;
@@ -441,12 +525,12 @@ export function extractFE12Entries(rom: Uint8Array): FE12ExtractResult {
         skippedFiles.push({ path: file.path, reason: "لا يطابق صيغة حوار FE12 ذات الرأس المتحقق" });
         continue;
       }
-      const records = primaryRecords(message);
+      const records = primaryRecords(message).filter((record) => record.end > record.start);
       if (records.length === 0) continue;
       files.push({ id: file.id, path: file.path, compressedBytes: packed.length, logicalBytes: logical.length, records: records.length });
-      records.forEach((record, index) => entries.push({
+      records.forEach((record) => entries.push({
         msbtFile: file.path,
-        index,
+        index: record.index,
         label: preview(record.visible),
         original: record.visible,
         // The resource is rebuilt and, when necessary, relocated safely in NitroFS.
@@ -675,11 +759,12 @@ function rewriteMessage(source: Uint8Array, changes: Map<number, string>, codeFo
   if (!message) throw new Error("ملف الحوار لا يطابق صيغة FE12 المتوقعة");
   const records = primaryRecords(message);
   const body: number[] = [];
+  const relativeOffsets = new Map<number, number>();
   let written = 0;
   const unsupported: { index: number; characters: string[] }[] = [];
-  for (let index = 0; index < records.length; index++) {
-    const record = records[index];
-    const translation = changes.get(index);
+  for (const record of records) {
+    relativeOffsets.set(record.index, body.length);
+    const translation = changes.get(record.index);
     if (!translation || translation === record.visible) {
       body.push(...source.subarray(record.start, record.end), 0);
       continue;
@@ -690,7 +775,7 @@ function rewriteMessage(source: Uint8Array, changes: Map<number, string>, codeFo
       : withControls;
     const encoded = encodeVisibleText(processed, codeForForm);
     if (encoded.unsupported.length) {
-      unsupported.push({ index, characters: encoded.unsupported });
+      unsupported.push({ index: record.index, characters: encoded.unsupported });
       body.push(...source.subarray(record.start, record.end), 0);
       continue;
     }
@@ -698,11 +783,26 @@ function rewriteMessage(source: Uint8Array, changes: Map<number, string>, codeFo
     written++;
   }
   const originalBodyLength = message.metadataOffset - HEADER_SIZE;
-  const tail = source.subarray(message.metadataOffset);
-  const output = new Uint8Array(HEADER_SIZE + body.length + tail.length);
+  const originalTableStart = message.metadataOffset + MESSAGE_METADATA_BYTES;
+  const originalTableEnd = originalTableStart + message.declaredRecords * MESSAGE_TABLE_RECORD_BYTES;
+  const hasPointerTable = message.declaredRecords > 0 && originalTableEnd <= source.length && records.length === message.declaredRecords;
+  const metadata = hasPointerTable ? source.subarray(message.metadataOffset, originalTableStart) : source.subarray(message.metadataOffset);
+  const table = hasPointerTable ? new Uint8Array(source.subarray(originalTableStart, originalTableEnd)) : new Uint8Array();
+  const tail = hasPointerTable ? source.subarray(originalTableEnd) : new Uint8Array();
+  if (hasPointerTable) {
+    for (const [index, offset] of relativeOffsets) {
+      const tableAt = index * MESSAGE_TABLE_RECORD_BYTES;
+      table[tableAt] = offset & 0xff;
+      table[tableAt + 1] = (offset >>> 8) & 0xff;
+      table[tableAt + 2] = (offset >>> 16) & 0xff;
+    }
+  }
+  const output = new Uint8Array(HEADER_SIZE + body.length + metadata.length + table.length + tail.length);
   output.set(source.subarray(0, HEADER_SIZE));
   output.set(body, HEADER_SIZE);
-  output.set(tail, HEADER_SIZE + body.length);
+  output.set(metadata, HEADER_SIZE + body.length);
+  output.set(table, HEADER_SIZE + body.length + metadata.length);
+  output.set(tail, HEADER_SIZE + body.length + metadata.length + table.length);
   putU32(output, 0, output.length);
   putU32(output, 4, HEADER_SIZE + body.length);
   if (originalBodyLength < 0) throw new Error("حدود كتلة الحوار غير صالحة");
@@ -750,7 +850,12 @@ function encodeResource(logical: Uint8Array, compression: Compression): Uint8Arr
 }
 
 function writeNitroReplacements(original: Uint8Array, layout: NitroLayout, replacements: Map<number, Uint8Array>): { rom: Uint8Array; relocated: Set<number> } {
-  const output = new Uint8Array(original);
+  let output = new Uint8Array(original);
+  const capacityExponent = original[0x14];
+  const declaredCapacity = 0x20000 * 2 ** capacityExponent;
+  if (!Number.isSafeInteger(declaredCapacity) || declaredCapacity < original.length) {
+    throw new Error("سعة بطاقة Nintendo DS المعلنة في رأس ROM غير صالحة.");
+  }
   const intervalFiles = layout.files.filter((file) => !replacements.has(file.id)).map((file) => ({ start: file.start, end: file.end })).sort((a, b) => a.start - b.start);
   const relocated = new Set<number>();
   const findGap = (size: number): number | null => {
@@ -761,7 +866,7 @@ function writeNitroReplacements(original: Uint8Array, layout: NitroLayout, repla
       cursor = Math.max(cursor, interval.end);
     }
     cursor = align(cursor);
-    return cursor + size <= output.length ? cursor : null;
+    return cursor + size <= declaredCapacity ? cursor : null;
   };
   for (const file of layout.files) {
     const replacement = replacements.get(file.id);
@@ -774,6 +879,13 @@ function writeNitroReplacements(original: Uint8Array, layout: NitroLayout, repla
       relocated.add(file.id);
       intervalFiles.push({ start, end: start + replacement.length });
       intervalFiles.sort((a, b) => a.start - b.start);
+    }
+    if (start + replacement.length > output.length) {
+      const nextLength = align(start + replacement.length);
+      const expanded = new Uint8Array(nextLength);
+      expanded.fill(0xff);
+      expanded.set(output);
+      output = expanded;
     }
     output.set(replacement, start);
     putU32(output, layout.fatOffset + file.id * 8, start);
@@ -857,4 +969,118 @@ export function buildFE12RomFromState(rom: Uint8Array, translations: Record<stri
   } catch (error) {
     return { error: (error as Error).message };
   }
+}
+
+export interface FE12MenuImageResource {
+  id: "title/mainsave.cg" | "title/modeselect.cg" | "title/temporarysave.cg";
+  label: string;
+  summary: string;
+  palettePath: "title/savetitle.cl" | "title/title.cl";
+}
+
+export interface FE12MenuImagePixels {
+  width: number;
+  height: number;
+  pixels: Uint8ClampedArray;
+}
+
+export const FE12_MENU_IMAGE_RESOURCES: FE12MenuImageResource[] = [
+  { id: "title/mainsave.cg", label: "قائمة الحفظ والبداية", summary: "يتضمن الرسم الثابت الخاص ببداية لعبة جديدة والحفظ.", palettePath: "title/savetitle.cl" },
+  { id: "title/modeselect.cg", label: "اختيار الصعوبة", summary: "يتضمن الرسم الثابت لدرجات الصعوبة مثل NORMAL وHARD.", palettePath: "title/title.cl" },
+  { id: "title/temporarysave.cg", label: "الحفظ المؤقت", summary: "رسم ثابت خاص بشاشة الحفظ المؤقت.", palettePath: "title/savetitle.cl" },
+];
+
+function menuResource(resourceId: string): FE12MenuImageResource {
+  const resource = FE12_MENU_IMAGE_RESOURCES.find((item) => item.id === resourceId);
+  if (!resource) throw new Error("مورد رسم Fire Emblem غير مدعوم.");
+  return resource;
+}
+
+function readBgr555Palette(raw: Uint8Array): Uint16Array {
+  if (raw.length < 32) throw new Error("لوحة ألوان قائمة Fire Emblem قصيرة أو تالفة.");
+  const palette = new Uint16Array(16);
+  for (let index = 0; index < 16; index++) palette[index] = u16(raw, index * 2);
+  return palette;
+}
+
+function bgr555ToRgba(value: number, transparent = false): [number, number, number, number] {
+  return [Math.round((value & 0x1f) * 255 / 31), Math.round(((value >>> 5) & 0x1f) * 255 / 31), Math.round(((value >>> 10) & 0x1f) * 255 / 31), transparent ? 0 : 255];
+}
+
+function decodeMenuTiles(raw: Uint8Array, palette: Uint16Array): FE12MenuImagePixels {
+  if (raw.length === 0 || raw.length % 32 !== 0) throw new Error("بلاطات قائمة Fire Emblem ليست 4bpp صالحة.");
+  const columns = 8;
+  const tiles = raw.length / 32;
+  const width = columns * 8;
+  const height = Math.ceil(tiles / columns) * 8;
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let tile = 0; tile < tiles; tile++) {
+    const tileX = (tile % columns) * 8;
+    const tileY = Math.floor(tile / columns) * 8;
+    for (let pixel = 0; pixel < 64; pixel++) {
+      const value = raw[tile * 32 + (pixel >>> 1)];
+      const colorIndex = pixel & 1 ? value >>> 4 : value & 0x0f;
+      const [red, green, blue, alpha] = bgr555ToRgba(palette[colorIndex], colorIndex === 0);
+      const x = tileX + (pixel & 7);
+      const y = tileY + (pixel >>> 3);
+      const at = (y * width + x) * 4;
+      pixels.set([red, green, blue, alpha], at);
+    }
+  }
+  return { width, height, pixels };
+}
+
+function encodeMenuTiles(image: FE12MenuImagePixels, palette: Uint16Array): Uint8Array {
+  if (image.width !== 64 || image.height % 8 !== 0) throw new Error("أبعاد بديل قائمة Fire Emblem لا تطابق تخطيط البلاطات الأصلي.");
+  const out = new Uint8Array((image.width / 8) * (image.height / 8) * 32);
+  const nearest = (red: number, green: number, blue: number): number => {
+    let selected = 1;
+    let distance = Number.POSITIVE_INFINITY;
+    for (let index = 1; index < 16; index++) {
+      const [r, g, b] = bgr555ToRgba(palette[index]);
+      const current = (red - r) ** 2 + (green - g) ** 2 + (blue - b) ** 2;
+      if (current < distance) { selected = index; distance = current; }
+    }
+    return selected;
+  };
+  const rows = image.height / 8;
+  for (let tileY = 0; tileY < rows; tileY++) for (let tileX = 0; tileX < 8; tileX++) {
+    const tile = tileY * 8 + tileX;
+    for (let pixel = 0; pixel < 64; pixel++) {
+      const x = tileX * 8 + (pixel & 7);
+      const y = tileY * 8 + (pixel >>> 3);
+      const at = (y * image.width + x) * 4;
+      const index = image.pixels[at + 3] < 32 ? 0 : nearest(image.pixels[at], image.pixels[at + 1], image.pixels[at + 2]);
+      const byteAt = tile * 32 + (pixel >>> 1);
+      out[byteAt] |= pixel & 1 ? index << 4 : index;
+    }
+  }
+  return out;
+}
+
+export function decodeFE12MenuImage(rom: Uint8Array, resourceId: FE12MenuImageResource["id"]): FE12MenuImagePixels {
+  const resource = menuResource(resourceId);
+  const layout = readNitroLayout(rom);
+  const files = new Map(layout.files.map((file) => [file.path, file]));
+  const imageFile = files.get(resource.id);
+  const paletteFile = files.get(resource.palettePath);
+  if (!imageFile || !paletteFile) throw new Error("لم يُعثر على مورد القائمة أو لوحة ألوانه في ROM.");
+  const raw = decompressNitro(rom.subarray(imageFile.start, imageFile.end));
+  const palette = readBgr555Palette(decompressNitro(rom.subarray(paletteFile.start, paletteFile.end)));
+  return decodeMenuTiles(raw, palette);
+}
+
+export function buildFE12MenuImageRom(rom: Uint8Array, resourceId: FE12MenuImageResource["id"], image: FE12MenuImagePixels): { rom: Uint8Array; path: string; relocated: boolean } {
+  if (!looksLikeFE12Rom(rom)) throw new Error("هذه ليست نسخة Fire Emblem 12 الإنجليزية المطلوبة.");
+  const resource = menuResource(resourceId);
+  const layout = readNitroLayout(rom);
+  const files = new Map(layout.files.map((file) => [file.path, file]));
+  const imageFile = files.get(resource.id);
+  const paletteFile = files.get(resource.palettePath);
+  if (!imageFile || !paletteFile) throw new Error("لم يُعثر على مورد القائمة أو لوحة ألوانه في ROM.");
+  const palette = readBgr555Palette(decompressNitro(rom.subarray(paletteFile.start, paletteFile.end)));
+  const original = rom.subarray(imageFile.start, imageFile.end);
+  const packed = compressionOf(original) === "lz10" ? compressLz10(encodeMenuTiles(image, palette)) : encodeMenuTiles(image, palette);
+  const written = writeNitroReplacements(rom, layout, new Map([[imageFile.id, packed]]));
+  return { rom: written.rom, path: resource.id, relocated: written.relocated.has(imageFile.id) };
 }

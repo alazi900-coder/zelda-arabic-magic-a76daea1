@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildFE12RomFromState, extractFE12Entries, looksLikeFE12Rom, verifyFE12Rom } from "./fe12-editor-bridge";
+import { buildFE12MenuImageRom, buildFE12RomFromState, decodeFE12MenuImage, extractFE12Entries, looksLikeFE12Rom, verifyFE12Rom } from "./fe12-editor-bridge";
 
 const ROM_PATH = "/home/ubuntu/fire-emblem-ds-lab/input/fe12-english-beta2-user.nds";
 const CURRENT_DIALOGUE_TEST_ROM = "/home/ubuntu/fire-emblem-ds-lab/artifacts/fe12-english-beta2-arabic-build.nds";
@@ -24,6 +24,26 @@ describe("FE12 English Beta 2 bridge", () => {
     expect(entry?.original).toContain("pegasus knights and dracoknights");
     expect(entry?.original).toContain("Both are fast and highly mobile units.");
     expect(entry?.original).not.toContain("pegasus knighs o");
+  }, 120_000);
+
+  it.runIf(existsSync(ROM_PATH))("exposes and rebuilds main-menu text through its actual message table", () => {
+    const original = new Uint8Array(readFileSync(ROM_PATH));
+    const extracted = extractFE12Entries(original);
+    expect(extracted.entries.find((item) => item.msbtFile === "m/MM" && item.index === 15)?.original).toBe("Start a new game.");
+    const result = buildFE12RomFromState(original, { "m/MM:15": "Begin a new game." });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.translatedLines).toBe(1);
+    expect(extractFE12Entries(result.rom).entries.find((item) => item.msbtFile === "m/MM" && item.index === 15)?.original).toBe("Begin a new game.");
+  }, 120_000);
+
+  it.runIf(existsSync(ROM_PATH))("decodes and rebuilds the NEW GAME menu tiles through their LZ10 resource", () => {
+    const original = new Uint8Array(readFileSync(ROM_PATH));
+    const menu = decodeFE12MenuImage(original, "title/mainsave.cg");
+    expect(menu.width).toBe(64);
+    expect(menu.height).toBeGreaterThan(0);
+    const rebuilt = buildFE12MenuImageRom(original, "title/mainsave.cg", menu);
+    const reread = decodeFE12MenuImage(rebuilt.rom, "title/mainsave.cg");
+    expect(reread).toEqual(menu);
   }, 120_000);
 
   it.runIf(existsSync(ROM_PATH))("builds Arabic from English dialogue with a fixed-size TTF font injection report", () => {

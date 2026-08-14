@@ -5,7 +5,7 @@
  */
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useState } from "react";
-import { ArrowRight, FileWarning, HardDrive, Loader2, ShieldCheck, Upload } from "lucide-react";
+import { ArrowRight, FileWarning, HardDrive, Image, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { idbGet, idbSet } from "@/lib/idb-storage";
 import {
@@ -45,7 +45,7 @@ export default function FireEmblem12() {
       await idbSet(FE12_BUFFER_KEY, rom.buffer.slice(0));
       await idbSet("originalTexts", originals);
       toast.success(
-        `تم استخراج ${result.entries.length.toLocaleString("ar-EG")} سجل حوار من ${result.files.length} ملف` +
+        `تم استخراج ${result.entries.length.toLocaleString("ar-EG")} سجل نص إنجليزي من ${result.files.length} ملف رسائل` +
           (Object.keys(translations).length ? ` — استُعيدت ${Object.keys(translations).length} ترجمة محفوظة` : "")
       );
       navigate("/editor");
@@ -64,7 +64,7 @@ export default function FireEmblem12() {
             <p className="mb-2 text-sm font-semibold text-primary">Nintendo DS · بناء محلي</p>
             <h1 className="font-display text-3xl font-black md:text-4xl">Fire Emblem: Shin Monshou no Nazo</h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-              افتح النسخة الإنجليزية Beta 2، حرّر نصوص الحوار داخل المحرر نفسه، ثم نزّل نسخة عربية جديدة. يبقى ملفك الأصلي محفوظاً دون أي تعديل.
+              افتح النسخة الإنجليزية Beta 2، حرّر كل نصوص الرسائل الإنجليزية داخل المحرر نفسه — بما فيها رسائل القوائم ووصفها — ثم نزّل نسخة عربية جديدة. يبقى ملفك الأصلي محفوظاً دون أي تعديل.
             </p>
           </div>
           <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
@@ -102,6 +102,11 @@ export default function FireEmblem12() {
             }}
           />
         </label>
+
+        <Link to="/fire-emblem-12/images" className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-primary/35 bg-primary/10 px-5 py-4 transition-colors hover:bg-primary/15">
+          <span><span className="block font-display text-sm font-bold">محرر صور القوائم</span><span className="mt-1 block text-xs leading-6 text-muted-foreground">لتعديل الرسومات الثابتة مثل NEW GAME وNORMAL وHARD مع الحفاظ على بلاطات اللعبة ولوحة ألوانها.</span></span>
+          <Image className="h-6 w-6 shrink-0 text-primary" />
+        </Link>
 
         <section className="mt-7 grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-border bg-card/50 p-4">

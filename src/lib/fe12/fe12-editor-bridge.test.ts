@@ -19,7 +19,10 @@ describe("FE12 English Beta 2 bridge", () => {
 
   it.runIf(existsSync(ROM_PATH))("preserves known English dialogue while decoding LZ11 back-references", () => {
     const rom = new Uint8Array(readFileSync(ROM_PATH));
+    const opening = extractFE12Entries(rom).entries.find((item) => item.msbtFile === "m/001" && item.index === 0);
     const entry = extractFE12Entries(rom).entries.find((item) => item.msbtFile === "m/002" && item.index === 0);
+    expect(opening?.original).toContain("This is your first real battle, is it not?");
+    expect(opening?.original).not.toContain("This s syour first rea beattle");
     expect(entry?.original).toContain("Macedon's main force consists of");
     expect(entry?.original).toContain("pegasus knights and dracoknights");
     expect(entry?.original).toContain("Both are fast and highly mobile units.");

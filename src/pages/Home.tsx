@@ -114,6 +114,18 @@ const games = [
     arrowClass: "text-[hsl(48,94%,68%)]",
   },
   {
+    title: "Fire Emblem 12 — Nintendo DS",
+    subtitle: "عرّب New Mystery of the Emblem",
+    desc: "يرفع الروم الإنجليزي Beta 2، ويستخرج ٣٬٩٣٢ سجل حوار إلى المحرر. عند البناء يدمج الخط العربي TTF داخل خانات آمنة ويعرض تقرير حقن مفصلاً قبل أن تجرّب الروم الناتج.",
+    link: "/fire-emblem-12",
+    image: dragonSwordBg,
+    formats: [".nds", "Nintendo DS", "Beta 2"],
+    cardClass: "border-[hsl(210,70%,50%)]/30 hover:border-[hsl(210,70%,50%)]/60",
+    formatClass: "bg-[hsl(210,70%,50%)]/20 text-[hsl(210,85%,70%)] border-[hsl(210,70%,50%)]/30",
+    subtitleClass: "text-[hsl(210,85%,70%)]",
+    arrowClass: "text-[hsl(210,85%,70%)]",
+  },
+  {
     title: "GameMaker Studio",
     subtitle: "عرّب ألعاب GameMaker",
     desc: "استخراج النصوص من ملفات GameMaker (IFF GEN8) مثل game.droid وألعاب المحرك الأخرى، تحريرها في المحرر، وإعادة بناء الملف معرّب بالعربية",

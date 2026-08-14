@@ -17,6 +17,15 @@ describe("FE12 English Beta 2 bridge", () => {
     expect(result.entries.some((entry) => entry.msbtFile === "m/PlayerMake")).toBe(true);
   }, 120_000);
 
+  it.runIf(existsSync(ROM_PATH))("preserves known English dialogue while decoding LZ11 back-references", () => {
+    const rom = new Uint8Array(readFileSync(ROM_PATH));
+    const entry = extractFE12Entries(rom).entries.find((item) => item.msbtFile === "m/002" && item.index === 0);
+    expect(entry?.original).toContain("Macedon's main force consists of");
+    expect(entry?.original).toContain("pegasus knights and dracoknights");
+    expect(entry?.original).toContain("Both are fast and highly mobile units.");
+    expect(entry?.original).not.toContain("pegasus knighs o");
+  }, 120_000);
+
   it.runIf(existsSync(ROM_PATH))("builds Arabic from English dialogue with a fixed-size TTF font injection report", () => {
     const original = new Uint8Array(readFileSync(ROM_PATH));
     const result = buildFE12RomFromState(original, { "m/201:1": "مرحبا" });

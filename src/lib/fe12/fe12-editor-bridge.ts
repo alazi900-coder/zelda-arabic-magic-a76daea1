@@ -308,7 +308,13 @@ export function decompressNitro(data: Uint8Array): Uint8Array {
         distance = (((first & 0x0f) << 8) | second) + 1;
       }
       if (distance > written) throw new Error("مرجع LZ11 يشير قبل بداية المورد");
-      for (let copied = 0; copied < length && written < size; copied++) out[written++] = out[written - distance];
+      // JavaScript evaluates the destination index before the source. Keeping
+      // the increment separate preserves the exact source position for every
+      // overlapping LZ11 back-reference in English Beta 2 dialogue resources.
+      for (let copied = 0; copied < length && written < size; copied++) {
+        out[written] = out[written - distance];
+        written++;
+      }
     }
   }
   return out;

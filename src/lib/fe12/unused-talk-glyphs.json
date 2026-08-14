@@ -1,0 +1,1603 @@
+{
+  "source": {
+    "romPath": "/home/ubuntu/fire-emblem-ds-lab/compare/fe12-jp-base-compare.nds",
+    "indexPath": "/home/ubuntu/fire-emblem-ds-lab/artifacts/compare/jp-nitrofs-index.tsv",
+    "fontPath": "/home/ubuntu/fire-emblem-ds-lab/artifacts/compare/fonts/talk-jp.bin"
+  },
+  "messageFiles": 92,
+  "unreadableFiles": [],
+  "fontGlyphs": 1540,
+  "glyphsObservedInMessages": 1222,
+  "candidates": [
+    {
+      "code": "0x8344",
+      "width": 10,
+      "descriptorOffset": "0x440"
+    },
+    {
+      "code": "0x8396",
+      "width": 10,
+      "descriptorOffset": "0x1ABC"
+    },
+    {
+      "code": "0x88A3",
+      "width": 12,
+      "descriptorOffset": "0x1E20"
+    },
+    {
+      "code": "0x88C0",
+      "width": 13,
+      "descriptorOffset": "0x265C"
+    },
+    {
+      "code": "0x88CB",
+      "width": 12,
+      "descriptorOffset": "0x2920"
+    },
+    {
+      "code": "0x88CF",
+      "width": 12,
+      "descriptorOffset": "0x2A20"
+    },
+    {
+      "code": "0x88D0",
+      "width": 12,
+      "descriptorOffset": "0x2A64"
+    },
+    {
+      "code": "0x88D3",
+      "width": 12,
+      "descriptorOffset": "0x2B18"
+    },
+    {
+      "code": "0x88D5",
+      "width": 12,
+      "descriptorOffset": "0x2BA0"
+    },
+    {
+      "code": "0x88D8",
+      "width": 12,
+      "descriptorOffset": "0x2C74"
+    },
+    {
+      "code": "0x88D9",
+      "width": 12,
+      "descriptorOffset": "0x2CA8"
+    },
+    {
+      "code": "0x88E1",
+      "width": 12,
+      "descriptorOffset": "0x2EE0"
+    },
+    {
+      "code": "0x88F3",
+      "width": 12,
+      "descriptorOffset": "0x33E0"
+    },
+    {
+      "code": "0x88F5",
+      "width": 11,
+      "descriptorOffset": "0x3470"
+    },
+    {
+      "code": "0x88F9",
+      "width": 12,
+      "descriptorOffset": "0x3550"
+    },
+    {
+      "code": "0x8945",
+      "width": 11,
+      "descriptorOffset": "0x47C"
+    },
+    {
+      "code": "0x895C",
+      "width": 12,
+      "descriptorOffset": "0xB20"
+    },
+    {
+      "code": "0x8971",
+      "width": 13,
+      "descriptorOffset": "0x115C"
+    },
+    {
+      "code": "0x897E",
+      "width": 11,
+      "descriptorOffset": "0x1560"
+    },
+    {
+      "code": "0x8984",
+      "width": 13,
+      "descriptorOffset": "0x168C"
+    },
+    {
+      "code": "0x8985",
+      "width": 12,
+      "descriptorOffset": "0x16F0"
+    },
+    {
+      "code": "0x8998",
+      "width": 12,
+      "descriptorOffset": "0x1B5C"
+    },
+    {
+      "code": "0x899C",
+      "width": 12,
+      "descriptorOffset": "0x1C44"
+    },
+    {
+      "code": "0x899F",
+      "width": 12,
+      "descriptorOffset": "0x1D30"
+    },
+    {
+      "code": "0x89C1",
+      "width": 12,
+      "descriptorOffset": "0x26C0"
+    },
+    {
+      "code": "0x89D2",
+      "width": 12,
+      "descriptorOffset": "0x2AE4"
+    },
+    {
+      "code": "0x89D7",
+      "width": 12,
+      "descriptorOffset": "0x2C20"
+    },
+    {
+      "code": "0x89D9",
+      "width": 12,
+      "descriptorOffset": "0x2CB0"
+    },
+    {
+      "code": "0x89DB",
+      "width": 12,
+      "descriptorOffset": "0x2D58"
+    },
+    {
+      "code": "0x89DC",
+      "width": 12,
+      "descriptorOffset": "0x2DA4"
+    },
+    {
+      "code": "0x89E4",
+      "width": 12,
+      "descriptorOffset": "0x2FC4"
+    },
+    {
+      "code": "0x89E5",
+      "width": 10,
+      "descriptorOffset": "0x3010"
+    },
+    {
+      "code": "0x89EE",
+      "width": 12,
+      "descriptorOffset": "0x3264"
+    },
+    {
+      "code": "0x89F3",
+      "width": 12,
+      "descriptorOffset": "0x3400"
+    },
+    {
+      "code": "0x89F7",
+      "width": 13,
+      "descriptorOffset": "0x3500"
+    },
+    {
+      "code": "0x89F9",
+      "width": 12,
+      "descriptorOffset": "0x3560"
+    },
+    {
+      "code": "0x8A46",
+      "width": 12,
+      "descriptorOffset": "0x4D8"
+    },
+    {
+      "code": "0x8A47",
+      "width": 12,
+      "descriptorOffset": "0x4FC"
+    },
+    {
+      "code": "0x8A4F",
+      "width": 12,
+      "descriptorOffset": "0x714"
+    },
+    {
+      "code": "0x8A55",
+      "width": 12,
+      "descriptorOffset": "0x904"
+    },
+    {
+      "code": "0x8A5B",
+      "width": 13,
+      "descriptorOffset": "0xAB4"
+    },
+    {
+      "code": "0x8A65",
+      "width": 12,
+      "descriptorOffset": "0xDA4"
+    },
+    {
+      "code": "0x8A6D",
+      "width": 12,
+      "descriptorOffset": "0x1034"
+    },
+    {
+      "code": "0x8A6F",
+      "width": 12,
+      "descriptorOffset": "0x10BC"
+    },
+    {
+      "code": "0x8A76",
+      "width": 12,
+      "descriptorOffset": "0x12B8"
+    },
+    {
+      "code": "0x8A88",
+      "width": 12,
+      "descriptorOffset": "0x1784"
+    },
+    {
+      "code": "0x8AA6",
+      "width": 12,
+      "descriptorOffset": "0x1ED4"
+    },
+    {
+      "code": "0x8AAE",
+      "width": 12,
+      "descriptorOffset": "0x2124"
+    },
+    {
+      "code": "0x8AB1",
+      "width": 12,
+      "descriptorOffset": "0x2200"
+    },
+    {
+      "code": "0x8AC3",
+      "width": 12,
+      "descriptorOffset": "0x2738"
+    },
+    {
+      "code": "0x8AD2",
+      "width": 12,
+      "descriptorOffset": "0x2AD4"
+    },
+    {
+      "code": "0x8ADB",
+      "width": 12,
+      "descriptorOffset": "0x2D40"
+    },
+    {
+      "code": "0x8ADD",
+      "width": 12,
+      "descriptorOffset": "0x2DF0"
+    },
+    {
+      "code": "0x8AE1",
+      "width": 12,
+      "descriptorOffset": "0x2F00"
+    },
+    {
+      "code": "0x8AE6",
+      "width": 11,
+      "descriptorOffset": "0x3054"
+    },
+    {
+      "code": "0x8AEE",
+      "width": 13,
+      "descriptorOffset": "0x325C"
+    },
+    {
+      "code": "0x8AF3",
+      "width": 11,
+      "descriptorOffset": "0x33E8"
+    },
+    {
+      "code": "0x8AF4",
+      "width": 11,
+      "descriptorOffset": "0x3424"
+    },
+    {
+      "code": "0x8AF8",
+      "width": 12,
+      "descriptorOffset": "0x353C"
+    },
+    {
+      "code": "0x8AF9",
+      "width": 12,
+      "descriptorOffset": "0x3558"
+    },
+    {
+      "code": "0x8B4B",
+      "width": 13,
+      "descriptorOffset": "0x61C"
+    },
+    {
+      "code": "0x8B4C",
+      "width": 12,
+      "descriptorOffset": "0x658"
+    },
+    {
+      "code": "0x8B51",
+      "width": 12,
+      "descriptorOffset": "0x794"
+    },
+    {
+      "code": "0x8B55",
+      "width": 12,
+      "descriptorOffset": "0x8EC"
+    },
+    {
+      "code": "0x8B5B",
+      "width": 12,
+      "descriptorOffset": "0xABC"
+    },
+    {
+      "code": "0x8B5C",
+      "width": 12,
+      "descriptorOffset": "0xAF0"
+    },
+    {
+      "code": "0x8B5E",
+      "width": 12,
+      "descriptorOffset": "0xB90"
+    },
+    {
+      "code": "0x8B60",
+      "width": 12,
+      "descriptorOffset": "0xC20"
+    },
+    {
+      "code": "0x8B77",
+      "width": 12,
+      "descriptorOffset": "0x130C"
+    },
+    {
+      "code": "0x8B7D",
+      "width": 12,
+      "descriptorOffset": "0x14E4"
+    },
+    {
+      "code": "0x8B7E",
+      "width": 12,
+      "descriptorOffset": "0x1540"
+    },
+    {
+      "code": "0x8B81",
+      "width": 12,
+      "descriptorOffset": "0x15A8"
+    },
+    {
+      "code": "0x8B8F",
+      "width": 11,
+      "descriptorOffset": "0x1950"
+    },
+    {
+      "code": "0x8B9B",
+      "width": 12,
+      "descriptorOffset": "0x1C00"
+    },
+    {
+      "code": "0x8BA3",
+      "width": 12,
+      "descriptorOffset": "0x1E38"
+    },
+    {
+      "code": "0x8BA5",
+      "width": 12,
+      "descriptorOffset": "0x1EB8"
+    },
+    {
+      "code": "0x8BA6",
+      "width": 12,
+      "descriptorOffset": "0x1EFC"
+    },
+    {
+      "code": "0x8BB4",
+      "width": 13,
+      "descriptorOffset": "0x22FC"
+    },
+    {
+      "code": "0x8BD8",
+      "width": 12,
+      "descriptorOffset": "0x2C9C"
+    },
+    {
+      "code": "0x8BEE",
+      "width": 12,
+      "descriptorOffset": "0x3284"
+    },
+    {
+      "code": "0x8BF6",
+      "width": 12,
+      "descriptorOffset": "0x34CC"
+    },
+    {
+      "code": "0x8BF7",
+      "width": 12,
+      "descriptorOffset": "0x3510"
+    },
+    {
+      "code": "0x8BF8",
+      "width": 12,
+      "descriptorOffset": "0x3534"
+    },
+    {
+      "code": "0x8BFC",
+      "width": 11,
+      "descriptorOffset": "0x3604"
+    },
+    {
+      "code": "0x8C59",
+      "width": 12,
+      "descriptorOffset": "0xA34"
+    },
+    {
+      "code": "0x8C76",
+      "width": 12,
+      "descriptorOffset": "0x12C0"
+    },
+    {
+      "code": "0x8C80",
+      "width": 13,
+      "descriptorOffset": "0x157C"
+    },
+    {
+      "code": "0x8C82",
+      "width": 12,
+      "descriptorOffset": "0x15F4"
+    },
+    {
+      "code": "0x8C8A",
+      "width": 11,
+      "descriptorOffset": "0x183C"
+    },
+    {
+      "code": "0x8C98",
+      "width": 12,
+      "descriptorOffset": "0x1B64"
+    },
+    {
+      "code": "0x8C99",
+      "width": 12,
+      "descriptorOffset": "0x1BB0"
+    },
+    {
+      "code": "0x8C9A",
+      "width": 12,
+      "descriptorOffset": "0x1BCC"
+    },
+    {
+      "code": "0x8C9C",
+      "width": 12,
+      "descriptorOffset": "0x1C54"
+    },
+    {
+      "code": "0x8CA3",
+      "width": 12,
+      "descriptorOffset": "0x1E30"
+    },
+    {
+      "code": "0x8CC3",
+      "width": 12,
+      "descriptorOffset": "0x2748"
+    },
+    {
+      "code": "0x8CD9",
+      "width": 12,
+      "descriptorOffset": "0x2CD0"
+    },
+    {
+      "code": "0x8CEC",
+      "width": 12,
+      "descriptorOffset": "0x31E4"
+    },
+    {
+      "code": "0x8CF2",
+      "width": 12,
+      "descriptorOffset": "0x33AC"
+    },
+    {
+      "code": "0x8CF6",
+      "width": 12,
+      "descriptorOffset": "0x34A4"
+    },
+    {
+      "code": "0x8CF7",
+      "width": 11,
+      "descriptorOffset": "0x3508"
+    },
+    {
+      "code": "0x8CF8",
+      "width": 13,
+      "descriptorOffset": "0x3524"
+    },
+    {
+      "code": "0x8CFC",
+      "width": 12,
+      "descriptorOffset": "0x3614"
+    },
+    {
+      "code": "0x8D44",
+      "width": 12,
+      "descriptorOffset": "0x428"
+    },
+    {
+      "code": "0x8D49",
+      "width": 13,
+      "descriptorOffset": "0x56C"
+    },
+    {
+      "code": "0x8D4B",
+      "width": 12,
+      "descriptorOffset": "0x5F4"
+    },
+    {
+      "code": "0x8D4C",
+      "width": 12,
+      "descriptorOffset": "0x648"
+    },
+    {
+      "code": "0x8D52",
+      "width": 13,
+      "descriptorOffset": "0x808"
+    },
+    {
+      "code": "0x8D55",
+      "width": 12,
+      "descriptorOffset": "0x8E4"
+    },
+    {
+      "code": "0x8D60",
+      "width": 12,
+      "descriptorOffset": "0xC30"
+    },
+    {
+      "code": "0x8D67",
+      "width": 12,
+      "descriptorOffset": "0xE34"
+    },
+    {
+      "code": "0x8D72",
+      "width": 12,
+      "descriptorOffset": "0x1180"
+    },
+    {
+      "code": "0x8D7E",
+      "width": 12,
+      "descriptorOffset": "0x1548"
+    },
+    {
+      "code": "0x8D8F",
+      "width": 12,
+      "descriptorOffset": "0x1968"
+    },
+    {
+      "code": "0x8D98",
+      "width": 13,
+      "descriptorOffset": "0x1B84"
+    },
+    {
+      "code": "0x8D9B",
+      "width": 12,
+      "descriptorOffset": "0x1C20"
+    },
+    {
+      "code": "0x8D9E",
+      "width": 12,
+      "descriptorOffset": "0x1CC4"
+    },
+    {
+      "code": "0x8DA5",
+      "width": 12,
+      "descriptorOffset": "0x1EA0"
+    },
+    {
+      "code": "0x8DCB",
+      "width": 12,
+      "descriptorOffset": "0x2928"
+    },
+    {
+      "code": "0x8DD0",
+      "width": 11,
+      "descriptorOffset": "0x2A6C"
+    },
+    {
+      "code": "0x8DD5",
+      "width": 12,
+      "descriptorOffset": "0x2BC0"
+    },
+    {
+      "code": "0x8DDE",
+      "width": 12,
+      "descriptorOffset": "0x2E2C"
+    },
+    {
+      "code": "0x8DF4",
+      "width": 12,
+      "descriptorOffset": "0x341C"
+    },
+    {
+      "code": "0x8E51",
+      "width": 12,
+      "descriptorOffset": "0x784"
+    },
+    {
+      "code": "0x8E55",
+      "width": 12,
+      "descriptorOffset": "0x91C"
+    },
+    {
+      "code": "0x8E59",
+      "width": 11,
+      "descriptorOffset": "0xA04"
+    },
+    {
+      "code": "0x8E71",
+      "width": 12,
+      "descriptorOffset": "0x1134"
+    },
+    {
+      "code": "0x8E7D",
+      "width": 12,
+      "descriptorOffset": "0x14DC"
+    },
+    {
+      "code": "0x8E91",
+      "width": 12,
+      "descriptorOffset": "0x19C0"
+    },
+    {
+      "code": "0x8E99",
+      "width": 12,
+      "descriptorOffset": "0x1BA8"
+    },
+    {
+      "code": "0x8E9A",
+      "width": 12,
+      "descriptorOffset": "0x1BD4"
+    },
+    {
+      "code": "0x8ECF",
+      "width": 12,
+      "descriptorOffset": "0x2A28"
+    },
+    {
+      "code": "0x8ED2",
+      "width": 13,
+      "descriptorOffset": "0x2ADC"
+    },
+    {
+      "code": "0x8ED5",
+      "width": 12,
+      "descriptorOffset": "0x2BB8"
+    },
+    {
+      "code": "0x8ED7",
+      "width": 12,
+      "descriptorOffset": "0x2C38"
+    },
+    {
+      "code": "0x8ED8",
+      "width": 12,
+      "descriptorOffset": "0x2C84"
+    },
+    {
+      "code": "0x8EEF",
+      "width": 12,
+      "descriptorOffset": "0x32B8"
+    },
+    {
+      "code": "0x8EF4",
+      "width": 11,
+      "descriptorOffset": "0x342C"
+    },
+    {
+      "code": "0x8EF6",
+      "width": 12,
+      "descriptorOffset": "0x34C4"
+    },
+    {
+      "code": "0x8F62",
+      "width": 12,
+      "descriptorOffset": "0xCD8"
+    },
+    {
+      "code": "0x8F7D",
+      "width": 12,
+      "descriptorOffset": "0x14FC"
+    },
+    {
+      "code": "0x8F8A",
+      "width": 12,
+      "descriptorOffset": "0x1844"
+    },
+    {
+      "code": "0x8F91",
+      "width": 12,
+      "descriptorOffset": "0x19D0"
+    },
+    {
+      "code": "0x8F9E",
+      "width": 12,
+      "descriptorOffset": "0x1CE4"
+    },
+    {
+      "code": "0x8FA0",
+      "width": 12,
+      "descriptorOffset": "0x1D5C"
+    },
+    {
+      "code": "0x8FC1",
+      "width": 12,
+      "descriptorOffset": "0x26B0"
+    },
+    {
+      "code": "0x8FD0",
+      "width": 12,
+      "descriptorOffset": "0x2A84"
+    },
+    {
+      "code": "0x8FD5",
+      "width": 12,
+      "descriptorOffset": "0x2BA8"
+    },
+    {
+      "code": "0x8FD8",
+      "width": 12,
+      "descriptorOffset": "0x2C7C"
+    },
+    {
+      "code": "0x9048",
+      "width": 12,
+      "descriptorOffset": "0x520"
+    },
+    {
+      "code": "0x904A",
+      "width": 12,
+      "descriptorOffset": "0x5C0"
+    },
+    {
+      "code": "0x9055",
+      "width": 12,
+      "descriptorOffset": "0x914"
+    },
+    {
+      "code": "0x9062",
+      "width": 10,
+      "descriptorOffset": "0xCC0"
+    },
+    {
+      "code": "0x9084",
+      "width": 12,
+      "descriptorOffset": "0x16A4"
+    },
+    {
+      "code": "0x9085",
+      "width": 12,
+      "descriptorOffset": "0x16F8"
+    },
+    {
+      "code": "0x908C",
+      "width": 12,
+      "descriptorOffset": "0x18CC"
+    },
+    {
+      "code": "0x908F",
+      "width": 12,
+      "descriptorOffset": "0x1960"
+    },
+    {
+      "code": "0x90A5",
+      "width": 12,
+      "descriptorOffset": "0x1E88"
+    },
+    {
+      "code": "0x90C3",
+      "width": 12,
+      "descriptorOffset": "0x2740"
+    },
+    {
+      "code": "0x90D3",
+      "width": 12,
+      "descriptorOffset": "0x2B10"
+    },
+    {
+      "code": "0x90D5",
+      "width": 12,
+      "descriptorOffset": "0x2BB0"
+    },
+    {
+      "code": "0x90D8",
+      "width": 12,
+      "descriptorOffset": "0x2C6C"
+    },
+    {
+      "code": "0x90EE",
+      "width": 13,
+      "descriptorOffset": "0x326C"
+    },
+    {
+      "code": "0x90F5",
+      "width": 12,
+      "descriptorOffset": "0x3468"
+    },
+    {
+      "code": "0x916F",
+      "width": 13,
+      "descriptorOffset": "0x10A4"
+    },
+    {
+      "code": "0x9177",
+      "width": 12,
+      "descriptorOffset": "0x12FC"
+    },
+    {
+      "code": "0x9183",
+      "width": 12,
+      "descriptorOffset": "0x1648"
+    },
+    {
+      "code": "0x9188",
+      "width": 12,
+      "descriptorOffset": "0x1794"
+    },
+    {
+      "code": "0x9192",
+      "width": 13,
+      "descriptorOffset": "0x19FC"
+    },
+    {
+      "code": "0x9198",
+      "width": 12,
+      "descriptorOffset": "0x1B7C"
+    },
+    {
+      "code": "0x919B",
+      "width": 13,
+      "descriptorOffset": "0x1C10"
+    },
+    {
+      "code": "0x91A5",
+      "width": 12,
+      "descriptorOffset": "0x1EC0"
+    },
+    {
+      "code": "0x91A7",
+      "width": 12,
+      "descriptorOffset": "0x1F30"
+    },
+    {
+      "code": "0x91B1",
+      "width": 12,
+      "descriptorOffset": "0x2220"
+    },
+    {
+      "code": "0x91CF",
+      "width": 11,
+      "descriptorOffset": "0x2A50"
+    },
+    {
+      "code": "0x924A",
+      "width": 12,
+      "descriptorOffset": "0x5B0"
+    },
+    {
+      "code": "0x9250",
+      "width": 12,
+      "descriptorOffset": "0x748"
+    },
+    {
+      "code": "0x9251",
+      "width": 12,
+      "descriptorOffset": "0x7BC"
+    },
+    {
+      "code": "0x9254",
+      "width": 12,
+      "descriptorOffset": "0x8C8"
+    },
+    {
+      "code": "0x9255",
+      "width": 11,
+      "descriptorOffset": "0x8FC"
+    },
+    {
+      "code": "0x925D",
+      "width": 12,
+      "descriptorOffset": "0xB5C"
+    },
+    {
+      "code": "0x9274",
+      "width": 12,
+      "descriptorOffset": "0x1218"
+    },
+    {
+      "code": "0x9276",
+      "width": 12,
+      "descriptorOffset": "0x12B0"
+    },
+    {
+      "code": "0x928D",
+      "width": 12,
+      "descriptorOffset": "0x18F0"
+    },
+    {
+      "code": "0x928E",
+      "width": 10,
+      "descriptorOffset": "0x191C"
+    },
+    {
+      "code": "0x9299",
+      "width": 12,
+      "descriptorOffset": "0x1BC0"
+    },
+    {
+      "code": "0x929A",
+      "width": 12,
+      "descriptorOffset": "0x1BEC"
+    },
+    {
+      "code": "0x92A5",
+      "width": 12,
+      "descriptorOffset": "0x1E98"
+    },
+    {
+      "code": "0x92A7",
+      "width": 11,
+      "descriptorOffset": "0x1F40"
+    },
+    {
+      "code": "0x92B4",
+      "width": 13,
+      "descriptorOffset": "0x2304"
+    },
+    {
+      "code": "0x92D7",
+      "width": 12,
+      "descriptorOffset": "0x2C28"
+    },
+    {
+      "code": "0x92ED",
+      "width": 12,
+      "descriptorOffset": "0x3230"
+    },
+    {
+      "code": "0x92FA",
+      "width": 12,
+      "descriptorOffset": "0x358C"
+    },
+    {
+      "code": "0x9349",
+      "width": 12,
+      "descriptorOffset": "0x584"
+    },
+    {
+      "code": "0x9372",
+      "width": 12,
+      "descriptorOffset": "0x1178"
+    },
+    {
+      "code": "0x9379",
+      "width": 12,
+      "descriptorOffset": "0x13AC"
+    },
+    {
+      "code": "0x937E",
+      "width": 12,
+      "descriptorOffset": "0x1530"
+    },
+    {
+      "code": "0x9390",
+      "width": 12,
+      "descriptorOffset": "0x199C"
+    },
+    {
+      "code": "0x9399",
+      "width": 12,
+      "descriptorOffset": "0x1B90"
+    },
+    {
+      "code": "0x939D",
+      "width": 12,
+      "descriptorOffset": "0x1C88"
+    },
+    {
+      "code": "0x93A5",
+      "width": 12,
+      "descriptorOffset": "0x1EB0"
+    },
+    {
+      "code": "0x93AE",
+      "width": 13,
+      "descriptorOffset": "0x211C"
+    },
+    {
+      "code": "0x93B1",
+      "width": 12,
+      "descriptorOffset": "0x2210"
+    },
+    {
+      "code": "0x93D9",
+      "width": 12,
+      "descriptorOffset": "0x2CC0"
+    },
+    {
+      "code": "0x93DB",
+      "width": 12,
+      "descriptorOffset": "0x2D38"
+    },
+    {
+      "code": "0x93E4",
+      "width": 12,
+      "descriptorOffset": "0x2FB4"
+    },
+    {
+      "code": "0x93EC",
+      "width": 12,
+      "descriptorOffset": "0x31FC"
+    },
+    {
+      "code": "0x93F7",
+      "width": 12,
+      "descriptorOffset": "0x34F0"
+    },
+    {
+      "code": "0x93FC",
+      "width": 10,
+      "descriptorOffset": "0x35E4"
+    },
+    {
+      "code": "0x9446",
+      "width": 12,
+      "descriptorOffset": "0x4C0"
+    },
+    {
+      "code": "0x944A",
+      "width": 12,
+      "descriptorOffset": "0x5A0"
+    },
+    {
+      "code": "0x944E",
+      "width": 11,
+      "descriptorOffset": "0x6C0"
+    },
+    {
+      "code": "0x9459",
+      "width": 13,
+      "descriptorOffset": "0xA14"
+    },
+    {
+      "code": "0x945B",
+      "width": 12,
+      "descriptorOffset": "0xAC4"
+    },
+    {
+      "code": "0x9465",
+      "width": 12,
+      "descriptorOffset": "0xDC4"
+    },
+    {
+      "code": "0x9468",
+      "width": 12,
+      "descriptorOffset": "0xE90"
+    },
+    {
+      "code": "0x946A",
+      "width": 13,
+      "descriptorOffset": "0xF30"
+    },
+    {
+      "code": "0x946B",
+      "width": 13,
+      "descriptorOffset": "0xF6C"
+    },
+    {
+      "code": "0x946E",
+      "width": 12,
+      "descriptorOffset": "0x1068"
+    },
+    {
+      "code": "0x9470",
+      "width": 12,
+      "descriptorOffset": "0x10F0"
+    },
+    {
+      "code": "0x9477",
+      "width": 12,
+      "descriptorOffset": "0x12F4"
+    },
+    {
+      "code": "0x947A",
+      "width": 12,
+      "descriptorOffset": "0x1400"
+    },
+    {
+      "code": "0x947E",
+      "width": 13,
+      "descriptorOffset": "0x1550"
+    },
+    {
+      "code": "0x948C",
+      "width": 12,
+      "descriptorOffset": "0x18C4"
+    },
+    {
+      "code": "0x948E",
+      "width": 12,
+      "descriptorOffset": "0x1924"
+    },
+    {
+      "code": "0x9499",
+      "width": 12,
+      "descriptorOffset": "0x1B98"
+    },
+    {
+      "code": "0x949B",
+      "width": 12,
+      "descriptorOffset": "0x1C18"
+    },
+    {
+      "code": "0x94A0",
+      "width": 12,
+      "descriptorOffset": "0x1D54"
+    },
+    {
+      "code": "0x94B0",
+      "width": 12,
+      "descriptorOffset": "0x21C4"
+    },
+    {
+      "code": "0x94B1",
+      "width": 12,
+      "descriptorOffset": "0x2208"
+    },
+    {
+      "code": "0x94B2",
+      "width": 12,
+      "descriptorOffset": "0x224C"
+    },
+    {
+      "code": "0x94D1",
+      "width": 12,
+      "descriptorOffset": "0x2AB0"
+    },
+    {
+      "code": "0x94D8",
+      "width": 11,
+      "descriptorOffset": "0x2C94"
+    },
+    {
+      "code": "0x94DA",
+      "width": 12,
+      "descriptorOffset": "0x2D0C"
+    },
+    {
+      "code": "0x94DB",
+      "width": 11,
+      "descriptorOffset": "0x2D48"
+    },
+    {
+      "code": "0x94DE",
+      "width": 12,
+      "descriptorOffset": "0x2E14"
+    },
+    {
+      "code": "0x94E4",
+      "width": 11,
+      "descriptorOffset": "0x2FE4"
+    },
+    {
+      "code": "0x94ED",
+      "width": 12,
+      "descriptorOffset": "0x3228"
+    },
+    {
+      "code": "0x94F2",
+      "width": 12,
+      "descriptorOffset": "0x33BC"
+    },
+    {
+      "code": "0x94F6",
+      "width": 11,
+      "descriptorOffset": "0x349C"
+    },
+    {
+      "code": "0x94F7",
+      "width": 12,
+      "descriptorOffset": "0x34F8"
+    },
+    {
+      "code": "0x94FC",
+      "width": 12,
+      "descriptorOffset": "0x35D4"
+    },
+    {
+      "code": "0x9550",
+      "width": 12,
+      "descriptorOffset": "0x758"
+    },
+    {
+      "code": "0x955D",
+      "width": 12,
+      "descriptorOffset": "0xB54"
+    },
+    {
+      "code": "0x9560",
+      "width": 13,
+      "descriptorOffset": "0xC40"
+    },
+    {
+      "code": "0x9574",
+      "width": 12,
+      "descriptorOffset": "0x1220"
+    },
+    {
+      "code": "0x9580",
+      "width": 12,
+      "descriptorOffset": "0x1584"
+    },
+    {
+      "code": "0x9581",
+      "width": 12,
+      "descriptorOffset": "0x15D0"
+    },
+    {
+      "code": "0x9585",
+      "width": 12,
+      "descriptorOffset": "0x16E8"
+    },
+    {
+      "code": "0x959B",
+      "width": 12,
+      "descriptorOffset": "0x1C28"
+    },
+    {
+      "code": "0x959C",
+      "width": 12,
+      "descriptorOffset": "0x1C3C"
+    },
+    {
+      "code": "0x959E",
+      "width": 12,
+      "descriptorOffset": "0x1CFC"
+    },
+    {
+      "code": "0x95A3",
+      "width": 12,
+      "descriptorOffset": "0x1E40"
+    },
+    {
+      "code": "0x95A5",
+      "width": 12,
+      "descriptorOffset": "0x1EA8"
+    },
+    {
+      "code": "0x95C0",
+      "width": 12,
+      "descriptorOffset": "0x2664"
+    },
+    {
+      "code": "0x95C3",
+      "width": 12,
+      "descriptorOffset": "0x2750"
+    },
+    {
+      "code": "0x95CF",
+      "width": 11,
+      "descriptorOffset": "0x2A40"
+    },
+    {
+      "code": "0x95D2",
+      "width": 13,
+      "descriptorOffset": "0x2AF4"
+    },
+    {
+      "code": "0x95D9",
+      "width": 12,
+      "descriptorOffset": "0x2CE0"
+    },
+    {
+      "code": "0x95DB",
+      "width": 12,
+      "descriptorOffset": "0x2D50"
+    },
+    {
+      "code": "0x95EF",
+      "width": 12,
+      "descriptorOffset": "0x32A8"
+    },
+    {
+      "code": "0x95F4",
+      "width": 12,
+      "descriptorOffset": "0x3444"
+    },
+    {
+      "code": "0x95F8",
+      "width": 12,
+      "descriptorOffset": "0x351C"
+    },
+    {
+      "code": "0x95F9",
+      "width": 12,
+      "descriptorOffset": "0x3548"
+    },
+    {
+      "code": "0x964A",
+      "width": 12,
+      "descriptorOffset": "0x5A8"
+    },
+    {
+      "code": "0x9654",
+      "width": 12,
+      "descriptorOffset": "0x8C0"
+    },
+    {
+      "code": "0x9659",
+      "width": 12,
+      "descriptorOffset": "0xA1C"
+    },
+    {
+      "code": "0x967A",
+      "width": 13,
+      "descriptorOffset": "0x13F0"
+    },
+    {
+      "code": "0x9684",
+      "width": 13,
+      "descriptorOffset": "0x1694"
+    },
+    {
+      "code": "0x9685",
+      "width": 13,
+      "descriptorOffset": "0x16E0"
+    },
+    {
+      "code": "0x969E",
+      "width": 12,
+      "descriptorOffset": "0x1CEC"
+    },
+    {
+      "code": "0x96A3",
+      "width": 13,
+      "descriptorOffset": "0x1E28"
+    },
+    {
+      "code": "0x96AC",
+      "width": 11,
+      "descriptorOffset": "0x20A4"
+    },
+    {
+      "code": "0x96B0",
+      "width": 13,
+      "descriptorOffset": "0x21EC"
+    },
+    {
+      "code": "0x96B1",
+      "width": 12,
+      "descriptorOffset": "0x2230"
+    },
+    {
+      "code": "0x96C0",
+      "width": 12,
+      "descriptorOffset": "0x266C"
+    },
+    {
+      "code": "0x96D2",
+      "width": 13,
+      "descriptorOffset": "0x2ACC"
+    },
+    {
+      "code": "0x96DA",
+      "width": 11,
+      "descriptorOffset": "0x2D14"
+    },
+    {
+      "code": "0x96F4",
+      "width": 12,
+      "descriptorOffset": "0x3434"
+    },
+    {
+      "code": "0x9754",
+      "width": 12,
+      "descriptorOffset": "0x8D0"
+    },
+    {
+      "code": "0x9756",
+      "width": 12,
+      "descriptorOffset": "0x948"
+    },
+    {
+      "code": "0x9762",
+      "width": 12,
+      "descriptorOffset": "0xCD0"
+    },
+    {
+      "code": "0x977E",
+      "width": 12,
+      "descriptorOffset": "0x1538"
+    },
+    {
+      "code": "0x9781",
+      "width": 12,
+      "descriptorOffset": "0x15B0"
+    },
+    {
+      "code": "0x9792",
+      "width": 12,
+      "descriptorOffset": "0x1A04"
+    },
+    {
+      "code": "0x97C3",
+      "width": 12,
+      "descriptorOffset": "0x2728"
+    },
+    {
+      "code": "0x97F4",
+      "width": 12,
+      "descriptorOffset": "0x3414"
+    },
+    {
+      "code": "0x97F6",
+      "width": 12,
+      "descriptorOffset": "0x34BC"
+    },
+    {
+      "code": "0x9842",
+      "width": 12,
+      "descriptorOffset": "0x3D0"
+    },
+    {
+      "code": "0x9848",
+      "width": 12,
+      "descriptorOffset": "0x540"
+    },
+    {
+      "code": "0x9849",
+      "width": 12,
+      "descriptorOffset": "0x574"
+    },
+    {
+      "code": "0x984A",
+      "width": 12,
+      "descriptorOffset": "0x598"
+    },
+    {
+      "code": "0x984D",
+      "width": 12,
+      "descriptorOffset": "0x68C"
+    },
+    {
+      "code": "0x9851",
+      "width": 12,
+      "descriptorOffset": "0x78C"
+    },
+    {
+      "code": "0x9853",
+      "width": 12,
+      "descriptorOffset": "0x884"
+    },
+    {
+      "code": "0x9854",
+      "width": 12,
+      "descriptorOffset": "0x8A8"
+    },
+    {
+      "code": "0x9856",
+      "width": 12,
+      "descriptorOffset": "0x930"
+    },
+    {
+      "code": "0x9859",
+      "width": 12,
+      "descriptorOffset": "0xA24"
+    },
+    {
+      "code": "0x9861",
+      "width": 13,
+      "descriptorOffset": "0xC8C"
+    },
+    {
+      "code": "0x9863",
+      "width": 12,
+      "descriptorOffset": "0xCEC"
+    },
+    {
+      "code": "0x9866",
+      "width": 11,
+      "descriptorOffset": "0xE08"
+    },
+    {
+      "code": "0x986C",
+      "width": 12,
+      "descriptorOffset": "0xFA8"
+    },
+    {
+      "code": "0x9872",
+      "width": 12,
+      "descriptorOffset": "0x1190"
+    },
+    {
+      "code": "0x98FC",
+      "width": 12,
+      "descriptorOffset": "0x35F4"
+    },
+    {
+      "code": "0x99E9",
+      "width": 12,
+      "descriptorOffset": "0x3118"
+    },
+    {
+      "code": "0x9A99",
+      "width": 12,
+      "descriptorOffset": "0x1BB8"
+    },
+    {
+      "code": "0x9AE2",
+      "width": 12,
+      "descriptorOffset": "0x2F44"
+    },
+    {
+      "code": "0x9C57",
+      "width": 13,
+      "descriptorOffset": "0x974"
+    },
+    {
+      "code": "0x9D7C",
+      "width": 13,
+      "descriptorOffset": "0x1488"
+    },
+    {
+      "code": "0x9F42",
+      "width": 12,
+      "descriptorOffset": "0x3D8"
+    },
+    {
+      "code": "0x9F94",
+      "width": 12,
+      "descriptorOffset": "0x1A5C"
+    },
+    {
+      "code": "0xE1D2",
+      "width": 12,
+      "descriptorOffset": "0x2AFC"
+    },
+    {
+      "code": "0xE24D",
+      "width": 12,
+      "descriptorOffset": "0x684"
+    },
+    {
+      "code": "0xE34A",
+      "width": 12,
+      "descriptorOffset": "0x5C8"
+    },
+    {
+      "code": "0xE359",
+      "width": 12,
+      "descriptorOffset": "0xA2C"
+    },
+    {
+      "code": "0xE3A9",
+      "width": 12,
+      "descriptorOffset": "0x1FC8"
+    },
+    {
+      "code": "0xE6D1",
+      "width": 12,
+      "descriptorOffset": "0x2AA0"
+    },
+    {
+      "code": "0xE888",
+      "width": 12,
+      "descriptorOffset": "0x17C4"
+    },
+    {
+      "code": "0xE978",
+      "width": 13,
+      "descriptorOffset": "0x1368"
+    }
+  ]
+}

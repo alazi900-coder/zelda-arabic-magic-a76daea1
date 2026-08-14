@@ -37,6 +37,7 @@ import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
+import { FE12_SOURCE_GAME } from "@/lib/fe12/fe12-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
@@ -65,8 +66,15 @@ export function useEditorState() {
   // assuming Risen 1. Only meaningful when entries are actually Risen; unused
   // for Xenoblade/BDAT sessions.
   const [risenVariant, setRisenVariant] = useState<'risen1' | 'risen2'>('risen1');
+  // Read once: the technical-tag guard has game-specific contracts. FE12 exposes
+  // raw control bytes as `{XX}` in the source preview, so applying the generic
+  // tag-restoration algorithm would replace a user's Arabic line with that source.
+  const [editorSourceGame, setEditorSourceGame] = useState('');
   useEffect(() => {
-    idbGet<string>('editor-source-game').then(g => { if (g === 'risen2') setRisenVariant('risen2'); });
+    idbGet<string>('editor-source-game').then(g => {
+      setEditorSourceGame(g || '');
+      if (g === 'risen2') setRisenVariant('risen2');
+    });
   }, []);
 
   const scanResults = useEditorScanResults();
@@ -639,6 +647,7 @@ export function useEditorState() {
       await saveToIDB(s);
       console.log('[FORCE-SAVE] Saved', Object.keys(s.translations).length, 'translation keys to IDB');
     }
+    return s;
   }, [saveToIDB]);
 
   // Wire the ref so useEditorBuild can call it
@@ -895,7 +904,7 @@ export function useEditorState() {
         }
       }
     }
-    if (entry && hasTechnicalTags(entry.original) && value.trim()) {
+    if (entry && editorSourceGame !== FE12_SOURCE_GAME && hasTechnicalTags(entry.original) && value.trim()) {
       // Check for missing closing tags BEFORE auto-fix (to show user what was wrong)
       const missingClosing = findMissingClosingTags(entry.original, value);
 
@@ -946,6 +955,9 @@ export function useEditorState() {
         if (risenNeedsReview) reviewKeys.add(key); else reviewKeys.delete(key);
         next.risenTagReviewKeys = reviewKeys;
       }
+      // Keep build actions in the same event cycle from seeing a stale render
+      // after a manual ✓ / Ctrl+Enter commit (notably the FE12 local builder).
+      latestStateRef.current = next;
       return next;
     });
 
@@ -1786,6 +1798,7 @@ export function useEditorState() {
     handleAcceptFuzzy, handleRejectFuzzy, handleAcceptAllFuzzy, handleRejectAllFuzzy,
     handleCloudSave, handleCloudLoad,
     handleApplyArabicProcessing, handleUndoArabicProcessing, handlePreBuild, handleBuild, handleBulkReplace, loadDemoBdatData, handleCheckIntegrity, handleRestoreOriginals, handleRemoveAllDiacritics,
+    forceSave,
     handleScanNewlines, handleApplyNewlineClean, handleRejectNewlineClean, handleApplyAllNewlineCleans,
     handleScanDiacritics, handleApplyDiacriticsClean, handleRejectDiacriticsClean, handleApplyAllDiacriticsCleans,
     

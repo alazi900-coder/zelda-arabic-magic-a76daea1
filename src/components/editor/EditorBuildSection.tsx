@@ -16,6 +16,7 @@ import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-edi
 import { buildReshefRom, RESHEF_BUFFER_KEY } from "@/lib/yugioh/reshef-editor-bridge";
 import { buildWctLabelRom, DEFAULT_WCT_LABELS } from "@/lib/yugioh/wct-label-builder";
 import { WCT_BUFFER_KEY, WCT_ENTRY_FILE } from "@/lib/yugioh/wct-editor-bridge";
+import { buildFE12RomFromState, FE12_BUFFER_KEY, type FE12FontInjectionReport } from "@/lib/fe12/fe12-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -28,7 +29,7 @@ type EditorSubset = Pick<
   | "mirrorPunctuation" | "setMirrorPunctuation"
   | "handleApplyArabicProcessing" | "applyingArabic"
   | "handleUndoArabicProcessing"
-  | "building" | "handleCheckIntegrity" | "handlePreBuild"
+  | "building" | "handleCheckIntegrity" | "handlePreBuild" | "forceSave"
 >;
 
 interface EditorBuildSectionProps {
@@ -40,6 +41,7 @@ interface EditorBuildSectionProps {
   isPokemon?: boolean;
   isReshef?: boolean;
   isWct?: boolean;
+  isFe12?: boolean;
   isGameMaker?: boolean;
   isDragonSword?: boolean;
   unprocessedArabicCount: number;
@@ -58,6 +60,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isPokemon = false,
   isReshef = false,
   isWct = false,
+  isFe12 = false,
   isGameMaker = false,
   isDragonSword = false,
   unprocessedArabicCount,
@@ -73,6 +76,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [reshefBuilding, setReshefBuilding] = useState(false);
   const [wctBuilding, setWctBuilding] = useState(false);
+  const [fe12Building, setFe12Building] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
@@ -89,6 +93,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
   const [showSkippedDialog, setShowSkippedDialog] = useState(false);
+  const [fe12FontReport, setFe12FontReport] = useState<FE12FontInjectionReport | null>(null);
+  const [showFe12FontReport, setShowFe12FontReport] = useState(false);
 
   const handleMother3Build = async () => {
     setM3Building(true);
@@ -312,6 +318,47 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في اختبار WCT", description: (err as Error).message, variant: "destructive" });
     } finally {
       setWctBuilding(false);
+    }
+  };
+
+  const handleFe12Build = async () => {
+    setFe12Building(true);
+    try {
+      const buffer = await idbGet<ArrayBuffer>(FE12_BUFFER_KEY);
+      if (!buffer) throw new Error("لم يُعثر على ROM Fire Emblem — أعد فتحه من صفحة Fire Emblem 12.");
+      // FE12 builds locally and does not go through the shared confirmation
+      // pipeline, so flush a just-committed manual translation before reading it.
+      const latestState = await editor.forceSave();
+      const result = buildFE12RomFromState(new Uint8Array(buffer), latestState?.translations || editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        const unsupported = result.unsupported?.length
+          ? ` | أمثلة: ${result.unsupported.slice(0, 3).map((item) => item.characters.join("")).join("، ")}`
+          : "";
+        toast({ title: "خطأ في بناء Fire Emblem", description: `${result.error}${unsupported}`, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "Fire-Emblem-12-Arabic.nds";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const relocated = result.modifiedResources.filter((resource) => resource.relocated).length;
+      if (result.fontReport) {
+        setFe12FontReport(result.fontReport);
+        setShowFe12FontReport(true);
+      }
+      toast({
+        title: "✅ تم بناء ROM Fire Emblem عربي",
+        description: `${result.translatedLines} سطر مترجم | ${result.fontGlyphs} شكل خط عربي | ${result.modifiedResources.length} موارد معدّلة${result.fontReport ? ` | ${result.fontReport.slots.usedCodes.length} خانة آمنة — التقرير مفتوح` : ""}${relocated ? ` | نُقل ${relocated} مورد NitroFS بأمان` : ""}`,
+      });
+    } catch (error) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء Fire Emblem", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setFe12Building(false);
     }
   };
 
@@ -576,6 +623,66 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         </DialogContent>
       </Dialog>
 
+      {/* FE12 font report — this is deliberately local to the build result, so
+          it documents the exact font resource and safe slots that entered the
+          ROM the user just downloaded. */}
+      <Dialog open={showFe12FontReport} onOpenChange={setShowFe12FontReport}>
+        <DialogContent className="max-w-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="font-display">تقرير حقن الخط العربي — Fire Emblem 12</DialogTitle>
+            <DialogDescription className="font-body">
+              {fe12FontReport
+                ? "هذا التقرير يخص ROM الذي بُني للتو. لم تُستبدل حروف الإنجليزية؛ استُخدمت خانات خط حوار آمنة فقط."
+                : "لا يوجد تقرير حقن من آخر بناء بعد."}
+            </DialogDescription>
+          </DialogHeader>
+          {fe12FontReport && (
+            <div className="space-y-4 text-sm font-body">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-md border border-border bg-muted/40 p-2"><p className="text-xs text-muted-foreground">مصدر الخط</p><p className="mt-1 font-bold">{fe12FontReport.source.name}</p></div>
+                <div className="rounded-md border border-border bg-muted/40 p-2"><p className="text-xs text-muted-foreground">صيغة الرسم</p><p className="mt-1 font-bold">{fe12FontReport.source.raster} · {fe12FontReport.source.colorDepth}</p></div>
+                <div className="rounded-md border border-border bg-muted/40 p-2"><p className="text-xs text-muted-foreground">الأشكال المحقونة</p><p className="mt-1 font-bold">{fe12FontReport.glyphs.injected} / {fe12FontReport.glyphs.requested}</p></div>
+                <div className="rounded-md border border-border bg-muted/40 p-2"><p className="text-xs text-muted-foreground">حجم المورد</p><p className="mt-1 font-bold">لم يتغير</p></div>
+              </div>
+              <div className="rounded-md border border-border p-3">
+                <p className="font-display font-bold">الخانات المستخدمة</p>
+                <p className="mt-1 text-xs text-muted-foreground">{fe12FontReport.slots.usedCodes.length} خانة مستخدمة من {fe12FontReport.slots.listedUnused} خانة غير مستخدمة مرشحة. استُبعدت {fe12FontReport.slots.rejectedAsObserved} خانة ظهرت في حوار الروم الإنجليزي.</p>
+                <div dir="ltr" className="mt-2 max-h-20 overflow-y-auto break-all rounded bg-muted/50 p-2 font-mono text-[11px] text-left">{fe12FontReport.slots.usedCodes.join(" ")}</div>
+              </div>
+              <div className="rounded-md border border-border p-3">
+                <p className="font-display font-bold">مورد الخط</p>
+                <p className="mt-1 text-xs text-muted-foreground"><span dir="ltr" className="font-mono">{fe12FontReport.resource.path}</span> — {fe12FontReport.resource.originalBytes.toLocaleString()} بايت قبل وبعد الحقن.</p>
+              </div>
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <p className="font-display font-bold text-emerald-700 dark:text-emerald-400">فحوصات السلامة</p>
+                <ul className="mt-1 list-disc space-y-1 pr-5 text-xs text-muted-foreground">{fe12FontReport.safety.map((note) => <li key={note}>{note}</li>)}</ul>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            {fe12FontReport && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="font-body"
+                onClick={() => {
+                  const blob = new Blob([JSON.stringify(fe12FontReport, null, 2)], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const anchor = document.createElement("a");
+                  anchor.href = url;
+                  anchor.download = "fire-emblem-12-font-injection-report.json";
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="ml-1 h-4 w-4" /> تنزيل التقرير
+              </Button>
+            )}
+            <Button size="sm" onClick={() => setShowFe12FontReport(false)} className="font-body">إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Arabic Unprocessed Warning Banner — meaningless for Risen: its Arabic
           is expected to stay unshaped in the editor by design (shapeArabicForRisen
@@ -586,7 +693,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isReshef && !isWct && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isReshef && !isWct && !isFe12 && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -616,7 +723,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isReshef || isWct}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isReshef || isWct || isFe12}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -665,7 +772,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <ShieldCheck className="w-4 h-4" />
           <span className="hidden sm:inline">سلامة</span>
         </Button>
-        {isMother3 ? (
+        {isFe12 ? (
+          <Button size="lg" onClick={handleFe12Build} disabled={fe12Building} className="flex-1 min-w-[200px] font-display font-bold">
+            {fe12Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM Fire Emblem عربي وتنزيله
+          </Button>
+        ) : isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">
             {m3Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM معرّب وتنزيله
           </Button>

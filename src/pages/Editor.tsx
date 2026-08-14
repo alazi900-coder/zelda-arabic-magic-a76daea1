@@ -133,6 +133,7 @@ const Editor = () => {
   const isPokemonEntries = PKM_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isReshefEntries = editor.state?.entries?.[0]?.msbtFile === "ygo_reshef_dialogue";
   const isWctEntries = editor.state?.entries?.[0]?.msbtFile === "ygo_wct_catalog";
+  const isFe12Entries = sourceGame === "fireemblem12" && /^m\//.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isGameMakerEntries = editor.state?.entries?.[0]?.msbtFile === "STRG";
   const isDragonSwordEntries = DS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   // "Back" link target — must match whichever tool actually loaded the
@@ -148,6 +149,8 @@ const Editor = () => {
     ? "/pokemon/text"
     : isReshefEntries || isWctEntries
     ? "/yugioh"
+    : isFe12Entries
+    ? "/fire-emblem-12"
     : isGameMakerEntries
     ? "/gamemaker"
     : isDragonSwordEntries
@@ -322,7 +325,7 @@ const Editor = () => {
                   <p className="text-base md:text-lg font-display font-bold">
                     {new Set((editor.state?.entries || []).map(e => { const p = e.msbtFile.split(':'); return p[0] === 'bdat-bin' ? p[1] : e.msbtFile; })).size}
                   </p>
-                  <p className="text-[10px] md:text-xs text-muted-foreground">ملفات BDAT</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">{isFe12Entries ? "ملفات الحوار" : "ملفات BDAT"}</p>
                 </div>
               </CardContent>
             </Card>
@@ -663,6 +666,7 @@ const Editor = () => {
             isPokemon={isPokemonEntries}
             isReshef={isReshefEntries}
             isWct={isWctEntries}
+            isFe12={isFe12Entries}
             isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}
             unprocessedArabicCount={unprocessedArabicCount}

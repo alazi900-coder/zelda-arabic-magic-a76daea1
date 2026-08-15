@@ -37,7 +37,6 @@ import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
-import { FE12_SOURCE_GAME } from "@/lib/fe12/fe12-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
@@ -66,9 +65,7 @@ export function useEditorState() {
   // assuming Risen 1. Only meaningful when entries are actually Risen; unused
   // for Xenoblade/BDAT sessions.
   const [risenVariant, setRisenVariant] = useState<'risen1' | 'risen2'>('risen1');
-  // Read once: the technical-tag guard has game-specific contracts. FE12 exposes
-  // raw control bytes as `{XX}` in the source preview, so applying the generic
-  // tag-restoration algorithm would replace a user's Arabic line with that source.
+  // Read once: the technical-tag guard has game-specific contracts.
   const [editorSourceGame, setEditorSourceGame] = useState('');
   useEffect(() => {
     idbGet<string>('editor-source-game').then(g => {
@@ -904,7 +901,7 @@ export function useEditorState() {
         }
       }
     }
-    if (entry && editorSourceGame !== FE12_SOURCE_GAME && hasTechnicalTags(entry.original) && value.trim()) {
+    if (entry && hasTechnicalTags(entry.original) && value.trim()) {
       // Check for missing closing tags BEFORE auto-fix (to show user what was wrong)
       const missingClosing = findMissingClosingTags(entry.original, value);
 
@@ -956,7 +953,7 @@ export function useEditorState() {
         next.risenTagReviewKeys = reviewKeys;
       }
       // Keep build actions in the same event cycle from seeing a stale render
-      // after a manual ✓ / Ctrl+Enter commit (notably the FE12 local builder).
+      // after a manual ✓ / Ctrl+Enter commit.
       latestStateRef.current = next;
       return next;
     });

@@ -55,9 +55,6 @@ const PokemonFont = lazyWithIgnoredRef(() => import("./pages/PokemonFont"));
 const PokemonText = lazyWithIgnoredRef(() => import("./pages/PokemonText"));
 const YuGiOh = lazyWithIgnoredRef(() => import("./pages/YuGiOh"));
 const YuGiOhImages = lazyWithIgnoredRef(() => import("./pages/YuGiOhImages"));
-const FireEmblem12 = lazyWithIgnoredRef(() => import("./pages/FireEmblem12"));
-const FireEmblem12Images = lazyWithIgnoredRef(() => import("./pages/FireEmblem12Images"));
-const FireEmblemSacredStones = lazyWithIgnoredRef(() => import("./pages/FireEmblemSacredStones"));
 const GameMaker = lazyWithIgnoredRef(() => import("./pages/GameMakerProcess"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
 
@@ -113,9 +110,6 @@ const App = () => (
                 <Route path="/pokemon/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Ruby Destiny"><PokemonText /></ErrorBoundary>} />
                 <Route path="/yugioh" element={<ErrorBoundary fallbackTitle="خطأ في أداة Yu-Gi-Oh!"><YuGiOh /></ErrorBoundary>} />
                 <Route path="/yugioh/images" element={<ErrorBoundary fallbackTitle="خطأ في محرر صور Yu-Gi-Oh!"><YuGiOhImages /></ErrorBoundary>} />
-                <Route path="/fire-emblem-12" element={<ErrorBoundary fallbackTitle="خطأ في أداة Fire Emblem"><FireEmblem12 /></ErrorBoundary>} />
-                <Route path="/fire-emblem-12/images" element={<ErrorBoundary fallbackTitle="خطأ في محرر صور Fire Emblem"><FireEmblem12Images /></ErrorBoundary>} />
-                <Route path="/fire-emblem-sacred-stones" element={<ErrorBoundary fallbackTitle="خطأ في أداة Sacred Stones"><FireEmblemSacredStones /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
                 <Route path="/dragonsword" element={<ErrorBoundary fallbackTitle="خطأ في أداة DragonSword Awakening"><DragonSword /></ErrorBoundary>} />
                 <Route path="/gamemaker" element={<ErrorBoundary fallbackTitle="خطأ في صفحة GameMaker"><GameMaker /></ErrorBoundary>} />

@@ -58,10 +58,9 @@ interface UseEditorBuildProps {
  * format. Detected from the loaded entries themselves (same `.tab` heuristic
  * used everywhere else in the editor) rather than a passed-in flag, so this
  * never drifts out of sync with what's actually loaded. */
-export function detectGameType(entries: EditorState["entries"]): "xenoblade" | "risen" | "risen3" | "fireemblem12" | "unknown" {
+export function detectGameType(entries: EditorState["entries"]): "xenoblade" | "risen" | "risen3" | "unknown" {
   if (entries.length === 0) return "unknown";
   const f = entries[0]?.msbtFile || "";
-  if (/^m\//.test(f)) return "fireemblem12";
   if (/\.gar3$/i.test(f)) return "risen3";
   if (/\.tab$/i.test(f)) return "risen";
   return "xenoblade";

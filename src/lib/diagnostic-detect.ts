@@ -357,7 +357,6 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
 
   // 19. Technical multiset mismatch
   const technicalDiff = diffTechnicalTags(entry.original, trimmed);
-  const hasReshefControls = /(?:#[0-5]|%)/.test(entry.original);
   const hasSpecificTechnicalIssue = issues.some(issue => SPECIFIC_TECHNICAL_ISSUE_CATEGORIES.has(issue.category));
   if (!technicalDiff.exactTagMatch && !hasSpecificTechnicalIssue) {
     const messageParts: string[] = [];
@@ -372,20 +371,16 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
       );
     }
     issues.push({
-      ...base, severity: "critical", category: hasReshefControls ? "reshef_control_mismatch" : "technical_mismatch",
-      message: hasReshefControls
-        ? `وسوم Reshef الحرفية (#0–#5 أو %) غير مطابقة للأصل — سيتم استعادتها تلقائياً: ${messageParts.join(" — ")}`
-        : (messageParts.length > 0 ? messageParts.join(" — ") : "مجموعة الرموز التقنية لا تطابق الأصل بدقة"),
+      ...base, severity: "critical", category: "technical_mismatch",
+      message: messageParts.length > 0 ? messageParts.join(" — ") : "مجموعة الرموز التقنية لا تطابق الأصل بدقة",
     });
   }
 
   // 19. Tag order mismatch
   if (technicalDiff.exactTagMatch && !technicalDiff.sequenceMatch) {
     issues.push({
-      ...base, severity: "critical", category: hasReshefControls ? "reshef_control_order_mismatch" : "tag_order_mismatch",
-      message: hasReshefControls
-        ? "وسوم Reshef الحرفية موجودة لكن ترتيبها تغير — سيعيد الفحص العميق ترتيبها من النص الأصلي"
-        : "الوسوم التقنية موجودة لكن ترتيبها مقلوب مقارنة بالأصل — يسبب تجمّد المشاهد",
+      ...base, severity: "critical", category: "tag_order_mismatch",
+      message: "الوسوم التقنية موجودة لكن ترتيبها مقلوب مقارنة بالأصل — يسبب تجمّد المشاهد",
     });
   }
 

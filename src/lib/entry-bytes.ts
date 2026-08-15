@@ -15,7 +15,6 @@
 
 import { encodeArabicForPkm } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
-import { RESHEF_ENTRY_FILE, measureReshefTextBytes } from "@/lib/yugioh/reshef-editor-bridge";
 
 /**
  * Bytes this text will occupy in `msbtFile`'s game, excluding any terminator.
@@ -30,6 +29,5 @@ export function measureEntryBytes(msbtFile: string | undefined, text: string): n
     const encoded = encodeArabicForPkm(text);
     return encoded.bytes.length + encoded.unmapped.length;
   }
-  if (msbtFile === RESHEF_ENTRY_FILE) return measureReshefTextBytes(text);
   return new TextEncoder().encode(text).length;
 }

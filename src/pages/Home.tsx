@@ -126,6 +126,18 @@ const games = [
     arrowClass: "text-[hsl(210,85%,70%)]",
   },
   {
+    title: "Fire Emblem: The Sacred Stones — GBA",
+    subtitle: "عرّب The Sacred Stones الأوروبية",
+    desc: "ارفع نسخة أوروبا متعددة اللغات، واستخرج النصوص الإنجليزية إلى المحرر، ثم ابنِ ROM معرّباً. يحقن الباني خط Noto Kufi Arabic في خطّي الحوار والقوائم ويعرض تقريراً واضحاً بالخانات والملفات المعدّلة.",
+    link: "/fire-emblem-sacred-stones",
+    image: dragonSwordBg,
+    formats: [".gba", "GBA ROM", "Europe"],
+    cardClass: "border-[hsl(22,80%,48%)]/30 hover:border-[hsl(22,80%,48%)]/60",
+    formatClass: "bg-[hsl(22,80%,48%)]/20 text-[hsl(30,92%,68%)] border-[hsl(22,80%,48%)]/30",
+    subtitleClass: "text-[hsl(30,92%,68%)]",
+    arrowClass: "text-[hsl(30,92%,68%)]",
+  },
+  {
     title: "GameMaker Studio",
     subtitle: "عرّب ألعاب GameMaker",
     desc: "استخراج النصوص من ملفات GameMaker (IFF GEN8) مثل game.droid وألعاب المحرك الأخرى، تحريرها في المحرر، وإعادة بناء الملف معرّب بالعربية",

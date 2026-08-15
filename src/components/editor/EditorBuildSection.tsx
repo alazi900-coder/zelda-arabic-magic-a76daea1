@@ -17,6 +17,7 @@ import { buildReshefRom, RESHEF_BUFFER_KEY } from "@/lib/yugioh/reshef-editor-br
 import { buildWctLabelRom, DEFAULT_WCT_LABELS } from "@/lib/yugioh/wct-label-builder";
 import { WCT_BUFFER_KEY, WCT_ENTRY_FILE } from "@/lib/yugioh/wct-editor-bridge";
 import { buildFE12RomFromState, FE12_BUFFER_KEY, type FE12FontInjectionReport } from "@/lib/fe12/fe12-editor-bridge";
+import { buildFE8RomFromState, FE8_BUFFER_KEY, type FE8FontInjectionReport } from "@/lib/fe8/fe8-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -42,6 +43,7 @@ interface EditorBuildSectionProps {
   isReshef?: boolean;
   isWct?: boolean;
   isFe12?: boolean;
+  isFe8?: boolean;
   isGameMaker?: boolean;
   isDragonSword?: boolean;
   unprocessedArabicCount: number;
@@ -61,6 +63,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isReshef = false,
   isWct = false,
   isFe12 = false,
+  isFe8 = false,
   isGameMaker = false,
   isDragonSword = false,
   unprocessedArabicCount,
@@ -77,6 +80,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [reshefBuilding, setReshefBuilding] = useState(false);
   const [wctBuilding, setWctBuilding] = useState(false);
   const [fe12Building, setFe12Building] = useState(false);
+  const [fe8Building, setFe8Building] = useState(false);
+  const [fe8FontReport, setFe8FontReport] = useState<FE8FontInjectionReport | null>(null);
   const [gmBuilding, setGmBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
@@ -359,6 +364,41 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في بناء Fire Emblem", description: (error as Error).message, variant: "destructive" });
     } finally {
       setFe12Building(false);
+    }
+  };
+
+  const handleFe8Build = async () => {
+    setFe8Building(true);
+    try {
+      const buffer = await idbGet<ArrayBuffer>(FE8_BUFFER_KEY);
+      if (!buffer) throw new Error("لم يُعثر على ROM Sacred Stones — أعد فتحه من صفحة Fire Emblem: The Sacred Stones.");
+      // Sacred Stones performs Arabic shaping/reversal during its own build.
+      // Applying the editor-wide transform beforehand would reverse Arabic twice.
+      const latestState = await editor.forceSave();
+      const result = buildFE8RomFromState(new Uint8Array(buffer), latestState?.translations || editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        const unsupported = result.unsupported?.length ? ` أمثلة: ${result.unsupported.slice(0, 12).join("، ")}` : "";
+        toast({ title: "خطأ في بناء Sacred Stones", description: `${result.error}${unsupported}`, variant: "destructive" });
+        return;
+      }
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "Fire-Emblem-Sacred-Stones-Arabic.gba";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setFe8FontReport(result.fontReport);
+      toast({
+        title: "تم بناء ROM Sacred Stones العربي",
+        description: `${result.translatedLines} رسالة مترجمة | ${result.encodedBytes} بايت Huffman | ${result.fontReport.glyphsInjected} شكل عربي في خطّي اللعبة`,
+      });
+    } catch (error) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء Sacred Stones", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setFe8Building(false);
     }
   };
 
@@ -693,7 +733,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isReshef && !isWct && !isFe12 && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isReshef && !isWct && !isFe12 && !isFe8 && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -717,13 +757,29 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         </div>
       )}
 
+      {isFe8 && fe8FontReport && (
+        <div className="mb-4 rounded-lg border border-primary/35 bg-primary/5 p-3 text-right" dir="rtl">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="font-display text-sm font-bold text-primary">تقرير حقن خط Sacred Stones</p>
+            <span className="rounded bg-primary/15 px-2 py-0.5 font-mono text-xs text-primary">{fe8FontReport.glyphsInjected} غليف</span>
+          </div>
+          <div className="grid gap-1 text-xs font-body text-muted-foreground sm:grid-cols-2">
+            <p><strong className="text-foreground">الخط:</strong> {fe8FontReport.fontName}</p>
+            <p><strong className="text-foreground">الجدولان:</strong> {fe8FontReport.glyphTables.join("، ")}</p>
+            <p><strong className="text-foreground">الخانات:</strong> {fe8FontReport.slots[0]} إلى {fe8FontReport.slots.at(-1)}</p>
+            <p><strong className="text-foreground">المحفوظة:</strong> {fe8FontReport.emptySlotsPreserved} خانة فارغة</p>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">{fe8FontReport.note}</p>
+        </div>
+      )}
+
       {/* Arabic Processing + Build Buttons */}
       <div className="flex flex-wrap gap-2 sm:gap-3 mb-6">
         <Button
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isReshef || isWct || isFe12}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isReshef || isWct || isFe12 || isFe8}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -772,7 +828,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <ShieldCheck className="w-4 h-4" />
           <span className="hidden sm:inline">سلامة</span>
         </Button>
-        {isFe12 ? (
+        {isFe8 ? (
+          <Button size="lg" onClick={handleFe8Build} disabled={fe8Building} className="flex-1 min-w-[200px] font-display font-bold">
+            {fe8Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM Sacred Stones عربي وتنزيله
+          </Button>
+        ) : isFe12 ? (
           <Button size="lg" onClick={handleFe12Build} disabled={fe12Building} className="flex-1 min-w-[200px] font-display font-bold">
             {fe12Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM Fire Emblem عربي وتنزيله
           </Button>

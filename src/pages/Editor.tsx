@@ -134,6 +134,7 @@ const Editor = () => {
   const isReshefEntries = editor.state?.entries?.[0]?.msbtFile === "ygo_reshef_dialogue";
   const isWctEntries = editor.state?.entries?.[0]?.msbtFile === "ygo_wct_catalog";
   const isFe12Entries = sourceGame === "fireemblem12" && /^m\//.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isFe8Entries = sourceGame === "fireemblem8" && editor.state?.entries?.[0]?.msbtFile === "fe8/messages";
   const isGameMakerEntries = editor.state?.entries?.[0]?.msbtFile === "STRG";
   const isDragonSwordEntries = DS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   // "Back" link target — must match whichever tool actually loaded the
@@ -151,6 +152,8 @@ const Editor = () => {
     ? "/yugioh"
     : isFe12Entries
     ? "/fire-emblem-12"
+    : isFe8Entries
+    ? "/fire-emblem-sacred-stones"
     : isGameMakerEntries
     ? "/gamemaker"
     : isDragonSwordEntries
@@ -667,6 +670,7 @@ const Editor = () => {
             isReshef={isReshefEntries}
             isWct={isWctEntries}
             isFe12={isFe12Entries}
+            isFe8={isFe8Entries}
             isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}
             unprocessedArabicCount={unprocessedArabicCount}

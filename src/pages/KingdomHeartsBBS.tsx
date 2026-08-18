@@ -5,7 +5,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, FolderArchive, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FolderArchive, Image, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
@@ -52,6 +52,9 @@ export default function KingdomHeartsBBS() {
       </header>
 
       <section className="mx-auto max-w-4xl px-4 py-10 md:py-16">
+        <Link to="/kingdom-hearts-images" className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 transition-colors hover:border-amber-400 hover:bg-amber-500/15">
+          <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500"><Image className="h-5 w-5" /></span><div><h2 className="font-bold">أداة صور Kingdom Hearts</h2><p className="text-sm text-muted-foreground">تعريب صور TIM2 مثل NEW GAME والقوائم المرسومة</p></div></div><span className="text-sm font-bold text-amber-500">فتح الأداة</span>
+        </Link>
         <div
           onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
           onDragLeave={() => setDragActive(false)}

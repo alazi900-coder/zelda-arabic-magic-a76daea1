@@ -13,6 +13,7 @@ import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
+import { buildKHBbsArchive } from "@/lib/khbbs-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -37,6 +38,7 @@ interface EditorBuildSectionProps {
   isPokemon?: boolean;
   isGameMaker?: boolean;
   isDragonSword?: boolean;
+  isKingdomHearts?: boolean;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -53,6 +55,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isPokemon = false,
   isGameMaker = false,
   isDragonSword = false,
+  isKingdomHearts = false,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -66,6 +69,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
+  const [khbbsBuilding, setKHBbsBuilding] = useState(false);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
   const [pkmGame, setPkmGame] = useState<PkmGame | undefined>(undefined);
@@ -285,6 +289,32 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setDsBuilding(false);
+    }
+  };
+
+  const handleKingdomHeartsBuild = async () => {
+    setKHBbsBuilding(true);
+    try {
+      // Save first so the latest row edit is included even if the autosave timer
+      // has not fired yet; CTD itself applies the project's Arabic handling.
+      await editor.forceSave();
+      const result = await buildKHBbsArchive(editor.state?.translations || {});
+      const url = URL.createObjectURL(result.archive);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "kingdom-hearts-bbs-ctd-modified.zip";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({
+        title: "✅ تم بناء أرشيف Kingdom Hearts",
+        description: `${result.translatedLines} نص مترجم | ${result.changedFiles} ملف CTD معدّل من أصل ${result.fileCount}`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء ملفات CTD", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setKHBbsBuilding(false);
     }
   };
 
@@ -521,7 +551,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isKingdomHearts && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -551,7 +581,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isKingdomHearts}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -623,6 +653,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isDragonSword ? (
           <Button size="lg" onClick={handleDragonSwordBuild} disabled={dsBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {dsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء حاوية DragonSword معرّبة
+          </Button>
+        ) : isKingdomHearts ? (
+          <Button size="lg" onClick={handleKingdomHeartsBuild} disabled={khbbsBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+            {khbbsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء أرشيف CTD معرّب وتنزيله
           </Button>
         ) : isGameMaker ? (
           <Button size="lg" onClick={handleGameMakerBuild} disabled={gmBuilding} className="flex-1 min-w-[200px] font-display font-bold">

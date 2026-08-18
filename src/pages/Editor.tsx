@@ -18,6 +18,7 @@ import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
 import { buildWolfCategories } from "@/lib/wolfrpg/wolf-categories";
 import { DS_FILE_RE, dsCategories } from "@/lib/dragonsword/ds-categories";
 import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
@@ -133,6 +134,7 @@ const Editor = () => {
   const isPokemonEntries = PKM_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isGameMakerEntries = editor.state?.entries?.[0]?.msbtFile === "STRG";
   const isDragonSwordEntries = DS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isKingdomHeartsEntries = KHBBS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   // "Back" link target — must match whichever tool actually loaded the
   // entries, not just default to Xenoblade's /process for every game that
   // isn't Risen (Mother 3 and Metroid Prime were falling through to it).
@@ -148,6 +150,8 @@ const Editor = () => {
     ? "/gamemaker"
     : isDragonSwordEntries
     ? "/dragonsword"
+    : isKingdomHeartsEntries
+    ? "/kingdom-hearts-bbs"
     : isRisen
     ? "/risen/process"
     : "/process";
@@ -167,7 +171,7 @@ const Editor = () => {
     if (isDragonSwordEntries) return dsCategories(entries);
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -659,6 +663,7 @@ const Editor = () => {
             isPokemon={isPokemonEntries}
             isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}
+            isKingdomHearts={isKingdomHeartsEntries}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

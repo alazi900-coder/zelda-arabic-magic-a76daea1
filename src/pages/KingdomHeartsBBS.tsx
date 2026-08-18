@@ -52,8 +52,18 @@ export default function KingdomHeartsBBS() {
       </header>
 
       <section className="mx-auto max-w-4xl px-4 py-10 md:py-16">
-        <Link to="/kingdom-hearts-images" className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 transition-colors hover:border-amber-400 hover:bg-amber-500/15">
-          <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500"><Image className="h-5 w-5" /></span><div><h2 className="font-bold">أداة صور Kingdom Hearts</h2><p className="text-sm text-muted-foreground">تعريب صور TIM2 مثل NEW GAME والقوائم المرسومة</p></div></div><span className="text-sm font-bold text-amber-500">فتح الأداة</span>
+        <Link to="/kingdom-hearts-images" className="group mb-8 block overflow-hidden rounded-3xl border border-amber-500/40 bg-gradient-to-br from-amber-500/20 via-card to-card p-6 shadow-lg shadow-amber-500/5 transition-all hover:border-amber-400 hover:shadow-xl hover:shadow-amber-500/10 md:p-9">
+          <div className="flex min-h-[250px] flex-col items-center justify-center text-center sm:min-h-[280px]">
+            <span className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-amber-400/35 bg-amber-500/20 text-amber-300 shadow-inner shadow-amber-100/10 transition-transform duration-200 group-hover:scale-105">
+              <Image className="h-10 w-10" />
+            </span>
+            <p className="mb-2 font-mono text-xs tracking-[0.18em] text-amber-300">PSP · TIM2 IMAGE RESOURCES</p>
+            <h2 className="font-display text-3xl font-black text-foreground md:text-4xl">أداة صور Kingdom Hearts</h2>
+            <p className="mt-3 max-w-xl leading-relaxed text-muted-foreground">افتح صور TIM2 مثل NEW GAME والقوائم والشعارات المرسومة، ثم نزّلها وعدّلها وأعدها باللوحة والترميز الأصليين.</p>
+            <span className="mt-6 inline-flex min-h-12 items-center justify-center rounded-xl bg-amber-500 px-7 py-3 text-base font-black text-black shadow-md shadow-amber-500/25 transition-colors group-hover:bg-amber-400">
+              <Image className="ml-2 h-5 w-5" />افتح أداة الصور
+            </span>
+          </div>
         </Link>
         <div
           onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}

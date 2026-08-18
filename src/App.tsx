@@ -55,6 +55,7 @@ const PokemonFont = lazyWithIgnoredRef(() => import("./pages/PokemonFont"));
 const PokemonText = lazyWithIgnoredRef(() => import("./pages/PokemonText"));
 const GameMaker = lazyWithIgnoredRef(() => import("./pages/GameMakerProcess"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
+const KingdomHeartsBBS = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsBBS"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <div ref={ref} className="min-h-screen flex items-center justify-center bg-background" {...props}>
@@ -109,6 +110,7 @@ const App = () => (
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
                 <Route path="/dragonsword" element={<ErrorBoundary fallbackTitle="خطأ في أداة DragonSword Awakening"><DragonSword /></ErrorBoundary>} />
                 <Route path="/gamemaker" element={<ErrorBoundary fallbackTitle="خطأ في صفحة GameMaker"><GameMaker /></ErrorBoundary>} />
+                <Route path="/kingdom-hearts-bbs" element={<ErrorBoundary fallbackTitle="خطأ في أداة Kingdom Hearts"><KingdomHeartsBBS /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

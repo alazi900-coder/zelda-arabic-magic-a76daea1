@@ -18,6 +18,7 @@ import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
+import type { KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -39,6 +40,10 @@ interface EditorBuildSectionProps {
   isGameMaker?: boolean;
   isDragonSword?: boolean;
   isKingdomHearts?: boolean;
+  khbbsUnsupportedCount?: number;
+  khbbsUnsupportedCharacters?: KHBBSUnsupportedCharacter[];
+  khbbsUnsupportedFilterActive?: boolean;
+  onFilterKHBBSUnsupported?: () => void;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -56,6 +61,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isGameMaker = false,
   isDragonSword = false,
   isKingdomHearts = false,
+  khbbsUnsupportedCount = 0,
+  khbbsUnsupportedCharacters = [],
+  khbbsUnsupportedFilterActive = false,
+  onFilterKHBBSUnsupported,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -459,6 +468,34 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                 <ListChecks className="w-4 h-4" />
                 ملخص الإبقاء ({m3SkippedItems.length})
               </Button>
+            )}
+            {isKingdomHearts && (
+              <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={khbbsUnsupportedFilterActive ? "secondary" : "outline"}
+                  onClick={onFilterKHBBSUnsupported}
+                  disabled={khbbsUnsupportedCount === 0}
+                  className="font-body gap-1 shrink-0"
+                  title={khbbsUnsupportedCount > 0 ? "يعرض في المحرر النصوص التي تحتوي رموز CTD غير مدعومة فقط" : "لا توجد رموز CTD غير مدعومة في الترجمات الحالية"}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  {khbbsUnsupportedFilterActive
+                    ? `إلغاء فلتر رموز CTD (${khbbsUnsupportedCount})`
+                    : `عرض رموز CTD غير المدعومة (${khbbsUnsupportedCount})`}
+                </Button>
+                {khbbsUnsupportedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
+                    <span>الرموز:</span>
+                    {khbbsUnsupportedCharacters.map((item) => (
+                      <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="ltr">
+                        «{item.character}» {item.unicode}{item.count > 1 ? ` ×${item.count}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </CardContent>

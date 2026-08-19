@@ -664,6 +664,10 @@ const Editor = () => {
             isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}
             isKingdomHearts={isKingdomHeartsEntries}
+            khbbsUnsupportedCount={editor.khbbsUnsupportedCount}
+            khbbsUnsupportedCharacters={editor.khbbsUnsupportedCharacters}
+            khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}
+            onFilterKHBBSUnsupported={() => editor.setFilterStatus(editor.filterStatus === "khbbs-unsupported" ? "all" : "khbbs-unsupported")}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

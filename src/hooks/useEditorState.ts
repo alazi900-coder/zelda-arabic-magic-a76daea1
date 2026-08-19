@@ -38,6 +38,8 @@ import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "@/lib/mother3/m3-editor-bridge";
 import { getLongestLineLength } from "@/lib/risen-line-split";
+import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
+import { analyzeKHBBSCTDText, type KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
 const LONG_TEXT_LINE_THRESHOLD = 35;
@@ -711,6 +713,38 @@ export function useEditorState() {
     return count;
   }, [state?.entries, state?.translations]);
 
+  // Kingdom Hearts: use the same analysis as the CTD builder, then retain the
+  // affected rows and an aggregate symbol list for the build-options filter.
+  const khbbsUnsupportedReport = useMemo(() => {
+    const keys = new Set<string>();
+    const characters = new Map<string, KHBBSUnsupportedCharacter>();
+    if (!state) return { keys, characters: [] as KHBBSUnsupportedCharacter[] };
+
+    for (const entry of state.entries) {
+      if (!KHBBS_FILE_RE.test(entry.msbtFile)) continue;
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key] || '';
+      if (!translation.trim()) continue;
+
+      const unsupported = analyzeKHBBSCTDText(translation).unsupported;
+      if (unsupported.length === 0) continue;
+      keys.add(key);
+      for (const item of unsupported) {
+        const previous = characters.get(item.unicode);
+        characters.set(item.unicode, previous
+          ? { ...previous, count: previous.count + item.count }
+          : { ...item });
+      }
+    }
+
+    return {
+      keys,
+      characters: [...characters.values()].sort((a, b) => b.count - a.count || a.unicode.localeCompare(b.unicode)),
+    };
+  }, [state?.entries, state?.translations]);
+  const khbbsUnsupportedKeys = khbbsUnsupportedReport.keys;
+  const khbbsUnsupportedCount = khbbsUnsupportedKeys.size;
+
   // === Deep diagnostic counts — uses shared predicates so the dropdown
   // badge count is GUARANTEED to match the filteredEntries length. ===
   const deepDiagnosticCounts = useMemo(() => {
@@ -830,6 +864,7 @@ export function useEditorState() {
         (filterStatus === "missing-tags" && qualityStats.missingTagKeys.has(key)) ||
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
         (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && measureEntryBytes(e.msbtFile, translation) > e.maxBytes) ||
+        (filterStatus === "khbbs-unsupported" && khbbsUnsupportedKeys.has(key)) ||
         (filterStatus === "has-newlines" && e.original.includes('\n')) ||
         // ترجمات تحوي حرف \n (literal newline). يفحص الترجمة فقط،
         // لا يتفاعل مع [XENO:n] (8 أحرف ASCII). يعرض أي ترجمة فيها السهم ↵.
@@ -850,7 +885,7 @@ export function useEditorState() {
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
       return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenSection;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys]);
 
   useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection]);
 
@@ -1273,7 +1308,7 @@ export function useEditorState() {
     'translated': 'مترجم', 'untranslated': 'غير مترجم', 'problems': 'مشاكل',
     'needs-improve': 'تحتاج تحسين', 'too-short': 'قصيرة', 'too-long': 'طويلة',
     'stuck-chars': 'أحرف ملتصقة', 'mixed-lang': 'مختلط', 'has-tags': 'أوسمة', 'no-tags': 'بدون أوسمة',
-    'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز',
+    'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز', 'khbbs-unsupported': 'رموز CTD غير مدعومة',
     'has-newlines': 'أسطر متعددة',
   };
   const filterLabel = filterCategory.length > 0 ? filterCategory.join('+')
@@ -1739,7 +1774,7 @@ export function useEditorState() {
     advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing,
     glossaryComplianceResults, checkingGlossaryCompliance,
     isSearchPinned, pinnedKeys, setPinnedKeys, setIsSearchPinned,
-    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
+    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     deepDiagnosticCounts,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
     ...glossary,

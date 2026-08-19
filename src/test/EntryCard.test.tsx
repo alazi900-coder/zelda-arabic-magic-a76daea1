@@ -92,13 +92,10 @@ describe("EntryCard", () => {
     expect(span.getAttribute("title")).toContain("معامل صيغة");
   });
 
-  it("shows unsupported KHBBS CTD symbols inline with Unicode and repeat count", () => {
+  it("does not add an inline CTD warning to a Kingdom Hearts text card", () => {
     const entry: ExtractedEntry = { ...mockEntry, msbtFile: "khbbs:msg/menu.ctd" };
     render(<EntryCard {...defaultProps} entry={entry} translation="ممنوع §§" />);
 
-    const warning = screen.getByRole("alert");
-    expect(warning).toHaveTextContent("§");
-    expect(warning).toHaveTextContent("U+00A7");
-    expect(warning).toHaveTextContent("2×");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

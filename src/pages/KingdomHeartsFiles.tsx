@@ -87,6 +87,7 @@ export default function KingdomHeartsFiles() {
   const [extension, setExtension] = useState("all");
   const [error, setError] = useState<string | null>(null);
   const [fontCandidateIds, setFontCandidateIds] = useState<Set<string>>(new Set());
+  const [flatZip, setFlatZip] = useState(true);
 
   const openArchives = useCallback(async (uploads: File[]) => {
     setLoading(true);
@@ -157,14 +158,31 @@ export default function KingdomHeartsFiles() {
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
-      for (const entry of selectedEntries) zip.file(`${entry.directory.replace(/[^A-Za-z0-9/_-]/g, "unknown")}/${getBbsEntryFilename(entry)}`, await readBbsArchiveEntry(entry, archive.archives));
-      downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } }), "khbbs-selected-files.zip");
+      const usedFlatNames = new Set<string>();
+      for (const entry of selectedEntries) {
+        const originalName = getBbsEntryFilename(entry);
+        let filename = originalName;
+        let suffix = 2;
+        while (flatZip && usedFlatNames.has(filename.toLowerCase())) {
+          const extensionIndex = originalName.lastIndexOf(".");
+          const stem = extensionIndex >= 0 ? originalName.slice(0, extensionIndex) : originalName;
+          const ext = extensionIndex >= 0 ? originalName.slice(extensionIndex) : "";
+          filename = `${stem}_${suffix}${ext}`;
+          suffix += 1;
+        }
+        usedFlatNames.add(filename.toLowerCase());
+        const zipPath = flatZip
+          ? `khbbs-files/${filename}`
+          : `${entry.directory.replace(/[^A-Za-z0-9/_-]/g, "unknown")}/${filename}`;
+        zip.file(zipPath, await readBbsArchiveEntry(entry, archive.archives));
+      }
+      downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } }), flatZip ? "khbbs-files-flat.zip" : "khbbs-selected-files.zip");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "تعذر بناء ZIP.");
     } finally {
       setZipping(false);
     }
-  }, [archive, selectedBytes, selectedEntries]);
+  }, [archive, flatZip, selectedBytes, selectedEntries]);
 
   const selectVisible = useCallback(() => setSelected(new Set(filteredEntries.filter((entry) => entry.downloadAvailable).map((entry) => entry.id))), [filteredEntries]);
 
@@ -223,9 +241,14 @@ export default function KingdomHeartsFiles() {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={selectVisible}><CheckSquare className="ml-1.5 h-4 w-4" />تحديد النتائج المتاحة</Button>
                 <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}><Square className="ml-1.5 h-4 w-4" />إلغاء التحديد</Button>
-                <Button size="sm" disabled={zipping || selectedEntries.length === 0} onClick={() => void downloadSelectedZip()} className="bg-amber-500 text-black hover:bg-amber-400"><Download className="ml-1.5 h-4 w-4" />{zipping ? "جارٍ بناء ZIP…" : "تنزيل المحدد ZIP"}</Button>
+                <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-semibold">
+                  <input type="checkbox" checked={flatZip} onChange={(event) => setFlatZip(event.target.checked)} className="h-4 w-4 accent-amber-500" />
+                  مجلد واحد فقط
+                </label>
+                <Button size="sm" disabled={zipping || selectedEntries.length === 0} onClick={() => void downloadSelectedZip()} className="bg-amber-500 text-black hover:bg-amber-400"><Download className="ml-1.5 h-4 w-4" />{zipping ? "جارٍ بناء ZIP…" : flatZip ? "تنزيل في مجلد واحد" : "تنزيل المحدد ZIP"}</Button>
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
             <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>

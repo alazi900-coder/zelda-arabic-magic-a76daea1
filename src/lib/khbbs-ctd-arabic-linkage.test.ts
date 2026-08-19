@@ -65,4 +65,9 @@ describe("KHBBS Arabic CTD linkage audit", () => {
     expect(wordResults).toHaveLength(6);
     expect(fullMapAudit).toHaveLength(126);
   });
+
+  it("identifies an unsupported Arabic-range code point with its exact Unicode value", () => {
+    const prepared = prepareCTDTextForBuild("٪");
+    expect(() => encodeKHBBSCTDTextForAudit(prepared)).toThrow("الرمز العربي «٪» (U+066A)");
+  });
 });

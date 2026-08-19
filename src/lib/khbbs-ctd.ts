@@ -181,8 +181,9 @@ function encodeCTDText(text: string): Uint8Array {
         continue;
       }
       if (isArabicChar(character)) {
+        const unicode = `U+${character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
         throw new CTDFormatError(
-          `الحرف العربي «${character}» لا يملك شكلاً محقوناً في Font.arc. احذف التشكيل أو استخدم الحروف العربية الأساسية المدعومة.`,
+          `الرمز العربي «${character}» (${unicode}) لا يملك شكلاً محقوناً في Font.arc. أرسل هذا الرمز كما هو لتحديد دعمه بدقة.`,
         );
       }
       encoded.push(...encoder.encode(character));

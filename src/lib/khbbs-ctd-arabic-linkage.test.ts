@@ -75,6 +75,12 @@ describe("KHBBS Arabic CTD linkage audit", () => {
     expect(analysis.replacements.map((item) => item.character)).toEqual(expect.arrayContaining(["؟", "،", "؛", "١", "٢", "٣", "٪"]));
   });
 
+  it("transliterates the confirmed stray Hebrew Resh U+05E8 instead of stopping CTD build", () => {
+    const prepared = prepareCTDTextForBuild("ר");
+    expect(Array.from(encodeKHBBSCTDTextForAudit(prepared))).toEqual([0x72]);
+    expect(analyzeKHBBSCTDText("ר").unsupported).toEqual([]);
+  });
+
   it("reports a truly unsupported symbol with its exact Unicode value", () => {
     const analysis = analyzeKHBBSCTDText("ممنوع §");
     expect(analysis.unsupported).toEqual(expect.arrayContaining([{ character: "§", unicode: "U+00A7", count: 1 }]));

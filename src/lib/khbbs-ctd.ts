@@ -26,6 +26,9 @@ const KHBBS_ASCII_FALLBACKS: ReadonlyMap<string, string> = new Map([
   ["٠", "0"], ["١", "1"], ["٢", "2"], ["٣", "3"], ["٤", "4"], ["٥", "5"], ["٦", "6"], ["٧", "7"], ["٨", "8"], ["٩", "9"],
   ["۰", "0"], ["۱", "1"], ["۲", "2"], ["۳", "3"], ["۴", "4"], ["۵", "5"], ["۶", "6"], ["۷", "7"], ["۸", "8"], ["۹", "9"],
   ["«", "\""], ["»", "\""], ["“", "\""], ["”", "\""], ["‘", "'"], ["’", "'"], ["…", "..."], ["–", "-"], ["—", "-"], [" ", " "],
+  // U+05E8 Hebrew Resh was confirmed in the user's KHBBS text. It is a stray
+  // foreign character, not an Arabic glyph, so encode its Latin transliteration.
+  ["ר", "r"],
 ]);
 
 export interface KHBBSCharacterReplacement {

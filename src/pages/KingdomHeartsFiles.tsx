@@ -112,7 +112,10 @@ export default function KingdomHeartsFiles() {
     if (!archive) return [];
     const normalizedQuery = query.trim().toLowerCase();
     return archive.entries.filter((entry) => {
-      const matchesExtension = extension === "all" || (extension === "confirmed-ctd" ? entry.isVerifiedCtd : entry.extension === extension);
+      // الفلتر المؤكد يعتمد حصراً على توقيع @CTD داخل المورد، لا على موضعه
+      // في جدول الامتدادات الذي يختلف بين بعض نسخ Final Mix.
+      const matchesExtension = extension === "all"
+        || (extension === "confirmed-ctd" ? entry.isVerifiedCtd : extension === "catalog-ctd" ? entry.catalogExtension === "ctd" : entry.extension === extension);
       if (!matchesExtension) return false;
       if (!normalizedQuery) return true;
       const searchable = `${entry.directory} ${entry.extension} ${formatBbsHash(entry.fileHash)} ${formatBbsHash(entry.directoryHash)} BBS${entry.archiveIndex}`.toLowerCase();
@@ -236,7 +239,7 @@ export default function KingdomHeartsFiles() {
             <div className="rounded-2xl border border-border bg-card/60 p-3 md:p-4">
               <div className="flex flex-col gap-3 md:flex-row">
                 <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في المسار أو الامتداد أو رقم التجزئة مثل 0x…" /></label>
-                <select value={extension} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm"><option value="all">كل الامتدادات</option><option value="confirmed-ctd">CTD مؤكّد بالترويسة</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
+                <select value={extension} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm"><option value="all">كل الامتدادات</option><option value="confirmed-ctd">CTD مؤكّد بالترويسة</option><option value="catalog-ctd">مرشحات CTD من فهرس BBSA</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={selectVisible}><CheckSquare className="ml-1.5 h-4 w-4" />تحديد النتائج المتاحة</Button>
@@ -248,7 +251,7 @@ export default function KingdomHeartsFiles() {
                 <Button size="sm" disabled={zipping || selectedEntries.length === 0} onClick={() => void downloadSelectedZip()} className="bg-amber-500 text-black hover:bg-amber-400"><Download className="ml-1.5 h-4 w-4" />{zipping ? "جارٍ بناء ZIP…" : flatZip ? "تنزيل في مجلد واحد" : "تنزيل المحدد ZIP"}</Button>
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">ملفات <bdi>CTD</bdi> لا تظهر بهذا الامتداد إلا بعد مطابقة ترويسة <bdi>@CTD</bdi> الفعلية. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
+              <p className="mt-2 text-xs text-muted-foreground">خيار «CTD مؤكّد بالترويسة» يفحص بايتات الموارد الفعلية في كل فهرس DAT ويعرض فقط ما يبدأ بتوقيع <bdi>@CTD</bdi>، حتى لو كانت مجموعة الامتداد في Final Mix غير دقيقة. خيار «مرشحات CTD من فهرس BBSA» تشخيصي فقط ويعرض ما يسميه جدول الفهرس <bdi>ctd</bdi>. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
             <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>

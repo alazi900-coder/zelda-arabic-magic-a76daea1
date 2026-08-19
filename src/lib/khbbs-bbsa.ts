@@ -19,6 +19,8 @@ export interface BbsArchiveEntry {
   directory: string;
   directoryHash: number;
   fileHash: number;
+  /** الامتداد كما يعلنه جدول BBSA؛ يبقى محفوظاً حتى لو اكتشفنا ترويسة مختلفة. */
+  catalogExtension: string;
   extension: string;
   globalSector: number;
   localSector: number;
@@ -192,6 +194,7 @@ function addEntry(
     directory: directoryName(directoryHash),
     directoryHash,
     fileHash,
+    catalogExtension: extension,
     extension,
     globalSector,
     localSector,
@@ -206,45 +209,69 @@ function addEntry(
 }
 
 /**
- * لا يكفي جدول امتدادات BBSA لتسمية CTD؛ بعض الإدخالات الواقعة في كتلة CTD
- * ليست حاويات @CTD قابلة للتحرير. لذلك نتحقق من بايتات المورد الحقيقية قبل
- * أن نترك امتداد .ctd في اسم التنزيل أو نعرضه داخل فلتر النصوص.
+ * لا يكفي ترتيب مجموعات الامتداد في بعض نسخ Final Mix لتحديد مجموعة النصوص؛
+ * نتحقق من أول أربعة بايتات لكل مورد قابل للقراءة. بهذه الطريقة لا تختفي CTD
+ * الصحيحة إذا كانت مجموعة الفهرس المعلنة ليست `ctd`، ولا تسمى الملفات الأخرى CTD.
  */
-async function verifyCtdCandidates(entries: BbsArchiveEntry[], archives: Map<number, File>, warnings: string[]): Promise<void> {
-  const candidates = entries.filter((entry) => entry.extension === "ctd");
-  if (candidates.length === 0) return;
+async function detectCtdEntries(entries: BbsArchiveEntry[], archives: Map<number, File>, warnings: string[]): Promise<void> {
+  const readable = entries.filter((entry) => entry.downloadAvailable);
+  if (readable.length === 0) return;
 
   let confirmed = 0;
-  let corrected = 0;
-  let unavailable = 0;
+  let catalogMismatch = 0;
+  let catalogUnavailable = 0;
 
-  await Promise.all(candidates.map(async (entry) => {
+  await Promise.all(readable.map(async (entry) => {
     const archive = archives.get(entry.archiveIndex);
-    if (!archive || !entry.downloadAvailable) {
-      // لا نعرضها كملف CTD قابل للتحرير طالما لا يمكن فحص مصدرها الفعلي.
-      entry.extension = "unknown";
-      entry.ctdVerification = "unavailable";
-      unavailable += 1;
-      return;
-    }
+    if (!archive) return;
 
-    const header = new Uint8Array(await archive.slice(entry.byteOffset, entry.byteOffset + 4).arrayBuffer());
+    let header = new Uint8Array(await archive.slice(entry.byteOffset, entry.byteOffset + 4).arrayBuffer());
     const magic = resourceMagic(header);
     if (magic === CTD_MAGIC) {
       entry.isVerifiedCtd = true;
       entry.ctdVerification = "confirmed";
+      entry.extension = "ctd";
       confirmed += 1;
       return;
     }
 
-    entry.extension = magic === null ? "unknown" : (EXTENSION_BY_MAGIC[magic] ?? "unknown");
-    entry.ctdVerification = "mismatch";
-    corrected += 1;
+    // لا نغيّر موضع المورد إلا عند مطابقة الترويسة فعلياً. فحص قطاعين قريبين
+    // يغطي انزياح حدود الأرشيف الفرعي الموثق في بعض ملفات Final Mix.
+    for (const sectorDelta of [-2, -1, 1, 2]) {
+      const localSector = entry.localSector + sectorDelta;
+      const byteOffset = localSector * BBS_SECTOR_SIZE;
+      if (localSector < 0 || byteOffset + 4 > archive.size || byteOffset + entry.allocatedBytes > archive.size) continue;
+      const neighboringHeader = new Uint8Array(await archive.slice(byteOffset, byteOffset + 4).arrayBuffer());
+      if (resourceMagic(neighboringHeader) !== CTD_MAGIC) continue;
+      entry.localSector = localSector;
+      entry.byteOffset = byteOffset;
+      entry.downloadAvailable = !entry.isStreamed && entry.allocatedSectors > 0;
+      entry.isVerifiedCtd = true;
+      entry.ctdVerification = "confirmed";
+      entry.extension = "ctd";
+      confirmed += 1;
+      return;
+    }
+
+    if (entry.catalogExtension === "ctd") {
+      entry.extension = magic === null ? "unknown" : (EXTENSION_BY_MAGIC[magic] ?? "unknown");
+      entry.ctdVerification = "mismatch";
+      catalogMismatch += 1;
+    }
   }));
 
-  const report = [`تم التحقق من الترويسة الفعلية لـ ${candidates.length} مورد/موارد مرشحة CTD: ${confirmed} CTD مؤكّد`];
-  if (corrected) report.push(`${corrected} ليست CTD وأعيدت تسميتها بامتداد مكتشف أو unknown`);
-  if (unavailable) report.push(`${unavailable} لم يمكن فحصها لأن ملف DAT المصدر غير مرفوع`);
+  const catalogCandidates = entries.filter((entry) => entry.catalogExtension === "ctd");
+  for (const entry of catalogCandidates) {
+    if (!entry.downloadAvailable) {
+      entry.ctdVerification = "unavailable";
+      catalogUnavailable += 1;
+    }
+  }
+  const discoveredOutsideCatalog = entries.filter((entry) => entry.isVerifiedCtd && entry.catalogExtension !== "ctd").length;
+  const report = [`تم فحص ترويسة @CTD الفعلية لـ ${readable.length} مورداً قابلاً للقراءة: ${confirmed} CTD مؤكّد`];
+  if (discoveredOutsideCatalog) report.push(`${discoveredOutsideCatalog} CTD اكتُشف خارج مجموعة ctd المعلنة في الفهرس`);
+  if (catalogMismatch) report.push(`${catalogMismatch} مرشحاً من جدول ctd ليس CTD وأعيدت تسميته`);
+  if (catalogUnavailable) report.push(`${catalogUnavailable} مرشحاً لم يمكن فحصه لأن DAT المصدر غير مرفوع`);
   warnings.push(`${report.join("؛ ")}.`);
 }
 
@@ -300,7 +327,7 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
     }
   }
 
-  await verifyCtdCandidates(entries, archives, warnings);
+  await detectCtdEntries(entries, archives, warnings);
 
   const unavailableArchives = [0, 1, 2, 3, 4].filter((index) => !archives.has(index));
   if (unavailableArchives.length) warnings.push(`لم تُرفع ${unavailableArchives.map((index) => `BBS${index}.DAT`).join("، ")}؛ ستظهر مراجعها لكن لا يمكن تنزيلها بعد.`);

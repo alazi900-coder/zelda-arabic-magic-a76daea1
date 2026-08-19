@@ -205,6 +205,14 @@ function encodeCTDText(text: string): Uint8Array {
   return Uint8Array.from(encoded);
 }
 
+/**
+ * نقطة فحص تشخيصية: تعيد استخدام مرمّز CTD الفعلي للتحقق من بايتات العربية
+ * قبل بناء ملف كامل. لا تغيّر النص ولا تضيف أي معالجة بديلة.
+ */
+export function encodeKHBBSCTDTextForAudit(text: string): Uint8Array {
+  return encodeCTDText(text);
+}
+
 function validateControlTokens(entry: CTDEntry): void {
   const actual = tokenBytes(entry.translation);
   if (!sameBytes(actual, entry.rawControlBytes)) {

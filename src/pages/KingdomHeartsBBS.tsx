@@ -5,7 +5,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, FolderArchive, Image, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileArchive, FolderArchive, Image, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
@@ -52,6 +52,17 @@ export default function KingdomHeartsBBS() {
       </header>
 
       <section className="mx-auto max-w-4xl px-4 py-10 md:py-16">
+        <Link to="/kingdom-hearts-files" className="group mb-5 block overflow-hidden rounded-3xl border border-amber-500/35 bg-card/60 p-5 shadow-sm transition-all hover:border-amber-400 hover:bg-amber-500/5 md:p-6">
+          <div className="flex items-center gap-4">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-500 transition-transform duration-200 group-hover:scale-105"><FileArchive className="h-7 w-7" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-xs text-amber-500">PSP · BBS0–BBS4.DAT</p>
+              <h2 className="mt-1 font-display text-xl font-black md:text-2xl">مدير ملفات اللعبة</h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">تصفّح فهرس ملفات DAT، ابحث في الموارد، ونزّل ملفاً مفرداً أو مجموعة ملفات في ZIP.</p>
+            </div>
+            <span className="shrink-0 rounded-xl bg-amber-500 px-3 py-2 text-sm font-black text-black">فتح</span>
+          </div>
+        </Link>
         <Link to="/kingdom-hearts-images" className="group mb-8 block overflow-hidden rounded-3xl border border-amber-500/40 bg-gradient-to-br from-amber-500/20 via-card to-card p-6 shadow-lg shadow-amber-500/5 transition-all hover:border-amber-400 hover:shadow-xl hover:shadow-amber-500/10 md:p-9">
           <div className="flex min-h-[250px] flex-col items-center justify-center text-center sm:min-h-[280px]">
             <span className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-amber-400/35 bg-amber-500/20 text-amber-300 shadow-inner shadow-amber-100/10 transition-transform duration-200 group-hover:scale-105">

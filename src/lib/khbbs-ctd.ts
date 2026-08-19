@@ -7,7 +7,8 @@
  * retained in their original order before a file can be rebuilt.
  */
 
-import { processArabicText } from "@/lib/arabic-processing";
+import { isArabicChar, processArabicText } from "@/lib/arabic-processing";
+import { encodeKHBBSArabicGlyph } from "@/lib/khbbs-arabic-font-map";
 
 const HEADER_MIN_BYTES = 0x20;
 const INDEX_RECORD_BYTES = 12;
@@ -171,16 +172,32 @@ function encodeCTDText(text: string): Uint8Array {
   const encoded: number[] = [];
   const encoder = new TextEncoder();
   const tokenPattern = new RegExp(CTD_TOKEN_PATTERN.source, CTD_TOKEN_PATTERN.flags);
+
+  const encodePlainSegment = (segment: string): void => {
+    for (const character of segment) {
+      const glyphBytes = encodeKHBBSArabicGlyph(character);
+      if (glyphBytes) {
+        encoded.push(...glyphBytes);
+        continue;
+      }
+      if (isArabicChar(character)) {
+        throw new CTDFormatError(
+          `الحرف العربي «${character}» لا يملك شكلاً محقوناً في Font.arc. احذف التشكيل أو استخدم الحروف العربية الأساسية المدعومة.`,
+        );
+      }
+      encoded.push(...encoder.encode(character));
+    }
+  };
   let cursor = 0;
   let match: RegExpExecArray | null;
 
   while ((match = tokenPattern.exec(text)) !== null) {
-    encoded.push(...encoder.encode(text.slice(cursor, match.index)));
+    encodePlainSegment(text.slice(cursor, match.index));
     const pairs = match[1].trim().split(/\s+/);
     for (const pair of pairs) encoded.push(Number.parseInt(pair, 16));
     cursor = match.index + match[0].length;
   }
-  encoded.push(...encoder.encode(text.slice(cursor)));
+  encodePlainSegment(text.slice(cursor));
 
   if (encoded.includes(0)) {
     throw new CTDFormatError("لا يمكن أن يحتوي النص على محرف NUL (00).");

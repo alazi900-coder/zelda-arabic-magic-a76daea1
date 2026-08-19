@@ -209,70 +209,46 @@ function addEntry(
 }
 
 /**
- * لا يكفي ترتيب مجموعات الامتداد في بعض نسخ Final Mix لتحديد مجموعة النصوص؛
- * نتحقق من أول أربعة بايتات لكل مورد قابل للقراءة. بهذه الطريقة لا تختفي CTD
- * الصحيحة إذا كانت مجموعة الفهرس المعلنة ليست `ctd`، ولا تسمى الملفات الأخرى CTD.
+ * يتحقق من ترويسة كل مورد بصورة تدريجية عند طلب المستخدم فقط. لا تستدعى هذه
+ * الدالة أثناء رفع DAT، كي يبقى فتح الأرشيف خفيفاً على الهاتف.
  */
-async function detectCtdEntries(entries: BbsArchiveEntry[], archives: Map<number, File>, warnings: string[]): Promise<void> {
+export async function verifyKHBbsCtdEntries(
+  entries: BbsArchiveEntry[],
+  archives: Map<number, File>,
+  onProgress?: (completed: number, total: number) => void,
+): Promise<{ checked: number; confirmed: number; catalogMismatch: number; discoveredOutsideCatalog: number }> {
   const readable = entries.filter((entry) => entry.downloadAvailable);
-  if (readable.length === 0) return;
+  if (readable.length === 0) return { checked: 0, confirmed: 0, catalogMismatch: 0, discoveredOutsideCatalog: 0 };
 
   let confirmed = 0;
   let catalogMismatch = 0;
-  let catalogUnavailable = 0;
+  let completed = 0;
 
-  await Promise.all(readable.map(async (entry) => {
+  for (const entry of readable) {
     const archive = archives.get(entry.archiveIndex);
-    if (!archive) return;
+    if (!archive) continue;
 
-    let header = new Uint8Array(await archive.slice(entry.byteOffset, entry.byteOffset + 4).arrayBuffer());
+    const header = new Uint8Array(await archive.slice(entry.byteOffset, entry.byteOffset + 4).arrayBuffer());
     const magic = resourceMagic(header);
     if (magic === CTD_MAGIC) {
       entry.isVerifiedCtd = true;
       entry.ctdVerification = "confirmed";
       entry.extension = "ctd";
       confirmed += 1;
-      return;
-    }
-
-    // لا نغيّر موضع المورد إلا عند مطابقة الترويسة فعلياً. فحص قطاعين قريبين
-    // يغطي انزياح حدود الأرشيف الفرعي الموثق في بعض ملفات Final Mix.
-    for (const sectorDelta of [-2, -1, 1, 2]) {
-      const localSector = entry.localSector + sectorDelta;
-      const byteOffset = localSector * BBS_SECTOR_SIZE;
-      if (localSector < 0 || byteOffset + 4 > archive.size || byteOffset + entry.allocatedBytes > archive.size) continue;
-      const neighboringHeader = new Uint8Array(await archive.slice(byteOffset, byteOffset + 4).arrayBuffer());
-      if (resourceMagic(neighboringHeader) !== CTD_MAGIC) continue;
-      entry.localSector = localSector;
-      entry.byteOffset = byteOffset;
-      entry.downloadAvailable = !entry.isStreamed && entry.allocatedSectors > 0;
-      entry.isVerifiedCtd = true;
-      entry.ctdVerification = "confirmed";
-      entry.extension = "ctd";
-      confirmed += 1;
-      return;
-    }
-
-    if (entry.catalogExtension === "ctd") {
+    } else if (entry.catalogExtension === "ctd") {
       entry.extension = magic === null ? "unknown" : (EXTENSION_BY_MAGIC[magic] ?? "unknown");
       entry.ctdVerification = "mismatch";
       catalogMismatch += 1;
     }
-  }));
 
-  const catalogCandidates = entries.filter((entry) => entry.catalogExtension === "ctd");
-  for (const entry of catalogCandidates) {
-    if (!entry.downloadAvailable) {
-      entry.ctdVerification = "unavailable";
-      catalogUnavailable += 1;
-    }
+    completed += 1;
+    onProgress?.(completed, readable.length);
+    // نعيد التحكم إلى الواجهة دورياً كي تبقى أزرار الهاتف والرسم متجاوبة.
+    if (completed % 32 === 0) await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
   }
+
   const discoveredOutsideCatalog = entries.filter((entry) => entry.isVerifiedCtd && entry.catalogExtension !== "ctd").length;
-  const report = [`تم فحص ترويسة @CTD الفعلية لـ ${readable.length} مورداً قابلاً للقراءة: ${confirmed} CTD مؤكّد`];
-  if (discoveredOutsideCatalog) report.push(`${discoveredOutsideCatalog} CTD اكتُشف خارج مجموعة ctd المعلنة في الفهرس`);
-  if (catalogMismatch) report.push(`${catalogMismatch} مرشحاً من جدول ctd ليس CTD وأعيدت تسميته`);
-  if (catalogUnavailable) report.push(`${catalogUnavailable} مرشحاً لم يمكن فحصه لأن DAT المصدر غير مرفوع`);
-  warnings.push(`${report.join("؛ ")}.`);
+  return { checked: readable.length, confirmed, catalogMismatch, discoveredOutsideCatalog };
 }
 
 /**
@@ -327,7 +303,7 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
     }
   }
 
-  await detectCtdEntries(entries, archives, warnings);
+  warnings.push("فحص CTD بالترويسة مؤجّل للحفاظ على سرعة فتح DAT في الهاتف؛ شغّله من زر «فحص CTD بالترويسة» عند الحاجة.");
 
   const unavailableArchives = [0, 1, 2, 3, 4].filter((index) => !archives.has(index));
   if (unavailableArchives.length) warnings.push(`لم تُرفع ${unavailableArchives.map((index) => `BBS${index}.DAT`).join("، ")}؛ ستظهر مراجعها لكن لا يمكن تنزيلها بعد.`);

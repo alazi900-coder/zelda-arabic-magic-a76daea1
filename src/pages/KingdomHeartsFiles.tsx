@@ -7,7 +7,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Loader2, Search, Square, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, isKHBbsFontArchive, readBbsArchiveEntry, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
+import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, verifyKHBbsCtdEntries, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 
 const LARGE_ZIP_BYTES = 300 * 1024 * 1024;
 
@@ -88,6 +88,8 @@ export default function KingdomHeartsFiles() {
   const [error, setError] = useState<string | null>(null);
   const [fontCandidateIds, setFontCandidateIds] = useState<Set<string>>(new Set());
   const [flatZip, setFlatZip] = useState(true);
+  const [ctdChecking, setCtdChecking] = useState(false);
+  const [ctdProgress, setCtdProgress] = useState<{ completed: number; total: number } | null>(null);
 
   const openArchives = useCallback(async (uploads: File[]) => {
     setLoading(true);
@@ -97,9 +99,7 @@ export default function KingdomHeartsFiles() {
     try {
       const indexed = await indexKHBbsDatFiles(uploads);
       setArchive(indexed);
-      const systemArcs = indexed.entries.filter((entry) => entry.directory === "arc/system" && entry.extension === "arc" && entry.downloadAvailable);
-      const checks = await Promise.all(systemArcs.map(async (entry) => ({ id: entry.id, isFont: await isKHBbsFontArchive(entry, indexed.archives) })));
-      setFontCandidateIds(new Set(checks.filter((item) => item.isFont).map((item) => item.id)));
+      setCtdProgress(null);
     } catch (caught) {
       setArchive(null);
       setError(caught instanceof Error ? caught.message : "تعذر قراءة فهرس ملفات DAT.");
@@ -107,6 +107,23 @@ export default function KingdomHeartsFiles() {
       setLoading(false);
     }
   }, []);
+
+  const verifyCtd = useCallback(async () => {
+    if (!archive || ctdChecking) return;
+    setCtdChecking(true);
+    setCtdProgress({ completed: 0, total: archive.entries.filter((entry) => entry.downloadAvailable).length });
+    setError(null);
+    try {
+      const result = await verifyKHBbsCtdEntries(archive.entries, archive.archives, (completed, total) => setCtdProgress({ completed, total }));
+      const report = `فحص CTD بالترويسة اكتمل: ${result.confirmed} CTD مؤكّد من ${result.checked} مورداً قابلاً للقراءة${result.discoveredOutsideCatalog ? `؛ ${result.discoveredOutsideCatalog} خارج جدول ctd` : ""}${result.catalogMismatch ? `؛ ${result.catalogMismatch} مرشح جدول غير مطابق` : ""}.`;
+      setArchive((current) => current ? { ...current, entries: [...current.entries], warnings: [...current.warnings.filter((warning) => !warning.startsWith("فحص CTD بالترويسة")), report] } : current);
+      setExtension("confirmed-ctd");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر فحص ترويسات CTD.");
+    } finally {
+      setCtdChecking(false);
+    }
+  }, [archive, ctdChecking]);
 
   const filteredEntries = useMemo(() => {
     if (!archive) return [];
@@ -242,6 +259,7 @@ export default function KingdomHeartsFiles() {
                 <select value={extension} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm"><option value="all">كل الامتدادات</option><option value="confirmed-ctd">CTD مؤكّد بالترويسة</option><option value="catalog-ctd">مرشحات CTD من فهرس BBSA</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" disabled={ctdChecking} onClick={() => void verifyCtd()}><Search className="ml-1.5 h-4 w-4" />{ctdChecking ? `فحص CTD… ${ctdProgress?.completed ?? 0}/${ctdProgress?.total ?? 0}` : "فحص CTD بالترويسة"}</Button>
                 <Button variant="outline" size="sm" onClick={selectVisible}><CheckSquare className="ml-1.5 h-4 w-4" />تحديد النتائج المتاحة</Button>
                 <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}><Square className="ml-1.5 h-4 w-4" />إلغاء التحديد</Button>
                 <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-semibold">
@@ -251,7 +269,7 @@ export default function KingdomHeartsFiles() {
                 <Button size="sm" disabled={zipping || selectedEntries.length === 0} onClick={() => void downloadSelectedZip()} className="bg-amber-500 text-black hover:bg-amber-400"><Download className="ml-1.5 h-4 w-4" />{zipping ? "جارٍ بناء ZIP…" : flatZip ? "تنزيل في مجلد واحد" : "تنزيل المحدد ZIP"}</Button>
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">خيار «CTD مؤكّد بالترويسة» يفحص بايتات الموارد الفعلية في كل فهرس DAT ويعرض فقط ما يبدأ بتوقيع <bdi>@CTD</bdi>، حتى لو كانت مجموعة الامتداد في Final Mix غير دقيقة. خيار «مرشحات CTD من فهرس BBSA» تشخيصي فقط ويعرض ما يسميه جدول الفهرس <bdi>ctd</bdi>. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
+              <p className="mt-2 text-xs text-muted-foreground">فتح DAT يقرأ الفهرس فقط كي يبقى سريعاً على الهاتف. اضغط «فحص CTD بالترويسة» عند الحاجة؛ الفحص تدريجي ويعرض فقط الموارد التي تبدأ بتوقيع <bdi>@CTD</bdi>، حتى لو كانت مجموعة الامتداد في Final Mix غير دقيقة. خيار «مرشحات CTD من فهرس BBSA» تشخيصي فقط. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
             <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>

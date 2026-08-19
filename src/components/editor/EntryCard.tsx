@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+/* Editor style contract: compact inline diagnostics stay directly under the text field; no standalone warning cards. */
+import React, { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered, Shield, Link2 } from "lucide-react";
@@ -22,6 +23,7 @@ import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { computeConfidence, detectLiteralTranslation } from "./TranslationProgressDashboard";
+import { analyzeKHBBSCTDText } from "@/lib/khbbs-ctd";
 
 /** Format a tag list as "<Exit>×2، <Attack>" for display in the Risen tag-diff badge. */
 function formatTagCounts(tags: string[]): string {
@@ -227,6 +229,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
+  const isKHBBSCTDEntry = /^khbbs:.*\.ctd$/i.test(entry.msbtFile);
   const gameParam = resolveGameParam(entry.msbtFile, risenVariant);
   const isTech = isTechnicalText(entry.original, entry.msbtFile);
   // A run of bytes out of a graphics table can end in the terminator and read
@@ -242,6 +245,18 @@ const EntryCard: React.FC<EntryCardProps> = ({
   const [showGamePreview, setShowGamePreview] = useState(false);
   const [alternatives, setAlternatives] = useState<{ style: string; text: string; reason: string }[] | null>(null);
   const [fetchingAlternatives, setFetchingAlternatives] = useState(false);
+  // DebouncedInput deliberately retains manual save. Keep this local value solely
+  // for live KHBBS diagnostics so the warning changes with every keystroke.
+  const [khbbsLiveTranslation, setKHBBSLiveTranslation] = useState(translation);
+
+  useEffect(() => {
+    setKHBBSLiveTranslation(translation);
+  }, [translation]);
+
+  const khbbsUnsupportedCharacters = useMemo(() => {
+    if (!isKHBBSCTDEntry || !khbbsLiveTranslation) return [];
+    return analyzeKHBBSCTDText(khbbsLiveTranslation).unsupported;
+  }, [isKHBBSCTDEntry, khbbsLiveTranslation]);
 
   const tagPreview = useMemo(() => {
     if (!isDamagedTag || !translation?.trim()) return null;
@@ -607,12 +622,26 @@ const EntryCard: React.FC<EntryCardProps> = ({
               <DebouncedInput
                 value={translation}
                 onChange={(val) => updateTranslation(key, val)}
+                onLiveChange={isKHBBSCTDEntry ? setKHBBSLiveTranslation : undefined}
                 placeholder="أدخل الترجمة... (اضغط ✓ أو Ctrl+Enter للحفظ)"
                 className="flex-1 w-full px-3 py-2 rounded bg-background border border-border font-body text-sm"
                 multiline
                 noSoftWrap
                 manualCommit
               />
+              {khbbsUnsupportedCharacters.length > 0 && (
+                <div className="mt-1.5 px-1 space-y-0.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400" role="alert">
+                  {khbbsUnsupportedCharacters.map((item) => (
+                    <p key={item.unicode} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+                      <span>الرمز</span>
+                      <span className="rounded bg-amber-500/10 px-1 font-mono text-foreground" dir="ltr">«{item.character}»</span>
+                      <span className="font-mono" dir="ltr">({item.unicode})</span>
+                      <span>غير مدعوم — بدّله قبل البناء{item.count > 1 ? ` (${item.count}×)` : ""}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
               {translation?.trim() && (
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 px-1" dir="ltr">
                   {translation.split('\n').map((line, i, arr) => {

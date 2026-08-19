@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.178.6",
+    date: "2026-08-19",
+    changes: [
+      { kind: "added", text: "**تظهر رموز CTD غير المدعومة الآن مباشرة تحت حقل الترجمة في محرر Kingdom Hearts.** يعرض التحذير الرمز نفسه وقيمة Unicode مثل `U+00A7` وعدد مرات تكراره، لتبديله يدوياً قبل البناء من دون بطاقة أو قسم منفصل." },
+      { kind: "changed", text: "**يتحدّث التحذير أثناء الكتابة حتى قبل الضغط على حفظ.** بقيت آلية الحفظ اليدوي في محرر النصوص كما هي، بينما يفحص التنبيه المسودة الحالية فقط." },
+      { kind: "fixed", text: "**التحذير محصور بملفات Kingdom Hearts ذات مسار `khbbs:` وامتداد CTD.** لا يظهر في Pokémon Emerald أو Risen أو أي محرر لعبة أخرى." },
+    ],
+  },
+  {
     version: "1.178.5",
     date: "2026-08-19",
     changes: [

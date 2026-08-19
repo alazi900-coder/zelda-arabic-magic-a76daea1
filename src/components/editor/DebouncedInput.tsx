@@ -1,10 +1,13 @@
+/* Component contract: keep inline editor feedback lightweight and immediate while preserving explicit save behavior. */
 import React, { useState, useEffect, useRef, memo } from "react";
 import { Check, Undo2 } from "lucide-react";
 import { INPUT_DEBOUNCE } from "./types";
 
-const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocus, multiline, noSoftWrap, manualCommit }: {
+const DebouncedInput = memo(({ value, onChange, onLiveChange, placeholder, className, autoFocus, multiline, noSoftWrap, manualCommit }: {
   value: string;
   onChange: (val: string) => void;
+  /** Receives each keystroke without committing the editor value. */
+  onLiveChange?: (val: string) => void;
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
@@ -47,6 +50,7 @@ const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocu
   const revert = () => {
     setLocalValue(committedRef.current);
     localRef.current = committedRef.current;
+    onLiveChange?.(committedRef.current);
     setDirty(false);
   };
 
@@ -54,6 +58,7 @@ const DebouncedInput = memo(({ value, onChange, placeholder, className, autoFocu
     const newVal = e.target.value;
     setLocalValue(newVal);
     localRef.current = newVal;
+    onLiveChange?.(newVal);
     if (manualCommit) {
       setDirty(newVal !== committedRef.current);
       return;

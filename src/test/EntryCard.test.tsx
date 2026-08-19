@@ -91,4 +91,14 @@ describe("EntryCard", () => {
     expect(span.className).toContain("fuchsia");
     expect(span.getAttribute("title")).toContain("معامل صيغة");
   });
+
+  it("shows unsupported KHBBS CTD symbols inline with Unicode and repeat count", () => {
+    const entry: ExtractedEntry = { ...mockEntry, msbtFile: "khbbs:msg/menu.ctd" };
+    render(<EntryCard {...defaultProps} entry={entry} translation="ممنوع §§" />);
+
+    const warning = screen.getByRole("alert");
+    expect(warning).toHaveTextContent("§");
+    expect(warning).toHaveTextContent("U+00A7");
+    expect(warning).toHaveTextContent("2×");
+  });
 });

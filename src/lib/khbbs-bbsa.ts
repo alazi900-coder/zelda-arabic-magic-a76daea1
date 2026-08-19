@@ -75,8 +75,7 @@ const KNOWN_DIRECTORIES: Record<number, string> = {
   0x00004350: "arc/pc",
   0x20004350: "arc/pc_aqua",
   0x30004350: "arc/pc_terra",
-  0x554e454d: "arc/menu",
-  0x53595300: "arc/system",
+  0x00535953: "arc/system",
   0x454e454d: "arc/enemy",
 };
 
@@ -244,6 +243,28 @@ export async function readBbsArchiveEntry(entry: BbsArchiveEntry, archives: Map<
   const archive = archives.get(entry.archiveIndex);
   if (!archive || !entry.downloadAvailable) throw new Error(`لا يمكن تنزيل هذا الملف قبل رفع BBS${entry.archiveIndex}.DAT كاملاً.`);
   return archive.slice(entry.byteOffset, entry.byteOffset + entry.allocatedBytes);
+}
+
+function hasAsciiToken(bytes: Uint8Array, token: string): boolean {
+  const tokenBytes = new TextEncoder().encode(token);
+  outer: for (let index = 0; index <= bytes.length - tokenBytes.length; index += 1) {
+    for (let offset = 0; offset < tokenBytes.length; offset += 1) {
+      if (bytes[index + offset] !== tokenBytes[offset]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Detects a font ARC from its internal resource names. This is used only on
+ * resources under arc/system and never changes the DAT archive or the ARC.
+ */
+export async function isKHBbsFontArchive(entry: BbsArchiveEntry, archives: Map<number, File>): Promise<boolean> {
+  if (entry.directory !== "arc/system" || entry.extension !== "arc" || !entry.downloadAvailable) return false;
+  const blob = await readBbsArchiveEntry(entry, archives);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  return hasAsciiToken(bytes, "mesfont.inf") && hasAsciiToken(bytes, "cmdfont.inf");
 }
 
 export function formatBbsBytes(bytes: number): string {

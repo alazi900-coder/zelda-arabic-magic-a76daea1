@@ -7,7 +7,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Loader2, Search, Square, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
+import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, isKHBbsFontArchive, readBbsArchiveEntry, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 
 const LARGE_ZIP_BYTES = 300 * 1024 * 1024;
 
@@ -21,7 +21,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function FolderGroup({
-  directory, entries, selected, toggleSelected, onDownload, downloadingId,
+  directory, entries, selected, toggleSelected, onDownload, downloadingId, fontCandidateIds,
 }: {
   directory: string;
   entries: BbsArchiveEntry[];
@@ -29,6 +29,7 @@ function FolderGroup({
   toggleSelected: (id: string) => void;
   onDownload: (entry: BbsArchiveEntry) => void;
   downloadingId: string | null;
+  fontCandidateIds: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
   const downloadable = entries.filter((entry) => entry.downloadAvailable).length;
@@ -45,6 +46,7 @@ function FolderGroup({
           {entries.map((entry) => {
             const checked = selected.has(entry.id);
             const filename = getBbsEntryFilename(entry);
+            const isFontCandidate = fontCandidateIds.has(entry.id);
             return (
               <div key={entry.id} className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5 last:border-b-0">
                 <button
@@ -57,9 +59,9 @@ function FolderGroup({
                 </button>
                 <FileArchive className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <p dir="ltr" className="truncate font-mono text-xs font-semibold">{filename}</p>
+                  <p dir="ltr" className={`truncate font-mono text-xs font-semibold ${isFontCandidate ? "text-amber-500" : ""}`}>{isFontCandidate ? `FONT ARCHIVE · ${filename}` : filename}</p>
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {formatBbsHash(entry.fileHash)} · BBS{entry.archiveIndex}.DAT · {formatBbsBytes(entry.allocatedBytes)} · {entry.isStreamed ? "تدفق غير قابل للتنزيل" : entry.downloadAvailable ? "جاهز" : "DAT المصدر غير مرفوع"}
+                    {isFontCandidate ? "تم التعرّف عليه من mesfont وcmdfont · " : ""}{formatBbsHash(entry.fileHash)} · BBS{entry.archiveIndex}.DAT · {formatBbsBytes(entry.allocatedBytes)} · {entry.isStreamed ? "تدفق غير قابل للتنزيل" : entry.downloadAvailable ? "جاهز" : "DAT المصدر غير مرفوع"}
                   </p>
                 </div>
                 <Button variant="outline" size="icon" disabled={!entry.downloadAvailable || downloadingId === entry.id} onClick={() => onDownload(entry)} title="تنزيل المورد كما هو في الأرشيف">
@@ -84,13 +86,19 @@ export default function KingdomHeartsFiles() {
   const [query, setQuery] = useState("");
   const [extension, setExtension] = useState("all");
   const [error, setError] = useState<string | null>(null);
+  const [fontCandidateIds, setFontCandidateIds] = useState<Set<string>>(new Set());
 
   const openArchives = useCallback(async (uploads: File[]) => {
     setLoading(true);
     setError(null);
     setSelected(new Set());
+    setFontCandidateIds(new Set());
     try {
-      setArchive(await indexKHBbsDatFiles(uploads));
+      const indexed = await indexKHBbsDatFiles(uploads);
+      setArchive(indexed);
+      const systemArcs = indexed.entries.filter((entry) => entry.directory === "arc/system" && entry.extension === "arc" && entry.downloadAvailable);
+      const checks = await Promise.all(systemArcs.map(async (entry) => ({ id: entry.id, isFont: await isKHBbsFontArchive(entry, indexed.archives) })));
+      setFontCandidateIds(new Set(checks.filter((item) => item.isFont).map((item) => item.id)));
     } catch (caught) {
       setArchive(null);
       setError(caught instanceof Error ? caught.message : "تعذر قراءة فهرس ملفات DAT.");
@@ -220,7 +228,7 @@ export default function KingdomHeartsFiles() {
               </div>
             </div>
 
-            <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} />)}</div>
+            <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>
           </div>
         )}
       </section>

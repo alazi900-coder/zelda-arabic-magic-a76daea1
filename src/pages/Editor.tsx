@@ -53,7 +53,6 @@ import EditorProgressStatus from "@/components/editor/EditorProgressStatus";
 import EditorBuildSection from "@/components/editor/EditorBuildSection";
 import EditorProviderSelection from "@/components/editor/EditorProviderSelection";
 import EditorActionsToolbar from "@/components/editor/EditorActionsToolbar";
-import KHBBSCharacterSupportPanel from "@/components/editor/KHBBSCharacterSupportPanel";
 const RelatedEntriesDialog = React.lazy(() => import("@/components/editor/RelatedEntriesDialog"));
 const SceneContextPanel = React.lazy(() => import("@/components/editor/SceneContextPanel"));
 const ContextSuggestPanel = React.lazy(() => import("@/components/editor/ContextSuggestPanel"));
@@ -654,37 +653,6 @@ const Editor = () => {
             setFontTestWord={setFontTestWord}
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
           />
-
-          {/* Kingdom Hearts design note: show the phone-symbol audit immediately before build, with direct row navigation. */}
-          {isKingdomHeartsEntries && editor.state && (
-            <KHBBSCharacterSupportPanel
-              state={editor.state}
-              onFilterByKeys={(keys) => {
-                editor.setPinnedKeys(keys);
-                editor.setIsSearchPinned(true);
-                editor.setCurrentPage(0);
-                setTimeout(() => document.querySelector('[data-entries-list]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
-              }}
-              onNavigateToEntry={(key) => {
-                editor.setFilterStatus('all');
-                editor.setSearch('');
-                editor.setPinnedKeys(null);
-                editor.setIsSearchPinned(false);
-                setTimeout(() => {
-                  const index = editor.state?.entries.findIndex((entry) => `${entry.msbtFile}:${entry.index}` === key) ?? -1;
-                  if (index < 0) return;
-                  editor.setCurrentPage(Math.floor(index / 50));
-                  setTimeout(() => {
-                    const element = document.querySelector(`[data-entry-key="${CSS.escape(key)}"]`);
-                    if (!element) return;
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    element.classList.add('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'animate-pulse');
-                    setTimeout(() => element.classList.remove('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'animate-pulse'), 2500);
-                  }, 100);
-                }, 50);
-              }}
-            />
-          )}
 
           <EditorBuildSection
             editor={editor}

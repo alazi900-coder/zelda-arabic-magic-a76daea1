@@ -1,3 +1,4 @@
+// بطاقة Kingdom Hearts تستخدم غلاف Final Mix الحقيقي بموضع علوي واضح، مع تدرّج داكن ثابت يحافظ على قراءة النص فوق الصورة على الهاتف.
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Activity } from "lucide-react";
@@ -22,7 +23,8 @@ const games = [
     subtitle: "نصوص كينغدوم هارتس BBS",
     desc: "يفتح كل ملفات CTD دفعة واحدة أو من أرشيف ZIP، ويعرض نصوص كل ملف باسمه، ثم يبني ZIP واحداً بالملفات المعدّلة مع حفظ وسوم التحكم التقنية.",
     link: "/kingdom-hearts-bbs",
-    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600'%3E%3Cdefs%3E%3CradialGradient id='g' cx='72%25' cy='22%25' r='85%25'%3E%3Cstop stop-color='%23f6bf62'/%3E%3Cstop offset='.42' stop-color='%235c3134'/%3E%3Cstop offset='1' stop-color='%23171724'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='1200' height='600' fill='url(%23g)'/%3E%3Cpath d='M700 80c-120 76-180 197-176 324 76-7 141-48 184-110 45 60 110 102 186 110 4-127-57-249-177-324-6-4-11-4-17 0Z' fill='none' stroke='%23f7d890' stroke-width='10' opacity='.48'/%3E%3Cpath d='M707 186 736 247 804 256 754 303 766 371 707 338 647 371 660 303 610 256 678 247Z' fill='%23f7d890' opacity='.46'/%3E%3C/svg%3E",
+    image: "/manus-storage/kingdom-hearts-birth-by-sleep-final-mix-cover_66f0ca57.jpg",
+    imageClass: "object-cover object-[50%_15%]",
     formats: [".CTD", "ZIP", "PSP"],
     cardClass: "border-[hsl(38,80%,52%)]/35 hover:border-[hsl(38,80%,60%)]/70",
     formatClass: "bg-[hsl(38,80%,52%)]/20 text-[hsl(42,95%,72%)] border-[hsl(38,80%,52%)]/35",
@@ -195,7 +197,7 @@ const Home = () => {
                   <img
                     src={covers[game.title] || game.image}
                     alt={game.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className={`w-full h-full transition-transform duration-500 group-hover:scale-105 ${game.imageClass || "object-cover"}`}
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-black/30" />

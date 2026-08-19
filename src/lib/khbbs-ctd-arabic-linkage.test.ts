@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
+  analyzeKHBBSCTDText,
   encodeKHBBSCTDTextForAudit,
   prepareCTDTextForBuild,
 } from "./khbbs-ctd";
@@ -66,8 +67,16 @@ describe("KHBBS Arabic CTD linkage audit", () => {
     expect(fullMapAudit).toHaveLength(126);
   });
 
-  it("identifies an unsupported Arabic-range code point with its exact Unicode value", () => {
-    const prepared = prepareCTDTextForBuild("٪");
-    expect(() => encodeKHBBSCTDTextForAudit(prepared)).toThrow("الرمز العربي «٪» (U+066A)");
+  it("replaces Arabic phone punctuation and digits with supported English bytes", () => {
+    const prepared = prepareCTDTextForBuild("سؤال؟،؛ ١٢٣٪");
+    expect(() => encodeKHBBSCTDTextForAudit(prepared)).not.toThrow();
+    const analysis = analyzeKHBBSCTDText("سؤال؟،؛ ١٢٣٪");
+    expect(analysis.unsupported).toEqual([]);
+    expect(analysis.replacements.map((item) => item.character)).toEqual(expect.arrayContaining(["؟", "،", "؛", "١", "٢", "٣", "٪"]));
+  });
+
+  it("reports a truly unsupported symbol with its exact Unicode value", () => {
+    const analysis = analyzeKHBBSCTDText("ممنوع §");
+    expect(analysis.unsupported).toEqual(expect.arrayContaining([{ character: "§", unicode: "U+00A7", count: 1 }]));
   });
 });

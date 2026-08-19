@@ -16,6 +16,41 @@ const TOKEN_PREFIX = "[CTD:";
 const CTD_TOKEN_PATTERN = /\[CTD:\s*([0-9A-Fa-f]{2}(?:\s+[0-9A-Fa-f]{2})*)\s*\]/gi;
 const CTD_TOKEN_SPLIT_PATTERN = /(\[CTD:\s*[0-9A-Fa-f]{2}(?:\s+[0-9A-Fa-f]{2})*\s*\])/gi;
 
+/**
+ * KHBBS design note: Arabic letters always use Font.arabic.arc glyph IDs.
+ * This table contains only punctuation and digits whose ASCII equivalent is
+ * already present in the English patch, so it must never contain a letter.
+ */
+const KHBBS_ASCII_FALLBACKS: ReadonlyMap<string, string> = new Map([
+  ["؟", "?"], ["،", ","], ["؛", ";"], ["٪", "%"], ["٫", "."], ["٬", ","], ["۔", "."], ["٭", "*"],
+  ["٠", "0"], ["١", "1"], ["٢", "2"], ["٣", "3"], ["٤", "4"], ["٥", "5"], ["٦", "6"], ["٧", "7"], ["٨", "8"], ["٩", "9"],
+  ["۰", "0"], ["۱", "1"], ["۲", "2"], ["۳", "3"], ["۴", "4"], ["۵", "5"], ["۶", "6"], ["۷", "7"], ["۸", "8"], ["۹", "9"],
+  ["«", "\""], ["»", "\""], ["“", "\""], ["”", "\""], ["‘", "'"], ["’", "'"], ["…", "..."], ["–", "-"], ["—", "-"], [" ", " "],
+]);
+
+export interface KHBBSCharacterReplacement {
+  character: string;
+  unicode: string;
+  replacement: string;
+  count: number;
+}
+
+export interface KHBBSUnsupportedCharacter {
+  character: string;
+  unicode: string;
+  count: number;
+}
+
+export interface KHBBSCharacterAnalysis {
+  replacements: KHBBSCharacterReplacement[];
+  unsupported: KHBBSUnsupportedCharacter[];
+  validationError?: string;
+}
+
+function unicodeCodePoint(character: string): string {
+  return `U+${character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
+}
+
 export interface CTDEntry {
   /** Zero-based row inside the CTD index table. */
   index: number;
@@ -167,6 +202,60 @@ export function prepareCTDTextForBuild(text: string): string {
     .join("");
 }
 
+/**
+ * Analyses the exact post-shaping text that CTD will encode. The editor uses
+ * this before build so phone punctuation is reported as a safe automatic
+ * substitution, while truly unsupported symbols remain visible to the user.
+ */
+export function analyzeKHBBSCTDText(text: string): KHBBSCharacterAnalysis {
+  let prepared: string;
+  try {
+    prepared = prepareCTDTextForBuild(text);
+  } catch (error) {
+    return {
+      replacements: [],
+      unsupported: [],
+      validationError: error instanceof Error ? error.message : "تعذر تحليل وسم CTD.",
+    };
+  }
+
+  const replacementCounts = new Map<string, KHBBSCharacterReplacement>();
+  const unsupportedCounts = new Map<string, KHBBSUnsupportedCharacter>();
+  const tokenPattern = new RegExp(CTD_TOKEN_PATTERN.source, CTD_TOKEN_PATTERN.flags);
+
+  const analyzePlainSegment = (segment: string) => {
+    for (const character of segment) {
+      if (encodeKHBBSArabicGlyph(character)) continue;
+      const replacement = KHBBS_ASCII_FALLBACKS.get(character);
+      if (replacement !== undefined) {
+        const current = replacementCounts.get(character);
+        replacementCounts.set(character, current
+          ? { ...current, count: current.count + 1 }
+          : { character, unicode: unicodeCodePoint(character), replacement, count: 1 });
+        continue;
+      }
+      if (character.charCodeAt(0) <= 0x7e) continue;
+      const current = unsupportedCounts.get(character);
+      unsupportedCounts.set(character, current
+        ? { ...current, count: current.count + 1 }
+        : { character, unicode: unicodeCodePoint(character), count: 1 });
+    }
+  };
+
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tokenPattern.exec(prepared)) !== null) {
+    analyzePlainSegment(prepared.slice(cursor, match.index));
+    cursor = match.index + match[0].length;
+  }
+  analyzePlainSegment(prepared.slice(cursor));
+
+  return {
+    replacements: [...replacementCounts.values()].sort((a, b) => a.unicode.localeCompare(b.unicode)),
+    unsupported: [...unsupportedCounts.values()].sort((a, b) => a.unicode.localeCompare(b.unicode)),
+  };
+}
+
 function encodeCTDText(text: string): Uint8Array {
   ensureNoMalformedControlTag(text);
   const encoded: number[] = [];
@@ -180,11 +269,19 @@ function encodeCTDText(text: string): Uint8Array {
         encoded.push(...glyphBytes);
         continue;
       }
+      const asciiFallback = KHBBS_ASCII_FALLBACKS.get(character);
+      if (asciiFallback !== undefined) {
+        encoded.push(...encoder.encode(asciiFallback));
+        continue;
+      }
       if (isArabicChar(character)) {
-        const unicode = `U+${character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
+        const unicode = unicodeCodePoint(character);
         throw new CTDFormatError(
-          `الرمز العربي «${character}» (${unicode}) لا يملك شكلاً محقوناً في Font.arc. أرسل هذا الرمز كما هو لتحديد دعمه بدقة.`,
+          `الرمز العربي «${character}» (${unicode}) لا يملك شكلاً محقوناً في Font.arc. لا يوجد له مقابل آمن للتحويل التلقائي.`,
         );
+      }
+      if (character.charCodeAt(0) > 0x7e) {
+        throw new CTDFormatError(`الرمز «${character}» (${unicodeCodePoint(character)}) غير مدعوم في نصوص CTD ولا يملك مقابلاً آمناً للتحويل التلقائي.`);
       }
       encoded.push(...encoder.encode(character));
     }

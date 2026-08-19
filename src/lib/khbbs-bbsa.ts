@@ -112,7 +112,6 @@ function readHeader(bytes: Uint8Array): BbsaHeader {
   if (!header.partitionCount || header.partitionCount > MAX_PARTITIONS) throw new Error("عدد أقسام BBSA غير صالح.");
   if (!header.directoryCount || header.directoryCount > MAX_DIRECTORY_COUNT) throw new Error("عدد جداول ملفات BBSA غير صالح.");
   if (header.partitionEntriesCount > MAX_ENTRIES || header.directoryEntriesCount > MAX_ENTRIES) throw new Error("فهرس BBSA أكبر من الحد الآمن للمتصفح.");
-  if (header.directoryEntriesCount % header.directoryCount !== 0) throw new Error("توزيع جداول امتدادات BBSA غير مكتمل.");
   assertRange(0x30, header.partitionCount * 8, bytes.length, "جدول أقسام BBSA");
   assertRange(header.partitionOffset, header.partitionEntriesCount * 8, bytes.length, "جدول ملفات ARC");
   assertRange(header.directoryOffset, header.directoryEntriesCount * 12, bytes.length, "جدول ملفات BBSA");
@@ -204,7 +203,13 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
     }
   }
 
-  const entriesPerDirectory = header.directoryEntriesCount / header.directoryCount;
+  // BBSA uses integer division here. A remainder is valid in real BBS0.DAT files;
+  // it represents unused trailing slots and must not make the archive fail to open.
+  const entriesPerDirectory = Math.floor(header.directoryEntriesCount / header.directoryCount);
+  const trailingDirectoryEntries = header.directoryEntriesCount % header.directoryCount;
+  if (trailingDirectoryEntries) {
+    warnings.push(`يتضمن فهرس BBSA ${trailingDirectoryEntries} مدخل/مداخل امتداد زائدة خارج كتل الجداول المتساوية؛ تم تجاهلها بأمان وفق طريقة قراءة اللعبة.`);
+  }
   for (let directoryIndex = 0; directoryIndex < header.directoryCount; directoryIndex += 1) {
     const extension = KNOWN_EXTENSIONS[directoryIndex] ?? "bin";
     const firstEntryOffset = header.directoryOffset + directoryIndex * entriesPerDirectory * 12;

@@ -61,7 +61,7 @@ function FolderGroup({
                 <div className="min-w-0 flex-1">
                   <p dir="ltr" className={`truncate font-mono text-xs font-semibold ${isFontCandidate ? "text-amber-500" : ""}`}>{isFontCandidate ? `FONT ARCHIVE · ${filename}` : filename}</p>
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {isFontCandidate ? "تم التعرّف عليه من mesfont وcmdfont · " : ""}{formatBbsHash(entry.fileHash)} · BBS{entry.archiveIndex}.DAT · {formatBbsBytes(entry.allocatedBytes)} · {entry.isStreamed ? "تدفق غير قابل للتنزيل" : entry.downloadAvailable ? "جاهز" : "DAT المصدر غير مرفوع"}
+                    {isFontCandidate ? "تم التعرّف عليه من mesfont وcmdfont · " : ""}{entry.isVerifiedCtd ? "CTD مؤكّد بالترويسة · " : entry.ctdVerification === "mismatch" ? "ليست CTD؛ تم تصحيح الامتداد · " : entry.ctdVerification === "unavailable" ? "تعذر فحص CTD لعدم توفر DAT · " : ""}{formatBbsHash(entry.fileHash)} · BBS{entry.archiveIndex}.DAT · {formatBbsBytes(entry.allocatedBytes)} · {entry.isStreamed ? "تدفق غير قابل للتنزيل" : entry.downloadAvailable ? "جاهز" : "DAT المصدر غير مرفوع"}
                   </p>
                 </div>
                 <Button variant="outline" size="icon" disabled={!entry.downloadAvailable || downloadingId === entry.id} onClick={() => onDownload(entry)} title="تنزيل المورد كما هو في الأرشيف">
@@ -112,7 +112,7 @@ export default function KingdomHeartsFiles() {
     if (!archive) return [];
     const normalizedQuery = query.trim().toLowerCase();
     return archive.entries.filter((entry) => {
-      const matchesExtension = extension === "all" || entry.extension === extension;
+      const matchesExtension = extension === "all" || (extension === "confirmed-ctd" ? entry.isVerifiedCtd : entry.extension === extension);
       if (!matchesExtension) return false;
       if (!normalizedQuery) return true;
       const searchable = `${entry.directory} ${entry.extension} ${formatBbsHash(entry.fileHash)} ${formatBbsHash(entry.directoryHash)} BBS${entry.archiveIndex}`.toLowerCase();
@@ -236,7 +236,7 @@ export default function KingdomHeartsFiles() {
             <div className="rounded-2xl border border-border bg-card/60 p-3 md:p-4">
               <div className="flex flex-col gap-3 md:flex-row">
                 <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في المسار أو الامتداد أو رقم التجزئة مثل 0x…" /></label>
-                <select value={extension} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm"><option value="all">كل الامتدادات</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
+                <select value={extension} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm"><option value="all">كل الامتدادات</option><option value="confirmed-ctd">CTD مؤكّد بالترويسة</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={selectVisible}><CheckSquare className="ml-1.5 h-4 w-4" />تحديد النتائج المتاحة</Button>
@@ -248,7 +248,7 @@ export default function KingdomHeartsFiles() {
                 <Button size="sm" disabled={zipping || selectedEntries.length === 0} onClick={() => void downloadSelectedZip()} className="bg-amber-500 text-black hover:bg-amber-400"><Download className="ml-1.5 h-4 w-4" />{zipping ? "جارٍ بناء ZIP…" : flatZip ? "تنزيل في مجلد واحد" : "تنزيل المحدد ZIP"}</Button>
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
+              <p className="mt-2 text-xs text-muted-foreground">ملفات <bdi>CTD</bdi> لا تظهر بهذا الامتداد إلا بعد مطابقة ترويسة <bdi>@CTD</bdi> الفعلية. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
             <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>

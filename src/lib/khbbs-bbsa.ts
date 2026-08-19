@@ -4,9 +4,13 @@
  */
 
 export const BBS_SECTOR_SIZE = 0x800;
+/** توقيع @CTD بصيغة little-endian كما تقرأه اللعبة وOpenKH. */
+const CTD_MAGIC = 0x44544340;
 const MAX_PARTITIONS = 4096;
 const MAX_DIRECTORY_COUNT = 64;
 const MAX_ENTRIES = 100_000;
+
+export type BbsCtdVerification = "not-applicable" | "confirmed" | "mismatch" | "unavailable";
 
 export interface BbsArchiveEntry {
   id: string;
@@ -23,6 +27,9 @@ export interface BbsArchiveEntry {
   byteOffset: number;
   downloadAvailable: boolean;
   isStreamed: boolean;
+  /** لا يكون true إلا بعد مطابقة أول أربعة بايتات للتوقيع @CTD. */
+  isVerifiedCtd: boolean;
+  ctdVerification: BbsCtdVerification;
 }
 
 export interface BbsArchiveIndex {
@@ -59,6 +66,27 @@ const KNOWN_EXTENSIONS = [
   "epd", "olo", "bep", "txa", "aac", "abc", "scd", "bsd", "seb", "ctd", "ecm", "ept", "mss", "nmd", "ite", "itb",
   "itc", "bdd", "bdc", "ngd", "exb", "gpd", "exa", "esd", "mtx", "inf", "cod", "clu", "pmf", "ese", "ptx", "bin",
 ] as const;
+
+/** امتدادات يمكن معرفتها من ترويسة المورد نفسه، وفق جدول قارئ BBSA المرجعي. */
+const EXTENSION_BY_MAGIC: Record<number, string> = {
+  0x61754c1b: "lub",
+  0x41264129: "ice",
+  [CTD_MAGIC]: "ctd",
+  0x50444540: "edp",
+  0x00435241: "arc",
+  0x44424d40: "mbd",
+  0x00444145: "ead",
+  0x07504546: "fep",
+  0x00425449: "itb",
+  0x00435449: "itc",
+  0x00455449: "ite",
+  0x004d4150: "pam",
+  0x004f4d50: "pmo",
+  0x42444553: "scd",
+  0x324d4954: "tm2",
+  0x00415854: "txa",
+  0x00617865: "exa",
+};
 
 /** The documented directory hashes needed to make the archive list human-readable. */
 const KNOWN_DIRECTORIES: Record<number, string> = {
@@ -134,6 +162,11 @@ function directoryName(hash: number): string {
   return KNOWN_DIRECTORIES[hash] ?? `مسار غير معروف · ${toHex(hash)}`;
 }
 
+function resourceMagic(bytes: Uint8Array): number | null {
+  if (bytes.byteLength < 4) return null;
+  return new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0, true);
+}
+
 function addEntry(
   entries: BbsArchiveEntry[],
   archives: Map<number, File>,
@@ -167,7 +200,52 @@ function addEntry(
     byteOffset,
     downloadAvailable,
     isStreamed,
+    isVerifiedCtd: false,
+    ctdVerification: extension === "ctd" ? "unavailable" : "not-applicable",
   });
+}
+
+/**
+ * لا يكفي جدول امتدادات BBSA لتسمية CTD؛ بعض الإدخالات الواقعة في كتلة CTD
+ * ليست حاويات @CTD قابلة للتحرير. لذلك نتحقق من بايتات المورد الحقيقية قبل
+ * أن نترك امتداد .ctd في اسم التنزيل أو نعرضه داخل فلتر النصوص.
+ */
+async function verifyCtdCandidates(entries: BbsArchiveEntry[], archives: Map<number, File>, warnings: string[]): Promise<void> {
+  const candidates = entries.filter((entry) => entry.extension === "ctd");
+  if (candidates.length === 0) return;
+
+  let confirmed = 0;
+  let corrected = 0;
+  let unavailable = 0;
+
+  await Promise.all(candidates.map(async (entry) => {
+    const archive = archives.get(entry.archiveIndex);
+    if (!archive || !entry.downloadAvailable) {
+      // لا نعرضها كملف CTD قابل للتحرير طالما لا يمكن فحص مصدرها الفعلي.
+      entry.extension = "unknown";
+      entry.ctdVerification = "unavailable";
+      unavailable += 1;
+      return;
+    }
+
+    const header = new Uint8Array(await archive.slice(entry.byteOffset, entry.byteOffset + 4).arrayBuffer());
+    const magic = resourceMagic(header);
+    if (magic === CTD_MAGIC) {
+      entry.isVerifiedCtd = true;
+      entry.ctdVerification = "confirmed";
+      confirmed += 1;
+      return;
+    }
+
+    entry.extension = magic === null ? "unknown" : (EXTENSION_BY_MAGIC[magic] ?? "unknown");
+    entry.ctdVerification = "mismatch";
+    corrected += 1;
+  }));
+
+  const report = [`تم التحقق من الترويسة الفعلية لـ ${candidates.length} مورد/موارد مرشحة CTD: ${confirmed} CTD مؤكّد`];
+  if (corrected) report.push(`${corrected} ليست CTD وأعيدت تسميتها بامتداد مكتشف أو unknown`);
+  if (unavailable) report.push(`${unavailable} لم يمكن فحصها لأن ملف DAT المصدر غير مرفوع`);
+  warnings.push(`${report.join("؛ ")}.`);
 }
 
 /**
@@ -221,6 +299,8 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
       addEntry(entries, archives, header, directoryHash, fileHash, extension, info, entries.length);
     }
   }
+
+  await verifyCtdCandidates(entries, archives, warnings);
 
   const unavailableArchives = [0, 1, 2, 3, 4].filter((index) => !archives.has(index));
   if (unavailableArchives.length) warnings.push(`لم تُرفع ${unavailableArchives.map((index) => `BBS${index}.DAT`).join("، ")}؛ ستظهر مراجعها لكن لا يمكن تنزيلها بعد.`);

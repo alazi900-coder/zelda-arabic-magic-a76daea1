@@ -15,6 +15,7 @@ const INDEX_RECORD_BYTES = 12;
 const TOKEN_PREFIX = "[CTD:";
 const CTD_TOKEN_PATTERN = /\[CTD:\s*([0-9A-Fa-f]{2}(?:\s+[0-9A-Fa-f]{2})*)\s*\]/gi;
 const CTD_TOKEN_SPLIT_PATTERN = /(\[CTD:\s*[0-9A-Fa-f]{2}(?:\s+[0-9A-Fa-f]{2})*\s*\])/gi;
+const SHIFT_JIS_DECODER = new TextDecoder("shift_jis");
 
 /**
  * KHBBS design note: Arabic letters always use Font.arabic.arc glyph IDs.
@@ -69,6 +70,8 @@ export interface CTDEntry {
   translation: string;
   /** All control bytes in their required original order. */
   rawControlBytes: Uint8Array;
+  /** Original NUL-free payload; reused exactly when this entry has not changed. */
+  rawTextBytes: Uint8Array;
   /** Whether the table row points to a NUL-terminated string inside the text area. */
   hasStringPointer: boolean;
   /** Whether the original string is non-empty and should be offered in the editor. */
@@ -127,17 +130,27 @@ function isPlainTextByte(byte: number): boolean {
   return byte === 9 || byte === 10 || byte === 13 || (byte >= 0x20 && byte <= 0x7e);
 }
 
+function isShiftJisLeadByte(byte: number): boolean {
+  return (byte >= 0x81 && byte <= 0x9f) || (byte >= 0xe0 && byte <= 0xef);
+}
+
+function isShiftJisTrailByte(byte: number): boolean {
+  return (byte >= 0x40 && byte <= 0x7e) || (byte >= 0x80 && byte <= 0xfc);
+}
+
+function isShiftJisHalfWidthKatakana(byte: number): boolean {
+  return byte >= 0xa1 && byte <= 0xdf;
+}
+
 /**
- * CTD uses short binary command sequences inside otherwise ASCII strings.
- * The sequences verified in the supplied archive are F9 xx and 81 xx xx.
- * Treating each verified sequence as one visible, atomic tag prevents editors
- * from accidentally changing a command parameter such as F9 59 (button icon).
+ * CTD text can contain ASCII and Shift-JIS characters alongside short binary
+ * game commands. Bytes 81–EF are valid Shift-JIS lead bytes, not commands.
+ * Commands in the verified archive are F0–F9 followed by one parameter byte;
+ * keep only those commands as visible atomic tags for safe rebuilding.
  */
 function readControlSequence(raw: Uint8Array, start: number): number[] | null {
   const byte = raw[start];
-  if (byte === 0xf9 && start + 1 < raw.length) return [byte, raw[start + 1]];
-  if (byte === 0x81 && start + 2 < raw.length) return [byte, raw[start + 1], raw[start + 2]];
-  if (!isPlainTextByte(byte)) return [byte];
+  if (byte >= 0xf0 && byte <= 0xf9 && start + 1 < raw.length) return [byte, raw[start + 1]];
   return null;
 }
 
@@ -146,6 +159,7 @@ function decodeCTDRaw(raw: Uint8Array): { text: string; controlBytes: Uint8Array
   const controls: number[] = [];
 
   for (let cursor = 0; cursor < raw.length;) {
+    const byte = raw[cursor];
     const sequence = readControlSequence(raw, cursor);
     if (sequence) {
       text += controlTag(sequence);
@@ -153,7 +167,24 @@ function decodeCTDRaw(raw: Uint8Array): { text: string; controlBytes: Uint8Array
       cursor += sequence.length;
       continue;
     }
-    text += String.fromCharCode(raw[cursor]);
+    const next = raw[cursor + 1];
+    if (isShiftJisLeadByte(byte) && next !== undefined && isShiftJisTrailByte(next)) {
+      text += SHIFT_JIS_DECODER.decode(raw.slice(cursor, cursor + 2));
+      cursor += 2;
+      continue;
+    }
+    if (isShiftJisHalfWidthKatakana(byte)) {
+      text += SHIFT_JIS_DECODER.decode(raw.slice(cursor, cursor + 1));
+      cursor += 1;
+      continue;
+    }
+    if (!isPlainTextByte(byte)) {
+      text += controlTag([byte]);
+      controls.push(byte);
+      cursor += 1;
+      continue;
+    }
+    text += String.fromCharCode(byte);
     cursor += 1;
   }
 
@@ -385,6 +416,7 @@ export function parseCTD(buffer: ArrayBuffer): CTDDocument {
       text: decoded.text,
       translation: decoded.text,
       rawControlBytes: decoded.controlBytes,
+      rawTextBytes: raw.slice(),
       hasStringPointer,
       editable: hasStringPointer && raw.length > 0,
     });
@@ -445,9 +477,13 @@ export function buildCTD(document: CTDDocument, entries: CTDEntry[] = document.e
       throw new CTDFormatError("يوجد سجلان يشيران إلى النص نفسه لكن بترجمتين مختلفتين.");
     }
 
-    validateControlTokens(canonical);
-    const prepared = prepareCTDTextForBuild(canonical.translation);
-    const payload = encodeCTDText(prepared);
+    const payload = canonical.translation === canonical.text
+      ? canonical.rawTextBytes.slice()
+      : (() => {
+        validateControlTokens(canonical);
+        const prepared = prepareCTDTextForBuild(canonical.translation);
+        return encodeCTDText(prepared);
+      })();
     const stored = new Uint8Array(payload.length + 1);
     stored.set(payload);
     chunks.push(stored);

@@ -237,12 +237,6 @@ export default function KingdomHeartsImages() {
   const onPointerDown = (event: PointerEvent<HTMLImageElement>) => {
     if (!selectedPicture) return;
     const point = pointFromEvent(event);
-    if (autoDetect && !pickingCleanSource) {
-      const detected = detectRegionBounds(selectedPicture.rgba, selectedPicture.width, selectedPicture.height, point.x, point.y);
-      if (detected) { setRegion({ x: detected.x, y: detected.y, width: detected.w, height: detected.h }); toast.success("تم اكتشاف حدود العنصر. يمكنك تعديل الأرقام يدوياً."); }
-      else toast.message("لم تُكتشف حدود مناسبة؛ اسحب لتحديدها يدوياً.");
-      return;
-    }
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = { ...point, mode: pickingCleanSource ? "source" : "target" };
   };
@@ -252,7 +246,25 @@ export default function KingdomHeartsImages() {
     const next = clampRegion({ x: Math.min(start.x, point.x), y: Math.min(start.y, point.y), width: Math.abs(point.x - start.x) + 1, height: Math.abs(point.y - start.y) + 1 }, selectedPicture.width, selectedPicture.height);
     if (start.mode === "source") setCleanSource(next); else setRegion(next);
   };
-  const onPointerUp = () => { if (dragRef.current?.mode === "source") setPickingCleanSource(false); dragRef.current = null; };
+  const onPointerUp = (event: PointerEvent<HTMLImageElement>) => {
+    const start = dragRef.current;
+    dragRef.current = null;
+    if (!start || !selectedPicture) return;
+    if (start.mode === "source") { setPickingCleanSource(false); return; }
+
+    // يبقى السحب يدوياً دائماً، حتى عندما يكون الكشف التلقائي مفعلاً. النقر
+    // الثابت فقط هو الذي يطلب من الكاشف إيجاد حدود العنصر أسفل المؤشر.
+    const point = pointFromEvent(event);
+    const wasDrag = Math.abs(point.x - start.x) > 3 || Math.abs(point.y - start.y) > 3;
+    if (!autoDetect || wasDrag) return;
+    const detected = detectRegionBounds(selectedPicture.rgba, selectedPicture.width, selectedPicture.height, start.x, start.y);
+    if (detected) {
+      setRegion({ x: detected.x, y: detected.y, width: detected.w, height: detected.h });
+      toast.success("تم اكتشاف حدود العنصر. اسحب فوق الصورة لتحديد مساحة أكبر يدوياً.");
+    } else {
+      toast.message("لم تُكتشف حدود مناسبة؛ اسحب لتحديد المنطقة يدوياً.");
+    }
+  };
 
   const updateRegionField = (field: keyof Region, value: string) => {
     if (!selectedPicture) return;
@@ -282,7 +294,7 @@ export default function KingdomHeartsImages() {
   if (compositeMode && selected && selectedPicture) return (
     <main dir="rtl" className="flex min-h-screen flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3"><Button size="sm" variant="ghost" onClick={() => { setCompositeMode(false); setOverlay(null); setCleanSource(null); }}><ArrowLeft className="ml-1 h-4 w-4" />رجوع</Button><span className="flex-1 truncate font-mono text-xs text-muted-foreground" dir="ltr">{selected.path}</span><div className="flex items-center gap-1"><Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setZoom((value) => Math.max(0.25, value / 1.25))} title="تصغير"><ZoomOut className="h-3.5 w-3.5" /></Button><span className="w-12 text-center font-mono text-xs">{Math.round(zoom * 100)}%</span><Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setZoom((value) => Math.min(8, value * 1.25))} title="تكبير"><ZoomIn className="h-3.5 w-3.5" /></Button><Button size="sm" variant="outline" onClick={() => setZoom(1)}><Maximize className="ml-1 h-3.5 w-3.5" />ملائمة</Button><Button size="sm" variant="outline" onClick={() => setZoom(1)}>100%</Button></div></header>
-      <p className="px-4 pt-3 text-xs text-muted-foreground">اسحب لتحديد موضع الشعار أو النص. يمكن كشف حدود العنصر بالنقر، وتعديل X/Y/العرض/الارتفاع يدوياً. اسحب رقعة نظيفة من الخلفية لمسح النص القديم قبل التركيب عند الحاجة.</p>
+      <p className="px-4 pt-3 text-xs text-muted-foreground">اسحب دائماً لتحديد مساحة كاملة للشعار أو النص. عند تفعيل الكشف التلقائي، النقر فقط يكشف حدود العنصر أسفل المؤشر ولا يمنع السحب. يمكن تعديل X/Y/العرض/الارتفاع يدوياً. اسحب رقعة نظيفة من الخلفية لمسح النص القديم قبل التركيب عند الحاجة.</p>
       <section className="flex min-h-0 flex-1 flex-col gap-3 p-3 md:flex-row">
         <div className="min-h-[320px] flex-1 overflow-auto rounded border border-border" style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}><div className="relative w-fit"><img src={canvasDataUrl(selectedPicture.rgba, selectedPicture.width, selectedPicture.height)} alt={selected.path} draggable={false} className={`block select-none ${pickingCleanSource ? "cursor-copy" : "cursor-crosshair"}`} style={{ width: selectedPicture.width * zoom, height: selectedPicture.height * zoom, maxWidth: "none", imageRendering: "pixelated" }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} />{region && <div className="pointer-events-none absolute border-2 border-emerald-400 bg-emerald-400/10" style={{ left: region.x * zoom, top: region.y * zoom, width: region.width * zoom, height: region.height * zoom }} />}{cleanSource && <div className="pointer-events-none absolute border-2 border-sky-400 bg-sky-400/10" style={{ left: cleanSource.x * zoom, top: cleanSource.y * zoom, width: cleanSource.width * zoom, height: cleanSource.height * zoom }} />}</div></div>
         <aside className="flex w-full shrink-0 flex-col gap-3 md:w-72"><div className="grid grid-cols-4 gap-1.5">{([ ["x", "X"], ["y", "Y"], ["width", "العرض"], ["height", "الارتفاع"] ] as [keyof Region, string][]).map(([field, label]) => <div key={field} className="flex flex-col items-center gap-0.5"><Label className="text-[10px] text-muted-foreground">{label}</Label><Input type="number" min={0} className="h-8 px-1 text-center font-mono text-xs" value={region?.[field] ?? 0} onChange={(event) => updateRegionField(field, event.target.value)} /></div>)}</div>

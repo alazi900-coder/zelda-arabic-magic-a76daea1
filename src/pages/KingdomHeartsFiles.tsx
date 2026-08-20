@@ -11,7 +11,7 @@ import { discoverKHBbs0CtdEntries, indexKHBbsDatFiles, formatBbsBytes, formatBbs
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
 import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
-import { decryptKHBbsPgdFile, inspectKHBbsPgdHeader, type KHBbsPgdHeaderInspection } from "@/lib/khbbs-pgd";
+import { decryptKHBbsPgdFile, inspectKHBbsPgdHeader, scanKHBbsFileSignatures, type KHBbsFileSignatureScan, type KHBbsPgdHeaderInspection } from "@/lib/khbbs-pgd";
 import { toast } from "sonner";
 
 const LARGE_ZIP_BYTES = 300 * 1024 * 1024;
@@ -104,7 +104,9 @@ export default function KingdomHeartsFiles() {
   const [fontSelection, setFontSelection] = useState<{ filename: string; archiveIndexes: number[] } | null>(null);
   const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
   const [decryptingBbs, setDecryptingBbs] = useState(false);
-  const [bbsInspection, setBbsInspection] = useState<(KHBbsPgdHeaderInspection & { filename: string; fileSize: number }) | null>(null);
+  const [bbsInspecting, setBbsInspecting] = useState(false);
+  const [bbsScanProgress, setBbsScanProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [bbsInspection, setBbsInspection] = useState<(KHBbsPgdHeaderInspection & KHBbsFileSignatureScan & { filename: string; fileSize: number }) | null>(null);
   const writablePickerSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
   const openArchives = useCallback(async (uploads: File[]) => {
@@ -326,14 +328,20 @@ export default function KingdomHeartsFiles() {
 
   const inspectBbsFile = useCallback(async (upload: File | undefined) => {
     if (!upload) return;
+    setBbsInspecting(true);
     setError(null);
+    setBbsScanProgress({ completed: 0, total: upload.size });
     try {
       const header = new Uint8Array(await upload.slice(0, 0x100).arrayBuffer());
-      setBbsInspection({ ...inspectKHBbsPgdHeader(header), filename: upload.name, fileSize: upload.size });
-      toast.success("تم فحص ترويسة BBS محلياً.");
+      const scan = await scanKHBbsFileSignatures(upload, (completed, total) => setBbsScanProgress({ completed, total }));
+      setBbsInspection({ ...inspectKHBbsPgdHeader(header), ...scan, filename: upload.name, fileSize: upload.size });
+      toast.success("اكتمل فحص BBS المحلي وتحديد تواقيع المحتوى.");
     } catch (caught) {
       setBbsInspection(null);
       setError(caught instanceof Error ? caught.message : "تعذر قراءة ترويسة ملف BBS.");
+    } finally {
+      setBbsInspecting(false);
+      setBbsScanProgress(null);
     }
   }, []);
 
@@ -343,6 +351,8 @@ export default function KingdomHeartsFiles() {
       `الملف: ${bbsInspection.filename}`,
       `الحجم: ${formatBbsBytes(bbsInspection.fileSize)}`,
       `PGD: ${bbsInspection.pgdOffset === null ? "غير موجود عند 0x0 أو 0x90" : `موجود عند 0x${bbsInspection.pgdOffset.toString(16).toUpperCase()}`}`,
+      `مسح المحتوى: ${formatBbsBytes(bbsInspection.scannedBytes)}`,
+      `التواقيع الداخلية: ${bbsInspection.signatures.length ? bbsInspection.signatures.map((item) => `${item.kind} عند 0x${item.offset.toString(16).toUpperCase()}`).join("؛ ") : "لم يُعثر على PGD أو BBSA أو @CTD"}${bbsInspection.truncated ? "؛ تظهر أول 6 مواقع من كل نوع فقط" : ""}`,
       `التوقيع عند 0x0: ${bbsInspection.startSignature}`,
       `التوقيع عند 0x90: ${bbsInspection.offset90Signature ?? "الملف أقصر من 0x94"}`,
       `HEX (${bbsInspection.bytesRead} بايت): ${bbsInspection.hex}`,
@@ -372,8 +382,8 @@ export default function KingdomHeartsFiles() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button onClick={() => inspectInputRef.current?.click()} disabled={loading || decryptingBbs} variant="outline" className="border-slate-500/50 text-slate-700 hover:bg-slate-500/10 dark:text-slate-300" title="يقرأ أول 256 بايت محلياً ويعرض الترويسة فقط">
-              <FileSearch className="ml-2 h-4 w-4" />فحص BBS
+            <Button onClick={() => inspectInputRef.current?.click()} disabled={loading || decryptingBbs || bbsInspecting} variant="outline" className="border-slate-500/50 text-slate-700 hover:bg-slate-500/10 dark:text-slate-300" title="يفحص الترويسة ويحدد موضع PGD أو BBSA أو CTD داخل الملف محلياً">
+              {bbsInspecting ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <FileSearch className="ml-2 h-4 w-4" />}{bbsInspecting ? "جارٍ فحص BBS…" : "فحص BBS"}
             </Button>
             <Button onClick={() => decryptInputRef.current?.click()} disabled={loading || decryptingBbs} variant="outline" className="border-sky-500/50 text-sky-700 hover:bg-sky-500/10 dark:text-sky-300" title="ينزّل نسخة مفكوكة من BBS1 إلى BBS3؛ BBS0 يمر كما هو">
               {decryptingBbs ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Unlock className="ml-2 h-4 w-4" />}{decryptingBbs ? "جارٍ فك BBS…" : "فك BBS"}
@@ -412,9 +422,12 @@ export default function KingdomHeartsFiles() {
             <Button size="sm" variant="outline" onClick={() => void copyBbsInspection()}><ClipboardCopy className="ml-1.5 h-4 w-4" />نسخ البيانات</Button>
           </div>
           <p className="mt-3 leading-relaxed"><b>PGD/DNAS:</b> {bbsInspection.pgdOffset === null ? "غير موجود عند 0x0 أو 0x90؛ لا يعني ذلك وحده أن الملف مفكوك." : <bdi className="font-mono">موجود عند 0x{bbsInspection.pgdOffset.toString(16).toUpperCase()}</bdi>}</p>
+          <p className="mt-2 leading-relaxed"><b>داخل الملف:</b> {bbsInspection.signatures.length ? bbsInspection.signatures.map((item) => <span key={`${item.kind}-${item.offset}`} className="ml-2 inline-flex rounded-md border border-border bg-background/60 px-2 py-0.5 font-mono text-xs"><bdi>{item.kind} · 0x{item.offset.toString(16).toUpperCase()}</bdi></span>) : "لم يُعثر على PGD أو BBSA أو @CTD داخل الملف."}{bbsInspection.truncated ? " تظهر أول 6 مواقع من كل نوع فقط." : ""}</p>
           <p dir="ltr" className="mt-2 font-mono text-xs text-muted-foreground">0x00: {bbsInspection.startSignature} · 0x90: {bbsInspection.offset90Signature ?? "—"}</p>
           <pre dir="ltr" className="mt-3 max-h-36 overflow-auto rounded-xl border border-border bg-background/80 p-3 text-left font-mono text-[10px] leading-5 text-muted-foreground whitespace-pre-wrap break-all">{bbsInspection.hex}</pre>
         </div>}
+
+        {bbsInspecting && bbsScanProgress && <div className="mt-5 rounded-2xl border border-slate-500/35 bg-slate-500/10 p-4 text-sm"><div className="flex items-center gap-3"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /><p>جارٍ مسح المحتوى محلياً: {formatBbsBytes(bbsScanProgress.completed)} / {formatBbsBytes(bbsScanProgress.total)}. لا يتم فك أو تغيير الملف.</p></div></div>}
 
         {archive && (
           <div className="space-y-5">

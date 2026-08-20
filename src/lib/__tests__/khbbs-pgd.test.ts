@@ -1,6 +1,6 @@
 import { cbc } from "@noble/ciphers/aes.js";
 import { describe, expect, it } from "vitest";
-import { decryptKHBbsPgdBytes, inspectKHBbsPgdHeader } from "../khbbs-pgd";
+import { decryptKHBbsPgdBytes, inspectKHBbsPgdHeader, scanKHBbsFileSignatures } from "../khbbs-pgd";
 
 const ZERO = new Uint8Array(16);
 const DNAS_KEY = Uint8Array.from([0xed, 0xe2, 0x5d, 0x2d, 0xbb, 0xf8, 0x12, 0xe5, 0x3c, 0x5c, 0x59, 0x32, 0xfa, 0xe3, 0xe2, 0x43]);
@@ -123,6 +123,16 @@ function buildPgd(payload: Uint8Array, prefixBytes = 0) {
   return output;
 }
 
+function makeMemoryBlob(bytes: Uint8Array): Blob {
+  return {
+    size: bytes.length,
+    slice(start = 0, end = bytes.length) {
+      const segment = bytes.slice(start, end);
+      return { arrayBuffer: async () => segment.buffer.slice(segment.byteOffset, segment.byteOffset + segment.byteLength) };
+    },
+  } as unknown as Blob;
+}
+
 describe("decryptKHBbsPgdBytes", () => {
   const original = Uint8Array.from({ length: 29 }, (_, index) => 0x41 + index);
 
@@ -163,5 +173,23 @@ describe("inspectKHBbsPgdHeader", () => {
     const inspection = inspectKHBbsPgdHeader(Uint8Array.from([0x42, 0x42, 0x53, 0x41]));
     expect(inspection.pgdOffset).toBeNull();
     expect(inspection.startSignature).toBe("42 42 53 41");
+  });
+});
+
+describe("scanKHBbsFileSignatures", () => {
+  it("يحدد PGD أو BBSA أو CTD خلف غلاف bbs1.dat من دون فك الحاوية", async () => {
+    const wrapped = new Uint8Array(0x3000);
+    wrapped.set(new TextEncoder().encode("bbs1.dat\0"), 0);
+    wrapped.set([0x00, 0x50, 0x47, 0x44], 0x800);
+    wrapped.set(new TextEncoder().encode("bbsa"), 0x1000);
+    wrapped.set(new TextEncoder().encode("@CTD"), 0x1800);
+
+    const scan = await scanKHBbsFileSignatures(makeMemoryBlob(wrapped));
+    expect(scan.scannedBytes).toBe(wrapped.length);
+    expect(scan.signatures).toEqual([
+      { kind: "PGD/DNAS", offset: 0x800 },
+      { kind: "فهرس BBSA", offset: 0x1000 },
+      { kind: "مورد CTD", offset: 0x1800 },
+    ]);
   });
 });

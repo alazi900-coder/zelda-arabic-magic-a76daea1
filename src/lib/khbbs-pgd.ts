@@ -10,6 +10,7 @@ import { cbc } from "@noble/ciphers/aes.js";
 
 const PGD_MAGIC = 0x44475000;
 const ZERO_BLOCK = new Uint8Array(16);
+const BBS_INSPECTION_CHUNK_BYTES = 4 * 1024 * 1024;
 const DNAS_KEY_1A90 = Uint8Array.from([0xed, 0xe2, 0x5d, 0x2d, 0xbb, 0xf8, 0x12, 0xe5, 0x3c, 0x5c, 0x59, 0x32, 0xfa, 0xe3, 0xe2, 0x43]);
 const BBMAC_XOR = Uint8Array.from([0xe3, 0x50, 0xed, 0x1d, 0x91, 0x0a, 0x1f, 0xd0, 0x29, 0xbb, 0x1c, 0x3e, 0xf3, 0x40, 0x77, 0xfb]);
 const BBCIPHER_XOR_1 = Uint8Array.from([0x13, 0x5f, 0xa4, 0x7c, 0xab, 0x39, 0x5b, 0xa4, 0x76, 0xb8, 0xcc, 0xa9, 0x8f, 0x3a, 0x04, 0x45]);
@@ -39,6 +40,18 @@ export interface KHBbsPgdHeaderInspection {
   offset90Signature: string | null;
   hex: string;
   ascii: string;
+}
+
+/** نتيجة قراءة فقط؛ تعرض تواقيع المحتوى المحتمل داخل غلاف BBS ولا تفك أو تكتب أي بايت. */
+export interface KHBbsEmbeddedSignature {
+  kind: "PGD/DNAS" | "فهرس BBSA" | "مورد CTD";
+  offset: number;
+}
+
+export interface KHBbsFileSignatureScan {
+  scannedBytes: number;
+  signatures: KHBbsEmbeddedSignature[];
+  truncated: boolean;
 }
 
 function fail(message: string): never {
@@ -201,6 +214,52 @@ function formatHex(bytes: Uint8Array) {
 
 function formatAscii(bytes: Uint8Array) {
   return [...bytes].map((value) => value >= 0x20 && value <= 0x7e ? String.fromCharCode(value) : ".").join("");
+}
+
+function startsWithAt(bytes: Uint8Array, offset: number, signature: readonly number[]) {
+  if (offset + signature.length > bytes.length) return false;
+  return signature.every((value, index) => bytes[offset + index] === value);
+}
+
+/**
+ * يفحص الملف كاملاً على دفعات صغيرة قابلة للاستخدام على الهاتف. الغرض تشخيصي فقط:
+ * تحديد أين يبدأ PGD أو BBSA أو أول موارد النص، لا فك تشفير أو تغيير الملف.
+ */
+export async function scanKHBbsFileSignatures(source: Blob, onProgress?: (completed: number, total: number) => void): Promise<KHBbsFileSignatureScan> {
+  const found: KHBbsEmbeddedSignature[] = [];
+  const perKind = new Map<KHBbsEmbeddedSignature["kind"], number>();
+  const signatures: { kind: KHBbsEmbeddedSignature["kind"]; bytes: readonly number[] }[] = [
+    { kind: "PGD/DNAS", bytes: [0x00, 0x50, 0x47, 0x44] },
+    { kind: "فهرس BBSA", bytes: [0x62, 0x62, 0x73, 0x61] },
+    { kind: "مورد CTD", bytes: [0x40, 0x43, 0x54, 0x44] },
+  ];
+  let tail = new Uint8Array(0);
+
+  for (let chunkStart = 0; chunkStart < source.size; chunkStart += BBS_INSPECTION_CHUNK_BYTES) {
+    const chunkEnd = Math.min(source.size, chunkStart + BBS_INSPECTION_CHUNK_BYTES);
+    const chunk = new Uint8Array(await source.slice(chunkStart, chunkEnd).arrayBuffer());
+    const combined = new Uint8Array(tail.length + chunk.length);
+    combined.set(tail);
+    combined.set(chunk, tail.length);
+    const combinedStart = chunkStart - tail.length;
+
+    for (let offset = 0; offset <= combined.length - 4; offset += 1) {
+      for (const signature of signatures) {
+        if (!startsWithAt(combined, offset, signature.bytes)) continue;
+        const seen = perKind.get(signature.kind) ?? 0;
+        perKind.set(signature.kind, seen + 1);
+        // نعرض أول 6 مواقع فقط من كل نوع، مع إبقاء العدّ الكامل محدود الذاكرة.
+        if (seen < 6) found.push({ kind: signature.kind, offset: combinedStart + offset });
+      }
+    }
+
+    tail = combined.slice(Math.max(0, combined.length - 3));
+    onProgress?.(chunkEnd, source.size);
+    // يتيح للرسم معالجة التقدم بين دفعات الملف الكبير.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  return { scannedBytes: source.size, signatures: found.sort((left, right) => left.offset - right.offset), truncated: [...perKind.values()].some((count) => count > 6) };
 }
 
 /** Reads only the supplied header bytes. It never decrypts, uploads, or alters a DAT. */

@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.179.1",
+    date: "2026-08-20",
+    changes: [
+      { kind: "fixed", text: "**أُصلح فقدان تعديل صورة Kingdom Hearts عند الرجوع إلى القائمة.** بعد «تركيب» صورة أو إزالة جزء، تبقى نسخة TIM2 المعدلة في المورد العامل وتظهر عند فتحه من القائمة مرة أخرى، مثل محرر Risen." },
+      { kind: "changed", text: "**زر «إغلاق» فقط يمسح جلسة الصور صراحةً.** الرجوع العادي إلى قائمة Kingdom Hearts لم يعد يعيد الموارد إلى نسخها الأصلية؛ تستطيع متابعة تعديل عدة صور ثم تنزيل TIM2 أو بناء ZIP." },
+    ],
+  },
+  {
     version: "1.179.0",
     date: "2026-08-20",
     changes: [

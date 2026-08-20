@@ -5,7 +5,7 @@
  * تحافظ عمليات TIM2 هنا على الترويسة واللوحة والفهارس الأصلية.
  */
 
-import { ChangeEvent, PointerEvent, useCallback, useMemo, useRef, useState } from "react";
+import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import JSZip from "jszip";
 import {
@@ -28,6 +28,11 @@ type Region = { x: number; y: number; width: number; height: number };
 type Tim2Resource = { id: string; path: string; asset: Tim2Asset; working: Uint8Array; preview: string; modified: boolean };
 type ImportedImage = { name: string; rgba: Uint8ClampedArray; width: number; height: number };
 type DragState = { x: number; y: number; mode: "target" | "source" };
+type Tim2EditorSession = { resources: Tim2Resource[]; selectedId: string | null; archiveName: string };
+
+// STYLE: حفظ نسخة العمل داخل الذاكرة يطابق سلوك محرر Risen: الرجوع لا يلغي تعديل الصورة،
+// بينما «إغلاق» هو الإجراء الصريح الوحيد لمسح جلسة موارد TIM2.
+let retainedTim2EditorSession: Tim2EditorSession | null = null;
 
 function canvasDataUrl(rgba: Uint8ClampedArray, width: number, height: number, maxWidth?: number): string {
   const source = document.createElement("canvas");
@@ -84,9 +89,9 @@ export default function KingdomHeartsImages() {
   const overlayInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<DragState | null>(null);
 
-  const [resources, setResources] = useState<Tim2Resource[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [archiveName, setArchiveName] = useState("TIM2 resources");
+  const [resources, setResources] = useState<Tim2Resource[]>(() => retainedTim2EditorSession?.resources ?? []);
+  const [selectedId, setSelectedId] = useState<string | null>(() => retainedTim2EditorSession?.selectedId ?? null);
+  const [archiveName, setArchiveName] = useState(() => retainedTim2EditorSession?.archiveName ?? "TIM2 resources");
   const [search, setSearch] = useState("");
   const [activeFolder, setActiveFolder] = useState("all");
   const [foldersOpen, setFoldersOpen] = useState(false);
@@ -111,6 +116,11 @@ export default function KingdomHeartsImages() {
     return inFolder && item.path.toLowerCase().includes(search.trim().toLowerCase());
   }), [activeFolder, resources, search]);
   const modified = resources.filter((item) => item.modified);
+
+  useEffect(() => {
+    if (!resources.length) return;
+    retainedTim2EditorSession = { resources, selectedId, archiveName };
+  }, [archiveName, resources, selectedId]);
 
   const refreshResource = useCallback((id: string, working: Uint8Array, isModified = true) => {
     setResources((current) => current.map((item) => {
@@ -310,7 +320,7 @@ export default function KingdomHeartsImages() {
   };
 
   const openComposite = () => { if (selectedPicture) { setCompositeMode(true); setZoom(1); setAutoDetect(false); } };
-  const closeAll = () => { setResources([]); setSelectedId(null); setFoldersOpen(false); setSelectionMode(false); setSelectedPngIds(new Set()); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null); };
+  const closeAll = () => { retainedTim2EditorSession = null; setResources([]); setSelectedId(null); setFoldersOpen(false); setSelectionMode(false); setSelectedPngIds(new Set()); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null); };
 
   if (!resources.length) return (
     <main dir="rtl" className={`min-h-screen flex flex-col items-center justify-center px-4 text-center transition-colors ${dragOver ? "bg-primary/5" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(event) => { event.preventDefault(); setDragOver(false); void openFiles(Array.from(event.dataTransfer.files)); }}>

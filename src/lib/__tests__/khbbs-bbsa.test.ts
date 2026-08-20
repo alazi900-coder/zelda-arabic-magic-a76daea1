@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { indexKHBbsDatFiles, verifyKHBbsCtdEntries } from "../khbbs-bbsa";
+import { discoverKHBbs0CtdEntries, indexKHBbsDatFiles, verifyKHBbsCtdEntries } from "../khbbs-bbsa";
 
 function writeU16(bytes: Uint8Array, offset: number, value: number): void {
   new DataView(bytes.buffer).setUint16(offset, value, true);
@@ -67,5 +67,21 @@ describe("KHBBS CTD directory detection", () => {
     expect(result).toEqual({ checked: 1, confirmed: 1, mismatch: 0 });
     expect(visibleCtd[0]).toMatchObject({ isVerifiedCtd: true, ctdVerification: "confirmed" });
     expect(index.entries.find((entry) => entry.fileHash === 0x11111111)?.ctdVerification).toBe("not-applicable");
+  });
+
+  it("يكتشف ترويسة @CTD مباشرة من BBS0 حتى لو كان امتداد BBSA غير صحيح", async () => {
+    const index = await indexKHBbsDatFiles([makeSyntheticBbs0()]);
+    const ctd = index.entries.find((entry) => entry.fileHash === 0x22222222);
+    if (!ctd) throw new Error("مدخل CTD الاصطناعي غير موجود.");
+    ctd.extension = "bin";
+    ctd.isVerifiedCtd = false;
+    ctd.ctdVerification = "not-applicable";
+
+    const progress: number[] = [];
+    const result = await discoverKHBbs0CtdEntries(index, (scanned) => progress.push(scanned));
+
+    expect(result).toMatchObject({ confirmed: 1, unmatched: 0 });
+    expect(progress.at(-1)).toBe(0x2000);
+    expect(ctd).toMatchObject({ extension: "ctd", isVerifiedCtd: true, ctdVerification: "confirmed" });
   });
 });

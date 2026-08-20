@@ -7,7 +7,7 @@ import { type ChangeEvent, useCallback, useMemo, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, ClipboardCopy, Download, FileArchive, FileDown, FileSearch, Files, FolderOpen, Image, Loader2, Search, Square, Type, Unlock, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, verifyKHBbsCtdEntries, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
+import { discoverKHBbs0CtdEntries, indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
 import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
@@ -160,29 +160,22 @@ export default function KingdomHeartsFiles() {
     }
   }, []);
 
-  const verifyCtd = useCallback(async () => {
-    if (!archive || ctdChecking || extension !== "ctd") return;
-    const normalizedQuery = query.trim().toLowerCase();
-    const visibleCtd = archive.entries.filter((entry) => {
-      if (!entry.downloadAvailable || entry.extension !== "ctd") return false;
-      if (!normalizedQuery) return true;
-      const searchable = `${entry.directory} ${entry.extension} ${formatBbsHash(entry.fileHash)} ${formatBbsHash(entry.directoryHash)} BBS${entry.archiveIndex}`.toLowerCase();
-      return searchable.includes(normalizedQuery);
-    });
-    if (visibleCtd.length === 0) return;
+  const discoverCtd = useCallback(async () => {
+    if (!archive || ctdChecking) return;
     setCtdChecking(true);
-    setCtdProgress({ completed: 0, total: visibleCtd.length });
+    setCtdProgress({ completed: 0, total: archive.archives.get(0)?.size ?? 0 });
     setError(null);
     try {
-      const result = await verifyKHBbsCtdEntries(visibleCtd, archive.archives, (completed, total) => setCtdProgress({ completed, total }));
-      const report = `تحقق CTD الظاهرة اكتمل: ${result.confirmed} ملف CTD مؤكد من ${result.checked}${result.mismatch ? `؛ ${result.mismatch} ملفاً استُبعد لأن ترويسه ليست @CTD` : ""}.`;
-      setArchive((current) => current ? { ...current, entries: [...current.entries], warnings: [...current.warnings.filter((warning) => !warning.startsWith("تحقق CTD الظاهرة")), report] } : current);
+      const result = await discoverKHBbs0CtdEntries(archive, (completed, total) => setCtdProgress({ completed, total }));
+      setExtension("ctd");
+      const report = `اكتشاف CTD المباشر في BBS0 اكتمل: ${result.confirmed} ملف @CTD مطابق للفهرس من ${result.scannedSectors.toLocaleString("ar")} قطاعاً${result.unmatched ? `؛ ${result.unmatched} ترويسة @CTD لم تطابق بداية مورد مفهرس، فتم تجاهلها لحماية حجم الملفات` : ""}.`;
+      setArchive((current) => current ? { ...current, entries: [...current.entries], warnings: [...current.warnings.filter((warning) => !warning.startsWith("اكتشاف CTD المباشر")), report] } : current);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "تعذر فحص ترويسات CTD.");
+      setError(caught instanceof Error ? caught.message : "تعذر اكتشاف ملفات CTD داخل BBS0.");
     } finally {
       setCtdChecking(false);
     }
-  }, [archive, ctdChecking, extension, query]);
+  }, [archive, ctdChecking]);
 
   const filteredEntries = useMemo(() => {
     if (!archive) return [];
@@ -456,7 +449,7 @@ export default function KingdomHeartsFiles() {
                 <select value={extension} disabled={ctdChecking} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm disabled:cursor-wait disabled:opacity-60"><option value="all">كل الامتدادات</option><option value="ctd">ملفات CTD (.ctd)</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" title={extension === "ctd" ? "يتحقق من ملفات CTD الظاهرة في هذه القائمة فقط" : "اختر «ملفات CTD (.ctd)» أولاً"} disabled={ctdChecking || extension !== "ctd" || visibleCtdCount === 0} onClick={() => void verifyCtd()}><Search className="ml-1.5 h-4 w-4" />{ctdChecking ? `تحقق CTD… ${ctdProgress?.completed ?? 0}/${ctdProgress?.total ?? 0}` : "تحقق من CTD الظاهرة"}</Button>
+                <Button variant="outline" size="sm" title="يفحص BBS0 على حدود القطاعات فقط ويعرض ترويسات @CTD المطابقة للفهرس" disabled={ctdChecking || !archive.archives.has(0)} onClick={() => void discoverCtd()}><Search className="ml-1.5 h-4 w-4" />{ctdChecking ? `اكتشاف CTD… ${formatBbsBytes(ctdProgress?.completed ?? 0)}/${formatBbsBytes(ctdProgress?.total ?? 0)}` : "اكتشاف CTD في BBS0"}</Button>
                 <Button variant="outline" size="sm" onClick={selectVisible}><CheckSquare className="ml-1.5 h-4 w-4" />تحديد النتائج المتاحة</Button>
                 <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}><Square className="ml-1.5 h-4 w-4" />إلغاء التحديد</Button>
                 <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-semibold">
@@ -467,7 +460,7 @@ export default function KingdomHeartsFiles() {
                 {selectedCtdEntries.length > 0 && <Button size="sm" disabled={openingCtd} onClick={() => void openSelectedCtdInEditor()} className="bg-emerald-600 text-white hover:bg-emerald-500"><FileArchive className="ml-1.5 h-4 w-4" />{openingCtd ? "جارٍ فتح CTD…" : `فتح CTD في المحرر (${selectedCtdEntries.length})`}</Button>}
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">بعد فتح DAT تقرأ الأداة توقيع مورد أو موردين فقط من كل مجموعة لتحديد «ملفات CTD (.ctd)» الصحيحة، ولا تستخدم مرشحات BBSA المضللة. عند اختيار هذا الفلتر، يقرأ زر «تحقق من CTD الظاهرة» هذه القائمة الظاهرة فقط ويثبت الترويسة <bdi>@CTD</bdi> قبل فتح أي ملف في المحرر. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
+              <p className="mt-2 text-xs text-muted-foreground">لا تعتمد «ملفات CTD (.ctd)» على امتداد BBSA. اضغط «اكتشاف CTD في BBS0» مرة واحدة: تقرأ الأداة BBS0 بكتل صغيرة وعلى حدود القطاعات فقط، وتعرض كل مورد يبدأ فعلياً بالترويسة <bdi>@CTD</bdi> إذا طابق فهرس BBS وحجمه المحجوز. لا تفحص 17 ألف ملف منفصلاً، وتحافظ على استجابة الهاتف. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
             <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>

@@ -9,6 +9,7 @@ const CTD_MAGIC = 0x44544340;
 const MAX_PARTITIONS = 4096;
 const MAX_DIRECTORY_COUNT = 64;
 const MAX_ENTRIES = 100_000;
+const CTD_DISCOVERY_CHUNK_BYTES = 8 * 1024 * 1024;
 
 export type BbsCtdVerification = "not-applicable" | "confirmed" | "mismatch" | "unavailable";
 
@@ -291,6 +292,52 @@ export async function verifyKHBbsCtdEntries(
   }
 
   return { checked: readable.length, confirmed, mismatch };
+}
+
+/**
+ * يفحص BBS0 على حدود القطاعات فقط لاكتشاف ترويسة @CTD الفعلية. لا يعتمد
+ * على ترتيب الامتدادات غير الموثوق في BBSA، ولا يقرأ 17 ألف مورد منفصلاً.
+ * لا تُعرض النتيجة إلا إذا طابقت بداية مورد مفهرس، لكي يبقى حجم الحجز
+ * الأصلي محفوظاً عند فتح CTD وإعادة بنائه.
+ */
+export async function discoverKHBbs0CtdEntries(
+  index: BbsArchiveIndex,
+  onProgress?: (scannedBytes: number, totalBytes: number) => void,
+): Promise<{ scannedSectors: number; confirmed: number; unmatched: number }> {
+  const bbs0 = index.archives.get(0);
+  if (!bbs0) throw new Error("ارفع BBS0.DAT أولاً لاكتشاف ملفات CTD الحقيقية.");
+
+  const entryByOffset = new Map<number, BbsArchiveEntry>();
+  for (const entry of index.entries) {
+    if (entry.archiveIndex === 0 && entry.downloadAvailable && !entry.isStreamed) {
+      entryByOffset.set(entry.byteOffset, entry);
+    }
+  }
+
+  let scannedSectors = 0;
+  let confirmed = 0;
+  let unmatched = 0;
+  for (let chunkStart = 0; chunkStart < bbs0.size; chunkStart += CTD_DISCOVERY_CHUNK_BYTES) {
+    const chunkEnd = Math.min(chunkStart + CTD_DISCOVERY_CHUNK_BYTES, bbs0.size);
+    const chunk = new Uint8Array(await bbs0.slice(chunkStart, chunkEnd).arrayBuffer());
+    for (let localOffset = 0; localOffset + 4 <= chunk.byteLength; localOffset += BBS_SECTOR_SIZE) {
+      scannedSectors += 1;
+      if (resourceMagic(chunk.subarray(localOffset, localOffset + 4)) !== CTD_MAGIC) continue;
+      const entry = entryByOffset.get(chunkStart + localOffset);
+      if (!entry) {
+        unmatched += 1;
+        continue;
+      }
+      if (!entry.isVerifiedCtd) confirmed += 1;
+      entry.extension = "ctd";
+      entry.isVerifiedCtd = true;
+      entry.ctdVerification = "confirmed";
+    }
+    onProgress?.(chunkEnd, bbs0.size);
+    // يعيد التحكم إلى المتصفح بين كتل 8 ميغابايت حتى لا تتجمد واجهة الهاتف.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  }
+  return { scannedSectors, confirmed, unmatched };
 }
 
 /**

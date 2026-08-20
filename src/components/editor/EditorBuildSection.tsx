@@ -476,13 +476,17 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                   size="sm"
                   variant={khbbsUnsupportedFilterActive ? "secondary" : "outline"}
                   onClick={onFilterKHBBSUnsupported}
-                  disabled={khbbsUnsupportedCount === 0}
+                  disabled={!khbbsUnsupportedFilterActive && khbbsUnsupportedCount === 0}
                   className="font-body gap-1 shrink-0"
-                  title={khbbsUnsupportedCount > 0 ? "يعرض في المحرر النصوص التي تحتوي رموز CTD غير مدعومة فقط" : "لا توجد رموز CTD غير مدعومة في الترجمات الحالية"}
+                  title={khbbsUnsupportedFilterActive
+                    ? "يلغي فلتر CTD ويعيد عرض كل النصوص في المحرر"
+                    : khbbsUnsupportedCount > 0
+                      ? "يعرض في المحرر النصوص التي تحتوي رموز CTD غير مدعومة فقط"
+                      : "لا توجد رموز CTD غير مدعومة في الترجمات الحالية"}
                 >
                   <AlertTriangle className="w-4 h-4" />
                   {khbbsUnsupportedFilterActive
-                    ? `إلغاء فلتر رموز CTD (${khbbsUnsupportedCount})`
+                    ? "إظهار كل النصوص"
                     : `عرض رموز CTD غير المدعومة (${khbbsUnsupportedCount})`}
                 </Button>
                 {khbbsUnsupportedCount > 0 && (

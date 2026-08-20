@@ -12,6 +12,8 @@ import {
 } from "@/lib/khbbs-bbs-workspace";
 import type { BbsArchiveEntry, BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 
+const SECTOR = 0x800;
+
 if (!("arrayBuffer" in Blob.prototype)) {
   Object.defineProperty(Blob.prototype, "arrayBuffer", {
     value: function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
@@ -49,6 +51,8 @@ function makeWorkspace(includeBbs3 = true): { archive: BbsArchiveIndex; ctd: Bbs
     directoryHash: 0,
     fileHash: 0,
     directoryTableIndex: 0,
+    infoTableOffset: 0,
+    sourceInfo: 1,
     catalogExtension: "ctd",
     extension: "ctd",
     globalSector: 0,
@@ -82,6 +86,71 @@ function makeWorkspace(includeBbs3 = true): { archive: BbsArchiveIndex; ctd: Bbs
       entries: [ctd, font],
       warnings: [],
       headerSectors: { archive0: 0, archive1: 0, archive2: 0, archive3: 0, archive4: 0 },
+      metadataEndOffset: 0,
+    },
+  };
+}
+
+function makeRelocationWorkspace(): { archive: BbsArchiveIndex; ctd: BbsArchiveEntry; neighborOffset: number; original: Uint8Array } {
+  const original = new Uint8Array(14 * SECTOR);
+  original.fill(0);
+  const ctdOffset = SECTOR;
+  const neighborOffset = 3 * SECTOR;
+  original.fill(0x41, ctdOffset, ctdOffset + 2 * SECTOR);
+  original.fill(0x5a, neighborOffset, neighborOffset + SECTOR);
+  const ctd: BbsArchiveEntry = {
+    id: "bbs0-relocated-ctd",
+    archiveIndex: 0,
+    sourceArchiveName: "BBS0.DAT",
+    directory: "test",
+    directoryHash: 0,
+    fileHash: 0,
+    directoryTableIndex: 0,
+    infoTableOffset: 0x40,
+    sourceInfo: (1 << 12) | 2,
+    catalogExtension: "ctd",
+    extension: "ctd",
+    globalSector: 1,
+    localSector: 1,
+    allocatedSectors: 2,
+    allocatedBytes: 2 * SECTOR,
+    byteOffset: ctdOffset,
+    downloadAvailable: true,
+    isStreamed: false,
+    isVerifiedCtd: true,
+    ctdVerification: "confirmed",
+  };
+  const neighbor: BbsArchiveEntry = {
+    ...ctd,
+    id: "bbs0-neighbor",
+    infoTableOffset: 0x4c,
+    sourceInfo: (3 << 12) | 1,
+    globalSector: 3,
+    localSector: 3,
+    allocatedSectors: 1,
+    allocatedBytes: SECTOR,
+    byteOffset: neighborOffset,
+    isVerifiedCtd: false,
+    ctdVerification: "not-applicable",
+    extension: "bin",
+  };
+  const archives = new Map<number, File>([
+    [0, makeFile("BBS0.DAT", [...original])],
+    [1, makeFile("BBS1.DAT", [0x31])],
+    [2, makeFile("BBS2.DAT", [0x32])],
+    [3, makeFile("BBS3.DAT", [0x33])],
+  ]);
+  return {
+    ctd,
+    neighborOffset,
+    original,
+    archive: {
+      version: 1,
+      archives,
+      entries: [ctd, neighbor],
+      warnings: [],
+      headerSectors: { archive0: 0, archive1: 0, archive2: 0, archive3: 0, archive4: 0 },
+      metadataEndOffset: SECTOR,
     },
   };
 }
@@ -119,5 +188,25 @@ describe("buildKHBbsDatOutput", () => {
     await expect(buildKHBbsDatOutput([
       { source: makeKHBbsResourceReference(ctd), bytes: new Uint8Array([0xaa]) },
     ])).rejects.toThrow("BBS3.DAT");
+  });
+
+  it("ينقل CTD المتجاوز إلى قطاعات صفرية ويُبقي المورد المجاور كما هو", async () => {
+    const { archive, ctd, neighborOffset, original } = makeRelocationWorkspace();
+    setKHBbsBbsWorkspace(archive);
+    const translated = new Uint8Array(17_327).fill(0xab);
+
+    const output = await buildKHBbsDatOutput([
+      { source: makeKHBbsResourceReference(ctd), bytes: translated },
+    ]);
+
+    expect(output.changedArchives).toEqual([0]);
+    const zip = await JSZip.loadAsync(output.archive);
+    const bbs0 = new Uint8Array(await zip.file("BBS0.DAT")!.async("arraybuffer"));
+    expect(bbs0.byteLength).toBe(original.byteLength);
+    expect(new DataView(bbs0.buffer).getUint32(0x40, true)).toBe((4 << 12) | 9);
+    expect([...bbs0.slice(SECTOR, 3 * SECTOR)]).toEqual([...original.slice(SECTOR, 3 * SECTOR)]);
+    expect([...bbs0.slice(neighborOffset, neighborOffset + SECTOR)]).toEqual([...original.slice(neighborOffset, neighborOffset + SECTOR)]);
+    expect([...bbs0.slice(4 * SECTOR, 4 * SECTOR + translated.byteLength)]).toEqual([...translated]);
+    expect([...bbs0.slice(4 * SECTOR + translated.byteLength, 13 * SECTOR)]).toEqual(new Array(13 * SECTOR - (4 * SECTOR + translated.byteLength)).fill(0));
   });
 });

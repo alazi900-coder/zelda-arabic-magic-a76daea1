@@ -6,6 +6,7 @@
 
 import JSZip from "jszip";
 import {
+  BBS_SECTOR_SIZE,
   getBbsEntryFilename,
   isKHBbsFontArchive,
   readBbsArchiveEntry,
@@ -16,6 +17,10 @@ import type { KHBbsDatResourceSource } from "@/lib/khbbs-dat-workspace";
 
 export interface KHBbsResourceReference extends KHBbsDatResourceSource {
   filename: string;
+  allocatedSectors: number;
+  isVerifiedCtd: boolean;
+  infoTableOffset: number | null;
+  sourceInfo: number;
 }
 
 export interface KHBbsCtdEditorInput {
@@ -51,6 +56,10 @@ function toSource(entry: BbsArchiveEntry): KHBbsResourceReference {
     byteOffset: entry.byteOffset,
     allocatedBytes: entry.allocatedBytes,
     filename: getBbsEntryFilename(entry),
+    allocatedSectors: entry.allocatedSectors,
+    isVerifiedCtd: entry.isVerifiedCtd,
+    infoTableOffset: entry.infoTableOffset,
+    sourceInfo: entry.sourceInfo,
   };
 }
 
@@ -66,17 +75,101 @@ function assertReplacement(source: KHBbsResourceReference, bytes: Uint8Array, la
   }
 }
 
-async function fullReplacement(source: KHBbsResourceReference, nextBytes: Uint8Array): Promise<{ next: Uint8Array; previous: Uint8Array }> {
+interface KHBbsArchivePatch {
+  byteOffset: number;
+  bytes: Uint8Array;
+  label: string;
+}
+
+interface KHBbsPreparedReplacement {
+  source: KHBbsResourceReference;
+  changed: boolean;
+  patches: KHBbsArchivePatch[];
+}
+
+function overlaps(start: number, end: number, otherStart: number, otherEnd: number): boolean {
+  return start < otherEnd && end > otherStart;
+}
+
+async function isAllZero(archive: File, offset: number, length: number): Promise<boolean> {
+  const bytes = new Uint8Array(await archive.slice(offset, offset + length).arrayBuffer());
+  return bytes.every((byte) => byte === 0);
+}
+
+/**
+ * يختار فجوة صفرية حقيقية بين موارد BBS0 المفهرسة. لا يلمس حجم الملف، ولا
+ * يعيد استخدام أي قطاع محجوز أو أي مساحة سُجلت لنقل CTD آخر في البناء نفسه.
+ */
+async function findBbs0FreeSectors(requiredSectors: number, claimed: Array<{ start: number; end: number }>): Promise<number | null> {
+  const workspace = activeWorkspace;
+  if (!workspace) throw new Error("افتح BBS0–BBS3 من مدير Kingdom Hearts أولاً.");
+  const bbs0 = workspace.archive.archives.get(0);
+  if (!bbs0) return null;
+  const firstSafeOffset = Math.ceil(workspace.archive.metadataEndOffset / BBS_SECTOR_SIZE) * BBS_SECTOR_SIZE;
+  const occupied = [
+    ...workspace.archive.entries
+      .filter((entry) => entry.archiveIndex === 0 && entry.downloadAvailable && !entry.isStreamed && entry.allocatedBytes > 0)
+      .map((entry) => ({ start: entry.byteOffset, end: entry.byteOffset + entry.allocatedBytes })),
+    ...claimed,
+  ].sort((left, right) => left.start - right.start);
+  const requiredBytes = requiredSectors * BBS_SECTOR_SIZE;
+  let cursor = firstSafeOffset;
+  for (const range of [...occupied, { start: bbs0.size, end: bbs0.size }]) {
+    if (range.end <= cursor) continue;
+    const candidate = Math.ceil(cursor / BBS_SECTOR_SIZE) * BBS_SECTOR_SIZE;
+    if (candidate + requiredBytes <= range.start && await isAllZero(bbs0, candidate, requiredBytes)) return candidate;
+    cursor = Math.max(cursor, range.end);
+  }
+  return null;
+}
+
+async function prepareReplacement(
+  source: KHBbsResourceReference,
+  nextBytes: Uint8Array,
+  claimedBbs0Ranges: Array<{ start: number; end: number }>,
+): Promise<KHBbsPreparedReplacement> {
   const workspace = activeWorkspace;
   if (!workspace) throw new Error("افتح BBS0–BBS3 من مدير Kingdom Hearts أولاً.");
   const entry = workspace.archive.entries.find((item) => item.id === source.entryId);
   const archive = workspace.archive.archives.get(source.archiveIndex);
   if (!entry || !archive || entry.allocatedBytes !== source.allocatedBytes) throw new Error(`فُقد مرجع المورد ${source.filename}. أعد فتح ملفات BBS.`);
-  assertReplacement(source, nextBytes, source.filename);
-  const previous = new Uint8Array(await archive.slice(source.byteOffset, source.byteOffset + source.allocatedBytes).arrayBuffer());
-  const next = previous.slice();
-  next.set(nextBytes, 0);
-  return { next, previous };
+  if (nextBytes.byteLength <= source.allocatedBytes) {
+    const previous = new Uint8Array(await archive.slice(source.byteOffset, source.byteOffset + source.allocatedBytes).arrayBuffer());
+    const next = previous.slice();
+    next.set(nextBytes, 0);
+    return {
+      source,
+      changed: !equalBytes(next, previous),
+      patches: [{ byteOffset: source.byteOffset, bytes: next, label: source.filename }],
+    };
+  }
+
+  if (source.archiveIndex !== 0 || !source.isVerifiedCtd || source.infoTableOffset === null) {
+    assertReplacement(source, nextBytes, source.filename);
+  }
+  const requiredSectors = Math.ceil(nextBytes.byteLength / BBS_SECTOR_SIZE);
+  const destinationOffset = await findBbs0FreeSectors(requiredSectors, claimedBbs0Ranges);
+  if (destinationOffset === null) {
+    throw new Error(`${source.filename} أكبر من الحجز الأصلي: يحتاج ${nextBytes.byteLength.toLocaleString("ar")} بايت بينما المورد يسمح بـ ${source.allocatedBytes.toLocaleString("ar")} بايت. لم تعثر الأداة على مساحة قطاعات فارغة وآمنة داخل BBS0؛ لم تُكتب الترجمة ولم يُمس المورد التالي.`);
+  }
+  const destinationSectors = destinationOffset / BBS_SECTOR_SIZE;
+  const newGlobalSector = destinationSectors - workspace.archive.headerSectors.archive0;
+  if (!Number.isInteger(newGlobalSector) || newGlobalSector < 0 || newGlobalSector > 0x000fffff) {
+    throw new Error(`تعذر تسجيل موضع آمن جديد لـ ${source.filename} داخل جدول BBSA.`);
+  }
+  const movedBytes = new Uint8Array(requiredSectors * BBS_SECTOR_SIZE);
+  movedBytes.set(nextBytes, 0);
+  const infoBytes = new Uint8Array(4);
+  new DataView(infoBytes.buffer).setUint32(0, (newGlobalSector << 12) | requiredSectors, true);
+  claimedBbs0Ranges.push({ start: destinationOffset, end: destinationOffset + movedBytes.byteLength });
+  return {
+    source,
+    changed: true,
+    patches: [
+      { byteOffset: source.infoTableOffset, bytes: infoBytes, label: `سجل BBSA لـ ${source.filename}` },
+      { byteOffset: destinationOffset, bytes: movedBytes, label: source.filename },
+    ],
+  };
 }
 
 export function clearKHBbsBbsWorkspace(): void {
@@ -150,15 +243,17 @@ export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsRes
   const updates = [...unique.values()];
   if (updates.length === 0) throw new Error("لا توجد ترجمة أو خط معدّل لإدخاله في BBS.");
 
-  const exact = await Promise.all(updates.map(async (replacement) => ({
-    ...replacement,
-    ...(await fullReplacement(replacement.source, replacement.bytes)),
-  })));
-  const changed = exact.filter(({ next, previous }) => !equalBytes(next, previous));
+  const claimedBbs0Ranges: Array<{ start: number; end: number }> = [];
+  const prepared: KHBbsPreparedReplacement[] = [];
+  for (const replacement of updates) prepared.push(await prepareReplacement(replacement.source, replacement.bytes, claimedBbs0Ranges));
+  const changed = prepared.filter((replacement) => replacement.changed);
   if (changed.length === 0) throw new Error("الملفات المختارة مطابقة للأصل؛ لا يوجد مورد جديد للكتابة.");
 
-  const byArchive = new Map<number, typeof changed>();
-  for (const replacement of changed) byArchive.set(replacement.source.archiveIndex, [...(byArchive.get(replacement.source.archiveIndex) ?? []), replacement]);
+  const byArchive = new Map<number, KHBbsArchivePatch[]>();
+  for (const replacement of changed) {
+    const archiveIndex = replacement.source.archiveIndex;
+    byArchive.set(archiveIndex, [...(byArchive.get(archiveIndex) ?? []), ...replacement.patches]);
+  }
   const zip = new JSZip();
   for (const archiveIndex of requiredArchives) {
     const original = workspace.archive.archives.get(archiveIndex);
@@ -168,14 +263,14 @@ export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsRes
       zip.file(`BBS${archiveIndex}.DAT`, original);
       continue;
     }
-    const ordered = [...archiveUpdates].sort((left, right) => left.source.byteOffset - right.source.byteOffset);
+    const ordered = [...archiveUpdates].sort((left, right) => left.byteOffset - right.byteOffset);
     const parts: BlobPart[] = [];
     let cursor = 0;
     for (const replacement of ordered) {
-      if (replacement.source.byteOffset < cursor) throw new Error("تعارض غير متوقع بين موردين داخل DAT؛ ألغيت البناء حمايةً للملف.");
-      parts.push(original.slice(cursor, replacement.source.byteOffset));
-      parts.push(replacement.next);
-      cursor = replacement.source.byteOffset + replacement.source.allocatedBytes;
+      if (replacement.byteOffset < cursor) throw new Error("تعارض غير متوقع بين موردين داخل DAT؛ ألغيت البناء حمايةً للملف.");
+      parts.push(original.slice(cursor, replacement.byteOffset));
+      parts.push(replacement.bytes);
+      cursor = replacement.byteOffset + replacement.bytes.byteLength;
     }
     parts.push(original.slice(cursor));
     const output = new Blob(parts, { type: "application/octet-stream" });

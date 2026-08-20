@@ -22,6 +22,10 @@ export interface BbsArchiveEntry {
   fileHash: number;
   /** فهرس مجموعة الامتداد داخل جدول BBSA؛ null لموارد ARC المنفصلة. */
   directoryTableIndex: number | null;
+  /** موضع حقل info ذي الأربع بايتات في BBS0؛ null لمورد ARC لا يُنقل بهذا المسار. */
+  infoTableOffset: number | null;
+  /** قيمة info الأصلية: القطاع العالمي في البتات العليا والحجز بالقطاعات في الدنيا. */
+  sourceInfo: number;
   /** الامتداد كما يقترحه ترتيب جدول BBSA المرجعي فقط. */
   catalogExtension: string;
   /** الامتداد الذي تُظهره الواجهة بعد أخذ عينة توقيع من مجموعة المورد. */
@@ -50,6 +54,8 @@ export interface BbsArchiveIndex {
     archive3: number;
     archive4: number;
   };
+  /** نهاية جداول BBSA داخل BBS0؛ لا تُعد هذه المنطقة مساحة حرة للموارد المنقولة. */
+  metadataEndOffset: number;
 }
 
 interface BbsaHeader {
@@ -216,6 +222,7 @@ function addEntry(
   fileHash: number,
   extension: string,
   directoryTableIndex: number | null,
+  infoTableOffset: number | null,
   info: number,
   ordinal: number,
 ) {
@@ -235,6 +242,8 @@ function addEntry(
     directoryHash,
     fileHash,
     directoryTableIndex,
+    infoTableOffset,
+    sourceInfo: info,
     catalogExtension: extension,
     extension,
     globalSector,
@@ -368,7 +377,7 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
     assertRange(firstEntryOffset, entryCount * 8, headerBytes.length, `ملفات قسم ARC ${partitionIndex + 1}`);
     for (let entryIndex = 0; entryIndex < entryCount; entryIndex += 1) {
       const offset = firstEntryOffset + entryIndex * 8;
-      addEntry(entries, archives, header, directoryHash, view.getUint32(offset, true), "arc", null, view.getUint32(offset + 4, true), entries.length);
+      addEntry(entries, archives, header, directoryHash, view.getUint32(offset, true), "arc", null, null, view.getUint32(offset + 4, true), entries.length);
     }
   }
 
@@ -388,7 +397,7 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
       const info = view.getUint32(offset + 4, true);
       const directoryHash = view.getUint32(offset + 8, true);
       if (fileHash === 0 && info === 0 && directoryHash === 0) continue;
-      addEntry(entries, archives, header, directoryHash, fileHash, extension, directoryIndex, info, entries.length);
+      addEntry(entries, archives, header, directoryHash, fileHash, extension, directoryIndex, offset + 4, info, entries.length);
     }
   }
 
@@ -405,6 +414,11 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
     entries: entries.sort((a, b) => a.directory.localeCompare(b.directory) || a.extension.localeCompare(b.extension) || a.fileHash - b.fileHash),
     warnings,
     headerSectors: { archive0: header.archive0Sector, archive1: header.archive1Sector, archive2: header.archive2Sector, archive3: header.archive3Sector, archive4: header.archive4Sector },
+    metadataEndOffset: Math.max(
+      0x30 + header.partitionCount * 8,
+      header.partitionOffset + header.partitionEntriesCount * 8,
+      header.directoryOffset + header.directoryEntriesCount * 12,
+    ),
   };
 }
 

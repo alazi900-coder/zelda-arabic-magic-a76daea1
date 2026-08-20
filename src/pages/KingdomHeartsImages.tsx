@@ -89,6 +89,9 @@ export default function KingdomHeartsImages() {
   const [archiveName, setArchiveName] = useState("TIM2 resources");
   const [search, setSearch] = useState("");
   const [activeFolder, setActiveFolder] = useState("all");
+  const [foldersOpen, setFoldersOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPngIds, setSelectedPngIds] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [preserveAlpha, setPreserveAlpha] = useState(true);
@@ -140,7 +143,7 @@ export default function KingdomHeartsImages() {
       }
       if (!accepted.length) throw new Error("لم تكن الملفات موارد TIM2 مفهرسة 8bpp مدعومة.");
       setResources(accepted); setSelectedId(accepted[0].id); setArchiveName(files[0]?.name ?? "TIM2 resources");
-      setSearch(""); setActiveFolder("all"); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null);
+      setSearch(""); setActiveFolder("all"); setFoldersOpen(false); setSelectionMode(false); setSelectedPngIds(new Set()); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null);
       toast.success(`تم فتح ${accepted.length} مورد TIM2`);
       if (rejected) toast.warning(`تُرك ${rejected} مورد غير مدعوم دون تغيير`);
     } catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر فتح موارد TIM2."); }
@@ -159,6 +162,38 @@ export default function KingdomHeartsImages() {
   }, [region, selected, selectedPicture]);
 
   const exportTim2 = () => { if (selected) downloadBytes(selected.working, `${fileStem(selected.path)}.tm2`, "application/octet-stream"); };
+
+  const togglePngSelection = useCallback((id: string) => {
+    setSelectedPngIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const downloadSelectedPngs = useCallback(async () => {
+    const chosen = resources.filter((item) => selectedPngIds.has(item.id));
+    if (!chosen.length) { toast.message("حدد صورة واحدة على الأقل أولاً."); return; }
+    setLoading(true);
+    try {
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+      for (const item of chosen) {
+        const picture = firstPicture(item);
+        const png = await encodePngRawNoCanvas(picture.rgba, picture.width, picture.height);
+        if (!png) throw new Error(`تعذّر تحويل ${fileStem(item.path)} إلى PNG.`);
+        const base = `${fileStem(item.path)}.png`;
+        let name = base; let suffix = 2;
+        while (usedNames.has(name)) { name = `${fileStem(item.path)}_${suffix}.png`; suffix += 1; }
+        usedNames.add(name);
+        zip.file(name, png);
+      }
+      const archive = new Uint8Array(await zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE", compressionOptions: { level: 6 } }));
+      downloadBytes(archive, "Kingdom_Hearts_Selected_PNG.zip", "application/zip");
+      toast.success(`تم تنزيل ${chosen.length} صورة PNG داخل ملف ZIP واحد.`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر تنزيل الصور المختارة."); }
+    finally { setLoading(false); }
+  }, [resources, selectedPngIds]);
 
   const replaceWhole = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = "";
@@ -275,7 +310,7 @@ export default function KingdomHeartsImages() {
   };
 
   const openComposite = () => { if (selectedPicture) { setCompositeMode(true); setZoom(1); setAutoDetect(false); } };
-  const closeAll = () => { setResources([]); setSelectedId(null); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null); };
+  const closeAll = () => { setResources([]); setSelectedId(null); setFoldersOpen(false); setSelectionMode(false); setSelectedPngIds(new Set()); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null); };
 
   if (!resources.length) return (
     <main dir="rtl" className={`min-h-screen flex flex-col items-center justify-center px-4 text-center transition-colors ${dragOver ? "bg-primary/5" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(event) => { event.preventDefault(); setDragOver(false); void openFiles(Array.from(event.dataTransfer.files)); }}>
@@ -314,7 +349,7 @@ export default function KingdomHeartsImages() {
     <main dir="rtl" className="flex min-h-screen flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3"><Link to="/kingdom-hearts-bbs"><Button variant="ghost" size="sm"><ArrowLeft className="ml-1 h-4 w-4" />رجوع</Button></Link><span className="font-display font-bold">صور Kingdom Hearts</span><span className="font-mono text-sm text-muted-foreground" dir="ltr">{archiveName}</span><span className="text-xs text-muted-foreground">({resources.length} مورد)</span><div className="flex-1" /><Button variant="outline" size="sm" onClick={closeAll}>إغلاق</Button><Button size="sm" disabled={loading} className="font-bold text-white" style={{ backgroundColor: ACCENT }} onClick={() => void buildZip()}><FolderArchive className="ml-1 h-4 w-4" />بناء ZIP ({modified.length})</Button></header>
       <section className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <section className="flex min-w-0 flex-1 flex-col"><div className="flex flex-col gap-2 border-b border-border p-3"><div className="flex items-center gap-2"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالاسم..." className="text-sm" /></div><div className="flex flex-wrap gap-2"><Button variant={activeFolder === "all" ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => setActiveFolder("all")}>الكل ({resources.length})</Button>{folders.map((folder) => <Button key={folder} variant={activeFolder === folder ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => setActiveFolder(folder)}>{folder} ({resources.filter((item) => (item.path.split("/")[0] || "ROOT") === folder).length})</Button>)}</div></div><div className="grid flex-1 grid-cols-3 content-start gap-2 overflow-y-auto p-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">{visible.map((item) => <button key={item.id} onClick={() => selectResource(item.id)} className={`flex flex-col gap-1 rounded border p-2 text-right transition-colors ${item.id === selectedId ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"}`} title={item.path}><div className="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted/40"><img src={item.preview} alt="" className="max-h-full max-w-full object-contain" style={{ imageRendering: "pixelated" }} /></div><span className="flex items-center gap-1 truncate font-mono text-[10px] text-muted-foreground" dir="ltr">{fileStem(item.path)}{item.modified && <CheckCircle2 className="mr-auto h-3.5 w-3.5 shrink-0 text-emerald-500" />}</span></button>)}{visible.length === 0 && <p className="col-span-full py-8 text-center text-sm text-muted-foreground">لا توجد نتائج مطابقة</p>}</div></section>
+        <section className="flex min-w-0 flex-1 flex-col"><div className="flex flex-col gap-2 border-b border-border p-3"><div className="flex items-center gap-2"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالاسم..." className="text-sm" /></div><div className="flex flex-wrap items-center gap-2"><Button variant={activeFolder === "all" ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => setActiveFolder("all")}>الكل ({resources.length})</Button><Button variant="outline" size="sm" className="text-xs" onClick={() => setFoldersOpen((value) => !value)}>{foldersOpen ? "إخفاء المجلدات" : `المجلدات (${folders.length})`}</Button>{foldersOpen && folders.map((folder) => <Button key={folder} variant={activeFolder === folder ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => setActiveFolder(folder)}>{folder} ({resources.filter((item) => (item.path.split("/")[0] || "ROOT") === folder).length})</Button>)}</div><div className="flex flex-wrap items-center gap-2"><Button variant={selectionMode ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => { setSelectionMode((value) => !value); if (selectionMode) setSelectedPngIds(new Set()); }}>{selectionMode ? "إنهاء تحديد الصور" : "تحديد عدة صور"}</Button>{selectionMode && <><Button variant="outline" size="sm" className="text-xs" onClick={() => setSelectedPngIds((current) => new Set([...current, ...visible.map((item) => item.id)]))}>تحديد النتائج ({visible.length})</Button><Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelectedPngIds(new Set())}>مسح التحديد</Button><Button size="sm" className="text-xs text-white" style={{ backgroundColor: ACCENT }} disabled={!selectedPngIds.size || loading} onClick={() => void downloadSelectedPngs()}>{loading ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Download className="ml-1 h-3.5 w-3.5" />}تنزيل PNG المحددة ({selectedPngIds.size})</Button></>}</div></div><div className="grid flex-1 grid-cols-3 content-start gap-2 overflow-y-auto p-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">{visible.map((item) => { const checked = selectedPngIds.has(item.id); return <button key={item.id} onClick={() => selectionMode ? togglePngSelection(item.id) : selectResource(item.id)} className={`relative flex flex-col gap-1 rounded border p-2 text-right transition-colors ${selectionMode && checked ? "border-primary bg-primary/10 ring-1 ring-primary" : item.id === selectedId ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"}`} title={selectionMode ? "اضغط لتحديد الصورة أو إلغاء تحديدها" : item.path}><div className="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted/40"><img src={item.preview} alt="" className="max-h-full max-w-full object-contain" style={{ imageRendering: "pixelated" }} /></div>{selectionMode && <span className={`absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold ${checked ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background/90"}`}>{checked ? "✓" : ""}</span>}<span className="flex items-center gap-1 truncate font-mono text-[10px] text-muted-foreground" dir="ltr">{fileStem(item.path)}{item.modified && <CheckCircle2 className="mr-auto h-3.5 w-3.5 shrink-0 text-emerald-500" />}</span></button>; })}{visible.length === 0 && <p className="col-span-full py-8 text-center text-sm text-muted-foreground">لا توجد نتائج مطابقة</p>}</div></section>
         <aside className="flex w-full shrink-0 flex-col gap-3 border-t border-border p-4 md:w-80 md:border-r md:border-t-0">{!selected || !selectedPicture ? <p className="mt-8 text-center text-sm text-muted-foreground">اختر صورة من القائمة للمعاينة</p> : <><p className="break-all font-mono text-xs text-muted-foreground" dir="ltr">{selected.path}</p><div className="flex aspect-square items-center justify-center overflow-hidden rounded" style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}><img src={canvasDataUrl(selectedPicture.rgba, selectedPicture.width, selectedPicture.height)} alt={selected.path} className="max-h-full max-w-full object-contain" style={{ imageRendering: "pixelated" }} /></div><div className="space-y-0.5 text-center text-xs text-muted-foreground"><p>{selectedPicture.width}×{selectedPicture.height} — 8bpp — لوحة 256 لوناً</p><p>{selected.asset.pictures.length > 1 ? `يُعرض المورد الأول من ${selected.asset.pictures.length}` : "مورد TIM2 مفهرس"}</p></div><div className="flex flex-col gap-2"><Button size="sm" variant="outline" onClick={() => void exportPng(false)}><ImageDown className="ml-1 h-3.5 w-3.5" />تنزيل PNG</Button><Button size="sm" variant="outline" onClick={exportTim2}><Download className="ml-1 h-3.5 w-3.5" />تنزيل TIM2 الأصلي/المعدل</Button><div className="flex items-start gap-2"><Checkbox id="tim2-alpha-full" checked={preserveAlpha} onCheckedChange={(value) => setPreserveAlpha(value === true)} /><Label htmlFor="tim2-alpha-full" className="cursor-pointer text-[11px] leading-relaxed text-muted-foreground">استخدم شفافية الصورة الأصلية؛ تتجاهل الأداة خلفية البديل في المواضع الشفافة من الأصل.</Label></div><input ref={replaceInputRef} type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={(event) => void replaceWhole(event)} /><Button size="sm" disabled={loading} className="text-white" style={{ backgroundColor: ACCENT }} onClick={() => replaceInputRef.current?.click()}>{loading ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Replace className="ml-1 h-3.5 w-3.5" />}استبدال...</Button><p className="text-[11px] leading-relaxed text-muted-foreground">تطابق الصورة البديلة أبعاد المورد تلقائياً، ثم تُطابق مع أقرب ألوان لوحة اللعبة الأصلية.</p><Button size="sm" variant="outline" onClick={openComposite}><Crop className="ml-1 h-3.5 w-3.5" />تركيب صورة داخل منطقة محددة</Button><p className="text-[11px] leading-relaxed text-muted-foreground">للشعارات والصور المجمعة: عدّل موضع النص فقط، فتظل الخلفية وبقية الصورة دون تغيير.</p>{selected.modified && <Button size="sm" variant="ghost" onClick={resetSelected}><Undo2 className="ml-1 h-3.5 w-3.5" />تراجع عن هذا التعديل</Button>}</div></>}</aside>
       </section>
       {modified.length > 0 && <footer className="border-t border-border px-4 py-3"><p className="mb-2 text-xs font-display font-bold">تعديلات هذه الجلسة ({modified.length})</p><div className="flex max-h-20 flex-wrap gap-x-3 gap-y-1 overflow-y-auto">{modified.map((item) => <span key={item.id} className="font-mono text-[11px] text-muted-foreground" dir="ltr">{item.path}</span>)}</div></footer>}

@@ -1,13 +1,14 @@
 /**
  * STYLE: مدير موارد Kingdom Hearts عملي كهرماني، مهيأ للهاتف، يقرأ DAT محلياً
- * ويعطي المستخدم فهرساً واضحاً وتنزيلاً مباشراً من دون أي تعديل على ملفات اللعبة.
+ * ويتيح فتحاً قابلاً للكتابة لمسار TIM2 فقط، مع إبقاء التصفح والتنزيل خفيفين وواضحين.
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Loader2, Search, Square, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Image, Loader2, Search, Square, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, verifyKHBbsCtdEntries, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
+import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
 
 const LARGE_ZIP_BYTES = 300 * 1024 * 1024;
 
@@ -90,12 +91,16 @@ export default function KingdomHeartsFiles() {
   const [flatZip, setFlatZip] = useState(true);
   const [ctdChecking, setCtdChecking] = useState(false);
   const [ctdProgress, setCtdProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
+  const writablePickerSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
   const openArchives = useCallback(async (uploads: File[]) => {
     setLoading(true);
     setError(null);
     setSelected(new Set());
     setFontCandidateIds(new Set());
+    clearKHBbsDatWritableWorkspace();
+    setWritableWorkspace(false);
     try {
       const indexed = await indexKHBbsDatFiles(uploads);
       setArchive(indexed);
@@ -103,6 +108,32 @@ export default function KingdomHeartsFiles() {
     } catch (caught) {
       setArchive(null);
       setError(caught instanceof Error ? caught.message : "تعذر قراءة فهرس ملفات DAT.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const openWritableArchives = useCallback(async () => {
+    if (!window.showOpenFilePicker) return;
+    setLoading(true);
+    setError(null);
+    setSelected(new Set());
+    setFontCandidateIds(new Set());
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: true,
+        types: [{ description: "Kingdom Hearts BBS DAT", accept: { "application/octet-stream": [".dat"] } }],
+      });
+      const indexed = await openKHBbsDatWritableWorkspace(handles);
+      setArchive(indexed);
+      setWritableWorkspace(true);
+      setCtdProgress(null);
+    } catch (caught) {
+      if (caught instanceof Error && caught.name === "AbortError") return;
+      clearKHBbsDatWritableWorkspace();
+      setWritableWorkspace(false);
+      setArchive(null);
+      setError(caught instanceof Error ? caught.message : "تعذر فتح ملفات DAT بصلاحية الكتابة.");
     } finally {
       setLoading(false);
     }
@@ -219,9 +250,12 @@ export default function KingdomHeartsFiles() {
               <h1 className="truncate font-display text-xl font-black md:text-2xl">مدير ملفات Kingdom Hearts</h1>
             </div>
           </div>
-          <Button onClick={() => inputRef.current?.click()} disabled={loading} className="bg-amber-500 font-bold text-black hover:bg-amber-400">
-            {loading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}رفع DAT
-          </Button>
+          <div className="flex items-center gap-2">
+            {writablePickerSupported && <Button onClick={() => void openWritableArchives()} disabled={loading} variant="outline" className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"><Image className="ml-2 h-4 w-4" />فتح قابل للكتابة</Button>}
+            <Button onClick={() => inputRef.current?.click()} disabled={loading} className="bg-amber-500 font-bold text-black hover:bg-amber-400">
+              {loading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}رفع DAT
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -233,8 +267,8 @@ export default function KingdomHeartsFiles() {
             <Files className="mx-auto mb-5 h-12 w-12 text-amber-500" />
             <h2 className="font-display text-2xl font-black">افتح أرشيفات BBS0–BBS4.DAT</h2>
             <p className="mx-auto mt-3 max-w-2xl leading-relaxed text-muted-foreground">اختر ملفات <bdi>BBS0.DAT</bdi> إلى <bdi>BBS4.DAT</bdi> معاً من <bdi>PSP_GAME/USRDIR</bdi>. يقرأ المدير الفهرس من BBS0 ثم يعرض الموارد حسب المجلد والامتداد ويسمح بتنزيلها محلياً.</p>
-            <Button onClick={() => inputRef.current?.click()} size="lg" className="mt-6 bg-amber-500 font-bold text-black hover:bg-amber-400"><Upload className="ml-2 h-5 w-5" />اختر ملفات DAT</Button>
-            <p className="mt-5 text-xs text-muted-foreground">هذه الأداة لا تفك تشفير DAT ولا تعيد بناءه ولا تغيّر أي بايت؛ التنزيل يسحب نطاقات القطاعات الأصلية فقط.</p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2"><Button onClick={() => inputRef.current?.click()} size="lg" className="bg-amber-500 font-bold text-black hover:bg-amber-400"><Upload className="ml-2 h-5 w-5" />اختر ملفات DAT</Button>{writablePickerSupported && <Button onClick={() => void openWritableArchives()} size="lg" variant="outline" className="border-emerald-500/50 font-bold text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"><Image className="ml-2 h-5 w-5" />فتح قابل للكتابة</Button>}</div>
+            <p className="mt-5 text-xs text-muted-foreground">«رفع DAT» للتصفح والتنزيل فقط. «فتح قابل للكتابة» هو المسار الذي يجعل استبدال صور TIM2 يكتب مباشرة في المورد الأصلي داخل DAT، مع تأكيد وقراءة تحقق بعد كل كتابة.</p>
           </div>
         )}
 
@@ -252,6 +286,8 @@ export default function KingdomHeartsFiles() {
             </div>
 
             {archive.warnings.map((warning) => <div key={warning} className="flex items-start gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 text-sm"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" /><p>{warning}</p></div>)}
+
+            {writableWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-sm"><p className="leading-relaxed"><b>الكتابة المباشرة مفعلة.</b> افتح محرر الصور؛ أي «استبدال» أو «تركيب» يكتب TIM2 المعدل في إزاحته الأصلية داخل DAT ويتحقق من البايتات قبل اعتماد النتيجة.</p><Button asChild size="sm" className="bg-emerald-600 text-white hover:bg-emerald-500"><Link to="/kingdom-hearts-images"><Image className="ml-1.5 h-4 w-4" />تحرير صور TIM2 الأصلية</Link></Button></div> : <p className="rounded-xl border border-border bg-card/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">لفتح الصور مع الكتابة المباشرة في الأصل، أعد فتح BBS0–BBS4 من زر «فتح قابل للكتابة» أعلى الصفحة، ثم انتقل إلى محرر الصور. الرفع العادي يبقى آمناً للعرض والتنزيل فقط.</p>}
 
             <div className="rounded-2xl border border-border bg-card/60 p-3 md:p-4">
               <div className="flex flex-col gap-3 md:flex-row">

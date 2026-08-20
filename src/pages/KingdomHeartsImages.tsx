@@ -19,13 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cropTim2Rgba, parseTim2, replaceTim2Rgba, Tim2Asset, Tim2Picture } from "@/lib/khbbs-tim2";
+import { hasKHBbsDatWritableWorkspace, loadKHBbsDatTim2Resources, type KHBbsDatResourceSource, writeKHBbsDatResource } from "@/lib/khbbs-dat-workspace";
 import { decodePngRawNoCanvas } from "@/lib/png-decode";
 import { encodePngRawNoCanvas } from "@/lib/png-encode";
 import { detectRegionBounds } from "@/lib/risen-image-composite";
 
 const ACCENT = "#4a7c3f";
 type Region = { x: number; y: number; width: number; height: number };
-type Tim2Resource = { id: string; path: string; asset: Tim2Asset; working: Uint8Array; preview: string; modified: boolean };
+type Tim2Resource = { id: string; path: string; asset: Tim2Asset; original: Uint8Array; working: Uint8Array; preview: string; modified: boolean; source?: KHBbsDatResourceSource };
 type ImportedImage = { name: string; rgba: Uint8ClampedArray; width: number; height: number };
 type DragState = { x: number; y: number; mode: "target" | "source" };
 type Tim2EditorSession = { resources: Tim2Resource[]; selectedId: string | null; archiveName: string };
@@ -88,6 +89,7 @@ export default function KingdomHeartsImages() {
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const overlayInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const directWriteConfirmedRef = useRef(false);
 
   const [resources, setResources] = useState<Tim2Resource[]>(() => retainedTim2EditorSession?.resources ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(() => retainedTim2EditorSession?.selectedId ?? null);
@@ -107,6 +109,7 @@ export default function KingdomHeartsImages() {
   const [pickingCleanSource, setPickingCleanSource] = useState(false);
   const [overlay, setOverlay] = useState<ImportedImage | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [datWorkspaceAvailable, setDatWorkspaceAvailable] = useState(() => hasKHBbsDatWritableWorkspace());
 
   const selected = resources.find((item) => item.id === selectedId) ?? null;
   const selectedPicture = useMemo(() => selected ? firstPicture(selected) : null, [selected]);
@@ -131,6 +134,19 @@ export default function KingdomHeartsImages() {
     }));
   }, []);
 
+  const commitResource = useCallback(async (resource: Tim2Resource, working: Uint8Array, isModified = true): Promise<boolean> => {
+    if (resource.source) {
+      if (!directWriteConfirmedRef.current) {
+        const accepted = window.confirm("سيُكتب مورد TIM2 المعدل الآن داخل ملف DAT الأصلي في جهازك، في موضعه نفسه فقط. أنشئ نسخة احتياطية من ملفات BBS قبل المتابعة. هل تريد الاستمرار؟");
+        if (!accepted) return false;
+        directWriteConfirmedRef.current = true;
+      }
+      await writeKHBbsDatResource(resource.source, working, resource.working);
+    }
+    refreshResource(resource.id, working, isModified);
+    return true;
+  }, [refreshResource]);
+
   const openFiles = useCallback(async (files: File[]) => {
     setLoading(true);
     try {
@@ -148,7 +164,7 @@ export default function KingdomHeartsImages() {
         try {
           const asset = parseTim2(item.bytes.buffer.slice(item.bytes.byteOffset, item.bytes.byteOffset + item.bytes.byteLength));
           const picture = asset.pictures[0];
-          accepted.push({ id: `${item.path}:${accepted.length}`, path: item.path, asset, working: item.bytes, preview: canvasDataUrl(picture.rgba, picture.width, picture.height, 180), modified: false });
+          accepted.push({ id: `${item.path}:${accepted.length}`, path: item.path, asset, original: item.bytes.slice(), working: item.bytes, preview: canvasDataUrl(picture.rgba, picture.width, picture.height, 180), modified: false });
         } catch { rejected += 1; }
       }
       if (!accepted.length) throw new Error("لم تكن الملفات موارد TIM2 مفهرسة 8bpp مدعومة.");
@@ -158,6 +174,29 @@ export default function KingdomHeartsImages() {
       if (rejected) toast.warning(`تُرك ${rejected} مورد غير مدعوم دون تغيير`);
     } catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر فتح موارد TIM2."); }
     finally { setLoading(false); }
+  }, []);
+
+  const openDatTim2Resources = useCallback(async () => {
+    setLoading(true);
+    try {
+      const raw = await loadKHBbsDatTim2Resources();
+      const accepted: Tim2Resource[] = [];
+      let rejected = 0;
+      for (const item of raw) {
+        try {
+          const asset = parseTim2(item.bytes.buffer.slice(item.bytes.byteOffset, item.bytes.byteOffset + item.bytes.byteLength));
+          const picture = asset.pictures[0];
+          accepted.push({ id: item.source.entryId, path: item.path, asset, original: item.bytes.slice(), working: item.bytes, preview: canvasDataUrl(picture.rgba, picture.width, picture.height, 180), modified: false, source: item.source });
+        } catch { rejected += 1; }
+      }
+      if (!accepted.length) throw new Error("لم يُعثر على موارد TIM2 مفهرسة 8bpp مدعومة داخل ملفات DAT المفتوحة.");
+      setResources(accepted); setSelectedId(accepted[0].id); setArchiveName("BBS DAT · كتابة مباشرة في المورد الأصلي");
+      setSearch(""); setActiveFolder("all"); setFoldersOpen(false); setSelectionMode(false); setSelectedPngIds(new Set()); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null);
+      toast.success(`تم فتح ${accepted.length} مورد TIM2 من DAT الأصلي للكتابة المباشرة.`);
+      if (rejected) toast.warning(`تُرك ${rejected} مورد TIM2 غير مدعوم دون تغيير.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر فتح صور TIM2 من DAT.");
+    } finally { setLoading(false); }
   }, []);
 
   const selectResource = (id: string) => {
@@ -211,11 +250,11 @@ export default function KingdomHeartsImages() {
     try {
       setLoading(true);
       const image = await decodeUpload(file);
-      refreshResource(selected.id, replaceTim2Rgba(selected.asset, 0, image.rgba, image.width, image.height, { preserveOriginalAlpha: preserveAlpha }));
-      toast.success("تمت مواءمة الصورة البديلة وحفظها في المورد.");
+      const committed = await commitResource(selected, replaceTim2Rgba(selected.asset, 0, image.rgba, image.width, image.height, { preserveOriginalAlpha: preserveAlpha }));
+      if (committed) toast.success(selected.source ? "تمت مواءمة الصورة وكتابتها مباشرة في مورد DAT الأصلي بعد التحقق." : "تمت مواءمة الصورة البديلة وحفظها في المورد.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر إدراج الصورة البديلة."); }
     finally { setLoading(false); }
-  }, [preserveAlpha, refreshResource, selected]);
+  }, [commitResource, preserveAlpha, selected]);
 
   const chooseOverlay = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = "";
@@ -224,7 +263,7 @@ export default function KingdomHeartsImages() {
     catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر قراءة صورة التركيب."); }
   }, []);
 
-  const confirmComposite = useCallback(() => {
+  const confirmComposite = useCallback(async () => {
     if (!selected || !region || !overlay) return;
     try {
       setLoading(true);
@@ -236,27 +275,37 @@ export default function KingdomHeartsImages() {
         const cleaned = replaceTim2Rgba(baseAsset, 0, cleanPatch.rgba, cleanPatch.width, cleanPatch.height, { preserveOriginalAlpha: preserveAlpha, region });
         baseAsset = parseTim2(cleaned.buffer.slice(cleaned.byteOffset, cleaned.byteOffset + cleaned.byteLength));
       }
-      refreshResource(selected.id, replaceTim2Rgba(baseAsset, 0, overlay.rgba, overlay.width, overlay.height, { preserveOriginalAlpha: preserveAlpha, region }));
-      toast.success(cleanSource ? "أعيدت الخلفية الأصلية ثم رُكّب التعريب داخل المنطقة المحددة." : "تم تركيب التعريب داخل المنطقة المحددة فقط.");
-      setCompositeMode(false); setOverlay(null); setCleanSource(null);
+      const committed = await commitResource(selected, replaceTim2Rgba(baseAsset, 0, overlay.rgba, overlay.width, overlay.height, { preserveOriginalAlpha: preserveAlpha, region }));
+      if (committed) {
+        toast.success(selected.source ? "أعيدت الخلفية ورُكّب التعريب في مورد DAT الأصلي مباشرة." : cleanSource ? "أعيدت الخلفية الأصلية ثم رُكّب التعريب داخل المنطقة المحددة." : "تم تركيب التعريب داخل المنطقة المحددة فقط.");
+        setCompositeMode(false); setOverlay(null); setCleanSource(null);
+      }
     } catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر تركيب الصورة."); }
     finally { setLoading(false); }
-  }, [cleanSource, overlay, preserveAlpha, refreshResource, region, selected, selectedPicture]);
+  }, [cleanSource, commitResource, overlay, preserveAlpha, region, selected, selectedPicture]);
 
-  const applyCleanSource = useCallback(() => {
+  const applyCleanSource = useCallback(async () => {
     if (!selected || !selectedPicture || !region || !cleanSource) return;
     try {
+      setLoading(true);
       const cleanPatch = cropTim2Rgba(selectedPicture, cleanSource);
-      refreshResource(selected.id, replaceTim2Rgba(selected.asset, 0, cleanPatch.rgba, cleanPatch.width, cleanPatch.height, { preserveOriginalAlpha: preserveAlpha, region }));
-      toast.success("تم تغطية النص القديم برقعة من الخلفية الأصلية.");
+      const committed = await commitResource(selected, replaceTim2Rgba(selected.asset, 0, cleanPatch.rgba, cleanPatch.width, cleanPatch.height, { preserveOriginalAlpha: preserveAlpha, region }));
+      if (committed) toast.success(selected.source ? "تمت تغطية النص القديم وكتابة المورد الأصلي مباشرة." : "تم تغطية النص القديم برقعة من الخلفية الأصلية.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "تعذّر تنظيف المنطقة."); }
-  }, [cleanSource, preserveAlpha, refreshResource, region, selected, selectedPicture]);
+    finally { setLoading(false); }
+  }, [cleanSource, commitResource, preserveAlpha, region, selected, selectedPicture]);
 
-  const resetSelected = () => {
+  const resetSelected = async () => {
     if (!selected) return;
-    refreshResource(selected.id, selected.asset.raw.slice(), false);
-    setRegion(null); setCleanSource(null); setOverlay(null);
-    toast.success("أعيد المورد المحدد إلى أصله.");
+    try {
+      setLoading(true);
+      const committed = await commitResource(selected, selected.original.slice(), false);
+      if (committed) {
+        setRegion(null); setCleanSource(null); setOverlay(null);
+        toast.success(selected.source ? "أُعيد المورد الأصلي داخل DAT مباشرة." : "أعيد المورد المحدد إلى أصله.");
+      }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذر استعادة المورد الأصلي."); }
+    finally { setLoading(false); }
   };
 
   const buildZip = useCallback(async () => {
@@ -320,18 +369,19 @@ export default function KingdomHeartsImages() {
   };
 
   const openComposite = () => { if (selectedPicture) { setCompositeMode(true); setZoom(1); setAutoDetect(false); } };
-  const closeAll = () => { retainedTim2EditorSession = null; setResources([]); setSelectedId(null); setFoldersOpen(false); setSelectionMode(false); setSelectedPngIds(new Set()); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null); };
+  const closeAll = () => { retainedTim2EditorSession = null; setResources([]); setSelectedId(null); setFoldersOpen(false); setSelectionMode(false); setSelectedPngIds(new Set()); setCompositeMode(false); setRegion(null); setCleanSource(null); setOverlay(null); setDatWorkspaceAvailable(hasKHBbsDatWritableWorkspace()); };
 
   if (!resources.length) return (
     <main dir="rtl" className={`min-h-screen flex flex-col items-center justify-center px-4 text-center transition-colors ${dragOver ? "bg-primary/5" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(event) => { event.preventDefault(); setDragOver(false); void openFiles(Array.from(event.dataTransfer.files)); }}>
       <Link to="/kingdom-hearts-bbs" className="absolute right-4 top-4"><Button variant="ghost" size="sm"><ArrowLeft className="ml-1 h-4 w-4" />رجوع</Button></Link>
       <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10" style={{ color: ACCENT, backgroundColor: `${ACCENT}1a` }}><FileImage className="h-8 w-8" /></div>
       <h1 className="mb-3 font-display text-2xl font-bold md:text-3xl">أداة صور Kingdom Hearts</h1>
-      <p className="mb-8 max-w-lg text-muted-foreground">افتح أرشيف <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">TIM2.zip</code> أو ملفات <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">.TM2</code> مباشرة لعرضها وتنزيلها وتعديلها، أو اسحبها وأفلتها هنا.</p>
+      <p className="mb-8 max-w-lg text-muted-foreground">افتح أرشيف <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">TIM2.zip</code> أو ملفات <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">.TM2</code> مباشرة، أو افتح موارد اللعبة الأصلية بعد اختيار DAT من مدير الملفات بصلاحية الكتابة.</p>
       <input ref={archiveInputRef} type="file" accept=".tm2,.zip,application/zip" multiple className="hidden" onChange={(event) => void openFiles(Array.from(event.target.files ?? []))} />
       <Button size="lg" disabled={loading} onClick={() => archiveInputRef.current?.click()} className="px-10 py-6 font-display text-lg font-bold text-white" style={{ backgroundColor: ACCENT }}>
         {loading ? <Loader2 className="ml-2 h-5 w-5 animate-spin" /> : <FolderOpen className="ml-2 h-5 w-5" />}{loading ? "جارٍ قراءة الموارد..." : "افتح TIM2 أو ZIP"}
       </Button>
+      {datWorkspaceAvailable && <Button size="lg" disabled={loading} onClick={() => void openDatTim2Resources()} variant="outline" className="mt-3 border-emerald-500/55 px-7 font-bold text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"><Replace className="ml-2 h-5 w-5" />افتح TIM2 من DAT الأصلي</Button>}
       <p className="mt-4 max-w-md text-xs text-muted-foreground">تعمل المعالجة داخل المتصفح فقط. تعيد الأداة بناء الفهارس من لوحة الألوان الأصلية ولا تغيّر ترويسة المورد.</p>
     </main>
   );
@@ -344,12 +394,12 @@ export default function KingdomHeartsImages() {
         <div className="min-h-[320px] flex-1 overflow-auto rounded border border-border" style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}><div className="relative w-fit"><img src={canvasDataUrl(selectedPicture.rgba, selectedPicture.width, selectedPicture.height)} alt={selected.path} draggable={false} className={`block select-none ${pickingCleanSource ? "cursor-copy" : "cursor-crosshair"}`} style={{ width: selectedPicture.width * zoom, height: selectedPicture.height * zoom, maxWidth: "none", imageRendering: "pixelated" }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} />{region && <div className="pointer-events-none absolute border-2 border-emerald-400 bg-emerald-400/10" style={{ left: region.x * zoom, top: region.y * zoom, width: region.width * zoom, height: region.height * zoom }} />}{cleanSource && <div className="pointer-events-none absolute border-2 border-sky-400 bg-sky-400/10" style={{ left: cleanSource.x * zoom, top: cleanSource.y * zoom, width: cleanSource.width * zoom, height: cleanSource.height * zoom }} />}</div></div>
         <aside className="flex w-full shrink-0 flex-col gap-3 md:w-72"><div className="grid grid-cols-4 gap-1.5">{([ ["x", "X"], ["y", "Y"], ["width", "العرض"], ["height", "الارتفاع"] ] as [keyof Region, string][]).map(([field, label]) => <div key={field} className="flex flex-col items-center gap-0.5"><Label className="text-[10px] text-muted-foreground">{label}</Label><Input type="number" min={0} className="h-8 px-1 text-center font-mono text-xs" value={region?.[field] ?? 0} onChange={(event) => updateRegionField(field, event.target.value)} /></div>)}</div>
           <div className="flex items-center gap-2"><Checkbox id="tim2-auto-detect" checked={autoDetect} onCheckedChange={(value) => setAutoDetect(value === true)} /><Label htmlFor="tim2-auto-detect" className="cursor-pointer text-xs">انقر لاكتشاف حدود العنصر تلقائياً</Label></div>
-          <div className="rounded border border-border bg-muted/30 p-2"><div className="text-[11px] font-medium">🧹 إزالة المحتوى القديم واستعادة الخلفية (اختياري)</div><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">اسحب مربعاً فوق جزء نظيف من الخلفية. عند الضغط على «تركيب» ستُمد الرقعة تلقائياً لتغطي موضع النص أو الشعار القديم، ثم يوضع التعريب فوقها؛ لا تتغير البكسلات خارج منطقة التركيب.</p><Button size="sm" variant={pickingCleanSource ? "default" : "outline"} className="mt-2 w-full" disabled={!region} onClick={() => setPickingCleanSource((value) => !value)}><Target className="ml-1 h-3.5 w-3.5" />{pickingCleanSource ? "اسحب الآن فوق خلفية نظيفة" : "حدد رقعة خلفية نظيفة"}</Button>{cleanSource && <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">المصدر: {cleanSource.width}×{cleanSource.height} عند ({cleanSource.x}, {cleanSource.y}) — سيطبق تلقائياً عند التركيب</p>}<Button size="sm" variant="secondary" className="mt-2 w-full" disabled={!region || !cleanSource || loading} onClick={applyCleanSource}><Eraser className="ml-1 h-3.5 w-3.5" />إزالة الجزء الآن (خلفية فقط)</Button></div>
+          <div className="rounded border border-border bg-muted/30 p-2"><div className="text-[11px] font-medium">🧹 إزالة المحتوى القديم واستعادة الخلفية (اختياري)</div><p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">اسحب مربعاً فوق جزء نظيف من الخلفية. عند الضغط على «تركيب» ستُمد الرقعة تلقائياً لتغطي موضع النص أو الشعار القديم، ثم يوضع التعريب فوقها؛ لا تتغير البكسلات خارج منطقة التركيب.</p><Button size="sm" variant={pickingCleanSource ? "default" : "outline"} className="mt-2 w-full" disabled={!region} onClick={() => setPickingCleanSource((value) => !value)}><Target className="ml-1 h-3.5 w-3.5" />{pickingCleanSource ? "اسحب الآن فوق خلفية نظيفة" : "حدد رقعة خلفية نظيفة"}</Button>{cleanSource && <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">المصدر: {cleanSource.width}×{cleanSource.height} عند ({cleanSource.x}, {cleanSource.y}) — سيطبق تلقائياً عند التركيب</p>}<Button size="sm" variant="secondary" className="mt-2 w-full" disabled={!region || !cleanSource || loading} onClick={() => void applyCleanSource()}><Eraser className="ml-1 h-3.5 w-3.5" />إزالة الجزء الآن (خلفية فقط)</Button></div>
           <Button size="sm" variant="outline" disabled={!region} onClick={() => void exportPng(true)}><Download className="ml-1 h-3.5 w-3.5" />تصدير المنطقة كـ PNG</Button>
           <input ref={overlayInputRef} type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={(event) => void chooseOverlay(event)} />
           <Button size="sm" variant="outline" onClick={() => overlayInputRef.current?.click()}><ImageDown className="ml-1 h-3.5 w-3.5" />{overlay ? "تغيير صورة التركيب" : "اختر صورة التركيب"}</Button>{overlay && <p className="truncate text-center text-[11px] text-muted-foreground">{overlay.name} · {overlay.width}×{overlay.height}</p>}
           <div className="flex items-start gap-2"><Checkbox id="tim2-alpha-composite" checked={preserveAlpha} onCheckedChange={(value) => setPreserveAlpha(value === true)} /><Label htmlFor="tim2-alpha-composite" className="cursor-pointer text-[11px] leading-relaxed text-muted-foreground">استخدم شفافية المورد الأصلي داخل منطقة التركيب.</Label></div>
-          <div className="flex gap-2"><Button size="sm" className="flex-1 text-white" style={{ backgroundColor: ACCENT }} disabled={!region || !overlay || loading} onClick={confirmComposite}>{loading ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Crop className="ml-1 h-3.5 w-3.5" />}{cleanSource ? "استعادة الخلفية ثم تركيب" : "تركيب"}</Button><Button size="sm" variant="ghost" onClick={() => { setCompositeMode(false); setOverlay(null); setCleanSource(null); }}><X className="ml-1 h-3.5 w-3.5" />إلغاء</Button></div>
+          <div className="flex gap-2"><Button size="sm" className="flex-1 text-white" style={{ backgroundColor: ACCENT }} disabled={!region || !overlay || loading} onClick={() => void confirmComposite()}>{loading ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Crop className="ml-1 h-3.5 w-3.5" />}{cleanSource ? "استعادة الخلفية ثم تركيب" : "تركيب"}</Button><Button size="sm" variant="ghost" onClick={() => { setCompositeMode(false); setOverlay(null); setCleanSource(null); }}><X className="ml-1 h-3.5 w-3.5" />إلغاء</Button></div>
         </aside>
       </section>
     </main>
@@ -357,7 +407,7 @@ export default function KingdomHeartsImages() {
 
   return (
     <main dir="rtl" className="flex min-h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3"><Link to="/kingdom-hearts-bbs"><Button variant="ghost" size="sm"><ArrowLeft className="ml-1 h-4 w-4" />رجوع</Button></Link><span className="font-display font-bold">صور Kingdom Hearts</span><span className="font-mono text-sm text-muted-foreground" dir="ltr">{archiveName}</span><span className="text-xs text-muted-foreground">({resources.length} مورد)</span><div className="flex-1" /><Button variant="outline" size="sm" onClick={closeAll}>إغلاق</Button><Button size="sm" disabled={loading} className="font-bold text-white" style={{ backgroundColor: ACCENT }} onClick={() => void buildZip()}><FolderArchive className="ml-1 h-4 w-4" />بناء ZIP ({modified.length})</Button></header>
+      <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3"><Link to="/kingdom-hearts-bbs"><Button variant="ghost" size="sm"><ArrowLeft className="ml-1 h-4 w-4" />رجوع</Button></Link><span className="font-display font-bold">صور Kingdom Hearts</span><span className="font-mono text-sm text-muted-foreground" dir="ltr">{archiveName}</span><span className="text-xs text-muted-foreground">({resources.length} مورد)</span>{selected?.source && <span className="rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">الأصل: كتابة مباشرة</span>}<div className="flex-1" /><Button variant="outline" size="sm" onClick={closeAll}>إغلاق</Button><Button size="sm" disabled={loading} className="font-bold text-white" style={{ backgroundColor: ACCENT }} onClick={() => void buildZip()}><FolderArchive className="ml-1 h-4 w-4" />ZIP اختياري ({modified.length})</Button></header>
       <section className="flex min-h-0 flex-1 flex-col md:flex-row">
         <section className="flex min-w-0 flex-1 flex-col"><div className="flex flex-col gap-2 border-b border-border p-3"><div className="flex items-center gap-2"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالاسم..." className="text-sm" /></div><div className="flex flex-wrap items-center gap-2"><Button variant={activeFolder === "all" ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => setActiveFolder("all")}>الكل ({resources.length})</Button><Button variant="outline" size="sm" className="text-xs" onClick={() => setFoldersOpen((value) => !value)}>{foldersOpen ? "إخفاء المجلدات" : `المجلدات (${folders.length})`}</Button>{foldersOpen && folders.map((folder) => <Button key={folder} variant={activeFolder === folder ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => setActiveFolder(folder)}>{folder} ({resources.filter((item) => (item.path.split("/")[0] || "ROOT") === folder).length})</Button>)}</div><div className="flex flex-wrap items-center gap-2"><Button variant={selectionMode ? "secondary" : "outline"} size="sm" className="text-xs" onClick={() => { setSelectionMode((value) => !value); if (selectionMode) setSelectedPngIds(new Set()); }}>{selectionMode ? "إنهاء تحديد الصور" : "تحديد عدة صور"}</Button>{selectionMode && <><Button variant="outline" size="sm" className="text-xs" onClick={() => setSelectedPngIds((current) => new Set([...current, ...visible.map((item) => item.id)]))}>تحديد النتائج ({visible.length})</Button><Button variant="ghost" size="sm" className="text-xs" onClick={() => setSelectedPngIds(new Set())}>مسح التحديد</Button><Button size="sm" className="text-xs text-white" style={{ backgroundColor: ACCENT }} disabled={!selectedPngIds.size || loading} onClick={() => void downloadSelectedPngs()}>{loading ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Download className="ml-1 h-3.5 w-3.5" />}تنزيل PNG المحددة ({selectedPngIds.size})</Button></>}</div></div><div className="grid flex-1 grid-cols-3 content-start gap-2 overflow-y-auto p-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">{visible.map((item) => { const checked = selectedPngIds.has(item.id); return <button key={item.id} onClick={() => selectionMode ? togglePngSelection(item.id) : selectResource(item.id)} className={`relative flex flex-col gap-1 rounded border p-2 text-right transition-colors ${selectionMode && checked ? "border-primary bg-primary/10 ring-1 ring-primary" : item.id === selectedId ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"}`} title={selectionMode ? "اضغط لتحديد الصورة أو إلغاء تحديدها" : item.path}><div className="flex aspect-square items-center justify-center overflow-hidden rounded bg-muted/40"><img src={item.preview} alt="" className="max-h-full max-w-full object-contain" style={{ imageRendering: "pixelated" }} /></div>{selectionMode && <span className={`absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold ${checked ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background/90"}`}>{checked ? "✓" : ""}</span>}<span className="flex items-center gap-1 truncate font-mono text-[10px] text-muted-foreground" dir="ltr">{fileStem(item.path)}{item.modified && <CheckCircle2 className="mr-auto h-3.5 w-3.5 shrink-0 text-emerald-500" />}</span></button>; })}{visible.length === 0 && <p className="col-span-full py-8 text-center text-sm text-muted-foreground">لا توجد نتائج مطابقة</p>}</div></section>
         <aside className="flex w-full shrink-0 flex-col gap-3 border-t border-border p-4 md:w-80 md:border-r md:border-t-0">{!selected || !selectedPicture ? <p className="mt-8 text-center text-sm text-muted-foreground">اختر صورة من القائمة للمعاينة</p> : <><p className="break-all font-mono text-xs text-muted-foreground" dir="ltr">{selected.path}</p><div className="flex aspect-square items-center justify-center overflow-hidden rounded" style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}><img src={canvasDataUrl(selectedPicture.rgba, selectedPicture.width, selectedPicture.height)} alt={selected.path} className="max-h-full max-w-full object-contain" style={{ imageRendering: "pixelated" }} /></div><div className="space-y-0.5 text-center text-xs text-muted-foreground"><p>{selectedPicture.width}×{selectedPicture.height} — 8bpp — لوحة 256 لوناً</p><p>{selected.asset.pictures.length > 1 ? `يُعرض المورد الأول من ${selected.asset.pictures.length}` : "مورد TIM2 مفهرس"}</p></div><div className="flex flex-col gap-2"><Button size="sm" variant="outline" onClick={() => void exportPng(false)}><ImageDown className="ml-1 h-3.5 w-3.5" />تنزيل PNG</Button><Button size="sm" variant="outline" onClick={exportTim2}><Download className="ml-1 h-3.5 w-3.5" />تنزيل TIM2 الأصلي/المعدل</Button><div className="flex items-start gap-2"><Checkbox id="tim2-alpha-full" checked={preserveAlpha} onCheckedChange={(value) => setPreserveAlpha(value === true)} /><Label htmlFor="tim2-alpha-full" className="cursor-pointer text-[11px] leading-relaxed text-muted-foreground">استخدم شفافية الصورة الأصلية؛ تتجاهل الأداة خلفية البديل في المواضع الشفافة من الأصل.</Label></div><input ref={replaceInputRef} type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" onChange={(event) => void replaceWhole(event)} /><Button size="sm" disabled={loading} className="text-white" style={{ backgroundColor: ACCENT }} onClick={() => replaceInputRef.current?.click()}>{loading ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Replace className="ml-1 h-3.5 w-3.5" />}استبدال...</Button><p className="text-[11px] leading-relaxed text-muted-foreground">تطابق الصورة البديلة أبعاد المورد تلقائياً، ثم تُطابق مع أقرب ألوان لوحة اللعبة الأصلية.</p><Button size="sm" variant="outline" onClick={openComposite}><Crop className="ml-1 h-3.5 w-3.5" />تركيب صورة داخل منطقة محددة</Button><p className="text-[11px] leading-relaxed text-muted-foreground">للشعارات والصور المجمعة: عدّل موضع النص فقط، فتظل الخلفية وبقية الصورة دون تغيير.</p>{selected.modified && <Button size="sm" variant="ghost" onClick={resetSelected}><Undo2 className="ml-1 h-3.5 w-3.5" />تراجع عن هذا التعديل</Button>}</div></>}</aside>

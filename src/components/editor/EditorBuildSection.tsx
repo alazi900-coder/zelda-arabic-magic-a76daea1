@@ -14,7 +14,7 @@ import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
-import { buildKHBbsArchive, buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
+import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
 import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
@@ -311,33 +311,24 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       await editor.forceSave();
       const translations = editor.state?.translations || {};
       const { toast } = await import("@/hooks/use-toast");
-      const canBuildDat = hasKHBbsBbsWorkspace() && await hasKHBbsBbsSources();
-      if (canBuildDat) {
-        const result = await buildKHBbsBbsReplacements(translations);
-        const output = await buildKHBbsDatOutput(result.replacements);
-        const url = URL.createObjectURL(output.archive);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = "kingdom-hearts-bbs0-bbs3-ar.zip";
-        anchor.click();
-        URL.revokeObjectURL(url);
-        const archives = output.changedArchives.map((index) => `BBS${index}.DAT`).join("، ");
-        toast({
-          title: "✅ تم بناء BBS0–BBS3 كاملة",
-          description: `${result.translatedLines} نص مترجم | ${output.changedResources} مورد معدّل داخل ${archives} | BBS2 وBBS3 نُسختا كما هما داخل ZIP` ,
-        });
-        return;
+      if (!await hasKHBbsBbsSources()) {
+        throw new Error("هذه جلسة CTD منفصلة ولا تعرف مواضعها داخل BBS. عد إلى مدير Kingdom Hearts، اختر BBS0.DAT إلى BBS3.DAT، ثم افتح CTD منه قبل البناء.");
       }
-      const result = await buildKHBbsArchive(translations);
-      const url = URL.createObjectURL(result.archive);
+      if (!hasKHBbsBbsWorkspace()) {
+        throw new Error("ملفات BBS0–BBS3 لم تعد مفتوحة في هذه الجلسة. عد إلى مدير Kingdom Hearts وافتح الملفات الأربعة من جديد؛ لن تنزّل الأداة CTD منفصلة بدلاً منها.");
+      }
+      const result = await buildKHBbsBbsReplacements(translations);
+      const output = await buildKHBbsDatOutput(result.replacements);
+      const url = URL.createObjectURL(output.archive);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "kingdom-hearts-bbs-ctd-modified.zip";
+      anchor.download = "kingdom-hearts-bbs0-bbs3-ar.zip";
       anchor.click();
       URL.revokeObjectURL(url);
+      const archives = output.changedArchives.map((index) => `BBS${index}.DAT`).join("، ");
       toast({
-        title: "✅ تم بناء أرشيف Kingdom Hearts",
-        description: `${result.translatedLines} نص مترجم | ${result.changedFiles} ملف CTD معدّل من أصل ${result.fileCount}`,
+        title: "✅ تم بناء BBS0–BBS3 كاملة",
+        description: `${result.translatedLines} نص مترجم | ${output.changedResources} مورد معدّل داخل ${archives} | BBS2 وBBS3 نُسختا كما هما داخل ZIP`,
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");
@@ -717,7 +708,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           </Button>
         ) : isKingdomHearts ? (
           <Button size="lg" onClick={handleKingdomHeartsBuild} disabled={khbbsBuilding} className="flex-1 min-w-[200px] font-display font-bold">
-            {khbbsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء أرشيف CTD معرّب وتنزيله
+            {khbbsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء BBS0–BBS3 معرّبة وتنزيلها
           </Button>
         ) : isGameMaker ? (
           <Button size="lg" onClick={handleGameMakerBuild} disabled={gmBuilding} className="flex-1 min-w-[200px] font-display font-bold">

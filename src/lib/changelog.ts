@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.180.6",
+    date: "2026-08-21",
+    changes: [
+      { kind: "fixed", text: "**زر بناء Kingdom Hearts الظاهر داخل المحرر لا ينزّل ملفات CTD منفصلة بعد الآن.** يبني فقط ZIP واحداً يحوي BBS0.DAT إلى BBS3.DAT كاملة عندما تكون جلسة BBS الصحيحة مفتوحة." },
+      { kind: "changed", text: "**تغيّر نص الزر إلى «بناء BBS0–BBS3 معرّبة وتنزيلها».** إذا فُتحت CTD خارج جلسة BBS أو فُقدت ملفات BBS من الجلسة، يوقف الزر البناء برسالة صريحة بدلاً من تنزيل ناتج CTD خاطئ." },
+    ],
+  },
+  {
     version: "1.180.5",
     date: "2026-08-20",
     changes: [

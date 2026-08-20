@@ -32,6 +32,21 @@ const KHBBS_ASCII_FALLBACKS: ReadonlyMap<string, string> = new Map([
   ["ר", "r"],
 ]);
 
+/**
+ * Exact Shift-JIS pairs found in the supplied English CTD text. These are not
+ * Arabic glyphs and must be emitted as their original encoded text bytes, so
+ * editing an English line that contains them never turns into a build error.
+ */
+const KHBBS_SHIFT_JIS_SYMBOL_BYTES: ReadonlyMap<string, readonly number[]> = new Map([
+  ["―", [0x81, 0x5c]], // U+2015 horizontal bar
+  ["∥", [0x81, 0x61]], // U+2225 parallel to
+  ["±", [0x81, 0x7d]], // U+00B1 plus-minus sign
+  ["×", [0x81, 0x7e]], // U+00D7 multiplication sign
+  ["　", [0x81, 0x40]], // U+3000 ideographic space
+  ["－", [0x81, 0x7c]], // U+FF0D fullwidth hyphen-minus
+  ["｜", [0x81, 0x62]], // U+FF5C fullwidth vertical line
+]);
+
 export interface KHBBSCharacterReplacement {
   character: string;
   unicode: string;
@@ -260,6 +275,7 @@ export function analyzeKHBBSCTDText(text: string): KHBBSCharacterAnalysis {
   const analyzePlainSegment = (segment: string) => {
     for (const character of segment) {
       if (encodeKHBBSArabicGlyph(character)) continue;
+      if (KHBBS_SHIFT_JIS_SYMBOL_BYTES.has(character)) continue;
       const replacement = KHBBS_ASCII_FALLBACKS.get(character);
       if (replacement !== undefined) {
         const current = replacementCounts.get(character);
@@ -301,6 +317,11 @@ function encodeCTDText(text: string): Uint8Array {
       const glyphBytes = encodeKHBBSArabicGlyph(character);
       if (glyphBytes) {
         encoded.push(...glyphBytes);
+        continue;
+      }
+      const shiftJisBytes = KHBBS_SHIFT_JIS_SYMBOL_BYTES.get(character);
+      if (shiftJisBytes) {
+        encoded.push(...shiftJisBytes);
         continue;
       }
       const asciiFallback = KHBBS_ASCII_FALLBACKS.get(character);

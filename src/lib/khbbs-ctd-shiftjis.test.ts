@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCTD, parseCTD } from "./khbbs-ctd";
+import { analyzeKHBBSCTDText, buildCTD, encodeKHBBSCTDTextForAudit, parseCTD } from "./khbbs-ctd";
 
 function createShiftJisFixture(): Uint8Array {
   const japanese = Uint8Array.from([0x83, 0x5f, 0x83, 0x7e, 0x81, 0x5b, 0x81, 0x46, 0x82, 0x68, 0x82, 0x63, 0x00]);
@@ -42,5 +42,22 @@ describe("KHBBS CTD Shift-JIS reader", () => {
     expect(reparsed.entries[0].text).toBe("ダミー：ＩＤ");
     expect(Array.from(reparsed.entries[0].rawTextBytes)).toEqual([0x83, 0x5f, 0x83, 0x7e, 0x81, 0x5b, 0x81, 0x46, 0x82, 0x68, 0x82, 0x63]);
     expect(reparsed.entries[1].text).toBe("Changed [CTD:F2 F6]");
+  });
+
+  it("builds the verified English Shift-JIS symbols without marking them unsupported", () => {
+    const symbols = "―∥±×　－｜";
+
+    expect(analyzeKHBBSCTDText(symbols).unsupported).toEqual([]);
+    expect(Array.from(encodeKHBBSCTDTextForAudit(symbols))).toEqual([
+      0x81, 0x5c, 0x81, 0x61, 0x81, 0x7d, 0x81, 0x7e,
+      0x81, 0x40, 0x81, 0x7c, 0x81, 0x62,
+    ]);
+
+    const document = parseCTD(createShiftJisFixture().buffer);
+    const entries = document.entries.map((entry) => ({ ...entry }));
+    entries[1].translation = `English ${symbols} [CTD:F2 F6]`;
+    const rebuilt = buildCTD(document, entries);
+
+    expect(parseCTD(rebuilt.buffer).entries[1].text).toBe(`English ${symbols} [CTD:F2 F6]`);
   });
 });

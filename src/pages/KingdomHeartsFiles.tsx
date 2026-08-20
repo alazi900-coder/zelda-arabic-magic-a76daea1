@@ -65,7 +65,7 @@ function FolderGroup({
                 <div className="min-w-0 flex-1">
                   <p dir="ltr" className={`truncate font-mono text-xs font-semibold ${isFontCandidate ? "text-amber-500" : ""}`}>{isFontCandidate ? `FONT ARCHIVE · ${filename}` : filename}</p>
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {isFontCandidate ? "تم التعرّف عليه من mesfont وcmdfont · " : ""}{entry.isVerifiedCtd ? "CTD مؤكّد بالترويسة · " : entry.ctdVerification === "mismatch" ? "ليست CTD؛ تم تصحيح الامتداد · " : entry.ctdVerification === "unavailable" ? "تعذر فحص CTD لعدم توفر DAT · " : ""}{formatBbsHash(entry.fileHash)} · BBS{entry.archiveIndex}.DAT · {formatBbsBytes(entry.allocatedBytes)} · {entry.isStreamed ? "تدفق غير قابل للتنزيل" : entry.downloadAvailable ? "جاهز" : "DAT المصدر غير مرفوع"}
+                    {isFontCandidate ? "تم التعرّف عليه من mesfont وcmdfont · " : ""}{entry.isVerifiedCtd ? "CTD مؤكّد بالترويسة · " : entry.ctdVerification === "mismatch" ? "ليست CTD؛ تم تصحيح الامتداد · " : entry.extension === "ctd" ? "CTD من توقيع مجموعة المورد؛ تحقّق فردي متاح · " : ""}{formatBbsHash(entry.fileHash)} · BBS{entry.archiveIndex}.DAT · {formatBbsBytes(entry.allocatedBytes)} · {entry.isStreamed ? "تدفق غير قابل للتنزيل" : entry.downloadAvailable ? "جاهز" : "DAT المصدر غير مرفوع"}
                   </p>
                 </div>
                 <Button variant="outline" size="icon" disabled={!entry.downloadAvailable || downloadingId === entry.id} onClick={() => onDownload(entry)} title="تنزيل المورد كما هو في الأرشيف">
@@ -108,6 +108,7 @@ export default function KingdomHeartsFiles() {
     setSelected(new Set());
     setFontCandidateIds(new Set());
     setFontSelection(null);
+    setExtension("ctd");
     clearKHBbsDatWritableWorkspace();
     clearKHBbsBbsWorkspace();
     setWritableWorkspace(false);
@@ -131,6 +132,7 @@ export default function KingdomHeartsFiles() {
     setSelected(new Set());
     setFontCandidateIds(new Set());
     setFontSelection(null);
+    setExtension("ctd");
     try {
       const handles = await window.showOpenFilePicker({
         multiple: true,
@@ -154,32 +156,34 @@ export default function KingdomHeartsFiles() {
   }, []);
 
   const verifyCtd = useCallback(async () => {
-    if (!archive || ctdChecking) return;
+    if (!archive || ctdChecking || extension !== "ctd") return;
+    const normalizedQuery = query.trim().toLowerCase();
+    const visibleCtd = archive.entries.filter((entry) => {
+      if (!entry.downloadAvailable || entry.extension !== "ctd") return false;
+      if (!normalizedQuery) return true;
+      const searchable = `${entry.directory} ${entry.extension} ${formatBbsHash(entry.fileHash)} ${formatBbsHash(entry.directoryHash)} BBS${entry.archiveIndex}`.toLowerCase();
+      return searchable.includes(normalizedQuery);
+    });
+    if (visibleCtd.length === 0) return;
     setCtdChecking(true);
-    // نعرض مرشحات CTD فوراً بدلاً من فلتر المؤكد الفارغ إلى أن تكتمل مطابقة الترويسة.
-    setExtension("catalog-ctd");
-    setCtdProgress({ completed: 0, total: archive.entries.filter((entry) => entry.downloadAvailable && entry.catalogExtension === "ctd").length });
+    setCtdProgress({ completed: 0, total: visibleCtd.length });
     setError(null);
     try {
-      const result = await verifyKHBbsCtdEntries(archive.entries, archive.archives, (completed, total) => setCtdProgress({ completed, total }));
-      const report = `فحص CTD بالترويسة اكتمل: ${result.confirmed} CTD مؤكّد من ${result.checked} مرشح CTD${result.catalogMismatch ? `؛ ${result.catalogMismatch} مرشح جدول غير مطابق` : ""}.`;
-      setArchive((current) => current ? { ...current, entries: [...current.entries], warnings: [...current.warnings.filter((warning) => !warning.startsWith("فحص CTD بالترويسة")), report] } : current);
-      setExtension("confirmed-ctd");
+      const result = await verifyKHBbsCtdEntries(visibleCtd, archive.archives, (completed, total) => setCtdProgress({ completed, total }));
+      const report = `تحقق CTD الظاهرة اكتمل: ${result.confirmed} ملف CTD مؤكد من ${result.checked}${result.mismatch ? `؛ ${result.mismatch} ملفاً استُبعد لأن ترويسه ليست @CTD` : ""}.`;
+      setArchive((current) => current ? { ...current, entries: [...current.entries], warnings: [...current.warnings.filter((warning) => !warning.startsWith("تحقق CTD الظاهرة")), report] } : current);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "تعذر فحص ترويسات CTD.");
     } finally {
       setCtdChecking(false);
     }
-  }, [archive, ctdChecking]);
+  }, [archive, ctdChecking, extension, query]);
 
   const filteredEntries = useMemo(() => {
     if (!archive) return [];
     const normalizedQuery = query.trim().toLowerCase();
     return archive.entries.filter((entry) => {
-      // الفلتر المؤكد يعتمد حصراً على توقيع @CTD داخل المورد، لا على موضعه
-      // في جدول الامتدادات الذي يختلف بين بعض نسخ Final Mix.
-      const matchesExtension = extension === "all"
-        || (extension === "confirmed-ctd" ? entry.isVerifiedCtd : extension === "catalog-ctd" ? entry.catalogExtension === "ctd" : entry.extension === extension);
+      const matchesExtension = extension === "all" || entry.extension === extension;
       if (!matchesExtension) return false;
       if (!normalizedQuery) return true;
       const searchable = `${entry.directory} ${entry.extension} ${formatBbsHash(entry.fileHash)} ${formatBbsHash(entry.directoryHash)} BBS${entry.archiveIndex}`.toLowerCase();
@@ -193,7 +197,8 @@ export default function KingdomHeartsFiles() {
     return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
   }, [filteredEntries]);
 
-  const extensions = useMemo(() => [...new Set(archive?.entries.map((entry) => entry.extension) ?? [])].sort(), [archive]);
+  const extensions = useMemo(() => [...new Set(archive?.entries.map((entry) => entry.extension) ?? [])].filter((item) => item !== "ctd").sort(), [archive]);
+  const visibleCtdCount = useMemo(() => filteredEntries.filter((entry) => entry.downloadAvailable && entry.extension === "ctd").length, [filteredEntries]);
   const selectedEntries = useMemo(() => filteredEntries.filter((entry) => selected.has(entry.id) && entry.downloadAvailable), [filteredEntries, selected]);
   const selectedCtdEntries = useMemo(() => selectedEntries.filter((entry) => entry.isVerifiedCtd && !entry.isStreamed), [selectedEntries]);
   const selectedBytes = useMemo(() => selectedEntries.reduce((total, entry) => total + entry.allocatedBytes, 0), [selectedEntries]);
@@ -359,10 +364,10 @@ export default function KingdomHeartsFiles() {
             <div className="rounded-2xl border border-border bg-card/60 p-3 md:p-4">
               <div className="flex flex-col gap-3 md:flex-row">
                 <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في المسار أو الامتداد أو رقم التجزئة مثل 0x…" /></label>
-                <select value={extension} disabled={ctdChecking} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm disabled:cursor-wait disabled:opacity-60"><option value="all">كل الامتدادات</option><option value="confirmed-ctd">CTD مؤكّد بالترويسة</option><option value="catalog-ctd">مرشحات CTD من فهرس BBSA</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
+                <select value={extension} disabled={ctdChecking} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm disabled:cursor-wait disabled:opacity-60"><option value="all">كل الامتدادات</option><option value="ctd">ملفات CTD (.ctd)</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" disabled={ctdChecking} onClick={() => void verifyCtd()}><Search className="ml-1.5 h-4 w-4" />{ctdChecking ? `فحص CTD… ${ctdProgress?.completed ?? 0}/${ctdProgress?.total ?? 0}` : "فحص CTD بالترويسة"}</Button>
+                <Button variant="outline" size="sm" title={extension === "ctd" ? "يتحقق من ملفات CTD الظاهرة في هذه القائمة فقط" : "اختر «ملفات CTD (.ctd)» أولاً"} disabled={ctdChecking || extension !== "ctd" || visibleCtdCount === 0} onClick={() => void verifyCtd()}><Search className="ml-1.5 h-4 w-4" />{ctdChecking ? `تحقق CTD… ${ctdProgress?.completed ?? 0}/${ctdProgress?.total ?? 0}` : "تحقق من CTD الظاهرة"}</Button>
                 <Button variant="outline" size="sm" onClick={selectVisible}><CheckSquare className="ml-1.5 h-4 w-4" />تحديد النتائج المتاحة</Button>
                 <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}><Square className="ml-1.5 h-4 w-4" />إلغاء التحديد</Button>
                 <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-semibold">
@@ -373,7 +378,7 @@ export default function KingdomHeartsFiles() {
                 {selectedCtdEntries.length > 0 && <Button size="sm" disabled={openingCtd} onClick={() => void openSelectedCtdInEditor()} className="bg-emerald-600 text-white hover:bg-emerald-500"><FileArchive className="ml-1.5 h-4 w-4" />{openingCtd ? "جارٍ فتح CTD…" : `فتح CTD في المحرر (${selectedCtdEntries.length})`}</Button>}
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">فتح DAT يقرأ الفهرس فقط كي يبقى سريعاً على الهاتف. زر «فحص CTD بالترويسة» يفحص مرشحات CTD فقط، ثم يعرض المؤكد الذي يبدأ بتوقيع <bdi>@CTD</bdi>. أثناء الفحص يعرض المدير المرشحات بدلاً من قائمة مؤكدة فارغة. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
+              <p className="mt-2 text-xs text-muted-foreground">بعد فتح DAT تقرأ الأداة توقيع مورد أو موردين فقط من كل مجموعة لتحديد «ملفات CTD (.ctd)» الصحيحة، ولا تستخدم مرشحات BBSA المضللة. عند اختيار هذا الفلتر، يقرأ زر «تحقق من CTD الظاهرة» هذه القائمة الظاهرة فقط ويثبت الترويسة <bdi>@CTD</bdi> قبل فتح أي ملف في المحرر. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
             <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>

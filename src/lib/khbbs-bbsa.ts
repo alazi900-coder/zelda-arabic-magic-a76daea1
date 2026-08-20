@@ -19,8 +19,11 @@ export interface BbsArchiveEntry {
   directory: string;
   directoryHash: number;
   fileHash: number;
-  /** الامتداد كما يعلنه جدول BBSA؛ يبقى محفوظاً حتى لو اكتشفنا ترويسة مختلفة. */
+  /** فهرس مجموعة الامتداد داخل جدول BBSA؛ null لموارد ARC المنفصلة. */
+  directoryTableIndex: number | null;
+  /** الامتداد كما يقترحه ترتيب جدول BBSA المرجعي فقط. */
   catalogExtension: string;
+  /** الامتداد الذي تُظهره الواجهة بعد أخذ عينة توقيع من مجموعة المورد. */
   extension: string;
   globalSector: number;
   localSector: number;
@@ -169,6 +172,41 @@ function resourceMagic(bytes: Uint8Array): number | null {
   return new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0, true);
 }
 
+/**
+ * يقرأ توقيع مورد أو موردين فقط من كل مجموعة BBSA (50 مجموعة كحد أقصى).
+ * لا يفحص كل الموردين؛ الغرض هو تصحيح ترتيب الامتدادات في نسخ Final Mix التي
+ * لا يطابق فيها ترتيب الجدول الثابت البيانات الفعلية. يبقى الفحص الفردي لـCTD
+ * منفصلاً عند طلب المستخدم قبل فتحها في محرر النصوص.
+ */
+async function resolveBbsDirectoryExtensions(entries: BbsArchiveEntry[], archives: Map<number, File>): Promise<void> {
+  const groups = new Map<number, BbsArchiveEntry[]>();
+  for (const entry of entries) {
+    if (entry.directoryTableIndex === null) continue;
+    groups.set(entry.directoryTableIndex, [...(groups.get(entry.directoryTableIndex) ?? []), entry]);
+  }
+
+  await Promise.all([...groups.values()].map(async (group) => {
+    const samples = group.filter((entry) => entry.downloadAvailable && !entry.isStreamed).slice(0, 2);
+    const detectedExtensions = await Promise.all(samples.map(async (entry) => {
+      const archive = archives.get(entry.archiveIndex);
+      if (!archive) return null;
+      try {
+        const bytes = new Uint8Array(await archive.slice(entry.byteOffset, entry.byteOffset + 4).arrayBuffer());
+        const magic = resourceMagic(bytes);
+        return magic === null ? null : (EXTENSION_BY_MAGIC[magic] ?? null);
+      } catch {
+        return null;
+      }
+    }));
+    const resolvedExtension = detectedExtensions.find((value): value is string => value !== null) ?? group[0].catalogExtension;
+    for (const entry of group) {
+      entry.extension = resolvedExtension;
+      entry.isVerifiedCtd = false;
+      entry.ctdVerification = resolvedExtension === "ctd" ? "unavailable" : "not-applicable";
+    }
+  }));
+}
+
 function addEntry(
   entries: BbsArchiveEntry[],
   archives: Map<number, File>,
@@ -176,6 +214,7 @@ function addEntry(
   directoryHash: number,
   fileHash: number,
   extension: string,
+  directoryTableIndex: number | null,
   info: number,
   ordinal: number,
 ) {
@@ -194,6 +233,7 @@ function addEntry(
     directory: directoryName(directoryHash),
     directoryHash,
     fileHash,
+    directoryTableIndex,
     catalogExtension: extension,
     extension,
     globalSector,
@@ -204,26 +244,27 @@ function addEntry(
     downloadAvailable,
     isStreamed,
     isVerifiedCtd: false,
-    ctdVerification: extension === "ctd" ? "unavailable" : "not-applicable",
+    ctdVerification: "not-applicable",
   });
 }
 
 /**
- * يتحقق من ترويسة كل مورد بصورة تدريجية عند طلب المستخدم فقط. لا تستدعى هذه
- * الدالة أثناء رفع DAT، كي يبقى فتح الأرشيف خفيفاً على الهاتف.
+ * يتحقق من ترويسة كل مورد بصورة تدريجية عند طلب المستخدم فقط. أثناء الفهرسة
+ * تؤخذ عينتان قصيرتان لكل مجموعة امتداد لتكوين قائمة CTD؛ أما هذه الدالة فلا
+ * تقرأ إلا ملفات CTD التي اختارتها الواجهة.
  */
 export async function verifyKHBbsCtdEntries(
   entries: BbsArchiveEntry[],
   archives: Map<number, File>,
   onProgress?: (completed: number, total: number) => void,
-): Promise<{ checked: number; confirmed: number; catalogMismatch: number; discoveredOutsideCatalog: number }> {
-  // لا نفحص جميع موارد BBS: جدول BBSA يحدد مرشحات CTD بالفعل. فحصها فقط
-  // يمنع قراءة آلاف ترويسات الصور والصوت والرسوم في كل جلسة على الهاتف.
-  const readable = entries.filter((entry) => entry.downloadAvailable && entry.catalogExtension === "ctd");
-  if (readable.length === 0) return { checked: 0, confirmed: 0, catalogMismatch: 0, discoveredOutsideCatalog: 0 };
+): Promise<{ checked: number; confirmed: number; mismatch: number }> {
+  // تستدعي الواجهة هذه الدالة بملفات CTD الظاهرة فقط؛ لا تمر أبداً على بقية
+  // موارد BBS أو على قائمة مرشحات BBSA القديمة.
+  const readable = entries.filter((entry) => entry.downloadAvailable && entry.extension === "ctd");
+  if (readable.length === 0) return { checked: 0, confirmed: 0, mismatch: 0 };
 
   let confirmed = 0;
-  let catalogMismatch = 0;
+  let mismatch = 0;
   let completed = 0;
 
   for (const entry of readable) {
@@ -237,10 +278,10 @@ export async function verifyKHBbsCtdEntries(
       entry.ctdVerification = "confirmed";
       entry.extension = "ctd";
       confirmed += 1;
-    } else if (entry.catalogExtension === "ctd") {
+    } else {
       entry.extension = magic === null ? "unknown" : (EXTENSION_BY_MAGIC[magic] ?? "unknown");
       entry.ctdVerification = "mismatch";
-      catalogMismatch += 1;
+      mismatch += 1;
     }
 
     completed += 1;
@@ -249,7 +290,7 @@ export async function verifyKHBbsCtdEntries(
     if (completed % 32 === 0) await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
   }
 
-  return { checked: readable.length, confirmed, catalogMismatch, discoveredOutsideCatalog: 0 };
+  return { checked: readable.length, confirmed, mismatch };
 }
 
 /**
@@ -280,7 +321,7 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
     assertRange(firstEntryOffset, entryCount * 8, headerBytes.length, `ملفات قسم ARC ${partitionIndex + 1}`);
     for (let entryIndex = 0; entryIndex < entryCount; entryIndex += 1) {
       const offset = firstEntryOffset + entryIndex * 8;
-      addEntry(entries, archives, header, directoryHash, view.getUint32(offset, true), "arc", view.getUint32(offset + 4, true), entries.length);
+      addEntry(entries, archives, header, directoryHash, view.getUint32(offset, true), "arc", null, view.getUint32(offset + 4, true), entries.length);
     }
   }
 
@@ -300,11 +341,12 @@ export async function indexKHBbsDatFiles(uploads: File[]): Promise<BbsArchiveInd
       const info = view.getUint32(offset + 4, true);
       const directoryHash = view.getUint32(offset + 8, true);
       if (fileHash === 0 && info === 0 && directoryHash === 0) continue;
-      addEntry(entries, archives, header, directoryHash, fileHash, extension, info, entries.length);
+      addEntry(entries, archives, header, directoryHash, fileHash, extension, directoryIndex, info, entries.length);
     }
   }
 
-  warnings.push("فحص CTD بالترويسة مؤجّل للحفاظ على سرعة فتح DAT في الهاتف؛ شغّله من زر «فحص CTD بالترويسة» عند الحاجة.");
+  await resolveBbsDirectoryExtensions(entries, archives);
+  warnings.push("تُحدد الأداة مجموعة ملفات CTD من توقيع موارد BBS الفعلية، ثم تفحص الملفات الظاهرة فقط عند الضغط على «تحقق من CTD الظاهرة».");
 
   const unavailableArchives = [0, 1, 2, 3, 4].filter((index) => !archives.has(index));
   if (unavailableArchives.length) warnings.push(`لم تُرفع ${unavailableArchives.map((index) => `BBS${index}.DAT`).join("، ")}؛ ستظهر مراجعها لكن لا يمكن تنزيلها بعد.`);

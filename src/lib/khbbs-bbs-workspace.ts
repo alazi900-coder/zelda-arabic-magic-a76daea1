@@ -1,6 +1,7 @@
 /**
- * STYLE: مساحة عمل Kingdom Hearts هادئة ومباشرة. لا تنقل مورداً ولا تغيّر
- * فهرس BBSA؛ كل إدخال يستبدل بايتات المورد نفسه ضمن حجزه القطاعي الأصلي.
+ * STYLE: مساحة عمل Kingdom Hearts هادئة ومباشرة. مخرجات البناء تضم BBS0–BBS3
+ * كاملة؛ لا تنقل مورداً ولا تغيّر فهرس BBSA، وكل إدخال يستبدل بايتات المورد
+ * نفسه ضمن حجزه القطاعي الأصلي.
  */
 
 import JSZip from "jszip";
@@ -11,12 +12,7 @@ import {
   type BbsArchiveEntry,
   type BbsArchiveIndex,
 } from "@/lib/khbbs-bbsa";
-import {
-  getKHBbsDatWritableWorkspace,
-  hasKHBbsDatWritableWorkspace,
-  writeKHBbsDatResource,
-  type KHBbsDatResourceSource,
-} from "@/lib/khbbs-dat-workspace";
+import type { KHBbsDatResourceSource } from "@/lib/khbbs-dat-workspace";
 
 export interface KHBbsResourceReference extends KHBbsDatResourceSource {
   filename: string;
@@ -39,8 +35,8 @@ interface KHBbsBbsWorkspace {
 }
 
 export interface KHBbsDatOutput {
-  kind: "direct" | "zip";
-  archive?: Blob;
+  archive: Blob;
+  includedArchives: [0, 1, 2, 3];
   changedArchives: number[];
   changedResources: number;
 }
@@ -139,7 +135,12 @@ export function getKHBbsFontReplacement(): KHBbsFontReplacement | null {
 
 export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsResourceReference; bytes: Uint8Array }>): Promise<KHBbsDatOutput> {
   const workspace = activeWorkspace;
-  if (!workspace) throw new Error("افتح BBS0–BBS4 من مدير Kingdom Hearts أولاً قبل بناء DAT.");
+  if (!workspace) throw new Error("افتح BBS0.DAT إلى BBS3.DAT من مدير Kingdom Hearts أولاً قبل البناء.");
+  const requiredArchives: [0, 1, 2, 3] = [0, 1, 2, 3];
+  const missingArchives = requiredArchives.filter((archiveIndex) => !workspace.archive.archives.has(archiveIndex));
+  if (missingArchives.length > 0) {
+    throw new Error(`اختر ${missingArchives.map((archiveIndex) => `BBS${archiveIndex}.DAT`).join("، ")} أيضاً. البناء ينزّل BBS0–BBS3 كاملة؛ BBS2 وBBS3 يُمران كما هما.`);
+  }
   const all = [...replacements];
   if (workspace.font) {
     for (const source of workspace.font.sources) all.push({ source, bytes: workspace.font.bytes });
@@ -156,30 +157,17 @@ export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsRes
   const changed = exact.filter(({ next, previous }) => !equalBytes(next, previous));
   if (changed.length === 0) throw new Error("الملفات المختارة مطابقة للأصل؛ لا يوجد مورد جديد للكتابة.");
 
-  if (hasKHBbsDatWritableWorkspace()) {
-    const writable = getKHBbsDatWritableWorkspace();
-    if (!writable) throw new Error("تعذرت قراءة صلاحية DAT القابلة للكتابة.");
-    for (const replacement of changed) {
-      if (!writable.handles.has(replacement.source.archiveIndex)) {
-        throw new Error(`افتح BBS${replacement.source.archiveIndex}.DAT أيضاً بصلاحية الكتابة؛ يحتوي مورداً مترجماً.`);
-      }
-    }
-    for (const replacement of changed) {
-      await writeKHBbsDatResource(replacement.source, replacement.next, replacement.previous);
-    }
-    return {
-      kind: "direct",
-      changedArchives: [...new Set(changed.map((item) => item.source.archiveIndex))].sort((left, right) => left - right),
-      changedResources: changed.length,
-    };
-  }
-
   const byArchive = new Map<number, typeof changed>();
   for (const replacement of changed) byArchive.set(replacement.source.archiveIndex, [...(byArchive.get(replacement.source.archiveIndex) ?? []), replacement]);
   const zip = new JSZip();
-  for (const [archiveIndex, archiveUpdates] of byArchive) {
+  for (const archiveIndex of requiredArchives) {
     const original = workspace.archive.archives.get(archiveIndex);
     if (!original) throw new Error(`BBS${archiveIndex}.DAT غير متاح لإخراج النسخة المعدلة.`);
+    const archiveUpdates = byArchive.get(archiveIndex) ?? [];
+    if (archiveUpdates.length === 0) {
+      zip.file(`BBS${archiveIndex}.DAT`, original);
+      continue;
+    }
     const ordered = [...archiveUpdates].sort((left, right) => left.source.byteOffset - right.source.byteOffset);
     const parts: BlobPart[] = [];
     let cursor = 0;
@@ -190,11 +178,13 @@ export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsRes
       cursor = replacement.source.byteOffset + replacement.source.allocatedBytes;
     }
     parts.push(original.slice(cursor));
-    zip.file(`BBS${archiveIndex}.DAT`, new Blob(parts, { type: "application/octet-stream" }));
+    const output = new Blob(parts, { type: "application/octet-stream" });
+    if (output.size !== original.size) throw new Error(`توقف البناء لأن حجم BBS${archiveIndex}.DAT تغيّر؛ لم يُنشأ أي ملف.`);
+    zip.file(`BBS${archiveIndex}.DAT`, output);
   }
   return {
-    kind: "zip",
     archive: await zip.generateAsync({ type: "blob", compression: "STORE" }),
+    includedArchives: requiredArchives,
     changedArchives: [...byArchive.keys()].sort((left, right) => left - right),
     changedResources: changed.length,
   };

@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.180.4",
+    date: "2026-08-20",
+    changes: [
+      { kind: "fixed", text: "**زر بناء Kingdom Hearts يُنتج الآن ZIP واحداً يحوي BBS0.DAT وBBS1.DAT وBBS2.DAT وBBS3.DAT كاملة.** يوضع CTD المعدّل داخل BBS0 والخط العربي داخل BBS0 وBBS1 فقط؛ أما BBS2 وBBS3 فيُنسخان كما اختارهما المستخدم بلا كتابة فيهما." },
+      { kind: "fixed", text: "**يطلب البناء الملفات الأربعة قبل البدء ويحمي حجم كل ملف.** يتوقف عند غياب أحد الملفات أو عند أي محاولة تغيّر حجم BBS، فلا يُنتج ملفاً ناقصاً أو يتجاوز المساحة الأصلية." },
+      { kind: "added", text: "**أضيف اختبار إخراج BBS الكامل.** يثبت أن مورد BBS0 المحدد وحده يتغير، وأن BBS1 وBBS2 وBBS3 تبقى مطابقة بايتاً ببايت للأصول داخل ZIP." },
+    ],
+  },
+  {
     version: "1.180.3",
     date: "2026-08-20",
     changes: [

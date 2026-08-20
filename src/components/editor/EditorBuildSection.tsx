@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-/** STYLE: بناء Kingdom Hearts يبقى مختصراً؛ عند مصدر BBS موثوق يخرج DAT فقط، وإلا يبقي ZIP النصوص المعتاد. */
+/** STYLE: بناء Kingdom Hearts يبقى مختصراً؛ عند مصدر BBS موثوق يخرج BBS0–BBS3 كاملة، وإلا يبقي ZIP النصوص المعتاد. */
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -315,18 +315,16 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       if (canBuildDat) {
         const result = await buildKHBbsBbsReplacements(translations);
         const output = await buildKHBbsDatOutput(result.replacements);
-        if (output.kind === "zip" && output.archive) {
-          const url = URL.createObjectURL(output.archive);
-          const anchor = document.createElement("a");
-          anchor.href = url;
-          anchor.download = "kingdom-hearts-bbs-dat-ar.zip";
-          anchor.click();
-          URL.revokeObjectURL(url);
-        }
+        const url = URL.createObjectURL(output.archive);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "kingdom-hearts-bbs0-bbs3-ar.zip";
+        anchor.click();
+        URL.revokeObjectURL(url);
         const archives = output.changedArchives.map((index) => `BBS${index}.DAT`).join("، ");
         toast({
-          title: output.kind === "direct" ? "✅ كُتبت ملفات BBS العربية" : "✅ تم بناء ملفات BBS العربية",
-          description: `${result.translatedLines} نص مترجم | ${output.changedResources} مورد معدّل | ${archives}${output.kind === "direct" ? " | كُتبت في DAT الأصلية" : " | تم تنزيل DAT المعدلة في ZIP"}`,
+          title: "✅ تم بناء BBS0–BBS3 كاملة",
+          description: `${result.translatedLines} نص مترجم | ${output.changedResources} مورد معدّل داخل ${archives} | BBS2 وBBS3 نُسختا كما هما داخل ZIP` ,
         });
         return;
       }

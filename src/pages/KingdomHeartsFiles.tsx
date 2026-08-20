@@ -156,11 +156,13 @@ export default function KingdomHeartsFiles() {
   const verifyCtd = useCallback(async () => {
     if (!archive || ctdChecking) return;
     setCtdChecking(true);
-    setCtdProgress({ completed: 0, total: archive.entries.filter((entry) => entry.downloadAvailable).length });
+    // نعرض مرشحات CTD فوراً بدلاً من فلتر المؤكد الفارغ إلى أن تكتمل مطابقة الترويسة.
+    setExtension("catalog-ctd");
+    setCtdProgress({ completed: 0, total: archive.entries.filter((entry) => entry.downloadAvailable && entry.catalogExtension === "ctd").length });
     setError(null);
     try {
       const result = await verifyKHBbsCtdEntries(archive.entries, archive.archives, (completed, total) => setCtdProgress({ completed, total }));
-      const report = `فحص CTD بالترويسة اكتمل: ${result.confirmed} CTD مؤكّد من ${result.checked} مورداً قابلاً للقراءة${result.discoveredOutsideCatalog ? `؛ ${result.discoveredOutsideCatalog} خارج جدول ctd` : ""}${result.catalogMismatch ? `؛ ${result.catalogMismatch} مرشح جدول غير مطابق` : ""}.`;
+      const report = `فحص CTD بالترويسة اكتمل: ${result.confirmed} CTD مؤكّد من ${result.checked} مرشح CTD${result.catalogMismatch ? `؛ ${result.catalogMismatch} مرشح جدول غير مطابق` : ""}.`;
       setArchive((current) => current ? { ...current, entries: [...current.entries], warnings: [...current.warnings.filter((warning) => !warning.startsWith("فحص CTD بالترويسة")), report] } : current);
       setExtension("confirmed-ctd");
     } catch (caught) {
@@ -357,7 +359,7 @@ export default function KingdomHeartsFiles() {
             <div className="rounded-2xl border border-border bg-card/60 p-3 md:p-4">
               <div className="flex flex-col gap-3 md:flex-row">
                 <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="ابحث في المسار أو الامتداد أو رقم التجزئة مثل 0x…" /></label>
-                <select value={extension} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm"><option value="all">كل الامتدادات</option><option value="confirmed-ctd">CTD مؤكّد بالترويسة</option><option value="catalog-ctd">مرشحات CTD من فهرس BBSA</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
+                <select value={extension} disabled={ctdChecking} onChange={(event) => setExtension(event.target.value)} className="h-12 rounded-xl border border-border bg-background px-3 text-sm disabled:cursor-wait disabled:opacity-60"><option value="all">كل الامتدادات</option><option value="confirmed-ctd">CTD مؤكّد بالترويسة</option><option value="catalog-ctd">مرشحات CTD من فهرس BBSA</option>{extensions.map((item) => <option key={item} value={item}>.{item}</option>)}</select>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" disabled={ctdChecking} onClick={() => void verifyCtd()}><Search className="ml-1.5 h-4 w-4" />{ctdChecking ? `فحص CTD… ${ctdProgress?.completed ?? 0}/${ctdProgress?.total ?? 0}` : "فحص CTD بالترويسة"}</Button>
@@ -371,7 +373,7 @@ export default function KingdomHeartsFiles() {
                 {selectedCtdEntries.length > 0 && <Button size="sm" disabled={openingCtd} onClick={() => void openSelectedCtdInEditor()} className="bg-emerald-600 text-white hover:bg-emerald-500"><FileArchive className="ml-1.5 h-4 w-4" />{openingCtd ? "جارٍ فتح CTD…" : `فتح CTD في المحرر (${selectedCtdEntries.length})`}</Button>}
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">فتح DAT يقرأ الفهرس فقط كي يبقى سريعاً على الهاتف. اضغط «فحص CTD بالترويسة» عند الحاجة؛ الفحص تدريجي ويعرض فقط الموارد التي تبدأ بتوقيع <bdi>@CTD</bdi>، حتى لو كانت مجموعة الامتداد في Final Mix غير دقيقة. خيار «مرشحات CTD من فهرس BBSA» تشخيصي فقط. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
+              <p className="mt-2 text-xs text-muted-foreground">فتح DAT يقرأ الفهرس فقط كي يبقى سريعاً على الهاتف. زر «فحص CTD بالترويسة» يفحص مرشحات CTD فقط، ثم يعرض المؤكد الذي يبدأ بتوقيع <bdi>@CTD</bdi>. أثناء الفحص يعرض المدير المرشحات بدلاً من قائمة مؤكدة فارغة. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
             <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>

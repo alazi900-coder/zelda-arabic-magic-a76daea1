@@ -217,7 +217,9 @@ export async function verifyKHBbsCtdEntries(
   archives: Map<number, File>,
   onProgress?: (completed: number, total: number) => void,
 ): Promise<{ checked: number; confirmed: number; catalogMismatch: number; discoveredOutsideCatalog: number }> {
-  const readable = entries.filter((entry) => entry.downloadAvailable);
+  // لا نفحص جميع موارد BBS: جدول BBSA يحدد مرشحات CTD بالفعل. فحصها فقط
+  // يمنع قراءة آلاف ترويسات الصور والصوت والرسوم في كل جلسة على الهاتف.
+  const readable = entries.filter((entry) => entry.downloadAvailable && entry.catalogExtension === "ctd");
   if (readable.length === 0) return { checked: 0, confirmed: 0, catalogMismatch: 0, discoveredOutsideCatalog: 0 };
 
   let confirmed = 0;
@@ -247,8 +249,7 @@ export async function verifyKHBbsCtdEntries(
     if (completed % 32 === 0) await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
   }
 
-  const discoveredOutsideCatalog = entries.filter((entry) => entry.isVerifiedCtd && entry.catalogExtension !== "ctd").length;
-  return { checked: readable.length, confirmed, catalogMismatch, discoveredOutsideCatalog };
+  return { checked: readable.length, confirmed, catalogMismatch, discoveredOutsideCatalog: 0 };
 }
 
 /**

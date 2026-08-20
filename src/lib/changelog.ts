@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.179.5",
+    date: "2026-08-20",
+    changes: [
+      { kind: "changed", text: "**فحص CTD بالترويسة صار يفحص مرشحات CTD من فهرس BBSA فقط، بدلاً من المرور على كل موارد BBS.** لا يقرأ الفحص ترويسات الصور والصوت وبقية الموارد غير النصية." },
+      { kind: "fixed", text: "**أُصلح ظهور «0 نتيجة» عند اختيار «CTD مؤكد بالترويسة» قبل نهاية الفحص.** يبدأ المدير بعرض مرشحات CTD أثناء الفحص، ويحوّل إلى قائمة CTD المؤكدة عند انتهائه." },
+    ],
+  },
+  {
     version: "1.179.4",
     date: "2026-08-20",
     changes: [

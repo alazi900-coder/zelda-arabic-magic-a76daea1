@@ -5,13 +5,13 @@
 
 import { type ChangeEvent, useCallback, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Image, Loader2, Search, Square, Type, Unlock, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, ClipboardCopy, Download, FileArchive, FileDown, FileSearch, Files, FolderOpen, Image, Loader2, Search, Square, Type, Unlock, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, verifyKHBbsCtdEntries, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
 import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
-import { decryptKHBbsPgdFile } from "@/lib/khbbs-pgd";
+import { decryptKHBbsPgdFile, inspectKHBbsPgdHeader, type KHBbsPgdHeaderInspection } from "@/lib/khbbs-pgd";
 import { toast } from "sonner";
 
 const LARGE_ZIP_BYTES = 300 * 1024 * 1024;
@@ -85,6 +85,7 @@ export default function KingdomHeartsFiles() {
   const inputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
   const decryptInputRef = useRef<HTMLInputElement>(null);
+  const inspectInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [archive, setArchive] = useState<BbsArchiveIndex | null>(null);
   const [loading, setLoading] = useState(false);
@@ -103,6 +104,7 @@ export default function KingdomHeartsFiles() {
   const [fontSelection, setFontSelection] = useState<{ filename: string; archiveIndexes: number[] } | null>(null);
   const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
   const [decryptingBbs, setDecryptingBbs] = useState(false);
+  const [bbsInspection, setBbsInspection] = useState<(KHBbsPgdHeaderInspection & { filename: string; fileSize: number }) | null>(null);
   const writablePickerSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
   const openArchives = useCallback(async (uploads: File[]) => {
@@ -329,6 +331,38 @@ export default function KingdomHeartsFiles() {
     }
   }, [decryptingBbs]);
 
+  const inspectBbsFile = useCallback(async (upload: File | undefined) => {
+    if (!upload) return;
+    setError(null);
+    try {
+      const header = new Uint8Array(await upload.slice(0, 0x100).arrayBuffer());
+      setBbsInspection({ ...inspectKHBbsPgdHeader(header), filename: upload.name, fileSize: upload.size });
+      toast.success("تم فحص ترويسة BBS محلياً.");
+    } catch (caught) {
+      setBbsInspection(null);
+      setError(caught instanceof Error ? caught.message : "تعذر قراءة ترويسة ملف BBS.");
+    }
+  }, []);
+
+  const copyBbsInspection = useCallback(async () => {
+    if (!bbsInspection) return;
+    const text = [
+      `الملف: ${bbsInspection.filename}`,
+      `الحجم: ${formatBbsBytes(bbsInspection.fileSize)}`,
+      `PGD: ${bbsInspection.pgdOffset === null ? "غير موجود عند 0x0 أو 0x90" : `موجود عند 0x${bbsInspection.pgdOffset.toString(16).toUpperCase()}`}`,
+      `التوقيع عند 0x0: ${bbsInspection.startSignature}`,
+      `التوقيع عند 0x90: ${bbsInspection.offset90Signature ?? "الملف أقصر من 0x94"}`,
+      `HEX (${bbsInspection.bytesRead} بايت): ${bbsInspection.hex}`,
+      `ASCII: ${bbsInspection.ascii}`,
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("تم نسخ بيانات ترويسة BBS.");
+    } catch {
+      setError("تعذر النسخ تلقائياً. حدّد بيانات HEX وانسخها يدوياً.");
+    }
+  }, [bbsInspection]);
+
   const selectVisible = useCallback(() => setSelected(new Set(filteredEntries.filter((entry) => entry.downloadAvailable).map((entry) => entry.id))), [filteredEntries]);
 
   return (
@@ -345,6 +379,9 @@ export default function KingdomHeartsFiles() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button onClick={() => inspectInputRef.current?.click()} disabled={loading || decryptingBbs} variant="outline" className="border-slate-500/50 text-slate-700 hover:bg-slate-500/10 dark:text-slate-300" title="يقرأ أول 256 بايت محلياً ويعرض الترويسة فقط">
+              <FileSearch className="ml-2 h-4 w-4" />فحص BBS
+            </Button>
             <Button onClick={() => decryptInputRef.current?.click()} disabled={loading || decryptingBbs} variant="outline" className="border-sky-500/50 text-sky-700 hover:bg-sky-500/10 dark:text-sky-300" title="ينزّل نسخة مفكوكة من BBS1 إلى BBS3؛ BBS0 يمر كما هو">
               {decryptingBbs ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Unlock className="ml-2 h-4 w-4" />}{decryptingBbs ? "جارٍ فك BBS…" : "فك BBS"}
             </Button>
@@ -360,6 +397,7 @@ export default function KingdomHeartsFiles() {
         <input ref={inputRef} type="file" accept=".dat,application/octet-stream" multiple className="hidden" onChange={(event) => { const uploads = Array.from(event.target.files ?? []); event.target.value = ""; void openArchives(uploads); }} />
         <input ref={fontInputRef} type="file" accept=".arc,application/octet-stream" className="hidden" onChange={(event) => void selectArabicFont(event)} />
         <input ref={decryptInputRef} type="file" accept=".dat,application/octet-stream" multiple className="hidden" onChange={(event) => { const uploads = Array.from(event.target.files ?? []); event.target.value = ""; void decryptBbsFiles(uploads); }} />
+        <input ref={inspectInputRef} type="file" accept=".dat,application/octet-stream" className="hidden" onChange={(event) => { const upload = event.target.files?.[0]; event.target.value = ""; void inspectBbsFile(upload); }} />
 
         {!archive && !loading && (
           <div className="rounded-3xl border-2 border-dashed border-amber-500/40 bg-card/50 p-7 text-center md:p-12">
@@ -374,6 +412,16 @@ export default function KingdomHeartsFiles() {
         {loading && <div className="flex items-center justify-center gap-3 rounded-3xl border border-border bg-card/50 p-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin text-amber-500" />جارٍ قراءة فهرس BBS0.DAT…</div>}
 
         {error && <div className="mt-5 flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" /><p>{error}</p></div>}
+
+        {bbsInspection && <div className="mt-5 rounded-2xl border border-slate-500/35 bg-slate-500/10 p-4 text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><p className="font-bold">فحص BBS محلي</p><p dir="ltr" className="mt-1 font-mono text-xs text-muted-foreground">{bbsInspection.filename} · {formatBbsBytes(bbsInspection.fileSize)}</p></div>
+            <Button size="sm" variant="outline" onClick={() => void copyBbsInspection()}><ClipboardCopy className="ml-1.5 h-4 w-4" />نسخ البيانات</Button>
+          </div>
+          <p className="mt-3 leading-relaxed"><b>PGD/DNAS:</b> {bbsInspection.pgdOffset === null ? "غير موجود عند 0x0 أو 0x90؛ لا يعني ذلك وحده أن الملف مفكوك." : <bdi className="font-mono">موجود عند 0x{bbsInspection.pgdOffset.toString(16).toUpperCase()}</bdi>}</p>
+          <p dir="ltr" className="mt-2 font-mono text-xs text-muted-foreground">0x00: {bbsInspection.startSignature} · 0x90: {bbsInspection.offset90Signature ?? "—"}</p>
+          <pre dir="ltr" className="mt-3 max-h-36 overflow-auto rounded-xl border border-border bg-background/80 p-3 text-left font-mono text-[10px] leading-5 text-muted-foreground whitespace-pre-wrap break-all">{bbsInspection.hex}</pre>
+        </div>}
 
         {archive && (
           <div className="space-y-5">

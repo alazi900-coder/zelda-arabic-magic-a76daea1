@@ -1,6 +1,6 @@
 import { cbc } from "@noble/ciphers/aes.js";
 import { describe, expect, it } from "vitest";
-import { decryptKHBbsPgdBytes } from "../khbbs-pgd";
+import { decryptKHBbsPgdBytes, inspectKHBbsPgdHeader } from "../khbbs-pgd";
 
 const ZERO = new Uint8Array(16);
 const DNAS_KEY = Uint8Array.from([0xed, 0xe2, 0x5d, 0x2d, 0xbb, 0xf8, 0x12, 0xe5, 0x3c, 0x5c, 0x59, 0x32, 0xfa, 0xe3, 0xe2, 0x43]);
@@ -142,5 +142,26 @@ describe("decryptKHBbsPgdBytes", () => {
 
   it("يرفض DAT المفكوك أو أي ملف لا يحمل توقيع PGD", () => {
     expect(() => decryptKHBbsPgdBytes(original)).toThrow("ليس PGD/DNAS مشفراً");
+  });
+});
+
+describe("inspectKHBbsPgdHeader", () => {
+  it("يعرض موقع PGD عند بداية الملف", () => {
+    const inspection = inspectKHBbsPgdHeader(buildPgd(new Uint8Array(16)));
+    expect(inspection.pgdOffset).toBe(0);
+    expect(inspection.startSignature).toBe("00 50 47 44");
+    expect(inspection.bytesRead).toBe(0xb0);
+  });
+
+  it("يعرض موقع PGD بعد مقدمة DNAS ولا يرفع الملف أو يفكّه", () => {
+    const inspection = inspectKHBbsPgdHeader(buildPgd(new Uint8Array(16), 0x90));
+    expect(inspection.pgdOffset).toBe(0x90);
+    expect(inspection.offset90Signature).toBe("00 50 47 44");
+  });
+
+  it("يبقي حالة الملفات ذات الترويسة المختلفة غير محسومة", () => {
+    const inspection = inspectKHBbsPgdHeader(Uint8Array.from([0x42, 0x42, 0x53, 0x41]));
+    expect(inspection.pgdOffset).toBeNull();
+    expect(inspection.startSignature).toBe("42 42 53 41");
   });
 });

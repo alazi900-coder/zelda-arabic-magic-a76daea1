@@ -32,6 +32,15 @@ export interface KHBbsPgdFileResult extends KHBbsPgdResult {
   file: File;
 }
 
+export interface KHBbsPgdHeaderInspection {
+  bytesRead: number;
+  pgdOffset: number | null;
+  startSignature: string;
+  offset90Signature: string | null;
+  hex: string;
+  ascii: string;
+}
+
 function fail(message: string): never {
   throw new Error(message);
 }
@@ -184,6 +193,28 @@ function findPgdOffset(bytes: Uint8Array) {
   if (bytes.length >= 4 && readU32LE(bytes, 0) === PGD_MAGIC) return 0;
   if (bytes.length >= 0x94 && readU32LE(bytes, 0x90) === PGD_MAGIC) return 0x90;
   return -1;
+}
+
+function formatHex(bytes: Uint8Array) {
+  return [...bytes].map((value) => value.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+}
+
+function formatAscii(bytes: Uint8Array) {
+  return [...bytes].map((value) => value >= 0x20 && value <= 0x7e ? String.fromCharCode(value) : ".").join("");
+}
+
+/** Reads only the supplied header bytes. It never decrypts, uploads, or alters a DAT. */
+export function inspectKHBbsPgdHeader(bytes: Uint8Array): KHBbsPgdHeaderInspection {
+  const header = bytes.slice(0, 0x100);
+  const pgdOffset = findPgdOffset(header);
+  return {
+    bytesRead: header.length,
+    pgdOffset: pgdOffset >= 0 ? pgdOffset : null,
+    startSignature: formatHex(header.slice(0, 4)),
+    offset90Signature: header.length >= 0x94 ? formatHex(header.slice(0x90, 0x94)) : null,
+    hex: formatHex(header),
+    ascii: formatAscii(header),
+  };
 }
 
 export function isKHBbsPgdFile(bytes: Uint8Array) {

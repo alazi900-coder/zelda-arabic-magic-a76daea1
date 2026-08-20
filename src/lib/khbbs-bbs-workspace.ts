@@ -28,7 +28,7 @@ export interface KHBbsCtdEditorInput {
 }
 
 interface KHBbsFontReplacement {
-  source: KHBbsResourceReference;
+  sources: KHBbsResourceReference[];
   bytes: Uint8Array;
   filename: string;
 }
@@ -117,7 +117,7 @@ export async function readKHBbsCtdSelection(entries: BbsArchiveEntry[]): Promise
   }));
 }
 
-export async function setKHBbsFontReplacement(upload: File): Promise<KHBbsResourceReference> {
+export async function setKHBbsFontReplacement(upload: File): Promise<KHBbsResourceReference[]> {
   const workspace = activeWorkspace;
   if (!workspace) throw new Error("افتح ملفات BBS من مدير Kingdom Hearts أولاً.");
   if (!upload.name.toLowerCase().endsWith(".arc")) throw new Error("اختر ملف Font.arabic.arc بصيغة ARC.");
@@ -125,16 +125,12 @@ export async function setKHBbsFontReplacement(upload: File): Promise<KHBbsResour
   for (const entry of workspace.archive.entries) {
     if (await isKHBbsFontArchive(entry, workspace.archive.archives)) candidates.push(entry);
   }
-  if (candidates.length !== 1) {
-    throw new Error(candidates.length === 0
-      ? "لم تعثر الأداة على Font.arc الذي يحتوي mesfont وcmdfont داخل BBS المفتوحة."
-      : `وجدت ${candidates.length} أرشيفات خط محتملة؛ لا يمكن اختيار واحد عشوائياً.`);
-  }
-  const source = toSource(candidates[0]);
+  if (candidates.length === 0) throw new Error("لم تعثر الأداة على Font.arc الذي يحتوي mesfont وcmdfont داخل BBS المفتوحة.");
+  const sources = candidates.map(toSource);
   const bytes = new Uint8Array(await upload.arrayBuffer());
-  assertReplacement(source, bytes, upload.name);
-  workspace.font = { source, bytes, filename: upload.name };
-  return source;
+  for (const source of sources) assertReplacement(source, bytes, upload.name);
+  workspace.font = { sources, bytes, filename: upload.name };
+  return sources;
 }
 
 export function getKHBbsFontReplacement(): KHBbsFontReplacement | null {
@@ -143,9 +139,11 @@ export function getKHBbsFontReplacement(): KHBbsFontReplacement | null {
 
 export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsResourceReference; bytes: Uint8Array }>): Promise<KHBbsDatOutput> {
   const workspace = activeWorkspace;
-  if (!workspace) throw new Error("افتح BBS0–BBS3 من مدير Kingdom Hearts أولاً قبل بناء DAT.");
+  if (!workspace) throw new Error("افتح BBS0–BBS4 من مدير Kingdom Hearts أولاً قبل بناء DAT.");
   const all = [...replacements];
-  if (workspace.font) all.push({ source: workspace.font.source, bytes: workspace.font.bytes });
+  if (workspace.font) {
+    for (const source of workspace.font.sources) all.push({ source, bytes: workspace.font.bytes });
+  }
   const unique = new Map<string, { source: KHBbsResourceReference; bytes: Uint8Array }>();
   for (const replacement of all) unique.set(replacement.source.entryId, replacement);
   const updates = [...unique.values()];

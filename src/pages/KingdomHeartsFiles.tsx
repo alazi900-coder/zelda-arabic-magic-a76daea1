@@ -3,13 +3,13 @@
  * ويتيح فتحاً قابلاً للكتابة لمسار TIM2 فقط، مع إبقاء التصفح والتنزيل خفيفين وواضحين.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useCallback, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Image, Loader2, Search, Square, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Image, Loader2, Search, Square, Type, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, verifyKHBbsCtdEntries, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
-import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
+import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
 import { toast } from "sonner";
 
@@ -82,6 +82,7 @@ function FolderGroup({
 
 export default function KingdomHeartsFiles() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const fontInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [archive, setArchive] = useState<BbsArchiveIndex | null>(null);
   const [loading, setLoading] = useState(false);
@@ -96,6 +97,8 @@ export default function KingdomHeartsFiles() {
   const [ctdChecking, setCtdChecking] = useState(false);
   const [ctdProgress, setCtdProgress] = useState<{ completed: number; total: number } | null>(null);
   const [openingCtd, setOpeningCtd] = useState(false);
+  const [selectingFont, setSelectingFont] = useState(false);
+  const [fontSelection, setFontSelection] = useState<{ filename: string; archiveIndexes: number[] } | null>(null);
   const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
   const writablePickerSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
@@ -104,6 +107,7 @@ export default function KingdomHeartsFiles() {
     setError(null);
     setSelected(new Set());
     setFontCandidateIds(new Set());
+    setFontSelection(null);
     clearKHBbsDatWritableWorkspace();
     clearKHBbsBbsWorkspace();
     setWritableWorkspace(false);
@@ -126,6 +130,7 @@ export default function KingdomHeartsFiles() {
     setError(null);
     setSelected(new Set());
     setFontCandidateIds(new Set());
+    setFontSelection(null);
     try {
       const handles = await window.showOpenFilePicker({
         multiple: true,
@@ -261,6 +266,25 @@ export default function KingdomHeartsFiles() {
     }
   }, [navigate, selectedCtdEntries]);
 
+  const selectArabicFont = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const upload = event.target.files?.[0];
+    event.target.value = "";
+    if (!upload) return;
+    setSelectingFont(true);
+    setError(null);
+    try {
+      const sources = await setKHBbsFontReplacement(upload);
+      const archiveIndexes = [...new Set(sources.map((source) => source.archiveIndex))].sort((left, right) => left - right);
+      setFontSelection({ filename: upload.name, archiveIndexes });
+      toast.success(`تم ربط ${upload.name} بمورد الخط المؤكد.`);
+    } catch (caught) {
+      setFontSelection(null);
+      setError(caught instanceof Error ? caught.message : "تعذر ربط الخط العربي بملفات BBS.");
+    } finally {
+      setSelectingFont(false);
+    }
+  }, []);
+
   const selectVisible = useCallback(() => setSelected(new Set(filteredEntries.filter((entry) => entry.downloadAvailable).map((entry) => entry.id))), [filteredEntries]);
 
   return (
@@ -287,6 +311,7 @@ export default function KingdomHeartsFiles() {
 
       <section className="mx-auto max-w-6xl px-4 py-7 md:py-10">
         <input ref={inputRef} type="file" accept=".dat,application/octet-stream" multiple className="hidden" onChange={(event) => { const uploads = Array.from(event.target.files ?? []); event.target.value = ""; void openArchives(uploads); }} />
+        <input ref={fontInputRef} type="file" accept=".arc,application/octet-stream" className="hidden" onChange={(event) => void selectArabicFont(event)} />
 
         {!archive && !loading && (
           <div className="rounded-3xl border-2 border-dashed border-amber-500/40 bg-card/50 p-7 text-center md:p-12">
@@ -312,6 +337,20 @@ export default function KingdomHeartsFiles() {
             </div>
 
             {archive.warnings.map((warning) => <div key={warning} className="flex items-start gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 text-sm"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" /><p>{warning}</p></div>)}
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <Type className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                <p className="text-sm leading-relaxed">
+                  {fontSelection
+                    ? <><b>الخط العربي جاهز للبناء:</b> <bdi className="font-mono">{fontSelection.filename}</bdi> ← مورد الخط المؤكد داخل {fontSelection.archiveIndexes.map((index) => <bdi key={index} className="font-mono">BBS{index}.DAT </bdi>)}</>
+                    : <>اختر <bdi className="font-mono font-bold">Font.arabic.arc</bdi> مرة واحدة؛ الأداة تتحقق من أرشيف الخط الحقيقي ثم تدخله عند البناء فقط.</>}
+                </p>
+              </div>
+              <Button size="sm" disabled={selectingFont} onClick={() => fontInputRef.current?.click()} className="shrink-0 bg-amber-500 font-bold text-black hover:bg-amber-400">
+                {selectingFont ? <Loader2 className="ml-1.5 h-4 w-4 animate-spin" /> : <Type className="ml-1.5 h-4 w-4" />}{selectingFont ? "جارٍ فحص الخط…" : fontSelection ? "تغيير الخط" : "اختيار الخط العربي"}
+              </Button>
+            </div>
 
             {writableWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-sm"><p className="leading-relaxed"><b>الكتابة المباشرة مفعلة.</b> افتح محرر الصور؛ أي «استبدال» أو «تركيب» يكتب TIM2 المعدل في إزاحته الأصلية داخل DAT ويتحقق من البايتات قبل اعتماد النتيجة.</p><Button asChild size="sm" className="bg-emerald-600 text-white hover:bg-emerald-500"><Link to="/kingdom-hearts-images"><Image className="ml-1.5 h-4 w-4" />تحرير صور TIM2 الأصلية</Link></Button></div> : <p className="rounded-xl border border-border bg-card/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">لفتح الصور مع الكتابة المباشرة في الأصل، أعد فتح BBS0–BBS4 من زر «فتح قابل للكتابة» أعلى الصفحة، ثم انتقل إلى محرر الصور. الرفع العادي يبقى آمناً للعرض والتنزيل فقط.</p>}
 

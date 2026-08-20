@@ -1,16 +1,17 @@
 /**
  * STYLE: مدير موارد Kingdom Hearts عملي كهرماني، مهيأ للهاتف، يقرأ DAT محلياً
- * ويتيح فتحاً قابلاً للكتابة لمسار TIM2 فقط، مع إبقاء التصفح والتنزيل خفيفين وواضحين.
+ * ويتيح فتحاً قابلاً للكتابة لمسار TIM2 وفك BBS المحلي، مع إبقاء التصفح والتنزيل خفيفين وواضحين.
  */
 
 import { type ChangeEvent, useCallback, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Image, Loader2, Search, Square, Type, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Image, Loader2, Search, Square, Type, Unlock, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, verifyKHBbsCtdEntries, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
 import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
+import { decryptKHBbsPgdFile } from "@/lib/khbbs-pgd";
 import { toast } from "sonner";
 
 const LARGE_ZIP_BYTES = 300 * 1024 * 1024;
@@ -83,6 +84,7 @@ function FolderGroup({
 export default function KingdomHeartsFiles() {
   const inputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
+  const decryptInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [archive, setArchive] = useState<BbsArchiveIndex | null>(null);
   const [loading, setLoading] = useState(false);
@@ -100,6 +102,7 @@ export default function KingdomHeartsFiles() {
   const [selectingFont, setSelectingFont] = useState(false);
   const [fontSelection, setFontSelection] = useState<{ filename: string; archiveIndexes: number[] } | null>(null);
   const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
+  const [decryptingBbs, setDecryptingBbs] = useState(false);
   const writablePickerSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
   const openArchives = useCallback(async (uploads: File[]) => {
@@ -292,6 +295,40 @@ export default function KingdomHeartsFiles() {
     }
   }, []);
 
+  const decryptBbsFiles = useCallback(async (uploads: File[]) => {
+    if (uploads.length === 0 || decryptingBbs) return;
+    setDecryptingBbs(true);
+    setError(null);
+    try {
+      let decryptedCount = 0;
+      let copiedBbs0 = 0;
+      const usedArchives = new Set<number>();
+      const outputs: { file: File; name: string }[] = [];
+      for (const upload of uploads) {
+        const match = upload.name.match(/^BBS([0-3])\.DAT$/i);
+        if (!match) throw new Error("اختر BBS0.DAT أو BBS1.DAT أو BBS2.DAT أو BBS3.DAT فقط لفك التشفير.");
+        const archiveNumber = Number(match[1]);
+        if (usedArchives.has(archiveNumber)) throw new Error(`تم اختيار BBS${archiveNumber}.DAT أكثر من مرة.`);
+        usedArchives.add(archiveNumber);
+        if (archiveNumber === 0) {
+          outputs.push({ file: upload, name: "BBS0.DAT" });
+          copiedBbs0 += 1;
+          continue;
+        }
+        const result = await decryptKHBbsPgdFile(upload);
+        outputs.push({ file: result.file, name: `BBS${archiveNumber}.DAT` });
+        decryptedCount += 1;
+      }
+      outputs.forEach(({ file, name }) => downloadBlob(file, name));
+      const parts = [decryptedCount > 0 ? `تم فك ${decryptedCount} ملف` : "", copiedBbs0 > 0 ? "تم تنزيل BBS0 كما هو" : ""].filter(Boolean);
+      toast.success(parts.join("؛ ") || "اكتمل فك ملفات BBS.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر فك ملف BBS.");
+    } finally {
+      setDecryptingBbs(false);
+    }
+  }, [decryptingBbs]);
+
   const selectVisible = useCallback(() => setSelected(new Set(filteredEntries.filter((entry) => entry.downloadAvailable).map((entry) => entry.id))), [filteredEntries]);
 
   return (
@@ -307,7 +344,10 @@ export default function KingdomHeartsFiles() {
               <h1 className="truncate font-display text-xl font-black md:text-2xl">مدير ملفات Kingdom Hearts</h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button onClick={() => decryptInputRef.current?.click()} disabled={loading || decryptingBbs} variant="outline" className="border-sky-500/50 text-sky-700 hover:bg-sky-500/10 dark:text-sky-300" title="ينزّل نسخة مفكوكة من BBS1 إلى BBS3؛ BBS0 يمر كما هو">
+              {decryptingBbs ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Unlock className="ml-2 h-4 w-4" />}{decryptingBbs ? "جارٍ فك BBS…" : "فك BBS"}
+            </Button>
             {writablePickerSupported && <Button onClick={() => void openWritableArchives()} disabled={loading} variant="outline" className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"><Image className="ml-2 h-4 w-4" />فتح قابل للكتابة</Button>}
             <Button onClick={() => inputRef.current?.click()} disabled={loading} className="bg-amber-500 font-bold text-black hover:bg-amber-400">
               {loading ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}رفع DAT
@@ -319,6 +359,7 @@ export default function KingdomHeartsFiles() {
       <section className="mx-auto max-w-6xl px-4 py-7 md:py-10">
         <input ref={inputRef} type="file" accept=".dat,application/octet-stream" multiple className="hidden" onChange={(event) => { const uploads = Array.from(event.target.files ?? []); event.target.value = ""; void openArchives(uploads); }} />
         <input ref={fontInputRef} type="file" accept=".arc,application/octet-stream" className="hidden" onChange={(event) => void selectArabicFont(event)} />
+        <input ref={decryptInputRef} type="file" accept=".dat,application/octet-stream" multiple className="hidden" onChange={(event) => { const uploads = Array.from(event.target.files ?? []); event.target.value = ""; void decryptBbsFiles(uploads); }} />
 
         {!archive && !loading && (
           <div className="rounded-3xl border-2 border-dashed border-amber-500/40 bg-card/50 p-7 text-center md:p-12">

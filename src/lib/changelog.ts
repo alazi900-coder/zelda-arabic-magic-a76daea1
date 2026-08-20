@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.179.7",
+    date: "2026-08-20",
+    changes: [
+      { kind: "added", text: "**أضيف زر «فك BBS» داخل مدير ملفات Kingdom Hearts.** يختار المستخدم BBS1.DAT إلى BBS3.DAT وينزّل لكل ملف نسخة DAT مفكوكة محلياً؛ يمر BBS0.DAT كما هو لأنه ليس ملف PGD مشفّراً." },
+      { kind: "fixed", text: "**فك BBS يتحقق من سلامة DNAS/PGD قبل إنشاء أي تنزيل.** يفحص MAC الخارجي وجدول التحقق ويوقف العملية عند ملف تالف أو غير متوافق، ولا يكتب أبداً فوق ملف DAT الذي اختاره المستخدم." },
+      { kind: "added", text: "**أضيفت اختبارات انحدار لمسار PGD.** تثبت فك الحاوية، دعم مقدمة DNAS، رفض جدول تالف، ورفض DAT المفكوك الذي لا يحتاج إلى فك تشفير." },
+    ],
+  },
+  {
     version: "1.179.6",
     date: "2026-08-20",
     changes: [

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+/** STYLE: بناء Kingdom Hearts يبقى مختصراً؛ عند مصدر BBS موثوق يخرج DAT فقط، وإلا يبقي ZIP النصوص المعتاد. */
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -13,7 +14,8 @@ import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
-import { buildKHBbsArchive } from "@/lib/khbbs-editor-bridge";
+import { buildKHBbsArchive, buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
+import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -307,14 +309,34 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       // Save first so the latest row edit is included even if the autosave timer
       // has not fired yet; CTD itself applies the project's Arabic handling.
       await editor.forceSave();
-      const result = await buildKHBbsArchive(editor.state?.translations || {});
+      const translations = editor.state?.translations || {};
+      const { toast } = await import("@/hooks/use-toast");
+      const canBuildDat = hasKHBbsBbsWorkspace() && await hasKHBbsBbsSources();
+      if (canBuildDat) {
+        const result = await buildKHBbsBbsReplacements(translations);
+        const output = await buildKHBbsDatOutput(result.replacements);
+        if (output.kind === "zip" && output.archive) {
+          const url = URL.createObjectURL(output.archive);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = "kingdom-hearts-bbs-dat-ar.zip";
+          anchor.click();
+          URL.revokeObjectURL(url);
+        }
+        const archives = output.changedArchives.map((index) => `BBS${index}.DAT`).join("، ");
+        toast({
+          title: output.kind === "direct" ? "✅ كُتبت ملفات BBS العربية" : "✅ تم بناء ملفات BBS العربية",
+          description: `${result.translatedLines} نص مترجم | ${output.changedResources} مورد معدّل | ${archives}${output.kind === "direct" ? " | كُتبت في DAT الأصلية" : " | تم تنزيل DAT المعدلة في ZIP"}`,
+        });
+        return;
+      }
+      const result = await buildKHBbsArchive(translations);
       const url = URL.createObjectURL(result.archive);
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = "kingdom-hearts-bbs-ctd-modified.zip";
       anchor.click();
       URL.revokeObjectURL(url);
-      const { toast } = await import("@/hooks/use-toast");
       toast({
         title: "✅ تم بناء أرشيف Kingdom Hearts",
         description: `${result.translatedLines} نص مترجم | ${result.changedFiles} ملف CTD معدّل من أصل ${result.fileCount}`,

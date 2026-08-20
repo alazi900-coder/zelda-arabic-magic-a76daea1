@@ -1,13 +1,14 @@
 /**
  * KINGDOM HEARTS BBS EDITOR BRIDGE
  * Design: CTD files are opened locally, flattened only for the shared editor,
- * and retained intact in IndexedDB so the common build panel can rebuild every
- * original file into one ZIP archive without losing paths or control bytes.
+ * and retained intact in IndexedDB. CTD opened from the BBS manager also keep
+ * their original DAT resource reference, never a guessed offset.
  */
 
 import JSZip from "jszip";
 import type { ExtractedEntry } from "@/components/editor/types";
 import { idbGet, idbSet } from "@/lib/idb-storage";
+import type { KHBbsCtdEditorInput, KHBbsResourceReference } from "@/lib/khbbs-bbs-workspace";
 import { buildCTD, editableEntryCount, parseCTD, type CTDDocument } from "@/lib/khbbs-ctd";
 
 export const KHBBS_SOURCE_GAME = "kingdom-hearts-bbs";
@@ -17,12 +18,23 @@ export const KHBBS_FILE_RE = /^khbbs:/;
 interface KHBbsStoredFile {
   path: string;
   document: CTDDocument;
+  bbsSource?: KHBbsResourceReference;
 }
 
 interface CandidateCTD {
   path: string;
   bytes: ArrayBuffer;
+  bbsSource?: KHBbsResourceReference;
 }
+
+interface KHBbsRebuiltFile {
+  path: string;
+  bytes: Uint8Array;
+  changed: boolean;
+  bbsSource?: KHBbsResourceReference;
+}
+
+type KHBbsEditorOpenInput = File | KHBbsCtdEditorInput;
 
 export interface KHBbsOpenResult {
   fileCount: number;
@@ -32,6 +44,13 @@ export interface KHBbsOpenResult {
 
 export interface KHBbsBuildResult {
   archive: Blob;
+  fileCount: number;
+  changedFiles: number;
+  translatedLines: number;
+}
+
+export interface KHBbsBbsBuildResult {
+  replacements: Array<{ source: KHBbsResourceReference; bytes: Uint8Array }>;
   fileCount: number;
   changedFiles: number;
   translatedLines: number;
@@ -49,14 +68,19 @@ function pathFromEditorFile(msbtFile: string): string {
   return msbtFile.slice("khbbs:".length);
 }
 
-async function collectCandidates(uploads: File[]): Promise<{ candidates: CandidateCTD[]; rejected: string[] }> {
+function normalizeOpenInput(input: KHBbsEditorOpenInput): { file: File; bbsSource?: KHBbsResourceReference } {
+  return input instanceof File ? { file: input } : input;
+}
+
+async function collectCandidates(uploads: KHBbsEditorOpenInput[]): Promise<{ candidates: CandidateCTD[]; rejected: string[] }> {
   const candidates: CandidateCTD[] = [];
   const rejected: string[] = [];
 
-  for (const upload of uploads) {
+  for (const input of uploads) {
+    const { file: upload, bbsSource } = normalizeOpenInput(input);
     const lowerName = upload.name.toLowerCase();
     if (lowerName.endsWith(".ctd")) {
-      candidates.push({ path: upload.name, bytes: await upload.arrayBuffer() });
+      candidates.push({ path: upload.name, bytes: await upload.arrayBuffer(), bbsSource });
       continue;
     }
 
@@ -70,9 +94,7 @@ async function collectCandidates(uploads: File[]): Promise<{ candidates: Candida
           rejected.push(`${upload.name}: لا يحتوي ملفات .ctd`);
           continue;
         }
-        for (const member of members) {
-          candidates.push({ path: member.name, bytes: await member.async("arraybuffer") });
-        }
+        for (const member of members) candidates.push({ path: member.name, bytes: await member.async("arraybuffer") });
       } catch {
         rejected.push(`${upload.name}: ملف ZIP غير صالح أو غير قابل للقراءة`);
       }
@@ -85,8 +107,8 @@ async function collectCandidates(uploads: File[]): Promise<{ candidates: Candida
   return { candidates, rejected };
 }
 
-/** Opens individual CTD files or a ZIP, then prepares one shared-editor session. */
-export async function openKHBbsInEditor(uploads: File[]): Promise<KHBbsOpenResult> {
+/** Opens CTD files or a ZIP. Inputs from BBS keep their real DAT resource reference. */
+export async function openKHBbsInEditor(uploads: KHBbsEditorOpenInput[]): Promise<KHBbsOpenResult> {
   const { candidates, rejected } = await collectCandidates(uploads);
   const loaded: KHBbsStoredFile[] = [];
   const usedPaths = new Set<string>();
@@ -98,16 +120,14 @@ export async function openKHBbsInEditor(uploads: File[]): Promise<KHBbsOpenResul
       continue;
     }
     try {
-      loaded.push({ path, document: parseCTD(candidate.bytes) });
+      loaded.push({ path, document: parseCTD(candidate.bytes), bbsSource: candidate.bbsSource });
       usedPaths.add(path);
     } catch (error) {
       rejected.push(`${path}: ${error instanceof Error ? error.message : "تعذر تحليل ملف CTD"}`);
     }
   }
 
-  if (loaded.length === 0) {
-    throw new Error(rejected.length ? rejected.join("\n") : "لم يتم العثور على أي ملف CTD صالح.");
-  }
+  if (loaded.length === 0) throw new Error(rejected.length ? rejected.join("\n") : "لم يتم العثور على أي ملف CTD صالح.");
 
   const entries: ExtractedEntry[] = [];
   const originals: Record<string, string> = {};
@@ -120,8 +140,8 @@ export async function openKHBbsInEditor(uploads: File[]): Promise<KHBbsOpenResul
         index: entry.index,
         label: `${file.path} · #${entry.index + 1}`,
         original: entry.text,
-        // CTD's pointers are rebuilt into a fresh string area, so the editor
-        // must not report a false fixed-byte warning before the custom builder.
+        // CTD pointers are rebuilt into a fresh string area; do not show a
+        // false fixed-byte warning before the custom CTD builder runs.
         maxBytes: 0,
       });
       originals[khbbsEntryKey(file.path, entry.index)] = entry.text;
@@ -140,24 +160,21 @@ export async function openKHBbsInEditor(uploads: File[]): Promise<KHBbsOpenResul
   await idbSet("editor-source-game", KHBBS_SOURCE_GAME);
   await idbSet("originalTexts", originals);
 
-  return {
-    fileCount: loaded.length,
-    entryCount: entries.length,
-    rejected,
-  };
+  return { fileCount: loaded.length, entryCount: entries.length, rejected };
 }
 
-/** Rebuilds every opened CTD and packages them under their original ZIP paths. */
-export async function buildKHBbsArchive(translations: Record<string, string>): Promise<KHBbsBuildResult> {
+async function rebuildKHBbsFiles(translations: Record<string, string>): Promise<{
+  files: KHBbsRebuiltFile[];
+  fileCount: number;
+  changedFiles: number;
+  translatedLines: number;
+}> {
   const files = await idbGet<KHBbsStoredFile[]>(KHBBS_DOCUMENTS_KEY);
-  if (!files?.length) {
-    throw new Error("لم يُعثر على ملفات CTD الأصلية. عد إلى صفحة Kingdom Hearts وافتحها من جديد.");
-  }
+  if (!files?.length) throw new Error("لم يُعثر على ملفات CTD الأصلية. عد إلى صفحة Kingdom Hearts وافتحها من جديد.");
 
-  const archive = new JSZip();
+  const rebuilt: KHBbsRebuiltFile[] = [];
   let changedFiles = 0;
   let translatedLines = 0;
-
   for (const file of files) {
     const entries = file.document.entries.map((entry) => {
       const translation = translations[khbbsEntryKey(file.path, entry.index)];
@@ -165,19 +182,44 @@ export async function buildKHBbsArchive(translations: Record<string, string>): P
       if (entry.editable && nextTranslation !== entry.text) translatedLines += 1;
       return { ...entry, translation: nextTranslation };
     });
-    if (entries.some((entry) => entry.translation !== entry.text)) changedFiles += 1;
-    archive.file(file.path, buildCTD(file.document, entries));
+    const changed = entries.some((entry) => entry.translation !== entry.text);
+    if (changed) changedFiles += 1;
+    rebuilt.push({ path: file.path, bytes: buildCTD(file.document, entries), changed, bbsSource: file.bbsSource });
   }
+  return { files: rebuilt, fileCount: files.length, changedFiles, translatedLines };
+}
 
+/** Rebuilds every opened CTD and packages them under their original ZIP paths. */
+export async function buildKHBbsArchive(translations: Record<string, string>): Promise<KHBbsBuildResult> {
+  const result = await rebuildKHBbsFiles(translations);
+  const archive = new JSZip();
+  for (const file of result.files) archive.file(file.path, file.bytes);
   return {
-    archive: await archive.generateAsync({
-      type: "blob",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 },
-    }),
-    fileCount: files.length,
-    changedFiles,
-    translatedLines,
+    archive: await archive.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } }),
+    fileCount: result.fileCount,
+    changedFiles: result.changedFiles,
+    translatedLines: result.translatedLines,
+  };
+}
+
+/** A DAT output is allowed only if every session file retained its exact BBS source. */
+export async function hasKHBbsBbsSources(): Promise<boolean> {
+  const files = await idbGet<KHBbsStoredFile[]>(KHBBS_DOCUMENTS_KEY);
+  return Boolean(files?.length) && files.every((file) => Boolean(file.bbsSource));
+}
+
+/** Rebuilds only changed CTDs as original-resource replacements for safe DAT output. */
+export async function buildKHBbsBbsReplacements(translations: Record<string, string>): Promise<KHBbsBbsBuildResult> {
+  const result = await rebuildKHBbsFiles(translations);
+  const missingReference = result.files.some((file) => !file.bbsSource);
+  if (missingReference) throw new Error("تحتوي جلسة المحرر على CTD بلا مرجع BBS؛ استخدم تنزيل ZIP لهذه الجلسة.");
+  return {
+    replacements: result.files
+      .filter((file) => file.changed && file.bbsSource)
+      .map((file) => ({ source: file.bbsSource!, bytes: file.bytes })),
+    fileCount: result.fileCount,
+    changedFiles: result.changedFiles,
+    translatedLines: result.translatedLines,
   };
 }
 

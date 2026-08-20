@@ -4,11 +4,14 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, Download, FileArchive, FileDown, Files, FolderOpen, Image, Loader2, Search, Square, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, verifyKHBbsCtdEntries, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
+import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
+import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
+import { toast } from "sonner";
 
 const LARGE_ZIP_BYTES = 300 * 1024 * 1024;
 
@@ -79,6 +82,7 @@ function FolderGroup({
 
 export default function KingdomHeartsFiles() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
   const [archive, setArchive] = useState<BbsArchiveIndex | null>(null);
   const [loading, setLoading] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -91,6 +95,7 @@ export default function KingdomHeartsFiles() {
   const [flatZip, setFlatZip] = useState(true);
   const [ctdChecking, setCtdChecking] = useState(false);
   const [ctdProgress, setCtdProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [openingCtd, setOpeningCtd] = useState(false);
   const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
   const writablePickerSupported = typeof window !== "undefined" && "showOpenFilePicker" in window;
 
@@ -100,9 +105,11 @@ export default function KingdomHeartsFiles() {
     setSelected(new Set());
     setFontCandidateIds(new Set());
     clearKHBbsDatWritableWorkspace();
+    clearKHBbsBbsWorkspace();
     setWritableWorkspace(false);
     try {
       const indexed = await indexKHBbsDatFiles(uploads);
+      setKHBbsBbsWorkspace(indexed);
       setArchive(indexed);
       setCtdProgress(null);
     } catch (caught) {
@@ -125,12 +132,14 @@ export default function KingdomHeartsFiles() {
         types: [{ description: "Kingdom Hearts BBS DAT", accept: { "application/octet-stream": [".dat"] } }],
       });
       const indexed = await openKHBbsDatWritableWorkspace(handles);
+      setKHBbsBbsWorkspace(indexed);
       setArchive(indexed);
       setWritableWorkspace(true);
       setCtdProgress(null);
     } catch (caught) {
       if (caught instanceof Error && caught.name === "AbortError") return;
       clearKHBbsDatWritableWorkspace();
+      clearKHBbsBbsWorkspace();
       setWritableWorkspace(false);
       setArchive(null);
       setError(caught instanceof Error ? caught.message : "تعذر فتح ملفات DAT بصلاحية الكتابة.");
@@ -179,6 +188,7 @@ export default function KingdomHeartsFiles() {
 
   const extensions = useMemo(() => [...new Set(archive?.entries.map((entry) => entry.extension) ?? [])].sort(), [archive]);
   const selectedEntries = useMemo(() => filteredEntries.filter((entry) => selected.has(entry.id) && entry.downloadAvailable), [filteredEntries, selected]);
+  const selectedCtdEntries = useMemo(() => selectedEntries.filter((entry) => entry.isVerifiedCtd && !entry.isStreamed), [selectedEntries]);
   const selectedBytes = useMemo(() => selectedEntries.reduce((total, entry) => total + entry.allocatedBytes, 0), [selectedEntries]);
 
   const toggleSelected = useCallback((id: string) => {
@@ -234,6 +244,22 @@ export default function KingdomHeartsFiles() {
       setZipping(false);
     }
   }, [archive, flatZip, selectedBytes, selectedEntries]);
+
+  const openSelectedCtdInEditor = useCallback(async () => {
+    if (selectedCtdEntries.length === 0) return;
+    setOpeningCtd(true);
+    setError(null);
+    try {
+      const result = await openKHBbsInEditor(await readKHBbsCtdSelection(selectedCtdEntries));
+      toast.success(`تم فتح ${result.fileCount} ملف CTD وفيها ${result.entryCount} نص في المحرر`);
+      if (result.rejected.length > 0) toast.warning(`تم تجاهل ${result.rejected.length} عنصر غير صالح`);
+      navigate("/editor");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر فتح ملفات CTD في المحرر.");
+    } finally {
+      setOpeningCtd(false);
+    }
+  }, [navigate, selectedCtdEntries]);
 
   const selectVisible = useCallback(() => setSelected(new Set(filteredEntries.filter((entry) => entry.downloadAvailable).map((entry) => entry.id))), [filteredEntries]);
 
@@ -303,6 +329,7 @@ export default function KingdomHeartsFiles() {
                   مجلد واحد فقط
                 </label>
                 <Button size="sm" disabled={zipping || selectedEntries.length === 0} onClick={() => void downloadSelectedZip()} className="bg-amber-500 text-black hover:bg-amber-400"><Download className="ml-1.5 h-4 w-4" />{zipping ? "جارٍ بناء ZIP…" : flatZip ? "تنزيل في مجلد واحد" : "تنزيل المحدد ZIP"}</Button>
+                {selectedCtdEntries.length > 0 && <Button size="sm" disabled={openingCtd} onClick={() => void openSelectedCtdInEditor()} className="bg-emerald-600 text-white hover:bg-emerald-500"><FileArchive className="ml-1.5 h-4 w-4" />{openingCtd ? "جارٍ فتح CTD…" : `فتح CTD في المحرر (${selectedCtdEntries.length})`}</Button>}
                 <span className="mr-auto text-xs text-muted-foreground">{filteredEntries.length.toLocaleString("ar")} نتيجة ضمن {groups.length.toLocaleString("ar")} مجلد</span>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">فتح DAT يقرأ الفهرس فقط كي يبقى سريعاً على الهاتف. اضغط «فحص CTD بالترويسة» عند الحاجة؛ الفحص تدريجي ويعرض فقط الموارد التي تبدأ بتوقيع <bdi>@CTD</bdi>، حتى لو كانت مجموعة الامتداد في Final Mix غير دقيقة. خيار «مرشحات CTD من فهرس BBSA» تشخيصي فقط. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>

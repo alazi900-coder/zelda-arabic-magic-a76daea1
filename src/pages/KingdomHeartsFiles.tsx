@@ -490,8 +490,8 @@ export default function KingdomHeartsFiles() {
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                <Button size="sm" disabled={selectingFont} onClick={() => void useBuiltInArabicFont()} className="bg-amber-500 font-bold text-black hover:bg-amber-400">
-                  {selectingFont ? <Loader2 className="ml-1.5 h-4 w-4 animate-spin" /> : <Type className="ml-1.5 h-4 w-4" />}{selectingFont ? "جارٍ فحص الخط…" : fontSelection ? "استخدام الخط المصحح" : "استخدام الخط العربي"}
+                <Button size="sm" disabled={selectingFont || Boolean(fontSelection)} onClick={() => void useBuiltInArabicFont()} className="bg-amber-500 font-bold text-black hover:bg-amber-400 disabled:bg-emerald-600 disabled:text-white">
+                  {selectingFont ? <Loader2 className="ml-1.5 h-4 w-4 animate-spin" /> : fontSelection ? <CheckSquare className="ml-1.5 h-4 w-4" /> : <Type className="ml-1.5 h-4 w-4" />}{selectingFont ? "جارٍ فحص الخط…" : fontSelection ? "الخط العربي جاهز" : "استخدام الخط العربي"}
                 </Button>
                 <Button size="sm" variant="outline" disabled={selectingFont} onClick={() => fontInputRef.current?.click()} className="font-bold">ملف آخر</Button>
               </div>

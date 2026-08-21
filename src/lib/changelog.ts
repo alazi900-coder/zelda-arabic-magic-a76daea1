@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.181.2",
+    date: "2026-08-21",
+    changes: [
+      { kind: "fixed", text: "**أصلحت زر «استخدام الخط العربي».** صار ملف `Font.arabic.arc` جزءاً من حزمة الإنتاج نفسها بدلاً من رابط خارجي يعيد صفحة خطأ؛ لذلك يحمل الزر ملف ARC كاملاً ويظهر حالة نجاح أو خطأ واضحة." },
+      { kind: "changed", text: "**تستخدم صفحة تنزيل الخط المصدر المضمّن نفسه.** لا يتغير BBS أو ISO أو النص عند تنزيل الخط أو اختيار الزر." },
+    ],
+  },
+  {
     version: "1.181.1",
     date: "2026-08-21",
     changes: [

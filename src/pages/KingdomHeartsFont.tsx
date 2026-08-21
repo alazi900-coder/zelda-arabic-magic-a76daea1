@@ -6,8 +6,9 @@
 import { ChangeEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileCheck2, FileWarning, Hash, ShieldCheck, Type, Upload } from "lucide-react";
+import builtInArabicFontUrl from "@/assets/Font.arabic.arc?url";
 
-const ARABIC_FONT_DOWNLOAD_URL = "/manus-storage/Font.arabic.fixed_1ef34122.arc";
+const ARABIC_FONT_DOWNLOAD_URL = builtInArabicFontUrl;
 const ARABIC_REPORT_DOWNLOAD_URL = "/manus-storage/Font.arabic.fixed.report_ef9765f2.json";
 
 const FONT_REPORT = {

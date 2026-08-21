@@ -5,6 +5,7 @@
  */
 
 import JSZip from "jszip";
+import builtInArabicFontUrl from "@/assets/Font.arabic.arc?url";
 import {
   BBS_SECTOR_SIZE,
   getBbsEntryFilename,
@@ -16,7 +17,7 @@ import {
 import type { KHBbsDatResourceSource } from "@/lib/khbbs-dat-workspace";
 
 /** ملف العربية المصحح المضمّن؛ لا يُحمّل ولا يُكتب إلا بعد ضغط المستخدم لزر استخدامه. */
-export const KHBBS_BUILT_IN_ARABIC_FONT_URL = "/manus-storage/Font.arabic.fixed_1ef34122.arc";
+export const KHBBS_BUILT_IN_ARABIC_FONT_URL = builtInArabicFontUrl;
 export const KHBBS_BUILT_IN_ARABIC_FONT_FILENAME = "Font.arabic.arc";
 
 export interface KHBbsResourceReference extends KHBbsDatResourceSource {
@@ -286,7 +287,11 @@ export async function setKHBbsFontReplacement(upload: File): Promise<KHBbsResour
 export async function setKHBbsBuiltInArabicFontReplacement(): Promise<KHBbsResourceReference[]> {
   const response = await fetch(KHBBS_BUILT_IN_ARABIC_FONT_URL);
   if (!response.ok) throw new Error("تعذر تحميل Font.arabic.arc المضمّن. تحقق من اتصالك ثم أعد المحاولة.");
-  const upload = new File([await response.blob()], KHBBS_BUILT_IN_ARABIC_FONT_FILENAME, { type: "application/octet-stream" });
+  const payload = await response.arrayBuffer();
+  if (payload.byteLength !== 218348) {
+    throw new Error(`تعذر تحميل ملف الخط المضمّن كاملاً؛ الحجم المستلم ${payload.byteLength.toLocaleString("ar")} بايت بدلاً من 218,348 بايت.`);
+  }
+  const upload = new File([payload], KHBBS_BUILT_IN_ARABIC_FONT_FILENAME, { type: "application/octet-stream" });
   return setKHBbsFontReplacement(upload);
 }
 

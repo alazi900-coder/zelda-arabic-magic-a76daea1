@@ -44,6 +44,8 @@ export interface KHBbsDatOutput {
   includedArchives: [0, 1, 2, 3];
   changedArchives: number[];
   changedResources: number;
+  /** تحذيرات البناء التجريبي التي يراها المستخدم بعد التنزيل. */
+  warnings: string[];
 }
 
 let activeWorkspace: KHBbsBbsWorkspace | null = null;
@@ -79,12 +81,15 @@ interface KHBbsArchivePatch {
   byteOffset: number;
   bytes: Uint8Array;
   label: string;
+  /** رقماً أكبر يعني أن هذا التعديل ينتصر عند التداخل المقصود في تجربة CTD. */
+  priority?: number;
 }
 
 interface KHBbsPreparedReplacement {
   source: KHBbsResourceReference;
   changed: boolean;
   patches: KHBbsArchivePatch[];
+  warnings: string[];
 }
 
 function overlaps(start: number, end: number, otherStart: number, otherEnd: number): boolean {
@@ -141,6 +146,7 @@ async function prepareReplacement(
       source,
       changed: !equalBytes(next, previous),
       patches: [{ byteOffset: source.byteOffset, bytes: next, label: source.filename }],
+      warnings: [],
     };
   }
 
@@ -150,7 +156,17 @@ async function prepareReplacement(
   const requiredSectors = Math.ceil(nextBytes.byteLength / BBS_SECTOR_SIZE);
   const destinationOffset = await findBbs0FreeSectors(requiredSectors, claimedBbs0Ranges);
   if (destinationOffset === null) {
-    throw new Error(`${source.filename} أكبر من الحجز الأصلي: يحتاج ${nextBytes.byteLength.toLocaleString("ar")} بايت بينما المورد يسمح بـ ${source.allocatedBytes.toLocaleString("ar")} بايت. لم تعثر الأداة على مساحة قطاعات فارغة وآمنة داخل BBS0؛ لم تُكتب الترجمة ولم يُمس المورد التالي.`);
+    const overflowBytes = nextBytes.byteLength - source.allocatedBytes;
+    const followingEntry = workspace.archive.entries
+      .filter((item) => item.archiveIndex === 0 && item.downloadAvailable && !item.isStreamed && item.byteOffset >= source.byteOffset + source.allocatedBytes)
+      .sort((left, right) => left.byteOffset - right.byteOffset)[0];
+    const nextLabel = followingEntry ? getBbsEntryFilename(followingEntry) : "نهاية BBS0.DAT";
+    return {
+      source,
+      changed: true,
+      patches: [{ byteOffset: source.byteOffset, bytes: nextBytes, label: `${source.filename} (تجريبي قسري)`, priority: 0 }],
+      warnings: [`تجربة قسرية: ${source.filename} تجاوز حجزه بـ ${overflowBytes.toLocaleString("ar")} بايت ووصل إلى ${nextLabel}. قد لا تعمل اللعبة؛ اختبر الناتج فقط.`],
+    };
   }
   const destinationSectors = destinationOffset / BBS_SECTOR_SIZE;
   const newGlobalSector = destinationSectors - workspace.archive.headerSectors.archive0;
@@ -169,7 +185,43 @@ async function prepareReplacement(
       { byteOffset: source.infoTableOffset, bytes: infoBytes, label: `سجل BBSA لـ ${source.filename}` },
       { byteOffset: destinationOffset, bytes: movedBytes, label: source.filename },
     ],
+    warnings: [],
   };
+}
+
+/**
+ * ينشئ نسخة DAT بالحجم نفسه. عند البناء القسري، يطبق تعديل المورد اللاحق فوق
+ * الذيل المتجاوز بدلاً من تغيير طول الملف؛ هذا يحافظ على ترويسة BBS وحدوده.
+ */
+function patchArchiveKeepingSize(original: File, patches: KHBbsArchivePatch[]): Blob {
+  const ordered = patches.map((patch, index) => ({ ...patch, index }));
+  for (const patch of ordered) {
+    if (patch.byteOffset < 0 || patch.byteOffset + patch.bytes.byteLength > original.size) {
+      throw new Error(`تجاوزت تجربة الكتابة حدود ${original.name}؛ لم يُنشأ أي ملف.`);
+    }
+  }
+  const boundaries = [...new Set([
+    0,
+    original.size,
+    ...ordered.flatMap((patch) => [patch.byteOffset, patch.byteOffset + patch.bytes.byteLength]),
+  ])].sort((left, right) => left - right);
+  const parts: BlobPart[] = [];
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    const start = boundaries[index];
+    const end = boundaries[index + 1];
+    const active = ordered
+      .filter((patch) => patch.byteOffset <= start && patch.byteOffset + patch.bytes.byteLength >= end)
+      .sort((left, right) => (left.priority ?? 1) - (right.priority ?? 1) || left.index - right.index)
+      .at(-1);
+    if (active) {
+      parts.push(active.bytes.slice(start - active.byteOffset, end - active.byteOffset));
+    } else {
+      parts.push(original.slice(start, end));
+    }
+  }
+  const output = new Blob(parts, { type: "application/octet-stream" });
+  if (output.size !== original.size) throw new Error(`توقفت التجربة لأن حجم ${original.name} تغيّر؛ لم يُنشأ أي ملف.`);
+  return output;
 }
 
 export function clearKHBbsBbsWorkspace(): void {
@@ -263,24 +315,13 @@ export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsRes
       zip.file(`BBS${archiveIndex}.DAT`, original);
       continue;
     }
-    const ordered = [...archiveUpdates].sort((left, right) => left.byteOffset - right.byteOffset);
-    const parts: BlobPart[] = [];
-    let cursor = 0;
-    for (const replacement of ordered) {
-      if (replacement.byteOffset < cursor) throw new Error("تعارض غير متوقع بين موردين داخل DAT؛ ألغيت البناء حمايةً للملف.");
-      parts.push(original.slice(cursor, replacement.byteOffset));
-      parts.push(replacement.bytes);
-      cursor = replacement.byteOffset + replacement.bytes.byteLength;
-    }
-    parts.push(original.slice(cursor));
-    const output = new Blob(parts, { type: "application/octet-stream" });
-    if (output.size !== original.size) throw new Error(`توقف البناء لأن حجم BBS${archiveIndex}.DAT تغيّر؛ لم يُنشأ أي ملف.`);
-    zip.file(`BBS${archiveIndex}.DAT`, output);
+    zip.file(`BBS${archiveIndex}.DAT`, patchArchiveKeepingSize(original, archiveUpdates));
   }
   return {
     archive: await zip.generateAsync({ type: "blob", compression: "STORE" }),
     includedArchives: requiredArchives,
     changedArchives: [...byArchive.keys()].sort((left, right) => left - right),
     changedResources: changed.length,
+    warnings: prepared.flatMap((replacement) => replacement.warnings),
   };
 }

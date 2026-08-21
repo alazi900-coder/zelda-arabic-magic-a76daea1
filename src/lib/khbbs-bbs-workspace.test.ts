@@ -209,4 +209,25 @@ describe("buildKHBbsDatOutput", () => {
     expect([...bbs0.slice(4 * SECTOR, 4 * SECTOR + translated.byteLength)]).toEqual([...translated]);
     expect([...bbs0.slice(4 * SECTOR + translated.byteLength, 13 * SECTOR)]).toEqual(new Array(13 * SECTOR - (4 * SECTOR + translated.byteLength)).fill(0));
   });
+
+  it("يبني تجربة قسرية بحجم BBS0 نفسه عندما لا توجد فجوة صفرية", async () => {
+    const { archive, ctd, original } = makeRelocationWorkspace();
+    const bbs0 = archive.archives.get(0)!;
+    const occupied = new Uint8Array(await bbs0.arrayBuffer());
+    occupied.fill(0x7f, 4 * SECTOR);
+    archive.archives.set(0, makeFile("BBS0.DAT", [...occupied]));
+    setKHBbsBbsWorkspace(archive);
+    const translated = new Uint8Array(17_327).fill(0xab);
+
+    const output = await buildKHBbsDatOutput([
+      { source: makeKHBbsResourceReference(ctd), bytes: translated },
+    ]);
+
+    expect(output.warnings).toHaveLength(1);
+    expect(output.warnings[0]).toContain("تجربة قسرية");
+    const zip = await JSZip.loadAsync(output.archive);
+    const forcedBbs0 = new Uint8Array(await zip.file("BBS0.DAT")!.async("arraybuffer"));
+    expect(forcedBbs0.byteLength).toBe(original.byteLength);
+    expect([...forcedBbs0.slice(SECTOR, SECTOR + translated.byteLength)]).toEqual([...translated]);
+  });
 });

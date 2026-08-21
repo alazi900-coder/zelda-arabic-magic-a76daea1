@@ -327,8 +327,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       URL.revokeObjectURL(url);
       const archives = output.changedArchives.map((index) => `BBS${index}.DAT`).join("، ");
       toast({
-        title: "✅ تم بناء BBS0–BBS3 كاملة",
-        description: `${result.translatedLines} نص مترجم | ${output.changedResources} مورد معدّل داخل ${archives} | BBS2 وBBS3 نُسختا كما هما داخل ZIP`,
+        title: output.warnings.length ? "⚠️ تم بناء BBS0–BBS3 للتجربة" : "✅ تم بناء BBS0–BBS3 كاملة",
+        description: output.warnings.length
+          ? output.warnings[0]
+          : `${result.translatedLines} نص مترجم | ${output.changedResources} مورد معدّل داخل ${archives} | BBS2 وBBS3 نُسختا كما هما داخل ZIP`,
+        variant: output.warnings.length ? "destructive" : undefined,
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");

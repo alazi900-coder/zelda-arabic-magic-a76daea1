@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-/** STYLE: بناء Kingdom Hearts يبقى مختصراً؛ عند مصدر BBS موثوق يخرج BBS0–BBS3 كاملة، وإلا يبقي ZIP النصوص المعتاد. */
+import React, { useEffect, useRef, useState } from "react";
+/** STYLE: بناء Kingdom Hearts يبقى مختصراً؛ يخرج BBS0–BBS3 كاملة أو ISO محلياً من الجلسة الموثوقة فقط. */
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -16,6 +16,7 @@ import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wol
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
 import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
 import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
+import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -81,6 +82,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [gmBuilding, setGmBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
   const [khbbsBuilding, setKHBbsBuilding] = useState(false);
+  const [khbbsIsoBuilding, setKHBbsIsoBuilding] = useState(false);
+  const khbbsIsoInputRef = useRef<HTMLInputElement>(null);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
   const [pkmGame, setPkmGame] = useState<PkmGame | undefined>(undefined);
@@ -303,22 +306,26 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
+  const buildKingdomHeartsOutput = async () => {
+    // Save first so the latest row edit is included even if the autosave timer
+    // has not fired yet; CTD itself applies the project's Arabic handling.
+    await editor.forceSave();
+    if (!await hasKHBbsBbsSources()) {
+      throw new Error("هذه جلسة CTD منفصلة ولا تعرف مواضعها داخل BBS. عد إلى مدير Kingdom Hearts، اختر BBS0.DAT إلى BBS3.DAT، ثم افتح CTD منه قبل البناء.");
+    }
+    if (!hasKHBbsBbsWorkspace()) {
+      throw new Error("ملفات BBS0–BBS3 لم تعد مفتوحة في هذه الجلسة. عد إلى مدير Kingdom Hearts وافتح الملفات الأربعة من جديد؛ لن تنزّل الأداة CTD منفصلة بدلاً منها.");
+    }
+    const result = await buildKHBbsBbsReplacements(editor.state?.translations || {});
+    const output = await buildKHBbsDatOutput(result.replacements);
+    return { result, output };
+  };
+
   const handleKingdomHeartsBuild = async () => {
     setKHBbsBuilding(true);
     try {
-      // Save first so the latest row edit is included even if the autosave timer
-      // has not fired yet; CTD itself applies the project's Arabic handling.
-      await editor.forceSave();
-      const translations = editor.state?.translations || {};
+      const { result, output } = await buildKingdomHeartsOutput();
       const { toast } = await import("@/hooks/use-toast");
-      if (!await hasKHBbsBbsSources()) {
-        throw new Error("هذه جلسة CTD منفصلة ولا تعرف مواضعها داخل BBS. عد إلى مدير Kingdom Hearts، اختر BBS0.DAT إلى BBS3.DAT، ثم افتح CTD منه قبل البناء.");
-      }
-      if (!hasKHBbsBbsWorkspace()) {
-        throw new Error("ملفات BBS0–BBS3 لم تعد مفتوحة في هذه الجلسة. عد إلى مدير Kingdom Hearts وافتح الملفات الأربعة من جديد؛ لن تنزّل الأداة CTD منفصلة بدلاً منها.");
-      }
-      const result = await buildKHBbsBbsReplacements(translations);
-      const output = await buildKHBbsDatOutput(result.replacements);
       const url = URL.createObjectURL(output.archive);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -338,6 +345,36 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في بناء ملفات CTD", description: (err as Error).message, variant: "destructive" });
     } finally {
       setKHBbsBuilding(false);
+    }
+  };
+
+  const handleKingdomHeartsIsoBuild = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const sourceIso = event.target.files?.[0];
+    event.target.value = "";
+    if (!sourceIso) return;
+    setKHBbsIsoBuilding(true);
+    try {
+      const { result, output } = await buildKingdomHeartsOutput();
+      const isoOutput = await injectKHBbsArchivesIntoIso(sourceIso, output.archives);
+      const url = URL.createObjectURL(isoOutput.iso);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${sourceIso.name.replace(/\.iso$/i, "")}_ar.iso`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({
+        title: output.warnings.length ? "⚠️ تم بناء ISO للتجربة" : "✅ تم بناء ISO معرّب",
+        description: output.warnings.length
+          ? output.warnings[0]
+          : `${result.translatedLines} نص مترجم | استُبدلت ${isoOutput.replaced.join("، ")} داخل ISO محلياً`,
+        variant: output.warnings.length ? "destructive" : undefined,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء ISO", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setKHBbsIsoBuilding(false);
     }
   };
 
@@ -710,9 +747,15 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             {dsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء حاوية DragonSword معرّبة
           </Button>
         ) : isKingdomHearts ? (
-          <Button size="lg" onClick={handleKingdomHeartsBuild} disabled={khbbsBuilding} className="flex-1 min-w-[200px] font-display font-bold">
-            {khbbsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء BBS0–BBS3 معرّبة وتنزيلها
-          </Button>
+          <>
+            <input ref={khbbsIsoInputRef} type="file" accept=".iso,application/x-iso9660-image" className="hidden" onChange={(event) => void handleKingdomHeartsIsoBuild(event)} />
+            <Button size="lg" onClick={handleKingdomHeartsBuild} disabled={khbbsBuilding || khbbsIsoBuilding} className="flex-1 min-w-[200px] font-display font-bold">
+              {khbbsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء BBS0–BBS3 معرّبة وتنزيلها
+            </Button>
+            <Button size="lg" variant="outline" onClick={() => khbbsIsoInputRef.current?.click()} disabled={khbbsBuilding || khbbsIsoBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يستبدل BBS0–BBS3 داخل ISO محلياً؛ لا يرفع ISO">
+              {khbbsIsoBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ISO معرّب مباشرة
+            </Button>
+          </>
         ) : isGameMaker ? (
           <Button size="lg" onClick={handleGameMakerBuild} disabled={gmBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {gmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف GameMaker معرّب وتنزيله

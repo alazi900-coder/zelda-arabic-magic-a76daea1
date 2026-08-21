@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.181.0",
+    date: "2026-08-21",
+    changes: [
+      { kind: "added", text: "**أضيف بناء ISO محلي من داخل محرر Kingdom Hearts.** يختار المستخدم ISO اللعبة ثم يضع الباني BBS0.DAT إلى BBS3.DAT الناتجة في `PSP_GAME/USRDIR` وينزّل ISO جديداً، بلا الحاجة إلى ZArchiver أو رفع الملف." },
+      { kind: "fixed", text: "**يحافظ إدراج ISO على حجم كل BBS وحجم ISO كاملاً.** يفحص مسار `PSP_GAME/USRDIR` وأسماء BBS وأحجامها قبل الكتابة، ويرفض ISO أو مخرجات BBS غير المطابقة بدلاً من تغيير مورد آخر." },
+      { kind: "added", text: "**أضيف اختبار ISO-9660 محلي.** يثبت استبدال امتدادات BBS0–BBS3 الأربعة فقط مع بقاء بداية ISO ومورد بعيد خارجها مطابقتين للأصل." },
+    ],
+  },
+  {
     version: "1.180.7",
     date: "2026-08-21",
     changes: [

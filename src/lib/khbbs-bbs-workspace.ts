@@ -41,7 +41,8 @@ interface KHBbsBbsWorkspace {
 
 export interface KHBbsDatOutput {
   archive: Blob;
-  includedArchives: [0, 1, 2, 3];
+  archives: ReadonlyMap<number, Blob>;
+  includedArchives: readonly [0, 1, 2, 3];
   changedArchives: number[];
   changedResources: number;
   /** تحذيرات البناء التجريبي التي يراها المستخدم بعد التنزيل. */
@@ -307,18 +308,23 @@ export async function buildKHBbsDatOutput(replacements: Array<{ source: KHBbsRes
     byArchive.set(archiveIndex, [...(byArchive.get(archiveIndex) ?? []), ...replacement.patches]);
   }
   const zip = new JSZip();
+  const archives = new Map<number, Blob>();
   for (const archiveIndex of requiredArchives) {
     const original = workspace.archive.archives.get(archiveIndex);
     if (!original) throw new Error(`BBS${archiveIndex}.DAT غير متاح لإخراج النسخة المعدلة.`);
     const archiveUpdates = byArchive.get(archiveIndex) ?? [];
     if (archiveUpdates.length === 0) {
       zip.file(`BBS${archiveIndex}.DAT`, original);
+      archives.set(archiveIndex, original);
       continue;
     }
-    zip.file(`BBS${archiveIndex}.DAT`, patchArchiveKeepingSize(original, archiveUpdates));
+    const patched = patchArchiveKeepingSize(original, archiveUpdates);
+    zip.file(`BBS${archiveIndex}.DAT`, patched);
+    archives.set(archiveIndex, patched);
   }
   return {
     archive: await zip.generateAsync({ type: "blob", compression: "STORE" }),
+    archives,
     includedArchives: requiredArchives,
     changedArchives: [...byArchive.keys()].sort((left, right) => left - right),
     changedResources: changed.length,

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
@@ -7,8 +8,9 @@ import {
 } from "./khbbs-ctd";
 import { KHBBS_ARABIC_FONT_CODES } from "./khbbs-arabic-font-map";
 
-const injectionReportPath = "/home/ubuntu/khbbs-font-work/output/Font.arabic.report.json";
-const outputPath = "/home/ubuntu/khbbs-font-work/audit-final/ctd-arabic-linkage-v2.json";
+const injectionReportPath = "/home/ubuntu/khbbs-font-work/audit-final/real-mesfont-output-audit.json";
+const embeddedFontPath = "/home/ubuntu/zelda-arabic-magic-original/src/assets/Font.arabic.arc";
+const outputPath = "/home/ubuntu/khbbs-font-work/audit-final/ctd-arabic-linkage-v3.json";
 const words = ["سلام", "مرحبا", "العالم", "بداية", "الشمس", "مكتبة"];
 
 function hex(value: number, width: number): string {
@@ -18,7 +20,10 @@ function hex(value: number, width: number): string {
 describe("KHBBS Arabic CTD linkage audit", () => {
   it("encodes all mapped forms and representative connected Arabic words to injected Font.arc codes", async () => {
     const injection = JSON.parse(await readFile(injectionReportPath, "utf8"));
-    const injectedCodes = new Set<number>(injection.glyphs.map((glyph: { fontCode: string }) => Number.parseInt(glyph.fontCode, 16)));
+    const injectedCodes = new Set<number>(
+      injection.forms.flatMap((form: { records: { actualCode: number }[] }) => form.records.map((record) => record.actualCode)),
+    );
+    const embeddedSha256 = createHash("sha256").update(await readFile(embeddedFontPath)).digest("hex");
 
     const wordResults = words.map((word) => {
       const prepared = prepareCTDTextForBuild(word);
@@ -55,10 +60,12 @@ describe("KHBBS Arabic CTD linkage audit", () => {
     const report = {
       wordCount: wordResults.length,
       mapEntryCount: KHBBS_ARABIC_FONT_CODES.size,
-      injectedGlyphCount: injection.glyphCount,
+      injectedGlyphCount: injection.arabicFormsPassing,
+      embeddedFontSha256: embeddedSha256,
+      expectedEmbeddedFontSha256: injection.outputSha256,
       words: wordResults,
       fullMapAudit,
-      passed: wordResults.every((result) => result.passed) && fullMapAudit.every((result) => result.passed),
+      passed: embeddedSha256 === injection.outputSha256 && wordResults.every((result) => result.passed) && fullMapAudit.every((result) => result.passed),
     };
     await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
 

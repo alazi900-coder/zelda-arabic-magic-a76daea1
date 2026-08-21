@@ -5,11 +5,11 @@
 
 import { type ChangeEvent, useCallback, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, ClipboardCopy, Download, FileArchive, FileDown, FileSearch, Files, FolderOpen, Image, Loader2, Search, Square, Type, Unlock, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, ClipboardCopy, Download, FileArchive, FileDown, FilePenLine, FileSearch, Files, FolderOpen, Image, Loader2, Search, Square, Type, Unlock, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { discoverKHBbs0CtdEntries, indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
-import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
+import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsBuiltInArabicFontReplacement, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
 import { decryptKHBbsPgdFile, inspectKHBbsPgdHeader, scanKHBbsFileSignatures, type KHBbsFileSignatureScan, type KHBbsPgdHeaderInspection } from "@/lib/khbbs-pgd";
 import { toast } from "sonner";
@@ -26,14 +26,16 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function FolderGroup({
-  directory, entries, selected, toggleSelected, onDownload, downloadingId, fontCandidateIds,
+  directory, entries, selected, toggleSelected, onDownload, onOpenCtd, downloadingId, openingCtdId, fontCandidateIds,
 }: {
   directory: string;
   entries: BbsArchiveEntry[];
   selected: Set<string>;
   toggleSelected: (id: string) => void;
   onDownload: (entry: BbsArchiveEntry) => void;
+  onOpenCtd: (entry: BbsArchiveEntry) => void;
   downloadingId: string | null;
+  openingCtdId: string | null;
   fontCandidateIds: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
@@ -72,6 +74,9 @@ function FolderGroup({
                 <Button variant="outline" size="icon" disabled={!entry.downloadAvailable || downloadingId === entry.id} onClick={() => onDownload(entry)} title="تنزيل المورد كما هو في الأرشيف">
                   {downloadingId === entry.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
                 </Button>
+                {entry.isVerifiedCtd && <Button size="sm" disabled={!entry.downloadAvailable || openingCtdId !== null} onClick={() => onOpenCtd(entry)} title="فتح هذا الملف في محرر النصوص" className="shrink-0 bg-emerald-600 font-bold text-white hover:bg-emerald-500 disabled:bg-emerald-700/50">
+                  {openingCtdId === entry.id ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <FilePenLine className="ml-1 h-4 w-4" />}فتح
+                </Button>}
               </div>
             );
           })}
@@ -100,6 +105,7 @@ export default function KingdomHeartsFiles() {
   const [ctdChecking, setCtdChecking] = useState(false);
   const [ctdProgress, setCtdProgress] = useState<{ completed: number; total: number } | null>(null);
   const [openingCtd, setOpeningCtd] = useState(false);
+  const [openingCtdId, setOpeningCtdId] = useState<string | null>(null);
   const [selectingFont, setSelectingFont] = useState(false);
   const [fontSelection, setFontSelection] = useState<{ filename: string; archiveIndexes: number[] } | null>(null);
   const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
@@ -273,6 +279,24 @@ export default function KingdomHeartsFiles() {
     }
   }, [navigate, selectedCtdEntries]);
 
+  const openCtdEntryInEditor = useCallback(async (entry: BbsArchiveEntry) => {
+    if (!entry.isVerifiedCtd || !entry.downloadAvailable || openingCtd) return;
+    setOpeningCtd(true);
+    setOpeningCtdId(entry.id);
+    setError(null);
+    try {
+      const result = await openKHBbsInEditor(await readKHBbsCtdSelection([entry]));
+      toast.success(`تم فتح ${result.fileCount} ملف CTD وفيه ${result.entryCount} نص في المحرر`);
+      if (result.rejected.length > 0) toast.warning(`تم تجاهل ${result.rejected.length} عنصر غير صالح`);
+      navigate("/editor");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "تعذر فتح ملف CTD في المحرر.");
+    } finally {
+      setOpeningCtd(false);
+      setOpeningCtdId(null);
+    }
+  }, [navigate, openingCtd]);
+
   const selectArabicFont = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const upload = event.target.files?.[0];
     event.target.value = "";
@@ -287,6 +311,22 @@ export default function KingdomHeartsFiles() {
     } catch (caught) {
       setFontSelection(null);
       setError(caught instanceof Error ? caught.message : "تعذر ربط الخط العربي بملفات BBS.");
+    } finally {
+      setSelectingFont(false);
+    }
+  }, []);
+
+  const useBuiltInArabicFont = useCallback(async () => {
+    setSelectingFont(true);
+    setError(null);
+    try {
+      const sources = await setKHBbsBuiltInArabicFontReplacement();
+      const archiveIndexes = [...new Set(sources.map((source) => source.archiveIndex))].sort((left, right) => left - right);
+      setFontSelection({ filename: "Font.arabic.arc (المصحح المضمّن)", archiveIndexes });
+      toast.success("تم ربط الخط العربي المصحح بمورد الخط المؤكد.");
+    } catch (caught) {
+      setFontSelection(null);
+      setError(caught instanceof Error ? caught.message : "تعذر ربط الخط العربي المصحح بملفات BBS.");
     } finally {
       setSelectingFont(false);
     }
@@ -446,12 +486,15 @@ export default function KingdomHeartsFiles() {
                 <p className="text-sm leading-relaxed">
                   {fontSelection
                     ? <><b>الخط العربي جاهز للبناء:</b> <bdi className="font-mono">{fontSelection.filename}</bdi> ← مورد الخط المؤكد داخل {fontSelection.archiveIndexes.map((index) => <bdi key={index} className="font-mono">BBS{index}.DAT </bdi>)}</>
-                    : <>اختر <bdi className="font-mono font-bold">Font.arabic.arc</bdi> مرة واحدة؛ الأداة تتحقق من أرشيف الخط الحقيقي ثم تدخله عند البناء فقط.</>}
+                    : <>الخط العربي المصحح مضمّن في الأداة. استخدمه مرة واحدة؛ تتحقق الأداة من أرشيف الخط الحقيقي ثم تدخله عند البناء فقط.</>}
                 </p>
               </div>
-              <Button size="sm" disabled={selectingFont} onClick={() => fontInputRef.current?.click()} className="shrink-0 bg-amber-500 font-bold text-black hover:bg-amber-400">
-                {selectingFont ? <Loader2 className="ml-1.5 h-4 w-4 animate-spin" /> : <Type className="ml-1.5 h-4 w-4" />}{selectingFont ? "جارٍ فحص الخط…" : fontSelection ? "تغيير الخط" : "اختيار الخط العربي"}
-              </Button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button size="sm" disabled={selectingFont} onClick={() => void useBuiltInArabicFont()} className="bg-amber-500 font-bold text-black hover:bg-amber-400">
+                  {selectingFont ? <Loader2 className="ml-1.5 h-4 w-4 animate-spin" /> : <Type className="ml-1.5 h-4 w-4" />}{selectingFont ? "جارٍ فحص الخط…" : fontSelection ? "استخدام الخط المصحح" : "استخدام الخط العربي"}
+                </Button>
+                <Button size="sm" variant="outline" disabled={selectingFont} onClick={() => fontInputRef.current?.click()} className="font-bold">ملف آخر</Button>
+              </div>
             </div>
 
             {writableWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-sm"><p className="leading-relaxed"><b>الكتابة المباشرة مفعلة.</b> افتح محرر الصور؛ أي «استبدال» أو «تركيب» يكتب TIM2 المعدل في إزاحته الأصلية داخل DAT ويتحقق من البايتات قبل اعتماد النتيجة.</p><Button asChild size="sm" className="bg-emerald-600 text-white hover:bg-emerald-500"><Link to="/kingdom-hearts-images"><Image className="ml-1.5 h-4 w-4" />تحرير صور TIM2 الأصلية</Link></Button></div> : <p className="rounded-xl border border-border bg-card/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">لفتح الصور مع الكتابة المباشرة في الأصل، أعد فتح BBS0–BBS4 من زر «فتح قابل للكتابة» أعلى الصفحة، ثم انتقل إلى محرر الصور. الرفع العادي يبقى آمناً للعرض والتنزيل فقط.</p>}
@@ -476,7 +519,7 @@ export default function KingdomHeartsFiles() {
               <p className="mt-2 text-xs text-muted-foreground">لا تعتمد «ملفات CTD (.ctd)» على امتداد BBSA. اضغط «اكتشاف CTD في BBS0» مرة واحدة: تقرأ الأداة BBS0 بكتل صغيرة وعلى حدود القطاعات فقط، وتعرض كل مورد يبدأ فعلياً بالترويسة <bdi>@CTD</bdi> إذا طابق فهرس BBS وحجمه المحجوز. لا تفحص 17 ألف ملف منفصلاً، وتحافظ على استجابة الهاتف. عند تفعيل «مجلد واحد فقط» تحفظ الأداة جميع الملفات داخل مجلد <bdi>khbbs-files</bdi> واحد، وتضيف رقماً تلقائياً إن تكرر الاسم.</p>
             </div>
 
-            <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} downloadingId={downloadingId} fontCandidateIds={fontCandidateIds} />)}</div>
+            <div className="space-y-3">{groups.map(([directory, entries]) => <FolderGroup key={directory} directory={directory} entries={entries} selected={selected} toggleSelected={toggleSelected} onDownload={(entry) => void downloadEntry(entry)} onOpenCtd={(entry) => void openCtdEntryInEditor(entry)} downloadingId={downloadingId} openingCtdId={openingCtdId} fontCandidateIds={fontCandidateIds} />)}</div>
           </div>
         )}
       </section>

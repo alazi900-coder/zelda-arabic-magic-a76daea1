@@ -15,6 +15,10 @@ import {
 } from "@/lib/khbbs-bbsa";
 import type { KHBbsDatResourceSource } from "@/lib/khbbs-dat-workspace";
 
+/** ملف العربية المصحح المضمّن؛ لا يُحمّل ولا يُكتب إلا بعد ضغط المستخدم لزر استخدامه. */
+export const KHBBS_BUILT_IN_ARABIC_FONT_URL = "/manus-storage/Font.arabic.fixed_1ef34122.arc";
+export const KHBBS_BUILT_IN_ARABIC_FONT_FILENAME = "Font.arabic.arc";
+
 export interface KHBbsResourceReference extends KHBbsDatResourceSource {
   filename: string;
   allocatedSectors: number;
@@ -273,6 +277,17 @@ export async function setKHBbsFontReplacement(upload: File): Promise<KHBbsResour
   for (const source of sources) assertReplacement(source, bytes, upload.name);
   workspace.font = { sources, bytes, filename: upload.name };
   return sources;
+}
+
+/**
+ * يجلب ملف الخط العربي المصحح فقط بعد اختيار المستخدم له في الواجهة، ثم يمرره
+ * إلى نفس فحص أرشيف الخط الذي يستعمله الملف اليدوي. لا يبني BBS ولا ISO هنا.
+ */
+export async function setKHBbsBuiltInArabicFontReplacement(): Promise<KHBbsResourceReference[]> {
+  const response = await fetch(KHBBS_BUILT_IN_ARABIC_FONT_URL);
+  if (!response.ok) throw new Error("تعذر تحميل Font.arabic.arc المضمّن. تحقق من اتصالك ثم أعد المحاولة.");
+  const upload = new File([await response.blob()], KHBBS_BUILT_IN_ARABIC_FONT_FILENAME, { type: "application/octet-stream" });
+  return setKHBbsFontReplacement(upload);
 }
 
 export function getKHBbsFontReplacement(): KHBbsFontReplacement | null {

@@ -7,8 +7,8 @@ import { ChangeEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileCheck2, FileWarning, Hash, ShieldCheck, Type, Upload } from "lucide-react";
 
-const ARABIC_FONT_DOWNLOAD_URL = "/manus-storage/Font.arabic_19fd9dfa.arc";
-const ARABIC_REPORT_DOWNLOAD_URL = "/manus-storage/Font.arabic.report_c4593979.json";
+const ARABIC_FONT_DOWNLOAD_URL = "/manus-storage/Font.arabic.fixed_1ef34122.arc";
+const ARABIC_REPORT_DOWNLOAD_URL = "/manus-storage/Font.arabic.fixed.report_ef9765f2.json";
 
 const FONT_REPORT = {
   source: {
@@ -19,19 +19,19 @@ const FONT_REPORT = {
   output: {
     fileName: "Font.arabic.arc",
     size: 218348,
-    sha256: "1ab688cb9c77608c503b730c77813751ac63f44e710bb3f6348176647aae66cb",
+    sha256: "534fcc4873a9768a8529e427c3dbbb31f567ef22b3a544192eeb64979ad7a13c",
   },
   glyphCount: 126,
   changedResources: ["mesfont.inf", "mesfont.mtx"],
   unchangedResourceCount: 20,
-  adjustedGlyphs: 11,
+  adjustedGlyphs: 8,
   sourceResourceHashes: {
     "mesfont.inf": "50edcd6c86f13146f24f1d90930280d7f675a49a2a65270876abc00e2537d29d",
     "mesfont.mtx": "6506cddcaedfc4014e3c84d53496dcf8e704a0ccf3e4802928939065a86c71a0",
   },
   outputResourceHashes: {
-    "mesfont.inf": "dfa3a0bec470a032a33fdacd304991d8cfe9305cadef113984442cdb85c451b9",
-    "mesfont.mtx": "335db216dc5bc10acb9baaa122d1e176adc827337b4d9124ec5516954bf5e0a7",
+    "mesfont.inf": "3dafcbc3d2677e688de5555d443eae3bee51ccbccfb031d6137e06cd3fc0aa6e",
+    "mesfont.mtx": "b61fd928ee0eeb6cc5c81b2578630db5ee59371ed84f5761f59e64c00ac648e3",
   },
 } as const;
 

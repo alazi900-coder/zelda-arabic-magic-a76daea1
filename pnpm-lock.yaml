@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  unityfs-js: 38d02424d241f625a19c7b695552b115322571b2453ab6e29c5e62bb20a0c130
+  unityfs-js: 08b21b74d92ef931224764b8058827fa07ff96a996fd20221f889dc92c373449
 
 importers:
 
@@ -190,7 +190,7 @@ importers:
         version: 1.0.7(tailwindcss@3.4.19)
       unityfs-js:
         specifier: 0.2.6
-        version: 0.2.6(patch_hash=38d02424d241f625a19c7b695552b115322571b2453ab6e29c5e62bb20a0c130)
+        version: 0.2.6(patch_hash=08b21b74d92ef931224764b8058827fa07ff96a996fd20221f889dc92c373449)
       vaul:
         specifier: ^0.9.9
         version: 0.9.9(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -9856,7 +9856,7 @@ snapshots:
     dependencies:
       crypto-random-string: 2.0.0
 
-  unityfs-js@0.2.6(patch_hash=38d02424d241f625a19c7b695552b115322571b2453ab6e29c5e62bb20a0c130): {}
+  unityfs-js@0.2.6(patch_hash=08b21b74d92ef931224764b8058827fa07ff96a996fd20221f889dc92c373449): {}
 
   universalify@0.2.0: {}
 

@@ -7,6 +7,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
+import { load } from "unityfs-js";
 import {
   buildLumenTaleBundle,
   extractLumenTaleEntries,
@@ -41,6 +42,9 @@ describe("LumenTale verified bundle build", () => {
       result.bundle.byteOffset,
       result.bundle.byteOffset + result.bundle.byteLength,
     ) as ArrayBuffer;
+    const rebuiltManager = await load(rebuilt, { unityRevision: "2022.3.62f2" });
+    expect(rebuiltManager.bundleFile.flags.compressionType).toBe(3);
+    expect(rebuiltManager.bundleFile.blockInfo.every((block) => block.flags.compressionType === 3)).toBe(true);
     const reopened = await extractLumenTaleEntries(rebuilt);
     expect(reopened.tables).toHaveLength(30);
     expect(reopened.entries).toHaveLength(extracted.entries.length);

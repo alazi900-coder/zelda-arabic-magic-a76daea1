@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.181.8",
+    date: "2026-08-22",
+    changes: [
+      { kind: "fixed", text: "**أُعيد رسم حبر خط Kingdom Hearts العربي لمعالجة تكسّر الحروف داخل اللعبة.** استُخدم نموذج Raster متدرج D: حبر أساسي أوضح مع حواف تنعيم محدودة، بدلاً من جزر بكسلية ضعيفة داخل جسم الحرف." },
+      { kind: "changed", text: "**اقتصر التعديل على `mesfont.mtx` و`menufont.mtx` فقط.** يُستخدم قياس 18×18 للحوارات و14×14 الأصلي للقوائم؛ بقيت `cod` و`clu` وCTD والعروض و`arabic-processing.ts` وموارد `helpfont` و`cmdfont` بلا تغيير." },
+      { kind: "fixed", text: "**اكتمل تدقيق بايتي مستقل قبل التضمين.** تغيّر 7,362 بايتاً داخل نسيجي الحروف المستهدفين فقط، ولم يتغير حجم ARC أو جدول موارده أو أي بايت خارج خلايا الأشكال العربية الـ126." },
+    ],
+  },
+  {
     version: "1.181.7",
     date: "2026-08-22",
     changes: [

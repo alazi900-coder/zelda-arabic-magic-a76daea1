@@ -9,9 +9,9 @@ import {
 import { KHBBS_ARABIC_FONT_CODES } from "./khbbs-arabic-font-map";
 
 const injectionReportPath = "/home/ubuntu/khbbs-font-work/audit-final/real-mesfont-output-audit.json";
-const embeddedModelReportPath = "/home/ubuntu/khbbs-font-work/audit-final/dialog-menu-model-v3-advance-aligned-audit.json";
+const embeddedModelReportPath = "/home/ubuntu/khbbs-font-work/audit-final/font-arabic-v4-raster-d-final-audit.json";
 const embeddedFontPath = "/home/ubuntu/zelda-arabic-magic-original/src/assets/Font.arabic.arc";
-const outputPath = "/home/ubuntu/khbbs-font-work/audit-final/ctd-arabic-linkage-v3.json";
+const outputPath = "/home/ubuntu/khbbs-font-work/audit-final/ctd-arabic-linkage-v4-raster-d.json";
 const words = ["سلام", "مرحبا", "العالم", "بداية", "الشمس", "مكتبة"];
 
 function hex(value: number, width: number): string {
@@ -64,10 +64,10 @@ describe("KHBBS Arabic CTD linkage audit", () => {
       mapEntryCount: KHBBS_ARABIC_FONT_CODES.size,
       injectedGlyphCount: injection.arabicFormsPassing,
       embeddedFontSha256: embeddedSha256,
-      expectedEmbeddedFontSha256: embeddedModel.modelSha256,
+      expectedEmbeddedFontSha256: embeddedModel.targetSha256,
       words: wordResults,
       fullMapAudit,
-      passed: embeddedSha256 === embeddedModel.modelSha256 && wordResults.every((result) => result.passed) && fullMapAudit.every((result) => result.passed),
+      passed: embeddedModel.passed === true && embeddedSha256 === embeddedModel.targetSha256 && wordResults.every((result) => result.passed) && fullMapAudit.every((result) => result.passed),
     };
     await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
 

@@ -3,12 +3,14 @@
  */
 
 import JSZip from "jszip";
+import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildKHBbsDatOutput,
   clearKHBbsBbsWorkspace,
   makeKHBbsResourceReference,
   setKHBbsBbsWorkspace,
+  setKHBbsFontReplacement,
 } from "@/lib/khbbs-bbs-workspace";
 import type { BbsArchiveEntry, BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 
@@ -155,6 +157,53 @@ function makeRelocationWorkspace(): { archive: BbsArchiveIndex; ctd: BbsArchiveE
   };
 }
 
+async function makeDualFontWorkspace(): Promise<{ archive: BbsArchiveIndex; originals: Map<number, Uint8Array>; embeddedArabicFont: Uint8Array }> {
+  const embeddedArabicFont = new Uint8Array(await readFile("src/assets/Font.arabic.arc"));
+  const englishFont = embeddedArabicFont.slice();
+  englishFont[0] ^= 0xff;
+  const originals = new Map<number, Uint8Array>([
+    [0, englishFont],
+    [1, englishFont],
+    [2, new Uint8Array([0x42, 0x42, 0x53, 0x32])],
+    [3, new Uint8Array([0x42, 0x42, 0x53, 0x33])],
+  ]);
+  const archives = new Map<number, File>([...originals].map(([index, bytes]) => [index, makeFile(`BBS${index}.DAT`, [...bytes])]));
+  const fontEntry = (archiveIndex: 0 | 1): BbsArchiveEntry => ({
+    id: `bbs${archiveIndex}-font-arc`,
+    archiveIndex,
+    sourceArchiveName: `BBS${archiveIndex}.DAT`,
+    directory: "arc/system",
+    directoryHash: 0,
+    fileHash: 0,
+    directoryTableIndex: 0,
+    infoTableOffset: null,
+    sourceInfo: 0,
+    catalogExtension: "arc",
+    extension: "arc",
+    globalSector: 0,
+    localSector: 0,
+    allocatedSectors: Math.ceil(englishFont.byteLength / SECTOR),
+    allocatedBytes: englishFont.byteLength,
+    byteOffset: 0,
+    downloadAvailable: true,
+    isStreamed: false,
+    isVerifiedCtd: false,
+    ctdVerification: "not-applicable",
+  });
+  return {
+    originals,
+    embeddedArabicFont,
+    archive: {
+      version: 1,
+      archives,
+      entries: [fontEntry(0), fontEntry(1)],
+      warnings: [],
+      headerSectors: { archive0: 0, archive1: 0, archive2: 0, archive3: 0, archive4: 0 },
+      metadataEndOffset: 0,
+    },
+  };
+}
+
 afterEach(() => clearKHBbsBbsWorkspace());
 
 describe("buildKHBbsDatOutput", () => {
@@ -188,6 +237,26 @@ describe("buildKHBbsDatOutput", () => {
     await expect(buildKHBbsDatOutput([
       { source: makeKHBbsResourceReference(ctd), bytes: new Uint8Array([0xaa]) },
     ])).rejects.toThrow("BBS3.DAT");
+  });
+
+  it("يكتشف Font.arc في BBS0 وBBS1 ويضع الخط العربي فيهما فقط", async () => {
+    const { archive, originals, embeddedArabicFont } = await makeDualFontWorkspace();
+    setKHBbsBbsWorkspace(archive);
+    const sources = await setKHBbsFontReplacement(new File([embeddedArabicFont], "Font.arabic.arc", { type: "application/octet-stream" }));
+    expect(sources.map((source) => source.archiveIndex)).toEqual([0, 1]);
+
+    const output = await buildKHBbsDatOutput([]);
+    expect(output.includedArchives).toEqual([0, 1, 2, 3]);
+    expect(output.changedArchives).toEqual([0, 1]);
+    const zip = await JSZip.loadAsync(output.archive);
+    for (const archiveIndex of [0, 1]) {
+      const bytes = new Uint8Array(await zip.file(`BBS${archiveIndex}.DAT`)!.async("arraybuffer"));
+      expect(bytes).toEqual(embeddedArabicFont);
+    }
+    for (const archiveIndex of [2, 3]) {
+      const bytes = new Uint8Array(await zip.file(`BBS${archiveIndex}.DAT`)!.async("arraybuffer"));
+      expect(bytes).toEqual(originals.get(archiveIndex));
+    }
   });
 
   it("ينقل CTD المتجاوز إلى قطاعات صفرية ويُبقي المورد المجاور كما هو", async () => {

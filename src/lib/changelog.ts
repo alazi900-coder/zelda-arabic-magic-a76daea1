@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.181.9",
+    date: "2026-08-22",
+    changes: [
+      { kind: "added", text: "**أضيف خيارا اختبار D2 وD3 داخل مدير ملفات Kingdom Hearts.** يختار المستخدم واحداً منهما عند إدراج الخط في BBS؛ يبقى D1 الحالي هو الخيار الافتراضي." },
+      { kind: "changed", text: "**D2 وD3 مقيدان بعشرة أشكال داخل `mesfont` فقط.** لا يغيران بقية الأشكال الـ126 أو `menufont` أو COD أو CLU أو CTD أو العروض أو النصوص، ولا يُعتمدان كإصدار نهائي قبل تجربة PPSSPP." },
+      { kind: "fixed", text: "**اختبار البناء يثبت أن مورد الخط المختار يدخل BBS0 وBBS1 فقط.** يظل BBS2 وBBS3 مطابقين بايتاً ببايت للملفات الأصلية." },
+    ],
+  },
+  {
     version: "1.181.8",
     date: "2026-08-22",
     changes: [

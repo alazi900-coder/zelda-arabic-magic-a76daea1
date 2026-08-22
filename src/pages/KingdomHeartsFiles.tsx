@@ -9,7 +9,7 @@ import { AlertTriangle, ArrowLeft, CheckSquare, ChevronDown, ClipboardCopy, Down
 import { Button } from "@/components/ui/button";
 import { discoverKHBbs0CtdEntries, indexKHBbsDatFiles, formatBbsBytes, formatBbsHash, getBbsEntryFilename, readBbsArchiveEntry, type BbsArchiveEntry, type BbsArchiveIndex } from "@/lib/khbbs-bbsa";
 import { clearKHBbsDatWritableWorkspace, hasKHBbsDatWritableWorkspace, openKHBbsDatWritableWorkspace } from "@/lib/khbbs-dat-workspace";
-import { clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsBuiltInArabicFontReplacement, setKHBbsFontReplacement } from "@/lib/khbbs-bbs-workspace";
+import { KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS, clearKHBbsBbsWorkspace, readKHBbsCtdSelection, setKHBbsBbsWorkspace, setKHBbsBuiltInArabicFontReplacement, setKHBbsFontReplacement, type KHBbsBuiltInArabicFontVariant } from "@/lib/khbbs-bbs-workspace";
 import { openKHBbsInEditor } from "@/lib/khbbs-editor-bridge";
 import { decryptKHBbsPgdFile, inspectKHBbsPgdHeader, scanKHBbsFileSignatures, type KHBbsFileSignatureScan, type KHBbsPgdHeaderInspection } from "@/lib/khbbs-pgd";
 import { toast } from "sonner";
@@ -107,7 +107,7 @@ export default function KingdomHeartsFiles() {
   const [openingCtd, setOpeningCtd] = useState(false);
   const [openingCtdId, setOpeningCtdId] = useState<string | null>(null);
   const [selectingFont, setSelectingFont] = useState(false);
-  const [fontSelection, setFontSelection] = useState<{ filename: string; archiveIndexes: number[] } | null>(null);
+  const [fontSelection, setFontSelection] = useState<{ filename: string; archiveIndexes: number[]; variant: KHBbsBuiltInArabicFontVariant | "manual" } | null>(null);
   const [writableWorkspace, setWritableWorkspace] = useState(() => hasKHBbsDatWritableWorkspace());
   const [decryptingBbs, setDecryptingBbs] = useState(false);
   const [bbsInspecting, setBbsInspecting] = useState(false);
@@ -306,7 +306,7 @@ export default function KingdomHeartsFiles() {
     try {
       const sources = await setKHBbsFontReplacement(upload);
       const archiveIndexes = [...new Set(sources.map((source) => source.archiveIndex))].sort((left, right) => left - right);
-      setFontSelection({ filename: upload.name, archiveIndexes });
+      setFontSelection({ filename: upload.name, archiveIndexes, variant: "manual" });
       toast.success(`تم ربط ${upload.name} بمورد الخط المؤكد.`);
     } catch (caught) {
       setFontSelection(null);
@@ -316,17 +316,18 @@ export default function KingdomHeartsFiles() {
     }
   }, []);
 
-  const useBuiltInArabicFont = useCallback(async () => {
+  const useBuiltInArabicFont = useCallback(async (variant: KHBbsBuiltInArabicFontVariant) => {
     setSelectingFont(true);
     setError(null);
     try {
-      const sources = await setKHBbsBuiltInArabicFontReplacement();
+      const sources = await setKHBbsBuiltInArabicFontReplacement(variant);
       const archiveIndexes = [...new Set(sources.map((source) => source.archiveIndex))].sort((left, right) => left - right);
-      setFontSelection({ filename: "Font.arabic.arc (المصحح المضمّن)", archiveIndexes });
-      toast.success("تم ربط الخط العربي المصحح بمورد الخط المؤكد.");
+      const option = KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS[variant];
+      setFontSelection({ filename: option.label, archiveIndexes, variant });
+      toast.success(`تم ربط ${option.label} بمورد الخط المؤكد.`);
     } catch (caught) {
       setFontSelection(null);
-      setError(caught instanceof Error ? caught.message : "تعذر ربط الخط العربي المصحح بملفات BBS.");
+      setError(caught instanceof Error ? caught.message : "تعذر ربط اختبار الخط بملفات BBS.");
     } finally {
       setSelectingFont(false);
     }
@@ -486,13 +487,15 @@ export default function KingdomHeartsFiles() {
                 <p className="text-sm leading-relaxed">
                   {fontSelection
                     ? <><b>الخط العربي جاهز للبناء:</b> <bdi className="font-mono">{fontSelection.filename}</bdi> ← مورد الخط المؤكد داخل {fontSelection.archiveIndexes.map((index) => <bdi key={index} className="font-mono">BBS{index}.DAT </bdi>)}</>
-                    : <>الخط العربي المصحح مضمّن في الأداة. استخدمه مرة واحدة؛ تتحقق الأداة من أرشيف الخط الحقيقي ثم تدخله عند البناء فقط.</>}
+                    : <>D1 هو الخط الحالي. يستطيع هذا الاختبار إدخال D2 أو D3 لعشرة أشكال في <bdi className="font-mono">mesfont</bdi> فقط؛ لا يتغير أي CTD أو نص أو جدول.</>}
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                <Button size="sm" disabled={selectingFont || Boolean(fontSelection)} onClick={() => void useBuiltInArabicFont()} className="bg-amber-500 font-bold text-black hover:bg-amber-400 disabled:bg-emerald-600 disabled:text-white">
-                  {selectingFont ? <Loader2 className="ml-1.5 h-4 w-4 animate-spin" /> : fontSelection ? <CheckSquare className="ml-1.5 h-4 w-4" /> : <Type className="ml-1.5 h-4 w-4" />}{selectingFont ? "جارٍ فحص الخط…" : fontSelection ? "الخط العربي جاهز" : "استخدام الخط العربي"}
+                <Button size="sm" disabled={selectingFont || Boolean(fontSelection)} onClick={() => void useBuiltInArabicFont("d1-raster-d")} className="bg-amber-500 font-bold text-black hover:bg-amber-400 disabled:bg-emerald-600 disabled:text-white">
+                  {selectingFont ? <Loader2 className="ml-1.5 h-4 w-4 animate-spin" /> : fontSelection ? <CheckSquare className="ml-1.5 h-4 w-4" /> : <Type className="ml-1.5 h-4 w-4" />}{selectingFont ? "جارٍ فحص الخط…" : fontSelection ? "الخط جاهز" : "D1 الحالي"}
                 </Button>
+                <Button size="sm" variant="outline" disabled={selectingFont || Boolean(fontSelection)} onClick={() => void useBuiltInArabicFont("d2-nearest-ten-mesfont")} title={KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS["d2-nearest-ten-mesfont"].description} className="border-sky-500/50 text-sky-700 hover:bg-sky-500/10 dark:text-sky-300">اختبار D2</Button>
+                <Button size="sm" variant="outline" disabled={selectingFont || Boolean(fontSelection)} onClick={() => void useBuiltInArabicFont("d3-reversed-levels-ten-mesfont")} title={KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS["d3-reversed-levels-ten-mesfont"].description} className="border-violet-500/50 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300">اختبار D3</Button>
                 <Button size="sm" variant="outline" disabled={selectingFont} onClick={() => fontInputRef.current?.click()} className="font-bold">ملف آخر</Button>
               </div>
             </div>

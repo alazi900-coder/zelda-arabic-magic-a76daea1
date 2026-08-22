@@ -6,6 +6,8 @@
 
 import JSZip from "jszip";
 import builtInArabicFontUrl from "@/assets/Font.arabic.arc?url";
+import d2NearestTenMesfontUrl from "@/assets/Font.arabic.test-d2-nearest-ten-mesfont.arc?url";
+import d3ReversedLevelsTenMesfontUrl from "@/assets/Font.arabic.test-d3-reversed-levels-ten-mesfont.arc?url";
 import {
   BBS_SECTOR_SIZE,
   getBbsEntryFilename,
@@ -16,9 +18,36 @@ import {
 } from "@/lib/khbbs-bbsa";
 import type { KHBbsDatResourceSource } from "@/lib/khbbs-dat-workspace";
 
-/** ملف العربية المصحح المضمّن؛ لا يُحمّل ولا يُكتب إلا بعد ضغط المستخدم لزر استخدامه. */
-export const KHBBS_BUILT_IN_ARABIC_FONT_URL = builtInArabicFontUrl;
-export const KHBBS_BUILT_IN_ARABIC_FONT_FILENAME = "Font.arabic.arc";
+/**
+ * STYLE: موارد خط Kingdom Hearts المضمّنة. يبقى D1 هو الافتراضي، أما D2 وD3
+ * فاختباران مقيدان بعشرة أشكال داخل mesfont ولا يُعتمدان كخط نهائي.
+ */
+export const KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS = {
+  "d1-raster-d": {
+    url: builtInArabicFontUrl,
+    filename: "Font.arabic.arc",
+    label: "D1 — الخط الحالي",
+    description: "الخط العربي الحالي 1.181.8.",
+  },
+  "d2-nearest-ten-mesfont": {
+    url: d2NearestTenMesfontUrl,
+    filename: "Font.arabic.test-d2-nearest-ten-mesfont.arc",
+    label: "D2 — اختبار nearest-neighbor",
+    description: "يغيّر عشرة أشكال في mesfont فقط؛ لا يُعتمد نهائياً.",
+  },
+  "d3-reversed-levels-ten-mesfont": {
+    url: d3ReversedLevelsTenMesfontUrl,
+    filename: "Font.arabic.test-d3-reversed-levels-ten-mesfont.arc",
+    label: "D3 — اختبار تبديل درجات الحبر",
+    description: "يبدّل درجتي 2 و3 لعشرة أشكال فقط؛ لا يُعتمد نهائياً.",
+  },
+} as const;
+
+export type KHBbsBuiltInArabicFontVariant = keyof typeof KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS;
+
+/** توافق مع مرجع D1 القائم خارج خيارات الاختبار. */
+export const KHBBS_BUILT_IN_ARABIC_FONT_URL = KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS["d1-raster-d"].url;
+export const KHBBS_BUILT_IN_ARABIC_FONT_FILENAME = KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS["d1-raster-d"].filename;
 
 export interface KHBbsResourceReference extends KHBbsDatResourceSource {
   filename: string;
@@ -284,14 +313,17 @@ export async function setKHBbsFontReplacement(upload: File): Promise<KHBbsResour
  * يجلب ملف الخط العربي المصحح فقط بعد اختيار المستخدم له في الواجهة، ثم يمرره
  * إلى نفس فحص أرشيف الخط الذي يستعمله الملف اليدوي. لا يبني BBS ولا ISO هنا.
  */
-export async function setKHBbsBuiltInArabicFontReplacement(): Promise<KHBbsResourceReference[]> {
-  const response = await fetch(KHBBS_BUILT_IN_ARABIC_FONT_URL);
-  if (!response.ok) throw new Error("تعذر تحميل Font.arabic.arc المضمّن. تحقق من اتصالك ثم أعد المحاولة.");
+export async function setKHBbsBuiltInArabicFontReplacement(
+  variant: KHBbsBuiltInArabicFontVariant = "d1-raster-d",
+): Promise<KHBbsResourceReference[]> {
+  const option = KHBBS_BUILT_IN_ARABIC_FONT_OPTIONS[variant];
+  const response = await fetch(option.url);
+  if (!response.ok) throw new Error(`تعذر تحميل ${option.filename} المضمّن. تحقق من اتصالك ثم أعد المحاولة.`);
   const payload = await response.arrayBuffer();
   if (payload.byteLength !== 218348) {
-    throw new Error(`تعذر تحميل ملف الخط المضمّن كاملاً؛ الحجم المستلم ${payload.byteLength.toLocaleString("ar")} بايت بدلاً من 218,348 بايت.`);
+    throw new Error(`تعذر تحميل ${option.filename} كاملاً؛ الحجم المستلم ${payload.byteLength.toLocaleString("ar")} بايت بدلاً من 218,348 بايت.`);
   }
-  const upload = new File([payload], KHBBS_BUILT_IN_ARABIC_FONT_FILENAME, { type: "application/octet-stream" });
+  const upload = new File([payload], option.filename, { type: "application/octet-stream" });
   return setKHBbsFontReplacement(upload);
 }
 

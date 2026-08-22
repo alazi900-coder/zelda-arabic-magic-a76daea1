@@ -259,6 +259,28 @@ describe("buildKHBbsDatOutput", () => {
     }
   });
 
+  it("يدخل موردي D2 وD3 الاختباريين في BBS0 وBBS1 فقط", async () => {
+    const variants = [
+      "src/assets/Font.arabic.test-d2-nearest-ten-mesfont.arc",
+      "src/assets/Font.arabic.test-d3-reversed-levels-ten-mesfont.arc",
+    ];
+    for (const path of variants) {
+      const { archive, originals } = await makeDualFontWorkspace();
+      const testFont = new Uint8Array(await readFile(path));
+      setKHBbsBbsWorkspace(archive);
+      await setKHBbsFontReplacement(new File([testFont], path.split("/").at(-1)!, { type: "application/octet-stream" }));
+      const output = await buildKHBbsDatOutput([]);
+      const zip = await JSZip.loadAsync(output.archive);
+      for (const archiveIndex of [0, 1]) {
+        expect(new Uint8Array(await zip.file(`BBS${archiveIndex}.DAT`)!.async("arraybuffer"))).toEqual(testFont);
+      }
+      for (const archiveIndex of [2, 3]) {
+        expect(new Uint8Array(await zip.file(`BBS${archiveIndex}.DAT`)!.async("arraybuffer"))).toEqual(originals.get(archiveIndex));
+      }
+      clearKHBbsBbsWorkspace();
+    }
+  });
+
   it("ينقل CTD المتجاوز إلى قطاعات صفرية ويُبقي المورد المجاور كما هو", async () => {
     const { archive, ctd, neighborOffset, original } = makeRelocationWorkspace();
     setKHBbsBbsWorkspace(archive);

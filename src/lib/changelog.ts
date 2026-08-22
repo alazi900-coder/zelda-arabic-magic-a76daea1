@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.181.7",
+    date: "2026-08-22",
+    changes: [
+      { kind: "fixed", text: "**أُصلح انفصال الحروف داخل كلمات Kingdom Hearts العربية.** يحاذي الخط الآن حبر أشكال البداية والوسط والنهاية مع عرض التقدم الذي يستخدمه محرك اللعبة، بدلاً من توسيطه داخل الخانة؛ لا تتغير أكواد CTD أو ترتيب العربية." },
+    ],
+  },
+  {
     version: "1.181.6",
     date: "2026-08-22",
     changes: [

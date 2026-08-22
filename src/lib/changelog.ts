@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.181.6",
+    date: "2026-08-22",
+    changes: [
+      { kind: "fixed", text: "**أُصلح تقطّع حروف Kingdom Hearts العربية.** يعيد الخط الآن تدرج بكسلات `mesfont` المتوافق مع المحرك (بدلاً من الأبيض الصلب)، مع حافة رمادية محدودة داخل الخانة نفسها؛ لا تتغير أكواد CTD أو ترتيب العربية." },
+    ],
+  },
+  {
     version: "1.181.5",
     date: "2026-08-22",
     changes: [

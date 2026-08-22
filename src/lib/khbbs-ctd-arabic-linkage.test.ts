@@ -9,7 +9,7 @@ import {
 import { KHBBS_ARABIC_FONT_CODES } from "./khbbs-arabic-font-map";
 
 const injectionReportPath = "/home/ubuntu/khbbs-font-work/audit-final/real-mesfont-output-audit.json";
-const embeddedModelReportPath = "/home/ubuntu/khbbs-font-work/audit-final/dialog-menu-model-report.json";
+const embeddedModelReportPath = "/home/ubuntu/khbbs-font-work/audit-final/dialog-menu-model-v2-report.json";
 const embeddedFontPath = "/home/ubuntu/zelda-arabic-magic-original/src/assets/Font.arabic.arc";
 const outputPath = "/home/ubuntu/khbbs-font-work/audit-final/ctd-arabic-linkage-v3.json";
 const words = ["سلام", "مرحبا", "العالم", "بداية", "الشمس", "مكتبة"];

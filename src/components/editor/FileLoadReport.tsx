@@ -5,9 +5,17 @@ import type { ExtractedEntry } from "./types";
 interface FileLoadReportProps {
   entries: ExtractedEntry[];
   translations: Record<string, string>;
+  /** Includes intentionally empty Unity tables that have no editor rows. */
+  tableCountOverride?: number;
+  unitLabel?: string;
 }
 
-const FileLoadReport: React.FC<FileLoadReportProps> = ({ entries, translations }) => {
+const FileLoadReport: React.FC<FileLoadReportProps> = ({
+  entries,
+  translations,
+  tableCountOverride,
+  unitLabel = "ملف",
+}) => {
   const [expanded, setExpanded] = useState(false);
 
   const stats = useMemo(() => {
@@ -42,7 +50,7 @@ const FileLoadReport: React.FC<FileLoadReportProps> = ({ entries, translations }
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Package className="w-4 h-4 text-primary" />
           <span>تقرير الملفات المحملة</span>
-          <span className="text-muted-foreground text-xs">— {totalFiles} ملف، {totalEntries} نص</span>
+          <span className="text-muted-foreground text-xs">— {tableCountOverride ?? totalFiles} {unitLabel}{unitLabel === "ملف" ? "،" : "،"} {totalEntries} نص</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono font-bold text-primary">{overallPct}%</span>

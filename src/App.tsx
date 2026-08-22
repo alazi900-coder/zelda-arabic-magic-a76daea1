@@ -59,6 +59,7 @@ const KingdomHeartsBBS = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsB
 const KingdomHeartsImages = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsImages"));
 const KingdomHeartsFiles = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsFiles"));
 const KingdomHeartsFont = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsFont"));
+const LumenTale = lazyWithIgnoredRef(() => import("./pages/LumenTale"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <div ref={ref} className="min-h-screen flex items-center justify-center bg-background" {...props}>
@@ -117,6 +118,7 @@ const App = () => (
                 <Route path="/kingdom-hearts-images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Kingdom Hearts"><KingdomHeartsImages /></ErrorBoundary>} />
                 <Route path="/kingdom-hearts-files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Kingdom Hearts"><KingdomHeartsFiles /></ErrorBoundary>} />
                 <Route path="/kingdom-hearts-font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Kingdom Hearts"><KingdomHeartsFont /></ErrorBoundary>} />
+                <Route path="/lumentale" element={<ErrorBoundary fallbackTitle="خطأ في أداة LumenTale"><LumenTale /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

@@ -17,6 +17,7 @@ import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-edi
 import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
 import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
 import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
+import { buildLumenTaleBundle, LUMENTALE_BUFFER_KEY, LUMENTALE_META_KEY, type LumenTaleBundleMeta } from "@/lib/lumentale/lumentale-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -43,6 +44,7 @@ interface EditorBuildSectionProps {
   isGameMaker?: boolean;
   isDragonSword?: boolean;
   isKingdomHearts?: boolean;
+  isLumenTale?: boolean;
   khbbsUnsupportedCount?: number;
   khbbsUnsupportedCharacters?: KHBBSUnsupportedCharacter[];
   khbbsUnsupportedFilterActive?: boolean;
@@ -64,6 +66,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isGameMaker = false,
   isDragonSword = false,
   isKingdomHearts = false,
+  isLumenTale = false,
   khbbsUnsupportedCount = 0,
   khbbsUnsupportedCharacters = [],
   khbbsUnsupportedFilterActive = false,
@@ -83,6 +86,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [dsBuilding, setDsBuilding] = useState(false);
   const [khbbsBuilding, setKHBbsBuilding] = useState(false);
   const [khbbsIsoBuilding, setKHBbsIsoBuilding] = useState(false);
+  const [lumenTaleBuilding, setLumenTaleBuilding] = useState(false);
   const khbbsIsoInputRef = useRef<HTMLInputElement>(null);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
@@ -433,6 +437,44 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
+  const handleLumenTaleBuild = async () => {
+    setLumenTaleBuilding(true);
+    try {
+      // Persist the focused input before reading the translation map, exactly as
+      // other game builders do, so a just-edited LumenTale row is not skipped.
+      await editor.forceSave();
+      const [source, meta] = await Promise.all([
+        idbGet<ArrayBuffer>(LUMENTALE_BUFFER_KEY),
+        idbGet<LumenTaleBundleMeta>(LUMENTALE_META_KEY),
+      ]);
+      if (!source || !meta) throw new Error("لم يُعثر على الحزمة أو خريطة هوية LumenTale. عد إلى صفحة LumenTale وافتح الحزمة من جديد.");
+
+      const result = await buildLumenTaleBundle(source, meta, editor.state?.entries || [], editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      if ("error" in result) {
+        toast({ title: "أُوقف بناء LumenTale للحماية", description: result.error, variant: "destructive" });
+        return;
+      }
+
+      const blob = new Blob([result.bundle as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "✅ تم بناء حزمة LumenTale معرّبة",
+        description: `${result.translatedLines} سطر مترجم داخل ${result.changedTables} جدول؛ احتُفظت الهوية والرموز التقنية قبل الكتابة.`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء حزمة LumenTale", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setLumenTaleBuilding(false);
+    }
+  };
+
   return (
   <Collapsible open={showBuildSection} onOpenChange={setShowBuildSection}>
     <div className="flex items-center justify-between mb-3">
@@ -643,7 +685,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isKingdomHearts && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isKingdomHearts && !isLumenTale && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -673,7 +715,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isKingdomHearts}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isKingdomHearts || isLumenTale}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -759,6 +801,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isGameMaker ? (
           <Button size="lg" onClick={handleGameMakerBuild} disabled={gmBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {gmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف GameMaker معرّب وتنزيله
+          </Button>
+        ) : isLumenTale ? (
+          <Button size="lg" onClick={handleLumenTaleBuild} disabled={lumenTaleBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يبني نسخة Bundle جديدة محلياً من الحزمة المفتوحة، بعد تحقق المورد وm_Id والرموز التقنية">
+            {lumenTaleBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء Bundle LumenTale معرّب وتنزيله
           </Button>
         ) : (
           <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 min-w-[200px] font-display font-bold">

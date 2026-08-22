@@ -1,0 +1,57 @@
+diff --git a/decoders/drivers/TextureDecoderPool.js b/decoders/drivers/TextureDecoderPool.js
+index a51066b974e08d724db7b2e7699112c3af6ead44..01ed30bdc713f25d48164bdbf8496d337bcd0c48 100644
+--- a/decoders/drivers/TextureDecoderPool.js
++++ b/decoders/drivers/TextureDecoderPool.js
+@@ -1,4 +1,7 @@
+-import TextureWorker from './textureDecoder.worker.js?worker&inline'
++// LumenTale imports MonoBehaviour text tables only. Avoid eagerly importing
++// the optional texture worker: its Vite query module has no standard ESM
++// default export, and this path never requests Texture2D decoding.
++const TextureWorker = undefined
+ 
+ export class TextureDecoderPool {
+     constructor(poolSize) {
+diff --git a/unityfs/bundleFile/writer.js b/unityfs/bundleFile/writer.js
+index 030b2093d534222634e177637ea3490c11a5eb17..90230667a40a93d79cbe5c31530a0c0b4ac3acc5 100644
+--- a/unityfs/bundleFile/writer.js
++++ b/unityfs/bundleFile/writer.js
+@@ -38,18 +38,10 @@ function serializeUnityFS(bundleFile) {
+                 data = new BundleFile(new BinaryReader(file.data)).serialize()
+                 break
+             case FileType.Assets:
+-                // Calculate original CAB CRC to use as fallback target CRC
+-                const origCrc = file.data ? calculateCrc32(file.data) : 0
+                 data = file.serialize()
+-
+-                const targetCrc = bundleFile.targetCrc || origCrc
+-                if (targetCrc && targetCrc > 0 && bundleFile.files.length === 1) {
+-                    try {
+-                        data = forceBufferCrc32(data, targetCrc)
+-                    } catch (e) {
+-                        console.error('Failed to force inner CAB CRC-32:', e)
+-                    }
+-                }
++                // Do not append bytes merely to force a CAB CRC. AssetFile
++                // has already written its own fileSize into the Unity header;
++                // changing the payload length afterwards makes Unity reject it.
+                 break
+         }
+         newNodes.push({
+diff --git a/unityfs/unityFile.js b/unityfs/unityFile.js
+index 6d94d4d48f4eaf4d6f225d6ed10213859fc2433c..565918ae466f27237db0618f17d12d12f5e8c8eb 100644
+--- a/unityfs/unityFile.js
++++ b/unityfs/unityFile.js
+@@ -60,8 +60,12 @@ export class UnityFS {
+             if (this.reader.data.length < 48) {
+                 return false
+             }
+-            dataOffset = this.reader.readUInt64()
++            // Unity 2022 keeps the legacy fields first, then stores the
++            // endianness flag, metadataSize, fileSize, and dataOffset.
++            this.reader.readUInt32()
++            this.reader.readUInt32()
+             fileSize = this.reader.readUInt64()
++            dataOffset = this.reader.readUInt64()
+         }
+         this.reader.seek(0)
+         if (fileSize !== BigInt(this.reader.data.length)) {

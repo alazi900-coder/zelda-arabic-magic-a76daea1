@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  unityfs-js: 38d02424d241f625a19c7b695552b115322571b2453ab6e29c5e62bb20a0c130
+
 importers:
 
   .:
@@ -185,6 +188,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.19)
+      unityfs-js:
+        specifier: 0.2.6
+        version: 0.2.6(patch_hash=38d02424d241f625a19c7b695552b115322571b2453ab6e29c5e62bb20a0c130)
       vaul:
         specifier: ^0.9.9
         version: 0.9.9(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -3221,6 +3227,7 @@ packages:
   eslint@9.39.5:
     resolution: {integrity: sha512-DgZS62aPLXKlnxILS/AYCoRvHaZeXceIzlXPkkGGzJWSow1aEk0lbTlxUSlyjC8jcaKxAdOnTDz+o1JFSBsyjw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -4788,6 +4795,9 @@ packages:
   unique-string@2.0.0:
     resolution: {integrity: sha512-uNaeirEPvpZWSgzwsPGtU2zVSTrn/8L5q/IexZmH0eH6SA73CmAA5U4GwORTxQAZs95TAXLNqeLoPPNO5gZfWg==}
     engines: {node: '>=8'}
+
+  unityfs-js@0.2.6:
+    resolution: {integrity: sha512-Y0kgXKpi6bj/zg6EMnXvUSxn7Y0Zl9mMiO6/SlBFElwlxDbzbSTjWccezDbeg500nsVHAds4EHmpsPcwwgVsGg==}
 
   universalify@0.2.0:
     resolution: {integrity: sha512-CJ1QgKmNg3CwvAv/kOFmtnEN05f0D/cn9QntgNOQlQF9dgvVTHj3t+8JPdjqawCHk7V/KA+fbUqzZ9XWhcqPUg==}
@@ -9845,6 +9855,8 @@ snapshots:
   unique-string@2.0.0:
     dependencies:
       crypto-random-string: 2.0.0
+
+  unityfs-js@0.2.6(patch_hash=38d02424d241f625a19c7b695552b115322571b2453ab6e29c5e62bb20a0c130): {}
 
   universalify@0.2.0: {}
 

@@ -50,18 +50,21 @@ interface EditorProgressStatusProps {
   editor: EditorSubset;
   isDanganronpa: boolean;
   setShowTagRepair: (v: boolean) => void;
+  lumentaleTableCount?: number | null;
 }
 
 const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   editor,
   isDanganronpa,
   setShowTagRepair,
+  lumentaleTableCount,
 }) => {
   const entries = editor.state?.entries;
   const isRisen = !!entries?.some((e) => /\.(tab|gar3)$/i.test(e.msbtFile));
   const isMother3 = !isRisen && !!entries?.some((e) => /^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile));
   const isMetroidPrime = !isRisen && !isMother3 && !!entries?.some((e) => /^TEXT_/.test(e.msbtFile));
   const isPokemon = !isRisen && !isMother3 && !isMetroidPrime && !!entries?.some((e) => PKM_FILE_RE.test(e.msbtFile));
+  const isLumenTale = !!entries?.some((e) => e.msbtFile.startsWith("lumentale/"));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
   const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
   const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);
@@ -122,7 +125,12 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
       </div>
 
       {/* File Load Report */}
-      <FileLoadReport entries={state.entries} translations={state.translations} />
+      <FileLoadReport
+        entries={state.entries}
+        translations={state.translations}
+        tableCountOverride={isLumenTale ? (lumentaleTableCount ?? undefined) : undefined}
+        unitLabel={isLumenTale ? "جدول Unity" : "ملف"}
+      />
 
       {/* Status Messages */}
       {editor.lastSaved && (

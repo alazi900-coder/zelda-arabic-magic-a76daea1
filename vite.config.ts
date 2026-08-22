@@ -4,6 +4,33 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/supabase/vite";
 
+/**
+ * LumenTale reads Unity MonoBehaviour string tables only. unityfs-js imports an
+ * image-decoder worker at module load time even when no texture is requested;
+ * Vitest and Vite dev reject that worker's non-module default export. Keeping
+ * the binding inert avoids the optional image path while preserving the parser.
+ */
+function unityFsTextTablesOnly() {
+  const inertWorkerId = "\0unityfs-text-tables-only-worker";
+  return {
+    name: "unityfs-text-tables-only",
+    enforce: "pre" as const,
+    resolveId(source: string, importer?: string) {
+      if (
+        source === "./textureDecoder.worker.js?worker&inline" &&
+        importer?.includes("unityfs-js/decoders/drivers/TextureDecoderPool.js")
+      ) {
+        return inertWorkerId;
+      }
+      return null;
+    },
+    load(id: string) {
+      if (id === inertWorkerId) return "export default undefined;";
+      return null;
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -14,6 +41,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
+    unityFsTextTablesOnly(),
     react(),
     mode === "development" && componentTagger(),
     mcpPlugin(),
@@ -22,6 +50,12 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  // unityfs-js includes an optional image-decoder worker. ES output allows
+  // Vite to bundle it safely alongside the application chunks; LumenTale only
+  // reads MonoBehaviour text tables and never invokes image decoding.
+  worker: {
+    format: "es",
   },
   build: {
     rollupOptions: {

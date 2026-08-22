@@ -7,6 +7,7 @@
 import type { EditorState } from "@/components/editor/types";
 import { hasRisenTags, restoreRisenTags } from "./risen-tag-guard";
 import { normalizeBreakStyleToSource } from "./balance-lines";
+import { validateLumenTaleTranslation } from "./lumentale/lumentale-token-guard";
 
 /**
  * Runs the Risen tag-repair + line-break-style normalization over a batch of
@@ -17,10 +18,11 @@ import { normalizeBreakStyleToSource } from "./balance-lines";
 export function mergeGuardedTranslations(
   prev: EditorState,
   updates: Record<string, string>
-): Pick<EditorState, "translations" | "risenTagReviewKeys"> {
+): Pick<EditorState, "translations" | "risenTagReviewKeys" | "lumentaleTokenErrorKeys"> {
   const byKey = new Map(prev.entries.map((e) => [`${e.msbtFile}:${e.index}`, e]));
   const guarded: Record<string, string> = {};
   let reviewKeys: Set<string> | undefined;
+  let lumentaleTokenErrorKeys: Set<string> | undefined;
 
   for (const [key, rawValue] of Object.entries(updates)) {
     const entry = byKey.get(key);
@@ -35,11 +37,25 @@ export function mergeGuardedTranslations(
         reviewKeys.add(key);
       }
     }
+    const isLumenTaleEntry = !!entry && entry.msbtFile.startsWith("lumentale/");
+    if (isLumenTaleEntry && entry) {
+      const validationError = value.trim() ? validateLumenTaleTranslation(entry.original, value) : null;
+      if (validationError) {
+        if (!lumentaleTokenErrorKeys) lumentaleTokenErrorKeys = new Set(prev.lumentaleTokenErrorKeys);
+        lumentaleTokenErrorKeys.add(key);
+        continue;
+      }
+      if (prev.lumentaleTokenErrorKeys?.has(key)) {
+        if (!lumentaleTokenErrorKeys) lumentaleTokenErrorKeys = new Set(prev.lumentaleTokenErrorKeys);
+        lumentaleTokenErrorKeys.delete(key);
+      }
+    }
     guarded[key] = value;
   }
 
   return {
     translations: { ...prev.translations, ...guarded },
     risenTagReviewKeys: reviewKeys ?? prev.risenTagReviewKeys,
+    lumentaleTokenErrorKeys: lumentaleTokenErrorKeys ?? prev.lumentaleTokenErrorKeys,
   };
 }

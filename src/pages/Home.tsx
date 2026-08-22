@@ -32,6 +32,18 @@ const games = [
     arrowClass: "text-[hsl(42,95%,72%)]",
   },
   {
+    title: "LumenTale: Memories of Trey",
+    subtitle: "جداول ترجمة Unity",
+    desc: "يفتح حزمة اللغة الإنجليزية محلياً، ويحفظ اسم كل جدول ومعرّف m_Id كما هما، ويمنع حفظ أي ترجمة تغيّر الوسوم أو الرموز التقنية. تصدير Bundle غير مفعّل حتى التحقق المستقل من سلامة إعادة البناء.",
+    link: "/lumentale",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3CradialGradient id='g' cx='76%25' cy='18%25'%3E%3Cstop stop-color='%23ffd69c'/%3E%3Cstop offset='.38' stop-color='%23885f83'/%3E%3Cstop offset='1' stop-color='%23171a36'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23g)'/%3E%3Cpath d='M0 700C260 600 420 790 700 665s390-240 900-110v345H0z' fill='%23102235' opacity='.8'/%3E%3Cpath d='M720 80l24 57 61 4-47 39 15 60-53-32-53 32 15-60-47-39 61-4z' fill='%23fff0c8' opacity='.82'/%3E%3C/svg%3E",
+    formats: ["UnityFS", ".bundle", "30 TABLES"],
+    cardClass: "border-[hsl(330,45%,58%)]/35 hover:border-[hsl(36,85%,70%)]/70",
+    formatClass: "bg-[hsl(330,45%,58%)]/20 text-[hsl(36,90%,80%)] border-[hsl(330,45%,58%)]/35",
+    subtitleClass: "text-[hsl(36,90%,80%)]",
+    arrowClass: "text-[hsl(36,90%,80%)]",
+  },
+  {
     title: "Xenoblade Chronicles 3",
     subtitle: "عرّب زينوبليد كرونيكلز 3",
     desc: "استخراج النصوص من ملفات BDAT و MSBT ومعالجتها وربط الحروف العربية وعكس الاتجاه تلقائياً",

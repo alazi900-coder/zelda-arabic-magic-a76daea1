@@ -19,6 +19,9 @@ import { buildWolfCategories } from "@/lib/wolfrpg/wolf-categories";
 import { DS_FILE_RE, dsCategories } from "@/lib/dragonsword/ds-categories";
 import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
+import { lumentaleCategories } from "@/lib/lumentale/lumentale-categories";
+import { LUMENTALE_META_KEY } from "@/lib/lumentale/lumentale-editor-bridge";
+import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
@@ -78,6 +81,7 @@ const Editor = () => {
   const [pageLocked, setPageLocked] = React.useState(false);
   const [showToolHelp, setShowToolHelp] = React.useState<ToolType>(null);
   const [sourceGame, setSourceGame] = React.useState<string | null>(null);
+  const [lumentaleTableCount, setLumentaleTableCount] = React.useState<number | null>(null);
   const [testConnStatus, setTestConnStatus] = React.useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
   const [testConnMsg, setTestConnMsg] = React.useState<Record<string, string>>({});
 
@@ -135,6 +139,35 @@ const Editor = () => {
   const isGameMakerEntries = editor.state?.entries?.[0]?.msbtFile === "STRG";
   const isDragonSwordEntries = DS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isKingdomHeartsEntries = KHBBS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
+  const isLumenTaleEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
+
+  // LumenTale can contain an intentionally empty table. It has no editor rows,
+  // so it is represented only by the immutable bundle metadata and must still
+  // be included in the visible table total.
+  React.useEffect(() => {
+    let active = true;
+    if (!isLumenTaleEntries) {
+      setLumentaleTableCount(null);
+      return () => { active = false; };
+    }
+    void idbGet<{ tables?: unknown[] }>(LUMENTALE_META_KEY)
+      .then((metadata) => {
+        if (active) setLumentaleTableCount(metadata?.tables?.length ?? null);
+      })
+      .catch(() => {
+        if (active) setLumentaleTableCount(null);
+      });
+    return () => { active = false; };
+  }, [isLumenTaleEntries]);
+
+  const entryFileCount = React.useMemo(
+    () => new Set((editor.state?.entries || []).map(e => {
+      const p = e.msbtFile.split(':');
+      return p[0] === 'bdat-bin' ? p[1] : e.msbtFile;
+    })).size,
+    [editor.state?.entries],
+  );
+  const displayedFileCount = isLumenTaleEntries ? (lumentaleTableCount ?? entryFileCount) : entryFileCount;
   // "Back" link target — must match whichever tool actually loaded the
   // entries, not just default to Xenoblade's /process for every game that
   // isn't Risen (Mother 3 and Metroid Prime were falling through to it).
@@ -152,6 +185,8 @@ const Editor = () => {
     ? "/dragonsword"
     : isKingdomHeartsEntries
     ? "/kingdom-hearts-bbs"
+    : isLumenTaleEntries
+    ? "/lumentale"
     : isRisen
     ? "/risen/process"
     : "/process";
@@ -169,9 +204,10 @@ const Editor = () => {
     if (isPokemonEntries) return buildPkmCategories(entries);
     if (isGameMakerEntries) return FILE_CATEGORIES;
     if (isDragonSwordEntries) return dsCategories(entries);
+    if (isLumenTaleEntries) return lumentaleCategories(entries);
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -320,9 +356,9 @@ const Editor = () => {
                 <Package className="w-4 h-4 md:w-5 md:h-5 text-accent" />
                 <div>
                   <p className="text-base md:text-lg font-display font-bold">
-                    {new Set((editor.state?.entries || []).map(e => { const p = e.msbtFile.split(':'); return p[0] === 'bdat-bin' ? p[1] : e.msbtFile; })).size}
+                    {displayedFileCount}
                   </p>
-                  <p className="text-[10px] md:text-xs text-muted-foreground">ملفات BDAT</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">{isLumenTaleEntries ? "جداول Unity" : "ملفات BDAT"}</p>
                 </div>
               </CardContent>
             </Card>
@@ -464,6 +500,7 @@ const Editor = () => {
             editor={editor}
             isDanganronpa={false}
             setShowTagRepair={setShowTagRepair}
+            lumentaleTableCount={isLumenTaleEntries ? lumentaleTableCount : null}
           />
 
 
@@ -664,6 +701,7 @@ const Editor = () => {
             isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}
             isKingdomHearts={isKingdomHeartsEntries}
+            isLumenTale={isLumenTaleEntries}
             khbbsUnsupportedCount={editor.khbbsUnsupportedCount}
             khbbsUnsupportedCharacters={editor.khbbsUnsupportedCharacters}
             khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}
@@ -674,6 +712,11 @@ const Editor = () => {
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
             setShowDiagnostic={setShowDiagnostic}
           />
+          {isLumenTaleEntries && (editor.state?.lumentaleTokenErrorKeys?.size ?? 0) > 0 && (
+            <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              تم رفض {editor.state?.lumentaleTokenErrorKeys?.size} ترجمة من LumenTale لأنها غيّرت رمزاً محمياً. صحّح السطر وأعد `{0}` والوسوم والأوامر بالترتيب نفسه.
+            </div>
+          )}
 
           {/* Quality Stats Panel */}
           {editor.showQualityStats && (

@@ -11,6 +11,7 @@
  *   - `wolf_b<N>_s<M>`          → Wolfenstein RPG (wolf-editor-bridge keys entries this way)
  *   - `pkm_rom` / `pkm_<kind>`  → Pokémon Ruby Destiny (pkm-editor-bridge keys lines this way;
  *                                 the `<kind>` form marks which name list a line sits in)
+ *   - `lumentale/<table>`        → LumenTale: Memories of Trey Unity tables
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -23,7 +24,8 @@ export type GameParam =
   | "mother3"
   | "metroidprime"
   | "wolfenstein"
-  | "pokemon";
+  | "pokemon"
+  | "lumentale";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -36,5 +38,6 @@ export function resolveGameParam(
   if (/^TEXT_/.test(f)) return "metroidprime";
   if (/^wolf_b\d+_s\d+$/.test(f)) return "wolfenstein";
   if (PKM_FILE_RE.test(f)) return "pokemon";
+  if (f.startsWith("lumentale/")) return "lumentale";
   return "xenoblade";
 }

@@ -86,6 +86,9 @@ const RISEN_LINE_STRUCTURE_RULE =
   "same total line count, empty lines in the same positions (including leading " +
   "empty lines at the start of the text), one list item per line. Never merge lines.";
 
+const LUMENTALE_TOKEN_RULE =
+  "LumenTale token contract: preserve every protected placeholder, Unity rich-text tag, escape, input/control token and printf token byte-for-byte and in the same order. Do not add, remove, translate or reorder tokens or lines.";
+
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
   filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
@@ -148,6 +151,7 @@ export function useEditorTranslation({
   // which is never reset and can go stale across projects) — Xenoblade/other
   // sessions never have a `.tab` msbtFile, so this stays false for them.
   const isRisenSource = /\.tab$/i.test(state?.entries?.[0]?.msbtFile || "");
+  const isLumenTaleSource = state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
   // Resolved AI `game` param (mother3 / risen1|2 / xenoblade) from entry shape.
   const gameParam = resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant);
 
@@ -157,7 +161,11 @@ export function useEditorTranslation({
     const activeCategoryId = filterCategory.length === 1 ? filterCategory[0] : null;
     const categoryPrompt = activeCategoryId ? resolveCategoryPrompt(activeCategoryId, categoryPromptTemplates) : '';
     const base = categoryPrompt.trim() ? categoryPrompt : customPromptInstructions;
-    const parts = [base?.trim(), isRisenSource ? RISEN_LINE_STRUCTURE_RULE : ""].filter(Boolean);
+    const parts = [
+      base?.trim(),
+      isRisenSource ? RISEN_LINE_STRUCTURE_RULE : "",
+      isLumenTaleSource ? LUMENTALE_TOKEN_RULE : "",
+    ].filter(Boolean);
     return parts.length ? parts.join("\n\n") : undefined;
   };
 
@@ -447,6 +455,7 @@ export function useEditorTranslation({
     if (/\.(tab|gar3)$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
     if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile)) return categorizeMother3Entry(e);
     if (/^TEXT_/.test(e.msbtFile)) return categorizeMetroidPrimeEntry(e);
+    if (e.msbtFile.startsWith("lumentale/")) return e.risen3Cat?.startsWith("lumentale-") ? e.risen3Cat : "lumentale-general";
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

@@ -37,6 +37,8 @@ export interface EditorState {
   /** Risen 1: keys whose translation needed a tag auto-appended (e.g. <Exit> → "خروج" لكن
    * الوسم عاد ملحقاً) — تُعرَض كتنبيه "يحتاج مراجعة" حتى يتحقق المترجم يدوياً. */
   risenTagReviewKeys?: Set<string>;
+  /** LumenTale rows rejected because a translation changed protected Unity/control tokens. */
+  lumentaleTokenErrorKeys?: Set<string>;
 }
 
 export interface ReviewIssue {

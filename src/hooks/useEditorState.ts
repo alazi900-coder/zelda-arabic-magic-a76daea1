@@ -40,6 +40,7 @@ import { extractMother3Entries, MOTHER3_BUFFER_KEY, MOTHER3_SOURCE_GAME } from "
 import { getLongestLineLength } from "@/lib/risen-line-split";
 import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
 import { analyzeKHBBSCTDText, type KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
+import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
 const LONG_TEXT_LINE_THRESHOLD = 35;
@@ -972,6 +973,20 @@ export function useEditorState() {
       finalValue = normalizeBreakStyleToSource(entry.original, finalValue);
     }
 
+    if (entry?.msbtFile.startsWith("lumentale/") && finalValue.trim()) {
+      const validationError = validateLumenTaleTranslation(entry.original, finalValue);
+      if (validationError) {
+        toast({ title: "⚠️ رُفض حفظ الترجمة", description: `${entry.label}: ${validationError}`, variant: "destructive" });
+        setState(prev => {
+          if (!prev) return null;
+          const lumentaleTokenErrorKeys = new Set(prev.lumentaleTokenErrorKeys);
+          lumentaleTokenErrorKeys.add(key);
+          return { ...prev, lumentaleTokenErrorKeys };
+        });
+        return;
+      }
+    }
+
     setState(prev => {
       if (!prev) return null;
       // If the user is re-typing a translation for a previously-cleared row,
@@ -986,6 +1001,11 @@ export function useEditorState() {
         const reviewKeys = new Set(prev.risenTagReviewKeys);
         if (risenNeedsReview) reviewKeys.add(key); else reviewKeys.delete(key);
         next.risenTagReviewKeys = reviewKeys;
+      }
+      if (entry?.msbtFile.startsWith("lumentale/")) {
+        const lumentaleTokenErrorKeys = new Set(prev.lumentaleTokenErrorKeys);
+        lumentaleTokenErrorKeys.delete(key);
+        next.lumentaleTokenErrorKeys = lumentaleTokenErrorKeys;
       }
       // Keep build actions in the same event cycle from seeing a stale render
       // after a manual ✓ / Ctrl+Enter commit.

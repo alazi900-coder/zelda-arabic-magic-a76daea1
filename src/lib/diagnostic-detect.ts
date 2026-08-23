@@ -242,7 +242,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     const missingTags = origTags.filter(t => !trimmed.includes(t));
     const unresolvedMissingTags = excludeTranslatedReplacementTags(missingTags, translatedTags);
     if (unresolvedMissingTags.length > 0) {
-      issues.push({ ...base, severity: "warning", category: "tag_mismatch",
+      issues.push({ ...base, severity: "critical", category: "tag_mismatch",
         message: `${unresolvedMissingTags.length} وسم مفقود: ${unresolvedMissingTags.slice(0, 3).join(", ")}${unresolvedMissingTags.length > 3 ? "..." : ""}` });
     }
   }
@@ -358,7 +358,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   // 19. Technical multiset mismatch
   const technicalDiff = diffTechnicalTags(entry.original, trimmed);
   const hasSpecificTechnicalIssue = issues.some(issue => SPECIFIC_TECHNICAL_ISSUE_CATEGORIES.has(issue.category));
-  if (!technicalDiff.exactTagMatch && !hasSpecificTechnicalIssue) {
+  if (!technicalDiff.exactTagMatch && !hasSpecificTechnicalIssue && !/\.tab$/i.test(entry.msbtFile)) {
     const messageParts: string[] = [];
     if (technicalDiff.missingTags.length > 0) {
       messageParts.push(
@@ -377,7 +377,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   }
 
   // 19. Tag order mismatch
-  if (technicalDiff.exactTagMatch && !technicalDiff.sequenceMatch) {
+  if (technicalDiff.exactTagMatch && !technicalDiff.sequenceMatch && !/\.tab$/i.test(entry.msbtFile)) {
     issues.push({
       ...base, severity: "critical", category: "tag_order_mismatch",
       message: "الوسوم التقنية موجودة لكن ترتيبها مقلوب مقارنة بالأصل — يسبب تجمّد المشاهد",

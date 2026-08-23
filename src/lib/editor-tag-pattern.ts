@@ -11,8 +11,9 @@
  *
  * It covers every shape this tool's games use: `{fb}` and `{FD:01}` (Gen 3
  * Pokémon), `[XENO:n ]` and `[System:PageBreak ]` (Xenoblade), `[TAG:...]`
- * (Metroid Prime), `<Exit>` (Risen), the private-use icons, and the bracketed
- * forms with a leading or trailing number.
+ * (Metroid Prime), Unity/TMP tags such as `<h>` and `</h>` (LumenTale),
+ * `<Exit>` (Risen), the private-use icons, and the bracketed forms with a
+ * leading or trailing number.
  */
 
 import { RISEN_TAG_REGEX } from "@/lib/risen-tag-guard";
@@ -21,15 +22,18 @@ const SOURCE = [
   "\\[\\s*\\w+\\s*:[^\\]]*?\\](?:\\s*\\([^)]{1,100}\\))?",
   "\\[\\s*\\w+\\s*=\\s*[^\\]]*\\]",
   "\\{\\s*\\w+\\s*:\\s*[^}]*\\}",
-  "\\{[\\w]+\\}",
+  "\\{(?:\\d+(?:\\.[A-Za-z_][\\w.-]*)?|[A-Za-z_][\\w.-]*)\\}",
   "\\d+\\s*\\[[A-Z]{2,10}\\]",
   "\\[[A-Z]{2,10}\\]\\s*\\d+",
   "\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]",
   "\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]",
-  "\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '\\/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]",
+  "\\\\?\\[\\s*[A-Za-z][A-Za-z0-9_]*(?:[ '\\/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]",
   "#[0-5]",
   "[\\uE000-\\uE0FF]+",
   "[\\uFFF9-\\uFFFC]",
+  "<\\/?[A-Za-z][^>]*>|<\\/>",
+  "\\\\[nrt]",
+  "%(?:\\d+\\$)?[\\d.$-]*[sdif]",
   RISEN_TAG_REGEX.source,
 ].join("|");
 

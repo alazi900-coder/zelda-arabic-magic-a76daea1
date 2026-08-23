@@ -79,9 +79,19 @@ function serializeUnityFS(bundleFile) {
                 for (let i = 0; i < hashTab.length; i++) hashTab[i] = 0
             }
 
-            const compressedSize = useLZ4HC
+            let compressedSize = useLZ4HC
                 ? compressBlockHC(uncompressedData, compBuf, processedSize, blockSize)
                 : compressBlock(uncompressedData, compBuf, processedSize, blockSize, hashTab)
+
+            // LZ4HC and LZ4 use the same on-disk block representation. Some
+            // dense Alpha8 atlas chunks defeat the HC match search even when
+            // the normal LZ4 matcher can encode them smaller than raw bytes.
+            // Retain the source's LZ4HC block class but use that compatible
+            // encoder as a safe fallback instead of emitting a raw block.
+            if (useLZ4HC && !(compressedSize > 0 && compressedSize < blockSize)) {
+                const fallbackHashTab = makeHashTable()
+                compressedSize = compressBlock(uncompressedData, compBuf, processedSize, blockSize, fallbackHashTab)
+            }
 
             if (compressedSize > 0 && compressedSize < blockSize) {
                 compressedBlocksWriter.write(compBuf.subarray(0, compressedSize))

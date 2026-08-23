@@ -32,6 +32,7 @@ import { hasRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { NO_OWNER_LABEL, getItemIdPrefix, getInfoIdPrefix, type RisenSectionFilterValue } from "@/lib/risen/categories";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
+import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
@@ -840,9 +841,10 @@ export function useEditorState() {
       const isMetroidPrime = !isBdat && !isRisen && !isMother3 && /^TEXT_/.test(e.msbtFile);
       const isPkm = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && PKM_FILE_RE.test(e.msbtFile);
       const isDs = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && DS_FILE_RE.test(e.msbtFile);
-      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isLumenTale = e.msbtFile.startsWith('lumentale/');
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||

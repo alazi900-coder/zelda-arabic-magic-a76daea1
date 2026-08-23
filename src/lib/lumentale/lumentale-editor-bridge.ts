@@ -10,6 +10,7 @@ import { processMonoBehaviour } from "@/lib/vendor/unityfs-js/exporters/index.js
 import type { ExtractedEntry } from "@/components/editor/types";
 import { hasArabicChars, hasArabicPresentationForms, processArabicText } from "@/lib/arabic-processing";
 import { validateLumenTaleTranslation } from "./lumentale-token-guard";
+import { categorizeLumenTaleEntry } from "./lumentale-categories";
 export { lumentaleTechnicalTokens, validateLumenTaleTranslation } from "./lumentale-token-guard";
 
 export const LUMENTALE_SOURCE_GAME = "lumentale";
@@ -36,16 +37,6 @@ function toOpaqueId(value: TableRow["m_Id"]): string {
   if (typeof value === "bigint") return value.toString();
   if (typeof value === "number") return String(value);
   return String(value ?? "");
-}
-
-function tableCategory(table: string): string {
-  const upper = table.toUpperCase();
-  if (/(DIALOG|STORY|CUTSCENE|QUEST)/.test(upper)) return "lumentale-dialogue";
-  if (/(ANIMON.*NAME|CHARACTER|NPC)/.test(upper)) return "lumentale-names";
-  if (/(DESCRIPTION|LORE|JOURNAL)/.test(upper)) return "lumentale-lore";
-  if (/(ITEM|INVENTORY|EQUIP)/.test(upper)) return "lumentale-items";
-  if (/(MENU|UI|SETTINGS|SYSTEM|TUTORIAL)/.test(upper)) return "lumentale-ui";
-  return "lumentale-general";
 }
 
 /**
@@ -79,7 +70,7 @@ export async function extractLumenTaleEntries(buffer: ArrayBuffer): Promise<{
     // retained in metadata for a future verified writer.
     if (!hasTableData || !table) continue;
 
-    const sourceName = `lumentale/${table}`;
+      const sourceName = `lumentale/${table}`;
     const metaRows: LumenTaleTableMeta["rows"] = [];
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
       const row = rows[rowIndex];
@@ -88,7 +79,7 @@ export async function extractLumenTaleEntries(buffer: ArrayBuffer): Promise<{
       if (!id) continue;
       const index = rowIndex;
       const editorKey = `${sourceName}:${index}`;
-      entries.push({
+      const entry: ExtractedEntry = {
         msbtFile: sourceName,
         index,
         label: `${table} · m_Id ${id}`,
@@ -96,8 +87,10 @@ export async function extractLumenTaleEntries(buffer: ArrayBuffer): Promise<{
         // Unity's string table has no byte ceiling. The builder validates tokens,
         // not arbitrary byte truncation.
         maxBytes: 1_000_000,
-        risen3Cat: tableCategory(table),
-      });
+        risen3Cat: "lumentale-general",
+      };
+      entry.risen3Cat = categorizeLumenTaleEntry(entry);
+      entries.push(entry);
       metaRows.push({ editorKey, rowIndex, m_Id: id });
     }
     tables.push({

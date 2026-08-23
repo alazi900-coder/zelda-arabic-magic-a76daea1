@@ -4,6 +4,7 @@ import type { RisenCategory } from "@/lib/risen/categories";
 import type { Mother3Category } from "@/lib/mother3/categories";
 import type { MetroidPrimeCategory } from "@/lib/metroid-prime/mp-categories";
 import type { PkmCategory } from "@/lib/pokemon/pkm-categories";
+import type { LumenTaleCategory } from "@/lib/lumentale/lumentale-categories";
 import {
   AlertTriangle, Wrench, Loader2, Sparkles, RefreshCw,
   Monitor, Swords, Users, Skull, ScrollText, MapPin, BookOpen,
@@ -50,15 +51,18 @@ interface CategoryProgressProps {
   isPokemon?: boolean;
   /** Built from the name lists measured in the ROM (see src/lib/pokemon/pkm-categories.ts). */
   pokemonCategories?: PkmCategory[];
+  isLumenTale?: boolean;
+  /** Built from the imported Unity table names, never from translated text. */
+  lumentaleCategories?: LumenTaleCategory[];
 }
 
-const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [] }) => {
-  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
+const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [], isLumenTale = false, lumentaleCategories = [] }) => {
+  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isLumenTale ? lumentaleCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
   const activeCats = categories.filter(cat => categoryProgress[cat.id]);
-  if (activeCats.length === 0 && !categoryProgress['other']) return null;
+  if (activeCats.length === 0 && (isLumenTale || !categoryProgress['other'])) return null;
 
   // Overall stats
-  const allKeys = [...activeCats.map(c => c.id), ...(categoryProgress['other'] ? ['other'] : [])];
+  const allKeys = [...activeCats.map(c => c.id), ...(!isLumenTale && categoryProgress['other'] ? ['other'] : [])];
   const totalAll = allKeys.reduce((s, k) => s + (categoryProgress[k]?.total || 0), 0);
   const translatedAll = allKeys.reduce((s, k) => s + (categoryProgress[k]?.translated || 0), 0);
   const overallPct = totalAll > 0 ? Math.round((translatedAll / totalAll) * 100) : 0;
@@ -185,7 +189,7 @@ const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, f
           </button>
         );
       })}
-      {categoryProgress['other'] && (
+      {!isLumenTale && categoryProgress['other'] && (
         <button
           onClick={() => setFilterCategory(
             filterCategory.includes("other")

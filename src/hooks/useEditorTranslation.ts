@@ -19,6 +19,7 @@ import { resolveGameParam } from "@/lib/game-param";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
 import { cacheLookupMany, cacheStoreMany } from "@/lib/translation-cache";
+import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
@@ -455,7 +456,7 @@ export function useEditorTranslation({
     if (/\.(tab|gar3)$/i.test(e.msbtFile)) return categorizeRisenEntry(e);
     if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile)) return categorizeMother3Entry(e);
     if (/^TEXT_/.test(e.msbtFile)) return categorizeMetroidPrimeEntry(e);
-    if (e.msbtFile.startsWith("lumentale/")) return e.risen3Cat?.startsWith("lumentale-") ? e.risen3Cat : "lumentale-general";
+    if (e.msbtFile.startsWith("lumentale/")) return categorizeLumenTaleEntry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

@@ -14,6 +14,7 @@ import { buildRisenCategories } from "@/lib/risen/categories";
 import { buildMother3Categories } from "@/lib/mother3/categories";
 import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
 import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { buildLumenTaleCategories } from "@/lib/lumentale/lumentale-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -70,6 +71,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);
   const metroidPrimeCategories = useMemo(() => (isMetroidPrime && entries ? buildMetroidPrimeCategories(entries) : []), [isMetroidPrime, entries]);
   const pokemonCategories = useMemo(() => (isPokemon && entries ? buildPkmCategories(entries) : []), [isPokemon, entries]);
+  const lumentaleCategories = useMemo(() => (isLumenTale && entries ? buildLumenTaleCategories(entries) : []), [isLumenTale, entries]);
   if (!editor.state) return null;
   const state = editor.state;
   return (
@@ -97,6 +99,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         metroidPrimeCategories={metroidPrimeCategories}
         isPokemon={isPokemon}
         pokemonCategories={pokemonCategories}
+        isLumenTale={isLumenTale}
+        lumentaleCategories={lumentaleCategories}
       />
 
       {isRisen && (

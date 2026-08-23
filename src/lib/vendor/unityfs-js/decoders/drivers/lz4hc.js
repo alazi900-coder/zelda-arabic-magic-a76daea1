@@ -1,7 +1,10 @@
 // LZ4HC-style block compressor for UnityFS. It emits standard LZ4 blocks,
 // but searches a bounded hash chain for longer matches than the fast encoder.
 const MIN_MATCH = 4
-const LAST_LITERALS = 5
+// The LZ4 block rules require five trailing literals and the last match to
+// begin at least 12 bytes before the end. Reserving eight bytes satisfies both
+// conditions for a minimum four-byte match.
+const LAST_LITERALS = 8
 const HASH_SIZE = 1 << 16
 const MAX_DISTANCE = 0xffff
 const CHAIN_LIMIT = 4096

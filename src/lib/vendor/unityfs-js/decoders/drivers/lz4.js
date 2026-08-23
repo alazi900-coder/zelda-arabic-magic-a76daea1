@@ -164,7 +164,10 @@ function xxh32(seed, src, index, len) {
 // Compression format parameters/constants.
 var minMatch = 4
 var minLength = 13
-var searchLimit = 5
+// A valid LZ4 block must retain at least five trailing literals and its final
+// match must begin at least 12 bytes before the end. A limit of five permitted
+// final matches that strict native decoders reject; seven satisfies both rules.
+var searchLimit = 7
 var skipTrigger = 6
 var hashSize = 1 << 16
 
@@ -433,6 +436,61 @@ export function decompressBlock(src, dst, sIndex, sLength, dIndex) {
     }
 
     return dIndex
+}
+
+// Validates raw LZ4 block structure without relying on this module's decoder.
+// Unity's native decoder enforces the terminal-match restrictions, so writer
+// code calls this before embedding a compressed block in a UnityFS bundle.
+export function isValidLZ4Block(src, sLength, expectedSize) {
+    let sIndex = 0
+    let dIndex = 0
+    let finalLiteralCount = 0
+    let lastMatchStart = -1
+    let sawMatch = false
+
+    while (sIndex < sLength) {
+        const token = src[sIndex++]
+        let literalCount = token >>> 4
+        if (literalCount === runMask) {
+            let extension
+            do {
+                if (sIndex >= sLength) return false
+                extension = src[sIndex++]
+                literalCount += extension
+            } while (extension === 0xff)
+        }
+        if (sIndex + literalCount > sLength) return false
+        sIndex += literalCount
+        dIndex += literalCount
+        finalLiteralCount = literalCount
+        if (dIndex > expectedSize) return false
+        if (sIndex === sLength) break
+
+        if (sIndex + 2 > sLength) return false
+        const offset = src[sIndex] | (src[sIndex + 1] << 8)
+        sIndex += 2
+        if (offset === 0 || offset > dIndex) return false
+
+        let matchLength = token & mlMask
+        if (matchLength === mlMask) {
+            let extension
+            do {
+                if (sIndex >= sLength) return false
+                extension = src[sIndex++]
+                matchLength += extension
+            } while (extension === 0xff)
+        }
+        lastMatchStart = dIndex
+        sawMatch = true
+        dIndex += matchLength + minMatch
+        if (dIndex > expectedSize) return false
+        finalLiteralCount = 0
+    }
+
+    return (
+        dIndex === expectedSize &&
+        (!sawMatch || (finalLiteralCount >= 5 && lastMatchStart <= expectedSize - 12))
+    )
 }
 
 // Compresses a block with Lz4.

@@ -1,7 +1,7 @@
 ﻿import { BinaryWriter, BinaryReader } from '../../core/binaryStream.js'
 import { FileType } from '../unityFile.js'
 import { BundleFile, BundleFlags, CompressionType } from './model.js'
-import { makeHashTable, compressBound, compressBlock } from '../../decoders/drivers/lz4.js'
+import { makeHashTable, compressBound, compressBlock, isValidLZ4Block } from '../../decoders/drivers/lz4.js'
 import { compressBlockHC } from '../../decoders/drivers/lz4hc.js'
 
 export function serializeBundleFile(bundleFile) {
@@ -57,8 +57,10 @@ function serializeUnityFS(bundleFile) {
     const uncompressedData = blockData.getData()
     const totalUncompressedSize = uncompressedData.length
 
-    // Preserve the source compression class. Unity uses the same LZ4 block
-    // format for LZ4 and LZ4HC, but LZ4HC needs a deeper match search.
+    // Preserve the source compression class. Unity uses the same on-disk LZ4
+    // format for LZ4 and LZ4HC; the flag describes the source class, not a
+    // separate decoding format. The HC path reserves the mandatory terminal
+    // bytes and every output block is structurally validated before inclusion.
     const BLOCK_SIZE = 131072 // 128 KB
     const blocks = []
     const compressedBlocksWriter = new BinaryWriter(0)
@@ -68,32 +70,19 @@ function serializeUnityFS(bundleFile) {
     const useLZ4HC = originalCompType === CompressionType.LZ4HC
 
     if (useLZ4) {
-        const hashTab = useLZ4HC ? null : makeHashTable()
+        const hashTab = makeHashTable()
         let processedSize = 0
         while (processedSize < totalUncompressedSize) {
             const blockSize = Math.min(BLOCK_SIZE, totalUncompressedSize - processedSize)
             const maxCompressedSize = compressBound(blockSize)
             const compBuf = new Uint8Array(maxCompressedSize)
 
-            if (hashTab) {
-                for (let i = 0; i < hashTab.length; i++) hashTab[i] = 0
-            }
-
-            let compressedSize = useLZ4HC
+            for (let i = 0; i < hashTab.length; i++) hashTab[i] = 0
+            const compressedSize = useLZ4HC
                 ? compressBlockHC(uncompressedData, compBuf, processedSize, blockSize)
                 : compressBlock(uncompressedData, compBuf, processedSize, blockSize, hashTab)
 
-            // LZ4HC and LZ4 use the same on-disk block representation. Some
-            // dense Alpha8 atlas chunks defeat the HC match search even when
-            // the normal LZ4 matcher can encode them smaller than raw bytes.
-            // Retain the source's LZ4HC block class but use that compatible
-            // encoder as a safe fallback instead of emitting a raw block.
-            if (useLZ4HC && !(compressedSize > 0 && compressedSize < blockSize)) {
-                const fallbackHashTab = makeHashTable()
-                compressedSize = compressBlock(uncompressedData, compBuf, processedSize, blockSize, fallbackHashTab)
-            }
-
-            if (compressedSize > 0 && compressedSize < blockSize) {
+            if (compressedSize > 0 && compressedSize < blockSize && isValidLZ4Block(compBuf, compressedSize, blockSize)) {
                 compressedBlocksWriter.write(compBuf.subarray(0, compressedSize))
                 blocks.push({
                     uncompressedSize: blockSize,
@@ -143,7 +132,7 @@ function serializeUnityFS(bundleFile) {
     if (blockInfoUsesLZ4HC) {
         const blockInfoBuffer = new Uint8Array(compressBound(blockInfoBytes.length))
         const blockInfoSize = compressBlockHC(blockInfoBytes, blockInfoBuffer, 0, blockInfoBytes.length)
-        if (blockInfoSize > 0 && blockInfoSize < blockInfoBytes.length) {
+        if (blockInfoSize > 0 && blockInfoSize < blockInfoBytes.length && isValidLZ4Block(blockInfoBuffer, blockInfoSize, blockInfoBytes.length)) {
             encodedBlockInfoBytes = blockInfoBuffer.subarray(0, blockInfoSize)
         }
     }

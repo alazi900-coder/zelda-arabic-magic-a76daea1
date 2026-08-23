@@ -3,8 +3,10 @@
  * Design rule: m_Id is an opaque 64-bit identity. It is never parsed as a JS
  * number, translated, renumbered, or used as a writable value.
  */
-import { load } from "unityfs-js";
-import { processMonoBehaviour } from "unityfs-js/exporters/index.js";
+// Use the checked-in UnityFS source explicitly. A bare package import lets
+// Node/Vitest resolve a different compressor than the browser application.
+import { load } from "@/lib/vendor/unityfs-js";
+import { processMonoBehaviour } from "@/lib/vendor/unityfs-js/exporters/index.js";
 import type { ExtractedEntry } from "@/components/editor/types";
 import { validateLumenTaleTranslation } from "./lumentale-token-guard";
 export { lumentaleTechnicalTokens, validateLumenTaleTranslation } from "./lumentale-token-guard";

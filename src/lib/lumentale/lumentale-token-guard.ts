@@ -9,6 +9,18 @@ export function lumentaleTechnicalTokens(text: string): string[] {
   return text.match(TECHNICAL_TOKEN) ?? [];
 }
 
+/**
+ * Replaces exactly the technical-token sequence governed by this module.
+ * Build-time Arabic shaping uses it to move immutable runtime syntax out of
+ * the BiDi transformation, then restores the source-order sequence verbatim.
+ */
+export function replaceLumenTaleTechnicalTokens(
+  text: string,
+  replacer: (token: string) => string,
+): string {
+  return text.replace(new RegExp(TECHNICAL_TOKEN.source, "g"), replacer);
+}
+
 export function validateLumenTaleTranslation(original: string, translation: string): string | null {
   const source = lumentaleTechnicalTokens(original);
   const target = lumentaleTechnicalTokens(translation);

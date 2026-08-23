@@ -8,9 +8,9 @@
 import { load } from "@/lib/vendor/unityfs-js";
 import { processMonoBehaviour } from "@/lib/vendor/unityfs-js/exporters/index.js";
 import type { ExtractedEntry } from "@/components/editor/types";
-import { hasArabicChars, hasArabicPresentationForms, processArabicText } from "@/lib/arabic-processing";
 import { validateLumenTaleTranslation } from "./lumentale-token-guard";
 import { categorizeLumenTaleEntry } from "./lumentale-categories";
+import { prepareLumenTaleLocalizedText } from "./lumentale-arabic-build-text";
 export { lumentaleTechnicalTokens, validateLumenTaleTranslation } from "./lumentale-token-guard";
 
 export const LUMENTALE_SOURCE_GAME = "lumentale";
@@ -113,22 +113,16 @@ function entryKey(entry: Pick<ExtractedEntry, "msbtFile" | "index">): string {
 }
 
 /**
- * LumenTale writes character code points through a left-to-right TMP string
- * table and does not perform Arabic shaping. Shape raw Arabic once before
- * serialization; pre-shaped presentation forms are intentionally preserved.
- */
-function prepareLumenTaleLocalizedText(text: string): string {
-  if (!hasArabicChars(text) || hasArabicPresentationForms(text)) return text;
-  return processArabicText(text, { arabicNumerals: true, mirrorPunct: true });
-}
-
-/**
  * The browser build must prove that the serialized bytes can be reopened by
  * UnityFS before the editor offers them for download. This catches the exact
  * failure mode where a bundle is written as Resource/no-compression and Unity
  * then falls back to displaying localization keys in its menus.
  */
-async function verifyBuiltLumenTaleBundle(bundle: Uint8Array, tables: LumenTaleTableMeta[]): Promise<string | null> {
+async function verifyBuiltLumenTaleBundle(
+  bundle: Uint8Array,
+  tables: LumenTaleTableMeta[],
+  expectedChanges: Array<{ table: string; rowIndex: number; m_Id: string; original: string; text: string }>,
+): Promise<string | null> {
   try {
     const copy = bundle.buffer.slice(bundle.byteOffset, bundle.byteOffset + bundle.byteLength);
     const verifier = await load(copy, { unityRevision: "2022.3.62f2" });
@@ -139,21 +133,29 @@ async function verifyBuiltLumenTaleBundle(bundle: Uint8Array, tables: LumenTaleT
 
     const verifiedObjects = verifier.getObjectInfosByClass("MonoBehaviour");
     const expectedByTable = new Map(tables.map((table) => [table.table, table.rowCount]));
-    const verifiedRows = new Map<string, number>();
+    const verifiedRows = new Map<string, TableRow[]>();
     for (const objectInfo of verifiedObjects) {
       const result = await processMonoBehaviour(objectInfo, {}, verifier);
       const raw = result?.data?.raw as { m_Name?: unknown; m_TableData?: unknown } | undefined;
       const table = typeof raw?.m_Name === "string" ? raw.m_Name : "";
-      if (table && Array.isArray(raw?.m_TableData)) verifiedRows.set(table, raw.m_TableData.length);
+      if (table && Array.isArray(raw?.m_TableData)) verifiedRows.set(table, raw.m_TableData as TableRow[]);
     }
 
     if (verifiedRows.size !== tables.length) {
       return `أوقف البناء: أُعيد فتح ${verifiedRows.size} جدولاً فقط من أصل ${tables.length}.`;
     }
     for (const [table, expectedRows] of expectedByTable) {
-      if (verifiedRows.get(table) !== expectedRows) {
+      if (verifiedRows.get(table)?.length !== expectedRows) {
         return `أوقف البناء: جدول ${table} لا يطابق عدد صفوفه الأصلي بعد إعادة الفتح.`;
       }
+    }
+    for (const change of expectedChanges) {
+      const row = verifiedRows.get(change.table)?.[change.rowIndex];
+      if (!row || toOpaqueId(row.m_Id) !== change.m_Id || row.m_Localized !== change.text) {
+        return `أوقف البناء: تعذر إثبات النص المكتوب للسطر ${change.table} · m_Id ${change.m_Id} بعد إعادة الفتح.`;
+      }
+      const tokenError = validateLumenTaleTranslation(change.original, change.text);
+      if (tokenError) return `أوقف البناء: ${change.table} · m_Id ${change.m_Id}: ${tokenError}`;
     }
     return null;
   } catch (cause) {
@@ -185,7 +187,14 @@ export async function buildLumenTaleBundle(
   const objectsByPathId = new Map(
     manager.getObjectInfosByClass("MonoBehaviour").map((objectInfo) => [objectInfo.pathID.toString(), objectInfo]),
   );
-  const pending: Array<{ row: { m_Localized?: unknown }; text: string; table: string }> = [];
+  const pending: Array<{
+    row: { m_Localized?: unknown };
+    text: string;
+    table: string;
+    rowIndex: number;
+    m_Id: string;
+    original: string;
+  }> = [];
 
   for (const tableMeta of meta.tables) {
     const objectInfo = objectsByPathId.get(tableMeta.pathId);
@@ -219,7 +228,23 @@ export async function buildLumenTaleBundle(
       if (translation === original) continue;
       const tokenError = validateLumenTaleTranslation(original, translation);
       if (tokenError) return { error: `${tableMeta.table} · m_Id ${rowMeta.m_Id}: ${tokenError}` };
-      pending.push({ row: writableRow, text: prepareLumenTaleLocalizedText(translation), table: tableMeta.table });
+      let prepared: string;
+      try {
+        prepared = prepareLumenTaleLocalizedText(translation);
+      } catch (cause) {
+        const detail = cause instanceof Error ? cause.message : String(cause);
+        return { error: `${tableMeta.table} · m_Id ${rowMeta.m_Id}: أوقف البناء لحماية الرموز التقنية (${detail})` };
+      }
+      const preparedTokenError = validateLumenTaleTranslation(original, prepared);
+      if (preparedTokenError) return { error: `${tableMeta.table} · m_Id ${rowMeta.m_Id}: ${preparedTokenError}` };
+      pending.push({
+        row: writableRow,
+        text: prepared,
+        table: tableMeta.table,
+        rowIndex: rowMeta.rowIndex,
+        m_Id: rowMeta.m_Id,
+        original,
+      });
     }
   }
 
@@ -240,7 +265,7 @@ export async function buildLumenTaleBundle(
 
   const serialized = manager.bundleFile.serialize();
   const bundle = serialized instanceof Uint8Array ? serialized : new Uint8Array(serialized as ArrayBuffer);
-  const verificationError = await verifyBuiltLumenTaleBundle(bundle, meta.tables);
+  const verificationError = await verifyBuiltLumenTaleBundle(bundle, meta.tables, pending);
   if (verificationError) return { error: verificationError };
   const stem = (meta.originalName || "localization-string-tables-english_assets_all.bundle").replace(/\.bundle$/i, "");
   return {

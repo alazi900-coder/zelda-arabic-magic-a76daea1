@@ -8,6 +8,7 @@
 import { load } from "@/lib/vendor/unityfs-js";
 import { processMonoBehaviour } from "@/lib/vendor/unityfs-js/exporters/index.js";
 import type { ExtractedEntry } from "@/components/editor/types";
+import { hasArabicChars, hasArabicPresentationForms, processArabicText } from "@/lib/arabic-processing";
 import { validateLumenTaleTranslation } from "./lumentale-token-guard";
 export { lumentaleTechnicalTokens, validateLumenTaleTranslation } from "./lumentale-token-guard";
 
@@ -119,6 +120,16 @@ function entryKey(entry: Pick<ExtractedEntry, "msbtFile" | "index">): string {
 }
 
 /**
+ * LumenTale writes character code points through a left-to-right TMP string
+ * table and does not perform Arabic shaping. Shape raw Arabic once before
+ * serialization; pre-shaped presentation forms are intentionally preserved.
+ */
+function prepareLumenTaleLocalizedText(text: string): string {
+  if (!hasArabicChars(text) || hasArabicPresentationForms(text)) return text;
+  return processArabicText(text, { arabicNumerals: true, mirrorPunct: true });
+}
+
+/**
  * The browser build must prove that the serialized bytes can be reopened by
  * UnityFS before the editor offers them for download. This catches the exact
  * failure mode where a bundle is written as Resource/no-compression and Unity
@@ -215,7 +226,7 @@ export async function buildLumenTaleBundle(
       if (translation === original) continue;
       const tokenError = validateLumenTaleTranslation(original, translation);
       if (tokenError) return { error: `${tableMeta.table} · m_Id ${rowMeta.m_Id}: ${tokenError}` };
-      pending.push({ row: writableRow, text: translation, table: tableMeta.table });
+      pending.push({ row: writableRow, text: prepareLumenTaleLocalizedText(translation), table: tableMeta.table });
     }
   }
 

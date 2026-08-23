@@ -7,7 +7,8 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
-import { load } from "unityfs-js";
+import { load } from "@/lib/vendor/unityfs-js";
+import { processArabicText } from "@/lib/arabic-processing";
 import {
   buildLumenTaleBundle,
   extractLumenTaleEntries,
@@ -55,7 +56,9 @@ describe("LumenTale verified bundle build", () => {
       return original?.original !== entry.original;
     });
     expect(changed).toHaveLength(1);
-    expect(changed[0]).toMatchObject({ msbtFile: target.msbtFile, index: target.index, original: translatedText });
+    const expectedStoredText = processArabicText(translatedText, { arabicNumerals: true, mirrorPunct: true });
+    expect(expectedStoredText).not.toBe(translatedText);
+    expect(changed[0]).toMatchObject({ msbtFile: target.msbtFile, index: target.index, original: expectedStoredText });
 
     const originalIdentity = extracted.tables.flatMap((table) => table.rows.map((row) => `${table.asset}\u0000${table.table}\u0000${row.m_Id}`));
     const rebuiltIdentity = reopened.tables.flatMap((table) => table.rows.map((row) => `${table.asset}\u0000${table.table}\u0000${row.m_Id}`));

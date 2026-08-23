@@ -1,0 +1,51 @@
+{
+    "name": "unityfs-js",
+    "version": "0.2.6",
+    "description": "A high-performance, lightweight pure JavaScript Unity assets and bundle parser/extractor.",
+    "main": "index.js",
+    "type": "module",
+    "types": "./index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "import": "./index.js"
+        },
+        "./exporters/*": "./exporters/*"
+    },
+    "files": [
+        "index.js",
+        "index.d.ts",
+        "assetManager.js",
+        "core",
+        "decoders",
+        "exporters",
+        "fsb5",
+        "unityfs",
+        "vendor",
+        "wasm",
+        "README.md",
+        "LICENSE"
+    ],
+    "keywords": [
+        "unity",
+        "unityfs",
+        "assetbundle",
+        "extractor",
+        "parser",
+        "live2d",
+        "web"
+    ],
+    "author": "bainiao404",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/bainiao404/unityfs-js.git"
+    },
+    "bugs": {
+        "url": "https://github.com/bainiao404/unityfs-js/issues"
+    },
+    "homepage": "https://github.com/bainiao404/unityfs-js#readme",
+    "publishConfig": {
+        "access": "public"
+    }
+}

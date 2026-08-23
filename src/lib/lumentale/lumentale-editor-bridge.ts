@@ -117,6 +117,46 @@ function entryKey(entry: Pick<ExtractedEntry, "msbtFile" | "index">): string {
 }
 
 /**
+ * The browser build must prove that the serialized bytes can be reopened by
+ * UnityFS before the editor offers them for download. This catches the exact
+ * failure mode where a bundle is written as Resource/no-compression and Unity
+ * then falls back to displaying localization keys in its menus.
+ */
+async function verifyBuiltLumenTaleBundle(bundle: Uint8Array, tables: LumenTaleTableMeta[]): Promise<string | null> {
+  try {
+    const copy = bundle.buffer.slice(bundle.byteOffset, bundle.byteOffset + bundle.byteLength);
+    const verifier = await load(copy, { unityRevision: "2022.3.62f2" });
+    if (!verifier.bundleFile) return "فشل فتح الحزمة الناتجة للتحقق قبل التنزيل.";
+    if (verifier.bundleFile.flags.compressionType !== 3) {
+      return "أوقف البناء: الحزمة الناتجة ليست مضغوطة بـLZ4HC كما في المصدر.";
+    }
+
+    const verifiedObjects = verifier.getObjectInfosByClass("MonoBehaviour");
+    const expectedByTable = new Map(tables.map((table) => [table.table, table.rowCount]));
+    const verifiedRows = new Map<string, number>();
+    for (const objectInfo of verifiedObjects) {
+      const result = await processMonoBehaviour(objectInfo, {}, verifier);
+      const raw = result?.data?.raw as { m_Name?: unknown; m_TableData?: unknown } | undefined;
+      const table = typeof raw?.m_Name === "string" ? raw.m_Name : "";
+      if (table && Array.isArray(raw?.m_TableData)) verifiedRows.set(table, raw.m_TableData.length);
+    }
+
+    if (verifiedRows.size !== tables.length) {
+      return `أوقف البناء: أُعيد فتح ${verifiedRows.size} جدولاً فقط من أصل ${tables.length}.`;
+    }
+    for (const [table, expectedRows] of expectedByTable) {
+      if (verifiedRows.get(table) !== expectedRows) {
+        return `أوقف البناء: جدول ${table} لا يطابق عدد صفوفه الأصلي بعد إعادة الفتح.`;
+      }
+    }
+    return null;
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    return `أوقف البناء: تعذر التحقق من Bundle الناتج (${detail}).`;
+  }
+}
+
+/**
  * Rebuilds a new UnityFS bundle from the browser-held source only after checking
  * every serialized table and row against its immutable extraction metadata.
  * The supplied ArrayBuffer is never mutated; UnityFS serializes a fresh result.
@@ -194,6 +234,8 @@ export async function buildLumenTaleBundle(
 
   const serialized = manager.bundleFile.serialize();
   const bundle = serialized instanceof Uint8Array ? serialized : new Uint8Array(serialized as ArrayBuffer);
+  const verificationError = await verifyBuiltLumenTaleBundle(bundle, meta.tables);
+  if (verificationError) return { error: verificationError };
   const stem = (meta.originalName || "localization-string-tables-english_assets_all.bundle").replace(/\.bundle$/i, "");
   return {
     bundle,

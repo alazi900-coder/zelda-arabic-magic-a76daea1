@@ -18,7 +18,7 @@ function unityFsTextTablesOnly() {
     resolveId(source: string, importer?: string) {
       if (
         source === "./textureDecoder.worker.js?worker&inline" &&
-        importer?.includes("unityfs-js/decoders/drivers/TextureDecoderPool.js")
+        importer?.includes("decoders/drivers/TextureDecoderPool.js")
       ) {
         return inertWorkerId;
       }
@@ -47,9 +47,20 @@ export default defineConfig(({ mode }) => ({
     mcpPlugin(),
   ].filter(Boolean),
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    // Lovable builds the browser application independently of pnpm's
+    // patchedDependencies. Use the checked-in, verified UnityFS source so
+    // the LumenTale writer always includes the LZ4HC/header fixes.
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      {
+        find: /^unityfs-js$/,
+        replacement: path.resolve(__dirname, "./src/lib/vendor/unityfs-js/index.js"),
+      },
+      {
+        find: /^unityfs-js\/(.*)$/,
+        replacement: path.resolve(__dirname, "./src/lib/vendor/unityfs-js/$1"),
+      },
+    ],
   },
   // unityfs-js includes an optional image-decoder worker. ES output allows
   // Vite to bundle it safely alongside the application chunks; LumenTale only

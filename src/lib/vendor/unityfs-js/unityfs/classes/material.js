@@ -1,0 +1,123 @@
+﻿import { NamedObject } from './namedObject.js'
+import { PPtr } from './pptr.js'
+import { KVPair } from '../basicTypes.js'
+
+export class UnityTexEnv {
+    static exposedAttributes = ['texture', 'scale', 'offset']
+    constructor(reader) {
+        this.texture = new PPtr(reader)
+        this.scale = reader.readVector2()
+        this.offset = reader.readVector2()
+    }
+}
+
+export class UnityPropertySheet {
+    static exposedAttributes = ['texEnvs', 'ints', 'floats', 'colors']
+    constructor(reader) {
+        let numTexEnvs = reader.readInt32()
+        this.texEnvs = new Array(numTexEnvs)
+        for (let i = 0; i < numTexEnvs; i++) {
+            let key = reader.readAlignedString()
+            this.texEnvs[i] = new KVPair(key, new UnityTexEnv(reader))
+        }
+
+        if (reader.version[0] >= 2021) {
+            let intsSize = reader.readInt32()
+            this.ints = new Array(intsSize)
+            for (let i = 0; i < intsSize; i++) {
+                let key = reader.readAlignedString()
+                this.ints[i] = new KVPair(key, reader.readInt32())
+            }
+        } else {
+            this.ints = []
+        }
+
+        let floatsSize = reader.readInt32()
+        this.floats = new Array(floatsSize)
+        for (let i = 0; i < floatsSize; i++) {
+            let key = reader.readAlignedString()
+            this.floats[i] = new KVPair(key, reader.readFloat32())
+        }
+
+        let colorsSize = reader.readInt32()
+        this.colors = new Array(colorsSize)
+        for (let i = 0; i < colorsSize; i++) {
+            let key = reader.readAlignedString()
+            this.colors[i] = new KVPair(key, reader.readColor())
+        }
+    }
+}
+
+export class Material extends NamedObject {
+    static exposedAttributes = [
+        'name',
+        'shader',
+        'shaderKeywords',
+        'lightmapFlags',
+        'enableInstancingVariants',
+        'customRenderQueue',
+        'stringTagMap',
+        'disabledShaderPasses',
+        'savedProperties',
+    ]
+    constructor(reader) {
+        super(reader)
+        this.shader = new PPtr(reader)
+        if (reader.version[0] === 4 && reader.version[1] >= 1) {
+            this.shaderKeywords = reader.readArrayT(() => reader.readAlignedString(), reader.readInt32())
+        }
+        this.shaderKeywords = ''
+        if (reader.versionGTE(2021, 3)) {
+            this.validKeywords = reader.readArrayT(() => reader.readAlignedString(), reader.readInt32())
+            this.invalidKeywords = reader.readArrayT(() => reader.readAlignedString(), reader.readInt32())
+        } else if (reader.version[0] >= 5) {
+            this.shaderKeywords = reader.readAlignedString()
+        }
+        if (reader.version[0] >= 5) {
+            this.lightmapFlags = reader.readUInt32()
+        }
+        if (reader.versionGTE(5, 6)) {
+            this.enableInstancingVariants = reader.readBool()
+            reader.align(4)
+        }
+        if (reader.versionGTE(4, 3)) {
+            this.customRenderQueue = reader.readInt32()
+        }
+        if (reader.versionGTE(5, 1)) {
+            let stringTagMapSize = reader.readInt32()
+            this.stringTagMap = new Array(stringTagMapSize)
+            for (let i = 0; i < stringTagMapSize; i++) {
+                let key = reader.readAlignedString()
+                this.stringTagMap[i] = new KVPair(key, reader.readAlignedString())
+            }
+        }
+        if (reader.versionGTE(5, 6)) {
+            this.disabledShaderPasses = reader.readArrayT(() => reader.readAlignedString(), reader.readInt32())
+        }
+        this.savedProperties = new UnityPropertySheet(reader)
+    }
+
+    getTexEnv(key) {
+        let texEnv = this.savedProperties.texEnvs.find((t) => t.key === key)
+        if (texEnv) {
+            let texPtr = texEnv.value.texture
+            texPtr.resolve()
+            if (texPtr.object) {
+                return texPtr.object
+            }
+        }
+        return null
+    }
+
+    getInt(key) {
+        return this.savedProperties.ints.find((t) => t.key === key)?.value ?? null
+    }
+
+    getFloat(key) {
+        return this.savedProperties.floats.find((t) => t.key === key)?.value ?? null
+    }
+
+    getColor(key) {
+        return this.savedProperties.colors.find((t) => t.key === key)?.value ?? null
+    }
+}

@@ -36,6 +36,7 @@ import {
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
+import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -246,6 +247,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
   const gameParam = resolveGameParam(entries[0]?.msbtFile, risenVariant);
+  const isLumenTale = gameParam === "lumentale";
+  const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
+    if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
+      return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
+    }
+    return isLumenTale ? validateLumenTaleTranslation(original, suggestion) : null;
+  };
+  const isSafeToApply = (original: string, previous: string, suggestion: string): boolean =>
+    !unsafeSuggestionReason(original, previous, suggestion);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<EnhanceSuggestion[]>([]);
@@ -535,7 +545,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       if (!data) return;
       if (mode === "enhance" && data.suggestions) {
         const fresh = data.suggestions.filter(
-          (s) => !allSuggestions.some(x => x.key === s.key)
+          (s) => isSafeToApply(s.original, s.current, s.suggested) && !allSuggestions.some(x => x.key === s.key)
         );
         if (fresh.length > 0) {
           allSuggestions = [...allSuggestions, ...fresh];
@@ -543,7 +553,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         }
       } else if (mode === "grammar" && data.issues) {
         const fresh = data.issues.filter(
-          (g) => !allIssues.some(x => x.key === g.key)
+          (g) => isSafeToApply(g.original, g.translation, g.suggestion) && !allIssues.some(x => x.key === g.key)
         );
         if (fresh.length > 0) {
           allIssues = [...allIssues, ...fresh];
@@ -555,14 +565,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         const newSuggestions: EnhanceSuggestion[] = [];
         const newIssues: GrammarIssue[] = [];
         for (const r of data.results as Array<Record<string, string>>) {
+          const original = r.original || "";
+          const previous = r.current || r.translation || "";
+          const suggested = r.suggested || r.suggestion || "";
+          if (!isSafeToApply(original, previous, suggested)) continue;
           if (r.category === "style") {
             if (allSuggestions.some(x => x.key === r.key) || newSuggestions.some(x => x.key === r.key)) continue;
             newSuggestions.push({
               key: r.key,
-              original: r.original,
-              current: r.current,
-              suggested: r.suggested,
-              alternatives: (r as unknown as { alternatives?: string[] }).alternatives || [],
+              original,
+              current: previous,
+              suggested,
+              alternatives: ((r as unknown as { alternatives?: string[] }).alternatives || [])
+                .filter(alt => isSafeToApply(original, previous, alt)),
               reason: r.issue || r.reason || "تحسين صياغة",
               detail: r.detail || "",
               fixExplanation: r.fixExplanation || "",
@@ -572,10 +587,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             if (allIssues.some(x => x.key === r.key) || newIssues.some(x => x.key === r.key)) continue;
             newIssues.push({
               key: r.key,
-              original: r.original,
-              translation: r.translation,
+              original,
+              translation: previous,
               issue: r.issue || "إصلاح قواعديّ + صياغة",
-              suggestion: r.suggested,
+              suggestion: suggested,
               severity: r.severity as GrammarIssue["severity"],
               detail: r.detail || "",
               fixExplanation: r.fixExplanation || "",
@@ -669,7 +684,17 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       if (!data) return;
       const rawList: Array<Record<string, unknown>> =
         (mode === "enhance" ? data.suggestions : mode === "grammar" ? data.issues : data.results) as Array<Record<string, unknown>> || [];
-      const byKey = new Map(rawList.map((r) => [r.key as string, r]));
+      const safeList = rawList.flatMap((item) => {
+        const original = typeof item.original === "string" ? item.original : "";
+        const previous = typeof item.current === "string" ? item.current : typeof item.translation === "string" ? item.translation : "";
+        const suggestion = typeof item.suggested === "string" ? item.suggested : typeof item.suggestion === "string" ? item.suggestion : "";
+        if (!isSafeToApply(original, previous, suggestion)) return [];
+        const alternatives = Array.isArray(item.alternatives)
+          ? item.alternatives.filter((alt): alt is string => typeof alt === "string" && isSafeToApply(original, previous, alt))
+          : item.alternatives;
+        return [{ ...item, ...(alternatives ? { alternatives } : {}) }];
+      });
+      const byKey = new Map(safeList.map((r) => [r.key as string, r]));
       await Promise.all(texts.map(t => {
         const cacheKey = makeEnhanceCacheKey(t.original, t.translation, cacheContextSignature);
         return enhanceCacheStore(cacheKey, byKey.get(t.key) || null);
@@ -871,7 +896,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       if (diffBefore.exactTagMatch && diffBefore.sequenceMatch) continue;
       const repaired = restoreTagsLocally(entry.original, current);
       const diffAfter = diffTechnicalTags(entry.original, repaired);
-      if (repaired === current || !diffAfter.exactTagMatch) continue;
+      if (repaired === current || !diffAfter.exactTagMatch || !isSafeToApply(entry.original, current, repaired)) continue;
       fixes.push({
         key,
         original: entry.original,
@@ -897,25 +922,28 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     });
   };
 
-  const applyOne = (key: string, newText: string) => {
+  const applyOne = (key: string, newText: string, originalOverride?: string): boolean => {
+    const original = originalOverride ?? entries.find(entry => `${entry.msbtFile}:${entry.index}` === key)?.original;
     const previous = translations[key] || "";
+    if (isLumenTale && !original) {
+      toast({ title: "تم منع اقتراح غير آمن", description: "تعذّر التحقق من نص LumenTale الأصلي قبل التطبيق.", variant: "destructive" });
+      return false;
+    }
+    const rejection = original ? unsafeSuggestionReason(original, previous, newText) : null;
+    if (rejection) {
+      toast({ title: "تم منع اقتراح غير آمن", description: rejection, variant: "destructive" });
+      return false;
+    }
     onApplySuggestion(key, newText);
     setAppliedHistory(prev => [{ key, previous, applied: newText, ts: Date.now() }, ...prev].slice(0, 50));
     markReviewed(key, newText, "approved").then(() => loadReviewMemory().then(setReviewMem));
+    return true;
   };
 
   const applySuggestion = (item: EnhanceSuggestion | GrammarIssue) => {
     const newText = 'suggested' in item ? item.suggested : item.suggestion;
     const previousText = 'current' in item ? item.current : item.translation;
-    if (isUnsafeEnglishReplacement(item.original, previousText, newText)) {
-      toast({
-        title: "تم منع اقتراح غير آمن",
-        description: "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية، لذلك لم يتم تطبيقه.",
-        variant: "destructive",
-      });
-      return;
-    }
-    applyOne(item.key, newText);
+    if (!applyOne(item.key, newText, item.original)) return;
     if ('suggested' in item) {
       setSuggestions(prev => prev.filter(s => s.key !== item.key));
     } else {
@@ -926,6 +954,16 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const undoLast = () => {
     const last = appliedHistory[0];
     if (!last) return;
+    const original = entries.find(entry => `${entry.msbtFile}:${entry.index}` === last.key)?.original;
+    if (isLumenTale && !original) {
+      toast({ title: "تعذّر التراجع بأمان", description: "تعذّر التحقق من نص LumenTale الأصلي.", variant: "destructive" });
+      return;
+    }
+    const rejection = original ? unsafeSuggestionReason(original, translations[last.key] || "", last.previous) : null;
+    if (rejection) {
+      toast({ title: "تم منع تراجع غير آمن", description: rejection, variant: "destructive" });
+      return;
+    }
     onApplySuggestion(last.key, last.previous);
     setAppliedHistory(prev => prev.slice(1));
     toast({ title: "↩️ تم التراجع" });
@@ -939,10 +977,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const saveEdit = (item: EnhanceSuggestion | GrammarIssue) => {
     const aiSuggested = 'suggested' in item ? item.suggested : item.suggestion;
     const type = 'suggested' in item ? item.type : (item.category || 'wrong');
+    if (!applyOne(item.key, editingText, item.original)) return;
     if (editingText.trim() !== aiSuggested.trim()) {
       recordFeedback({ type, original: item.original, aiSuggested, userAction: "edited", userFinal: editingText });
     }
-    applyOne(item.key, editingText);
     setEditingKey(null);
     setEditingText("");
     if ('suggested' in item) {
@@ -955,23 +993,23 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const applyAll = () => {
     if (activeTab === "enhance") {
       const list = bulkSuggestions;
-      const safe = list.filter(s => !isUnsafeEnglishReplacement(s.original, s.current, s.suggested));
-      for (const s of safe) applyOne(s.key, s.suggested);
+      const safe = list.filter(s => isSafeToApply(s.original, s.current, s.suggested));
+      for (const s of safe) applyOne(s.key, s.suggested, s.original);
       const skipped = list.length - safe.length;
       toast({
         title: `✅ تم تطبيق ${safe.length} اقتراح`,
-        description: skipped > 0 ? `تم منع ${skipped} اقتراح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+        description: skipped > 0 ? `تم منع ${skipped} اقتراح غير آمن بسبب حماية اللغة أو رموز اللعبة التقنية.` : undefined,
       });
       const keys = new Set(safe.map(s => s.key));
       setSuggestions(prev => prev.filter(s => !keys.has(s.key)));
     } else {
       const list = bulkIssues;
-      const safe = list.filter(g => !isUnsafeEnglishReplacement(g.original, g.translation, g.suggestion));
-      for (const g of safe) applyOne(g.key, g.suggestion);
+      const safe = list.filter(g => isSafeToApply(g.original, g.translation, g.suggestion));
+      for (const g of safe) applyOne(g.key, g.suggestion, g.original);
       const skipped = list.length - safe.length;
       toast({
         title: `✅ تم إصلاح ${safe.length} خطأ`,
-        description: skipped > 0 ? `تم منع ${skipped} إصلاح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+        description: skipped > 0 ? `تم منع ${skipped} إصلاح غير آمن بسبب حماية اللغة أو رموز اللعبة التقنية.` : undefined,
       });
       const keys = new Set(safe.map(g => g.key));
       setGrammarIssues(prev => prev.filter(g => !keys.has(g.key)));
@@ -981,12 +1019,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   /** تطبيق سريع لكل أخطاء severity="high" فقط (بمعزل عن severityFilter الظاهر في الواجهة، لكن يحترم categoryFilter). */
   const applyHighConfidenceIssues = () => {
     const list = grammarIssues.filter(g => g.severity === 'high' && (!categoryFilter || (g.category ?? 'wrong') === categoryFilter));
-    const safe = list.filter(g => !isUnsafeEnglishReplacement(g.original, g.translation, g.suggestion));
-    for (const g of safe) applyOne(g.key, g.suggestion);
+    const safe = list.filter(g => isSafeToApply(g.original, g.translation, g.suggestion));
+    for (const g of safe) applyOne(g.key, g.suggestion, g.original);
     const skipped = list.length - safe.length;
     toast({
       title: `✅ تم تطبيق ${safe.length} إصلاح بثقة عالية`,
-      description: skipped > 0 ? `تم منع ${skipped} إصلاح غير آمن لأنه يستبدل العربية بالإنجليزية.` : undefined,
+      description: skipped > 0 ? `تم منع ${skipped} إصلاح غير آمن بسبب حماية اللغة أو رموز اللعبة التقنية.` : undefined,
     });
     const keys = new Set(safe.map(g => g.key));
     setGrammarIssues(prev => prev.filter(g => !keys.has(g.key)));
@@ -1383,7 +1421,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                   <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground" onClick={() => copyToClipboard(alt)} title="نسخ">
                     <Copy className="w-3 h-3" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-6 w-6 text-green-500 hover:bg-green-500/10" onClick={() => applyOne(s.key, alt)} title="تطبيق هذا البديل">
+                  <Button size="icon" variant="ghost" className="h-6 w-6 text-green-500 hover:bg-green-500/10" onClick={() => applyOne(s.key, alt, s.original)} title="تطبيق هذا البديل">
                     <Check className="w-3 h-3" />
                   </Button>
                 </div>

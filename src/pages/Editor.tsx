@@ -694,9 +694,10 @@ const Editor = () => {
             setShowFontTest={setShowFontTest}
             setFontTestWord={setFontTestWord}
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
+            isGtaIv={isGtaIvEntries}
           />
 
-          {!isGtaIvEntries && <EditorBuildSection
+          <EditorBuildSection
             editor={editor}
             isRisen={isRisenEntries}
             isMother3={isMother3Entries}
@@ -707,16 +708,17 @@ const Editor = () => {
             isDragonSword={isDragonSwordEntries}
             isKingdomHearts={isKingdomHeartsEntries}
             isLumenTale={isLumenTaleEntries}
+            isGtaIv={isGtaIvEntries}
             khbbsUnsupportedCount={editor.khbbsUnsupportedCount}
             khbbsUnsupportedCharacters={editor.khbbsUnsupportedCharacters}
             khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}
             onFilterKHBBSUnsupported={() => editor.setFilterStatus(editor.filterStatus === "khbbs-unsupported" ? "all" : "khbbs-unsupported")}
             unprocessedArabicCount={unprocessedArabicCount}
-            showBuildSection={showBuildSection && !isGtaIvEntries}
+            showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
             setShowDiagnostic={setShowDiagnostic}
-          />}
+          />
           {isLumenTaleEntries && (editor.state?.lumentaleTokenErrorKeys?.size ?? 0) > 0 && (
             <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               تم رفض {editor.state?.lumentaleTokenErrorKeys?.size} ترجمة من LumenTale لأنها غيّرت رمزاً محمياً. صحّح السطر وأعد `{0}` والوسوم والأوامر بالترتيب نفسه.

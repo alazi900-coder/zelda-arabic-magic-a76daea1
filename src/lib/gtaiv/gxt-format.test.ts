@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   gtaIvHashKey,
   gtaIvRawUnitsToString,
+  encodeGtaIvArabicText,
   inspectGtaIvGxt,
   inspectGtaIvOxt,
   parseGtaIvGxt,
@@ -10,6 +11,7 @@ import {
   reconcileGtaIvOxtWithGxt,
   validateGtaIvRuntimeTokenSequence,
 } from "./gxt-format";
+import { buildGtaIvAmericanOutput, extractGtaIvEntries } from "./gtaiv-editor-bridge";
 
 function makeGxt(crc = 0x12345678): ArrayBuffer {
   const bytes = new Uint8Array(72);
@@ -93,6 +95,36 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(validateGtaIvRuntimeTokenSequence("~x~ Hello ~n~~z~", "~x~ نص ~n~~z~")).toMatchObject({ valid: true });
     expect(validateGtaIvRuntimeTokenSequence("~x~ Hello ~n~~z~", "~x~ نص ~z~~n~")).toMatchObject({ valid: false });
     expect(validateGtaIvRuntimeTokenSequence("Hello", "نص ~")).toMatchObject({ valid: false });
+  });
+
+  it("shapes and encodes Arabic Presentation Forms through the audited English font map", () => {
+    const encoded = encodeGtaIvArabicText("", "تؤبسك");
+    expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
+    expect(Array.from(encoded.textUnits)).toEqual([410, 228, 193, 123, 199]);
+  });
+
+  it("keeps GTA IV runtime tokens byte-for-byte while encoding Arabic prose", () => {
+    const encoded = encodeGtaIvArabicText("~r~ Hello ~n~", "~r~ مرحبا ~n~");
+    expect(encoded.processedText).toContain("~r~");
+    expect(encoded.processedText).toContain("~n~");
+    expect(gtaIvRawUnitsToString(encoded.textUnits)).toMatch(/^~r~.*~n~$/);
+    expect(Array.from(encoded.textUnits.slice(0, 3))).toEqual([0x7e, 0x72, 0x7e]);
+  });
+
+  it("refuses an Arabic character not represented by English v3", () => {
+    expect(() => encodeGtaIvArabicText("", "پ")).toThrow("غير مدعوم");
+  });
+
+  it("builds american.gxt from the shared editor identity and re-parses the encoded row", () => {
+    const source = makeGxt(0x00009b22);
+    const imported = extractGtaIvEntries(source);
+    const row = imported.entries[0];
+    const result = buildGtaIvAmericanOutput(source, imported.entries, {
+      [`${row.msbtFile}:${row.index}`]: "تؤبسك",
+    });
+    expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
+    const output = parseGtaIvGxt(result.buffer);
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([410, 228, 193, 123, 199]);
   });
 
 });

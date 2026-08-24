@@ -127,6 +127,7 @@ interface EditorActionsToolbarProps {
   setShowFontTest: (v: boolean) => void;
   setFontTestWord: (v: string) => void;
   setShowArabicProcessConfirm: (v: boolean) => void;
+  isGtaIv?: boolean;
 }
 
 const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
@@ -140,6 +141,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
   setShowFontTest,
   setFontTestWord,
   setShowArabicProcessConfirm,
+  isGtaIv = false,
 }) => {
   const handleExportProcessedArabic = React.useCallback(async () => {
     const st = editor.state;
@@ -336,10 +338,12 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <Button variant="outline" size="sm" className="font-body text-xs"><MoreVertical className="w-3 h-3" /> أدوات</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[min(calc(100vw-1.5rem),360px)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-                  {/* ─── معالجة عربية ─── */}
-                  <DropdownMenuLabel className="text-xs text-primary/80">🔤 معالجة عربية</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic}><Sparkles className="w-4 h-4" /> تطبيق المعالجة العربية ✨</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic}><RotateCcw className="w-4 h-4" /> التراجع عن المعالجة العربية ↩️</DropdownMenuItem>
+                  {!isGtaIv && <>
+                    {/* ─── معالجة عربية ─── */}
+                    <DropdownMenuLabel className="text-xs text-primary/80">🔤 معالجة عربية</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic}><Sparkles className="w-4 h-4" /> تطبيق المعالجة العربية ✨</DropdownMenuItem>
+                    <DropdownMenuItem onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic}><RotateCcw className="w-4 h-4" /> التراجع عن المعالجة العربية ↩️</DropdownMenuItem>
+                  </>}
                   <DropdownMenuItem onClick={editor.handleFixAllReversed}><RotateCcw className="w-4 h-4" /> تصحيح الكل (معكوس)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleFixAllStuckCharacters} disabled={editor.needsImproveCount.stuck === 0}><AlertTriangle className="w-4 h-4" /> إصلاح الأحرف الملتصقة 🔤</DropdownMenuItem>
 

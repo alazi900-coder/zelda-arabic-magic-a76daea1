@@ -18,6 +18,7 @@ import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-edito
 import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
 import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
 import { buildLumenTaleBundle, LUMENTALE_BUFFER_KEY, LUMENTALE_META_KEY, type LumenTaleBundleMeta } from "@/lib/lumentale/lumentale-editor-bridge";
+import { buildGtaIvAmericanOutput, GTAIV_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -45,6 +46,7 @@ interface EditorBuildSectionProps {
   isDragonSword?: boolean;
   isKingdomHearts?: boolean;
   isLumenTale?: boolean;
+  isGtaIv?: boolean;
   khbbsUnsupportedCount?: number;
   khbbsUnsupportedCharacters?: KHBBSUnsupportedCharacter[];
   khbbsUnsupportedFilterActive?: boolean;
@@ -67,6 +69,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isDragonSword = false,
   isKingdomHearts = false,
   isLumenTale = false,
+  isGtaIv = false,
   khbbsUnsupportedCount = 0,
   khbbsUnsupportedCharacters = [],
   khbbsUnsupportedFilterActive = false,
@@ -87,6 +90,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [khbbsBuilding, setKHBbsBuilding] = useState(false);
   const [khbbsIsoBuilding, setKHBbsIsoBuilding] = useState(false);
   const [lumenTaleBuilding, setLumenTaleBuilding] = useState(false);
+  const [gtaIvBuilding, setGtaIvBuilding] = useState(false);
   const khbbsIsoInputRef = useRef<HTMLInputElement>(null);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
@@ -475,6 +479,33 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
+  const handleGtaIvBuild = async () => {
+    setGtaIvBuilding(true);
+    try {
+      const source = await idbGet<ArrayBuffer>(GTAIV_BUFFER_KEY);
+      if (!source) throw new Error("لم يُعثر على american.gxt المصدر. أعد فتحه من قسم GTA IV أولاً.");
+      if (!editor.state) throw new Error("لا توجد جلسة ترجمة مفتوحة لبناء american.gxt.");
+      const result = buildGtaIvAmericanOutput(source, editor.state.entries, editor.state.translations || {});
+      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({
+        title: "تم بناء american.gxt",
+        description: `${result.translatedLines} سطر مترجم. تم التحقق من الجداول وCRC والرموز التقنية قبل التنزيل.`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء american.gxt", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setGtaIvBuilding(false);
+    }
+  };
+
   return (
   <Collapsible open={showBuildSection} onOpenChange={setShowBuildSection}>
     <div className="flex items-center justify-between mb-3">
@@ -685,7 +716,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isKingdomHearts && !isLumenTale && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isKingdomHearts && !isLumenTale && !isGtaIv && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -715,13 +746,13 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isKingdomHearts || isLumenTale}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isKingdomHearts || isLumenTale || isGtaIv}
           className="flex-1 min-w-[200px] font-display font-bold"
-          title={isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
+          title={isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
           {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
         </Button>
-        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic} className="font-body gap-1 shrink-0" title="التراجع عن المعالجة العربية">
+        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv} className="font-body gap-1 shrink-0" title={isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
           <RotateCcw className="w-4 h-4" />
           <span className="hidden sm:inline">تراجع</span>
         </Button>
@@ -749,7 +780,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               toast({ title: "✅ تم التصدير", description: `${Object.keys(processed).length} ترجمة بعد المعالجة العربية` })
             );
           }}
-          disabled={editor.applyingArabic}
+          disabled={editor.applyingArabic || isGtaIv}
           className="font-body gap-1 shrink-0"
           title="تصدير الترجمات بعد تطبيق المعالجة العربية"
         >
@@ -764,7 +795,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <ShieldCheck className="w-4 h-4" />
           <span className="hidden sm:inline">سلامة</span>
         </Button>
-        {isMother3 ? (
+        {isGtaIv ? (
+          <Button size="lg" onClick={handleGtaIvBuild} disabled={gtaIvBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يشكّل العربية عند البناء ثم يتحقق من بنية GXT والرموز التقنية قبل التنزيل">
+            {gtaIvBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء american.gxt معرّب وتنزيله
+          </Button>
+        ) : isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">
             {m3Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM معرّب وتنزيله
           </Button>

@@ -2,10 +2,11 @@
  * GTA IV GXT/OXT reader.
  *
  * Scope: inspect and reconcile text identities, then perform a verified binary
- * GXT rebuild from pre-encoded units only. It never reads or emits font resources.
- * Arabic glyph encoding remains intentionally outside the editor until a
- * trustworthy glyph map exists.
+ * GXT rebuild. It never reads or emits font resources. Arabic text is shaped
+ * locally then converted to the units carried by the audited English v3 font.
  */
+
+import { processArabicText } from "@/lib/arabic-processing";
 
 export interface GtaIvGxtTableSummary {
   name: string;
@@ -109,6 +110,52 @@ export interface GtaIvRuntimeTokenValidation {
 const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
+/**
+ * Unit at offset N is the slot assigned to Arabic Presentation Form
+ * U+FE70 + N in the English v3 font's MAP. The ordering is verified from the
+ * 16×16 font atlas: slots 96–239 are exactly U+FE70–U+FEFF.
+ */
+const gtaIvPresentationFormUnits = [
+  103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114,
+  115, 116, 117, 118, 119, 120, 121, 122, 91, 93, 123, 125,
+  163, 165, 166, 167, 182, 188, 189, 190, 192, 193, 194, 195,
+  196, 197, 198, 199, 200, 298, 201, 202, 203, 204, 205, 206,
+  207, 208, 209, 210, 211, 212, 213, 214, 216, 217, 218, 219,
+  220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 232, 350,
+  352, 233, 235, 237, 239, 240, 242, 243, 245, 249, 251, 490,
+  492, 494, 497, 500, 385, 386, 388, 390, 391, 393, 394, 395,
+  398, 399, 400, 401, 403, 404, 405, 406, 407, 408, 410, 412,
+  413, 415, 416, 418, 420, 502, 504, 425, 428, 430, 431, 433,
+  434, 435, 437, 439, 440, 443, 506, 508, 510, 161, 124, 247,
+  191, 171, 180, 185, 186, 471, 253, 170, 176, 168, 387, 255,
+] as const;
+
+const gtaIvArabicPunctuationToAscii: Record<string, string> = {
+  "؟": "?",
+  "،": ",",
+  "؛": ";",
+  "٪": "%",
+  "٠": "0",
+  "١": "1",
+  "٢": "2",
+  "٣": "3",
+  "٤": "4",
+  "٥": "5",
+  "٦": "6",
+  "٧": "7",
+  "٨": "8",
+  "٩": "9",
+};
+
+const runtimeTokenPattern = /~[^~]+~/g;
+
+export interface GtaIvArabicEncoding {
+  /** Shaped and visually ordered text after protected tokens are restored. */
+  processedText: string;
+  /** Font-unit sequence ready for the GXT TDAT payload, without NUL. */
+  textUnits: Uint16Array;
+}
+
 function fail(message: string): never {
   throw new Error(`ملف GTA IV غير صالح: ${message}`);
 }
@@ -142,6 +189,42 @@ function textFromUnits(units: Uint16Array): string {
   let value = "";
   for (let index = 0; index < units.length; index += 1) value += String.fromCharCode(units[index]);
   return value;
+}
+
+function normalizeGtaIvArabicPunctuation(value: string): string {
+  return [...value].map((char) => gtaIvArabicPunctuationToAscii[char] ?? char).join("");
+}
+
+/**
+ * Converts a logical editor translation into GTA IV font units. Only ASCII and
+ * the Arabic Presentation Forms carried by English v3 are emitted. This keeps
+ * unsupported glyphs out of GXT instead of silently writing visible squares.
+ */
+export function encodeGtaIvArabicText(sourceText: string, translation: string): GtaIvArabicEncoding {
+  const tokenValidation = validateGtaIvRuntimeTokenSequence(sourceText, translation);
+  if (!tokenValidation.valid) fail(`رموز وقت التشغيل غير محفوظة: ${tokenValidation.reason}`);
+
+  const pieces = translation.split(/(~[^~]+~)/g);
+  const processedText = pieces.map((piece, index) => (
+    index % 2 === 1 ? piece : processArabicText(normalizeGtaIvArabicPunctuation(piece))
+  )).join("");
+  const units: number[] = [];
+
+  for (const char of processedText) {
+    const code = char.charCodeAt(0);
+    if (code >= 0xfe70 && code <= 0xfeff) {
+      const unit = gtaIvPresentationFormUnits[code - 0xfe70];
+      if (unit === undefined) fail(`لا توجد خانة خط مؤكدة للشكل العربي U+${code.toString(16).toUpperCase()}.`);
+      units.push(unit);
+      continue;
+    }
+    if (code > 0 && code <= 0x7f) {
+      units.push(code);
+      continue;
+    }
+    fail(`المحرف «${char}» غير مدعوم في خط GTA IV English المعدل.`);
+  }
+  return { processedText, textUnits: new Uint16Array(units) };
 }
 
 /**

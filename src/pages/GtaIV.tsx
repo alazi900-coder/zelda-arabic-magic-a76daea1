@@ -4,7 +4,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, CheckCircle2, FileCode2, Loader2, LockKeyhole, Search, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { gtaIvRawUnitsToString, inspectGtaIvGxt, parseGtaIvGxt, type GtaIvGxtSummary } from "@/lib/gtaiv/gxt-format";
-import { extractGtaIvEntries, GTAIV_SOURCE_GAME } from "@/lib/gtaiv/gtaiv-editor-bridge";
+import {
+  extractGtaIvEntries,
+  GTAIV_BUFFER_KEY,
+  GTAIV_SOURCE_GAME,
+  GTAIV_SOURCE_NAME_KEY,
+} from "@/lib/gtaiv/gtaiv-editor-bridge";
 import { idbGet, idbSet } from "@/lib/idb-storage";
 
 type EnglishSourceRow = { table: string; crc: number; value: string };
@@ -46,6 +51,8 @@ export default function GtaIV() {
       await idbSet("editorState:gtaiv", editorState);
       await idbSet("editor-source-game", GTAIV_SOURCE_GAME);
       await idbSet("originalTexts", originals);
+      await idbSet(GTAIV_BUFFER_KEY, buffer.slice(0));
+      await idbSet(GTAIV_SOURCE_NAME_KEY, file.name);
       toast.success(`قُرئ المصدر الإنجليزي: ${summary.entries.toLocaleString("ar")} سطراً.`);
       navigate("/editor");
     } catch (error) {
@@ -95,7 +102,7 @@ export default function GtaIV() {
               <h2 className="font-bold">النص الإنجليزي المصدر</h2>
               <p className="mt-1 text-sm text-muted-foreground"><code>{sourceName}</code> · عرض للقراءة فقط</p>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300"><LockKeyhole className="h-3.5 w-3.5" /> الكتابة والبناء مقفلان</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" /> جاهز للتحرير والبناء داخل المحرر</span>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -119,8 +126,8 @@ export default function GtaIV() {
 
         <section className="mt-6 space-y-3 rounded-xl border bg-card p-5 text-sm text-muted-foreground">
           <p className="flex gap-2"><ShieldCheck className="h-5 w-5 shrink-0 text-emerald-500" /> يتحقق القارئ من Version 4 وCharSize 16 وكتل <code>TABL</code> و<code>TKEY</code> و<code>TDAT</code> وإزاحات كل سجل قبل عرض النتيجة.</p>
-          <p className="flex gap-2"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" /> تُميز رموز GTA IV مثل <code>~n~</code> و<code>~r~</code> و<code>~z~</code> بلون منفصل. ستظل محفوظة بالقيمة والترتيب عند تفعيل الترجمة والبناء لاحقاً.</p>
-          <p>هذا القسم مخصص للإنجليزية فقط. لا ينسخ أي ترميز أو مورد من مسار الروسية، ولا يكتب العربية أو يبني <code>GXT</code> قبل إثبات طريقة ترميز خط الإنجليزية.</p>
+          <p className="flex gap-2"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" /> تُميز رموز GTA IV مثل <code>~n~</code> و<code>~r~</code> و<code>~z~</code> بلون منفصل. ستظل محفوظة بالقيمة والترتيب عند البناء.</p>
+          <p>هذا القسم مخصص للإنجليزية فقط. يحفظ المصدر الخام محلياً، ثم يبني المحرر <code>american.gxt</code> منفصلاً من الترجمات التي تعدلها.</p>
         </section>
       </section>
     </main>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   gtaIvHashKey,
+  gtaIvRawUnitsToString,
   inspectGtaIvGxt,
   inspectGtaIvOxt,
   parseGtaIvGxt,
@@ -37,6 +38,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(summary.tables[0]).toMatchObject({ name: "MAIN", entries: 1, textBytes: 6 });
     expect(Array.from(parsed.tables[0].entries[0].textUnits)).toEqual([0x48, 0x69]);
     expect(parsed.tables[0].entries[0].crc).toBe(0x12345678);
+    expect(gtaIvRawUnitsToString(parsed.tables[0].entries[0].textUnits)).toBe("Hi");
   });
 
   it("rejects a malformed GXT header before reading any table", () => {

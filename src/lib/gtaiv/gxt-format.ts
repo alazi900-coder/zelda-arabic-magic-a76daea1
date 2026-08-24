@@ -144,6 +144,15 @@ function textFromUnits(units: Uint16Array): string {
   return value;
 }
 
+/**
+ * Returns the literal UTF-16 representation stored in a GXT entry.
+ * This is suitable for the English source file; it does not decode the
+ * custom Arabic glyph identifiers used by the separate Russian-slot mod.
+ */
+export function gtaIvRawUnitsToString(units: Uint16Array): string {
+  return textFromUnits(units);
+}
+
 function align4(value: number): number {
   return (value + 3) & ~3;
 }

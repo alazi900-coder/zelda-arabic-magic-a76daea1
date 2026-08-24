@@ -21,6 +21,7 @@ import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
 import { lumentaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { LUMENTALE_META_KEY } from "@/lib/lumentale/lumentale-editor-bridge";
+import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
@@ -140,6 +141,7 @@ const Editor = () => {
   const isDragonSwordEntries = DS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isKingdomHeartsEntries = KHBBS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isLumenTaleEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
+  const isGtaIvEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("gtaiv/") ?? false;
 
   // LumenTale can contain an intentionally empty table. It has no editor rows,
   // so it is represented only by the immutable bundle metadata and must still
@@ -187,6 +189,8 @@ const Editor = () => {
     ? "/kingdom-hearts-bbs"
     : isLumenTaleEntries
     ? "/lumentale"
+    : isGtaIvEntries
+    ? "/gta-iv"
     : isRisen
     ? "/risen/process"
     : "/process";
@@ -205,9 +209,10 @@ const Editor = () => {
     if (isGameMakerEntries) return FILE_CATEGORIES;
     if (isDragonSwordEntries) return dsCategories(entries);
     if (isLumenTaleEntries) return lumentaleCategories(entries);
+    if (isGtaIvEntries) return GTAIV_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -358,7 +363,7 @@ const Editor = () => {
                   <p className="text-base md:text-lg font-display font-bold">
                     {displayedFileCount}
                   </p>
-                  <p className="text-[10px] md:text-xs text-muted-foreground">{isLumenTaleEntries ? "جداول Unity" : "ملفات BDAT"}</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">{isGtaIvEntries ? "جداول GXT" : isLumenTaleEntries ? "جداول Unity" : "ملفات BDAT"}</p>
                 </div>
               </CardContent>
             </Card>
@@ -691,7 +696,7 @@ const Editor = () => {
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
           />
 
-          <EditorBuildSection
+          {!isGtaIvEntries && <EditorBuildSection
             editor={editor}
             isRisen={isRisenEntries}
             isMother3={isMother3Entries}
@@ -707,11 +712,11 @@ const Editor = () => {
             khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}
             onFilterKHBBSUnsupported={() => editor.setFilterStatus(editor.filterStatus === "khbbs-unsupported" ? "all" : "khbbs-unsupported")}
             unprocessedArabicCount={unprocessedArabicCount}
-            showBuildSection={showBuildSection}
+            showBuildSection={showBuildSection && !isGtaIvEntries}
             setShowBuildSection={setShowBuildSection}
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
             setShowDiagnostic={setShowDiagnostic}
-          />
+          />}
           {isLumenTaleEntries && (editor.state?.lumentaleTokenErrorKeys?.size ?? 0) > 0 && (
             <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               تم رفض {editor.state?.lumentaleTokenErrorKeys?.size} ترجمة من LumenTale لأنها غيّرت رمزاً محمياً. صحّح السطر وأعد `{0}` والوسوم والأوامر بالترتيب نفسه.

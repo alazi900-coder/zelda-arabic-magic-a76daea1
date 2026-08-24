@@ -1,9 +1,11 @@
 /** GTA IV design: a focused RTL workbench for the original English source; source text is searchable, while Arabic writing stays locked until English-font encoding is proven. */
 import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, FileCode2, Loader2, LockKeyhole, Search, ShieldCheck, Upload } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, CheckCircle2, FileCode2, Loader2, LockKeyhole, Search, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { gtaIvRawUnitsToString, inspectGtaIvGxt, parseGtaIvGxt, type GtaIvGxtSummary } from "@/lib/gtaiv/gxt-format";
+import { extractGtaIvEntries, GTAIV_SOURCE_GAME } from "@/lib/gtaiv/gtaiv-editor-bridge";
+import { idbGet, idbSet } from "@/lib/idb-storage";
 
 type EnglishSourceRow = { table: string; crc: number; value: string };
 
@@ -14,6 +16,7 @@ export default function GtaIV() {
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedTable, setSelectedTable] = useState("ALL");
+  const navigate = useNavigate();
 
   const inspectEnglishGxt = useCallback(async (file: File) => {
     setBusy(true);
@@ -33,13 +36,24 @@ export default function GtaIV() {
       setSourceName(file.name);
       setQuery("");
       setSelectedTable("ALL");
+      const imported = extractGtaIvEntries(buffer);
+      const oldState = await idbGet<{ translations?: Record<string, string> }>("editorState:gtaiv");
+      const allowed = new Set(imported.entries.map((entry) => `${entry.msbtFile}:${entry.index}`));
+      const translations = Object.fromEntries(Object.entries(oldState?.translations || {}).filter(([key, value]) => allowed.has(key) && value));
+      const editorState = { entries: imported.entries, translations, freshExtraction: true };
+      const originals = Object.fromEntries(imported.entries.map((entry) => [`${entry.msbtFile}:${entry.index}`, entry.original]));
+      await idbSet("editorState", editorState);
+      await idbSet("editorState:gtaiv", editorState);
+      await idbSet("editor-source-game", GTAIV_SOURCE_GAME);
+      await idbSet("originalTexts", originals);
       toast.success(`قُرئ المصدر الإنجليزي: ${summary.entries.toLocaleString("ar")} سطراً.`);
+      navigate("/editor");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر قراءة american.gxt.");
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [navigate]);
 
   const tables = useMemo(() => Array.from(new Set(rows.map((row) => row.table))).sort(), [rows]);
   const filteredRows = useMemo(() => {
@@ -64,12 +78,12 @@ export default function GtaIV() {
 
         <div className="mb-6 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
           <p className="flex gap-2 font-semibold"><FileCode2 className="h-5 w-5 shrink-0 text-primary" /> المسار النشط: ترجمة المصدر الإنجليزي الأصلي.</p>
-          <p className="mt-2 text-muted-foreground">حمّل <code>american.gxt</code> لتقرأ النص الإنجليزي الحقيقي وتبحث فيه حسب الجدول أو العبارة. لا يستخدم هذا القسم ملفات الروسية أو OXT.</p>
+          <p className="mt-2 text-muted-foreground">حمّل <code>american.gxt</code> ليفتح مباشرة داخل محرر الأداة الحالي. لا يستخدم هذا القسم ملفات الروسية أو OXT.</p>
         </div>
 
         <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-primary/35 bg-card p-6 text-center transition hover:border-primary">
           {busy ? <Loader2 className="h-10 w-10 animate-spin text-primary" /> : <FileCode2 className="h-10 w-10 text-primary" />}
-          <strong>1. حمّل النص الإنجليزي الأصلي</strong>
+          <strong>افتح النص الإنجليزي داخل المحرر</strong>
           <span className="text-sm text-muted-foreground"><code>american.gxt</code> من GTA IV</span>
           <label className="sr-only" htmlFor="american-gxt-input">اختر ملف american.gxt</label>
           <input id="american-gxt-input" aria-label="اختر ملف american.gxt" className="block w-full max-w-sm cursor-pointer rounded-md border border-primary/45 bg-background px-3 py-2 text-sm text-foreground file:me-3 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1.5 file:font-semibold file:text-primary-foreground" type="file" accept=".gxt" onChange={(event) => { const file = event.target.files?.[0]; if (file) void inspectEnglishGxt(file); }} />

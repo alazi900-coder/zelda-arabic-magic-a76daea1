@@ -60,6 +60,7 @@ const KingdomHeartsImages = lazyWithIgnoredRef(() => import("./pages/KingdomHear
 const KingdomHeartsFiles = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsFiles"));
 const KingdomHeartsFont = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsFont"));
 const LumenTale = lazyWithIgnoredRef(() => import("./pages/LumenTale"));
+const GtaIV = lazyWithIgnoredRef(() => import("./pages/GtaIV"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <div ref={ref} className="min-h-screen flex items-center justify-center bg-background" {...props}>
@@ -119,6 +120,7 @@ const App = () => (
                 <Route path="/kingdom-hearts-files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Kingdom Hearts"><KingdomHeartsFiles /></ErrorBoundary>} />
                 <Route path="/kingdom-hearts-font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Kingdom Hearts"><KingdomHeartsFont /></ErrorBoundary>} />
                 <Route path="/lumentale" element={<ErrorBoundary fallbackTitle="خطأ في أداة LumenTale"><LumenTale /></ErrorBoundary>} />
+                <Route path="/gta-iv" element={<ErrorBoundary fallbackTitle="خطأ في فاحص GTA IV"><GtaIV /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

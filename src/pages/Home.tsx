@@ -19,6 +19,18 @@ import emeraldFontBg from "@/assets/covers/pokemon-cover.jpg";
 
 const games = [
   {
+    title: "Grand Theft Auto IV",
+    subtitle: "فاحص ملفات لغة GTA IV",
+    desc: "يتحقق محلياً من بنية GXT وOXT: الجداول والمفاتيح وكتل النص، من دون تحرير أو بناء قبل فحص خط اللعبة وخريطة ترميز العربية.",
+    link: "/gta-iv",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%23100e13'/%3E%3Cstop offset='.52' stop-color='%232b2330'/%3E%3Cstop offset='1' stop-color='%2375212f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23b)'/%3E%3Cpath d='M0 670L420 510l215 97 355-260 610 216v337H0z' fill='%23090a0d' opacity='.72'/%3E%3Cpath d='M170 170h450v34H170zm0 70h310v24H170z' fill='%23f2d7b1' opacity='.84'/%3E%3C/svg%3E",
+    formats: [".GXT", ".OXT", "GTA IV"],
+    cardClass: "border-[hsl(350,55%,48%)]/35 hover:border-[hsl(25,80%,65%)]/70",
+    formatClass: "bg-[hsl(350,55%,48%)]/20 text-[hsl(25,85%,74%)] border-[hsl(350,55%,48%)]/35",
+    subtitleClass: "text-[hsl(25,85%,74%)]",
+    arrowClass: "text-[hsl(25,85%,74%)]",
+  },
+  {
     title: "Kingdom Hearts: Birth by Sleep",
     subtitle: "نصوص كينغدوم هارتس BBS",
     desc: "يفتح كل ملفات CTD دفعة واحدة أو من أرشيف ZIP، ويعرض نصوص كل ملف باسمه، ثم يبني ZIP واحداً بالملفات المعدّلة مع حفظ وسوم التحكم التقنية.",

@@ -108,10 +108,6 @@ export async function extractLumenTaleEntries(buffer: ArrayBuffer): Promise<{
   return { entries, tables };
 }
 
-function entryKey(entry: Pick<ExtractedEntry, "msbtFile" | "index">): string {
-  return `${entry.msbtFile}:${entry.index}`;
-}
-
 /**
  * The browser build must prove that the serialized bytes can be reopened by
  * UnityFS before the editor offers them for download. This catches the exact
@@ -183,7 +179,6 @@ export async function buildLumenTaleBundle(
   const manager = await load(source, { unityRevision: "2022.3.62f2" });
   if (!manager.bundleFile) return { error: "تعذر تحميل UnityFS قبل البناء." };
 
-  const entryByKey = new Map(entries.map((entry) => [entryKey(entry), entry]));
   const objectsByPathId = new Map(
     manager.getObjectInfosByClass("MonoBehaviour").map((objectInfo) => [objectInfo.pathID.toString(), objectInfo]),
   );

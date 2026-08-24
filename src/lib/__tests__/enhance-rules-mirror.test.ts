@@ -52,14 +52,14 @@ describe("Pokémon rules in the AI enhancement tool", () => {
     for (const id of PKM_RULE_IDS) expect(gate![1]).toContain(id);
   });
 
-  it("withholds Xenoblade's tag rules from Pokémon", () => {
+  it("withholds Xenoblade's tag rules from Pokémon and LumenTale", () => {
     // They tell the model to add [XENO:n], which this engine would print as
     // eight literal characters in a line that has no room for them.
     const gate = /const XENOBLADE_TAG_RULE_IDS = new Set\(\[([^\]]+)\]\)/.exec(EDGE_SOURCE);
     expect(gate).not.toBeNull();
     expect(gate![1]).toContain("detect_line_breaks");
     expect(gate![1]).toContain("detect_split_and_tags");
-    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || !isPokemon)");
+    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale))");
   });
 
   it("names the game it is reviewing", () => {

@@ -3,7 +3,7 @@
  * UnityFS dependency so it can be tested in isolation in browser and Node test
  * environments alike.
  */
-const TECHNICAL_TOKEN = /\{\d+(?:\.[A-Za-z_][\w.-]*)?\}|\{[A-Za-z_][\w.-]*\}|<\/?[A-Za-z][^>]*>|<\/\>|\\[nrt]|\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\]]+)?|[A-Za-z][\w.-]*=[^\]]+)\]|%(?:\d+\$)?[\d.$-]*[sdif]/g;
+const TECHNICAL_TOKEN = /\{\d+(?:\.[A-Za-z_][\w.-]*)?\}|\{[A-Za-z_][\w.-]*\}|<\/?[A-Za-z][^>]*>|<\/>|\\[nrt]|\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\]]+)?|[A-Za-z][\w.-]*=[^\]]+)\]|%(?:\d+\$)?[\d.$-]*[sdif]/g;
 
 export function lumentaleTechnicalTokens(text: string): string[] {
   return text.match(TECHNICAL_TOKEN) ?? [];

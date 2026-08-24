@@ -407,7 +407,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         const openCount = (trans.match(/\[(?:XENO|System|ML):/g) || []).length;
         const closedCount = (trans.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
         if (openCount > closedCount) {
-          const fixed = trans.replace(/(\[(?:XENO|System|ML):[^\]\[]{0,200})(?=\[|$)/g, '$1]');
+          const fixed = trans.replace(/(\[(?:XENO|System|ML):(?:(?![[\]]).){0,200})(?=\[|$)/g, '$1]');
           const fixedOpen = (fixed.match(/\[(?:XENO|System|ML):/g) || []).length;
           const fixedClosed = (fixed.match(/\[(?:XENO|System|ML):[^\]]*\]/g) || []).length;
           if (fixedOpen === fixedClosed) {
@@ -524,7 +524,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // === Post-BiDi bracket tag validation (NEVER revert) ===
       // After Arabic processing, bracket tags [Tag:Value] may get corrupted by BiDi reversal.
       // Translation is always kept — we only warn so the user can fix it manually.
-      const BRACKET_TAG_RE_BUILD = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
+      const BRACKET_TAG_RE_BUILD = /\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*[^\]]*\]|\{\s*\w+\s*:[^}]*\}/g;
       let bracketRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         if (previouslyBuiltKeys.has(key)) continue;
@@ -548,7 +548,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       // Apply best-effort tag repair. Never silently revert to English here —
       // even a slightly-wrong tag order is preferable to losing the translation entirely.
       let tagRepairCount = 0;
-      let tagOrderRevertCount = 0;
+      const tagOrderRevertCount = 0;
       for (const [key, trans] of Object.entries(nonEmptyTranslations)) {
         if (previouslyBuiltKeys.has(key)) continue;
         const orig = entryOriginals.get(key);
@@ -582,7 +582,7 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         if (previouslyBuiltKeys.has(key)) continue;
         const label = entryLabels.get(key) || '';
         // Extract table name from label like "TableName[row].column"
-        const tableMatch = label.match(/^([^\[]+)\[/);
+        const tableMatch = label.match(/^([^[]+)\[/);
         if (!tableMatch) continue;
         const tableName = tableMatch[1];
         if (PROTECTED_TABLE_PATTERNS.some(p => p.test(tableName))) {
@@ -1019,7 +1019,6 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         // covered by unit tests and cannot silently regress.
         const { evaluateMsbtSafety } = await import("@/lib/build-safety-gates");
         let fixedTechnicalCount = 0;
-        let skippedUnsafeCount = 0;
         const msbtRepairLog: SafetyRepairEntry[] = [];
         for (const entry of currentState.entries) {
           const key = `${entry.msbtFile}:${entry.index}`;
@@ -1071,12 +1070,6 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
           await yieldToUI();
         }
 
-        if (skippedUnsafeCount > 0) {
-          setBuildProgress(`🛡️ تم استبعاد ${skippedUnsafeCount} نص MSBT خطر — راجع تقرير الأمان للتفاصيل...`);
-          await yieldToUI();
-        }
-
-        
         formData.append("translations", JSON.stringify(nonEmptyTranslations));
         formData.append("protectedEntries", JSON.stringify(Array.from(currentState.protectedEntries || [])));
         if (arabicNumerals) formData.append("arabicNumerals", "true");

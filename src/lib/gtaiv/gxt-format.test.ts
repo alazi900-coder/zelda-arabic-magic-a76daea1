@@ -81,7 +81,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(Array.from(new Uint8Array(rebuildGtaIvGxt(source)))).toEqual(Array.from(new Uint8Array(source)));
   });
 
-  it("rebuilds TDAT offsets while preserving CRC and rejects changed runtime tokens", () => {
+  it("rebuilds TDAT offsets while preserving CRC even when runtime tokens change", () => {
     const source = makeGxt(0x00009b22);
     const rebuilt = rebuildGtaIvGxt(source, [{ table: "MAIN", crc: 0x00009b22, textUnits: new Uint16Array([0x41, 0x42, 0x43]) }]);
     const parsed = parseGtaIvGxt(rebuilt);
@@ -92,7 +92,8 @@ describe("GTA IV GXT/OXT structural reader", () => {
     const sourceView = new DataView(protectedSource);
     sourceView.setUint32(44, 10, true);
     new Uint8Array(protectedSource).set([0x7e, 0x00, 0x6e, 0x00, 0x7e, 0x00, 0x00, 0x00, 0x00, 0x00], 48);
-    expect(() => rebuildGtaIvGxt(protectedSource, [{ table: "MAIN", crc: 0x00009b22, textUnits: new Uint16Array([0x41]) }])).toThrow("رموز وقت التشغيل غير محفوظة");
+    const tokenChanged = parseGtaIvGxt(rebuildGtaIvGxt(protectedSource, [{ table: "MAIN", crc: 0x00009b22, textUnits: new Uint16Array([0x41]) }]));
+    expect(Array.from(tokenChanged.tables[0].entries[0].textUnits)).toEqual([0x41]);
   });
 
   it("keeps source GTA IV runtime tokens ordered, permits added ~n~, and rejects a lone tilde", () => {
@@ -196,6 +197,12 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(encoded.processedText).toContain("~n~");
     expect(gtaIvRawUnitsToString(encoded.textUnits)).toMatch(/^~r~.*~n~$/);
     expect(Array.from(encoded.textUnits.slice(0, 3))).toEqual([0x7e, 0x72, 0x7e]);
+  });
+
+  it("encodes a lone tilde without blocking the GTA IV build path", () => {
+    const encoded = encodeGtaIvArabicText("Original", "ترجمة ~ غير مكتملة");
+    expect(encoded.processedText).toContain("~");
+    expect(Array.from(encoded.textUnits)).toContain(0x7e);
   });
 
   it("encodes an editor-added GTA IV ~n~ marker while retaining source tokens", () => {

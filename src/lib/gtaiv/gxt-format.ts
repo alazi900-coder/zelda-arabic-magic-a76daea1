@@ -297,8 +297,6 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
   // Dollar values are an editor-level warning, not a build-blocking format rule.
   // Keep a safe normalization when possible, otherwise emit the user translation.
   const normalizedTranslation = dollarRepair.safe ? dollarRepair.text : translation;
-  const tokenValidation = validateGtaIvRuntimeTokenSequence(sourceText, normalizedTranslation);
-  if (!tokenValidation.valid) fail(`رموز وقت التشغيل غير محفوظة: ${tokenValidation.reason}`);
 
   const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(normalizedTranslation, sourceText);
   if (unsupported.length > 0) {
@@ -590,8 +588,8 @@ export function reconcileGtaIvOxtWithGxt(gxt: GtaIvParsedGxt, oxt: GtaIvParsedOx
  * Rebuilds GXT from its existing tables and pre-encoded replacement units only.
  * No replacements return a byte-identical copy. With replacements, it preserves
  * TABL table names/order, table prefixes, TKEY CRC/order, and all non-replaced
- * text units; only TDAT payload offsets are recalculated. Runtime tokens must
- * remain exactly equal and ordered as in the original entry.
+ * text units; only TDAT payload offsets are recalculated. Runtime token checks
+ * remain available to editor diagnostics but do not prevent file construction.
  */
 export function rebuildGtaIvGxt(source: ArrayBuffer, replacements: readonly GtaIvGxtReplacement[] = []): ArrayBuffer {
   const parsed = parseGtaIvGxt(source);
@@ -610,10 +608,6 @@ export function rebuildGtaIvGxt(source: ArrayBuffer, replacements: readonly GtaI
     if (!sourceEntry) fail(`هوية استبدال غير موجودة: ${replacement.table}:${replacement.crc}.`);
     if (replacement.textUnits.some((unit) => unit === 0)) {
       fail(`النص البديل للهوية ${replacement.table}:${replacement.crc} يحوي NUL داخلياً.`);
-    }
-    const tokenValidation = validateGtaIvRuntimeTokenSequence(textFromUnits(sourceEntry.textUnits), textFromUnits(replacement.textUnits));
-    if (!tokenValidation.valid) {
-      fail(`رموز وقت التشغيل غير محفوظة للهوية ${replacement.table}:${replacement.crc}: ${tokenValidation.reason}`);
     }
     replacementByIdentity.set(key, replacement);
   }

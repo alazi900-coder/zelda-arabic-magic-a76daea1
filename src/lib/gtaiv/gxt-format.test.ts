@@ -141,6 +141,16 @@ describe("GTA IV GXT/OXT structural reader", () => {
     }
   });
 
+  it("restores a localized decimal dollar price to the exact English source literal", () => {
+    const source = "Now under $100 by a nickel: $99.95.";
+    const candidate = "الآن بأقل من 100 دولار بخمسة سنتات: 99,95 دولار.";
+    expect(validateGtaIvDollarAmountSequence(source, candidate)).toMatchObject({ valid: true });
+    expect(repairGtaIvDollarAmountSequence(source, candidate))
+      .toMatchObject({ text: "الآن بأقل من $100 بخمسة سنتات: $99.95.", changed: true, safe: true });
+    expect(repairGtaIvDollarAmountSequence(source, "الآن بأقل من 100 دولار: 99,94 دولار."))
+      .toMatchObject({ changed: false, safe: false });
+  });
+
   it("normalizes explicit Arabic million wordings only when they equal the GTA IV m value", () => {
     const source = "Prize: $10m then $2m";
     for (const candidate of [
@@ -196,6 +206,15 @@ describe("GTA IV GXT/OXT structural reader", () => {
     const encoded = encodeGtaIvArabicText("Pay $700", "ادفع ٧٠٠ دولار");
     expect(encoded.processedText).toContain("$700");
     expect(encoded.processedText).not.toContain("دولار");
+  });
+
+  it("encodes the rejected MAIN price sequence after normalizing its decimal comma", () => {
+    const encoded = encodeGtaIvArabicText(
+      "~z~Now you get the entire set, under a $100 by a nickel. $99.95. You are an idiot if you don't order.",
+      "~z~الآن تحصل على المجموعة كاملة بأقل من 100 دولار بخمسة سنتات. 99,95 دولار. أنت أحمق إذا لم تطلبها.",
+    );
+    expect(encoded.processedText).toContain("$100");
+    expect(encoded.processedText).toContain("$99.95");
   });
 
   it("encodes an explicit Arabic million wording only after restoring the source literal", () => {

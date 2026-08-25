@@ -193,7 +193,7 @@ const gtaIvDollarAmountPattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
 // Translation services may express `$700` as `700$`, `٧٠٠$`, `700 دولار`,
 // `٧٠٠ دولار`, or `$10m` as `10 ملايين دولار`. Only those explicit money
 // spellings are candidate slots; ordinary UI numbers are never changed.
-const gtaIvDollarAmountCandidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?\s*(?:\$|دولار)|[0-9٠-٩]+\s+(?:مليون|ملايين)\s+دولار/g;
+const gtaIvDollarAmountCandidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:[\.,،][0-9٠-٩]{1,2})?(?:[kKmMbB])?\s*(?:\$|دولار)|[0-9٠-٩]+\s+(?:مليون|ملايين)\s+دولار/g;
 
 export interface GtaIvArabicEncoding {
   /** Shaped and visually ordered text after protected tokens are restored. */
@@ -773,9 +773,16 @@ export function repairGtaIvDollarAmountSequence(source: string, candidate: strin
 function normalizeGtaIvDollarAmount(value: string): string {
   const normalized = normalizeGtaIvArabicPunctuation(value).trim().toLowerCase();
   const arabicMillions = normalized.match(/^(\d+)\s+(?:مليون|ملايين)\s+دولار$/);
-  const compact = (arabicMillions ? `${arabicMillions[1]}m` : normalized
+  const unseparated = arabicMillions ? `${arabicMillions[1]}m` : normalized
     .replace(/دولار/g, "")
-    .replace(/[\s$,]/g, ""))
+    .replace(/[\s$]/g, "");
+  // Translation services often localize the decimal separator: `$99.95` can
+  // arrive as `99,95 دولار`. A comma followed by one or two digits is a clear
+  // decimal spelling here; comma groups of exactly three remain thousands.
+  const decimalComma = unseparated.match(/^(\d+(?:,\d{3})*),(\d{1,2})([kmb])?$/i);
+  const compact = (decimalComma
+    ? `${decimalComma[1].replace(/,/g, "")}.${decimalComma[2]}${decimalComma[3] ?? ""}`
+    : unseparated.replace(/,/g, ""))
     .toLowerCase();
   const parts = compact.match(/^(\d+)(?:\.(\d+))?([kmb])?$/);
   if (!parts) return compact;

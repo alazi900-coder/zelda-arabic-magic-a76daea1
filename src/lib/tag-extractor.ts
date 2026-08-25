@@ -15,7 +15,7 @@ export interface ExtractorEntry {
 interface Occurrence {
   count: number;
   files: Set<string>;
-  example: string;
+  examples: Array<{ file: string; context: string }>;
 }
 
 export interface TagReport {
@@ -24,7 +24,7 @@ export interface TagReport {
   categories: Record<string, Map<string, Occurrence>>;
 }
 
-const CATEGORIES = [
+export const CATEGORIES = [
   "bracket_tags",      // [Tag:Value], [System:Ruby], [XENO:n]
   "paired_tags",       // [Tag:x]...[/Tag:x]
   "curly_vars",        // {var}, {player:name}
@@ -34,13 +34,57 @@ const CATEGORIES = [
   "control_chars",     // U+FFF9..U+FFFC, BiDi marks
   "dollar_vars",       // $1, $2, $name
   "percent_vars",      // %s, %d, %1$s
+  "hash_controls",     // #0..#5
 ] as const;
 type Category = (typeof CATEGORIES)[number];
+
+export const CATEGORY_INFO: Record<Category, { label: string; protectionReason: string }> = {
+  bracket_tags: {
+    label: "وسوم مربعة [Tag:Value]",
+    protectionReason: "تتحكم في تنسيق النص أو محرك اللعبة، ويجب أن تبقى كما هي.",
+  },
+  paired_tags: {
+    label: "وسوم مزدوجة [Tag]...[/Tag]",
+    protectionReason: "وسم افتتاح وإغلاق مرتبطان ويجب أن يبقيا بالترتيب نفسه.",
+  },
+  curly_vars: {
+    label: "متغيرات {var}",
+    protectionReason: "تستبدلها اللعبة بقيم مثل اسم اللاعب أو رقم أو عنصر.",
+  },
+  html_like: {
+    label: "وسوم HTML <tag>",
+    protectionReason: "تحدد نمط النص أو سلوكه ويجب عدم ترجمة بنية الوسم.",
+  },
+  escape_seq: {
+    label: "تسلسلات الهروب \\xNN و\\uNNNN",
+    protectionReason: "تمثل محارف وتحكمات داخل النص وليست كلمات قابلة للترجمة.",
+  },
+  pua_chars: {
+    label: "أحرف PUA (أيقونات)",
+    protectionReason: "غالباً ما تشير إلى رمز أو أيقونة من خط اللعبة.",
+  },
+  control_chars: {
+    label: "أحرف تحكم واتجاه",
+    protectionReason: "تتحكم في اتجاه أو بنية العرض ولا تظهر كنص عادي.",
+  },
+  dollar_vars: {
+    label: "متغيرات $N و$name",
+    protectionReason: "عنصر نائب تستبدله اللعبة بقيمة وقت التشغيل.",
+  },
+  percent_vars: {
+    label: "محددات تنسيق %s و%d",
+    protectionReason: "صيغة تمرير قيم إلى النص ويجب أن تبقى مطابقة للمصدر.",
+  },
+  hash_controls: {
+    label: "رموز تحكم #0 إلى #5",
+    protectionReason: "رمز تحكم قصير يستخدمه محرك اللعبة، وليس جزءاً من الترجمة.",
+  },
+};
 
 const PATTERNS: Record<Category, RegExp> = {
   paired_tags: /\[\s*\w+\s*:[^\]]*\][^[]*?\[\/\s*\w+\s*:[^\]]*\]/g,
   bracket_tags: /\\?\[\s*\/?\s*[A-Za-z][\w\s:=.'\/-]*\s*\\?\]/g,
-  curly_vars: /\{[^{}]{1,60}\}/g,
+  curly_vars: /\{\s*(?:\d+(?:\.[A-Za-z_][\w.-]*)?|[A-Za-z_][\w.-]*)(?::\s*[^{}]{0,60})?\s*\}/g,
   html_like: /<\/?[A-Za-z][^>]{0,80}>/g,
   // 'n' is deliberately excluded from the hex-prefix class below: \xNN and
   // \uNNNN are real hex escapes, but \n is the single-char newline escape —
@@ -51,6 +95,7 @@ const PATTERNS: Record<Category, RegExp> = {
   control_chars: /[\uFFF9-\uFFFC\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
   dollar_vars: /\$\w+/g,
   percent_vars: /%[\d.$-]*[sdif]/g,
+  hash_controls: /#[0-5]/g,
 };
 
 // Priority order for cross-category de-duplication: when two categories'
@@ -69,6 +114,7 @@ const SCAN_PRIORITY: Category[] = [
   "control_chars",
   "dollar_vars",
   "percent_vars",
+  "hash_controls",
 ];
 
 /** Extracts a stable de-dup key for paired_tags: the opening+closing tag
@@ -81,20 +127,40 @@ function pairedTagKey(fullMatch: string): string {
   return m ? `${m[1]}...${m[2]}` : fullMatch;
 }
 
-function recordMatch(map: Map<string, Occurrence>, key: string, file: string, example: string) {
+function contextAroundMatch(text: string, start: number, end: number): string {
+  const radius = 54;
+  const from = Math.max(0, start - radius);
+  const to = Math.min(text.length, end + radius);
+  const prefix = from > 0 ? "…" : "";
+  const suffix = to < text.length ? "…" : "";
+  return `${prefix}${text.slice(from, start)}⟦${text.slice(start, end)}⟧${text.slice(end, to)}${suffix}`;
+}
+
+function recordMatch(
+  map: Map<string, Occurrence>,
+  key: string,
+  file: string,
+  context: string,
+) {
   const existing = map.get(key);
   if (existing) {
     existing.count++;
     if (existing.files.size < 20) existing.files.add(file);
+    if (
+      existing.examples.length < 3 &&
+      !existing.examples.some((example) => example.file === file && example.context === context)
+    ) {
+      existing.examples.push({ file, context });
+    }
   } else {
-    map.set(key, { count: 1, files: new Set([file]), example });
+    map.set(key, { count: 1, files: new Set([file]), examples: [{ file, context }] });
   }
 }
 
 function scanSingle(text: string, file: string, categories: Record<Category, Map<string, Occurrence>>) {
-  const claimed: [number, number][] = [];
-  const isClaimed = (start: number, end: number) => claimed.some(([s, e]) => start >= s && end <= e);
-  const example = text.length > 100 ? text.slice(0, 97) + "..." : text;
+  const pairedSpans: [number, number][] = [];
+  const isBracketInsidePairedTag = (start: number, end: number) =>
+    pairedSpans.some(([pairStart, pairEnd]) => start >= pairStart && end <= pairEnd);
 
   for (const cat of SCAN_PRIORITY) {
     const re = PATTERNS[cat];
@@ -103,8 +169,11 @@ function scanSingle(text: string, file: string, categories: Record<Category, Map
     while ((m = re.exec(text)) !== null) {
       const start = m.index;
       const end = start + m[0].length;
-      if (isClaimed(start, end)) continue;
-      claimed.push([start, end]);
+      // A paired tag already reports its opening/closing bracket pieces as one
+      // protected skeleton. Other nested token types (such as <h>) must still
+      // be reported, because they require independent protection.
+      if (cat === "bracket_tags" && isBracketInsidePairedTag(start, end)) continue;
+      if (cat === "paired_tags") pairedSpans.push([start, end]);
 
       const key = cat === "paired_tags"
         ? pairedTagKey(m[0])
@@ -113,7 +182,7 @@ function scanSingle(text: string, file: string, categories: Record<Category, Map
           : cat === "control_chars"
             ? `\\u${m[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
             : m[0];
-      recordMatch(categories[cat], key, file, example);
+      recordMatch(categories[cat], key, file, contextAroundMatch(text, start, end));
     }
   }
 }
@@ -186,24 +255,19 @@ export async function extractTags(
   return { totalEntries: entries.length, scannedEntries: scanned, categories };
 }
 
-const CATEGORY_LABELS: Record<Category, string> = {
-  bracket_tags: "Bracket Tags [Tag:Value]",
-  paired_tags: "Paired Tags [Tag]...[/Tag]",
-  curly_vars: "Curly Variables {var}",
-  html_like: "HTML-like <tag>",
-  escape_seq: "Escape Sequences \\xNN \\uNNNN",
-  pua_chars: "PUA Characters (U+E000..U+E0FF) — likely icons",
-  control_chars: "Control / BiDi Characters",
-  dollar_vars: "Dollar Variables $N / $name",
-  percent_vars: "Percent Format Specifiers %s %d",
-};
-
 export function formatReport(report: TagReport): string {
   const lines: string[] = [];
   const now = new Date().toISOString();
-  lines.push(`# Xenoblade Technical Tag Report`);
+  const activeCategories = CATEGORIES.filter((cat) => report.categories[cat].size > 0);
+  const uniqueTokens = activeCategories.reduce((total, cat) => total + report.categories[cat].size, 0);
+  const totalOccurrences = activeCategories.reduce(
+    (total, cat) => total + [...report.categories[cat].values()].reduce((sum, occurrence) => sum + occurrence.count, 0),
+    0,
+  );
+  lines.push(`# تقرير الوسوم التقنية`);
   lines.push(`# Generated: ${now}`);
   lines.push(`# Entries scanned: ${report.scannedEntries} / ${report.totalEntries}`);
+  lines.push(`# Active categories: ${activeCategories.length} | Unique tokens: ${uniqueTokens} | Total occurrences: ${totalOccurrences}`);
   lines.push("");
 
   for (const cat of CATEGORIES) {
@@ -212,7 +276,8 @@ export function formatReport(report: TagReport): string {
     const sorted = [...map.entries()].sort((a, b) => b[1].count - a[1].count);
     const totalCount = sorted.reduce((s, [, v]) => s + v.count, 0);
     lines.push(`========================================================`);
-    lines.push(`=== ${CATEGORY_LABELS[cat]}`);
+    lines.push(`=== ${CATEGORY_INFO[cat].label}`);
+    lines.push(`=== سبب الحماية: ${CATEGORY_INFO[cat].protectionReason}`);
     lines.push(`=== Unique: ${sorted.length}    Total occurrences: ${totalCount}`);
     lines.push(`========================================================`);
     for (const [token, occ] of sorted) {
@@ -221,7 +286,9 @@ export function formatReport(report: TagReport): string {
       lines.push(`${token}`);
       lines.push(`  count: ${occ.count}`);
       lines.push(`  files: ${files}${more}`);
-      lines.push(`  example: ${occ.example.replace(/\n/g, "\\n")}`);
+      for (const example of occ.examples) {
+        lines.push(`  context (${example.file}): ${example.context.replace(/\n/g, "\\n")}`);
+      }
       lines.push("");
     }
     lines.push("");

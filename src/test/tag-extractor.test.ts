@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractTags, categoryMatches, type ExtractorEntry } from "@/lib/tag-extractor";
+import { extractTags, categoryMatches, formatReport, type ExtractorEntry } from "@/lib/tag-extractor";
 
 describe("tag-extractor: paired_tags aggregation", () => {
   it("aggregates occurrences of the same tag pair skeleton even when inner text differs each time", async () => {
@@ -10,7 +10,7 @@ describe("tag-extractor: paired_tags aggregation", () => {
     ];
     const report = await extractTags(entries);
     const map = report.categories.paired_tags;
-    expect(map.size).toBe(1); // one skeleton, not three
+    expect(map.size).toBe(1);
     const [, occ] = [...map.entries()][0];
     expect(occ.count).toBe(3);
     expect(occ.files.size).toBe(3);
@@ -43,6 +43,38 @@ describe("tag-extractor: cross-category double counting", () => {
     const report = await extractTags(entries);
     expect(Object.keys(report.categories)).not.toContain("uppercase_tokens");
     expect(Object.values(report.categories).every((category) => category.size === 0)).toBe(true);
+  });
+
+  it("keeps a nested HTML tag visible even when it is inside a paired bracket tag", async () => {
+    const entries: ExtractorEntry[] = [
+      { msbtFile: "a.msbt", original: "[System:Ruby]<h>Hero</h>[/System:Ruby]" },
+    ];
+    const report = await extractTags(entries);
+    expect(report.categories.paired_tags.size).toBe(1);
+    expect([...report.categories.html_like.keys()]).toEqual(["<h>", "</h>"]);
+  });
+});
+
+describe("tag-extractor: precision and report context", () => {
+  it("does not treat prose enclosed in braces as a runtime variable", async () => {
+    const entries: ExtractorEntry[] = [
+      { msbtFile: "a.msbt", original: "Narration { this is a note, not a variable }" },
+    ];
+    const report = await extractTags(entries);
+    expect(report.categories.curly_vars.size).toBe(0);
+  });
+
+  it("reports #0..#5 controls and includes their exact location in the export", async () => {
+    const entries: ExtractorEntry[] = [
+      { msbtFile: "menu.msbt", original: "Before #3 After" },
+    ];
+    const report = await extractTags(entries);
+    const occurrence = report.categories.hash_controls.get("#3");
+    expect(occurrence?.count).toBe(1);
+    expect(occurrence?.examples[0]).toEqual({ file: "menu.msbt", context: "Before ⟦#3⟧ After" });
+    expect(formatReport(report)).toContain("سبب الحماية");
+    expect(formatReport(report)).toContain("context (menu.msbt): Before ⟦#3⟧ After");
+    expect(formatReport(report)).not.toContain("Xenoblade Technical Tag Report");
   });
 });
 
@@ -94,6 +126,7 @@ describe("tag-extractor: categoryMatches (used to wire filter chips to the edito
     expect(categoryMatches("percent_vars", "You have items")).toBe(false);
     expect(categoryMatches("bracket_tags", "[XENO:1] hi")).toBe(true);
     expect(categoryMatches("dollar_vars", "hi $player")).toBe(true);
+    expect(categoryMatches("hash_controls", "Break #5 now")).toBe(true);
   });
 
   it("is safe to call repeatedly (global-regex lastIndex doesn't leak state across calls)", () => {
@@ -126,6 +159,6 @@ describe("tag-extractor: basic sanity", () => {
     ];
     const report = await extractTags(entries);
     expect(report.totalEntries).toBe(2);
-    expect(report.scannedEntries).toBe(1); // empty original is skipped
+    expect(report.scannedEntries).toBe(1);
   });
 });

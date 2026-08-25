@@ -25,6 +25,7 @@ import {
   downloadReport,
   formatReport,
   categoryMatches,
+  CATEGORY_INFO,
   type TagReport,
   type Category,
 } from "@/lib/tag-extractor";
@@ -40,19 +41,17 @@ interface CleanupToolsPanelProps {
   onFilterByKeys?: (keys: Set<string>) => void;
 }
 
-const CATEGORY_META: Record<
-  string,
-  { label: string; emoji: string; tone: string }
-> = {
-  bracket_tags: { label: "وسوم مربعة [Tag:Value]", emoji: "🏷️", tone: "text-sky-400" },
-  paired_tags: { label: "وسوم مزدوجة [Tag]...[/Tag]", emoji: "🧩", tone: "text-indigo-400" },
-  curly_vars: { label: "متغيرات {var}", emoji: "✨", tone: "text-violet-400" },
-  html_like: { label: "وسوم HTML <tag>", emoji: "🌐", tone: "text-cyan-400" },
-  escape_seq: { label: "تسلسلات هروب \\xNN", emoji: "🪄", tone: "text-pink-400" },
-  pua_chars: { label: "أحرف PUA (أيقونات)", emoji: "🎴", tone: "text-amber-400" },
-  control_chars: { label: "أحرف تحكم / BiDi", emoji: "🧭", tone: "text-orange-400" },
-  dollar_vars: { label: "متغيرات $N / $name", emoji: "💲", tone: "text-emerald-400" },
-  percent_vars: { label: "محددات تنسيق %s %d", emoji: "📐", tone: "text-teal-400" },
+const CATEGORY_META: Record<Category, { emoji: string; tone: string }> = {
+  bracket_tags: { emoji: "🏷️", tone: "text-sky-400" },
+  paired_tags: { emoji: "🧩", tone: "text-indigo-400" },
+  curly_vars: { emoji: "✨", tone: "text-violet-400" },
+  html_like: { emoji: "🌐", tone: "text-cyan-400" },
+  escape_seq: { emoji: "🪄", tone: "text-pink-400" },
+  pua_chars: { emoji: "🎴", tone: "text-amber-400" },
+  control_chars: { emoji: "🧭", tone: "text-orange-400" },
+  dollar_vars: { emoji: "💲", tone: "text-emerald-400" },
+  percent_vars: { emoji: "📐", tone: "text-teal-400" },
+  hash_controls: { emoji: "#️⃣", tone: "text-rose-400" },
 };
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_META) as Category[];
@@ -116,7 +115,7 @@ export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupTool
               token,
               count: occ.count,
               files: [...occ.files],
-              example: occ.example,
+              examples: occ.examples,
             })),
         ]),
       ),
@@ -383,7 +382,7 @@ export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupTool
                               {meta.emoji}
                             </span>
                             <span className="text-xs font-bold">
-                              {meta.label}
+                              {CATEGORY_INFO[cat].label}
                             </span>
                             <Badge variant="secondary" className="text-[10px]">
                               {sorted.length} وسم · {totalCount} ظهور
@@ -422,6 +421,9 @@ export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupTool
 
                         {isOpen && (
                           <div className="border-t border-border/40 divide-y divide-border/30">
+                            <p className="px-2 py-1.5 text-[10px] text-muted-foreground bg-background/30">
+                              {CATEGORY_INFO[cat].protectionReason}
+                            </p>
                             {sorted.slice(0, 300).map(([token, occ]) => (
                               <div
                                 key={token}
@@ -465,7 +467,7 @@ export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupTool
                                   className="text-[10px] text-muted-foreground line-clamp-2"
                                   dir="ltr"
                                 >
-                                  {occ.example}
+                                  {occ.examples[0]?.context || ""}
                                 </div>
                               </div>
                             ))}
@@ -489,7 +491,7 @@ export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupTool
                     {ALL_CATEGORIES.filter(
                       (c) => (report.categories[c]?.size || 0) === 0,
                     )
-                      .map((c) => CATEGORY_META[c].label)
+                      .map((c) => CATEGORY_INFO[c].label)
                       .join(" · ")}
                   </div>
                 )}

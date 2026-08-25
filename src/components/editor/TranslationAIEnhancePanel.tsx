@@ -27,7 +27,7 @@ import {
 import { recordFeedback, getRecentFeedbackForPrompt } from "@/lib/enhance-feedback-memory";
 import { makeEnhanceCacheKey, enhanceCacheLookup, enhanceCacheStore, enhanceCacheClear } from "@/lib/enhance-cache";
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
-import type { ExtractedEntry } from "./types";
+import { isTranslationExcludedText, type ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
 import {
   loadEnabledRules, loadCustomRules, loadBuiltinOverrides,
@@ -384,7 +384,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const translatedEntries = entries.filter(e => {
       const key = `${e.msbtFile}:${e.index}`;
       const t = translations[key];
-      return t?.trim() && !processedKeysRef.current.has(key) && scopeFilter(e, t);
+      return t?.trim() && !isTranslationExcludedText(e.original, e.msbtFile) && !processedKeysRef.current.has(key) && scopeFilter(e, t);
     });
 
     if (translatedEntries.length === 0) {

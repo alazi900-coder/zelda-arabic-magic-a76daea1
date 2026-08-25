@@ -13,7 +13,7 @@ function readFileAsText(file: File): Promise<string> {
 import type { ImportConflict } from "@/components/editor/ImportConflictDialog";
 import { removeArabicPresentationForms, stripBidiMarkers, hasArabicPresentationForms, reverseBidi } from "@/lib/arabic-processing";
 import type { EditorState } from "@/components/editor/types";
-import { ExtractedEntry, hasArabicChars, unReverseBidi, isTechnicalText } from "@/components/editor/types";
+import { ExtractedEntry, hasArabicChars, unReverseBidi, isTechnicalText, isTranslationExcludedText } from "@/components/editor/types";
 import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
 import { fetchBundledTranslations, uploadBundledTranslations } from "@/lib/bundled-cloud";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
@@ -202,6 +202,8 @@ function parseCSVLine(line: string): string[] {
 export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries, filterLabel }: UseEditorFileIOProps) {
 
   const isFilterActive = filterLabel !== "";
+  const withoutTranslationExcludedEntries = (entries: ExtractedEntry[]) =>
+    entries.filter(entry => !isTranslationExcludedText(entry.original, entry.msbtFile));
 
   // Conflict dialog state
   const [importConflicts, setImportConflicts] = useState<ImportConflict[]>([]);
@@ -217,6 +219,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
     if (isFilterActive) {
       for (const entry of filteredEntries) {
+        if (isTranslationExcludedText(entry.original, entry.msbtFile)) continue;
         const key = `${entry.msbtFile}:${entry.index}`;
         const value = state.translations[key]?.trim();
         // مترجم → العربية، غير مترجم → النص الإنجليزي الأصلي
@@ -225,7 +228,10 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           : entry.original;
       }
     } else {
+      const entryByKey = new Map(state.entries.map(entry => [`${entry.msbtFile}:${entry.index}`, entry]));
       for (const [key, value] of Object.entries(state.translations)) {
+        const entry = entryByKey.get(key);
+        if (entry && isTranslationExcludedText(entry.original, entry.msbtFile)) continue;
         cleanTranslations[key] = normalizeArabicPresentationForms(value);
       }
     }
@@ -535,6 +541,11 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       if (key.startsWith('__fp__:')) continue;
       // When filter is active, only import keys that match filtered entries
       if (filteredKeySet && !filteredKeySet.has(key)) {
+        skippedByFilter++;
+        continue;
+      }
+      const entry = state?.entries.find(candidate => `${candidate.msbtFile}:${candidate.index}` === key);
+      if (entry && isTranslationExcludedText(entry.original, entry.msbtFile)) {
         skippedByFilter++;
         continue;
       }
@@ -999,8 +1010,9 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   const handleExportCSV = () => {
     if (!state) return;
     const entriesToExport = (isFilterActive && filteredEntries.length < state.entries.length) ? filteredEntries : state.entries;
+    const exchangeEntries = withoutTranslationExcludedEntries(entriesToExport);
     const header = 'file,index,label,original,translation,max_bytes';
-    const rows = entriesToExport.map(entry => {
+    const rows = exchangeEntries.map(entry => {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = normalizeArabicPresentationForms(state.translations[key] || '');
       return [
@@ -1022,8 +1034,8 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     a.click();
     URL.revokeObjectURL(url);
     const msg = isFilterActive
-      ? `✅ تم تصدير ${entriesToExport.length} نص كملف CSV (${filterLabel})`
-      : `✅ تم تصدير ${entriesToExport.length} نص كملف CSV`;
+      ? `✅ تم تصدير ${exchangeEntries.length} نص كملف CSV (${filterLabel})`
+      : `✅ تم تصدير ${exchangeEntries.length} نص كملف CSV`;
     setLastSaved(msg);
     setTimeout(() => setLastSaved(""), 3000);
   };
@@ -1060,6 +1072,8 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           if (!filePath || !index || !translation) continue;
           const key = `${filePath}:${index}`;
           if (allowedKeys && !allowedKeys.has(key)) continue;
+          const entry = state?.entries.find(candidate => `${candidate.msbtFile}:${candidate.index}` === key);
+          if (entry && isTranslationExcludedText(entry.original, entry.msbtFile)) continue;
           updates[key] = normalizeArabicPresentationForms(translation);
           imported++;
         }
@@ -1079,7 +1093,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   /** Export ALL English originals as JSON {key: original} for external translation */
   const handleExportAllEnglishJson = () => {
     if (!state) return;
-    const entriesToExport = isFilterActive ? filteredEntries : state.entries;
+    const entriesToExport = withoutTranslationExcludedEntries(isFilterActive ? filteredEntries : state.entries);
     const exportObj: Record<string, string> = {};
     for (const entry of entriesToExport) {
       const key = `${entry.msbtFile}:${entry.index}`;
@@ -1101,7 +1115,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
   /** Export ALL English originals as TXT (including already translated) */
   const handleExportAllEnglishTxt = () => {
     if (!state) return;
-    const entriesToExport = isFilterActive ? filteredEntries : state.entries;
+    const entriesToExport = withoutTranslationExcludedEntries(isFilterActive ? filteredEntries : state.entries);
     const sortedEntries = [...entriesToExport].sort((a, b) => {
       const fileCompare = a.msbtFile.localeCompare(b.msbtFile);
       if (fileCompare !== 0) return fileCompare;
@@ -1191,7 +1205,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   const handleExportXLIFF = () => {
     if (!state) return;
-    const entriesToExport = isFilterActive ? filteredEntries : state.entries;
+    const entriesToExport = withoutTranslationExcludedEntries(isFilterActive ? filteredEntries : state.entries);
     const xliff = buildXliff(entriesToExport, state.translations);
     const blob = new Blob([xliff], { type: 'application/xliff+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -1207,7 +1221,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
 
   const handleExportTMX = () => {
     if (!state) return;
-    const entriesToExport = isFilterActive ? filteredEntries : state.entries;
+    const entriesToExport = withoutTranslationExcludedEntries(isFilterActive ? filteredEntries : state.entries);
     const tmx = buildTmx(entriesToExport, state.translations);
     const translatedCount = entriesToExport.filter(e => {
       const t = state.translations[`${e.msbtFile}:${e.index}`]?.trim();
@@ -1251,6 +1265,8 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           const target = unit.querySelector('target');
           if (!id || !target?.textContent?.trim()) return;
           if (allowedKeys && !allowedKeys.has(id)) return;
+          const entry = state?.entries.find(candidate => `${candidate.msbtFile}:${candidate.index}` === id);
+          if (entry && isTranslationExcludedText(entry.original, entry.msbtFile)) return;
           updates[id] = normalizeArabicPresentationForms(target.textContent.trim());
         });
 
@@ -1350,6 +1366,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         for (const entry of entriesToCheck) {
           const key = `${entry.msbtFile}:${entry.index}`;
           if (allowedKeys && !allowedKeys.has(key)) continue;
+          if (isTranslationExcludedText(entry.original, entry.msbtFile)) continue;
 
           // Priority 1: match by tuid (exact key match)
           if (tuidToArabic.has(key)) {

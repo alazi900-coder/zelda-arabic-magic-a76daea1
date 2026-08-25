@@ -33,6 +33,10 @@ function formatTagCounts(tags: string[]): string {
 
 /** Classify a tag token for color-coding */
 function getTagDisplayInfo(tag: string): { label: string; color: string; title: string } {
+  // GTA IV input / runtime token: ~PAD_X~, ~MOUSE_WHEEL~, ~n~, etc.
+  if (/^~[^~\r\n]+~$/.test(tag)) {
+    return { label: tag, color: 'bg-violet-500/15 text-violet-400 border-violet-500/25', title: 'وسم تحكم GTA IV — لا تحذفه ولا تترجمه ولا تغيّر ترتيبه' };
+  }
   // PUA characters (private use area — game engine icons/glyphs)
   if (/^[\uE000-\uE0FF]+$/.test(tag)) {
     const codes = [...tag].map(c => `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`).join(' ');
@@ -343,9 +347,9 @@ const EntryCard: React.FC<EntryCardProps> = ({
             return <p className="text-xs text-muted-foreground mb-1 truncate">{entry.msbtFile} • {entry.label}</p>;
           })()}
           <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'isolate' }}><HighlightedOriginal text={entry.original} /></p>
-          {hasTechnicalTags(entry.original) && (
+          {hasTechnicalTags(entry.original, entry.msbtFile) && (
             <p className="text-[10px] text-muted-foreground mb-2 leading-relaxed">
-              💡 الرموز الملونة (⚙ تحكم • 🎨 تنسيق • 📌 متغير) أكواد خاصة بمحرك اللعبة — <span className="font-semibold text-accent">لا تحذفها من الترجمة</span>
+              💡 الرموز الملونة أكواد خاصة بمحرك اللعبة — <span className="font-semibold text-accent">لا تحذفها من الترجمة</span>
             </p>
           )}
           {isTech && <p className="text-xs text-accent mb-2">⚠️ نص تقني - تحتاج حذر في الترجمة</p>}

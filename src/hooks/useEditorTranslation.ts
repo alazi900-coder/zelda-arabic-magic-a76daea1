@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
   ExtractedEntry, EditorState, PAGE_SIZE,
-  categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, isTechnicalText, hasTechnicalTags,
+  categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, isTechnicalText, isTranslationExcludedText, hasTechnicalTags,
 } from "@/components/editor/types";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
@@ -383,6 +383,13 @@ export function useEditorTranslation({
 
   const handleTranslateSingle = async (entry: ExtractedEntry) => {
     if (!state) return;
+    if (isTranslationExcludedText(entry.original, entry.msbtFile)) {
+      toast({
+        title: "وسم تحكم GTA IV فقط",
+        description: "هذا السطر محفوظ في GXT ولا يُرسل إلى الذكاء الاصطناعي لأنه لا يحتوي نصاً قابلاً للترجمة.",
+      });
+      return;
+    }
     const key = `${entry.msbtFile}:${entry.index}`;
     setTranslatingSingle(key);
     try {
@@ -428,7 +435,7 @@ export function useEditorTranslation({
         }
         let processed = translated;
         // Post-process: local tag repair + auto-sync lines
-        if (hasTechnicalTags(entry.original)) {
+        if (hasTechnicalTags(entry.original, entry.msbtFile)) {
           processed = restoreTagsLocally(entry.original, processed);
           processed = autoFixTagBrackets(entry.original, processed);
         }
@@ -472,6 +479,7 @@ export function useEditorTranslation({
       if (!matchCategory) { skipCategory++; return false; }
       if (!e.original.trim()) { skipEmpty++; return false; }
       if (arabicRegex.test(e.original)) { skipArabic++; return false; }
+      if (isTranslationExcludedText(e.original, e.msbtFile)) { skipTechnical++; return false; }
       if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) { skipTechnical++; return false; }
       if (state.translations[key]?.trim()) { skipTranslated++; return false; }
       return true;
@@ -945,6 +953,7 @@ export function useEditorTranslation({
       const key = `${e.msbtFile}:${e.index}`;
       if (!e.original.trim()) { skipEmpty++; return false; }
       if (arabicRegex.test(e.original)) { skipArabic++; return false; }
+      if (isTranslationExcludedText(e.original, e.msbtFile)) { skipTechnical++; return false; }
       if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) { skipTechnical++; return false; }
       if (!forceRetranslate && state.translations[key]?.trim()) { skipTranslated++; return false; }
       return true;
@@ -1162,6 +1171,7 @@ export function useEditorTranslation({
         const key = `${e.msbtFile}:${e.index}`;
         if (!e.original.trim()) continue;
         if (arabicRegex.test(e.original)) continue;
+        if (isTranslationExcludedText(e.original, e.msbtFile)) continue;
         if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) continue;
         if (!forceRetranslate && state.translations[key]?.trim()) { totalSkippedTranslated++; continue; }
         totalCandidates++;
@@ -1194,6 +1204,7 @@ export function useEditorTranslation({
         const key = `${e.msbtFile}:${e.index}`;
         if (!e.original.trim()) continue;
         if (arabicRegex.test(e.original)) continue;
+        if (isTranslationExcludedText(e.original, e.msbtFile)) continue;
         if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) continue;
         if (!forceRetranslate && state.translations[key]?.trim()) continue;
         oldTrans[key] = state.translations[key] || '';
@@ -1215,6 +1226,7 @@ export function useEditorTranslation({
           const key = `${e.msbtFile}:${e.index}`;
           if (!e.original.trim()) return false;
           if (arabicRegex.test(e.original)) return false;
+          if (isTranslationExcludedText(e.original, e.msbtFile)) return false;
           if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) return false;
           if (!forceRetranslate && state.translations[key]?.trim()) return false;
           return true;
@@ -1388,6 +1400,7 @@ export function useEditorTranslation({
       const key = `${e.msbtFile}:${e.index}`;
       if (!e.original.trim()) { skipEmpty++; continue; }
       if (arabicRegex.test(e.original)) { skipArabic++; continue; }
+      if (isTranslationExcludedText(e.original, e.msbtFile)) { skipTechnical++; continue; }
       if (isTechnicalText(e.original, e.msbtFile) && !state.technicalBypass?.has(key)) { skipTechnical++; continue; }
 
       const norm = e.original.trim().toLowerCase();

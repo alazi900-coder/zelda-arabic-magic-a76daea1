@@ -574,9 +574,22 @@ export function categorizeByColumnName(columnName: string): string | null {
   return null;
 }
 
+/** GTA IV control/runtime tokens are valid only inside a GTA IV session. */
+const GTAIV_RUNTIME_TOKEN_RE = /~[^~\r\n]+~/;
+const GTAIV_RUNTIME_ONLY_LINE_RE = /^(?:~[^~\r\n]+~)(?:\s+~[^~\r\n]+~)*$/;
+
+export function isGtaIvRuntimeOnlyText(text: string, msbtFile?: string): boolean {
+  return !!msbtFile?.startsWith("gtaiv/") && GTAIV_RUNTIME_ONLY_LINE_RE.test(text.trim());
+}
+
+/** Rows that must remain in the source but must never be sent to translation exchange or AI. */
+export function isTranslationExcludedText(text: string, msbtFile?: string): boolean {
+  return isGtaIvRuntimeOnlyText(text, msbtFile);
+}
+
 // Check if text contains technical tag markers (PUA, control chars, Reshef #0–#5,
-// [Tag:...], [/Tag:...], N[TAG], [TAG]N, [TAG=Value], {TAG:Value})
-export function hasTechnicalTags(text: string): boolean {
+// [Tag:...], [/Tag:...], N[TAG], [TAG]N, [TAG=Value], {TAG:Value}, GTA IV ~TOKEN~).
+export function hasTechnicalTags(text: string, msbtFile?: string): boolean {
   return /[\uFFF9\uFFFA\uFFFB\uFFFC\uE000-\uE0FF]/.test(text)
     || /#[0-5]|%/.test(text)
     || /\[\s*\/?\s*\w+\s*:[^\]]*\]/.test(text)
@@ -585,6 +598,7 @@ export function hasTechnicalTags(text: string): boolean {
     || /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/.test(text)
     || /\[\s*\w+\s*=\s*\w[^\]]*\]/.test(text)
     || /\{\s*\w+\s*:\s*\w[^}]*\}/.test(text)
+    || (msbtFile?.startsWith("gtaiv/") === true && GTAIV_RUNTIME_TOKEN_RE.test(text))
     || hasRisenTags(text);
 }
 
@@ -718,6 +732,9 @@ function usesUppercaseNames(msbtFile?: string): boolean {
 export function isTechnicalText(text: string, msbtFile?: string): boolean {
   const t = text.trim();
   if (!t) return true;
+  // GTA IV control rows such as ~MOUSE_WHEEL~ have no human-readable text.
+  // Keep them in the GXT source, but never send them to an AI translator.
+  if (isGtaIvRuntimeOnlyText(t, msbtFile)) return true;
   // Pure hex/numeric/path-like identifiers (e.g. "a1b2c3", "path/to/file")
   if (/^[0-9A-Fa-f\-\._:\/]+$/.test(t)) return true;
   // camelCase or snake_case identifiers (e.g. "getItemName", "item_name")

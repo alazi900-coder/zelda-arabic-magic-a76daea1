@@ -12,6 +12,7 @@
  *   - `pkm_rom` / `pkm_<kind>`  → Pokémon Ruby Destiny (pkm-editor-bridge keys lines this way;
  *                                 the `<kind>` form marks which name list a line sits in)
  *   - `lumentale/<table>`        → LumenTale: Memories of Trey Unity tables
+ *   - `gtaiv/<table>`             → GTA IV GXT tables
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -25,7 +26,8 @@ export type GameParam =
   | "metroidprime"
   | "wolfenstein"
   | "pokemon"
-  | "lumentale";
+  | "lumentale"
+  | "gtaiv";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -39,5 +41,6 @@ export function resolveGameParam(
   if (/^wolf_b\d+_s\d+$/.test(f)) return "wolfenstein";
   if (PKM_FILE_RE.test(f)) return "pokemon";
   if (f.startsWith("lumentale/")) return "lumentale";
+  if (f.startsWith("gtaiv/")) return "gtaiv";
   return "xenoblade";
 }

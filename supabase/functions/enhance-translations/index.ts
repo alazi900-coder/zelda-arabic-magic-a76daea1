@@ -205,11 +205,22 @@ function isUnsafeEnglishReplacement(original: string, previous: string, suggeste
   return false;
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false): boolean {
+function preservesGtaIvRuntimeTokenSequence(original: string, candidate: string): boolean {
+  const extract = (text: string): string[] | null => {
+    const tokens = text.match(/~[^~]*~/g) || [];
+    return text.replace(/~[^~]*~/g, '').includes('~') ? null : tokens;
+  };
+  const before = extract(original);
+  const after = extract(candidate);
+  return before !== null && after !== null && before.length === after.length && before.every((token, i) => token === after[i]);
+}
+
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
-    (!isLumenTale || preservesLumenTaleTechnicalTokenSequence(original, suggested));
+    (!isLumenTale || preservesLumenTaleTechnicalTokenSequence(original, suggested)) &&
+    (!isGtaIv || preservesGtaIvRuntimeTokenSequence(original, suggested));
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -233,6 +244,7 @@ function buildRuleSections(
   isRisen: boolean,
   isPokemon = false,
   isLumenTale = false,
+  isGtaIv = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -243,7 +255,7 @@ function buildRuleSections(
     // قد يكون عندهم override محفوظ في localStorage يجمّد نصّاً حرفيّاً قديماً
     // يذكر Xenoblade — يبقى مُرسَلاً للأبد ويتجاوز تسمية اللعبة الصحيحة هنا.
     // تجاهله في جلسات الألعاب غير Xenoblade؛ الافتراضي الصحيح أدناه يطبَّق بدلاً منه.
-    if (r.id === 'protect_proper_nouns' && (isRisen || isLumenTale) && !o.prompt.includes('{{PROPER_NOUNS_SECTION}}') && /Xenoblade/i.test(o.prompt)) {
+    if (r.id === 'protect_proper_nouns' && (isRisen || isLumenTale || isGtaIv) && !o.prompt.includes('{{PROPER_NOUNS_SECTION}}') && /Xenoblade/i.test(o.prompt)) {
       return r;
     }
     return { ...r, prompt: o.prompt };
@@ -266,7 +278,7 @@ function buildRuleSections(
     enabled.has(r.id) &&
     (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen) &&
     (!PKM_ONLY_RULE_IDS.has(r.id) || isPokemon) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale));
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -466,7 +478,7 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'lumentale';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'lumentale' | 'gtaiv';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
@@ -484,8 +496,11 @@ Deno.serve(async (req) => {
     const isMetroidPrime = game === 'metroidprime';
     const isPokemon = game === 'pokemon';
     const isLumenTale = game === 'lumentale';
+    const isGtaIv = game === 'gtaiv';
     const gameLabel = isLumenTale
       ? 'LumenTale: Memories of Trey'
+      : isGtaIv
+      ? 'Grand Theft Auto IV (GTA IV)'
       : isPokemon
       ? 'Pokémon Ruby Destiny: Reign of Legends (تعديل على Pokémon Ruby)'
       : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
@@ -497,6 +512,8 @@ Deno.serve(async (req) => {
       ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n`
       : isLumenTale
       ? '\nهذه مراجعة خاصة بـ LumenTale: Memories of Trey. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى.\n'
+      : isGtaIv
+      ? '\nهذه مراجعة خاصة بـ GTA IV. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى. استند فقط إلى النص والقاموس المعطى، ولا تغيّر رموز GTA IV المحاطة بعلامتي ~.\n'
       : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
@@ -526,12 +543,12 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isLumenTale
+    const properNounsSection = isRisen || isMother3 || isPokemon || isLumenTale || isGtaIv
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -551,9 +568,13 @@ Deno.serve(async (req) => {
     }
     const strictTokenSafetyRule = isLumenTale
       ? 'قاعدة أمان غير قابلة للتجاوز في LumenTale: يجب أن يحتوي الاقتراح على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
+      : isGtaIv
+      ? 'قاعدة أمان غير قابلة للتجاوز في GTA IV: يجب أن يحتوي الاقتراح على كل رمز بين ~...~ من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تنقل أي رمز، ولا تترك علامة ~ منفردة.'
       : 'قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
     const strictTokenSafetyBullet = isLumenTale
       ? '- في LumenTale يجب أن يحتوي suggested وكل بديل على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف.'
+      : isGtaIv
+      ? '- في GTA IV يجب أن يحتوي suggested وكل بديل على كل رمز بين ~...~ بالقيمة والترتيب نفسيهما حرفاً بحرف، ومن دون علامة ~ منفردة.'
       : '- إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
     if (ruleSections.detectCount === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {
@@ -938,7 +959,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv) &&
           isCategoryEnabled(i.category, ruleSections.enabledSet) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1057,7 +1078,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv) &&
             isTypeEnabled(r.type, ruleSections.enabledSet) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1146,7 +1167,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
               .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1154,7 +1175,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv) &&
         isTypeEnabled(s.type, ruleSections.enabledSet) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

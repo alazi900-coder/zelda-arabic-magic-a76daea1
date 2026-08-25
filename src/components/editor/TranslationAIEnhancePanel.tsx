@@ -37,6 +37,7 @@ import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
+import { validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -248,11 +249,16 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
   const gameParam = resolveGameParam(entries[0]?.msbtFile, risenVariant);
   const isLumenTale = gameParam === "lumentale";
+  const isGtaIv = gameParam === "gtaiv";
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
     }
-    return isLumenTale ? validateLumenTaleTranslation(original, suggestion) : null;
+    if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
+    if (isGtaIv) return validateGtaIvRuntimeTokenSequence(original, suggestion).valid
+      ? null
+      : "الاقتراح يغيّر رمز GTA IV محاطاً بـ ~ أو ترتيبه.";
+    return null;
   };
   const isSafeToApply = (original: string, previous: string, suggestion: string): boolean =>
     !unsafeSuggestionReason(original, previous, suggestion);

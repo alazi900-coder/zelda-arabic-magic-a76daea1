@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Key, Loader2, CheckCircle2, XCircle, Wifi } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PROMPT_PRESETS, RISEN_PROMPT_PRESETS } from "@/components/editor/promptPresets";
+import { GTAIV_PROMPT_PRESETS, PROMPT_PRESETS, RISEN_PROMPT_PRESETS } from "@/components/editor/promptPresets";
 import { CATEGORY_PROMPT_DEFAULTS, resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import AIRoutingToggle from "@/components/editor/AIRoutingToggle";
 import type { useEditorState } from "@/hooks/useEditorState";
@@ -58,7 +58,8 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
     && !editor.categoryPromptTemplates[activeCategory.id]?.trim()
     && !!CATEGORY_PROMPT_DEFAULTS[activeCategory.id];
   const isRisen = /\.tab$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
-  const activePresets = isRisen ? RISEN_PROMPT_PRESETS : PROMPT_PRESETS;
+  const isGtaIv = editor.state?.entries?.[0]?.msbtFile?.startsWith("gtaiv/") || false;
+  const activePresets = isGtaIv ? GTAIV_PROMPT_PRESETS : isRisen ? RISEN_PROMPT_PRESETS : PROMPT_PRESETS;
 
   return (
   <Card className="mb-6 border-primary/20 bg-primary/5">

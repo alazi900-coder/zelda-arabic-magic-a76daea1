@@ -141,6 +141,25 @@ describe("GTA IV GXT/OXT structural reader", () => {
     }
   });
 
+  it("normalizes explicit Arabic million wordings only when they equal the GTA IV m value", () => {
+    const source = "Prize: $10m then $2m";
+    for (const candidate of [
+      "الجائزة: 10 ملايين دولار ثم 2 مليون دولار",
+      "الجائزة: ١٠ ملايين دولار ثم ٢ مليون دولار",
+    ]) {
+      expect(validateGtaIvDollarAmountSequence(source, candidate)).toMatchObject({ valid: true });
+      expect(repairGtaIvDollarAmountSequence(source, candidate))
+        .toMatchObject({ text: "الجائزة: $10m ثم $2m", changed: true, safe: true });
+    }
+
+    expect(repairGtaIvDollarAmountSequence("Prize: $10m", "الجائزة: 11 ملايين دولار"))
+      .toMatchObject({ text: "الجائزة: 11 ملايين دولار", changed: false, safe: false });
+    expect(repairGtaIvDollarAmountSequence("Prize: $10m", "الجائزة: 10 ملايين دولار و1 مليون دولار"))
+      .toMatchObject({ text: "الجائزة: 10 ملايين دولار و1 مليون دولار", changed: false, safe: false });
+    expect(repairGtaIvDollarAmountSequence("Prize: $10m", "الجائزة: 10 ملايين"))
+      .toMatchObject({ text: "الجائزة: 10 ملايين", changed: false, safe: false });
+  });
+
   it("never guesses missing, extra, or different GTA IV dollar values", () => {
     expect(repairGtaIvDollarAmountSequence("Pay $700", "ادفع 701$"))
       .toMatchObject({ text: "ادفع 701$", changed: false, safe: false });
@@ -176,6 +195,12 @@ describe("GTA IV GXT/OXT structural reader", () => {
     const encoded = encodeGtaIvArabicText("Pay $700", "ادفع ٧٠٠ دولار");
     expect(encoded.processedText).toContain("$700");
     expect(encoded.processedText).not.toContain("دولار");
+  });
+
+  it("encodes an explicit Arabic million wording only after restoring the source literal", () => {
+    const encoded = encodeGtaIvArabicText("Prize: $10m", "الجائزة: 10 ملايين دولار");
+    expect(encoded.processedText).toContain("$10m");
+    expect(encoded.processedText).not.toContain("ملايين");
   });
 
   it("refuses an Arabic character not represented by English v3", () => {

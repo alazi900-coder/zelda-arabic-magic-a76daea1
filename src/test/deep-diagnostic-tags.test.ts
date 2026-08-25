@@ -123,4 +123,17 @@ describe("Deep diagnostic translated tag deduping", () => {
     expect(repairGtaIvDollarAmountSequence(entry.original, "ادفع ٧٠١ دولار"))
       .toMatchObject({ text: "ادفع ٧٠١ دولار", changed: false, safe: false });
   });
+
+  it("surfaces an explicit Arabic million wording for safe GTA IV canonical repair", () => {
+    const entry = { ...makeEntry("Prize: $10m"), msbtFile: "gtaiv/MAIN" };
+    const equivalent = detectIssues(entry, "الجائزة: 10 ملايين دولار")
+      .find(issue => issue.category === "gtaiv_dollar_amount_mismatch");
+    expect(equivalent?.severity).toBe("critical");
+    expect(equivalent?.message).toContain("صيغة");
+    expect(repairGtaIvDollarAmountSequence(entry.original, "الجائزة: 10 ملايين دولار"))
+      .toMatchObject({ text: "الجائزة: $10m", changed: true, safe: true });
+
+    expect(repairGtaIvDollarAmountSequence(entry.original, "الجائزة: 11 ملايين دولار"))
+      .toMatchObject({ text: "الجائزة: 11 ملايين دولار", changed: false, safe: false });
+  });
 });

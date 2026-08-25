@@ -217,12 +217,16 @@ function preservesGtaIvRuntimeTokenSequence(original: string, candidate: string)
 
 function preservesGtaIvDollarAmountSequence(original: string, candidate: string): boolean {
   const sourcePattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
-  const candidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?\s*(?:\$|دولار)/g;
-  const normalize = (amount: string): string => amount
-    .replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+  const candidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?\s*(?:\$|دولار)|[0-9٠-٩]+\s+(?:مليون|ملايين)\s+دولار/g;
+  const normalize = (amount: string): string => {
+    const normalized = amount.replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))).trim().toLowerCase();
+    const arabicMillions = normalized.match(/^(\d+)\s+(?:مليون|ملايين)\s+دولار$/);
+    if (arabicMillions) return `${arabicMillions[1]}m`;
+    return normalized
     .replace(/دولار/g, '')
     .replace(/[\s$,]/g, '')
     .toLowerCase();
+  };
   const before = original.match(sourcePattern) || [];
   const after = candidate.match(candidatePattern) || [];
   return before.length === after.length && before.every((amount, index) => normalize(amount) === normalize(after[index] || ''));

@@ -191,9 +191,9 @@ const runtimeTokenPattern = /~[^~]+~/g;
 // $0.50, $20m.
 const gtaIvDollarAmountPattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
 // Translation services may express `$700` as `700$`, `٧٠٠$`, `700 دولار`,
-// or `٧٠٠ دولار`. Only those explicit money spellings are candidate slots;
-// ordinary UI numbers are never changed.
-const gtaIvDollarAmountCandidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?\s*(?:\$|دولار)/g;
+// `٧٠٠ دولار`, or `$10m` as `10 ملايين دولار`. Only those explicit money
+// spellings are candidate slots; ordinary UI numbers are never changed.
+const gtaIvDollarAmountCandidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?\s*(?:\$|دولار)|[0-9٠-٩]+\s+(?:مليون|ملايين)\s+دولار/g;
 
 export interface GtaIvArabicEncoding {
   /** Shaped and visually ordered text after protected tokens are restored. */
@@ -743,7 +743,10 @@ export function repairGtaIvDollarAmountSequence(source: string, candidate: strin
 }
 
 function normalizeGtaIvDollarAmount(value: string): string {
-  return normalizeGtaIvArabicPunctuation(value)
+  const normalized = normalizeGtaIvArabicPunctuation(value).trim().toLowerCase();
+  const arabicMillions = normalized.match(/^(\d+)\s+(?:مليون|ملايين)\s+دولار$/);
+  if (arabicMillions) return `${arabicMillions[1]}m`;
+  return normalized
     .replace(/دولار/g, "")
     .replace(/[\s$,]/g, "")
     .toLowerCase();

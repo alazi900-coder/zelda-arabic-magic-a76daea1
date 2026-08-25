@@ -26,6 +26,15 @@ describe("mergeGuardedTranslations GTA IV dollar protection", () => {
       .toBe("ادفع $700");
   });
 
+  it("stores an explicit Arabic million wording as the source m literal", () => {
+    const state = gtaIvState();
+    state.entries[0] = { ...state.entries[0], original: "Prize: $10m" };
+    const key = "gtaiv/MAIN:7";
+
+    expect(mergeGuardedTranslations(state, { [key]: "الجائزة: 10 ملايين دولار" }).translations[key])
+      .toBe("الجائزة: $10m");
+  });
+
   it("does not import a different GTA IV dollar value", () => {
     const state = gtaIvState();
     const key = "gtaiv/MAIN:7";

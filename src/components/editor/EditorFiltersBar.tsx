@@ -132,12 +132,13 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
       >
         📌
       </Button>
-      {isRisen && !isMobile && (
+      {(isRisen || isGtaIv) && !isMobile && (
         <RisenLineSplitTool
           filteredEntries={editor.filteredEntries}
           translations={editor.state?.translations || {}}
           updateTranslationsBatch={editor.updateTranslationsBatch}
           onFilterByKeys={focusKeys}
+          mode={isGtaIv ? "gtaiv" : "risen"}
         />
       )}
       {isGtaIv && !isMobile && (
@@ -216,12 +217,13 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
     </div>
     {isMobile && editor.filtersOpen && (
       <div className="mt-3 flex flex-col gap-2">
-        {isRisen && (
+        {(isRisen || isGtaIv) && (
           <RisenLineSplitTool
             filteredEntries={editor.filteredEntries}
             translations={editor.state?.translations || {}}
             updateTranslationsBatch={editor.updateTranslationsBatch}
             onFilterByKeys={focusKeys}
+            mode={isGtaIv ? "gtaiv" : "risen"}
           />
         )}
         {isGtaIv && (

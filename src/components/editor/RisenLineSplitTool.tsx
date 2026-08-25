@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Scissors, RotateCcw } from "lucide-react";
 import { planLineSplit, planLineJoin } from "@/lib/risen-line-split";
+import { planGtaIvLineSplit, planGtaIvLineJoin } from "@/lib/gtaiv/gtaiv-line-split";
 import type { ExtractedEntry } from "@/components/editor/types";
 
 const STORAGE_KEY = "risenLineSplitLimit";
@@ -16,15 +17,19 @@ interface RisenLineSplitToolProps {
   /** Pins the just-split entries in the editor's real entry list, so their
    * result is immediately visible without searching manually. */
   onFilterByKeys?: (keys: Set<string>) => void;
+  /** GTA IV uses the same UI, but saves line boundaries as `~n~` instead of LF. */
+  mode?: "risen" | "gtaiv";
 }
 
 /** Manual bulk line-splitting tool for Risen — see src/lib/risen-line-split.ts for why. */
 const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
   filteredEntries, translations, updateTranslationsBatch, onFilterByKeys,
+  mode = "risen",
 }) => {
+  const isGtaIv = mode === "gtaiv";
   const [limit, setLimit] = React.useState<number>(() => {
     try {
-      const saved = Number(localStorage.getItem(STORAGE_KEY));
+      const saved = Number(localStorage.getItem(isGtaIv ? "gtaivLineSplitLimit" : STORAGE_KEY));
       return saved >= MIN_LIMIT && saved <= MAX_LIMIT ? saved : DEFAULT_LIMIT;
     } catch { return DEFAULT_LIMIT; }
   });
@@ -38,7 +43,7 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
     const clamped = Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Number.isFinite(v) ? v : DEFAULT_LIMIT));
     setLimit(clamped);
     setLimitText(String(clamped));
-    try { localStorage.setItem(STORAGE_KEY, String(clamped)); } catch { /* localStorage unavailable */ }
+    try { localStorage.setItem(isGtaIv ? "gtaivLineSplitLimit" : STORAGE_KEY, String(clamped)); } catch { /* localStorage unavailable */ }
   };
 
   const commitLimitText = () => {
@@ -47,7 +52,9 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
 
   const handleSplit = async () => {
     const { toast } = await import("sonner");
-    const plan = planLineSplit(filteredEntries, translations, limit);
+    const plan = isGtaIv
+      ? planGtaIvLineSplit(filteredEntries, translations, limit)
+      : planLineSplit(filteredEntries, translations, limit);
 
     if (plan.targetKeys.length === 0) {
       toast.info("لا توجد نصوص تحتاج تقسيمًا ضمن العرض الحالي");
@@ -78,7 +85,9 @@ const RisenLineSplitTool: React.FC<RisenLineSplitToolProps> = ({
 
   const handleJoin = async () => {
     const { toast } = await import("sonner");
-    const plan = planLineJoin(filteredEntries, translations);
+    const plan = isGtaIv
+      ? planGtaIvLineJoin(filteredEntries, translations)
+      : planLineJoin(filteredEntries, translations);
 
     if (plan.targetKeys.length === 0) {
       toast.info("لا توجد نصوص متعددة الأسطر ضمن العرض الحالي");

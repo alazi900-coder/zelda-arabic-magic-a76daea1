@@ -6,6 +6,12 @@ import {
   isTranslationExcludedText,
 } from "@/components/editor/types";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
+import {
+  gtaIvEditorTextToRuntimeText,
+  gtaIvRuntimeTextToEditorText,
+  planGtaIvLineJoin,
+  planGtaIvLineSplit,
+} from "@/lib/gtaiv/gtaiv-line-split";
 
 describe("GTA IV technical-only rows", () => {
   const gtaivFile = "gtaiv/MAIN";
@@ -37,5 +43,31 @@ describe("GTA IV technical-only rows", () => {
   it("includes GTA IV runtime tokens in the editor highlight pattern", () => {
     const matches = "Press ~PAD_X~ to focus".match(editorTagPattern());
     expect(matches).toContain("~PAD_X~");
+  });
+
+  it("renders the stored GTA IV break marker as a textarea line and restores it", () => {
+    const raw = "السطر الأول~n~السطر الثاني";
+    expect(gtaIvRuntimeTextToEditorText(raw)).toBe("السطر الأول~n~\nالسطر الثاني");
+    expect(gtaIvEditorTextToRuntimeText("السطر الأول~n~\nالسطر الثاني")).toBe(raw);
+  });
+
+  it("plans a character-limit split as raw ~n~ markers for GTA IV rows passed by the tool", () => {
+    const entries = [
+      { msbtFile: "gtaiv/american.gxt", index: 12, original: "English source" },
+    ];
+    const translations = {
+      "gtaiv/american.gxt:12": "هذه جملة عربية طويلة يجب أن تقسم عند الكلمات من دون قطع أي كلمة في المنتصف",
+    };
+    const plan = planGtaIvLineSplit(entries, translations, 24);
+    expect(plan.targetKeys).toEqual(["gtaiv/american.gxt:12"]);
+    expect(plan.updates["gtaiv/american.gxt:12"]).toContain("~n~");
+    expect(plan.updates["gtaiv/american.gxt:12"]).not.toContain("\n");
+    expect(plan.snapshot["gtaiv/american.gxt:12"]).toBe(translations["gtaiv/american.gxt:12"]);
+  });
+
+  it("joins stored GTA IV markers into one logical raw line", () => {
+    const entries = [{ msbtFile: "gtaiv/american.gxt", index: 6, original: "English source" }];
+    const plan = planGtaIvLineJoin(entries, { "gtaiv/american.gxt:6": "أول~n~ثان" });
+    expect(plan.updates["gtaiv/american.gxt:6"]).toBe("أول ثان");
   });
 });

@@ -148,33 +148,27 @@ const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
 /**
- * GTA IV's GXT units address sparse glyph slots; they are not the consecutive
- * indexes of `fonts.dat` MAP. The English Arabic v5 resource copies the 144
- * Presentation-Form glyph tiles to these audited units, inherited from the
- * working Arabic reference font. Unit 126 is deliberately absent because GTA
- * IV interprets it as ASCII `~` for runtime-token syntax.
+ * GTA IV GXT stores MAP *input* units, rather than the sparse glyph-slot
+ * values on the right side of `fonts.dat` MAP. In the working Arabic
+ * reference, the 144 Arabic Presentation Forms occupy the consecutive input
+ * range 97..240. Unit 126 is a valid Arabic glyph input in binary GXT data;
+ * it must never be interpreted as a literal runtime-token tilde during build.
  */
 const gtaIvArabicPresentationFormStart = 0xfe70;
 const gtaIvArabicPresentationFormEnd = 0xfeff;
-const gtaIvPresentationFormUnits = [
-  103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118,
-  119, 120, 121, 122, 91, 93, 123, 125, 163, 165, 166, 167, 182, 188, 189, 190,
-  192, 193, 194, 195, 196, 197, 198, 199, 200, 298, 201, 202, 203, 204, 205, 206,
-  207, 208, 209, 210, 211, 212, 213, 214, 216, 217, 218, 219, 220, 221, 222, 223,
-  224, 225, 226, 227, 228, 229, 232, 350, 352, 233, 235, 237, 239, 240, 242, 243,
-  245, 249, 251, 490, 492, 494, 497, 500, 385, 386, 388, 390, 391, 393, 394, 395,
-  398, 399, 400, 401, 403, 404, 405, 406, 407, 408, 410, 412, 413, 415, 416, 418,
-  420, 502, 504, 425, 428, 430, 431, 433, 434, 435, 437, 439, 440, 443, 506, 508,
-  510, 161, 124, 247, 191, 171, 180, 185, 186, 471, 253, 170, 176, 168, 387, 255,
-] as const;
+const gtaIvArabicPresentationFormInputStart = 97;
+const gtaIvArabicPresentationFormCount = gtaIvArabicPresentationFormEnd - gtaIvArabicPresentationFormStart + 1;
 
 const gtaIvPresentationFormByUnit = new Map<number, number>(
-  gtaIvPresentationFormUnits.map((unit, index) => [unit, gtaIvArabicPresentationFormStart + index]),
+  Array.from({ length: gtaIvArabicPresentationFormCount }, (_, index) => [
+    gtaIvArabicPresentationFormInputStart + index,
+    gtaIvArabicPresentationFormStart + index,
+  ]),
 );
 
 function gtaIvArabicInputUnitForPresentationForm(code: number): number | undefined {
   if (code < gtaIvArabicPresentationFormStart || code > gtaIvArabicPresentationFormEnd) return undefined;
-  return gtaIvPresentationFormUnits[code - gtaIvArabicPresentationFormStart];
+  return gtaIvArabicPresentationFormInputStart + code - gtaIvArabicPresentationFormStart;
 }
 
 const gtaIvArabicPunctuationToAscii: Record<string, string> = {
@@ -308,8 +302,9 @@ function normalizeGtaIvArabicPunctuation(value: string): string {
 
 /**
  * Converts a logical editor translation into GTA IV font units. Only ASCII and
- * the Arabic Presentation Forms carried by English v3 are emitted. This keeps
- * unsupported glyphs out of GXT instead of silently writing visible squares.
+ * the Arabic Presentation Forms present in the verified reference MAP are
+ * emitted. This keeps unsupported glyphs out of GXT instead of silently
+ * writing visible squares.
  */
 export function encodeGtaIvArabicText(sourceText: string, translation: string): GtaIvArabicEncoding {
   const dollarRepair = repairGtaIvDollarAmountSequence(sourceText, translation);
@@ -320,7 +315,7 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
   const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(normalizedTranslation, sourceText);
   if (unsupported.length > 0) {
     const first = unsupported[0];
-    fail(`المحرف «${first.character}» (${first.unicode}) غير مدعوم في خط GTA IV English المعدل.`);
+    fail(`المحرف «${first.character}» (${first.unicode}) غير مدعوم في خط GTA IV المرجعي.`);
   }
   const units: number[] = [];
 
@@ -343,7 +338,7 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
       units.push(code);
       continue;
     }
-    fail(`المحرف «${char}» غير مدعوم في خط GTA IV English المعدل.`);
+    fail(`المحرف «${char}» غير مدعوم في خط GTA IV المرجعي.`);
   }
   return { processedText, textUnits: new Uint16Array(units) };
 }
@@ -379,14 +374,12 @@ export function gtaIvRawUnitsToString(units: Uint16Array): string {
 }
 
 /**
- * Decodes the Arabic font units emitted by the paired GTA IV v5 builder back
- * into logical Arabic for editor display. English source rows stay literal:
- * an Arabic row is identified only by a sparse mapped unit above ASCII, which
- * cannot be produced by the ordinary English GXT text path.
+ * Decodes units from an already built Arabic GXT back to logical Arabic. The
+ * caller must opt in because the verified Arabic input range 97..240 overlaps
+ * ordinary English ASCII and therefore cannot be auto-detected safely.
  */
-export function decodeGtaIvArabicFontUnits(units: Uint16Array): string {
-  const isArabicFontRow = units.some((unit) => unit > 0x7f && gtaIvPresentationFormByUnit.has(unit));
-  if (!isArabicFontRow) return textFromUnits(units);
+export function decodeGtaIvArabicFontUnits(units: Uint16Array, encodedArabic = false): string {
+  if (!encodedArabic) return textFromUnits(units);
 
   let presentationText = "";
   for (const unit of units) {

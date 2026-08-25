@@ -195,20 +195,19 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "ادفع 700$ و$20", changed: false, safe: false });
   });
 
-  it("uses the paired v5 sparse glyph units for shaped Arabic Presentation Forms without emitting an Arabic tilde", () => {
+  it("uses the verified consecutive MAP input units for shaped Arabic Presentation Forms, including binary unit 126", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
-    expect(Array.from(encoded.textUnits)).toEqual([410, 228, 193, 123, 199]);
+    expect(Array.from(encoded.textUnits)).toEqual([203, 165, 130, 119, 136]);
 
     const alef = encodeGtaIvArabicText("", "ا");
     expect(alef.processedText).toBe("ﺍ");
-    expect(Array.from(alef.textUnits)).toEqual([188]);
-    expect(Array.from(alef.textUnits)).not.toContain(126);
+    expect(Array.from(alef.textUnits)).toEqual([126]);
   });
 
-  it("decodes a v5 Arabic font row back to logical editor Arabic without decoding English ASCII", () => {
+  it("decodes an explicitly identified Arabic GXT row without decoding English source ASCII", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
-    expect(decodeGtaIvArabicFontUnits(encoded.textUnits)).toBe("تؤبسك");
+    expect(decodeGtaIvArabicFontUnits(encoded.textUnits, true)).toBe("تؤبسك");
     expect(decodeGtaIvArabicFontUnits(new Uint16Array([0x48, 0x65, 0x6c, 0x70]))).toBe("Help");
   });
 
@@ -297,8 +296,10 @@ describe("GTA IV GXT/OXT structural reader", () => {
     });
     expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
     const output = parseGtaIvGxt(result.buffer);
-    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([410, 228, 193, 123, 199]);
-    expect(extractGtaIvEntries(result.buffer).entries[0].original).toBe("تؤبسك");
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([203, 165, 130, 119, 136]);
+    expect(extractGtaIvEntries(result.buffer).entries[0].original)
+      .toBe(gtaIvRawUnitsToString(new Uint16Array([203, 165, 130, 119, 136])));
+    expect(decodeGtaIvArabicFontUnits(output.tables[0].entries[0].textUnits, true)).toBe("تؤبسك");
   });
 
 });

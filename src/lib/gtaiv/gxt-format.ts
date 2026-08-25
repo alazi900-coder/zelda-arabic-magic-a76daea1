@@ -745,11 +745,26 @@ export function repairGtaIvDollarAmountSequence(source: string, candidate: strin
 function normalizeGtaIvDollarAmount(value: string): string {
   const normalized = normalizeGtaIvArabicPunctuation(value).trim().toLowerCase();
   const arabicMillions = normalized.match(/^(\d+)\s+(?:مليون|ملايين)\s+دولار$/);
-  if (arabicMillions) return `${arabicMillions[1]}m`;
-  return normalized
+  const compact = (arabicMillions ? `${arabicMillions[1]}m` : normalized
     .replace(/دولار/g, "")
-    .replace(/[\s$,]/g, "")
+    .replace(/[\s$,]/g, ""))
     .toLowerCase();
+  const parts = compact.match(/^(\d+)(?:\.(\d+))?([kmb])?$/);
+  if (!parts) return compact;
+
+  const [, integerPart, fractionalPart = "", suffix = ""] = parts;
+  const scale = suffix === "k" ? 3 : suffix === "m" ? 6 : suffix === "b" ? 9 : 0;
+  const digits = `${integerPart}${fractionalPart}`.replace(/^0+(?=\d)/, "") || "0";
+  if (digits === "0") return "0";
+
+  const decimalPlaces = fractionalPart.length - scale;
+  if (decimalPlaces <= 0) return `${digits}${"0".repeat(-decimalPlaces)}`;
+
+  const splitAt = digits.length - decimalPlaces;
+  const decimal = splitAt > 0
+    ? `${digits.slice(0, splitAt)}.${digits.slice(splitAt)}`
+    : `0.${"0".repeat(-splitAt)}${digits}`;
+  return decimal.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
 /**

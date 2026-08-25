@@ -146,6 +146,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     for (const candidate of [
       "الجائزة: 10 ملايين دولار ثم 2 مليون دولار",
       "الجائزة: ١٠ ملايين دولار ثم ٢ مليون دولار",
+      "الجائزة: 10,000,000 دولار ثم 2,000,000 دولار",
     ]) {
       expect(validateGtaIvDollarAmountSequence(source, candidate)).toMatchObject({ valid: true });
       expect(repairGtaIvDollarAmountSequence(source, candidate))

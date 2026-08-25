@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  decodeGtaIvArabicFontUnits,
   gtaIvHashKey,
   gtaIvRawUnitsToString,
   encodeGtaIvArabicText,
@@ -205,6 +206,12 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(Array.from(alef.textUnits)).not.toContain(126);
   });
 
+  it("decodes a v5 Arabic font row back to logical editor Arabic without decoding English ASCII", () => {
+    const encoded = encodeGtaIvArabicText("", "تؤبسك");
+    expect(decodeGtaIvArabicFontUnits(encoded.textUnits)).toBe("تؤبسك");
+    expect(decodeGtaIvArabicFontUnits(new Uint16Array([0x48, 0x65, 0x6c, 0x70]))).toBe("Help");
+  });
+
   it("keeps GTA IV runtime tokens byte-for-byte while encoding Arabic prose", () => {
     const encoded = encodeGtaIvArabicText("~r~ Hello ~n~", "~r~ مرحبا ~n~");
     expect(encoded.processedText).toContain("~r~");
@@ -291,6 +298,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
     const output = parseGtaIvGxt(result.buffer);
     expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([410, 228, 193, 123, 199]);
+    expect(extractGtaIvEntries(result.buffer).entries[0].original).toBe("تؤبسك");
   });
 
 });

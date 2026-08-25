@@ -6,7 +6,7 @@
  * locally then converted to the units carried by the audited English v3 font.
  */
 
-import { processArabicText } from "@/lib/arabic-processing";
+import { processArabicText, removeArabicPresentationForms, reverseBidi } from "@/lib/arabic-processing";
 
 export interface GtaIvGxtTableSummary {
   name: string;
@@ -167,6 +167,10 @@ const gtaIvPresentationFormUnits = [
   420, 502, 504, 425, 428, 430, 431, 433, 434, 435, 437, 439, 440, 443, 506, 508,
   510, 161, 124, 247, 191, 171, 180, 185, 186, 471, 253, 170, 176, 168, 387, 255,
 ] as const;
+
+const gtaIvPresentationFormByUnit = new Map<number, number>(
+  gtaIvPresentationFormUnits.map((unit, index) => [unit, gtaIvArabicPresentationFormStart + index]),
+);
 
 function gtaIvArabicInputUnitForPresentationForm(code: number): number | undefined {
   if (code < gtaIvArabicPresentationFormStart || code > gtaIvArabicPresentationFormEnd) return undefined;
@@ -372,6 +376,23 @@ function processGtaIvArabicPiece(value: string): string {
  */
 export function gtaIvRawUnitsToString(units: Uint16Array): string {
   return textFromUnits(units);
+}
+
+/**
+ * Decodes the Arabic font units emitted by the paired GTA IV v5 builder back
+ * into logical Arabic for editor display. English source rows stay literal:
+ * an Arabic row is identified only by a sparse mapped unit above ASCII, which
+ * cannot be produced by the ordinary English GXT text path.
+ */
+export function decodeGtaIvArabicFontUnits(units: Uint16Array): string {
+  const isArabicFontRow = units.some((unit) => unit > 0x7f && gtaIvPresentationFormByUnit.has(unit));
+  if (!isArabicFontRow) return textFromUnits(units);
+
+  let presentationText = "";
+  for (const unit of units) {
+    presentationText += String.fromCharCode(gtaIvPresentationFormByUnit.get(unit) ?? unit);
+  }
+  return removeArabicPresentationForms(reverseBidi(presentationText));
 }
 
 function align4(value: number): number {

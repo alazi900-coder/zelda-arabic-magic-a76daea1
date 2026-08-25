@@ -4,6 +4,7 @@
  */
 import type { ExtractedEntry } from "@/components/editor/types";
 import {
+  decodeGtaIvArabicFontUnits,
   encodeGtaIvArabicText,
   gtaIvRawUnitsToString,
   parseGtaIvGxt,
@@ -33,7 +34,7 @@ export function extractGtaIvEntries(buffer: ArrayBuffer): GtaIvEditorImport {
     msbtFile: `gtaiv/${table.name}`,
     index: entry.crc >>> 0,
     label: `${table.name} · 0x${(entry.crc >>> 0).toString(16).padStart(8, "0")}`,
-    original: gtaIvRawUnitsToString(entry.textUnits),
+    original: decodeGtaIvArabicFontUnits(entry.textUnits),
     // GXT size can only be measured after its Arabic glyph encoding is fixed.
     // A zero budget tells generic editor checks not to invent a byte limit.
     maxBytes: 0,

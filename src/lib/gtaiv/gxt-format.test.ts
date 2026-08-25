@@ -88,6 +88,15 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(parsed.tables[0].entries[0].crc).toBe(0x00009b22);
     expect(Array.from(parsed.tables[0].entries[0].textUnits)).toEqual([0x41, 0x42, 0x43]);
 
+    // 126 is a valid Arabic MAP input unit. It must not be decoded as ASCII
+    // tilde while rebuilding and therefore must not trigger token validation.
+    const arabicMapInput = parseGtaIvGxt(rebuildGtaIvGxt(source, [{
+      table: "MAIN",
+      crc: 0x00009b22,
+      textUnits: new Uint16Array([126]),
+    }]));
+    expect(Array.from(arabicMapInput.tables[0].entries[0].textUnits)).toEqual([126]);
+
     const protectedSource = makeGxt(0x00009b22);
     const sourceView = new DataView(protectedSource);
     sourceView.setUint32(44, 10, true);

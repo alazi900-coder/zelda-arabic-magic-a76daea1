@@ -65,6 +65,21 @@ describe("GTA IV technical-only rows", () => {
     expect(plan.snapshot["gtaiv/american.gxt:12"]).toBe(translations["gtaiv/american.gxt:12"]);
   });
 
+  it("fills each GTA IV line through the last whole word that fits before starting the next one", () => {
+    const entries = [{ msbtFile: "gtaiv/american.gxt", index: 13, original: "English source" }];
+    const text = "هذا نص عربي طويل يحتاج إلى توزيع الكلمات بالتتابع حتى تمتلئ الأسطر قبل بداية السطر التالي";
+    const limit = 24;
+    const plan = planGtaIvLineSplit(entries, { "gtaiv/american.gxt:13": text }, limit);
+    const lines = plan.updates["gtaiv/american.gxt:13"].split("~n~");
+
+    expect(lines.length).toBeGreaterThan(1);
+    for (let index = 0; index < lines.length - 1; index++) {
+      const firstWordOfNextLine = lines[index + 1].split(" ")[0];
+      expect(lines[index].length).toBeLessThanOrEqual(limit);
+      expect(`${lines[index]} ${firstWordOfNextLine}`.length).toBeGreaterThan(limit);
+    }
+  });
+
   it("joins stored GTA IV markers into one logical raw line", () => {
     const entries = [{ msbtFile: "gtaiv/american.gxt", index: 6, original: "English source" }];
     const plan = planGtaIvLineJoin(entries, { "gtaiv/american.gxt:6": "أول~n~ثان" });

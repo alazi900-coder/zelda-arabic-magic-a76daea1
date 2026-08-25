@@ -1,4 +1,3 @@
-import { balanceChunk } from "@/lib/balance-lines";
 import { hasArabicText } from "@/lib/risen-line-split";
 import type { ExtractedEntry } from "@/components/editor/types";
 
@@ -25,7 +24,14 @@ export interface GtaIvLineSplitPlan {
   snapshot: Record<string, string>;
 }
 
-function splitBalancedSegment(segment: string, limit: number): string[] {
+/**
+ * GTA IV's manual character-limit tool is deliberately sequential: fill the
+ * current line through the last whole word that fits, then start the next one.
+ * The generic visual balancer optimizes all lines together, which is useful for
+ * cinematic text but can leave a short line in the middle of a 30-character
+ * split. Here the selected number is a hard per-line target, not an average.
+ */
+function splitSequentialSegment(segment: string, limit: number): string[] {
   if (segment.length <= limit) return [segment];
 
   const tokens: string[] = [];
@@ -33,8 +39,23 @@ function splitBalancedSegment(segment: string, limit: number): string[] {
     const index = tokens.push(token) - 1;
     return `\uE200${index.toString(36)}\uE201`;
   });
-  const balanced = balanceChunk(shielded, limit, limit).split("\n");
-  return balanced.map((line) => line.replace(/\uE200([0-9a-z]+)\uE201/g, (_match, index) => (
+  const visualLength = (value: string) => value.replace(/\uE200[0-9a-z]+\uE201/g, "□").length;
+  const words = shielded.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && visualLength(candidate) > limit) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+
+  return lines.map((line) => line.replace(/\uE200([0-9a-z]+)\uE201/g, (_match, index) => (
     tokens[parseInt(index, 36)] ?? _match
   )));
 }
@@ -60,7 +81,7 @@ export function planGtaIvLineSplit(
     const segments = current.split(GTAIV_LINE_BREAK_TOKEN);
     if (!segments.some((segment) => segment.length > limit)) continue;
 
-    const next = segments.flatMap((segment) => splitBalancedSegment(segment, limit)).join(GTAIV_LINE_BREAK_TOKEN);
+    const next = segments.flatMap((segment) => splitSequentialSegment(segment, limit)).join(GTAIV_LINE_BREAK_TOKEN);
     if (next === current) continue;
     targetKeys.push(key);
     snapshot[key] = current;

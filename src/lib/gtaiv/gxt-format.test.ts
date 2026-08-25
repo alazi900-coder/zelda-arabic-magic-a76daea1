@@ -112,7 +112,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "مرحبا ~", changed: false, safe: false });
   });
 
-  it("requires exact ordered GTA IV dollar amounts and repairs only matching amount slots", () => {
+  it("requires ordered GTA IV dollar values and repairs only matching amount slots", () => {
     expect(validateGtaIvDollarAmountSequence("Pay $100 then $20m", "ادفع $100 ثم $20m"))
       .toMatchObject({ valid: true });
     expect(validateGtaIvDollarAmountSequence("Pay $100 then $20m", "ادفع $20m ثم $100"))
@@ -120,11 +120,36 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(validateGtaIvDollarAmountSequence("Pay $100", "ادفع $200"))
       .toMatchObject({ valid: false });
     expect(repairGtaIvDollarAmountSequence("Pay $100 then $20m", "ادفع $200 ثم $20m"))
-      .toMatchObject({ text: "ادفع $100 ثم $20m", changed: true, safe: true });
+      .toMatchObject({ text: "ادفع $200 ثم $20m", changed: false, safe: false });
     expect(repairGtaIvDollarAmountSequence("Pay $100", "ادفع الآن"))
       .toMatchObject({ text: "ادفع الآن", changed: false, safe: false });
     expect(repairGtaIvDollarAmountSequence("Pay $100", "ادفع $100 و$20"))
       .toMatchObject({ text: "ادفع $100 و$20", changed: false, safe: false });
+  });
+
+  it("normalizes equivalent Arabic and reversed dollar spellings back to the English source literal", () => {
+    const source = "Pay $700 then $20m";
+    for (const candidate of [
+      "ادفع 700$ ثم 20m$",
+      "ادفع ٧٠٠$ ثم 20m$",
+      "ادفع 700 دولار ثم 20m$",
+      "ادفع ٧٠٠ دولار ثم 20m$",
+    ]) {
+      expect(validateGtaIvDollarAmountSequence(source, candidate)).toMatchObject({ valid: true });
+      expect(repairGtaIvDollarAmountSequence(source, candidate))
+        .toMatchObject({ text: "ادفع $700 ثم $20m", changed: true, safe: true });
+    }
+  });
+
+  it("never guesses missing, extra, or different GTA IV dollar values", () => {
+    expect(repairGtaIvDollarAmountSequence("Pay $700", "ادفع 701$"))
+      .toMatchObject({ text: "ادفع 701$", changed: false, safe: false });
+    expect(repairGtaIvDollarAmountSequence("Pay $700", "ادفع ٧٠١ دولار"))
+      .toMatchObject({ text: "ادفع ٧٠١ دولار", changed: false, safe: false });
+    expect(repairGtaIvDollarAmountSequence("Pay $700", "ادفع الآن"))
+      .toMatchObject({ text: "ادفع الآن", changed: false, safe: false });
+    expect(repairGtaIvDollarAmountSequence("Pay $700", "ادفع 700$ و$20"))
+      .toMatchObject({ text: "ادفع 700$ و$20", changed: false, safe: false });
   });
 
   it("shapes and encodes Arabic Presentation Forms through the audited English font map", () => {
@@ -145,6 +170,12 @@ describe("GTA IV GXT/OXT structural reader", () => {
     const encoded = encodeGtaIvArabicText("Pay $100", "ادفع $100");
     expect(encoded.processedText).toContain("$100");
     expect(encoded.processedText).not.toContain("001$");
+  });
+
+  it("encodes an equivalent Arabic dollar spelling only after restoring the source literal", () => {
+    const encoded = encodeGtaIvArabicText("Pay $700", "ادفع ٧٠٠ دولار");
+    expect(encoded.processedText).toContain("$700");
+    expect(encoded.processedText).not.toContain("دولار");
   });
 
   it("refuses an Arabic character not represented by English v3", () => {

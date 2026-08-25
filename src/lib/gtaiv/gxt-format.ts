@@ -190,6 +190,10 @@ const runtimeTokenPattern = /~[^~]+~/g;
 // Supports ordinary, grouped, decimal, and abbreviated values: $100, $5,000,
 // $0.50, $20m.
 const gtaIvDollarAmountPattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
+// Translation services may express `$700` as `700$`, `٧٠٠$`, `700 دولار`,
+// or `٧٠٠ دولار`. Only those explicit money spellings are candidate slots;
+// ordinary UI numbers are never changed.
+const gtaIvDollarAmountCandidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?\s*(?:\$|دولار)/g;
 
 export interface GtaIvArabicEncoding {
   /** Shaped and visually ordered text after protected tokens are restored. */
@@ -279,12 +283,16 @@ function normalizeGtaIvArabicPunctuation(value: string): string {
  * unsupported glyphs out of GXT instead of silently writing visible squares.
  */
 export function encodeGtaIvArabicText(sourceText: string, translation: string): GtaIvArabicEncoding {
-  const tokenValidation = validateGtaIvRuntimeTokenSequence(sourceText, translation);
+  const dollarRepair = repairGtaIvDollarAmountSequence(sourceText, translation);
+  if (!dollarRepair.safe) fail(`مبالغ الدولار غير محفوظة: ${dollarRepair.reason}`);
+
+  const normalizedTranslation = dollarRepair.text;
+  const tokenValidation = validateGtaIvRuntimeTokenSequence(sourceText, normalizedTranslation);
   if (!tokenValidation.valid) fail(`رموز وقت التشغيل غير محفوظة: ${tokenValidation.reason}`);
-  const dollarValidation = validateGtaIvDollarAmountSequence(sourceText, translation);
+  const dollarValidation = validateGtaIvDollarAmountSequence(sourceText, normalizedTranslation);
   if (!dollarValidation.valid) fail(`مبالغ الدولار غير محفوظة: ${dollarValidation.reason}`);
 
-  const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(translation);
+  const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(normalizedTranslation);
   if (unsupported.length > 0) {
     const first = unsupported[0];
     fail(`المحرف «${first.character}» (${first.unicode}) غير مدعوم في خط GTA IV English المعدل.`);
@@ -700,11 +708,11 @@ export function validateGtaIvRuntimeTokenSequence(source: string, candidate: str
  */
 export function validateGtaIvDollarAmountSequence(source: string, candidate: string): GtaIvDollarAmountValidation {
   const sourceAmounts = source.match(gtaIvDollarAmountPattern) ?? [];
-  const candidateAmounts = candidate.match(gtaIvDollarAmountPattern) ?? [];
+  const candidateAmounts = candidate.match(gtaIvDollarAmountCandidatePattern) ?? [];
   if (sourceAmounts.length !== candidateAmounts.length) {
     return { valid: false, sourceAmounts, candidateAmounts, reason: "عدد مبالغ الدولار تغير." };
   }
-  if (sourceAmounts.some((amount, index) => amount !== candidateAmounts[index])) {
+  if (sourceAmounts.some((amount, index) => normalizeGtaIvDollarAmount(amount) !== normalizeGtaIvDollarAmount(candidateAmounts[index] ?? ""))) {
     return { valid: false, sourceAmounts, candidateAmounts, reason: "قيمة أو ترتيب مبلغ الدولار تغير." };
   }
   return { valid: true, sourceAmounts, candidateAmounts };
@@ -716,8 +724,7 @@ export function validateGtaIvDollarAmountSequence(source: string, candidate: str
  */
 export function repairGtaIvDollarAmountSequence(source: string, candidate: string): GtaIvDollarAmountRepair {
   const validation = validateGtaIvDollarAmountSequence(source, candidate);
-  if (validation.valid) return { text: candidate, changed: false, safe: true };
-  if (validation.sourceAmounts.length !== validation.candidateAmounts.length) {
+  if (!validation.valid) {
     return {
       text: candidate,
       changed: false,
@@ -727,12 +734,19 @@ export function repairGtaIvDollarAmountSequence(source: string, candidate: strin
   }
 
   let amountIndex = 0;
-  const repaired = candidate.replace(gtaIvDollarAmountPattern, () => validation.sourceAmounts[amountIndex++] ?? "");
+  const repaired = candidate.replace(gtaIvDollarAmountCandidatePattern, () => validation.sourceAmounts[amountIndex++] ?? "");
   const repairedValidation = validateGtaIvDollarAmountSequence(source, repaired);
   if (!repairedValidation.valid) {
     return { text: candidate, changed: false, safe: false, reason: repairedValidation.reason };
   }
   return { text: repaired, changed: repaired !== candidate, safe: true };
+}
+
+function normalizeGtaIvDollarAmount(value: string): string {
+  return normalizeGtaIvArabicPunctuation(value)
+    .replace(/دولار/g, "")
+    .replace(/[\s$,]/g, "")
+    .toLowerCase();
 }
 
 /**

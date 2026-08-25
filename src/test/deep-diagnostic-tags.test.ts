@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { detectIssues } from "@/components/editor/DeepDiagnosticPanel";
 import type { ExtractedEntry } from "@/components/editor/types";
+import { repairGtaIvDollarAmountSequence } from "@/lib/gtaiv/gxt-format";
 
 function makeEntry(original: string): ExtractedEntry {
   return {
@@ -105,5 +106,21 @@ describe("Deep diagnostic translated tag deduping", () => {
     const reordered = detectIssues(entry, "ادفع $20m ثم $100")
       .find(issue => issue.category === "gtaiv_dollar_amount_mismatch");
     expect(reordered?.message).toContain("ترتيب");
+  });
+
+  it("surfaces equivalent GTA IV dollar spellings for safe canonical repair", () => {
+    const entry = { ...makeEntry("Pay $700"), msbtFile: "gtaiv/MAIN" };
+    const equivalent = detectIssues(entry, "ادفع ٧٠٠ دولار")
+      .find(issue => issue.category === "gtaiv_dollar_amount_mismatch");
+    expect(equivalent?.severity).toBe("critical");
+    expect(equivalent?.message).toContain("صيغة");
+    expect(repairGtaIvDollarAmountSequence(entry.original, "ادفع ٧٠٠ دولار"))
+      .toMatchObject({ text: "ادفع $700", changed: true, safe: true });
+
+    const wrongValue = detectIssues(entry, "ادفع ٧٠١ دولار")
+      .find(issue => issue.category === "gtaiv_dollar_amount_mismatch");
+    expect(wrongValue?.severity).toBe("critical");
+    expect(repairGtaIvDollarAmountSequence(entry.original, "ادفع ٧٠١ دولار"))
+      .toMatchObject({ text: "ادفع ٧٠١ دولار", changed: false, safe: false });
   });
 });

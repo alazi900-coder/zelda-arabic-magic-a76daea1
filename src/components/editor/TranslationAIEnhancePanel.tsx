@@ -37,7 +37,7 @@ import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
-import { validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -256,9 +256,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     }
     if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
     if (isGtaIv) {
-      const tokenCheck = validateGtaIvRuntimeTokenSequence(original, suggestion);
+      const dollarRepair = repairGtaIvDollarAmountSequence(original, suggestion);
+      if (!dollarRepair.safe) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";
+      const normalizedSuggestion = dollarRepair.text;
+      const tokenCheck = validateGtaIvRuntimeTokenSequence(original, normalizedSuggestion);
       if (!tokenCheck.valid) return "الاقتراح يغيّر رمز GTA IV محاطاً بـ ~ أو ترتيبه.";
-      const dollarCheck = validateGtaIvDollarAmountSequence(original, suggestion);
+      const dollarCheck = validateGtaIvDollarAmountSequence(original, normalizedSuggestion);
       if (!dollarCheck.valid) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";
     }
     return null;
@@ -943,9 +946,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       toast({ title: "تم منع اقتراح غير آمن", description: rejection, variant: "destructive" });
       return false;
     }
-    onApplySuggestion(key, newText);
-    setAppliedHistory(prev => [{ key, previous, applied: newText, ts: Date.now() }, ...prev].slice(0, 50));
-    markReviewed(key, newText, "approved").then(() => loadReviewMemory().then(setReviewMem));
+    const appliedText = isGtaIv && original
+      ? repairGtaIvDollarAmountSequence(original, newText).text
+      : newText;
+    onApplySuggestion(key, appliedText);
+    setAppliedHistory(prev => [{ key, previous, applied: appliedText, ts: Date.now() }, ...prev].slice(0, 50));
+    markReviewed(key, appliedText, "approved").then(() => loadReviewMemory().then(setReviewMem));
     return true;
   };
 

@@ -22,7 +22,7 @@ import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { countMissingTagNewlines } from "@/lib/tag-newline-anchor";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
-import { validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -179,6 +179,16 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
         category: "gtaiv_dollar_amount_mismatch",
         message: `مبالغ دولار GTA IV غير محفوظة: ${gtaIvDollarAmounts.reason ?? "اختلاف غير محدد"}`,
       });
+    } else {
+      const gtaIvDollarRepair = repairGtaIvDollarAmountSequence(entry.original, trimmed);
+      if (gtaIvDollarRepair.changed) {
+        issues.push({
+          ...base,
+          severity: "critical",
+          category: "gtaiv_dollar_amount_mismatch",
+          message: "صيغة مبلغ GTA IV مكافئة لكن غير قياسية؛ يمكن تحويلها بأمان إلى صيغة المصدر مثل $700.",
+        });
+      }
     }
   }
 

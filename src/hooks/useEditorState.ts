@@ -43,7 +43,7 @@ import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
 import { analyzeKHBBSCTDText, type KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
 import { categorizeGtaIvEntry } from "@/lib/gtaiv/gtaiv-categories";
-import { analyzeGtaIvUnsupportedCharacters, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence, type GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
+import { analyzeGtaIvUnsupportedCharacters, repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence, type GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
 const LONG_TEXT_LINE_THRESHOLD = 35;
@@ -1022,6 +1022,12 @@ export function useEditorState() {
       }
     }
     if (entry?.msbtFile.startsWith("gtaiv/") && finalValue.trim()) {
+      const dollarRepair = repairGtaIvDollarAmountSequence(entry.original, finalValue);
+      if (!dollarRepair.safe) {
+        toast({ title: "⚠️ رُفض حفظ الترجمة", description: `${entry.label}: ${dollarRepair.reason || "تغيّر مبلغ دولار محمي"}`, variant: "destructive" });
+        return;
+      }
+      finalValue = dollarRepair.text;
       const tokenCheck = validateGtaIvRuntimeTokenSequence(entry.original, finalValue);
       if (!tokenCheck.valid) {
         toast({ title: "⚠️ رُفض حفظ الترجمة", description: `${entry.label}: ${tokenCheck.reason || "تغيّر رمز GTA IV تقني"}`, variant: "destructive" });

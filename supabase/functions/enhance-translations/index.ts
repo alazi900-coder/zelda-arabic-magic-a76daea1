@@ -216,10 +216,16 @@ function preservesGtaIvRuntimeTokenSequence(original: string, candidate: string)
 }
 
 function preservesGtaIvDollarAmountSequence(original: string, candidate: string): boolean {
-  const amountPattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
-  const before = original.match(amountPattern) || [];
-  const after = candidate.match(amountPattern) || [];
-  return before.length === after.length && before.every((amount, index) => amount === after[index]);
+  const sourcePattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
+  const candidatePattern = /\$\s*[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?|[0-9٠-٩]+(?:,[0-9٠-٩]{3})*(?:\.[0-9٠-٩]+)?(?:[kKmMbB])?\s*(?:\$|دولار)/g;
+  const normalize = (amount: string): string => amount
+    .replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+    .replace(/دولار/g, '')
+    .replace(/[\s$,]/g, '')
+    .toLowerCase();
+  const before = original.match(sourcePattern) || [];
+  const after = candidate.match(candidatePattern) || [];
+  return before.length === after.length && before.every((amount, index) => normalize(amount) === normalize(after[index] || ''));
 }
 
 function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false): boolean {

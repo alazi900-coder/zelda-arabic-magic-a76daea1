@@ -37,7 +37,7 @@ import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
-import { validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -255,9 +255,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
     }
     if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
-    if (isGtaIv) return validateGtaIvRuntimeTokenSequence(original, suggestion).valid
-      ? null
-      : "الاقتراح يغيّر رمز GTA IV محاطاً بـ ~ أو ترتيبه.";
+    if (isGtaIv) {
+      const tokenCheck = validateGtaIvRuntimeTokenSequence(original, suggestion);
+      if (!tokenCheck.valid) return "الاقتراح يغيّر رمز GTA IV محاطاً بـ ~ أو ترتيبه.";
+      const dollarCheck = validateGtaIvDollarAmountSequence(original, suggestion);
+      if (!dollarCheck.valid) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";
+    }
     return null;
   };
   const isSafeToApply = (original: string, previous: string, suggestion: string): boolean =>

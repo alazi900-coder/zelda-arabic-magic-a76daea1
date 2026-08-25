@@ -22,7 +22,7 @@ import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { countMissingTagNewlines } from "@/lib/tag-newline-anchor";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
-import { validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -89,6 +89,7 @@ const SPECIFIC_TECHNICAL_ISSUE_CATEGORIES = new Set([
   "missing_vars",
   "pkm_var_mismatch",
   "gtaiv_runtime_token_mismatch",
+  "gtaiv_dollar_amount_mismatch",
 ]);
 
 type TechnicalTagKind = "bracket" | "brace";
@@ -168,6 +169,15 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
         severity: "critical",
         category: "gtaiv_runtime_token_mismatch",
         message: `رموز GTA IV بين ~...~ غير محفوظة: ${gtaIvTokens.reason ?? "اختلاف غير محدد"}`,
+      });
+    }
+    const gtaIvDollarAmounts = validateGtaIvDollarAmountSequence(entry.original, trimmed);
+    if (!gtaIvDollarAmounts.valid) {
+      issues.push({
+        ...base,
+        severity: "critical",
+        category: "gtaiv_dollar_amount_mismatch",
+        message: `مبالغ دولار GTA IV غير محفوظة: ${gtaIvDollarAmounts.reason ?? "اختلاف غير محدد"}`,
       });
     }
   }

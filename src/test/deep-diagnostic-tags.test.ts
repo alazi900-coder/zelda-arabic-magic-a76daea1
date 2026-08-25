@@ -90,4 +90,20 @@ describe("Deep diagnostic translated tag deduping", () => {
       .find(issue => issue.category === "gtaiv_runtime_token_mismatch");
     expect(lone?.message).toContain("رمز ~ منفرد");
   });
+
+  it("detects changed or reordered GTA IV dollar amounts without generic dollar-variable diagnostics", () => {
+    const entry = { ...makeEntry("Pay $100 then $20m"), msbtFile: "gtaiv/MAIN" };
+    expect(detectIssues(entry, "ادفع $100 ثم $20m").map(issue => issue.category))
+      .not.toContain("gtaiv_dollar_amount_mismatch");
+
+    const changed = detectIssues(entry, "ادفع $200 ثم $20m");
+    const changedAmount = changed.find(issue => issue.category === "gtaiv_dollar_amount_mismatch");
+    expect(changedAmount?.severity).toBe("critical");
+    expect(changed.map(issue => issue.category)).not.toContain("missing_vars");
+    expect(changed.map(issue => issue.category)).not.toContain("corrupted_vars");
+
+    const reordered = detectIssues(entry, "ادفع $20m ثم $100")
+      .find(issue => issue.category === "gtaiv_dollar_amount_mismatch");
+    expect(reordered?.message).toContain("ترتيب");
+  });
 });

@@ -8,7 +8,7 @@ import type { EditorState } from "@/components/editor/types";
 import { hasRisenTags, restoreRisenTags } from "./risen-tag-guard";
 import { normalizeBreakStyleToSource } from "./balance-lines";
 import { validateLumenTaleTranslation } from "./lumentale/lumentale-token-guard";
-import { validateGtaIvRuntimeTokenSequence } from "./gtaiv/gxt-format";
+import { validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "./gtaiv/gxt-format";
 
 /**
  * Runs the Risen tag-repair + line-break-style normalization over a batch of
@@ -51,12 +51,14 @@ export function mergeGuardedTranslations(
         lumentaleTokenErrorKeys.delete(key);
       }
     }
-    // GTA IV control/runtime tokens use the form ~...~. They must occur with
-    // the same value and order in every saved translation, including AI and
-    // bulk-tool paths that do not go through the individual textarea handler.
+    // GTA IV runtime tokens and visible dollar amounts must remain equal and
+    // ordered in every saved translation, including AI/bulk paths that do not
+    // pass through the individual textarea handler.
     if (entry?.msbtFile.startsWith("gtaiv/") && value.trim()) {
       const tokenCheck = validateGtaIvRuntimeTokenSequence(entry.original, value);
       if (!tokenCheck.valid) continue;
+      const dollarCheck = validateGtaIvDollarAmountSequence(entry.original, value);
+      if (!dollarCheck.valid) continue;
     }
     guarded[key] = value;
   }

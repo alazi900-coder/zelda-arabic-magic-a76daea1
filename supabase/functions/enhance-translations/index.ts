@@ -215,12 +215,22 @@ function preservesGtaIvRuntimeTokenSequence(original: string, candidate: string)
   return before !== null && after !== null && before.length === after.length && before.every((token, i) => token === after[i]);
 }
 
+function preservesGtaIvDollarAmountSequence(original: string, candidate: string): boolean {
+  const amountPattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
+  const before = original.match(amountPattern) || [];
+  const after = candidate.match(amountPattern) || [];
+  return before.length === after.length && before.every((amount, index) => amount === after[index]);
+}
+
 function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
     (!isLumenTale || preservesLumenTaleTechnicalTokenSequence(original, suggested)) &&
-    (!isGtaIv || preservesGtaIvRuntimeTokenSequence(original, suggested));
+    (!isGtaIv || (
+      preservesGtaIvRuntimeTokenSequence(original, suggested) &&
+      preservesGtaIvDollarAmountSequence(original, suggested)
+    ));
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -513,7 +523,7 @@ Deno.serve(async (req) => {
       : isLumenTale
       ? '\nهذه مراجعة خاصة بـ LumenTale: Memories of Trey. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى.\n'
       : isGtaIv
-      ? '\nهذه مراجعة خاصة بـ GTA IV. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى. استند فقط إلى النص والقاموس المعطى، ولا تغيّر رموز GTA IV المحاطة بعلامتي ~.\n'
+      ? '\nهذه مراجعة خاصة بـ GTA IV. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى. استند فقط إلى النص والقاموس المعطى، ولا تغيّر رموز GTA IV المحاطة بعلامتي ~ ولا أي مبلغ دولار ظاهر مثل $100 أو $20m.\n'
       : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
@@ -569,12 +579,12 @@ Deno.serve(async (req) => {
     const strictTokenSafetyRule = isLumenTale
       ? 'قاعدة أمان غير قابلة للتجاوز في LumenTale: يجب أن يحتوي الاقتراح على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
       : isGtaIv
-      ? 'قاعدة أمان غير قابلة للتجاوز في GTA IV: يجب أن يحتوي الاقتراح على كل رمز بين ~...~ من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تنقل أي رمز، ولا تترك علامة ~ منفردة.'
+      ? 'قاعدة أمان غير قابلة للتجاوز في GTA IV: يجب أن يحتوي الاقتراح على كل رمز بين ~...~ وكل مبلغ دولار ظاهر من الأصل (مثل $100 و$20m) بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تنقل أيّاً منها، ولا تترك علامة ~ منفردة.'
       : 'قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
     const strictTokenSafetyBullet = isLumenTale
       ? '- في LumenTale يجب أن يحتوي suggested وكل بديل على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف.'
       : isGtaIv
-      ? '- في GTA IV يجب أن يحتوي suggested وكل بديل على كل رمز بين ~...~ بالقيمة والترتيب نفسيهما حرفاً بحرف، ومن دون علامة ~ منفردة.'
+      ? '- في GTA IV يجب أن يحتوي suggested وكل بديل على كل رمز بين ~...~ وكل مبلغ دولار ظاهر بالقيمة والترتيب نفسيهما حرفاً بحرف، ومن دون علامة ~ منفردة.'
       : '- إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
     if (ruleSections.detectCount === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {

@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
-import { repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { fixTagNewlines } from "@/lib/tag-newline-anchor";
 import { countEffectiveLines } from "@/lib/text-tokens";
@@ -87,6 +87,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم أصلية مفقودة فعلياً بعد استثناء الوسوم التي تُرجمت بالخطأ — قد تسبب خلل في العرض" },
   { id: "technical_mismatch", label: "اختلاف الرموز التقنية", icon: "🧷", severity: "critical", description: "مجموعة الرموز التقنية لا تطابق الأصل بدقة حتى لو كان العدد متساوياً — قد تسبب تجمّد اللعبة" },
   { id: "gtaiv_runtime_token_mismatch", label: "رموز GTA IV بين ~...~", icon: "🛡️", severity: "critical", description: "رموز GTA IV بين ~...~ ناقصة أو زائدة أو تغيّرت قيمتها/ترتيبها أو تحتوي ~ منفردة؛ البناء يرفضها. الإصلاح التلقائي يستبدل الرموز فقط عندما تكون مواضعها مكتملة ومتساوية." },
+  { id: "gtaiv_dollar_amount_mismatch", label: "مبلغ دولار GTA IV تغيّر", icon: "💵", severity: "critical", description: "سعر ظاهر مثل $100 أو $20m حُذف أو تغيّرت قيمته أو ترتيبه؛ الحفظ والبناء يرفضانه. الإصلاح التلقائي يستبدل السعر فقط عندما تتطابق خانات المبالغ." },
   { id: "tag_order_mismatch", label: "ترتيب الوسوم مقلوب", icon: "🔀", severity: "critical", description: "الوسوم التقنية موجودة لكن بترتيب مختلف عن الأصل — يسبب تجمّد المشاهد السينمائية" },
   { id: "placeholder_mismatch", label: "عناصر نائبة مفقودة", icon: "⬛", severity: "warning", description: "رموز \uFFFC نائبة مفقودة — قد تسبب خلل في الواجهة" },
   { id: "newline_mismatch", label: "فرق كبير بعدد الأسطر", icon: "📄", severity: "warning", description: "عدد الأسطر في الترجمة يختلف كثيراً عن الأصل — قد يكسر صندوق الحوار" },
@@ -143,9 +144,14 @@ interface DeepDiagnosticPanelProps {
 
 // Categories fixable via build tag guard
 const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", "translated_tags", "tag_order_mismatch"]);
-// GTA IV uses `~...~` runtime tokens, not XC3 tags. This path may only repair
-// complete matching token slots; it never restores the English source text.
-const GTAIV_TOKEN_FIXABLE_CATEGORIES = new Set(["gtaiv_runtime_token_mismatch"]);
+// GTA IV uses `~...~` runtime tokens plus protected visible dollar amounts.
+// This path only restores complete matching slots; it never restores English.
+const GTAIV_TOKEN_FIXABLE_CATEGORIES = new Set(["gtaiv_runtime_token_mismatch", "gtaiv_dollar_amount_mismatch"]);
+const repairGtaIvProtectedSequence = (category: string, original: string, candidate: string) => (
+  category === "gtaiv_dollar_amount_mismatch"
+    ? repairGtaIvDollarAmountSequence(original, candidate)
+    : repairGtaIvRuntimeTokenSequence(original, candidate)
+);
 // Categories fixable by repairing $N variables
 const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
@@ -346,15 +352,15 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     if (!trans.trim()) return { fixResult: '', reason: '❌ الترجمة فارغة' };
 
     if (GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category)) {
-      const repaired = repairGtaIvRuntimeTokenSequence(entry.original, trans);
+      const repaired = repairGtaIvProtectedSequence(issue.category, entry.original, trans);
       if (!repaired.safe) {
-        return { fixResult: trans, reason: `⚠️ لا يمكن تخمين رموز GTA IV الناقصة/الزائدة أو التالفة: ${repaired.reason ?? 'مراجعة يدوية مطلوبة'}` };
+        return { fixResult: trans, reason: `⚠️ لا يمكن تخمين القيمة المحمية الناقصة/الزائدة أو التالفة: ${repaired.reason ?? 'مراجعة يدوية مطلوبة'}` };
       }
       return {
         fixResult: repaired.text,
         reason: repaired.changed
-          ? '🛡️ سيتم استبدال رموز ~...~ فقط مع الحفاظ على الترجمة العربية'
-          : '⚠️ لم يجد الإصلاح رمز GTA IV مختلفاً قابلاً للاستبدال',
+          ? '🛡️ سيتم استبدال القيمة المحمية فقط مع الحفاظ على الترجمة العربية'
+          : '⚠️ لم يجد الإصلاح قيمة GTA IV مختلفة قابلة للاستبدال',
       };
     }
 
@@ -480,16 +486,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     if (!entry) return;
 
     if (GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category)) {
-      const repaired = repairGtaIvRuntimeTokenSequence(entry.original, issue.translation);
+      const repaired = repairGtaIvProtectedSequence(issue.category, entry.original, issue.translation);
       if (repaired.safe && repaired.changed && onApplyFix) {
         onApplyFix(issue.key, repaired.text);
-        toast({ title: '🛡️ إصلاح GTA IV آمن', description: 'تمت استعادة رموز ~...~ فقط؛ بقيت الترجمة العربية كما هي' });
+        toast({ title: '🛡️ إصلاح GTA IV آمن', description: 'أُعيدت القيمة المحمية فقط؛ بقيت الترجمة العربية كما هي' });
       } else {
         toast({
           title: repaired.safe ? '⚠️ لم يتغير النص' : '⚠️ مراجعة GTA IV مطلوبة',
           description: repaired.safe
-            ? 'لا توجد رموز مكتملة مختلفة قابلة للإصلاح'
-            : `لم يُطبّق أي تخمين على الرموز الناقصة/الزائدة أو ~ المنفردة: ${repaired.reason ?? 'راجع النص يدوياً'}`,
+            ? 'لا توجد قيمة GTA IV مكتملة مختلفة قابلة للإصلاح'
+            : `لم يُطبّق أي تخمين على القيمة الناقصة/الزائدة أو التالفة: ${repaired.reason ?? 'راجع النص يدوياً'}`,
         });
       }
       return;
@@ -611,14 +617,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const entry = entryMap.get(key);
         const trans = state.translations[key];
         if (!entry || !trans) continue;
-        const repaired = repairGtaIvRuntimeTokenSequence(entry.original, trans);
+        const repaired = repairGtaIvProtectedSequence(activeFilter, entry.original, trans);
         if (repaired.safe && repaired.changed) updates[key] = repaired.text;
         else if (!repaired.safe) requiresReview++;
       }
       const count = applyBatchUpdates(updates);
       toast({
         title: count > 0 ? '🛡️ إصلاح GTA IV آمن' : '⚠️ لا توجد إصلاحات آمنة',
-        description: `تم إصلاح الرموز فقط في ${count} نص${requiresReview > 0 ? ` — ${requiresReview} نص يحتاج مراجعة يدوية` : ''}`,
+        description: `تم إصلاح القيمة المحمية فقط في ${count} نص${requiresReview > 0 ? ` — ${requiresReview} نص يحتاج مراجعة يدوية` : ''}`,
       });
       setTimeout(() => runScan(true), 250);
       return;
@@ -838,16 +844,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           const entry = entryMap.get(issue.key);
           const trans = state.translations[issue.key];
           if (entry && trans) {
-            const repaired = repairGtaIvRuntimeTokenSequence(entry.original, trans);
+            const repaired = repairGtaIvProtectedSequence(issue.category, entry.original, trans);
             if (repaired.safe && repaired.changed) {
               updates[issue.key] = repaired.text;
               counters.gtaIv++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🛡️ استُبدلت رموز GTA IV بين ~...~ فقط مع الحفاظ على الترجمة العربية', before: trans, after: repaired.text });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🛡️ استُبدلت قيمة GTA IV المحمية فقط مع الحفاظ على الترجمة العربية', before: trans, after: repaired.text });
             } else if (!repaired.safe) {
               counters.gtaIvNeedsReview++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: `⚠️ لم يُطبّق تخمين على رموز GTA IV الناقصة/الزائدة أو التالفة: ${repaired.reason ?? 'مراجعة يدوية مطلوبة'}`, before: trans, after: trans });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: `⚠️ لم يُطبّق تخمين على قيمة GTA IV الناقصة/الزائدة أو التالفة: ${repaired.reason ?? 'مراجعة يدوية مطلوبة'}`, before: trans, after: trans });
             } else {
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لا توجد رموز GTA IV مكتملة مختلفة قابلة للإصلاح', before: trans, after: trans });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لا توجد قيمة GTA IV مكتملة مختلفة قابلة للإصلاح', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);
@@ -1271,7 +1277,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                               : RISEN_TAG_FIXABLE_CATEGORIES.has(activeFilter)
                               ? `🏷️ إلحاق وسوم Risen (${activeFilterKeys.size})`
                               : GTAIV_TOKEN_FIXABLE_CATEGORIES.has(activeFilter)
-                              ? `🛡️ إصلاح رموز GTA IV الآمنة (${activeFilterKeys.size})`
+                              ? `🛡️ إصلاح حماية GTA IV الآمنة (${activeFilterKeys.size})`
                               : activeFilter === "invisible_chars"
                               ? `🧹 تنظيف (${activeFilterKeys.size})`
                               : `🔧 إصلاح الكل محلياً (${activeFilterKeys.size})`
@@ -1321,7 +1327,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                     title={TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح الوسوم" :
                                            DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح المتغيرات" :
                                            RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إلحاق وسم Risen" :
-                                           GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح رموز GTA IV الآمن" :
+                                           GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح حماية GTA IV الآمن" :
                                            RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "استعادة الأصل" :
                                            issue.category === "invisible_chars" ? "تنظيف" : "إصلاح"}>
                                     {TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🔧" :

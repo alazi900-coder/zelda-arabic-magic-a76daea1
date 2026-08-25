@@ -114,6 +114,20 @@ export interface GtaIvRuntimeTokenRepair {
   reason?: string;
 }
 
+export interface GtaIvDollarAmountValidation {
+  valid: boolean;
+  sourceAmounts: string[];
+  candidateAmounts: string[];
+  reason?: string;
+}
+
+export interface GtaIvDollarAmountRepair {
+  text: string;
+  changed: boolean;
+  safe: boolean;
+  reason?: string;
+}
+
 const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
@@ -155,6 +169,11 @@ const gtaIvArabicPunctuationToAscii: Record<string, string> = {
 };
 
 const runtimeTokenPattern = /~[^~]+~/g;
+// Visible GTA IV prices are content rather than runtime syntax, but their
+// spelling and order must survive translation and Arabic visual reordering.
+// Supports ordinary, grouped, decimal, and abbreviated values: $100, $5,000,
+// $0.50, $20m.
+const gtaIvDollarAmountPattern = /\$\d+(?:,\d{3})*(?:\.\d+)?(?:[kKmMbB])?/g;
 
 export interface GtaIvArabicEncoding {
   /** Shaped and visually ordered text after protected tokens are restored. */
@@ -210,10 +229,12 @@ function normalizeGtaIvArabicPunctuation(value: string): string {
 export function encodeGtaIvArabicText(sourceText: string, translation: string): GtaIvArabicEncoding {
   const tokenValidation = validateGtaIvRuntimeTokenSequence(sourceText, translation);
   if (!tokenValidation.valid) fail(`رموز وقت التشغيل غير محفوظة: ${tokenValidation.reason}`);
+  const dollarValidation = validateGtaIvDollarAmountSequence(sourceText, translation);
+  if (!dollarValidation.valid) fail(`مبالغ الدولار غير محفوظة: ${dollarValidation.reason}`);
 
   const pieces = translation.split(/(~[^~]+~)/g);
   const processedText = pieces.map((piece, index) => (
-    index % 2 === 1 ? piece : processArabicText(normalizeGtaIvArabicPunctuation(piece))
+    index % 2 === 1 ? piece : processGtaIvArabicPiece(piece)
   )).join("");
   const units: number[] = [];
 
@@ -232,6 +253,27 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
     fail(`المحرف «${char}» غير مدعوم في خط GTA IV English المعدل.`);
   }
   return { processedText, textUnits: new Uint16Array(units) };
+}
+
+/**
+ * Keeps each visible dollar amount atomic while the surrounding Arabic text is
+ * reshaped and visually reversed for GTA IV's LTR renderer. The temporary PUA
+ * markers are restored before GXT units are emitted, so they can never leak
+ * into the game text.
+ */
+function processGtaIvArabicPiece(value: string): string {
+  const amounts: string[] = [];
+  const shielded = normalizeGtaIvArabicPunctuation(value).replace(gtaIvDollarAmountPattern, (amount) => {
+    const index = amounts.length;
+    amounts.push(amount);
+    if (index >= 96) return amount;
+    return `\uE0F2${String.fromCharCode(0xE0A0 + index)}\uE0F2`;
+  });
+  const processed = processArabicText(shielded);
+  return processed.replace(/\uE0F2([\uE0A0-\uE0FF])\uE0F2/g, (marker, slot) => {
+    const index = slot.charCodeAt(0) - 0xE0A0;
+    return amounts[index] ?? marker;
+  });
 }
 
 /**
@@ -499,6 +541,10 @@ export function rebuildGtaIvGxt(source: ArrayBuffer, replacements: readonly GtaI
     if (!tokenValidation.valid) {
       fail(`رموز وقت التشغيل غير محفوظة للهوية ${replacement.table}:${replacement.crc}: ${tokenValidation.reason}`);
     }
+    const dollarValidation = validateGtaIvDollarAmountSequence(textFromUnits(sourceEntry.textUnits), textFromUnits(replacement.textUnits));
+    if (!dollarValidation.valid) {
+      fail(`مبالغ الدولار غير محفوظة للهوية ${replacement.table}:${replacement.crc}: ${dollarValidation.reason}`);
+    }
     replacementByIdentity.set(key, replacement);
   }
 
@@ -592,6 +638,48 @@ export function validateGtaIvRuntimeTokenSequence(source: string, candidate: str
     return { valid: false, sourceTokens, candidateTokens, reason: "ترتيب أو قيمة رمز وقت التشغيل تغيرت." };
   }
   return { valid: true, sourceTokens, candidateTokens };
+}
+
+/**
+ * Keeps GTA IV's visible dollar prices exactly equal and ordered as in the
+ * English source. They are not engine control tags, so this is an editorial
+ * safety rule: it protects price meaning without treating `$` as runtime code.
+ */
+export function validateGtaIvDollarAmountSequence(source: string, candidate: string): GtaIvDollarAmountValidation {
+  const sourceAmounts = source.match(gtaIvDollarAmountPattern) ?? [];
+  const candidateAmounts = candidate.match(gtaIvDollarAmountPattern) ?? [];
+  if (sourceAmounts.length !== candidateAmounts.length) {
+    return { valid: false, sourceAmounts, candidateAmounts, reason: "عدد مبالغ الدولار تغير." };
+  }
+  if (sourceAmounts.some((amount, index) => amount !== candidateAmounts[index])) {
+    return { valid: false, sourceAmounts, candidateAmounts, reason: "قيمة أو ترتيب مبلغ الدولار تغير." };
+  }
+  return { valid: true, sourceAmounts, candidateAmounts };
+}
+
+/**
+ * Restores only changed dollar amount slots. Missing, extra, or malformed
+ * amounts are not guessed: the Arabic translation stays untouched for review.
+ */
+export function repairGtaIvDollarAmountSequence(source: string, candidate: string): GtaIvDollarAmountRepair {
+  const validation = validateGtaIvDollarAmountSequence(source, candidate);
+  if (validation.valid) return { text: candidate, changed: false, safe: true };
+  if (validation.sourceAmounts.length !== validation.candidateAmounts.length) {
+    return {
+      text: candidate,
+      changed: false,
+      safe: false,
+      reason: validation.reason ?? "تعذّر إصلاح مبلغ الدولار تلقائياً.",
+    };
+  }
+
+  let amountIndex = 0;
+  const repaired = candidate.replace(gtaIvDollarAmountPattern, () => validation.sourceAmounts[amountIndex++] ?? "");
+  const repairedValidation = validateGtaIvDollarAmountSequence(source, repaired);
+  if (!repairedValidation.valid) {
+    return { text: candidate, changed: false, safe: false, reason: repairedValidation.reason };
+  }
+  return { text: repaired, changed: repaired !== candidate, safe: true };
 }
 
 /**

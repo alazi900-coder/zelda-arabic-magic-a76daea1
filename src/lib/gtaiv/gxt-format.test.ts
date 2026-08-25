@@ -9,7 +9,9 @@ import {
   parseGtaIvOxt,
   rebuildGtaIvGxt,
   reconcileGtaIvOxtWithGxt,
+  repairGtaIvDollarAmountSequence,
   repairGtaIvRuntimeTokenSequence,
+  validateGtaIvDollarAmountSequence,
   validateGtaIvRuntimeTokenSequence,
 } from "./gxt-format";
 import { buildGtaIvAmericanOutput, extractGtaIvEntries } from "./gtaiv-editor-bridge";
@@ -109,6 +111,21 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "مرحبا ~", changed: false, safe: false });
   });
 
+  it("requires exact ordered GTA IV dollar amounts and repairs only matching amount slots", () => {
+    expect(validateGtaIvDollarAmountSequence("Pay $100 then $20m", "ادفع $100 ثم $20m"))
+      .toMatchObject({ valid: true });
+    expect(validateGtaIvDollarAmountSequence("Pay $100 then $20m", "ادفع $20m ثم $100"))
+      .toMatchObject({ valid: false });
+    expect(validateGtaIvDollarAmountSequence("Pay $100", "ادفع $200"))
+      .toMatchObject({ valid: false });
+    expect(repairGtaIvDollarAmountSequence("Pay $100 then $20m", "ادفع $200 ثم $20m"))
+      .toMatchObject({ text: "ادفع $100 ثم $20m", changed: true, safe: true });
+    expect(repairGtaIvDollarAmountSequence("Pay $100", "ادفع الآن"))
+      .toMatchObject({ text: "ادفع الآن", changed: false, safe: false });
+    expect(repairGtaIvDollarAmountSequence("Pay $100", "ادفع $100 و$20"))
+      .toMatchObject({ text: "ادفع $100 و$20", changed: false, safe: false });
+  });
+
   it("shapes and encodes Arabic Presentation Forms through the audited English font map", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
@@ -121,6 +138,12 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(encoded.processedText).toContain("~n~");
     expect(gtaIvRawUnitsToString(encoded.textUnits)).toMatch(/^~r~.*~n~$/);
     expect(Array.from(encoded.textUnits.slice(0, 3))).toEqual([0x7e, 0x72, 0x7e]);
+  });
+
+  it("keeps a protected dollar amount readable as $100 while encoding Arabic prose", () => {
+    const encoded = encodeGtaIvArabicText("Pay $100", "ادفع $100");
+    expect(encoded.processedText).toContain("$100");
+    expect(encoded.processedText).not.toContain("001$");
   });
 
   it("refuses an Arabic character not represented by English v3", () => {

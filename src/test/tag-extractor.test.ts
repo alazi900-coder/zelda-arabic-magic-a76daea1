@@ -76,6 +76,24 @@ describe("tag-extractor: precision and report context", () => {
     expect(formatReport(report)).toContain("context (menu.msbt): Before ⟦#3⟧ After");
     expect(formatReport(report)).not.toContain("Xenoblade Technical Tag Report");
   });
+
+  it("does not classify GTA IV prices or visible # labels as technical tokens", async () => {
+    const entries: ExtractorEntry[] = [
+      { msbtFile: "gtaiv/WEB", original: "Win $100, earn $20m — #1 rated. Funk #49." },
+    ];
+    const report = await extractTags(entries);
+    expect(report.categories.dollar_vars.size).toBe(0);
+    expect(report.categories.hash_controls.size).toBe(0);
+  });
+
+  it("retains dollar and hash extraction for non-GTA formats that may use them as controls", async () => {
+    const entries: ExtractorEntry[] = [
+      { msbtFile: "menu.msbt", original: "Name $player — Break #3" },
+    ];
+    const report = await extractTags(entries);
+    expect(report.categories.dollar_vars.has("$player")).toBe(true);
+    expect(report.categories.hash_controls.has("#3")).toBe(true);
+  });
 });
 
 describe("tag-extractor: pua_chars range", () => {

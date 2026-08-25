@@ -107,6 +107,13 @@ export interface GtaIvRuntimeTokenValidation {
   reason?: string;
 }
 
+export interface GtaIvRuntimeTokenRepair {
+  text: string;
+  changed: boolean;
+  safe: boolean;
+  reason?: string;
+}
+
 const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
@@ -585,4 +592,33 @@ export function validateGtaIvRuntimeTokenSequence(source: string, candidate: str
     return { valid: false, sourceTokens, candidateTokens, reason: "ترتيب أو قيمة رمز وقت التشغيل تغيرت." };
   }
   return { valid: true, sourceTokens, candidateTokens };
+}
+
+/**
+ * Restores only changed GTA IV `~...~` runtime tokens in place. This is safe
+ * solely when both strings contain the same number of complete token slots;
+ * missing, extra, or malformed tokens are reported but never guessed.
+ */
+export function repairGtaIvRuntimeTokenSequence(source: string, candidate: string): GtaIvRuntimeTokenRepair {
+  const validation = validateGtaIvRuntimeTokenSequence(source, candidate);
+  if (validation.valid) return { text: candidate, changed: false, safe: true };
+
+  const sourceResult = extractRuntimeTokens(source);
+  const candidateResult = extractRuntimeTokens(candidate);
+  if (sourceResult.error || candidateResult.error || sourceResult.tokens.length !== candidateResult.tokens.length) {
+    return {
+      text: candidate,
+      changed: false,
+      safe: false,
+      reason: validation.reason ?? "تعذّر إصلاح رموز وقت التشغيل تلقائياً.",
+    };
+  }
+
+  let tokenIndex = 0;
+  const repaired = candidate.replace(/~[^~\r\n]+~/g, () => sourceResult.tokens[tokenIndex++] ?? "");
+  const repairedValidation = validateGtaIvRuntimeTokenSequence(source, repaired);
+  if (!repairedValidation.valid) {
+    return { text: candidate, changed: false, safe: false, reason: repairedValidation.reason };
+  }
+  return { text: repaired, changed: repaired !== candidate, safe: true };
 }

@@ -9,6 +9,7 @@ import {
   parseGtaIvOxt,
   rebuildGtaIvGxt,
   reconcileGtaIvOxtWithGxt,
+  repairGtaIvRuntimeTokenSequence,
   validateGtaIvRuntimeTokenSequence,
 } from "./gxt-format";
 import { buildGtaIvAmericanOutput, extractGtaIvEntries } from "./gtaiv-editor-bridge";
@@ -95,6 +96,17 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(validateGtaIvRuntimeTokenSequence("~x~ Hello ~n~~z~", "~x~ نص ~n~~z~")).toMatchObject({ valid: true });
     expect(validateGtaIvRuntimeTokenSequence("~x~ Hello ~n~~z~", "~x~ نص ~z~~n~")).toMatchObject({ valid: false });
     expect(validateGtaIvRuntimeTokenSequence("Hello", "نص ~")).toMatchObject({ valid: false });
+  });
+
+  it("repairs only changed complete GTA IV token slots and refuses malformed token layouts", () => {
+    expect(repairGtaIvRuntimeTokenSequence("~r~ Hello ~n~", "~g~ مرحبا ~n~"))
+      .toMatchObject({ text: "~r~ مرحبا ~n~", changed: true, safe: true });
+    expect(repairGtaIvRuntimeTokenSequence("~r~ Hello ~n~", "مرحبا ~n~"))
+      .toMatchObject({ text: "مرحبا ~n~", changed: false, safe: false });
+    expect(repairGtaIvRuntimeTokenSequence("~r~ Hello", "~r~ مرحبا ~n~"))
+      .toMatchObject({ text: "~r~ مرحبا ~n~", changed: false, safe: false });
+    expect(repairGtaIvRuntimeTokenSequence("Hello", "مرحبا ~"))
+      .toMatchObject({ text: "مرحبا ~", changed: false, safe: false });
   });
 
   it("shapes and encodes Arabic Presentation Forms through the audited English font map", () => {

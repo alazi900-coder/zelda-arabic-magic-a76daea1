@@ -159,10 +159,16 @@ function recordMatch(
 
 function scanSingle(text: string, file: string, categories: Record<Category, Map<string, Occurrence>>) {
   const pairedSpans: [number, number][] = [];
+  const isGtaIv = file.startsWith("gtaiv/");
   const isBracketInsidePairedTag = (start: number, end: number) =>
     pairedSpans.some(([pairStart, pairEnd]) => start >= pairStart && end <= pairEnd);
 
   for (const cat of SCAN_PRIORITY) {
+    // In GTA IV, `$100`/`$20m` are visible prices and `#1 rated`/`Funk #49`
+    // are visible text. They are not part of the documented `~...~` runtime
+    // syntax, so reporting them as protected technical tags is misleading.
+    // Preserve the existing extraction for other game formats that use them.
+    if (isGtaIv && (cat === "dollar_vars" || cat === "hash_controls")) continue;
     const re = PATTERNS[cat];
     re.lastIndex = 0;
     let m: RegExpExecArray | null;

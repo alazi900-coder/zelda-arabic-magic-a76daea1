@@ -65,4 +65,29 @@ describe("Deep diagnostic translated tag deduping", () => {
     const issues = detectIssues(entry, "مرحبا[XENO:n ]\nبالعالم");
     expect(issues.find(i => i.category === "xeno_n_no_newline")).toBeUndefined();
   });
+
+  it("uses the GTA IV runtime-token guard instead of generic XC3 diagnostics", () => {
+    const entry = { ...makeEntry("~r~ Hello ~n~"), msbtFile: "gtaiv/MAIN" };
+    const issues = detectIssues(entry, "~g~ مرحبا ~n~");
+    const categories = issues.map(issue => issue.category);
+
+    expect(categories).toContain("gtaiv_runtime_token_mismatch");
+    expect(categories).not.toContain("technical_mismatch");
+    expect(categories).not.toContain("tag_order_mismatch");
+    expect(categories).not.toContain("missing_rlm_isolation");
+  });
+
+  it("accepts matching GTA IV tokens and identifies missing or lone tokens as critical", () => {
+    const entry = { ...makeEntry("~r~ Hello ~n~"), msbtFile: "gtaiv/MAIN" };
+    expect(detectIssues(entry, "~r~ مرحبا ~n~").map(issue => issue.category))
+      .not.toContain("gtaiv_runtime_token_mismatch");
+
+    const missing = detectIssues(entry, "~r~ مرحبا").find(issue => issue.category === "gtaiv_runtime_token_mismatch");
+    expect(missing?.severity).toBe("critical");
+    expect(missing?.message).toContain("عدد رموز وقت التشغيل تغير");
+
+    const lone = detectIssues({ ...makeEntry("Hello"), msbtFile: "gtaiv/MAIN" }, "مرحبا ~")
+      .find(issue => issue.category === "gtaiv_runtime_token_mismatch");
+    expect(lone?.message).toContain("رمز ~ منفرد");
+  });
 });

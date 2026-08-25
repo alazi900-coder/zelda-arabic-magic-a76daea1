@@ -22,6 +22,7 @@ import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { countMissingTagNewlines } from "@/lib/tag-newline-anchor";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
+import { validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -87,6 +88,7 @@ const SPECIFIC_TECHNICAL_ISSUE_CATEGORIES = new Set([
   "corrupted_vars",
   "missing_vars",
   "pkm_var_mismatch",
+  "gtaiv_runtime_token_mismatch",
 ]);
 
 type TechnicalTagKind = "bracket" | "brace";
@@ -153,6 +155,22 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   const trimmed = translation.trim();
   const issues: DiagnosticIssue[] = [];
   const base = { key, label: entry.label, original: entry.original, translation };
+  const isGtaIv = entry.msbtFile.startsWith("gtaiv/");
+
+  // GTA IV has its own runtime/control syntax: `~...~`. It is not an XC3 tag
+  // and must retain both spelling and order. Run the same authoritative guard
+  // used at save/build time, rather than trying to infer it from generic regex.
+  if (isGtaIv) {
+    const gtaIvTokens = validateGtaIvRuntimeTokenSequence(entry.original, trimmed);
+    if (!gtaIvTokens.valid) {
+      issues.push({
+        ...base,
+        severity: "critical",
+        category: "gtaiv_runtime_token_mismatch",
+        message: `رموز GTA IV بين ~...~ غير محفوظة: ${gtaIvTokens.reason ?? "اختلاف غير محدد"}`,
+      });
+    }
+  }
 
   // 1. Control characters missing
   const origControl = countMatches(entry.original, RE_CONTROL);
@@ -301,7 +319,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
 
   // 17. Corrupted / Missing $N variables
   const origDollarVars = getMatches(entry.original, RE_ORIG_DOLLAR_VARS);
-  if (origDollarVars.length > 0) {
+  if (!isGtaIv && origDollarVars.length > 0) {
     const corruptedMatches = getMatches(trimmed, RE_CORRUPTED_DOLLAR);
     if (corruptedMatches.length > 0) {
       issues.push({ ...base, severity: "critical", category: "corrupted_vars",
@@ -358,7 +376,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   // 19. Technical multiset mismatch
   const technicalDiff = diffTechnicalTags(entry.original, trimmed);
   const hasSpecificTechnicalIssue = issues.some(issue => SPECIFIC_TECHNICAL_ISSUE_CATEGORIES.has(issue.category));
-  if (!technicalDiff.exactTagMatch && !hasSpecificTechnicalIssue && !/\.tab$/i.test(entry.msbtFile)) {
+  if (!isGtaIv && !technicalDiff.exactTagMatch && !hasSpecificTechnicalIssue && !/\.tab$/i.test(entry.msbtFile)) {
     const messageParts: string[] = [];
     if (technicalDiff.missingTags.length > 0) {
       messageParts.push(
@@ -377,7 +395,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   }
 
   // 19. Tag order mismatch
-  if (technicalDiff.exactTagMatch && !technicalDiff.sequenceMatch && !/\.tab$/i.test(entry.msbtFile)) {
+  if (!isGtaIv && technicalDiff.exactTagMatch && !technicalDiff.sequenceMatch && !/\.tab$/i.test(entry.msbtFile)) {
     issues.push({
       ...base, severity: "critical", category: "tag_order_mismatch",
       message: "الوسوم التقنية موجودة لكن ترتيبها مقلوب مقارنة بالأصل — يسبب تجمّد المشاهد",
@@ -411,7 +429,7 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   // Broadened: [Word:Value] tags (XENO/System/ML/Event/...), closing tags
   // [/Word:...], number-affixed forms (1[XENO:n], [XENO:wait]2), brace tags
   // {var}/{Word:value}, and $N variables.
-  if (RE_ARABIC_STANDARD.test(trimmed)) {
+  if (!isGtaIv && RE_ARABIC_STANDARD.test(trimmed)) {
     const tagRe = /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\{\s*\w+\s*:[^}]*\}|\{\s*\w+\s*\}|\$\d+/g;
     let unisolated = 0;
     let m: RegExpExecArray | null;

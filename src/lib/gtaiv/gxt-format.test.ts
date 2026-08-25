@@ -184,10 +184,10 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "ادفع 700$ و$20", changed: false, safe: false });
   });
 
-  it("shapes and encodes Arabic Presentation Forms through the audited English font map", () => {
+  it("shapes Arabic Presentation Forms into the English v3 MAP input units, not texture slots", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
-    expect(Array.from(encoded.textUnits)).toEqual([410, 228, 193, 123, 199]);
+    expect(Array.from(encoded.textUnits)).toEqual([203, 165, 130, 119, 136]);
   });
 
   it("keeps GTA IV runtime tokens byte-for-byte while encoding Arabic prose", () => {
@@ -269,7 +269,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     });
     expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
     const output = parseGtaIvGxt(result.buffer);
-    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([410, 228, 193, 123, 199]);
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([203, 165, 130, 119, 136]);
   });
 
 });

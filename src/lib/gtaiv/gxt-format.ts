@@ -148,12 +148,26 @@ const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
 /**
- * `fonts.dat` maps input units 97–240 to the 144 Arabic Presentation Form
- * slots in `fonts.wtd`, in U+FE70–U+FEFF order. GXT stores the *input* unit,
- * never the texture-slot number selected by the MAP table.
+ * Recovery encoding used by the builder before the 97–240 MAP-input change.
+ * Unit at offset N is the historical font-slot value for Arabic Presentation
+ * Form U+FE70 + N. It is retained solely to restore the last known
+ * non-crashing output path; it is not a verified semantic font map and may
+ * still render incorrect glyphs in-game.
  */
-const gtaIvPresentationFormUnitStart = 97;
-const gtaIvPresentationFormUnitEnd = 240;
+const gtaIvPresentationFormUnits = [
+  103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114,
+  115, 116, 117, 118, 119, 120, 121, 122, 91, 93, 123, 125,
+  163, 165, 166, 167, 182, 188, 189, 190, 192, 193, 194, 195,
+  196, 197, 198, 199, 200, 298, 201, 202, 203, 204, 205, 206,
+  207, 208, 209, 210, 211, 212, 213, 214, 216, 217, 218, 219,
+  220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 232, 350,
+  352, 233, 235, 237, 239, 240, 242, 243, 245, 249, 251, 490,
+  492, 494, 497, 500, 385, 386, 388, 390, 391, 393, 394, 395,
+  398, 399, 400, 401, 403, 404, 405, 406, 407, 408, 410, 412,
+  413, 415, 416, 418, 420, 502, 504, 425, 428, 430, 431, 433,
+  434, 435, 437, 439, 440, 443, 506, 508, 510, 161, 124, 247,
+  191, 171, 180, 185, 186, 471, 253, 170, 176, 168, 387, 255,
+] as const;
 
 const gtaIvArabicPunctuationToAscii: Record<string, string> = {
   "؟": "?",
@@ -193,8 +207,7 @@ export interface GtaIvArabicEncoding {
 function isGtaIvEnglishV3CharacterSupported(char: string, sourceExtendedUnits?: Map<number, number>): boolean {
   const code = char.codePointAt(0) ?? 0;
   if (code >= 0xfe70 && code <= 0xfeff) {
-    const unit = gtaIvPresentationFormUnitStart + code - 0xfe70;
-    return unit >= gtaIvPresentationFormUnitStart && unit <= gtaIvPresentationFormUnitEnd;
+    return gtaIvPresentationFormUnits[code - 0xfe70] !== undefined;
   }
   // The source american.gxt can contain verified legacy Latin-1 glyph units
   // such as © and NBSP. They are safe only when the same unit already occurs
@@ -308,7 +321,9 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
   for (const char of processedText) {
     const code = char.charCodeAt(0);
     if (code >= 0xfe70 && code <= 0xfeff) {
-      units.push(gtaIvPresentationFormUnitStart + code - 0xfe70);
+      const unit = gtaIvPresentationFormUnits[code - 0xfe70];
+      if (unit === undefined) fail(`لا توجد خانة استعادة للشكل العربي U+${code.toString(16).toUpperCase()}.`);
+      units.push(unit);
       continue;
     }
     if (code > 0 && code <= 0x7f) {

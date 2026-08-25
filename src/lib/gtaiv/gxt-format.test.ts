@@ -88,14 +88,14 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(parsed.tables[0].entries[0].crc).toBe(0x00009b22);
     expect(Array.from(parsed.tables[0].entries[0].textUnits)).toEqual([0x41, 0x42, 0x43]);
 
-    // 126 is a valid Arabic MAP input unit. It must not be decoded as ASCII
-    // tilde while rebuilding and therefore must not trigger token validation.
-    const arabicMapInput = parseGtaIvGxt(rebuildGtaIvGxt(source, [{
+    // A binary GXT unit of 126 must never be decoded as ASCII tilde while
+    // rebuilding and therefore must not trigger token validation.
+    const encodedUnit126 = parseGtaIvGxt(rebuildGtaIvGxt(source, [{
       table: "MAIN",
       crc: 0x00009b22,
       textUnits: new Uint16Array([126]),
     }]));
-    expect(Array.from(arabicMapInput.tables[0].entries[0].textUnits)).toEqual([126]);
+    expect(Array.from(encodedUnit126.tables[0].entries[0].textUnits)).toEqual([126]);
 
     const protectedSource = makeGxt(0x00009b22);
     const sourceView = new DataView(protectedSource);
@@ -194,10 +194,10 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "ادفع 700$ و$20", changed: false, safe: false });
   });
 
-  it("shapes Arabic Presentation Forms into the English v3 MAP input units, not texture slots", () => {
+  it("uses the historical non-crashing recovery units for shaped Arabic Presentation Forms", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
-    expect(Array.from(encoded.textUnits)).toEqual([203, 165, 130, 119, 136]);
+    expect(Array.from(encoded.textUnits)).toEqual([410, 228, 193, 123, 199]);
   });
 
   it("keeps GTA IV runtime tokens byte-for-byte while encoding Arabic prose", () => {
@@ -285,7 +285,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     });
     expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
     const output = parseGtaIvGxt(result.buffer);
-    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([203, 165, 130, 119, 136]);
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([410, 228, 193, 123, 199]);
   });
 
 });

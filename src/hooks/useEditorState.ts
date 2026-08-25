@@ -43,7 +43,7 @@ import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
 import { analyzeKHBBSCTDText, type KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
 import { categorizeGtaIvEntry } from "@/lib/gtaiv/gtaiv-categories";
-import { validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { analyzeGtaIvUnsupportedCharacters, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence, type GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
 
 /** Below the 40-char dialogue-box limit, to also catch texts that would wrap in the narrower item/book boxes. */
 const LONG_TEXT_LINE_THRESHOLD = 35;
@@ -749,6 +749,35 @@ export function useEditorState() {
   const khbbsUnsupportedKeys = khbbsUnsupportedReport.keys;
   const khbbsUnsupportedCount = khbbsUnsupportedKeys.size;
 
+  // GTA IV: use the exact post-shaping font check used by the GXT builder.
+  const gtaIvUnsupportedReport = useMemo(() => {
+    const keys = new Set<string>();
+    const characters = new Map<string, GtaIvUnsupportedCharacter>();
+    if (!state) return { keys, characters: [] as GtaIvUnsupportedCharacter[] };
+
+    for (const entry of state.entries) {
+      if (!entry.msbtFile.startsWith("gtaiv/")) continue;
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key] || "";
+      if (!translation.trim()) continue;
+      const unsupported = analyzeGtaIvUnsupportedCharacters(translation).unsupported;
+      if (unsupported.length === 0) continue;
+      keys.add(key);
+      for (const item of unsupported) {
+        const previous = characters.get(item.unicode);
+        characters.set(item.unicode, previous
+          ? { ...previous, count: previous.count + item.count }
+          : { ...item });
+      }
+    }
+    return {
+      keys,
+      characters: [...characters.values()].sort((a, b) => b.count - a.count || a.unicode.localeCompare(b.unicode)),
+    };
+  }, [state?.entries, state?.translations]);
+  const gtaIvUnsupportedKeys = gtaIvUnsupportedReport.keys;
+  const gtaIvUnsupportedCount = gtaIvUnsupportedKeys.size;
+
   // === Deep diagnostic counts — uses shared predicates so the dropdown
   // badge count is GUARANTEED to match the filteredEntries length. ===
   const deepDiagnosticCounts = useMemo(() => {
@@ -871,6 +900,7 @@ export function useEditorState() {
         (filterStatus === "fuzzy" && !!(state.fuzzyScores?.[key])) ||
         (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && measureEntryBytes(e.msbtFile, translation) > e.maxBytes) ||
         (filterStatus === "khbbs-unsupported" && khbbsUnsupportedKeys.has(key)) ||
+        (filterStatus === "gtaiv-unsupported" && gtaIvUnsupportedKeys.has(key)) ||
         (filterStatus === "has-newlines" && e.original.includes('\n')) ||
         // ترجمات تحوي حرف \n (literal newline). يفحص الترجمة فقط،
         // لا يتفاعل مع [XENO:n] (8 أحرف ASCII). يعرض أي ترجمة فيها السهم ↵.
@@ -891,7 +921,7 @@ export function useEditorState() {
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
       return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenSection;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys]);
 
   useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection]);
 
@@ -1811,7 +1841,7 @@ export function useEditorState() {
     advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing,
     glossaryComplianceResults, checkingGlossaryCompliance,
     isSearchPinned, pinnedKeys, setPinnedKeys, setIsSearchPinned,
-    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
+    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, gtaIvUnsupportedCount, gtaIvUnsupportedCharacters: gtaIvUnsupportedReport.characters, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     deepDiagnosticCounts,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
     ...glossary,

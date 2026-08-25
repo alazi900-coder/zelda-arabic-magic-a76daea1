@@ -128,6 +128,22 @@ export interface GtaIvDollarAmountRepair {
   reason?: string;
 }
 
+export interface GtaIvUnsupportedCharacter {
+  /** The literal character as it appears after GTA IV Arabic shaping. */
+  character: string;
+  /** Unicode identifier, including non-BMP symbols when applicable. */
+  unicode: string;
+  /** Number of appearances across the analyzed text. */
+  count: number;
+}
+
+export interface GtaIvUnsupportedCharacterAnalysis {
+  /** The text after Arabic shaping and protected-dollar restoration. */
+  processedText: string;
+  /** Characters that cannot be emitted by the audited English v3 font. */
+  unsupported: GtaIvUnsupportedCharacter[];
+}
+
 const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
@@ -182,6 +198,42 @@ export interface GtaIvArabicEncoding {
   textUnits: Uint16Array;
 }
 
+function isGtaIvEnglishV3CharacterSupported(char: string): boolean {
+  const code = char.codePointAt(0) ?? 0;
+  if (code >= 0xfe70 && code <= 0xfeff) {
+    return gtaIvPresentationFormUnits[code - 0xfe70] !== undefined;
+  }
+  return code > 0 && code <= 0x7f;
+}
+
+/**
+ * Applies the exact preparation used by the GTA IV builder, then reports every
+ * remaining character that cannot be represented by the audited English v3
+ * font. It is safe to call while editing: it never validates or mutates text.
+ */
+export function analyzeGtaIvUnsupportedCharacters(translation: string): GtaIvUnsupportedCharacterAnalysis {
+  const pieces = translation.split(/(~[^~]+~)/g);
+  const processedText = pieces.map((piece, index) => (
+    index % 2 === 1 ? piece : processGtaIvArabicPiece(piece)
+  )).join("");
+  const unsupported = new Map<string, GtaIvUnsupportedCharacter>();
+
+  for (const char of processedText) {
+    if (isGtaIvEnglishV3CharacterSupported(char)) continue;
+    const codePoint = char.codePointAt(0) ?? 0;
+    const unicode = `U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}`;
+    const previous = unsupported.get(unicode);
+    unsupported.set(unicode, previous
+      ? { ...previous, count: previous.count + 1 }
+      : { character: char, unicode, count: 1 });
+  }
+
+  return {
+    processedText,
+    unsupported: [...unsupported.values()].sort((left, right) => left.unicode.localeCompare(right.unicode)),
+  };
+}
+
 function fail(message: string): never {
   throw new Error(`ملف GTA IV غير صالح: ${message}`);
 }
@@ -232,10 +284,11 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
   const dollarValidation = validateGtaIvDollarAmountSequence(sourceText, translation);
   if (!dollarValidation.valid) fail(`مبالغ الدولار غير محفوظة: ${dollarValidation.reason}`);
 
-  const pieces = translation.split(/(~[^~]+~)/g);
-  const processedText = pieces.map((piece, index) => (
-    index % 2 === 1 ? piece : processGtaIvArabicPiece(piece)
-  )).join("");
+  const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(translation);
+  if (unsupported.length > 0) {
+    const first = unsupported[0];
+    fail(`المحرف «${first.character}» (${first.unicode}) غير مدعوم في خط GTA IV English المعدل.`);
+  }
   const units: number[] = [];
 
   for (const char of processedText) {

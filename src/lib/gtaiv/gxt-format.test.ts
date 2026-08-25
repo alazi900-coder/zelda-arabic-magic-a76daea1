@@ -11,6 +11,7 @@ import {
   reconcileGtaIvOxtWithGxt,
   repairGtaIvDollarAmountSequence,
   repairGtaIvRuntimeTokenSequence,
+  analyzeGtaIvUnsupportedCharacters,
   validateGtaIvDollarAmountSequence,
   validateGtaIvRuntimeTokenSequence,
 } from "./gxt-format";
@@ -148,6 +149,15 @@ describe("GTA IV GXT/OXT structural reader", () => {
 
   it("refuses an Arabic character not represented by English v3", () => {
     expect(() => encodeGtaIvArabicText("", "پ")).toThrow("غير مدعوم");
+  });
+
+  it("reports each unsupported GTA IV English-font character with its code point and count", () => {
+    const report = analyzeGtaIvUnsupportedCharacters("قال «نعم» ثم «لا» ☃");
+    expect(report.unsupported).toEqual([
+      { character: "«", unicode: "U+00AB", count: 2 },
+      { character: "»", unicode: "U+00BB", count: 2 },
+      { character: "☃", unicode: "U+2603", count: 1 },
+    ]);
   });
 
   it("builds american.gxt from the shared editor identity and re-parses the encoded row", () => {

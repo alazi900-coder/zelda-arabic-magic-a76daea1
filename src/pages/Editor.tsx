@@ -713,6 +713,10 @@ const Editor = () => {
             khbbsUnsupportedCharacters={editor.khbbsUnsupportedCharacters}
             khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}
             onFilterKHBBSUnsupported={() => editor.setFilterStatus(editor.filterStatus === "khbbs-unsupported" ? "all" : "khbbs-unsupported")}
+            gtaIvUnsupportedCount={editor.gtaIvUnsupportedCount}
+            gtaIvUnsupportedCharacters={editor.gtaIvUnsupportedCharacters}
+            gtaIvUnsupportedFilterActive={editor.filterStatus === "gtaiv-unsupported"}
+            onFilterGtaIvUnsupported={() => editor.setFilterStatus(editor.filterStatus === "gtaiv-unsupported" ? "all" : "gtaiv-unsupported")}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

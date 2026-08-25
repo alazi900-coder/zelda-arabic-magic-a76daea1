@@ -24,6 +24,7 @@ import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 import type { KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
+import type { GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -51,6 +52,10 @@ interface EditorBuildSectionProps {
   khbbsUnsupportedCharacters?: KHBBSUnsupportedCharacter[];
   khbbsUnsupportedFilterActive?: boolean;
   onFilterKHBBSUnsupported?: () => void;
+  gtaIvUnsupportedCount?: number;
+  gtaIvUnsupportedCharacters?: GtaIvUnsupportedCharacter[];
+  gtaIvUnsupportedFilterActive?: boolean;
+  onFilterGtaIvUnsupported?: () => void;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -74,6 +79,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   khbbsUnsupportedCharacters = [],
   khbbsUnsupportedFilterActive = false,
   onFilterKHBBSUnsupported,
+  gtaIvUnsupportedCount = 0,
+  gtaIvUnsupportedCharacters = [],
+  gtaIvUnsupportedFilterActive = false,
+  onFilterGtaIvUnsupported,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -617,6 +626,38 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
                     <span>الرموز:</span>
                     {khbbsUnsupportedCharacters.map((item) => (
+                      <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="ltr">
+                        «{item.character}» {item.unicode}{item.count > 1 ? ` ×${item.count}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {isGtaIv && (
+              <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={gtaIvUnsupportedFilterActive ? "secondary" : "outline"}
+                  onClick={onFilterGtaIvUnsupported}
+                  disabled={!gtaIvUnsupportedFilterActive && gtaIvUnsupportedCount === 0}
+                  className="font-body gap-1 shrink-0"
+                  title={gtaIvUnsupportedFilterActive
+                    ? "يلغي فلتر GTA IV ويعيد عرض كل النصوص في المحرر"
+                    : gtaIvUnsupportedCount > 0
+                      ? "يعرض النصوص التي تحتوي محارف غير موجودة في خط GTA IV English المعدل فقط"
+                      : "لا توجد محارف غير مدعومة في الترجمات الحالية"}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  {gtaIvUnsupportedFilterActive
+                    ? "إظهار كل النصوص"
+                    : `عرض محارف GTA IV غير المدعومة (${gtaIvUnsupportedCount})`}
+                </Button>
+                {gtaIvUnsupportedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
+                    <span>المحارف:</span>
+                    {gtaIvUnsupportedCharacters.map((item) => (
                       <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="ltr">
                         «{item.character}» {item.unicode}{item.count > 1 ? ` ×${item.count}` : ""}
                       </span>

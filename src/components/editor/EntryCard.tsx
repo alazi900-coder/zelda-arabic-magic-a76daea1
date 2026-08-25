@@ -23,6 +23,7 @@ import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { computeConfidence, detectLiteralTranslation } from "./TranslationProgressDashboard";
+import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
 
 /** Format a tag list as "<Exit>×2، <Attack>" for display in the Risen tag-diff badge. */
 function formatTagCounts(tags: string[]): string {
@@ -33,6 +34,9 @@ function formatTagCounts(tags: string[]): string {
 
 /** Classify a tag token for color-coding */
 function getTagDisplayInfo(tag: string): { label: string; color: string; title: string } {
+  if (/^~n~$/i.test(tag)) {
+    return { label: "↵ ~n~", color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/25', title: 'فاصل سطر GTA IV — يُحفظ ~n~ في الملف ويُعرض كسطر حقيقي هنا' };
+  }
   // GTA IV input / runtime token: ~PAD_X~, ~MOUSE_WHEEL~, ~n~, etc.
   if (/^~[^~\r\n]+~$/.test(tag)) {
     return { label: tag, color: 'bg-violet-500/15 text-violet-400 border-violet-500/25', title: 'وسم تحكم GTA IV — لا تحذفه ولا تترجمه ولا تغيّر ترتيبه' };
@@ -231,6 +235,9 @@ const EntryCard: React.FC<EntryCardProps> = ({
   legacyCommaSplitEnabled, extraToolButtons, risenVariant,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
+  const isGtaIvEntry = entry.msbtFile.startsWith("gtaiv/");
+  const editorOriginal = isGtaIvEntry ? gtaIvRuntimeTextToEditorText(entry.original) : entry.original;
+  const editorTranslation = isGtaIvEntry ? gtaIvRuntimeTextToEditorText(translation) : translation;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
   const gameParam = resolveGameParam(entry.msbtFile, risenVariant);
   const isTech = isTechnicalText(entry.original, entry.msbtFile);
@@ -346,7 +353,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
             }
             return <p className="text-xs text-muted-foreground mb-1 truncate">{entry.msbtFile} • {entry.label}</p>;
           })()}
-          <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'isolate' }}><HighlightedOriginal text={entry.original} /></p>
+          <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'isolate' }}><HighlightedOriginal text={editorOriginal} /></p>
           {hasTechnicalTags(entry.original, entry.msbtFile) && (
             <p className="text-[10px] text-muted-foreground mb-2 leading-relaxed">
               💡 الرموز الملونة أكواد خاصة بمحرك اللعبة — <span className="font-semibold text-accent">لا تحذفها من الترجمة</span>
@@ -374,9 +381,9 @@ const EntryCard: React.FC<EntryCardProps> = ({
               ))}
             </div>
           )}
-          {entry.original.includes('\n') && (() => {
-            const origLineCount = countLines(entry.original);
-            const trLineCount = translation?.trim() ? countLines(translation) : null;
+          {editorOriginal.includes('\n') && (() => {
+            const origLineCount = countLines(editorOriginal);
+            const trLineCount = editorTranslation?.trim() ? countLines(editorTranslation) : null;
             // Live feedback: green once the draft's line count matches the
             // original, red/warning while it differs, neutral before any draft.
             const colorClass = trLineCount === null
@@ -609,17 +616,17 @@ const EntryCard: React.FC<EntryCardProps> = ({
           <div className={`flex ${isMobile ? 'flex-col' : 'items-center'} gap-2`}>
             <div className="flex-1 w-full min-w-0">
               <DebouncedInput
-                value={translation}
-                onChange={(val) => updateTranslation(key, val)}
+                value={editorTranslation}
+                onChange={(val) => updateTranslation(key, isGtaIvEntry ? gtaIvRuntimeTextToEditorText(val) : val)}
                 placeholder="أدخل الترجمة... (اضغط ✓ أو Ctrl+Enter للحفظ)"
                 className="flex-1 w-full px-3 py-2 rounded bg-background border border-border font-body text-sm"
                 multiline
                 noSoftWrap
                 manualCommit
               />
-              {translation?.trim() && (
+              {editorTranslation?.trim() && (
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 px-1" dir="ltr">
-                  {translation.split('\n').map((line, i, arr) => {
+                  {editorTranslation.split('\n').map((line, i, arr) => {
                     const vLen = visualLength(line);
                     return (
                       <span

@@ -78,6 +78,15 @@ describe("Deep diagnostic translated tag deduping", () => {
     expect(categories).not.toContain("missing_rlm_isolation");
   });
 
+  it("flags a GTA IV ~n~ that has not been expanded to an editor line", () => {
+    const entry = { ...makeEntry("Hello ~n~ world"), msbtFile: "gtaiv/MAIN" };
+
+    expect(detectIssues(entry, "مرحبا ~n~ بالعالم").map(issue => issue.category))
+      .toContain("gtaiv_line_break_display");
+    expect(detectIssues(entry, "مرحبا ~n~\nبالعالم").map(issue => issue.category))
+      .not.toContain("gtaiv_line_break_display");
+  });
+
   it("accepts matching GTA IV tokens and identifies missing or lone tokens as critical", () => {
     const entry = { ...makeEntry("~r~ Hello ~n~"), msbtFile: "gtaiv/MAIN" };
     expect(detectIssues(entry, "~r~ مرحبا ~n~").map(issue => issue.category))
@@ -85,7 +94,7 @@ describe("Deep diagnostic translated tag deduping", () => {
 
     const missing = detectIssues(entry, "~r~ مرحبا").find(issue => issue.category === "gtaiv_runtime_token_mismatch");
     expect(missing?.severity).toBe("critical");
-    expect(missing?.message).toContain("عدد رموز وقت التشغيل تغير");
+    expect(missing?.message).toMatch(/عدد رموز وقت التشغيل تغير|ترتيب أو قيمة رمز وقت التشغيل تغيرت/);
 
     const lone = detectIssues({ ...makeEntry("Hello"), msbtFile: "gtaiv/MAIN" }, "مرحبا ~")
       .find(issue => issue.category === "gtaiv_runtime_token_mismatch");

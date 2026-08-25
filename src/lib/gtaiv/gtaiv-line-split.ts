@@ -4,6 +4,21 @@ import type { ExtractedEntry } from "@/components/editor/types";
 
 export const GTAIV_LINE_BREAK_TOKEN = "~n~";
 
+/**
+ * GTA IV stores a line-break marker inline as `~n~`. The editor deliberately
+ * adds a real newline after that marker so translators get the same visible
+ * line layout as Risen. The marker remains present and is collapsed again at
+ * the GXT-build boundary; a bare user newline is never invented as a token.
+ */
+export function gtaIvRuntimeTextToEditorText(text: string): string {
+  return text.replace(/(~n~)(?:\r\n|\r|\n)?/gi, "$1\n");
+}
+
+/** Converts only the editor-only newline following a GTA IV `~n~` back to GXT syntax. */
+export function gtaIvEditorTextToRuntimeText(text: string): string {
+  return text.replace(/(~n~)(?:\r\n|\r|\n)+/gi, "$1");
+}
+
 export interface GtaIvLineSplitPlan {
   targetKeys: string[];
   updates: Record<string, string>;

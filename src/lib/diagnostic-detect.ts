@@ -23,6 +23,7 @@ import { countMissingTagNewlines } from "@/lib/tag-newline-anchor";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -423,6 +424,16 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   }
 
   // 20. [XENO:n ] not followed by \n
+  // GTA IV keeps its line-break instruction as `~n~` in GXT. In the shared
+  // editor it must visibly become `~n~\n`, otherwise a translator edits one
+  // visual line and loses the source's line structure. This is presentation
+  // normalization only: the builder collapses it back to `~n~`.
+  if (isGtaIv && gtaIvRuntimeTextToEditorText(trimmed) !== trimmed) {
+    const count = (trimmed.match(/~n~(?!\r?\n)/gi) || []).length;
+    issues.push({ ...base, severity: "warning", category: "gtaiv_line_break_display",
+      message: `${count} علامة ~n~ لا تظهر كسطر داخل المحرر — الإصلاح يضيف السطر المرئي فقط ويحفظ ~n~ عند البناء` });
+  }
+
   const xenoNMatches = [...trimmed.matchAll(/\[XENO:n\s*\]/g)];
   if (xenoNMatches.length > 0) {
     const missingNewline = xenoNMatches.filter(m => {

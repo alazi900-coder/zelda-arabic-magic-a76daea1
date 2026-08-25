@@ -10,6 +10,7 @@ import {
   parseGtaIvGxt,
   rebuildGtaIvGxt,
 } from "./gxt-format";
+import { gtaIvEditorTextToRuntimeText } from "./gtaiv-line-split";
 
 export const GTAIV_SOURCE_GAME = "gtaiv";
 export const GTAIV_BUFFER_KEY = "gtaiv:american-gxt-buffer";
@@ -73,8 +74,11 @@ export function buildGtaIvAmericanOutput(
     }
     const key = `${entry.msbtFile}:${entry.index}`;
     const translation = translations[key];
-    if (!translation || translation === entry.original) continue;
-    const encoded = encodeGtaIvArabicText(entry.original, translation);
+    // `~n~\n` exists only to make the editor show GTA IV's explicit break as
+    // a real line. Collapse it here, immediately before GXT encoding.
+    const runtimeTranslation = translation ? gtaIvEditorTextToRuntimeText(translation) : translation;
+    if (!runtimeTranslation || runtimeTranslation === entry.original) continue;
+    const encoded = encodeGtaIvArabicText(entry.original, runtimeTranslation);
     replacements.push({ table: sourceEntry.table, crc: sourceEntry.crc, textUnits: encoded.textUnits });
   }
 

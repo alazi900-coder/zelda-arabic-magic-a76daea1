@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GTAIV_LINE_BREAK_TOKEN, planGtaIvLineJoin, planGtaIvLineSplit } from "@/lib/gtaiv/gtaiv-line-split";
+import { GTAIV_LINE_BREAK_TOKEN, gtaIvEditorTextToRuntimeText, gtaIvRuntimeTextToEditorText, planGtaIvLineJoin, planGtaIvLineSplit } from "@/lib/gtaiv/gtaiv-line-split";
 
 const gtaEntry = (original: string, index = 0) => ({
   msbtFile: "gtaiv/american.gxt",
@@ -28,5 +28,14 @@ describe("GTA IV line-split planner", () => {
     const plan = planGtaIvLineJoin([entry], { "gtaiv/american.gxt:0": "السطر الأول~n~السطر الثاني" });
     expect(plan.targetKeys).toEqual(["gtaiv/american.gxt:0"]);
     expect(plan.updates["gtaiv/american.gxt:0"]).toBe("السطر الأول السطر الثاني");
+  });
+
+  it("shows every GTA IV ~n~ as a real editor line and collapses only that display line at build time", () => {
+    const raw = "الأول~n~الثاني~N~الثالث";
+    const editorText = gtaIvRuntimeTextToEditorText(raw);
+
+    expect(editorText).toBe("الأول~n~\nالثاني~N~\nالثالث");
+    expect(gtaIvEditorTextToRuntimeText(editorText)).toBe("الأول~n~الثاني~N~الثالث");
+    expect(gtaIvEditorTextToRuntimeText("سطر حر\nثانٍ")).toBe("سطر حر\nثانٍ");
   });
 });

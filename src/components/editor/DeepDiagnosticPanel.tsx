@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { fixTagNewlines } from "@/lib/tag-newline-anchor";
 import { countEffectiveLines } from "@/lib/text-tokens";
@@ -87,6 +88,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم أصلية مفقودة فعلياً بعد استثناء الوسوم التي تُرجمت بالخطأ — قد تسبب خلل في العرض" },
   { id: "technical_mismatch", label: "اختلاف الرموز التقنية", icon: "🧷", severity: "critical", description: "مجموعة الرموز التقنية لا تطابق الأصل بدقة حتى لو كان العدد متساوياً — قد تسبب تجمّد اللعبة" },
   { id: "gtaiv_runtime_token_mismatch", label: "رموز GTA IV بين ~...~", icon: "🛡️", severity: "critical", description: "رموز GTA IV بين ~...~ ناقصة أو زائدة أو تغيّرت قيمتها/ترتيبها أو تحتوي ~ منفردة؛ البناء يرفضها. الإصلاح التلقائي يستبدل الرموز فقط عندما تكون مواضعها مكتملة ومتساوية." },
+  { id: "gtaiv_line_break_display", label: "سهم كسر سطر GTA IV", icon: "↵", severity: "warning", description: "علامة ~n~ موجودة بلا سطر محرر بعدها. الإصلاح يضيف السطر المرئي فقط ويعيد الباني حفظ ~n~ داخل GXT." },
   { id: "gtaiv_dollar_amount_mismatch", label: "صيغة أو مبلغ دولار GTA IV", icon: "💵", severity: "critical", description: "سعر ظاهر مثل $100 أو $20m حُذف أو تغيّرت قيمته أو ترتيبه، أو كتبته خدمة ترجمة بصيغة 700$/٧٠٠ دولار. الإصلاح يحوّل فقط الصيغة المطابقة للقيمة والترتيب إلى حرفية الأصل مثل $700؛ لا يخمن قيمة مختلفة." },
   { id: "tag_order_mismatch", label: "ترتيب الوسوم مقلوب", icon: "🔀", severity: "critical", description: "الوسوم التقنية موجودة لكن بترتيب مختلف عن الأصل — يسبب تجمّد المشاهد السينمائية" },
   { id: "placeholder_mismatch", label: "عناصر نائبة مفقودة", icon: "⬛", severity: "warning", description: "رموز \uFFFC نائبة مفقودة — قد تسبب خلل في الواجهة" },
@@ -147,6 +149,7 @@ const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", 
 // GTA IV uses `~...~` runtime tokens plus protected visible dollar amounts.
 // This path only restores complete matching slots; it never restores English.
 const GTAIV_TOKEN_FIXABLE_CATEGORIES = new Set(["gtaiv_runtime_token_mismatch", "gtaiv_dollar_amount_mismatch"]);
+const GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES = new Set(["gtaiv_line_break_display"]);
 const repairGtaIvProtectedSequence = (category: string, original: string, candidate: string) => (
   category === "gtaiv_dollar_amount_mismatch"
     ? repairGtaIvDollarAmountSequence(original, candidate)
@@ -178,7 +181,7 @@ const RISEN_TAG_FIXABLE_CATEGORIES = new Set(["risen_tag_mismatch"]);
  */
 const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -364,6 +367,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       };
     }
 
+    if (GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES.has(issue.category)) {
+      const fixed = gtaIvRuntimeTextToEditorText(trans);
+      return {
+        fixResult: fixed,
+        reason: fixed !== trans
+          ? '↵ سيظهر كل ~n~ كسطر محرر، وسيعاد حفظه ~n~ عند بناء GXT'
+          : '⚠️ لا توجد علامة ~n~ تحتاج سطراً مرئياً',
+      };
+    }
+
     if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
       const safeRepair = getSafeTagRepair(entry, trans);
       if (!safeRepair.changed) {
@@ -501,6 +514,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
+    if (GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES.has(issue.category) && onApplyFix) {
+      const fixed = gtaIvRuntimeTextToEditorText(issue.translation);
+      if (fixed !== issue.translation) onApplyFix(issue.key, fixed);
+      toast({ title: '↵ كسر سطر GTA IV', description: 'أضيف السطر المرئي بعد ~n~؛ سيُحفظ الرمز نفسه عند البناء' });
+      return;
+    }
+
     if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
       if (onApplyFix) {
         const safeRepair = getSafeTagRepair(entry, issue.translation);
@@ -626,6 +646,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         title: count > 0 ? '🛡️ إصلاح GTA IV آمن' : '⚠️ لا توجد إصلاحات آمنة',
         description: `تم إصلاح القيمة المحمية فقط في ${count} نص${requiresReview > 0 ? ` — ${requiresReview} نص يحتاج مراجعة يدوية` : ''}`,
       });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
+
+    if (GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
+      for (const key of uniqueKeys) {
+        const trans = state.translations[key];
+        if (!trans) continue;
+        const fixed = gtaIvRuntimeTextToEditorText(trans);
+        if (fixed !== trans) updates[key] = fixed;
+      }
+      const count = applyBatchUpdates(updates);
+      toast({ title: '↵ كسر سطر GTA IV', description: `أضيف السطر المرئي بعد ~n~ في ${count} نص` });
       setTimeout(() => runScan(true), 250);
       return;
     }
@@ -820,7 +854,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const processedKeys = new Set<string>();
     const tagFixKeys: string[] = [];
     const reportEntries: FixReportEntry[] = [];
-    const counters = { restore: 0, strip: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0, gtaIv: 0, gtaIvNeedsReview: 0, rlm: 0, risenTag: 0 };
+    const counters = { restore: 0, strip: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0, gtaIv: 0, gtaIvLines: 0, gtaIvNeedsReview: 0, rlm: 0, risenTag: 0 };
 
     const totalToProcess = allFixableIssues.length;
     toast({
@@ -854,6 +888,22 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: `⚠️ لم يُطبّق تخمين على قيمة GTA IV الناقصة/الزائدة أو التالفة: ${repaired.reason ?? 'مراجعة يدوية مطلوبة'}`, before: trans, after: trans });
             } else {
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ لا توجد قيمة GTA IV مكتملة مختلفة قابلة للإصلاح', before: trans, after: trans });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
+
+        if (GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES.has(issue.category)) {
+          const trans = state.translations[issue.key];
+          if (trans) {
+            const fixed = gtaIvRuntimeTextToEditorText(trans);
+            if (fixed !== trans) {
+              updates[issue.key] = fixed;
+              counters.gtaIvLines++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '↵ أضيف السطر المرئي بعد ~n~؛ سيُحفظ الرمز نفسه في GXT', before: trans, after: fixed });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ علامة ~n~ معروضة كسطر بالفعل', before: trans, after: trans });
             }
           }
           processedKeys.add(issue.key);

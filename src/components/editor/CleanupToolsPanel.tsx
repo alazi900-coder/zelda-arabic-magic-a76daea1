@@ -51,7 +51,6 @@ const CATEGORY_META: Record<
   escape_seq: { label: "تسلسلات هروب \\xNN", emoji: "🪄", tone: "text-pink-400" },
   pua_chars: { label: "أحرف PUA (أيقونات)", emoji: "🎴", tone: "text-amber-400" },
   control_chars: { label: "أحرف تحكم / BiDi", emoji: "🧭", tone: "text-orange-400" },
-  uppercase_tokens: { label: "كلمات بأحرف كبيرة", emoji: "🔠", tone: "text-yellow-400" },
   dollar_vars: { label: "متغيرات $N / $name", emoji: "💲", tone: "text-emerald-400" },
   percent_vars: { label: "محددات تنسيق %s %d", emoji: "📐", tone: "text-teal-400" },
 };

@@ -18,14 +18,13 @@ describe("tag-extractor: paired_tags aggregation", () => {
 });
 
 describe("tag-extractor: cross-category double counting", () => {
-  it("does not count the same paired-tag span again under bracket_tags or uppercase_tokens", async () => {
+  it("does not count the same paired-tag span again under bracket_tags", async () => {
     const entries: ExtractorEntry[] = [
       { msbtFile: "a.msbt", original: "[System:FAT]hi[/System:FAT]" },
     ];
     const report = await extractTags(entries);
     expect(report.categories.paired_tags.size).toBe(1);
     expect(report.categories.bracket_tags.size).toBe(0);
-    expect(report.categories.uppercase_tokens.size).toBe(0);
   });
 
   it("still reports a standalone bracket tag that is NOT part of a pair", async () => {
@@ -37,12 +36,13 @@ describe("tag-extractor: cross-category double counting", () => {
     expect(report.categories.bracket_tags.size).toBe(1);
   });
 
-  it("still reports an uppercase token that appears outside any tag", async () => {
+  it("does not report standalone uppercase words as technical tags", async () => {
     const entries: ExtractorEntry[] = [
-      { msbtFile: "a.msbt", original: "Your EXP has increased" },
+      { msbtFile: "a.msbt", original: "NEW GAME — EXP HAS INCREASED" },
     ];
     const report = await extractTags(entries);
-    expect(report.categories.uppercase_tokens.size).toBe(1);
+    expect(Object.keys(report.categories)).not.toContain("uppercase_tokens");
+    expect(Object.values(report.categories).every((category) => category.size === 0)).toBe(true);
   });
 });
 
@@ -117,7 +117,6 @@ describe("tag-extractor: basic sanity", () => {
     expect(report.categories.html_like.size).toBeGreaterThan(0);
     expect(report.categories.dollar_vars.size).toBe(1);
     expect(report.categories.escape_seq.size).toBe(1);
-    expect(report.categories.uppercase_tokens.size).toBe(1);
   });
 
   it("never throws on empty/undefined originals and reports scannedEntries correctly", async () => {

@@ -32,7 +32,6 @@ const CATEGORIES = [
   "escape_seq",        // \xNN, \uNNNN, \n, \t
   "pua_chars",         // U+E000..U+E0FF (matches the real protection range in xc3-tag-protection.ts)
   "control_chars",     // U+FFF9..U+FFFC, BiDi marks
-  "uppercase_tokens",  // FAT, EXP, ABCDEF (≥2 uppercase letters, standalone)
   "dollar_vars",       // $1, $2, $name
   "percent_vars",      // %s, %d, %1$s
 ] as const;
@@ -50,7 +49,6 @@ const PATTERNS: Record<Category, RegExp> = {
   escape_seq: /\\[xu][0-9A-Fa-f]{2,8}|\\[ntr0]/g,
   pua_chars: /[\uE000-\uE0FF]+/g,
   control_chars: /[\uFFF9-\uFFFC\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
-  uppercase_tokens: /(?<![A-Za-z])[A-Z]{2,10}(?![A-Za-z])/g,
   dollar_vars: /\$\w+/g,
   percent_vars: /%[\d.$-]*[sdif]/g,
 };
@@ -58,7 +56,7 @@ const PATTERNS: Record<Category, RegExp> = {
 // Priority order for cross-category de-duplication: when two categories'
 // patterns both match overlapping text (e.g. paired_tags' full
 // "[Tag]...[/Tag]" span also matches bracket_tags' single-bracket pattern,
-// and uppercase_tokens matches inner text of any of the above), the first
+// and a nested pattern matches inner text of any of the above), the first
 // category in this list to claim a span wins; the same span is skipped by
 // every later category so the same token isn't reported 2-3x over.
 const SCAN_PRIORITY: Category[] = [
@@ -69,7 +67,6 @@ const SCAN_PRIORITY: Category[] = [
   "escape_seq",
   "pua_chars",
   "control_chars",
-  "uppercase_tokens",
   "dollar_vars",
   "percent_vars",
 ];
@@ -197,7 +194,6 @@ const CATEGORY_LABELS: Record<Category, string> = {
   escape_seq: "Escape Sequences \\xNN \\uNNNN",
   pua_chars: "PUA Characters (U+E000..U+E0FF) — likely icons",
   control_chars: "Control / BiDi Characters",
-  uppercase_tokens: "Uppercase Tokens (potential abbreviations or leaked tag names)",
   dollar_vars: "Dollar Variables $N / $name",
   percent_vars: "Percent Format Specifiers %s %d",
 };

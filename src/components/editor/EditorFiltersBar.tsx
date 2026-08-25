@@ -5,6 +5,7 @@ import DebouncedInput from "@/components/editor/DebouncedInput";
 import TableFilterTree from "@/components/editor/TableFilterTree";
 import { type FilterStatus, type FilterTechnical } from "@/components/editor/types";
 import RisenLineSplitTool from "@/components/editor/RisenLineSplitTool";
+import GtaIvLineSplitTool from "@/components/editor/GtaIvLineSplitTool";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 // تصنيف وتنقّل الجداول صار في `TableFilterTree` (شجرة قابلة للطي بدل قائمة مسطّحة).
@@ -60,6 +61,7 @@ interface EditorFiltersBarProps {
   showDiffView: boolean;
   setShowDiffView: (v: boolean) => void;
   isRisen?: boolean;
+  isGtaIv?: boolean;
 }
 
 const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
@@ -67,6 +69,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
   isMobile,
   showDiffView,
   isRisen = false,
+  isGtaIv = false,
   setShowDiffView,
 }) => {
   /** حذف ترجمات كل المدخلات التي تنتمي لقائمة جداول معيّنة. */
@@ -131,6 +134,14 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
       </Button>
       {isRisen && !isMobile && (
         <RisenLineSplitTool
+          filteredEntries={editor.filteredEntries}
+          translations={editor.state?.translations || {}}
+          updateTranslationsBatch={editor.updateTranslationsBatch}
+          onFilterByKeys={focusKeys}
+        />
+      )}
+      {isGtaIv && !isMobile && (
+        <GtaIvLineSplitTool
           filteredEntries={editor.filteredEntries}
           translations={editor.state?.translations || {}}
           updateTranslationsBatch={editor.updateTranslationsBatch}
@@ -207,6 +218,14 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
       <div className="mt-3 flex flex-col gap-2">
         {isRisen && (
           <RisenLineSplitTool
+            filteredEntries={editor.filteredEntries}
+            translations={editor.state?.translations || {}}
+            updateTranslationsBatch={editor.updateTranslationsBatch}
+            onFilterByKeys={focusKeys}
+          />
+        )}
+        {isGtaIv && (
+          <GtaIvLineSplitTool
             filteredEntries={editor.filteredEntries}
             translations={editor.state?.translations || {}}
             updateTranslationsBatch={editor.updateTranslationsBatch}

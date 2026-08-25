@@ -95,9 +95,11 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(() => rebuildGtaIvGxt(protectedSource, [{ table: "MAIN", crc: 0x00009b22, textUnits: new Uint16Array([0x41]) }])).toThrow("رموز وقت التشغيل غير محفوظة");
   });
 
-  it("requires exact ordered GTA IV runtime tokens and rejects a lone tilde", () => {
+  it("keeps source GTA IV runtime tokens ordered, permits added ~n~, and rejects a lone tilde", () => {
     expect(validateGtaIvRuntimeTokenSequence("~x~ Hello ~n~~z~", "~x~ نص ~n~~z~")).toMatchObject({ valid: true });
     expect(validateGtaIvRuntimeTokenSequence("~x~ Hello ~n~~z~", "~x~ نص ~z~~n~")).toMatchObject({ valid: false });
+    expect(validateGtaIvRuntimeTokenSequence("~r~ Hello ~z~", "~r~ مرحبا ~n~ بالعالم ~z~")).toMatchObject({ valid: true });
+    expect(validateGtaIvRuntimeTokenSequence("~r~ Hello ~z~", "~r~ مرحبا ~g~ بالعالم ~z~")).toMatchObject({ valid: false });
     expect(validateGtaIvRuntimeTokenSequence("Hello", "نص ~")).toMatchObject({ valid: false });
   });
 
@@ -107,7 +109,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(repairGtaIvRuntimeTokenSequence("~r~ Hello ~n~", "مرحبا ~n~"))
       .toMatchObject({ text: "مرحبا ~n~", changed: false, safe: false });
     expect(repairGtaIvRuntimeTokenSequence("~r~ Hello", "~r~ مرحبا ~n~"))
-      .toMatchObject({ text: "~r~ مرحبا ~n~", changed: false, safe: false });
+      .toMatchObject({ text: "~r~ مرحبا ~n~", changed: false, safe: true });
     expect(repairGtaIvRuntimeTokenSequence("Hello", "مرحبا ~"))
       .toMatchObject({ text: "مرحبا ~", changed: false, safe: false });
   });
@@ -194,6 +196,13 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(encoded.processedText).toContain("~n~");
     expect(gtaIvRawUnitsToString(encoded.textUnits)).toMatch(/^~r~.*~n~$/);
     expect(Array.from(encoded.textUnits.slice(0, 3))).toEqual([0x7e, 0x72, 0x7e]);
+  });
+
+  it("encodes an editor-added GTA IV ~n~ marker while retaining source tokens", () => {
+    const encoded = encodeGtaIvArabicText("~r~ Hello ~z~", "~r~ مرحبا ~n~ بالعالم ~z~");
+    expect(encoded.processedText).toContain("~r~");
+    expect(encoded.processedText).toContain("~n~");
+    expect(encoded.processedText).toContain("~z~");
   });
 
   it("keeps a protected dollar amount readable as $100 while encoding Arabic prose", () => {

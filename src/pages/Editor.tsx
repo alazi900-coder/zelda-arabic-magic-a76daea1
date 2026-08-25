@@ -575,6 +575,7 @@ const Editor = () => {
             showDiffView={showDiffView}
             setShowDiffView={setShowDiffView}
             isRisen={isRisenEntries}
+            isGtaIv={isGtaIvEntries}
           />
 
           {/* Needs Improvement Badges */}

@@ -702,9 +702,10 @@ function extractRuntimeTokens(value: string): { tokens: string[]; error?: string
 }
 
 /**
- * Requires all GTA IV `~...~` runtime/control tokens to remain present in the
- * same order and spelling. A lone tilde is rejected because it can destabilize
- * GTA IV text handling.
+ * Requires all GTA IV `~...~` runtime/control tokens from the source to remain
+ * present in the same order and spelling. Extra `~n~` markers are accepted so
+ * the editor's GTA IV line-split tool can add and later remove line separators;
+ * no other new runtime token is accepted. A lone tilde is always rejected.
  */
 export function validateGtaIvRuntimeTokenSequence(source: string, candidate: string): GtaIvRuntimeTokenValidation {
   const sourceResult = extractRuntimeTokens(source);
@@ -714,11 +715,16 @@ export function validateGtaIvRuntimeTokenSequence(source: string, candidate: str
 
   if (sourceResult.error) return { valid: false, sourceTokens, candidateTokens, reason: `النص الأصلي: ${sourceResult.error}` };
   if (candidateResult.error) return { valid: false, sourceTokens, candidateTokens, reason: `النص المعدل: ${candidateResult.error}` };
-  if (sourceTokens.length !== candidateTokens.length) {
-    return { valid: false, sourceTokens, candidateTokens, reason: "عدد رموز وقت التشغيل تغير." };
+  let candidateIndex = 0;
+  for (const sourceToken of sourceTokens) {
+    const matchedAt = candidateTokens.indexOf(sourceToken, candidateIndex);
+    if (matchedAt === -1 || candidateTokens.slice(candidateIndex, matchedAt).some((token) => token !== "~n~")) {
+      return { valid: false, sourceTokens, candidateTokens, reason: "ترتيب أو قيمة رمز وقت التشغيل تغيرت." };
+    }
+    candidateIndex = matchedAt + 1;
   }
-  if (sourceTokens.some((token, index) => token !== candidateTokens[index])) {
-    return { valid: false, sourceTokens, candidateTokens, reason: "ترتيب أو قيمة رمز وقت التشغيل تغيرت." };
+  if (candidateTokens.slice(candidateIndex).some((token) => token !== "~n~")) {
+    return { valid: false, sourceTokens, candidateTokens, reason: "عدد رموز وقت التشغيل تغير." };
   }
   return { valid: true, sourceTokens, candidateTokens };
 }

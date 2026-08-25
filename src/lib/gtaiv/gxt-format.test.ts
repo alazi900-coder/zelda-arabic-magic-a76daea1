@@ -217,6 +217,16 @@ describe("GTA IV GXT/OXT structural reader", () => {
     ]);
   });
 
+  it("preserves a verified Latin-1 glyph from the same English source row but refuses a new one", () => {
+    expect(analyzeGtaIvUnsupportedCharacters("حقوق ©", "Copyright ©").unsupported).toEqual([]);
+    expect(analyzeGtaIvUnsupportedCharacters("حقوق ©", "Copyright").unsupported).toEqual([
+      { character: "©", unicode: "U+00A9", count: 1 },
+    ]);
+    const encoded = encodeGtaIvArabicText("Copyright ©", "حقوق ©");
+    expect(Array.from(encoded.textUnits)).toContain(0x00a9);
+    expect(() => encodeGtaIvArabicText("Copyright", "حقوق ©")).toThrow("U+00A9");
+  });
+
   it("builds american.gxt from the shared editor identity and re-parses the encoded row", () => {
     const source = makeGxt(0x00009b22);
     const imported = extractGtaIvEntries(source);

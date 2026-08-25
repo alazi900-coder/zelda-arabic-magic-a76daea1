@@ -716,7 +716,27 @@ const Editor = () => {
             gtaIvUnsupportedCount={editor.gtaIvUnsupportedCount}
             gtaIvUnsupportedCharacters={editor.gtaIvUnsupportedCharacters}
             gtaIvUnsupportedFilterActive={editor.filterStatus === "gtaiv-unsupported"}
-            onFilterGtaIvUnsupported={() => editor.setFilterStatus(editor.filterStatus === "gtaiv-unsupported" ? "all" : "gtaiv-unsupported")}
+            onFilterGtaIvUnsupported={() => {
+              if (editor.filterStatus === "gtaiv-unsupported") {
+                editor.setFilterStatus("all");
+                return;
+              }
+              // This is a direct "show the affected rows" action. Leaving an
+              // old category, file, search, technical or pinned filter in place
+              // produced an empty list although the GTA IV report had rows.
+              editor.setSearch("");
+              editor.setFilterFile("all");
+              editor.setFilterCategory([]);
+              editor.setFilterTechnical("all");
+              editor.setFilterTable("all");
+              editor.setFilterColumn("all");
+              editor.setFilterRisenOwner("");
+              editor.setFilterRisenItemPrefix("");
+              editor.setFilterRisenSection(null);
+              editor.setPinnedKeys(null);
+              editor.setIsSearchPinned(false);
+              editor.setFilterStatus("gtaiv-unsupported");
+            }}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

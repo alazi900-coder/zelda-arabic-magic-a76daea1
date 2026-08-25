@@ -63,6 +63,17 @@ interface EditorBuildSectionProps {
   setShowDiagnostic: (v: boolean) => void;
 }
 
+/** GTA IV report symbols must stay legible even when the actual character is invisible. */
+function formatGtaIvUnsupportedCharacter(item: GtaIvUnsupportedCharacter): string {
+  if (item.unicode === "U+00A0") return "مسافة غير قابلة للكسر (NBSP) · U+00A0";
+  if (item.unicode === "U+00A9") return "© رمز حقوق النشر · U+00A9";
+  const codePoint = item.character.codePointAt(0) ?? 0;
+  if ((codePoint >= 0 && codePoint <= 0x1f) || (codePoint >= 0x7f && codePoint <= 0x9f)) {
+    return `محرف تحكم غير مرئي · ${item.unicode}`;
+  }
+  return `«${item.character}» ${item.unicode}`;
+}
+
 const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   editor,
   isRisen = false,
@@ -646,7 +657,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                   title={gtaIvUnsupportedFilterActive
                     ? "يلغي فلتر GTA IV ويعيد عرض كل النصوص في المحرر"
                     : gtaIvUnsupportedCount > 0
-                      ? "يعرض النصوص التي تحتوي محارف غير موجودة في خط GTA IV English المعدل فقط"
+                      ? "يلغي فلاتر البحث والفئة الحالية ويعرض النصوص التي ستُبنى وفيها محارف غير ممثلة في خط GTA IV English المعدل"
                       : "لا توجد محارف غير مدعومة في الترجمات الحالية"}
                 >
                   <AlertTriangle className="w-4 h-4" />
@@ -658,8 +669,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
                     <span>المحارف:</span>
                     {gtaIvUnsupportedCharacters.map((item) => (
-                      <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="ltr">
-                        «{item.character}» {item.unicode}{item.count > 1 ? ` ×${item.count}` : ""}
+                      <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="rtl">
+                        {formatGtaIvUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
                       </span>
                     ))}
                   </div>

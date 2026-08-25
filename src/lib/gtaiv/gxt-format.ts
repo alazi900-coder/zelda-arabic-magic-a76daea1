@@ -202,12 +202,26 @@ export interface GtaIvArabicEncoding {
   textUnits: Uint16Array;
 }
 
-function isGtaIvEnglishV3CharacterSupported(char: string): boolean {
+function isGtaIvEnglishV3CharacterSupported(char: string, sourceExtendedUnits?: Map<number, number>): boolean {
   const code = char.codePointAt(0) ?? 0;
   if (code >= 0xfe70 && code <= 0xfeff) {
     return gtaIvPresentationFormUnits[code - 0xfe70] !== undefined;
   }
+  // The source american.gxt can contain verified legacy Latin-1 glyph units
+  // such as © and NBSP. They are safe only when the same unit already occurs
+  // in this exact source row; a new extended glyph still has no audited slot.
+  if (code > 0x7f && code <= 0xff && (sourceExtendedUnits?.get(code) ?? 0) > 0) return true;
   return code > 0 && code <= 0x7f;
+}
+
+function gtaIvSourceExtendedUnitBudget(sourceText: string): Map<number, number> {
+  const budget = new Map<number, number>();
+  for (let index = 0; index < sourceText.length; index += 1) {
+    const unit = sourceText.charCodeAt(index);
+    if (unit <= 0x7f || unit > 0xff) continue;
+    budget.set(unit, (budget.get(unit) ?? 0) + 1);
+  }
+  return budget;
 }
 
 /**
@@ -215,16 +229,23 @@ function isGtaIvEnglishV3CharacterSupported(char: string): boolean {
  * remaining character that cannot be represented by the audited English v3
  * font. It is safe to call while editing: it never validates or mutates text.
  */
-export function analyzeGtaIvUnsupportedCharacters(translation: string): GtaIvUnsupportedCharacterAnalysis {
+export function analyzeGtaIvUnsupportedCharacters(translation: string, sourceText = ""): GtaIvUnsupportedCharacterAnalysis {
   const pieces = translation.split(/(~[^~]+~)/g);
   const processedText = pieces.map((piece, index) => (
     index % 2 === 1 ? piece : processGtaIvArabicPiece(piece)
   )).join("");
   const unsupported = new Map<string, GtaIvUnsupportedCharacter>();
+  const sourceExtendedUnits = gtaIvSourceExtendedUnitBudget(sourceText);
 
   for (const char of processedText) {
-    if (isGtaIvEnglishV3CharacterSupported(char)) continue;
     const codePoint = char.codePointAt(0) ?? 0;
+    const sourceCount = sourceExtendedUnits.get(codePoint) ?? 0;
+    if (isGtaIvEnglishV3CharacterSupported(char, sourceExtendedUnits)) {
+      if (codePoint > 0x7f && codePoint <= 0xff && sourceCount > 0) {
+        sourceExtendedUnits.set(codePoint, sourceCount - 1);
+      }
+      continue;
+    }
     const unicode = `U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}`;
     const previous = unsupported.get(unicode);
     unsupported.set(unicode, previous
@@ -292,7 +313,7 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
   const dollarValidation = validateGtaIvDollarAmountSequence(sourceText, normalizedTranslation);
   if (!dollarValidation.valid) fail(`مبالغ الدولار غير محفوظة: ${dollarValidation.reason}`);
 
-  const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(normalizedTranslation);
+  const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(normalizedTranslation, sourceText);
   if (unsupported.length > 0) {
     const first = unsupported[0];
     fail(`المحرف «${first.character}» (${first.unicode}) غير مدعوم في خط GTA IV English المعدل.`);
@@ -308,6 +329,13 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
       continue;
     }
     if (code > 0 && code <= 0x7f) {
+      units.push(code);
+      continue;
+    }
+    // `analyzeGtaIvUnsupportedCharacters` above has already verified this unit
+    // appeared in the same source row, so preserving it cannot invent a font
+    // mapping. This branch intentionally covers only legacy one-byte units.
+    if (code > 0x7f && code <= 0xff) {
       units.push(code);
       continue;
     }

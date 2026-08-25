@@ -760,7 +760,7 @@ export function useEditorState() {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key] || "";
       if (!translation.trim()) continue;
-      const unsupported = analyzeGtaIvUnsupportedCharacters(translation).unsupported;
+      const unsupported = analyzeGtaIvUnsupportedCharacters(translation, entry.original).unsupported;
       if (unsupported.length === 0) continue;
       keys.add(key);
       for (const item of unsupported) {

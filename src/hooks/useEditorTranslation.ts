@@ -40,7 +40,9 @@ interface UseEditorTranslationProps {
   userGeminiKey: string;
   userDeepSeekKey: string;
   userTokenRouterKey: string;
-  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter';
+  /** Session-only key; it is never persisted by useEditorSettings. */
+  userGmiCloudKey: string;
+  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud';
   myMemoryEmail: string;
   addMyMemoryChars: (chars: number) => void;
   addAiRequest: (count?: number) => void;
@@ -73,6 +75,7 @@ const PROVIDER_BATCH_DELAY_MS = {
   gemini:     { free: 4000, paid: 500 },  // ~15 RPM free tier
   deepseek:   { free: 0,    paid: 0 },    // generous; no proactive throttle
   tokenrouter:{ free: 0,    paid: 0 },    // generous; no proactive throttle
+  gmicloud:   { free: 0,    paid: 250 },  // modest spacing; no undocumented quota claim
   mymemory:   { free: 0,    paid: 0 },    // not AI; own char-budget logic
   google:     { free: 0,    paid: 0 },    // not AI
 } as const;
@@ -92,8 +95,21 @@ const LUMENTALE_TOKEN_RULE =
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
 }: UseEditorTranslationProps) {
+
+  // Keep all outbound translation paths on the same key policy. In particular,
+  // GMICLOUD is accepted only from session state and is never written to storage.
+  const getProviderApiKey = (provider: string): string | undefined => {
+    const key = provider === 'deepseek'
+      ? userDeepSeekKey
+      : provider === 'tokenrouter'
+      ? userTokenRouterKey
+      : provider === 'gmicloud'
+      ? userGmiCloudKey
+      : undefined;
+    return key || undefined;
+  };
 
   /**
    * Detect a translation that came back un-translated. Catches the two failure
@@ -233,8 +249,7 @@ export function useEditorTranslation({
         entries,
         glossary: activeGlossary,
         userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-        providerApiKey:
-          (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
+        providerApiKey: getProviderApiKey(translationProvider),
         provider: translationProvider,
         myMemoryEmail: myMemoryEmail || undefined,
         rebalanceNewlines: rebalanceNewlines || undefined,
@@ -318,7 +333,7 @@ export function useEditorTranslation({
     // إعادة الإنشاء عند تغيّر إعدادات المزوّد/الموديل/القاموس حتى تُلتقط القيم الحديثة في buildPayload.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
+    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines,
     npcMode, aiModel, customPromptInstructions, categoryPromptTemplates, filterCategory, aiRoutingMode, aiBatchSize, translationCacheEnabled, isRisenSource,
   ]);
@@ -600,8 +615,8 @@ export function useEditorTranslation({
           method: 'POST',
           headers: getSupabaseHeaders(),
           signal,
-          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
-        });
+          body: JSON.stringify({ entries: batchEntries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: getProviderApiKey(translationProvider), provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
+       });
         if (response.status === 429) {
           // Rate-limited: wait then retry once. After that, surface the error (no split — wastes quota)
           if (retriesLeft > 0) {
@@ -727,7 +742,8 @@ export function useEditorTranslation({
     const hasPersonalKey =
       (translationProvider === 'gemini'     && !!userGeminiKey)     ||
       (translationProvider === 'deepseek'   && !!userDeepSeekKey)   ||
-      (translationProvider === 'tokenrouter' && !!userTokenRouterKey);
+      (translationProvider === 'tokenrouter' && !!userTokenRouterKey) ||
+      (translationProvider === 'gmicloud' && !!userGmiCloudKey);
     const batchDelayMs = !aiThrottleEnabled
       ? 0
       : aiRoutingMode === 'paid'
@@ -856,14 +872,14 @@ export function useEditorTranslation({
           break;
         }
         const batch = entriesToRetranslate.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
-        setTranslateProgress(`🔄 إعادة ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
-        const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
-          method: 'POST',
-          headers: getSupabaseHeaders(),
-          signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
-        });
+       setTranslateProgress(`🔄 إعادة ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
+       const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
+       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+         method: 'POST',
+         headers: getSupabaseHeaders(),
+         signal: abortControllerRef.current.signal,
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: getProviderApiKey(translationProvider), provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
+       });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
         addAiRequest(1);
@@ -914,14 +930,14 @@ export function useEditorTranslation({
       for (let b = 0; b < totalBatches; b++) {
         if (abortControllerRef.current.signal.aborted) break;
         const batch = entriesToFix.slice(b * aiBatchSize, (b + 1) * aiBatchSize);
-        setTranslateProgress(`🔧 إصلاح الرموز التالفة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
-        const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
-        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
-          method: 'POST',
-          headers: getSupabaseHeaders(),
-          signal: abortControllerRef.current.signal,
-           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined, provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
-        });
+       setTranslateProgress(`🔧 إصلاح الرموز التالفة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
+       const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
+       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+         method: 'POST',
+         headers: getSupabaseHeaders(),
+         signal: abortControllerRef.current.signal,
+           body: JSON.stringify({ entries, glossary: activeGlossary, userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined, providerApiKey: getProviderApiKey(translationProvider), provider: translationProvider, myMemoryEmail: myMemoryEmail || undefined, rebalanceNewlines: rebalanceNewlines || undefined, npcMaxLines, npcMode: npcMode || undefined, aiModel, extraInstructions: buildExtraInstructions(), routingMode: aiRoutingMode, game: gameParam }),
+       });
         if (!response.ok) { const errData = await response.json().catch(() => null); throw new Error(errData?.error || `خطأ ${response.status}`); }
         const data = await response.json(); recordBatchQuality(data);
         addAiRequest(1);
@@ -1067,9 +1083,9 @@ export function useEditorTranslation({
           break;
         }
         const batch = needsAI.slice(b * PAGE_AI_BATCH, (b + 1) * PAGE_AI_BATCH);
-        setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
+       setTranslateProgress(`🔄 ترجمة الدفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
-        const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
+       const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
         const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
           method: 'POST',
           headers: getSupabaseHeaders(),
@@ -1078,7 +1094,7 @@ export function useEditorTranslation({
             entries,
             glossary: activeGlossary,
             userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-            providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
+            providerApiKey: getProviderApiKey(translationProvider),
             provider: translationProvider,
             myMemoryEmail: myMemoryEmail || undefined,
             npcMaxLines,
@@ -1269,9 +1285,9 @@ export function useEditorTranslation({
           for (let b = 0; b < totalBatches; b++) {
             if (abortControllerRef.current.signal.aborted) break;
             const batch = candidates.slice(b * ALL_PAGES_BATCH, (b + 1) * ALL_PAGES_BATCH);
-            setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — دفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
+           setTranslateProgress(`📄 صفحة ${p + 1}/${allPages} — دفعة ${b + 1}/${totalBatches} (${batch.length} نص)...`);
 
-            const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
+           const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
             const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
               method: 'POST',
               headers: getSupabaseHeaders(),
@@ -1280,7 +1296,7 @@ export function useEditorTranslation({
                 entries,
                 glossary: activeGlossary,
                 userApiKey: effectiveProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-                providerApiKey: (effectiveProvider === 'deepseek' ? userDeepSeekKey : effectiveProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
+                providerApiKey: getProviderApiKey(effectiveProvider),
                 provider: effectiveProvider,
                 myMemoryEmail: myMemoryEmail || undefined,
                 npcMaxLines,
@@ -1523,8 +1539,8 @@ export function useEditorTranslation({
       for (let i = 0; i < toRetry.length; i++) {
         if (abortControllerRef.current.signal.aborted) break;
         const entry = toRetry[i];
-        const key = `${entry.msbtFile}:${entry.index}`;
-        setTranslateProgress(`🔄 إعادة محاولة ${i + 1}/${toRetry.length}: ${entry.label || key}...`);
+       const key = `${entry.msbtFile}:${entry.index}`;
+       setTranslateProgress(`🔄 إعادة محاولة ${i + 1}/${toRetry.length}: ${entry.label || key}...`);
         try {
           const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
             method: 'POST',
@@ -1534,7 +1550,7 @@ export function useEditorTranslation({
               entries: [{ key, original: entry.original }],
               glossary: activeGlossary,
               userApiKey: translationProvider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-              providerApiKey: (translationProvider === 'deepseek' ? userDeepSeekKey : translationProvider === 'tokenrouter' ? userTokenRouterKey : undefined) || undefined,
+              providerApiKey: getProviderApiKey(translationProvider),
               provider: translationProvider,
               myMemoryEmail: myMemoryEmail || undefined,
               rebalanceNewlines: rebalanceNewlines || undefined,

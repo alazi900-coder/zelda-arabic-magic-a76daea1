@@ -67,8 +67,8 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter';
-  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter'];
+  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud';
+  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter', 'gmicloud'];
   const [translationProvider, _setTranslationProvider] = useState<TranslationProvider>(() => {
     try {
       const saved = localStorage.getItem('translationProvider') as TranslationProvider | null;
@@ -96,6 +96,11 @@ export function useEditorSettings() {
     _setUserTokenRouterKey(key);
     try { if (key) localStorage.setItem('userTokenRouterKey', key); else localStorage.removeItem('userTokenRouterKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
+
+  // GMICLOUD is deliberately session-only: never read from or write to localStorage.
+  // A refresh or closing the tab clears the key, while translation requests receive it
+  // only as providerApiKey for the current HTTPS request to the edge function.
+  const [userGmiCloudKey, setUserGmiCloudKey] = useState('');
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
     try { return localStorage.getItem('myMemoryEmail') || ''; } catch { return ''; }
@@ -357,6 +362,7 @@ export function useEditorSettings() {
     userGeminiKey, setUserGeminiKey,
     userDeepSeekKey, setUserDeepSeekKey,
     userTokenRouterKey, setUserTokenRouterKey,
+    userGmiCloudKey, setUserGmiCloudKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,
     myMemoryEmail, setMyMemoryEmail,

@@ -100,7 +100,8 @@ const Editor = () => {
     try {
       const providerApiKey =
         provider === 'deepseek' ? editor.userDeepSeekKey :
-        provider === 'tokenrouter' ? editor.userTokenRouterKey : undefined;
+        provider === 'tokenrouter' ? editor.userTokenRouterKey :
+        provider === 'gmicloud' ? editor.userGmiCloudKey : undefined;
       const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
         method: 'POST',
         headers: getSupabaseHeaders(),
@@ -125,7 +126,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.aiModel]);
 
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";
   const isGameMaker = sourceGame === "gamemaker";

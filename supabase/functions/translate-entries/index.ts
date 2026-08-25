@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { RISEN_TAG_REGEX } from "../_shared/risen-tag-mask.ts";
+import { GMICLOUD_OPENAI_BASE_URL, resolveGmiCloudTextModel } from "../_shared/gmicloud.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1365,7 +1366,7 @@ async function translateWithGoogle(
   return { translations: result, charsUsed, glossaryStats: stats };
 }
 
-// --- OpenAI-compatible translation (DeepSeek) ---
+// --- OpenAI-compatible translation (DeepSeek / GMICLOUD / TokenRouter) ---
 async function translateWithOpenAICompat(
   entries: { key: string; original: string }[],
   protectedEntries: { key: string; cleaned: string; tags: Map<string, string> }[],
@@ -1373,6 +1374,7 @@ async function translateWithOpenAICompat(
   apiKey: string,
   baseUrl: string,
   model: string,
+  explicitProviderName?: string,
 ): Promise<{ translations: Record<string, string>; glossaryStats: GlossaryStats }> {
   const result: Record<string, string> = {};
   const stats: GlossaryStats = { directMatches: 0, lockedTerms: 0, contextTerms: 0 };
@@ -1422,7 +1424,7 @@ async function translateWithOpenAICompat(
     game: _game,
   });
 
-  const providerName = baseUrl.includes('deepseek') ? 'DeepSeek' : 'OpenAI-Compat';
+  const providerName = explicitProviderName || (baseUrl.includes('deepseek') ? 'DeepSeek' : 'OpenAI-Compat');
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -2198,6 +2200,29 @@ Deno.serve(async (req) => {
       const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, trKey,
         'https://api.tokenrouter.com/v1', 'z-ai/glm-5.2-free',
+      );
+      return buildSuccessResponse(entries, result);
+    } else if (provider === 'gmicloud') {
+      // Do not fall back to a server-side secret: GMICLOUD is intentionally a
+      // user-supplied session key, passed only for this request.
+      const gmiKey = providerApiKey;
+      if (!gmiKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج GMICLOUD مفتاح API — الصقه في حقل GMICLOUD داخل المحرر' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const officialModelId = resolveGmiCloudTextModel(aiModel);
+      if (!officialModelId) {
+        return new Response(JSON.stringify({
+          error: 'نموذج GMICLOUD غير متاح للترجمة النصية حالياً. النموذج المفعّل والموثّق هو MiniMax M2.7 فقط.',
+        }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const result = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, gmiKey,
+        GMICLOUD_OPENAI_BASE_URL, officialModelId, 'GMICLOUD',
       );
       return buildSuccessResponse(entries, result);
     } else {

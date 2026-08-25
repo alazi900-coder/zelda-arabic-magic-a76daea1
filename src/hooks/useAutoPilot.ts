@@ -54,6 +54,7 @@ interface UseAutoPilotProps {
   userGeminiKey: string;
   userDeepSeekKey: string;
   userTokenRouterKey?: string;
+  userGmiCloudKey?: string;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
@@ -81,7 +82,7 @@ function pickFreeProvider(): { provider: string; model?: string; label: string }
 
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
-  translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
+  translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
   customPromptInstructions, aiRoutingMode = 'paid', risenVariant,
@@ -117,7 +118,13 @@ export function useAutoPilot({
     forceModel?: string,
   ) => {
     const prov = forceProvider || translationProvider;
-    const provKey = prov === 'deepseek' ? userDeepSeekKey : prov === 'tokenrouter' ? userTokenRouterKey : undefined;
+    const provKey = prov === 'deepseek'
+      ? userDeepSeekKey
+      : prov === 'tokenrouter'
+      ? userTokenRouterKey
+      : prov === 'gmicloud'
+      ? userGmiCloudKey
+      : undefined;
     return JSON.stringify({
       entries,
       glossary: activeGlossary,
@@ -128,12 +135,12 @@ export function useAutoPilot({
       rebalanceNewlines: rebalanceNewlines || undefined,
       npcMaxLines,
       npcMode: npcMode || undefined,
-      aiModel: forceModel || (prov === 'gemini' ? aiModel : undefined),
+      aiModel: forceModel || ((prov === 'gemini' || prov === 'gmicloud') ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
       game: resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant),
     });
-  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey,
+  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey,
       myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode, state]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {

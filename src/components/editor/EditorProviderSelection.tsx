@@ -16,6 +16,7 @@ type EditorSubset = Pick<
   | "userGeminiKey" | "setUserGeminiKey"
   | "userDeepSeekKey" | "setUserDeepSeekKey"
   | "userTokenRouterKey" | "setUserTokenRouterKey"
+  | "userGmiCloudKey" | "setUserGmiCloudKey"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
   | "myMemoryCharsUsed"
@@ -77,12 +78,16 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'gemini' as const, label: '🤖 Lovable AI', badge: editor.userGeminiKey ? '✅' : '⚡' },
               { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
               { id: 'tokenrouter' as const, label: '🔀 TokenRouter', badge: editor.userTokenRouterKey ? '✅' : '⚠️' },
+              { id: 'gmicloud' as const, label: '☁️ GMICLOUD', badge: editor.userGmiCloudKey ? '✅' : '⚠️' },
             ].map(({ id, label, badge }) => (
               <Button
                 key={id}
                 size="sm"
                 variant={editor.translationProvider === id ? 'default' : 'outline'}
-                onClick={() => editor.setTranslationProvider(id)}
+                onClick={() => {
+                  editor.setTranslationProvider(id);
+                  if (id === 'gmicloud') editor.setAiModel('MiniMaxAI/MiniMax-M2.7');
+                }}
                 className="text-xs font-display gap-1"
               >
                 {label}
@@ -271,6 +276,88 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               {!editor.userTokenRouterKey && (
                 <a href="https://www.tokenrouter.com" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
                   احصل على مفتاح ↗
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {editor.translationProvider === 'gmicloud' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2 flex-1">
+              <input
+                type="password"
+                name="gmicloud-api-key"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                placeholder="الصق مفتاح GMICLOUD API هنا..."
+                value={editor.userGmiCloudKey}
+                onChange={(e) => editor.setUserGmiCloudKey(e.target.value)}
+                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                dir="ltr"
+              />
+              {editor.userGmiCloudKey && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => handleTestConnection('gmicloud')}
+                  disabled={testConnStatus['gmicloud'] === 'testing'}
+                  className="text-xs shrink-0 gap-1"
+                >
+                  {testConnStatus['gmicloud'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                   testConnStatus['gmicloud'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                   testConnStatus['gmicloud'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                   <Wifi className="w-3 h-3" />}
+                  تجربة
+                </Button>
+              )}
+              {editor.userGmiCloudKey && (
+                <Button variant="ghost" size="sm" onClick={() => editor.setUserGmiCloudKey('')} className="text-xs text-destructive shrink-0">
+                  مسح
+                </Button>
+              )}
+            </div>
+            {testConnMsg['gmicloud'] && (
+              <p className={`text-xs font-body ${testConnStatus['gmicloud'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                {testConnStatus['gmicloud'] === 'ok' ? '✅' : '❌'} {testConnMsg['gmicloud']}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-display text-muted-foreground">☁️ نماذج GMICLOUD:</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
+                <button
+                  onClick={() => editor.setAiModel('MiniMaxAI/MiniMax-M2.7')}
+                  className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${
+                    editor.aiModel === 'MiniMaxAI/MiniMax-M2.7'
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  <span className="font-display">✓ MiniMax M2.7</span>
+                  <span className="text-[10px] opacity-70">نموذج نصي موثّق للترجمة</span>
+                </button>
+                <div className="flex flex-col items-start p-2 rounded-md border border-dashed border-border bg-muted/30 text-xs text-muted-foreground">
+                  <span className="font-display">MiniMax M3 — غير مفعّل</span>
+                  <span className="text-[10px] opacity-70">ينتظر معرّف API نصي موثّق</span>
+                </div>
+                <div className="flex flex-col items-start p-2 rounded-md border border-dashed border-border bg-muted/30 text-xs text-muted-foreground">
+                  <span className="font-display">minimax-music-3.0 — غير متاح</span>
+                  <span className="text-[10px] opacity-70">نموذج موسيقى وليس ترجمة نصية</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground font-body">
+                {editor.userGmiCloudKey
+                  ? '✅ المفتاح موجود لهذه الجلسة فقط — لن يُحفظ بعد تحديث الصفحة أو إغلاقها'
+                  : '⚠️ أدخل المفتاح هنا فقط؛ لا ترسله في المحادثة'}
+              </p>
+              {!editor.userGmiCloudKey && (
+                <a href="https://console.gmicloud.ai/user-setting/ie/api-keys" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
+                  مفاتيح GMICLOUD ↗
                 </a>
               )}
             </div>

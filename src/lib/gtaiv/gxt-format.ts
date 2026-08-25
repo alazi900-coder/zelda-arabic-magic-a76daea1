@@ -305,13 +305,11 @@ function normalizeGtaIvArabicPunctuation(value: string): string {
  */
 export function encodeGtaIvArabicText(sourceText: string, translation: string): GtaIvArabicEncoding {
   const dollarRepair = repairGtaIvDollarAmountSequence(sourceText, translation);
-  if (!dollarRepair.safe) fail(`مبالغ الدولار غير محفوظة: ${dollarRepair.reason}`);
-
-  const normalizedTranslation = dollarRepair.text;
+  // Dollar values are an editor-level warning, not a build-blocking format rule.
+  // Keep a safe normalization when possible, otherwise emit the user translation.
+  const normalizedTranslation = dollarRepair.safe ? dollarRepair.text : translation;
   const tokenValidation = validateGtaIvRuntimeTokenSequence(sourceText, normalizedTranslation);
   if (!tokenValidation.valid) fail(`رموز وقت التشغيل غير محفوظة: ${tokenValidation.reason}`);
-  const dollarValidation = validateGtaIvDollarAmountSequence(sourceText, normalizedTranslation);
-  if (!dollarValidation.valid) fail(`مبالغ الدولار غير محفوظة: ${dollarValidation.reason}`);
 
   const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(normalizedTranslation, sourceText);
   if (unsupported.length > 0) {
@@ -629,10 +627,6 @@ export function rebuildGtaIvGxt(source: ArrayBuffer, replacements: readonly GtaI
     const tokenValidation = validateGtaIvRuntimeTokenSequence(textFromUnits(sourceEntry.textUnits), textFromUnits(replacement.textUnits));
     if (!tokenValidation.valid) {
       fail(`رموز وقت التشغيل غير محفوظة للهوية ${replacement.table}:${replacement.crc}: ${tokenValidation.reason}`);
-    }
-    const dollarValidation = validateGtaIvDollarAmountSequence(textFromUnits(sourceEntry.textUnits), textFromUnits(replacement.textUnits));
-    if (!dollarValidation.valid) {
-      fail(`مبالغ الدولار غير محفوظة للهوية ${replacement.table}:${replacement.crc}: ${dollarValidation.reason}`);
     }
     replacementByIdentity.set(key, replacement);
   }

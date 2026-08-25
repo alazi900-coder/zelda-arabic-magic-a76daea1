@@ -208,6 +208,11 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(encoded.processedText).not.toContain("دولار");
   });
 
+  it("does not block GTA IV encoding when a dollar value differs", () => {
+    const encoded = encodeGtaIvArabicText("Pay $700", "ادفع 701 دولار");
+    expect(encoded.processedText).toContain("701");
+  });
+
   it("encodes the rejected MAIN price sequence after normalizing its decimal comma", () => {
     const encoded = encodeGtaIvArabicText(
       "~z~Now you get the entire set, under a $100 by a nickel. $99.95. You are an idiot if you don't order.",

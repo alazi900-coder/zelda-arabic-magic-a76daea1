@@ -621,17 +621,22 @@ export function useEditorState() {
       technicalBypass: Array.from(editorState.technicalBypass || []),
       clearedKeys: Array.from(editorState.clearedKeys || []),
     };
-    await idbSet("editorState", payload);
-    // Per-game snapshot: the shared "editorState" key gets overwritten whenever
-    // another game is opened. Keeping a copy per game means translations are
-    // never lost by switching games.
     try {
-      const game = await idbGet<string>("editor-source-game");
-      if (game) await idbSet(`editorState:${game}`, payload);
+      await idbSet("editorState", payload);
+      // Per-game snapshot: the shared "editorState" key gets overwritten whenever
+      // another game is opened. Keeping a copy per game means translations are
+      // never lost by switching games.
+      try {
+        const game = await idbGet<string>("editor-source-game");
+        if (game) await idbSet(`editorState:${game}`, payload);
+      } catch (err) {
+        console.error("[idb] per-game snapshot failed:", err);
+      }
+      setLastSaved(`آخر حفظ: ${new Date().toLocaleTimeString("ar-SA")}`);
     } catch (err) {
-      console.error("[idb] per-game snapshot failed:", err);
+      console.error("[idb] project save failed:", err);
+      setLastSaved("تعذّر الحفظ المحلي — لا تغلق الصفحة قبل تصدير نسخة احتياطية أو إتاحة مساحة تخزين.");
     }
-    setLastSaved(`آخر حفظ: ${new Date().toLocaleTimeString("ar-SA")}`);
   }, []);
 
 
@@ -640,7 +645,7 @@ export function useEditorState() {
   useEffect(() => { latestStateRef.current = state; }, [state]);
 
   // Force-save: flush pending autosave immediately (call before build)
-  const forceSave = useCallback(async () => {
+  const forceSave = useCallback(async (): Promise<void> => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = undefined;
@@ -650,7 +655,6 @@ export function useEditorState() {
       await saveToIDB(s);
       console.log('[FORCE-SAVE] Saved', Object.keys(s.translations).length, 'translation keys to IDB');
     }
-    return s;
   }, [saveToIDB]);
 
   // Wire the ref so useEditorBuild can call it

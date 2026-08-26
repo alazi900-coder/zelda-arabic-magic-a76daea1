@@ -234,48 +234,34 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
     <Card className="mb-4 border-accent/30 bg-accent/5">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CardContent className="p-3">
-          <CollapsibleTrigger className="flex items-center justify-between w-full text-right">
-            <div className="flex items-center gap-2">
-              <Scale className="w-4 h-4 text-accent" />
-              <span className="font-display font-bold text-sm">⚖️ إعادة توازن الأسطر</span>
-              {results && results.length > 0 && (
-                <Badge variant="secondary" className="text-xs">{results.length} نص</Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="default"
-                size="sm"
-                className="text-xs h-7 gap-1"
-                onClick={(e) => { e.stopPropagation(); handleRebalanceAll(); }}
-                disabled={rebalancing || scanning}
-                title="يمر على كل الترجمات ويعيد موازنتها مع احترام [XENO:n ] كحد إلزامي"
-              >
-                {rebalancing ? (
-                  <><Wand2 className="w-3 h-3 animate-pulse" /> {rebalanceProgress.current}/{rebalanceProgress.total}</>
-                ) : (
-                  <><Wand2 className="w-3 h-3" /> إعادة موازنة الكل (XENO:n)</>
-                )}
+          <div className="flex flex-wrap items-center gap-1">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="h-auto min-w-0 flex-1 justify-between px-2 py-1.5 text-right">
+                <span className="flex min-w-0 items-center gap-2">
+                  <Scale className="w-4 h-4 shrink-0 text-accent" />
+                  <span className="truncate font-display text-sm font-bold">⚖️ إعادة توازن الأسطر</span>
+                  {results && results.length > 0 && <Badge variant="secondary" className="shrink-0 text-xs">{results.length} نص</Badge>}
+                </span>
+                {open ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="text-xs h-7"
-                onClick={(e) => { e.stopPropagation(); handleScan(); }}
-                disabled={scanning || rebalancing}
-              >
-                {scanning ? (
-                  <><Sparkles className="w-3 h-3 animate-spin" /> جاري الفحص...</>
-                ) : (
-                  <><Sparkles className="w-3 h-3" /> فحص الكلمات اليتيمة</>
-                )}
-              </Button>
-              <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setDismissed(true); }}>
-                <X className="w-3 h-3" />
-              </Button>
-              {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
-          </CollapsibleTrigger>
+            </CollapsibleTrigger>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={handleRebalanceAll}
+              disabled={rebalancing || scanning}
+              title="يمر على كل الترجمات ويعيد موازنتها مع احترام [XENO:n ] كحد إلزامي"
+            >
+              {rebalancing ? <><Wand2 className="w-3 h-3 animate-pulse" /> {rebalanceProgress.current}/{rebalanceProgress.total}</> : <><Wand2 className="w-3 h-3" /> إعادة موازنة الكل (XENO:n)</>}
+            </Button>
+            <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={handleScan} disabled={scanning || rebalancing}>
+              {scanning ? <><Sparkles className="w-3 h-3 animate-spin" /> جاري الفحص...</> : <><Sparkles className="w-3 h-3" /> فحص الكلمات اليتيمة</>}
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setDismissed(true)} aria-label="إخفاء إعادة توازن الأسطر">
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
 
           {/* Live progress bar for global re-balance */}
           {rebalancing && (

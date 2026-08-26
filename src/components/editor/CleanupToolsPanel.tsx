@@ -199,37 +199,25 @@ export default function CleanupToolsPanel({ state, onFilterByKeys }: CleanupTool
     <Card className="mb-4 border-purple-500/30 bg-purple-500/5">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CardContent className="p-3">
-          <CollapsibleTrigger className="flex items-center justify-between w-full text-right">
-            <div className="flex items-center gap-2">
-              <Tags className="w-4 h-4 text-purple-400" />
-              <span className="font-display font-bold text-sm">
-                فاحص الوسوم التقنية
-              </span>
-              {report && (
-                <Badge variant="secondary" className="text-xs">
-                  {totals.unique} وسم · {totals.occurrences} ظهور
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs h-7 text-muted-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDismissed(true);
-                }}
-              >
-                <X className="w-3 h-3" />
+          <div className="flex items-center gap-1">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="h-auto min-w-0 flex-1 justify-between px-2 py-1.5 text-right">
+                <span className="flex min-w-0 items-center gap-2">
+                  <Tags className="w-4 h-4 shrink-0 text-purple-400" />
+                  <span className="truncate font-display text-sm font-bold">فاحص الوسوم التقنية</span>
+                  {report && (
+                    <Badge variant="secondary" className="shrink-0 text-xs">
+                      {totals.unique} وسم · {totals.occurrences} ظهور
+                    </Badge>
+                  )}
+                </span>
+                {open ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
               </Button>
-              {open ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </div>
-          </CollapsibleTrigger>
+            </CollapsibleTrigger>
+            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setDismissed(true)} aria-label="إخفاء فاحص الوسوم التقنية">
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
 
           <CollapsibleContent className="mt-3 space-y-3">
             {/* Run / Re-run */}

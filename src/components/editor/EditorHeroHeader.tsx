@@ -17,7 +17,7 @@ const EditorHeroHeader: React.FC<EditorHeroHeaderProps> = ({
 }) => (
   <header className="relative flex flex-col items-center justify-center py-8 md:py-12 px-4 text-center overflow-hidden">
     <div className="absolute inset-0">
-      <img src={heroBg} alt="" className="w-full h-full object-cover" fetchPriority="high" />
+      <img src={heroBg} alt="" className="w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/70 to-background" />
     </div>
     <div className="relative z-10 w-full max-w-6xl mx-auto">

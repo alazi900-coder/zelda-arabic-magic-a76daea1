@@ -546,32 +546,26 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     <Card className="mb-4 border-emerald-500/30 bg-emerald-500/5">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CardContent className="p-3">
-          <CollapsibleTrigger className="flex items-center justify-between w-full text-right">
-            <div className="flex items-center gap-2">
-              {totalIssues > 0 ? (
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              )}
-              <span className="font-display font-bold text-sm">
-                فحص الجودة المتقدم
-              </span>
-              {totalIssues > 0 && (
-                <Badge variant="destructive" className="text-xs">{totalIssues} مشكلة</Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {totalIssues > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={(e) => { e.stopPropagation(); onFilterByKeys(activeFilter ? filteredKeys : allIssueKeys); }}>
-                  فلترة {activeFilter ? CHECK_LABELS[activeFilter] : 'المشاكل'}
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={(e) => { e.stopPropagation(); setDismissed(true); }}>
-                <X className="w-3 h-3" />
+          <div className="flex items-center gap-1">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="h-auto min-w-0 flex-1 justify-between px-2 py-1.5 text-right">
+                <span className="flex min-w-0 items-center gap-2">
+                  {totalIssues > 0 ? <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" /> : <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />}
+                  <span className="truncate font-display text-sm font-bold">فحص الجودة المتقدم</span>
+                  {totalIssues > 0 && <Badge variant="destructive" className="shrink-0 text-xs">{totalIssues} مشكلة</Badge>}
+                </span>
+                {open ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
               </Button>
-              {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
-          </CollapsibleTrigger>
+            </CollapsibleTrigger>
+            {totalIssues > 0 && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onFilterByKeys(activeFilter ? filteredKeys : allIssueKeys)}>
+                فلترة {activeFilter ? CHECK_LABELS[activeFilter] : 'المشاكل'}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setDismissed(true)} aria-label="إخفاء فحص الجودة المتقدم">
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
 
           <CollapsibleContent className="mt-3 space-y-2">
             {/* Summary badges */}

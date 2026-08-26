@@ -36,7 +36,7 @@ interface RequestBody {
   /** Which game this entry is from — the system prompt names it correctly instead
    * of always assuming Xenoblade. Defaults to Xenoblade for backward compatibility
    * with callers that don't send it yet. */
-  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
+  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'lumentale';
   /** Risen: the speaking NPC (Owner/Role fields from infos.tab), when known. */
   speaker?: Speaker;
   /** Risen: the entry's raw id/key (e.g. "HUD2_Damage_Edge") — grounds the model instead of it guessing from a bare filename. */
@@ -53,6 +53,7 @@ const GAME_LABELS: Record<string, string> = {
   risen2: 'لعبة Risen 2: Dark Waters (محرك Genome — عالم قراصنة مفتوح في الكاريبي)',
   mother3: 'لعبة MOTHER 3 (سلسلة MOTHER/EarthBound لـ Shigesato Itoi ونينتندو — أسلوب بسيط دافئ طريف)',
   metroidprime: 'لعبة Metroid Prime Remastered (سلسلة Metroid لـ Nintendo/Retro Studios — استكشاف/إطلاق نار من منظور شخصي في عالم خيال علمي)',
+  lumentale: 'لعبة LumenTale: Memories of Trey',
 };
 
 function buildSystemPrompt(game?: string): string {

@@ -902,7 +902,7 @@ const Editor = () => {
               findSimilar={findSimilar}
               onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
               risenVariant={editor.risenVariant}
-              userGmiCloudKey={editor.settings.userGmiCloudKey}
+              userGmiCloudKey={editor.userGmiCloudKey}
             />
           </React.Suspense>
         )}

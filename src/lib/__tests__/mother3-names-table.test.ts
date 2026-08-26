@@ -50,8 +50,13 @@ describe("mother3 names codec", () => {
     expect(res?.text).toBe(text);
   });
 
-  it("rejects un-encodable characters", () => {
-    expect(() => encodeNamesString("café")).toThrow();
+  it("normalizes accented Latin but rejects genuinely un-encodable characters", () => {
+    expect(decodeNamesString(new Uint8Array([
+      ...encodeNamesString("café").flatMap((code) => [code & 0xff, (code >>> 8) & 0xff]),
+      0xff,
+      0xff,
+    ]), 0, 10)?.text).toBe("cafe");
+    expect(() => encodeNamesString("猫")).toThrow();
   });
 
   it("round-trips comma, parentheses, and PSI Greek-letter suffixes", () => {

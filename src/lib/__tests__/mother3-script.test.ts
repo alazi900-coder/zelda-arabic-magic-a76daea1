@@ -105,15 +105,16 @@ describe("mother3 codec", () => {
     expect(textToCodes(text)).toEqual(codes);
   });
 
-  it("rejects un-encodable characters", () => {
-    expect(() => textToCodes("café")).toThrow();
+  it("normalizes accented Latin but rejects genuinely un-encodable characters", () => {
+    expect(textToCodes("café")).toEqual(textToCodes("cafe"));
+    expect(() => textToCodes("猫")).toThrow();
   });
 
   it("encodes Arabic words whose ط/ظ/آ resolve to forms the font lacks", () => {
     // خطر → ط lands in the medial form (U+FEC4) the font never drew; the
-    // fallback maps it to the ط final glyph (0x09) instead of throwing.
+    // fallback maps it to the remapped ط final glyph (0xA7) instead of throwing.
     const codes = textToCodes("خطر");
-    expect(codes).toContain(0x09);
+    expect(codes).toContain(0xA7);
     // آ (alef madda, isolated form U+FE81) falls back to the آ final glyph.
     expect(() => textToCodes("آن")).not.toThrow();
   });

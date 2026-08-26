@@ -31,18 +31,19 @@ function makeFakeLagp(): ArrayBuffer {
   return buf.buffer;
 }
 
-function sha256(bytes: Uint8Array): Promise<string> {
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  return crypto.subtle.digest("SHA-256", ab).then((digest) => {
-    const arr = Array.from(new Uint8Array(digest));
-    return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
-  });
+/**
+ * A complete hexadecimal byte fingerprint is deliberately used here instead
+ * of Web Crypto. The test must compare every input byte, and the JSDOM crypto
+ * shim rejects ArrayBuffers created in Vitest worker realms.
+ */
+function byteFingerprint(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 describe("lagp-packer", () => {
   it("unpack → repack with no edits is byte-exact (no outer compression)", async () => {
     const original = makeFakeLagp();
-    const originalHash = await sha256(new Uint8Array(original));
+    const originalHash = byteFingerprint(new Uint8Array(original));
 
     const { zip, manifest } = await unpackLagp(original, "fake.wilay");
 
@@ -55,7 +56,7 @@ describe("lagp-packer", () => {
     expect(manifest.chunks[1].kind).toBe("raw");
 
     const repacked = await repackLagp(zip);
-    const repackedHash = await sha256(new Uint8Array(repacked));
+    const repackedHash = byteFingerprint(new Uint8Array(repacked));
 
     expect(repacked.byteLength).toBe(original.byteLength);
     expect(repackedHash).toBe(originalHash);

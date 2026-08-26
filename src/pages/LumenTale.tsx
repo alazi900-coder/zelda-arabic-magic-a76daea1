@@ -3,14 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, FileText, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { idbGet, idbSet } from "@/lib/idb-storage";
-import {
-  extractLumenTaleEntries,
-  LUMENTALE_BUFFER_KEY,
-  LUMENTALE_META_KEY,
-  LUMENTALE_SOURCE_GAME,
-} from "@/lib/lumentale/lumentale-editor-bridge";
 
-/** Entry point for LumenTale's English Unity localization bundle. */
+/** V2 performance: load the Unity bundle bridge only after the user chooses a bundle. */
 export default function LumenTale() {
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -23,7 +17,14 @@ export default function LumenTale() {
       if (!file.name.endsWith(".bundle")) {
         throw new Error("اختر ملف Unity Bundle الخاص بالنص الإنجليزي (.bundle).");
       }
+      const bridgePromise = import("@/lib/lumentale/lumentale-editor-bridge");
       const bytes = await file.arrayBuffer();
+      const {
+        extractLumenTaleEntries,
+        LUMENTALE_BUFFER_KEY,
+        LUMENTALE_META_KEY,
+        LUMENTALE_SOURCE_GAME,
+      } = await bridgePromise;
       const { entries, tables } = await extractLumenTaleEntries(bytes);
       const previous = await idbGet<{ translations?: Record<string, string>; entries?: { msbtFile: string; index: number }[] }>("editorState");
       const previousMeta = await idbGet<{

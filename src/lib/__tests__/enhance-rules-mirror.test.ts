@@ -59,7 +59,7 @@ describe("Pokémon rules in the AI enhancement tool", () => {
     expect(gate).not.toBeNull();
     expect(gate![1]).toContain("detect_line_breaks");
     expect(gate![1]).toContain("detect_split_and_tags");
-    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale))");
+    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv))");
   });
 
   it("names the game it is reviewing", () => {

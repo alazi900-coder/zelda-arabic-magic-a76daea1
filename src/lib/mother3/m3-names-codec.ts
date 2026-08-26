@@ -74,11 +74,19 @@ function controlCodeToToken(code: number): string {
   return `[${lo.toString(16).toUpperCase().padStart(2, "0")} ${hi.toString(16).toUpperCase().padStart(2, "0")}]`;
 }
 
-/** Map one display character to a code, trying Arabic presentation forms first. */
+/**
+ * Map one display character to a names-table code.
+ *
+ * The Arabic font table intentionally also declares a few ASCII glyphs, but
+ * its hyphen code (0xAB) belongs to the dialogue font and is not decodable in
+ * the fixed-stride names tables. Prefer the recovered names charset whenever
+ * a glyph exists there; Arabic presentation forms are still resolved from the
+ * Arabic table because they have no Latin-table equivalent.
+ */
 function charToCode(ch: string): number | undefined {
-  const a = ARABIC_CHAR_TO_CODE[ch];
-  if (a !== undefined) return a;
-  return CHAR_TO_CODE.get(ch);
+  const namesCode = CHAR_TO_CODE.get(ch);
+  if (namesCode !== undefined) return namesCode;
+  return ARABIC_CHAR_TO_CODE[ch];
 }
 
 /**
@@ -217,4 +225,3 @@ export function encodeNamesString(text: string, _lossy = false): number[] {
   }
   return out;
 }
-

@@ -13,6 +13,8 @@ import {
   repairGtaIvDollarAmountSequence,
   repairGtaIvRuntimeTokenSequence,
   analyzeGtaIvUnsupportedCharacters,
+  gtaIvArabicGlyphCellForPresentationForm,
+  gtaIvArabicPresentationFormGlyphCells,
   validateGtaIvDollarAmountSequence,
   validateGtaIvRuntimeTokenSequence,
 } from "./gxt-format";
@@ -195,14 +197,28 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "ادفع 700$ و$20", changed: false, safe: false });
   });
 
-  it("uses the verified consecutive MAP input units for shaped Arabic Presentation Forms, including binary unit 126", () => {
+  it("uses the verified sparse MAP glyph-cell units for shaped Arabic Presentation Forms", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
-    expect(Array.from(encoded.textUnits)).toEqual([203, 165, 130, 119, 136]);
+    expect(Array.from(encoded.textUnits)).toEqual([410, 228, 193, 123, 199]);
 
     const alef = encodeGtaIvArabicText("", "ا");
     expect(alef.processedText).toBe("ﺍ");
-    expect(Array.from(alef.textUnits)).toEqual([126]);
+    expect(Array.from(alef.textUnits)).toEqual([188]);
+  });
+
+  it("maps every Arabic Presentation Form to one audited, sparse MAP glyph cell", () => {
+    expect(gtaIvArabicPresentationFormGlyphCells).toHaveLength(144);
+    expect(new Set(gtaIvArabicPresentationFormGlyphCells).size).toBe(144);
+    expect(gtaIvArabicGlyphCellForPresentationForm(0xfe70)).toBe(103);
+    expect(gtaIvArabicGlyphCellForPresentationForm(0xfe99)).toBe(298);
+    expect(gtaIvArabicGlyphCellForPresentationForm(0xfee0)).toBe(420);
+    expect(gtaIvArabicGlyphCellForPresentationForm(0xfef9)).toBe(471);
+    expect(gtaIvArabicGlyphCellForPresentationForm(0xfeff)).toBe(255);
+    for (let index = 0; index < 144; index += 1) {
+      expect(gtaIvArabicGlyphCellForPresentationForm(0xfe70 + index))
+        .toBe(gtaIvArabicPresentationFormGlyphCells[index]);
+    }
   });
 
   it("decodes an explicitly identified Arabic GXT row without decoding English source ASCII", () => {
@@ -296,9 +312,9 @@ describe("GTA IV GXT/OXT structural reader", () => {
     });
     expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
     const output = parseGtaIvGxt(result.buffer);
-    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([203, 165, 130, 119, 136]);
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([410, 228, 193, 123, 199]);
     expect(extractGtaIvEntries(result.buffer).entries[0].original)
-      .toBe(gtaIvRawUnitsToString(new Uint16Array([203, 165, 130, 119, 136])));
+      .toBe(gtaIvRawUnitsToString(new Uint16Array([410, 228, 193, 123, 199])));
     expect(decodeGtaIvArabicFontUnits(output.tables[0].entries[0].textUnits, true)).toBe("تؤبسك");
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -272,13 +272,44 @@ const CHECK_LABELS: Record<string, string> = {
   grammar_check: "📝 قواعد نحوية",
 };
 
+const QUALITY_CHECK_IDS = [
+  "number_check",
+  "variable_check",
+  "extra_spaces_check",
+  "remaining_english",
+  "length_check",
+  "punctuation_check",
+  "repetition_check",
+  "grammar_check",
+] as const;
+
+type QualityCheckId = (typeof QUALITY_CHECK_IDS)[number];
+type EnabledQualityChecks = Record<QualityCheckId, boolean>;
+
+function createDefaultEnabledChecks(): EnabledQualityChecks {
+  return Object.fromEntries(QUALITY_CHECK_IDS.map((id) => [id, true])) as EnabledQualityChecks;
+}
+
+function readEnabledChecks(storageKey: string): EnabledQualityChecks {
+  const defaults = createDefaultEnabledChecks();
+  if (typeof window === "undefined") return defaults;
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(storageKey) || "{}") as Partial<EnabledQualityChecks>;
+    return { ...defaults, ...saved };
+  } catch {
+    return defaults;
+  }
+}
+
 // Types that can be auto-fixed without AI
 const FIXABLE_TYPES = new Set(["extra_spaces_check", "punctuation_check", "grammar_check"]);
 
 export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry, glossary, risenVariant }: QualityChecksPanelProps) {
-  const isEnabled = (_id: string) => true;
   const isRisen = /\.tab$/i.test(state.entries[0]?.msbtFile || "");
   const gameParam = resolveGameParam(state.entries[0]?.msbtFile, risenVariant);
+  const qualitySettingsKey = `lumentale:quality-checks:${gameParam || "default"}`;
+  const [enabledChecks, setEnabledChecks] = useState<EnabledQualityChecks>(() => readEnabledChecks(qualitySettingsKey));
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
@@ -294,6 +325,27 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
   const [autoFixRunning, setAutoFixRunning] = useState(false);
   const [autoFixProgress, setAutoFixProgress] = useState('');
 
+  useEffect(() => {
+    setEnabledChecks(readEnabledChecks(qualitySettingsKey));
+  }, [qualitySettingsKey]);
+
+  const isEnabled = useCallback(
+    (id: string) => enabledChecks[id as QualityCheckId] !== false,
+    [enabledChecks],
+  );
+
+  const toggleCheck = useCallback((id: QualityCheckId) => {
+    setEnabledChecks((current) => {
+      const next = { ...current, [id]: !current[id] };
+      try {
+        window.localStorage.setItem(qualitySettingsKey, JSON.stringify(next));
+      } catch {
+        // The current session remains usable if the browser blocks preference storage.
+      }
+      return next;
+    });
+  }, [qualitySettingsKey]);
+
   // Only compute quality checks when panel is open (avoid blocking UI)
   const results = useMemo(() => {
     if (!open) return { issues: [] as QualityIssue[], typeCounts: {} as Record<string, number> };
@@ -308,22 +360,38 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
 
       const entryIssues: { type: string; message: string; fix?: string }[] = [];
 
-      const r1 = checkNumbers(entry.original, translation);
-      if (r1) entryIssues.push(r1);
-      const r2 = checkVariables(entry.original, translation);
-      if (r2) entryIssues.push(r2);
-      const r3 = checkExtraSpaces(translation);
-      if (r3) entryIssues.push(r3);
-      const r4 = checkRemainingEnglish(translation);
-      if (r4) entryIssues.push(r4);
-      const r5 = checkLength(entry, translation);
-      if (r5) entryIssues.push(r5);
-      const r6 = checkPunctuation(entry.original, translation);
-      if (r6) entryIssues.push(r6);
-      const r7 = checkRepetition(translation);
-      if (r7) entryIssues.push(r7);
-      const r8 = checkGrammar(translation);
-      if (r8.length > 0) entryIssues.push(...r8);
+      if (isEnabled("number_check")) {
+        const result = checkNumbers(entry.original, translation);
+        if (result) entryIssues.push(result);
+      }
+      if (isEnabled("variable_check")) {
+        const result = checkVariables(entry.original, translation);
+        if (result) entryIssues.push(result);
+      }
+      if (isEnabled("extra_spaces_check")) {
+        const result = checkExtraSpaces(translation);
+        if (result) entryIssues.push(result);
+      }
+      if (isEnabled("remaining_english")) {
+        const result = checkRemainingEnglish(translation);
+        if (result) entryIssues.push(result);
+      }
+      if (isEnabled("length_check")) {
+        const result = checkLength(entry, translation);
+        if (result) entryIssues.push(result);
+      }
+      if (isEnabled("punctuation_check")) {
+        const result = checkPunctuation(entry.original, translation);
+        if (result) entryIssues.push(result);
+      }
+      if (isEnabled("repetition_check")) {
+        const result = checkRepetition(translation);
+        if (result) entryIssues.push(result);
+      }
+      if (isEnabled("grammar_check")) {
+        const results = checkGrammar(translation);
+        if (results.length > 0) entryIssues.push(...results);
+      }
 
       if (entryIssues.length > 0) {
         issues.push({ key, entryLabel: entry.label, original: entry.original, translation, issues: entryIssues });
@@ -334,7 +402,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     }
 
     return { issues, typeCounts };
-  }, [open, state.entries, state.translations]);
+  }, [open, state.entries, state.translations, isEnabled]);
 
   // === Feature 1: Batch fix by type ===
   const handleFixAll = useCallback((type: string) => {
@@ -518,7 +586,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
   }, [improveResults, onApplyFix]);
 
   // Check if any quality feature is enabled
-  const anyEnabled = ["number_check", "variable_check", "extra_spaces_check", "remaining_english", "length_check", "punctuation_check", "repetition_check", "grammar_check"].some(id => isEnabled(id));
+  const anyEnabled = QUALITY_CHECK_IDS.some(isEnabled);
   if (!anyEnabled || dismissed) return null;
 
   const totalIssues = results.issues.length;
@@ -577,8 +645,26 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
             </Button>
           </div>
 
-          <CollapsibleContent className="mt-3 space-y-2">
-            {/* Summary badges */}
+	          <CollapsibleContent className="mt-3 space-y-2">
+	            <div className="rounded border border-border/60 bg-background/40 p-2">
+	              <p className="mb-2 text-[11px] font-medium text-muted-foreground">قواعد الفحص لهذه اللعبة</p>
+	              <div className="flex flex-wrap gap-1.5">
+	                {QUALITY_CHECK_IDS.map((id) => (
+	                  <Button
+	                    key={id}
+	                    type="button"
+	                    size="sm"
+	                    variant={isEnabled(id) ? "secondary" : "outline"}
+	                    className="h-7 text-[10px]"
+	                    aria-pressed={isEnabled(id)}
+	                    onClick={() => toggleCheck(id)}
+	                  >
+	                    {isEnabled(id) ? "✓" : "○"} {CHECK_LABELS[id]}
+	                  </Button>
+	                ))}
+	              </div>
+	            </div>
+	            {/* Summary badges */}
             <div className="flex flex-wrap gap-2 mb-3">
               {Object.entries(results.typeCounts).map(([type, count]) => (
                 <Badge

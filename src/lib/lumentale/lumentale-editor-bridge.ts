@@ -120,8 +120,10 @@ async function verifyBuiltLumenTaleBundle(
   expectedChanges: Array<{ table: string; rowIndex: number; m_Id: string; original: string; text: string }>,
 ): Promise<string | null> {
   try {
-    const copy = bundle.buffer.slice(bundle.byteOffset, bundle.byteOffset + bundle.byteLength);
-    const verifier = await load(copy, { unityRevision: "2022.3.62f2" });
+    // Copy into a concrete ArrayBuffer: UnityFS does not accept a SharedArrayBuffer-backed view.
+    const copy = new Uint8Array(bundle.byteLength);
+    copy.set(bundle);
+    const verifier = await load(copy.buffer, { unityRevision: "2022.3.62f2" });
     if (!verifier.bundleFile) return "فشل فتح الحزمة الناتجة للتحقق قبل التنزيل.";
     if (verifier.bundleFile.flags.compressionType !== 3) {
       return "أوقف البناء: الحزمة الناتجة ليست مضغوطة بـLZ4HC كما في المصدر.";

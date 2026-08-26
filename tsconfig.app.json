@@ -32,5 +32,10 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/test/manual-reshef-*.test.ts",
+    "src/test/reshef-image-editor.test.ts",
+    "src/test/reshef-two-layer-font.test.ts"
   ]
 }

@@ -15,6 +15,7 @@ function makeEditor(overrides: Partial<Parameters<typeof EditorBuildSection>[0][
     building: false,
     handleCheckIntegrity: vi.fn(),
     handlePreBuild: vi.fn(),
+    forceSave: vi.fn(),
     ...overrides,
   };
 }

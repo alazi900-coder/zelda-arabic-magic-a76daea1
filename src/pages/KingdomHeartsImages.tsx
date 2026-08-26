@@ -35,10 +35,16 @@ type Tim2EditorSession = { resources: Tim2Resource[]; selectedId: string | null;
 // بينما «إغلاق» هو الإجراء الصريح الوحيد لمسح جلسة موارد TIM2.
 let retainedTim2EditorSession: Tim2EditorSession | null = null;
 
+function toArrayBuffer(bytes: Uint8Array | Uint8ClampedArray): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  return copy.buffer;
+}
+
 function canvasDataUrl(rgba: Uint8ClampedArray, width: number, height: number, maxWidth?: number): string {
   const source = document.createElement("canvas");
   source.width = width; source.height = height;
-  source.getContext("2d")!.putImageData(new ImageData(rgba, width, height), 0, 0);
+  source.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(toArrayBuffer(rgba)), width, height), 0, 0);
   const canvas = document.createElement("canvas");
   const scale = maxWidth ? Math.min(1, maxWidth / width) : 1;
   canvas.width = Math.max(1, Math.round(width * scale)); canvas.height = Math.max(1, Math.round(height * scale));
@@ -49,7 +55,7 @@ function canvasDataUrl(rgba: Uint8ClampedArray, width: number, height: number, m
 }
 
 function downloadBytes(bytes: Uint8Array, fileName: string, type: string) {
-  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const url = URL.createObjectURL(new Blob([toArrayBuffer(bytes)], { type }));
   const link = document.createElement("a");
   link.href = url; link.download = fileName; link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -68,7 +74,7 @@ async function decodeUpload(file: File): Promise<ImportedImage> {
 }
 
 function firstPicture(resource: Tim2Resource): Tim2Picture {
-  return parseTim2(resource.working.buffer.slice(resource.working.byteOffset, resource.working.byteOffset + resource.working.byteLength)).pictures[0];
+  return parseTim2(toArrayBuffer(resource.working)).pictures[0];
 }
 
 function clampRegion(region: Region, width: number, height: number): Region {
@@ -128,7 +134,7 @@ export default function KingdomHeartsImages() {
   const refreshResource = useCallback((id: string, working: Uint8Array, isModified = true) => {
     setResources((current) => current.map((item) => {
       if (item.id !== id) return item;
-      const asset = parseTim2(working.buffer.slice(working.byteOffset, working.byteOffset + working.byteLength));
+      const asset = parseTim2(toArrayBuffer(working));
       const picture = asset.pictures[0];
       return { ...item, asset, working, preview: canvasDataUrl(picture.rgba, picture.width, picture.height, 180), modified: isModified };
     }));
@@ -150,19 +156,19 @@ export default function KingdomHeartsImages() {
   const openFiles = useCallback(async (files: File[]) => {
     setLoading(true);
     try {
-      const raw: { path: string; bytes: Uint8Array }[] = [];
+      const uploadedTim2: { path: string; bytes: Uint8Array }[] = [];
       for (const file of files) {
         if (file.name.toLowerCase().endsWith(".zip")) {
           const zip = await JSZip.loadAsync(file);
-          for (const entry of Object.values(zip.files)) if (!entry.dir && entry.name.toLowerCase().endsWith(".tm2")) raw.push({ path: entry.name, bytes: await entry.async("uint8array") });
-        } else if (file.name.toLowerCase().endsWith(".tm2")) raw.push({ path: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+          for (const entry of Object.values(zip.files)) if (!entry.dir && entry.name.toLowerCase().endsWith(".tm2")) uploadedTim2.push({ path: entry.name, bytes: await entry.async("uint8array") });
+        } else if (file.name.toLowerCase().endsWith(".tm2")) uploadedTim2.push({ path: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
       }
-      if (!raw.length) throw new Error("لم يُعثر على ملفات TIM2 داخل الملفات المحددة.");
+      if (!uploadedTim2.length) throw new Error("لم يُعثر على ملفات TIM2 داخل الملفات المحددة.");
       const accepted: Tim2Resource[] = [];
       let rejected = 0;
-      for (const item of raw) {
+      for (const item of uploadedTim2) {
         try {
-          const asset = parseTim2(item.bytes.buffer.slice(item.bytes.byteOffset, item.bytes.byteOffset + item.bytes.byteLength));
+          const asset = parseTim2(toArrayBuffer(item.bytes));
           const picture = asset.pictures[0];
           accepted.push({ id: `${item.path}:${accepted.length}`, path: item.path, asset, original: item.bytes.slice(), working: item.bytes, preview: canvasDataUrl(picture.rgba, picture.width, picture.height, 180), modified: false });
         } catch { rejected += 1; }
@@ -179,12 +185,12 @@ export default function KingdomHeartsImages() {
   const openDatTim2Resources = useCallback(async () => {
     setLoading(true);
     try {
-      const raw = await loadKHBbsDatTim2Resources();
+      const datTim2 = await loadKHBbsDatTim2Resources();
       const accepted: Tim2Resource[] = [];
       let rejected = 0;
-      for (const item of raw) {
+      for (const item of datTim2) {
         try {
-          const asset = parseTim2(item.bytes.buffer.slice(item.bytes.byteOffset, item.bytes.byteOffset + item.bytes.byteLength));
+          const asset = parseTim2(toArrayBuffer(item.bytes));
           const picture = asset.pictures[0];
           accepted.push({ id: item.source.entryId, path: item.path, asset, original: item.bytes.slice(), working: item.bytes, preview: canvasDataUrl(picture.rgba, picture.width, picture.height, 180), modified: false, source: item.source });
         } catch { rejected += 1; }
@@ -273,7 +279,7 @@ export default function KingdomHeartsImages() {
       if (cleanSource && selectedPicture) {
         const cleanPatch = cropTim2Rgba(selectedPicture, cleanSource);
         const cleaned = replaceTim2Rgba(baseAsset, 0, cleanPatch.rgba, cleanPatch.width, cleanPatch.height, { preserveOriginalAlpha: preserveAlpha, region });
-        baseAsset = parseTim2(cleaned.buffer.slice(cleaned.byteOffset, cleaned.byteOffset + cleaned.byteLength));
+        baseAsset = parseTim2(toArrayBuffer(cleaned));
       }
       const committed = await commitResource(selected, replaceTim2Rgba(baseAsset, 0, overlay.rgba, overlay.width, overlay.height, { preserveOriginalAlpha: preserveAlpha, region }));
       if (committed) {

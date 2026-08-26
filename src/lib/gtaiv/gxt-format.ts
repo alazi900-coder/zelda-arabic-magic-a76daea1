@@ -554,6 +554,7 @@ export function parseGtaIvOxt(text: string): GtaIvParsedOxt {
       continue;
     }
     if (insideTable) {
+      if (!current) throw new Error("تعذر إضافة مدخل OXT: لا يوجد جدول نشط.");
       if (!rawLine.startsWith("\t")) fail("سطر OXT داخل جدول لا يبدأ بعلامة tab.");
       const separator = rawLine.indexOf("=");
       if (separator <= 1) fail("مدخل OXT لا يحتوي مفتاحاً وقيمة.");

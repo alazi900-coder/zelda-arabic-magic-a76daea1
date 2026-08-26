@@ -114,7 +114,7 @@ export async function openKHBbsInEditor(uploads: KHBbsEditorOpenInput[]): Promis
   const usedPaths = new Set<string>();
 
   for (const candidate of candidates) {
-    const path = candidate.path.replaceAll("\\", "/");
+    const path = candidate.path.replace(/\\/g, "/");
     if (usedPaths.has(path)) {
       rejected.push(`${path}: اسم مكرر داخل الملفات المفتوحة`);
       continue;
@@ -205,7 +205,8 @@ export async function buildKHBbsArchive(translations: Record<string, string>): P
 /** A DAT output is allowed only if every session file retained its exact BBS source. */
 export async function hasKHBbsBbsSources(): Promise<boolean> {
   const files = await idbGet<KHBbsStoredFile[]>(KHBBS_DOCUMENTS_KEY);
-  return Boolean(files?.length) && files.every((file) => Boolean(file.bbsSource));
+  if (!files?.length) return false;
+  return files.every((file) => Boolean(file.bbsSource));
 }
 
 /** Rebuilds only changed CTDs as original-resource replacements for safe DAT output. */

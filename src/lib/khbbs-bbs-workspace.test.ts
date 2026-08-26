@@ -242,7 +242,9 @@ describe("buildKHBbsDatOutput", () => {
   it("يكتشف Font.arc في BBS0 وBBS1 ويضع الخط العربي فيهما فقط", async () => {
     const { archive, originals, embeddedArabicFont } = await makeDualFontWorkspace();
     setKHBbsBbsWorkspace(archive);
-    const sources = await setKHBbsFontReplacement(new File([embeddedArabicFont], "Font.arabic.arc", { type: "application/octet-stream" }));
+    const fontCopy = new Uint8Array(embeddedArabicFont.byteLength);
+    fontCopy.set(embeddedArabicFont);
+    const sources = await setKHBbsFontReplacement(new File([fontCopy.buffer], "Font.arabic.arc", { type: "application/octet-stream" }));
     expect(sources.map((source) => source.archiveIndex)).toEqual([0, 1]);
 
     const output = await buildKHBbsDatOutput([]);

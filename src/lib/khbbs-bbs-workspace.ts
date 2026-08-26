@@ -187,6 +187,7 @@ async function prepareReplacement(
 
   if (source.archiveIndex !== 0 || !source.isVerifiedCtd || source.infoTableOffset === null) {
     assertReplacement(source, nextBytes, source.filename);
+    throw new Error(`لا يمكن نقل ${source.filename} داخل BBS0 لأنه لا يملك جدول معلومات CTD مؤكداً.`);
   }
   const requiredSectors = Math.ceil(nextBytes.byteLength / BBS_SECTOR_SIZE);
   const destinationOffset = await findBbs0FreeSectors(requiredSectors, claimedBbs0Ranges);

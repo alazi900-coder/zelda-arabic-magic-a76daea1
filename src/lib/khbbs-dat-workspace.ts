@@ -118,8 +118,15 @@ export async function writeKHBbsDatResource(
     throw new Error("توقف الاستبدال: حجم TIM2 لا يطابق الحجز الأصلي في DAT، لحماية المورد التالي.");
   }
 
-  const permission = await handle.queryPermission({ mode: "readwrite" });
-  if (permission !== "granted" && await handle.requestPermission({ mode: "readwrite" }) !== "granted") {
+  const writableHandle = handle as FileSystemFileHandle & {
+    queryPermission?: (descriptor: { mode: "readwrite" }) => Promise<PermissionState>;
+    requestPermission?: (descriptor: { mode: "readwrite" }) => Promise<PermissionState>;
+  };
+  if (!writableHandle.queryPermission || !writableHandle.requestPermission) {
+    throw new Error("هذا المتصفح لا يدعم طلب صلاحية الكتابة المباشرة لملف DAT.");
+  }
+  const permission = await writableHandle.queryPermission({ mode: "readwrite" });
+  if (permission !== "granted" && await writableHandle.requestPermission({ mode: "readwrite" }) !== "granted") {
     throw new Error("لم تُمنح الأداة صلاحية الكتابة في ملف DAT الأصلي.");
   }
 

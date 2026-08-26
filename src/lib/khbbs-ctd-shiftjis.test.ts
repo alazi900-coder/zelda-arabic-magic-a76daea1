@@ -21,9 +21,15 @@ function createShiftJisFixture(): Uint8Array {
   return bytes;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 describe("KHBBS CTD Shift-JIS reader", () => {
   it("renders Shift-JIS text as text and keeps F2 commands as one protected token", () => {
-    const document = parseCTD(createShiftJisFixture().buffer);
+    const document = parseCTD(toArrayBuffer(createShiftJisFixture()));
 
     expect(document.entries[0].text).toBe("ダミー：ＩＤ");
     expect(document.entries[0].text).not.toContain("[CTD:");
@@ -32,12 +38,12 @@ describe("KHBBS CTD Shift-JIS reader", () => {
   });
 
   it("preserves an unchanged Shift-JIS entry while another CTD entry is rebuilt", () => {
-    const document = parseCTD(createShiftJisFixture().buffer);
+    const document = parseCTD(toArrayBuffer(createShiftJisFixture()));
     const entries = document.entries.map((entry) => ({ ...entry }));
     entries[1].translation = "Changed [CTD:F2 F6]";
 
     const rebuilt = buildCTD(document, entries);
-    const reparsed = parseCTD(rebuilt.buffer);
+    const reparsed = parseCTD(toArrayBuffer(rebuilt));
 
     expect(reparsed.entries[0].text).toBe("ダミー：ＩＤ");
     expect(Array.from(reparsed.entries[0].rawTextBytes)).toEqual([0x83, 0x5f, 0x83, 0x7e, 0x81, 0x5b, 0x81, 0x46, 0x82, 0x68, 0x82, 0x63]);
@@ -53,11 +59,11 @@ describe("KHBBS CTD Shift-JIS reader", () => {
       0x81, 0x40, 0x81, 0x7c, 0x81, 0x62,
     ]);
 
-    const document = parseCTD(createShiftJisFixture().buffer);
+    const document = parseCTD(toArrayBuffer(createShiftJisFixture()));
     const entries = document.entries.map((entry) => ({ ...entry }));
     entries[1].translation = `English ${symbols} [CTD:F2 F6]`;
     const rebuilt = buildCTD(document, entries);
 
-    expect(parseCTD(rebuilt.buffer).entries[1].text).toBe(`English ${symbols} [CTD:F2 F6]`);
+    expect(parseCTD(toArrayBuffer(rebuilt)).entries[1].text).toBe(`English ${symbols} [CTD:F2 F6]`);
   });
 });

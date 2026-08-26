@@ -719,7 +719,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           : item.alternatives;
         return [{ ...item, ...(alternatives ? { alternatives } : {}) }];
       });
-      const byKey = new Map(safeList.map((r) => [r.key as string, r]));
+      const byKey = new Map(
+        safeList
+          .map((result) => [typeof (result as { key?: unknown }).key === "string" ? (result as { key: string }).key : "", result] as const)
+          .filter(([key]) => key.length > 0),
+      );
       await Promise.all(texts.map(t => {
         const cacheKey = makeEnhanceCacheKey(t.original, t.translation, cacheContextSignature);
         return enhanceCacheStore(cacheKey, byKey.get(t.key) || null);

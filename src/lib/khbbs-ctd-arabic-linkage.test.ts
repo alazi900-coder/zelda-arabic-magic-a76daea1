@@ -13,13 +13,14 @@ const embeddedModelReportPath = "/home/ubuntu/khbbs-font-work/audit-final/font-a
 const embeddedFontPath = "/home/ubuntu/zelda-arabic-magic-original/src/assets/Font.arabic.arc";
 const outputPath = "/home/ubuntu/khbbs-font-work/audit-final/ctd-arabic-linkage-v4-raster-d.json";
 const words = ["سلام", "مرحبا", "العالم", "بداية", "الشمس", "مكتبة"];
+const runExternalFontAudit = process.env.KHBBS_EXTERNAL_FONT_AUDIT === "1";
 
 function hex(value: number, width: number): string {
   return `0x${value.toString(16).toUpperCase().padStart(width, "0")}`;
 }
 
 describe("KHBBS Arabic CTD linkage audit", () => {
-  it("encodes all mapped forms and representative connected Arabic words to injected Font.arc codes", async () => {
+  it.skipIf(!runExternalFontAudit)("encodes all mapped forms and representative connected Arabic words to injected Font.arc codes", async () => {
     const injection = JSON.parse(await readFile(injectionReportPath, "utf8"));
     const embeddedModel = JSON.parse(await readFile(embeddedModelReportPath, "utf8"));
     const injectedCodes = new Set<number>(

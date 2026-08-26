@@ -325,8 +325,10 @@ export function decryptKHBbsPgdBytes(source: Uint8Array): KHBbsPgdResult {
 export async function decryptKHBbsPgdFile(source: File): Promise<KHBbsPgdFileResult> {
   const decrypted = decryptKHBbsPgdBytes(new Uint8Array(await source.arrayBuffer()));
   const outputName = source.name.replace(/\.dat$/i, "") || "BBS";
+  const copy = new Uint8Array(decrypted.data.byteLength);
+  copy.set(decrypted.data);
   return {
     ...decrypted,
-    file: new File([decrypted.data], `${outputName}.DAT`, { type: "application/octet-stream" }),
+    file: new File([copy.buffer], `${outputName}.DAT`, { type: "application/octet-stream" }),
   };
 }

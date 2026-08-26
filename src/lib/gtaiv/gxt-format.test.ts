@@ -13,8 +13,8 @@ import {
   repairGtaIvDollarAmountSequence,
   repairGtaIvRuntimeTokenSequence,
   analyzeGtaIvUnsupportedCharacters,
-  gtaIvArabicGlyphCellForPresentationForm,
-  gtaIvArabicPresentationFormGlyphCells,
+  gtaIvArabicInputUnitForPresentationForm,
+  gtaIvArabicPresentationFormInputUnits,
   validateGtaIvDollarAmountSequence,
   validateGtaIvRuntimeTokenSequence,
 } from "./gxt-format";
@@ -197,27 +197,28 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "ادفع 700$ و$20", changed: false, safe: false });
   });
 
-  it("uses the verified sparse MAP glyph-cell units for shaped Arabic Presentation Forms", () => {
+  it("uses the verified consecutive original-English input units for shaped Arabic Presentation Forms", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
-    expect(Array.from(encoded.textUnits)).toEqual([410, 228, 193, 123, 199]);
+    expect(Array.from(encoded.textUnits)).toEqual([202, 164, 129, 118, 135]);
 
     const alef = encodeGtaIvArabicText("", "ا");
     expect(alef.processedText).toBe("ﺍ");
-    expect(Array.from(alef.textUnits)).toEqual([188]);
+    expect(Array.from(alef.textUnits)).toEqual([125]);
   });
 
-  it("maps every Arabic Presentation Form to one audited, sparse MAP glyph cell", () => {
-    expect(gtaIvArabicPresentationFormGlyphCells).toHaveLength(144);
-    expect(new Set(gtaIvArabicPresentationFormGlyphCells).size).toBe(144);
-    expect(gtaIvArabicGlyphCellForPresentationForm(0xfe70)).toBe(103);
-    expect(gtaIvArabicGlyphCellForPresentationForm(0xfe99)).toBe(298);
-    expect(gtaIvArabicGlyphCellForPresentationForm(0xfee0)).toBe(420);
-    expect(gtaIvArabicGlyphCellForPresentationForm(0xfef9)).toBe(471);
-    expect(gtaIvArabicGlyphCellForPresentationForm(0xfeff)).toBe(255);
+  it("maps every Arabic Presentation Form to the matching original-English input unit", () => {
+    expect(gtaIvArabicPresentationFormInputUnits).toHaveLength(144);
+    expect(new Set(gtaIvArabicPresentationFormInputUnits).size).toBe(144);
+    expect(gtaIvArabicInputUnitForPresentationForm(0xfe70)).toBe(96);
+    expect(gtaIvArabicInputUnitForPresentationForm(0xfe99)).toBe(137);
+    expect(gtaIvArabicInputUnitForPresentationForm(0xfee0)).toBe(208);
+    expect(gtaIvArabicInputUnitForPresentationForm(0xfef9)).toBe(233);
+    expect(gtaIvArabicInputUnitForPresentationForm(0xfeff)).toBe(239);
     for (let index = 0; index < 144; index += 1) {
-      expect(gtaIvArabicGlyphCellForPresentationForm(0xfe70 + index))
-        .toBe(gtaIvArabicPresentationFormGlyphCells[index]);
+      expect(gtaIvArabicInputUnitForPresentationForm(0xfe70 + index))
+        .toBe(96 + index);
+      expect(gtaIvArabicPresentationFormInputUnits[index]).toBe(96 + index);
     }
   });
 
@@ -225,6 +226,7 @@ describe("GTA IV GXT/OXT structural reader", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(decodeGtaIvArabicFontUnits(encoded.textUnits, true)).toBe("تؤبسك");
     expect(decodeGtaIvArabicFontUnits(new Uint16Array([0x48, 0x65, 0x6c, 0x70]))).toBe("Help");
+    expect(decodeGtaIvArabicFontUnits(new Uint16Array([126]))).toBe("~");
   });
 
   it("keeps GTA IV runtime tokens byte-for-byte while encoding Arabic prose", () => {
@@ -312,9 +314,9 @@ describe("GTA IV GXT/OXT structural reader", () => {
     });
     expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
     const output = parseGtaIvGxt(result.buffer);
-    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([410, 228, 193, 123, 199]);
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([202, 164, 129, 118, 135]);
     expect(extractGtaIvEntries(result.buffer).entries[0].original)
-      .toBe(gtaIvRawUnitsToString(new Uint16Array([410, 228, 193, 123, 199])));
+      .toBe(gtaIvRawUnitsToString(new Uint16Array([202, 164, 129, 118, 135])));
     expect(decodeGtaIvArabicFontUnits(output.tables[0].entries[0].textUnits, true)).toBe("تؤبسك");
   });
 

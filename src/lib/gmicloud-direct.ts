@@ -11,6 +11,15 @@ export const GMICLOUD_DIRECT_MODELS = [
 ] as const;
 export type GmiCloudDirectModel = (typeof GMICLOUD_DIRECT_MODELS)[number];
 
+export interface GmiCloudJsonRequest {
+  apiKey?: string;
+  model?: string;
+  system: string;
+  user: string;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
 export interface GmiCloudEntry {
   key: string;
   original: string;
@@ -49,6 +58,54 @@ function errorMessage(payload: unknown, status: number): string {
     if (typeof record.message === 'string') return record.message;
   }
   return `تعذر الاتصال بـ GMICLOUD (HTTP ${status}).`;
+}
+
+/**
+ * نقل JSON مباشر لأدوات المحرر. عند اختيار MiniMax لا يستدعي هذا المسار
+ * Lovable أو Gemini أو أي دالة خلفية، ويستخدم مفتاح الجلسة فقط.
+ */
+export async function requestGmiCloudJson<T extends Record<string, unknown>>(request: GmiCloudJsonRequest): Promise<T> {
+  if (!request.apiKey?.trim()) {
+    throw new GmiCloudDirectError('يحتاج GMICLOUD مفتاح API في حقل GMICLOUD داخل المحرر.', 400);
+  }
+  const model = request.model || GMICLOUD_DIRECT_MODEL;
+  if (!GMICLOUD_DIRECT_MODELS.includes(model as GmiCloudDirectModel)) {
+    throw new GmiCloudDirectError('نموذج GMICLOUD المختار غير متاح لهذه الأداة في هذه الجلسة.', 400);
+  }
+
+  const response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
+    method: 'POST',
+    signal: request.signal,
+    headers: {
+      Authorization: `Bearer ${request.apiKey.trim()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      temperature: request.temperature ?? 0.2,
+      messages: [
+        { role: 'system', content: request.system },
+        { role: 'user', content: request.user },
+      ],
+    }),
+  });
+
+  const raw = await response.text();
+  let payload: unknown = null;
+  try { payload = raw ? JSON.parse(raw) : null; } catch { /* handled below */ }
+  if (!response.ok) throw new GmiCloudDirectError(errorMessage(payload, response.status), response.status);
+
+  const content = payload && typeof payload === 'object'
+    ? (payload as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content
+    : undefined;
+  if (typeof content !== 'string') {
+    throw new GmiCloudDirectError('استجابة GMICLOUD لا تحتوي نصاً صالحاً.', 502);
+  }
+  const parsed = safeJson(content);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new GmiCloudDirectError('استجابة GMICLOUD ليست كائن JSON صالحاً.', 502);
+  }
+  return parsed as T;
 }
 
 function buildSystemPrompt({ glossary, extraInstructions, game }: Omit<GmiCloudDirectRequest, 'apiKey' | 'entries' | 'signal'>): string {

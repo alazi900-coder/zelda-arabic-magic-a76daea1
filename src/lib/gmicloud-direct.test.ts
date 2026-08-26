@@ -3,6 +3,7 @@ import {
   GMICLOUD_DIRECT_ENDPOINT,
   GMICLOUD_DIRECT_MODEL,
   requestGmiCloudDirect,
+  requestGmiCloudJson,
 } from "./gmicloud-direct";
 
 afterEach(() => {
@@ -35,5 +36,39 @@ describe("GMICLOUD direct transport", () => {
       translations: { "test:0": "مرحباً" },
       providerUsed: "GMICLOUD / MiniMax M2.7 (direct)",
     });
+  });
+
+  it("uses MiniMax M3 directly for editor JSON tools and accepts fenced JSON", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '```json\n{"results":[{"key":"a","suggested":"أهلاً"}]}\n```' } }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await requestGmiCloudJson<{ results: Array<{ key: string; suggested: string }> }>({
+      apiKey: "session-key",
+      model: "MiniMaxAI/MiniMax-M3",
+      system: "Return JSON only",
+      user: "{}",
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(GMICLOUD_DIRECT_ENDPOINT);
+    expect(options.headers).toMatchObject({ Authorization: "Bearer session-key" });
+    expect(JSON.parse(String(options.body))).toMatchObject({ model: "MiniMaxAI/MiniMax-M3" });
+    expect(response.results[0]).toEqual({ key: "a", suggested: "أهلاً" });
+  });
+
+  it("rejects a non-MiniMax model before sending any request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(requestGmiCloudJson({
+      apiKey: "session-key",
+      model: "gemini-2.5-flash",
+      system: "Return JSON only",
+      user: "{}",
+    })).rejects.toThrow("نموذج GMICLOUD المختار غير متاح");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

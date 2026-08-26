@@ -9,6 +9,7 @@ import type { ExtractedEntry } from "./types";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { resolveGameParam } from "@/lib/game-param";
+import { requestGmiCloudDirect } from "@/lib/gmicloud-direct";
 
 interface CompareEnginesDialogProps {
   open: boolean;
@@ -204,33 +205,46 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
     setErrors(prev => { const next = { ...prev }; delete next[engine.id]; return next; });
 
     try {
-      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
-        method: 'POST',
-        headers: getSupabaseHeaders(),
-        body: JSON.stringify({
-          entries: [{ key, original: entry.original }],
-          glossary,
-          provider: engine.provider,
-          userApiKey: engine.provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
-          providerApiKey: providerKey,
-          myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
-          aiModel: engine.model || undefined,
-          game: resolveGameParam(entry.msbtFile || '', risenVariant),
-        }),
-      });
-      if (!response.ok) {
-        let errMsg = `خطأ ${response.status}`;
-        try { const j = await response.json(); if (j.error) errMsg = j.error; } catch { /* ignore */ }
-        setErrors(prev => ({ ...prev, [engine.id]: errMsg }));
-      } else {
+      let rawTranslation: string | null = null;
+      if (engine.provider === 'gmicloud') {
+        const response = await requestGmiCloudDirect({
+            apiKey: providerKey,
+            model: engine.model,
+            entries: [{ key, original: entry.original }],
+            glossary,
+            game: resolveGameParam(entry.msbtFile || '', risenVariant),
+          });
         const data = await response.json();
-        const rawTranslation = data.translations?.[key] || null;
-        const translation = rawTranslation ? normalizeTranslationForEntry(entry.original, rawTranslation) : null;
-        if (translation) {
-          setResults(prev => ({ ...prev, [engine.id]: translation }));
-        } else {
-          setErrors(prev => ({ ...prev, [engine.id]: 'لا توجد ترجمة في الاستجابة' }));
+        rawTranslation = data.translations?.[key] || null;
+      } else {
+        const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
+            method: 'POST',
+            headers: getSupabaseHeaders(),
+            body: JSON.stringify({
+              entries: [{ key, original: entry.original }],
+              glossary,
+              provider: engine.provider,
+              userApiKey: engine.provider === 'gemini' ? (userGeminiKey || undefined) : undefined,
+              providerApiKey: providerKey,
+              myMemoryEmail: engine.provider === 'mymemory' ? (myMemoryEmail || undefined) : undefined,
+              aiModel: engine.model || undefined,
+              game: resolveGameParam(entry.msbtFile || '', risenVariant),
+            }),
+          });
+        if (!response.ok) {
+          let errMsg = `خطأ ${response.status}`;
+          try { const j = await response.json(); if (j.error) errMsg = j.error; } catch { /* ignore */ }
+          setErrors(prev => ({ ...prev, [engine.id]: errMsg }));
+          return;
         }
+        const data = await response.json();
+        rawTranslation = data.translations?.[key] || null;
+      }
+      const translation = rawTranslation ? normalizeTranslationForEntry(entry.original, rawTranslation) : null;
+      if (translation) {
+        setResults(prev => ({ ...prev, [engine.id]: translation }));
+      } else {
+        setErrors(prev => ({ ...prev, [engine.id]: 'لا توجد ترجمة في الاستجابة' }));
       }
     } catch (e) {
       setErrors(prev => ({ ...prev, [engine.id]: e instanceof Error ? e.message : 'فشل الاتصال' }));

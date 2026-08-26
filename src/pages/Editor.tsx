@@ -903,6 +903,8 @@ const Editor = () => {
               onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
               risenVariant={editor.risenVariant}
               userGmiCloudKey={typeof editor.userGmiCloudKey === "string" ? editor.userGmiCloudKey : ""}
+              translationProvider={editor.translationProvider}
+              aiModel={editor.aiModel}
             />
           </React.Suspense>
         )}

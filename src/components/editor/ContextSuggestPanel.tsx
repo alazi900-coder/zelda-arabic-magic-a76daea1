@@ -11,6 +11,7 @@ import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/catego
 import type { ExtractedEntry } from "./types";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import { resolveGameParam } from "@/lib/game-param";
+import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
 
 interface Suggestion {
   translation: string;
@@ -31,6 +32,8 @@ interface ContextSuggestPanelProps {
   onApplyTranslation: (key: string, text: string) => void;
   risenVariant: 'risen1' | 'risen2';
   userGmiCloudKey?: string;
+  translationProvider?: string;
+  aiModel?: string;
 }
 
 // Persistent IndexedDB cache. Keyed by `ctxsugg:<msbtFile>:<index>`.
@@ -72,7 +75,7 @@ const STYLE_STYLES: Record<Suggestion["style"], { emoji: string; cls: string }> 
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
 
 const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
-  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation, risenVariant, userGmiCloudKey,
+  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation, risenVariant, userGmiCloudKey, translationProvider, aiModel: selectedAiModel,
 }) => {
   const key = entry ? `${entry.msbtFile}:${entry.index}` : "";
   const currentTranslation = entry ? translations[key] || "" : "";
@@ -153,8 +156,8 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
       let aiModel = "";
       let providerApiKey = "";
       try {
-        provider = localStorage.getItem("translationProvider") || "gemini";
-        aiModel = localStorage.getItem("aiModel") || "";
+        provider = translationProvider || localStorage.getItem("translationProvider") || "gemini";
+        aiModel = selectedAiModel || localStorage.getItem("aiModel") || "";
         if (provider === "deepseek") {
           providerApiKey = localStorage.getItem("userDeepSeekKey") || "";
         } else if (provider === "tokenrouter") {
@@ -165,6 +168,21 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
     } catch {
       if (provider === "gmicloud") providerApiKey = userGmiCloudKey || "";
     }
+
+      if (provider === "gmicloud") {
+        const data = await requestGmiCloudJson<{ suggestions?: Suggestion[]; contextNote?: string }>({
+          apiKey: providerApiKey,
+          model: aiModel,
+          system: "You are an Arabic video-game localization editor. Return ONLY one JSON object with keys suggestions and contextNote. suggestions must be an array of up to three objects with translation, style (formal, natural, or creative), styleLabel in Arabic, reason in Arabic, and confidence from 0 to 1. Preserve every technical token, variable, control code, number, punctuation-bearing game code, and line-break marker exactly. Do not use Markdown.",
+          user: JSON.stringify({ target: { original: entry.original, translation: currentTranslation }, context: contextWindow, tmExamples, maxBytes: entry.maxBytes || 0, glossary: glossarySnippet, game: gameParam, speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined }),
+        });
+        const sg: Suggestion[] = Array.isArray(data.suggestions) ? data.suggestions : [];
+        const note = typeof data.contextNote === "string" ? data.contextNote : "";
+        setSuggestions(sg);
+        setContextNote(note);
+        await writeCache(key, sg, note);
+        return;
+      }
 
       const res = await fetch(getEdgeFunctionUrl("context-suggest"), {
         method: "POST",

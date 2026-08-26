@@ -182,12 +182,13 @@ function isUnsafeEnglishReplacement(original: string, previous: string, next: st
 }
 
 // --- Diff helpers: word-level + sentence-level ---
-function splitTokens(s: string, mode: "word" | "sentence"): string[] {
+function splitTokens(s: unknown, mode: "word" | "sentence"): string[] {
+  const text = typeof s === "string" ? s : "";
   if (mode === "sentence") {
     // Split on . ! ? ؟ ، ؛ : newlines while keeping the delimiter attached
-    return s.split(/(?<=[.!?؟،؛:\n])\s+/).filter(t => t.length > 0);
+    return text.split(/(?<=[.!?؟،؛:\n])\s+/).filter(t => t.length > 0);
   }
-  return s.split(/(\s+)/);
+  return text.split(/(\s+)/);
 }
 
 function diffTokens(a: string, b: string, mode: "word" | "sentence"): { type: "same" | "del" | "add"; text: string }[] {
@@ -692,8 +693,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setProgress({ current: processed, total: translatedEntries.length });
 
     const isTokenRouterActive = effectiveProvider === 'tokenrouter';
-    const effectiveBatchSize = isTokenRouterActive ? TOKENROUTER_BATCH_SIZE : BATCH_SIZE;
-    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : PARALLEL_REQUESTS;
+    const isGmiCloudActive = effectiveProvider === 'gmicloud';
+    // MiniMax may temporarily reject large parallel bursts; use small serial batches
+    // and let its direct-only transport retry only the same GMI Cloud model.
+    const effectiveBatchSize = isTokenRouterActive ? TOKENROUTER_BATCH_SIZE : isGmiCloudActive ? 4 : BATCH_SIZE;
+    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : isGmiCloudActive ? 1 : PARALLEL_REQUESTS;
     const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
     for (let i = 0; i < cacheMissEntries.length; i += effectiveBatchSize) {
       batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + effectiveBatchSize) });

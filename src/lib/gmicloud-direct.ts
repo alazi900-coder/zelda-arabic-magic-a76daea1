@@ -60,6 +60,22 @@ function errorMessage(payload: unknown, status: number): string {
   return `تعذر الاتصال بـ GMICLOUD (HTTP ${status}).`;
 }
 
+function isRetryableGmiStatus(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+function waitForRetry(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = globalThis.setTimeout(resolve, milliseconds);
+    if (!signal) return;
+    const onAbort = () => {
+      globalThis.clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /**
  * نقل JSON مباشر لأدوات المحرر. عند اختيار MiniMax لا يستدعي هذا المسار
  * Lovable أو Gemini أو أي دالة خلفية، ويستخدم مفتاح الجلسة فقط.
@@ -73,26 +89,32 @@ export async function requestGmiCloudJson<T extends Record<string, unknown>>(req
     throw new GmiCloudDirectError('نموذج GMICLOUD المختار غير متاح لهذه الأداة في هذه الجلسة.', 400);
   }
 
-  const response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
-    method: 'POST',
-    signal: request.signal,
-    headers: {
-      Authorization: `Bearer ${request.apiKey.trim()}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: request.temperature ?? 0.2,
-      messages: [
-        { role: 'system', content: request.system },
-        { role: 'user', content: request.user },
-      ],
-    }),
-  });
-
-  const raw = await response.text();
+  let response: Response | undefined;
   let payload: unknown = null;
-  try { payload = raw ? JSON.parse(raw) : null; } catch { /* handled below */ }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
+      method: 'POST',
+      signal: request.signal,
+      headers: {
+        Authorization: `Bearer ${request.apiKey.trim()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        temperature: request.temperature ?? 0.2,
+        messages: [
+          { role: 'system', content: request.system },
+          { role: 'user', content: request.user },
+        ],
+      }),
+    });
+
+    const raw = await response.text();
+    try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
+    if (response.ok || !isRetryableGmiStatus(response.status) || attempt === 2) break;
+    await waitForRetry(700 * (attempt + 1), request.signal);
+  }
+  if (!response) throw new GmiCloudDirectError('تعذر بدء طلب GMICLOUD.', 502);
   if (!response.ok) throw new GmiCloudDirectError(errorMessage(payload, response.status), response.status);
 
   const content = payload && typeof payload === 'object'

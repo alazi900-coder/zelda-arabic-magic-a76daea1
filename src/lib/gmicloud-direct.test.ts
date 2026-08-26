@@ -59,6 +59,28 @@ describe("GMICLOUD direct transport", () => {
     expect(response.results[0]).toEqual({ key: "a", suggested: "أهلاً" });
   });
 
+  it("retries a temporary GMICLOUD overload and stays on the same MiniMax model", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "Service temporarily unavailable. All endpoints are currently overloaded." } }), { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: '{"results":[{"key":"a","suggested":"أهلاً"}]}' } }],
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = requestGmiCloudJson<{ results: Array<{ key: string; suggested: string }> }>({
+      apiKey: "session-key",
+      model: "MiniMaxAI/MiniMax-M3",
+      system: "Return JSON only",
+      user: "{}",
+    });
+    const response = await pending;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({ model: "MiniMaxAI/MiniMax-M3" });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toMatchObject({ model: "MiniMaxAI/MiniMax-M3" });
+    expect(response.results[0]).toEqual({ key: "a", suggested: "أهلاً" });
+  });
+
   it("rejects a non-MiniMax model before sending any request", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

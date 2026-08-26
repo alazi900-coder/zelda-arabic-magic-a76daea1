@@ -126,6 +126,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
   const [showSkippedDialog, setShowSkippedDialog] = useState(false);
+  const [showLumenTalePreBuild, setShowLumenTalePreBuild] = useState(false);
 
   const handleMother3Build = async () => {
     setM3Building(true);
@@ -759,6 +760,46 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         </DialogContent>
       </Dialog>
 
+      {isLumenTale && (
+        <Dialog open={showLumenTalePreBuild} onOpenChange={setShowLumenTalePreBuild}>
+          <DialogContent className="max-w-lg font-body" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="font-display text-right">مراجعة قبل بناء حزمة LumenTale</DialogTitle>
+              <DialogDescription className="text-right leading-6">
+                سيبني المحرر نسخة Bundle جديدة محلياً من الحزمة المفتوحة حالياً. لا تُرفع الحزمة أو الترجمات إلى خادم.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6">
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p>سيتحقق الباني من هوية المورد و<code className="font-mono text-xs">m_Id</code> قبل الكتابة؛ وعند عدم تطابقها سيوقف البناء للحماية.</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p>افتح «تشخيص» و«سلامة» أولاً إذا أردت مراجعة الترجمات والرموز التقنية قبل التنزيل.</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <FileDown className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p>سيُنزّل ملف جديد فقط؛ ستبقى الحزمة الأصلية المفتوحة دون تعديل.</p>
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:justify-start">
+              <Button variant="outline" onClick={() => setShowLumenTalePreBuild(false)} disabled={lumenTaleBuilding}>رجوع للمراجعة</Button>
+              <Button
+                onClick={() => {
+                  setShowLumenTalePreBuild(false);
+                  void handleLumenTaleBuild();
+                }}
+                disabled={lumenTaleBuilding}
+              >
+                {lumenTaleBuilding ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <FileDown className="ml-2 h-4 w-4" />}
+                تأكيد البناء والتنزيل
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Arabic Unprocessed Warning Banner — meaningless for Risen: its Arabic
           is expected to stay unshaped in the editor by design (shapeArabicForRisen
           runs only at build time), so the warning itself would be wrong, not
@@ -890,7 +931,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             {gmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف GameMaker معرّب وتنزيله
           </Button>
         ) : isLumenTale ? (
-          <Button size="lg" onClick={handleLumenTaleBuild} disabled={lumenTaleBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يبني نسخة Bundle جديدة محلياً من الحزمة المفتوحة، بعد تحقق المورد وm_Id والرموز التقنية">
+          <Button size="lg" onClick={() => setShowLumenTalePreBuild(true)} disabled={lumenTaleBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يفتح مراجعة الحماية قبل بناء نسخة Bundle محلية من الحزمة المفتوحة">
             {lumenTaleBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء Bundle LumenTale معرّب وتنزيله
           </Button>
         ) : (

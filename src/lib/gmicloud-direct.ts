@@ -1,0 +1,123 @@
+/**
+ * GMICLOUD direct-only transport: session API key → api.gmi-serving.com.
+ * This module must never fall back to Gemini, Lovable AI, or an Edge Function.
+ */
+
+export const GMICLOUD_DIRECT_ENDPOINT = 'https://api.gmi-serving.com/v1/chat/completions';
+export const GMICLOUD_DIRECT_MODEL = 'MiniMaxAI/MiniMax-M2.7';
+
+export interface GmiCloudEntry {
+  key: string;
+  original: string;
+}
+
+interface GmiCloudDirectRequest {
+  apiKey?: string;
+  entries: GmiCloudEntry[];
+  glossary?: string;
+  extraInstructions?: string;
+  game?: string;
+  signal?: AbortSignal;
+}
+
+class GmiCloudDirectError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'GmiCloudDirectError';
+  }
+}
+
+function safeJson(value: string): unknown {
+  const trimmed = value.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('GMICLOUD لم يُرجع كائن JSON للترجمة.');
+  return JSON.parse(trimmed.slice(start, end + 1));
+}
+
+function errorMessage(payload: unknown, status: number): string {
+  if (payload && typeof payload === 'object') {
+    const record = payload as { error?: { message?: string } | string; message?: string };
+    if (typeof record.error === 'string') return record.error;
+    if (record.error && typeof record.error.message === 'string') return record.error.message;
+    if (typeof record.message === 'string') return record.message;
+  }
+  return `تعذر الاتصال بـ GMICLOUD (HTTP ${status}).`;
+}
+
+function buildSystemPrompt({ glossary, extraInstructions, game }: Omit<GmiCloudDirectRequest, 'apiKey' | 'entries' | 'signal'>): string {
+  const glossaryRule = glossary?.trim()
+    ? `\nGLOSSARY (apply only when relevant; do not translate its technical tokens):\n${glossary.trim()}`
+    : '';
+  const extraRule = extraInstructions?.trim() ? `\nPROJECT RULES:\n${extraInstructions.trim()}` : '';
+  const gameRule = game ? `\nGAME CONTEXT: ${game}` : '';
+
+  return `You are a professional video-game translator. Translate each English value to natural Arabic.
+Return ONLY one valid JSON object whose keys are exactly the supplied keys and whose values are the Arabic translations.
+Preserve every technical token, control code, placeholder, rich-text tag, variable, number, line break, and punctuation-bearing game code exactly and in the same relative position. Never add markdown or explanatory text.${gameRule}${glossaryRule}${extraRule}`;
+}
+
+export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Promise<Response> {
+  try {
+    if (!request.apiKey?.trim()) {
+      throw new GmiCloudDirectError('يحتاج GMICLOUD مفتاح API في حقل GMICLOUD داخل المحرر.', 400);
+    }
+    if (!request.entries.length) {
+      throw new GmiCloudDirectError('لا توجد نصوص لإرسالها إلى GMICLOUD.', 400);
+    }
+
+    const sourceByKey = Object.fromEntries(request.entries.map(({ key, original }) => [key, original]));
+    const response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
+      method: 'POST',
+      signal: request.signal,
+      headers: {
+        Authorization: `Bearer ${request.apiKey.trim()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: GMICLOUD_DIRECT_MODEL,
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: buildSystemPrompt(request) },
+          { role: 'user', content: JSON.stringify(sourceByKey) },
+        ],
+      }),
+    });
+
+    const raw = await response.text();
+    let payload: unknown = null;
+    try { payload = raw ? JSON.parse(raw) : null; } catch { /* handled below for successful text */ }
+    if (!response.ok) throw new GmiCloudDirectError(errorMessage(payload, response.status), response.status);
+
+    const content = payload && typeof payload === 'object'
+      ? (payload as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content
+      : undefined;
+    if (typeof content !== 'string') throw new GmiCloudDirectError('استجابة GMICLOUD لا تحتوي نص ترجمة صالحاً.', 502);
+
+    const parsed = safeJson(content);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new GmiCloudDirectError('استجابة GMICLOUD ليست خريطة ترجمات صالحة.', 502);
+    }
+    const translations: Record<string, string> = {};
+    for (const { key } of request.entries) {
+      const value = (parsed as Record<string, unknown>)[key];
+      if (typeof value === 'string') translations[key] = value;
+    }
+    if (Object.keys(translations).length === 0) {
+      throw new GmiCloudDirectError('لم يُرجع GMICLOUD أي ترجمة قابلة للاستخدام.', 502);
+    }
+
+    return new Response(JSON.stringify({ translations, providerUsed: 'GMICLOUD / MiniMax M2.7 (direct)' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    const status = error instanceof GmiCloudDirectError ? error.status : 502;
+    const message = error instanceof Error ? error.message : 'تعذر الاتصال المباشر بـ GMICLOUD.';
+    return new Response(JSON.stringify({ error: message }), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}

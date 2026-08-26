@@ -3,7 +3,8 @@
  *
  * Scope: inspect and reconcile text identities, then perform a verified binary
  * GXT rebuild. It never reads or emits font resources. Arabic text is shaped
- * locally then converted to the units carried by the audited English v3 font.
+ * locally then converted to sparse glyph-cell units from the audited GTA IV
+ * Arabic reference [FONT_ID 0] MAP slots 96..239.
  */
 
 import { processArabicText, removeArabicPresentationForms, reverseBidi } from "@/lib/arabic-processing";
@@ -148,27 +149,47 @@ const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
 /**
- * GTA IV GXT stores MAP *input* units, rather than the sparse glyph-slot
- * values on the right side of `fonts.dat` MAP. In the working Arabic
- * reference, the 144 Arabic Presentation Forms occupy the consecutive input
- * range 97..240. Unit 126 is a valid Arabic glyph input in binary GXT data;
- * it must never be interpreted as a literal runtime-token tilde during build.
+ * GTA IV GXT stores the sparse glyph-cell values from `fonts.dat` MAP, not the
+ * consecutive MAP input slots. The Arabic reference maps the 144 presentation
+ * forms U+FE70..U+FEFF to MAP slots 96..239. For example, MAP slot 137 emits
+ * GXT unit 298 and MAP slot 208 emits unit 420. This is independently matched
+ * byte-for-byte by russian.oxt and russian.gxt from the working Arabic mod.
  */
 const gtaIvArabicPresentationFormStart = 0xfe70;
 const gtaIvArabicPresentationFormEnd = 0xfeff;
-const gtaIvArabicPresentationFormInputStart = 97;
 const gtaIvArabicPresentationFormCount = gtaIvArabicPresentationFormEnd - gtaIvArabicPresentationFormStart + 1;
 
+/**
+ * Literal MAP values from the audited Arabic reference `fonts_r.dat`,
+ * FONT_ID 0, slots 96..239, in presentation-form order U+FE70..U+FEFF.
+ * They are glyph-cell identifiers and intentionally non-consecutive.
+ */
+export const gtaIvArabicPresentationFormGlyphCells = [
+  103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114,
+  115, 116, 117, 118, 119, 120, 121, 122, 91, 93, 123, 125,
+  163, 165, 166, 167, 182, 188, 189, 190, 192, 193, 194, 195,
+  196, 197, 198, 199, 200, 298, 201, 202, 203, 204, 205, 206,
+  207, 208, 209, 210, 211, 212, 213, 214, 216, 217, 218, 219,
+  220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 232, 350,
+  352, 233, 235, 237, 239, 240, 242, 243, 245, 249, 251, 490,
+  492, 494, 497, 500, 385, 386, 388, 390, 391, 393, 394, 395,
+  398, 399, 400, 401, 403, 404, 405, 406, 407, 408, 410, 412,
+  413, 415, 416, 418, 420, 502, 504, 425, 428, 430, 431, 433,
+  434, 435, 437, 439, 440, 443, 506, 508, 510, 161, 124, 247,
+  191, 171, 180, 185, 186, 471, 253, 170, 176, 168, 387, 255,
+] as const;
+
+if (gtaIvArabicPresentationFormGlyphCells.length !== gtaIvArabicPresentationFormCount) {
+  throw new Error("خريطة خلايا الأشكال العربية في GTA IV غير مكتملة.");
+}
+
 const gtaIvPresentationFormByUnit = new Map<number, number>(
-  Array.from({ length: gtaIvArabicPresentationFormCount }, (_, index) => [
-    gtaIvArabicPresentationFormInputStart + index,
-    gtaIvArabicPresentationFormStart + index,
-  ]),
+  gtaIvArabicPresentationFormGlyphCells.map((unit, index) => [unit, gtaIvArabicPresentationFormStart + index]),
 );
 
-function gtaIvArabicInputUnitForPresentationForm(code: number): number | undefined {
+export function gtaIvArabicGlyphCellForPresentationForm(code: number): number | undefined {
   if (code < gtaIvArabicPresentationFormStart || code > gtaIvArabicPresentationFormEnd) return undefined;
-  return gtaIvArabicPresentationFormInputStart + code - gtaIvArabicPresentationFormStart;
+  return gtaIvArabicPresentationFormGlyphCells[code - gtaIvArabicPresentationFormStart];
 }
 
 const gtaIvArabicPunctuationToAscii: Record<string, string> = {
@@ -302,9 +323,9 @@ function normalizeGtaIvArabicPunctuation(value: string): string {
 
 /**
  * Converts a logical editor translation into GTA IV font units. Only ASCII and
- * the Arabic Presentation Forms present in the verified reference MAP are
- * emitted. This keeps unsupported glyphs out of GXT instead of silently
- * writing visible squares.
+ * Arabic presentation forms represented by the verified sparse MAP cells are
+ * emitted. This keeps unsupported glyphs out of GXT instead of writing wrong
+ * texture cells.
  */
 export function encodeGtaIvArabicText(sourceText: string, translation: string): GtaIvArabicEncoding {
   const dollarRepair = repairGtaIvDollarAmountSequence(sourceText, translation);
@@ -322,7 +343,7 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
   for (const char of processedText) {
     const code = char.charCodeAt(0);
     if (code >= gtaIvArabicPresentationFormStart && code <= gtaIvArabicPresentationFormEnd) {
-      const unit = gtaIvArabicInputUnitForPresentationForm(code);
+      const unit = gtaIvArabicGlyphCellForPresentationForm(code);
       if (unit === undefined) fail(`لا توجد خانة استعادة للشكل العربي U+${code.toString(16).toUpperCase()}.`);
       units.push(unit);
       continue;

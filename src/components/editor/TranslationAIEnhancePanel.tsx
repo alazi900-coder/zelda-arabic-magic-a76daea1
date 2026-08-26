@@ -1558,6 +1558,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                       <SelectLabel className="text-[10px]">TokenRouter</SelectLabel>
                       {MODEL_OPTIONS.filter(m => m.group === "tokenrouter").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
                     </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px]">GMI Cloud — MiniMax</SelectLabel>
+                      {MODEL_OPTIONS.filter(m => m.group === "gmicloud").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>

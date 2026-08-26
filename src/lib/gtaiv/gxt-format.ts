@@ -149,10 +149,10 @@ const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
 /**
- * The Arabic-over-original-English font resource owns GXT input units 96..239.
- * Its fonts.dat redirects those consecutive input units to safe atlas cells
- * containing the 144 Arabic presentation-form glyph images. GXT must write
- * the input units, never WTD glyph-cell values.
+ * The Arabic-over-original-English font resource assigns input units 96..239
+ * to the 144 Arabic presentation-form glyph images. These units overlap
+ * visible English/Latin input, so a built GXT must not retain visible source
+ * text in that interval. GXT writes input units, never WTD glyph-cell values.
  */
 const gtaIvArabicPresentationFormStart = 0xfe70;
 const gtaIvArabicPresentationFormEnd = 0xfeff;

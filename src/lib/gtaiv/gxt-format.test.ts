@@ -320,4 +320,15 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(decodeGtaIvArabicFontUnits(output.tables[0].entries[0].textUnits, true)).toBe("تؤبسك");
   });
 
+  it("refuses a mixed GXT that would render an untranslated English lowercase letter as Arabic art", () => {
+    const source = makeGxt(0x00009b22);
+    const sourceBytes = new Uint8Array(source);
+    // TDAT contains `ab\0`: both visible units fall inside 96..239.
+    sourceBytes.set([0x61, 0x00, 0x62, 0x00, 0x00, 0x00], 48);
+    const imported = extractGtaIvEntries(source);
+    expect(() => buildGtaIvAmericanOutput(source, imported.entries, {})).toThrow(
+      "تستخدم محارف إنجليزية مرئية في نطاق وحدات العربية 96–239",
+    );
+  });
+
 });

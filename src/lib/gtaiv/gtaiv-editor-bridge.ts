@@ -27,6 +27,35 @@ export interface GtaIvAmericanBuild {
   translatedLines: number;
 }
 
+/**
+ * Style contract: the current Arabic-over-English font dedicates 96..239 to
+ * Arabic presentation forms. Runtime tokens are interpreted by GTA IV rather
+ * than rendered as glyphs, so their contents remain exempt. Any visible raw
+ * English unit in that interval would render as Arabic art and corrupt menus.
+ */
+const gtaIvArabicInputUnitStart = 96;
+const gtaIvArabicInputUnitEnd = 239;
+const gtaIvRuntimeTokenPattern = /~[^~]+~/g;
+
+interface GtaIvVisibleUnitConflict {
+  unit: number;
+  character: string;
+}
+
+function findVisibleGtaIvArabicUnitConflict(text: string): GtaIvVisibleUnitConflict | null {
+  const pieces = text.split(gtaIvRuntimeTokenPattern);
+  for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 2) {
+    const piece = pieces[pieceIndex] ?? "";
+    for (let index = 0; index < piece.length; index += 1) {
+      const unit = piece.charCodeAt(index);
+      if (unit >= gtaIvArabicInputUnitStart && unit <= gtaIvArabicInputUnitEnd) {
+        return { unit, character: piece[index] ?? "" };
+      }
+    }
+  }
+  return null;
+}
+
 export function extractGtaIvEntries(buffer: ArrayBuffer): GtaIvEditorImport {
   const parsed = parseGtaIvGxt(buffer);
   const entries = parsed.tables.flatMap((table) => table.entries.map((entry) => ({
@@ -63,6 +92,7 @@ export function buildGtaIvAmericanOutput(
     { table: table.name, crc: entry.crc >>> 0, textUnits: entry.textUnits },
   ])));
   const replacements: { table: string; crc: number; textUnits: Uint16Array }[] = [];
+  const translatedPresentationText = new Map<string, string>();
 
   for (const entry of entries) {
     const identity = gtaIvEntryIdentity(entry);
@@ -80,13 +110,30 @@ export function buildGtaIvAmericanOutput(
     if (!runtimeTranslation || runtimeTranslation === entry.original) continue;
     const encoded = encodeGtaIvArabicText(entry.original, runtimeTranslation);
     replacements.push({ table: sourceEntry.table, crc: sourceEntry.crc, textUnits: encoded.textUnits });
+    translatedPresentationText.set(`${sourceEntry.table}:${sourceEntry.crc >>> 0}`, encoded.processedText);
+  }
+
+  const replacementByIdentity = new Map(replacements.map((entry) => [`${entry.table}:${entry.crc >>> 0}`, entry.textUnits]));
+  const visibleConflicts: { table: string; crc: number; unit: number; character: string }[] = [];
+  for (const table of parsedSource.tables) {
+    for (const entry of table.entries) {
+      const identity = `${table.name}:${entry.crc >>> 0}`;
+      const renderedText = translatedPresentationText.get(identity) ?? gtaIvRawUnitsToString(entry.textUnits);
+      const conflict = findVisibleGtaIvArabicUnitConflict(renderedText);
+      if (conflict) visibleConflicts.push({ table: table.name, crc: entry.crc >>> 0, ...conflict });
+    }
+  }
+  if (visibleConflicts.length > 0) {
+    const first = visibleConflicts[0];
+    throw new Error(
+      `لا يمكن بناء american.gxt مع الخط العربي الحالي: بقيت ${visibleConflicts.length} سطور تستخدم محارف إنجليزية مرئية في نطاق وحدات العربية 96–239 (أولها ${first.table} · 0x${first.crc.toString(16).padStart(8, "0")} بالحرف «${first.character}» والوحدة ${first.unit}). ترجم هذه السطور أو لا تستخدم حزمة الخط العربي الحالية؛ الوسوم بين ~...~ مستثناة.`,
+    );
   }
 
   const buffer = rebuildGtaIvGxt(source, replacements);
   const parsedOutput = parseGtaIvGxt(buffer);
   if (parsedOutput.tables.length !== parsedSource.tables.length) throw new Error("فشل تحقق البناء: عدد الجداول تغير.");
 
-  const replacementByIdentity = new Map(replacements.map((entry) => [`${entry.table}:${entry.crc}`, entry.textUnits]));
   for (let tableIndex = 0; tableIndex < parsedSource.tables.length; tableIndex += 1) {
     const originalTable = parsedSource.tables[tableIndex];
     const outputTable = parsedOutput.tables[tableIndex];

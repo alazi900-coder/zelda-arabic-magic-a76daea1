@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.181.12",
+    date: "2026-08-26",
+    changes: [
+      { kind: "added", text: "**أضيف تشغيل MiniMax M2.7 وMiniMax M3 عبر GMI Cloud مباشرةً.** عند اختيار أحدهما في مقارنة المحركات أو تحسين الترجمة بالذكاء الاصطناعي أو اقتراحات السياق، لا يمر الطلب عبر Lovable Gateway أو Google." },
+      { kind: "fixed", text: "**أُصلح انهيار محرر LumenTale عند فتح اقتراحات السياق.** غياب مفتاح GMI Cloud في الجلسة لا يسبب بعد الآن خطأ `userGmiCloudKey` أو يمنع فتح المحرر." },
+      { kind: "fixed", text: "**أُصلح انهيار أداة تحسين الترجمة عند ازدحام GMI Cloud.** تعيد الأداة محاولة محدودة مع نموذج MiniMax نفسه، ثم تعرض خطأ قابلاً لإعادة المحاولة بدلاً من خطأ `reading 'split'` أو إغلاق المحرر." },
+      { kind: "added", text: "**أضيفت اختبارات لمسارات MiniMax المباشرة.** تتحقق من أن المقارنة والتحسين والسياق تستخدم `api.gmi-serving.com` فقط، وأن إعادة المحاولة لا تتحول إلى مزود آخر." },
+    ],
+  },
+  {
     version: "1.181.11",
     date: "2026-08-23",
     changes: [

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Loader2, Sparkles, Tag, LogIn, BookOpen, AlertTriangle, Eye, EyeOff, RotateCcw, CheckCircle2, Package } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
+import { requestGmiCloudDirect } from "@/lib/gmicloud-direct";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -102,17 +103,22 @@ const Editor = () => {
         provider === 'deepseek' ? editor.userDeepSeekKey :
         provider === 'tokenrouter' ? editor.userTokenRouterKey :
         provider === 'gmicloud' ? editor.userGmiCloudKey : undefined;
-      const response = await fetch(getEdgeFunctionUrl("translate-entries"), {
-        method: 'POST',
-        headers: getSupabaseHeaders(),
-        body: JSON.stringify({
-          entries: [{ key: 'test:0', original: 'Hello' }],
-          provider,
-          userApiKey: provider === 'gemini' ? (editor.userGeminiKey || undefined) : undefined,
-          providerApiKey: providerApiKey || undefined,
-          aiModel: editor.aiModel,
-        }),
-      });
+      const response = provider === 'gmicloud'
+        ? await requestGmiCloudDirect({
+            apiKey: editor.userGmiCloudKey,
+            entries: [{ key: 'test:0', original: 'Hello' }],
+          })
+        : await fetch(getEdgeFunctionUrl("translate-entries"), {
+            method: 'POST',
+            headers: getSupabaseHeaders(),
+            body: JSON.stringify({
+              entries: [{ key: 'test:0', original: 'Hello' }],
+              provider,
+              userApiKey: provider === 'gemini' ? (editor.userGeminiKey || undefined) : undefined,
+              providerApiKey: providerApiKey || undefined,
+              aiModel: editor.aiModel,
+            }),
+          });
       const data = await response.json();
       if (!response.ok) {
         setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));

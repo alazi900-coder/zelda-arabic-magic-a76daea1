@@ -381,6 +381,32 @@ const EntryCard: React.FC<EntryCardProps> = ({
               ))}
             </div>
           )}
+          {tmSuggestions && tmSuggestions.length > 0 && (
+            <div className="mb-3 rounded-md border border-primary/20 bg-primary/5 p-2" aria-label="اقتراحات ذاكرة الترجمة">
+              <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-primary">
+                <BookOpen className="h-3.5 w-3.5" />
+                ذاكرة الترجمة — {tmSuggestions.length} اقتراح{tmSuggestions.length === 1 ? '' : 'ات'}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {tmSuggestions.map((suggestion) => (
+                  <Button
+                    key={suggestion.key}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-auto min-h-8 justify-between gap-2 whitespace-normal border-primary/20 bg-background px-2 py-1.5 text-right hover:bg-primary/10"
+                    onClick={() => updateTranslation(key, suggestion.translation)}
+                    title={`استخدام هذه الترجمة من: ${suggestion.original}`}
+                  >
+                    <span className="min-w-0 flex-1 break-words" dir="auto">{suggestion.translation}</span>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${suggestion.matchType === 'exact' ? 'bg-emerald-500/15 text-emerald-700' : 'bg-primary/10 text-primary'}`}>
+                      {suggestion.matchType === 'exact' ? 'مطابقة تامة' : `${suggestion.similarity}% تشابه`}
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           {editorOriginal.includes('\n') && (() => {
             const origLineCount = countLines(editorOriginal);
             const trLineCount = editorTranslation?.trim() ? countLines(editorTranslation) : null;

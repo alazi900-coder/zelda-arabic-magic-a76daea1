@@ -6,6 +6,11 @@ export interface TMSuggestion {
   original: string;
   translation: string;
   similarity: number;
+  matchType: 'exact' | 'similar';
+}
+
+function normalizeExactMatch(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 }
 
 /** Tokenize a string into lowercase words */
@@ -51,15 +56,20 @@ export function useTranslationMemory(state: EditorState | null) {
     const queryTokens = tokenize(original);
     if (queryTokens.size === 0) return [];
 
+    const normalizedOriginal = normalizeExactMatch(original);
     const results: TMSuggestion[] = [];
     for (const item of tmIndex) {
       if (item.key === entryKey) continue; // skip self
+      if (normalizeExactMatch(item.original) === normalizedOriginal) {
+        results.push({ key: item.key, original: item.original, translation: item.translation, similarity: 100, matchType: 'exact' });
+        continue;
+      }
       const sim = wordSimilarity(queryTokens, item.tokens);
       if (sim >= minSimilarity && sim < 100) {
-        results.push({ key: item.key, original: item.original, translation: item.translation, similarity: sim });
+        results.push({ key: item.key, original: item.original, translation: item.translation, similarity: sim, matchType: 'similar' });
       }
     }
-    results.sort((a, b) => b.similarity - a.similarity);
+    results.sort((a, b) => b.similarity - a.similarity || a.translation.localeCompare(b.translation, 'ar'));
     return results.slice(0, 3);
   }, [tmIndex]);
 

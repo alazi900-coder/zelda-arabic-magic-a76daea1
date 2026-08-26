@@ -522,7 +522,12 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
   if (!anyEnabled || dismissed) return null;
 
   const totalIssues = results.issues.length;
-  if (totalIssues === 0 && !open) return null;
+  // Keep the collapsed launcher available whenever there is translated work.
+  // The detailed scan itself remains deferred until the user opens the panel.
+  const hasTranslations = Object.values(state.translations).some(
+    (translation) => typeof translation === "string" && translation.trim().length > 0,
+  );
+  if (!hasTranslations && !open) return null;
 
   const allIssueKeys = new Set(results.issues.map(i => i.key));
 
@@ -552,6 +557,11 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
                 <span className="flex min-w-0 items-center gap-2">
                   {totalIssues > 0 ? <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" /> : <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />}
                   <span className="truncate font-display text-sm font-bold">فحص الجودة المتقدم</span>
+                  {!open && hasTranslations && totalIssues === 0 && (
+                    <Badge variant="outline" className="shrink-0 text-[10px] font-normal text-muted-foreground">
+                      افتح للتشغيل
+                    </Badge>
+                  )}
                   {totalIssues > 0 && <Badge variant="destructive" className="shrink-0 text-xs">{totalIssues} مشكلة</Badge>}
                 </span>
                 {open ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}

@@ -9,7 +9,8 @@ import { Zap, DollarSign, Sparkles, ChevronDown } from "lucide-react";
 export type AIRoutingMode = "free" | "paid" | "auto";
 
 interface Props {
-  mode: AIRoutingMode;
+  /** قد تصل قيمة إعدادات قديمة أو ناقصة أثناء تهيئة الجلسة؛ نعود إلى التلقائي بدلاً من كسر المحرر. */
+  mode?: AIRoutingMode | null;
   onChange: (mode: AIRoutingMode) => void;
 }
 
@@ -35,7 +36,8 @@ const MODE_META: Record<AIRoutingMode, { label: string; emoji: string; color: st
 };
 
 const AIRoutingToggle: React.FC<Props> = ({ mode, onChange }) => {
-  const meta = MODE_META[mode];
+  const safeMode: AIRoutingMode = mode === "free" || mode === "paid" || mode === "auto" ? mode : "auto";
+  const meta = MODE_META[safeMode];
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -60,14 +62,14 @@ const AIRoutingToggle: React.FC<Props> = ({ mode, onChange }) => {
             <DropdownMenuItem
               key={m}
               onClick={() => onChange(m)}
-              className={`flex flex-col items-start gap-0.5 py-2 cursor-pointer ${mode === m ? "bg-primary/10" : ""}`}
+              className={`flex flex-col items-start gap-0.5 py-2 cursor-pointer ${safeMode === m ? "bg-primary/10" : ""}`}
             >
               <div className="flex items-center gap-2 w-full">
                 <Icon className="w-3.5 h-3.5" />
                 <span className="font-bold text-xs">
                   {info.emoji} {info.label}
                 </span>
-                {mode === m && <span className="ml-auto text-[10px] text-primary">✓ مفعّل</span>}
+                {safeMode === m && <span className="ml-auto text-[10px] text-primary">✓ مفعّل</span>}
               </div>
               <span className="text-[10px] text-muted-foreground leading-tight pr-5">{info.desc}</span>
             </DropdownMenuItem>

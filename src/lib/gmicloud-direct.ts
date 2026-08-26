@@ -66,14 +66,26 @@ function isRetryableGmiStatus(status: number): boolean {
 
 function waitForRetry(milliseconds: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = globalThis.setTimeout(resolve, milliseconds);
+    const finish = () => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    };
+    const timer = globalThis.setTimeout(finish, milliseconds);
     if (!signal) return;
     const onAbort = () => {
       globalThis.clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
       reject(new DOMException('Aborted', 'AbortError'));
     };
     signal.addEventListener('abort', onAbort, { once: true });
   });
+}
+
+function retryableConnectionError(error: unknown, signal?: AbortSignal): never | undefined {
+  if (error instanceof DOMException && error.name === 'AbortError') throw error;
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  if (error instanceof TypeError) return;
+  throw error;
 }
 
 /**
@@ -92,22 +104,31 @@ export async function requestGmiCloudJson<T extends Record<string, unknown>>(req
   let response: Response | undefined;
   let payload: unknown = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
-      method: 'POST',
-      signal: request.signal,
-      headers: {
-        Authorization: `Bearer ${request.apiKey.trim()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: request.temperature ?? 0.2,
-        messages: [
-          { role: 'system', content: request.system },
-          { role: 'user', content: request.user },
-        ],
-      }),
-    });
+    try {
+      response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
+        method: 'POST',
+        signal: request.signal,
+        headers: {
+          Authorization: `Bearer ${request.apiKey.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          temperature: request.temperature ?? 0.2,
+          messages: [
+            { role: 'system', content: request.system },
+            { role: 'user', content: request.user },
+          ],
+        }),
+      });
+    } catch (error) {
+      retryableConnectionError(error, request.signal);
+      if (attempt === 2) {
+        throw new GmiCloudDirectError('تعذر الاتصال بـ GMICLOUD بعد محاولات محدودة. أعد المحاولة لاحقاً.', 502);
+      }
+      await waitForRetry(700 * (attempt + 1), request.signal);
+      continue;
+    }
 
     const raw = await response.text();
     try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
@@ -156,26 +177,41 @@ export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Pro
     }
 
     const sourceByKey = Object.fromEntries(request.entries.map(({ key, original }) => [key, original]));
-    const response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
-      method: 'POST',
-      signal: request.signal,
-      headers: {
-        Authorization: `Bearer ${request.apiKey.trim()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          { role: 'system', content: buildSystemPrompt(request) },
-          { role: 'user', content: JSON.stringify(sourceByKey) },
-        ],
-      }),
-    });
-
-    const raw = await response.text();
     let payload: unknown = null;
-    try { payload = raw ? JSON.parse(raw) : null; } catch { /* handled below for successful text */ }
+    let response: Response | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
+          method: 'POST',
+          signal: request.signal,
+          headers: {
+            Authorization: `Bearer ${request.apiKey.trim()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            temperature: 0.2,
+            messages: [
+              { role: 'system', content: buildSystemPrompt(request) },
+              { role: 'user', content: JSON.stringify(sourceByKey) },
+            ],
+          }),
+        });
+      } catch (error) {
+        retryableConnectionError(error, request.signal);
+        if (attempt === 2) {
+          throw new GmiCloudDirectError('تعذر الاتصال بـ GMICLOUD بعد محاولات محدودة. أعد المحاولة لاحقاً.', 502);
+        }
+        await waitForRetry(700 * (attempt + 1), request.signal);
+        continue;
+      }
+
+      const raw = await response.text();
+      try { payload = raw ? JSON.parse(raw) : null; } catch { /* handled below for successful text */ }
+      if (response.ok || !isRetryableGmiStatus(response.status) || attempt === 2) break;
+      await waitForRetry(700 * (attempt + 1), request.signal);
+    }
+    if (!response) throw new GmiCloudDirectError('تعذر بدء طلب GMICLOUD.', 502);
     if (!response.ok) throw new GmiCloudDirectError(errorMessage(payload, response.status), response.status);
 
     const content = payload && typeof payload === 'object'

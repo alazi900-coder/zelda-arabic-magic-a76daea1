@@ -637,7 +637,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const deepseekKey = userDeepSeekKeyProp || readLocalStorage('userDeepSeekKey');
     // مفتاح TokenRouter مخزَّن في إعدادات المحرّر؛ نمرّره عند اختيار نموذج TokenRouter.
     const tokenRouterKey = userTokenRouterKeyProp || readLocalStorage('userTokenRouterKey');
-    const gmiCloudKey = userGmiCloudKeyProp || readLocalStorage('userGmiCloudKey');
+    // مفتاح GMI Cloud مقصود أن يبقى في حالة المحرر الحالية فقط؛ لا نقرأه من
+    // localStorage كي لا نستعيد مفتاحاً قديماً أو نحفظ بيانات حساسة بين الجلسات.
+    const gmiCloudKey = userGmiCloudKeyProp?.trim() || "";
     // مفتاح Gemini الشخصي + وضع التوجيه (مجاني/مدفوع/تلقائي) — نفس المفاتيح المستخدمة
     // في translate-entries حتى تعمل أداة التحسين مع الوضع المجاني عبر Gemini المباشر.
     const userGeminiKey = userGeminiKeyProp || readLocalStorage('userGeminiKey');
@@ -1187,12 +1189,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestions, filterType, searchQuery]);
 
-  const bulkSuggestions = useMemo(() => {
-    return suggestions
-      .filter(s => !filterType || s.type === filterType)
-      .sort((a, b) => (typeToSeverity[a.type] ?? 2) - (typeToSeverity[b.type] ?? 2));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestions, filterType]);
+  // عملية «تطبيق المعروض» يجب أن تطابق النتائج المرئية، بما فيها البحث النصي،
+  // كي لا تُطبّق اقتراحات أخفاها المستخدم بفلتر أو ببحث أثناء المراجعة.
+  const bulkSuggestions = filteredSuggestions;
 
   const filteredIssues = useMemo(() => {
     const catOrder: Record<string, number> = { wrong: 0, reorder: 1, weak: 2 };
@@ -1214,22 +1213,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grammarIssues, severityFilter, categoryFilter, searchQuery]);
 
-  const bulkIssues = useMemo(() => {
-    const catOrder: Record<string, number> = { wrong: 0, reorder: 1, weak: 2 };
-    return grammarIssues
-      .filter(g => {
-        if (severityFilter && g.severity !== severityFilter) return false;
-        if (categoryFilter && (g.category ?? 'wrong') !== categoryFilter) return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const ca = catOrder[a.category ?? 'wrong'] ?? 0;
-        const cb = catOrder[b.category ?? 'wrong'] ?? 0;
-        if (ca !== cb) return ca - cb;
-        return (severityOrder[a.severity ?? 'low'] ?? 2) - (severityOrder[b.severity ?? 'low'] ?? 2);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grammarIssues, severityFilter, categoryFilter]);
+  const bulkIssues = filteredIssues;
 
   const highConfidenceIssuesCount = useMemo(() => {
     return grammarIssues.filter(g => g.severity === 'high' && (!categoryFilter || (g.category ?? 'wrong') === categoryFilter)).length;
@@ -1743,9 +1727,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                   ثقة عالية فقط ({highConfidenceIssuesCount})
                 </Button>
               )}
-              <Button size="sm" variant="default" onClick={applyAll} className="gap-1.5 mr-auto">
+              <Button size="sm" variant="default" onClick={applyAll} className="gap-1.5 mr-auto" title="طبّق النتائج الظاهرة بعد البحث والفلاتر">
                 <Zap className="w-4 h-4" />
-                تطبيق المحدد ({activeTab === "enhance" ? bulkSuggestions.length : bulkIssues.length})
+                تطبيق المعروض ({activeTab === "enhance" ? bulkSuggestions.length : bulkIssues.length})
               </Button>
             </>
           )}

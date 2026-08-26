@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Filter, Eye, Replace, Columns, Wand2 } from "lucide-react";
+import { Filter, Eye, Replace, Columns, RotateCcw, Wand2 } from "lucide-react";
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import TableFilterTree from "@/components/editor/TableFilterTree";
 import { type FilterStatus, type FilterTechnical } from "@/components/editor/types";
@@ -53,6 +53,7 @@ type EditorSubset = Pick<
   | "setPinnedKeys"
   | "setIsSearchPinned"
   | "setCurrentPage"
+  | "resetWorkspace"
 >;
 
 interface EditorFiltersBarProps {
@@ -212,6 +213,9 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           <Button variant={showDiffView ? "secondary" : "outline"} size="sm" onClick={() => setShowDiffView(!showDiffView)} className="font-body text-xs">
             <Columns className="w-3 h-3" /> مقارنة
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => void editor.resetWorkspace()} className="font-body text-xs" title="إعادة ضبط البحث والفلاتر المحفوظة">
+            <RotateCcw className="w-3 h-3" /> إعادة ضبط
+          </Button>
         </>
       )}
     </div>
@@ -276,6 +280,9 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             {editor.bdatColumnNames.map(c => <option key={c} value={c}>{c} ({editor.bdatColumnCounts?.[c] || 0})</option>)}
           </select>
         )}
+        <Button variant="outline" size="sm" onClick={() => void editor.resetWorkspace()} className="font-body text-xs w-full">
+          <RotateCcw className="w-3 h-3" /> إعادة ضبط مساحة العمل
+        </Button>
       </div>
     )}
 

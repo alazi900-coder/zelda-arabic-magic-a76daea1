@@ -3,6 +3,12 @@ import { toast } from "@/hooks/use-toast";
 import { idbSet, idbGet, checkAndMigrateSchema } from "@/lib/idb-storage";
 import { APP_VERSION } from "@/lib/version";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
+import {
+  defaultEditorWorkspace,
+  editorWorkspaceStorageKey,
+  readEditorWorkspace,
+  type EditorWorkspaceSnapshot,
+} from "@/lib/editor-workspace";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -138,15 +144,45 @@ export function useEditorState() {
   const [isSearchPinned, setIsSearchPinned] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
 
 
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const workspaceSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const forceSaveRef = useRef<() => Promise<void>>(async () => {});
   const { user } = useAuth();
   const [pendingRecovery, setPendingRecovery] = useState<{ translationCount: number; entryCount: number; lastDate?: string } | null>(null);
   const [hasStoredOriginals, setHasStoredOriginals] = useState(false);
   const [originalsDetectedAsPreviousBuild, setOriginalsDetectedAsPreviousBuild] = useState(false);
+
+  const applyWorkspace = useCallback((workspace: EditorWorkspaceSnapshot) => {
+    setSearch(workspace.search);
+    setFilterFile(workspace.filterFile);
+    setFilterCategory(workspace.filterCategory);
+    setFilterStatus(workspace.filterStatus);
+    setFilterTechnical(workspace.filterTechnical);
+    setFilterTable(workspace.filterTable);
+    setFilterColumn(workspace.filterColumn);
+    setFiltersOpen(workspace.filtersOpen);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const restoreWorkspace = async () => {
+      try {
+        const sourceGame = await idbGet<string>("editor-source-game");
+        const storedWorkspace = await idbGet<unknown>(editorWorkspaceStorageKey(sourceGame));
+        if (!cancelled) applyWorkspace(readEditorWorkspace(storedWorkspace));
+      } catch (err) {
+        console.error("[workspace] restore failed:", err);
+      } finally {
+        if (!cancelled) setWorkspaceReady(true);
+      }
+    };
+    void restoreWorkspace();
+    return () => { cancelled = true; };
+  }, [applyWorkspace]);
 
   const glossary = useEditorGlossary({
     state, setState, setLastSaved, setCloudSyncing, setCloudStatus, userId: user?.id,
@@ -669,6 +705,49 @@ export function useEditorState() {
     // (if the row had no value yet) but still must be persisted so a page
     // refresh doesn't re-detect baked-in Arabic from entry.original.
   }, [state?.translations, state?.clearedKeys, saveToIDB]);
+
+  useEffect(() => {
+    if (!workspaceReady) return;
+    if (workspaceSaveTimerRef.current) clearTimeout(workspaceSaveTimerRef.current);
+    const workspace: EditorWorkspaceSnapshot = {
+      version: 1,
+      search,
+      filterFile,
+      filterCategory,
+      filterStatus,
+      filterTechnical,
+      filterTable,
+      filterColumn,
+      filtersOpen,
+    };
+    workspaceSaveTimerRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const sourceGame = await idbGet<string>("editor-source-game");
+          await idbSet(editorWorkspaceStorageKey(sourceGame), workspace);
+        } catch (err) {
+          console.error("[workspace] save failed:", err);
+        }
+      })();
+    }, 450);
+    return () => { if (workspaceSaveTimerRef.current) clearTimeout(workspaceSaveTimerRef.current); };
+  }, [workspaceReady, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filtersOpen]);
+
+  const resetWorkspace = useCallback(async () => {
+    const workspace = defaultEditorWorkspace();
+    applyWorkspace(workspace);
+    setPinnedKeys(null);
+    setIsSearchPinned(false);
+    setCurrentPage(0);
+    try {
+      const sourceGame = await idbGet<string>("editor-source-game");
+      await idbSet(editorWorkspaceStorageKey(sourceGame), workspace);
+      setLastSaved("تمت إعادة ضبط مساحة العمل");
+    } catch (err) {
+      console.error("[workspace] reset failed:", err);
+      setLastSaved("تمت إعادة ضبط مساحة العمل لهذه الجلسة فقط");
+    }
+  }, [applyWorkspace]);
 
   // === Computed values ===
   const msbtFiles = useMemo(() => {
@@ -1859,7 +1938,7 @@ export function useEditorState() {
     user,
 
     // Setters
-    setSearch, setFilterFile, setFilterCategory, setFilterStatus, setFilterTechnical, setFilterTable, setFilterColumn,
+    setSearch, setFilterFile, setFilterCategory, setFilterStatus, setFilterTechnical, setFilterTable, setFilterColumn, resetWorkspace,
     setFilterRisenOwner, setFilterRisenItemPrefix, setFilterRisenSection,
     setFiltersOpen, setShowQualityStats, setQuickReviewMode, setQuickReviewIndex, setShowFindReplace,
     setCurrentPage, setShowRetranslateConfirm,

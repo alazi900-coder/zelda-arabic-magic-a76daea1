@@ -628,6 +628,7 @@ Deno.serve(async (req) => {
     // ثم سرّ Lovable Cloud كاحتياط — مطابق لسلوك translate-entries.
     const DEEPSEEK_API_KEY = (providerApiKey && providerApiKey.trim()) || Deno.env.get('DEEPSEEK_API_KEY');
     const TOKENROUTER_API_KEY = (providerApiKey && providerApiKey.trim()) || Deno.env.get('TOKENROUTER_API_KEY');
+    const GMICLOUD_API_KEY = (providerApiKey && providerApiKey.trim()) || Deno.env.get('GMICLOUD_API_KEY');
 
     // خريطة موحَّدة لكلّ النماذج المعروضة في TranslationAIEnhancePanel.
     const gatewayModelMap: Record<string, string> = {
@@ -657,12 +658,19 @@ Deno.serve(async (req) => {
       'deepseek-chat': 'deepseek-v4-flash',
       'deepseek-reasoner': 'deepseek-v4-pro',
     };
+    const GMICLOUD_NAME_MAP: Record<string, string> = {
+      'MiniMaxAI/MiniMax-M2.7': 'MiniMaxAI/MiniMax-M2.7',
+      'MiniMaxAI/MiniMax-M3': 'MiniMaxAI/MiniMax-M3',
+    };
     const isDeepSeek = provider === 'deepseek' || (!!aiModel && aiModel in DEEPSEEK_NAME_MAP);
     const isTokenRouter = provider === 'tokenrouter' || aiModel === 'tokenrouter-glm-5.2';
+    const isGmiCloud = provider === 'gmicloud' || (!!aiModel && aiModel in GMICLOUD_NAME_MAP);
     const resolvedModel = isDeepSeek
       ? (aiModel && DEEPSEEK_NAME_MAP[aiModel]) || 'deepseek-v4-flash'
       : isTokenRouter
       ? 'z-ai/glm-5.2-free'
+      : isGmiCloud
+      ? (aiModel && GMICLOUD_NAME_MAP[aiModel]) || 'MiniMaxAI/MiniMax-M2.7'
       : ((aiModel && gatewayModelMap[aiModel]) || 'google/gemini-2.5-flash');
     // إذا أرسلت الواجهة thinkingMode فإنّه يفرض تفعيل/تعطيل التفكير العميق صراحةً؛
     // وإلّا الافتراضي حسب الموديل: V4 Pro بتفكير (يطابق سلوك reasoner القديم)،
@@ -688,21 +696,26 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    if (isGmiCloud && !GMICLOUD_API_KEY) {
+      return new Response(JSON.stringify({ error: 'يحتاج GMICLOUD مفتاح API — أضفه في إعدادات المحرر.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // ─── Routing: free/auto → try direct Gemini first (server or user key). ──
     // paid → skip Gemini direct entirely, use Lovable Gateway only.
     const geminiDirectKey = (userGeminiKey && userGeminiKey.trim()) || Deno.env.get('GEMINI_API_KEY') || '';
-    const useGeminiDirect = !isDeepSeek && !isTokenRouter && normalizedRouting !== 'paid' && !!geminiDirectKey;
+    const useGeminiDirect = !isDeepSeek && !isTokenRouter && !isGmiCloud && normalizedRouting !== 'paid' && !!geminiDirectKey;
     const allowLovableFallback = normalizedRouting !== 'free';
 
-    if (normalizedRouting === 'free' && !isDeepSeek && !isTokenRouter && !geminiDirectKey) {
+    if (normalizedRouting === 'free' && !isDeepSeek && !isTokenRouter && !isGmiCloud && !geminiDirectKey) {
       return new Response(JSON.stringify({ error: '🆓 وضع "مجاني فقط": لم يُكوَّن مفتاح Gemini (لا في إعدادات المستخدم ولا في أسرار السيرفر) — أضف مفتاحك من Google AI Studio أو بدّل الوضع' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (!useGeminiDirect && !isDeepSeek && !isTokenRouter && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+    if (!useGeminiDirect && !isDeepSeek && !isTokenRouter && !isGmiCloud && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    console.log('[enhance] request', { mode: mode || 'enhance', provider: provider || 'auto', model: resolvedModel, isDeepSeek, isTokenRouter, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
+    console.log('[enhance] request', { mode: mode || 'enhance', provider: provider || 'auto', model: resolvedModel, isDeepSeek, isTokenRouter, isGmiCloud, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
 
     // يُرفَع لـ true إن اضطُررنا للتحويل من DeepSeek إلى Gemini بسبب فشل مؤقّت —
     // نُضمّنه في الردّ النهائي (_meta.providerFallback) ليعرف المستخدم أنّ
@@ -763,6 +776,22 @@ Deno.serve(async (req) => {
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway، Gemini المباشر، أو DeepSeek).
     const FALLBACK_STATUSES = new Set([429, 402, 500, 502, 503, 504]);
     const callAI = async (messages: Array<{ role: string; content: string }>): Promise<Response> => {
+      if (isGmiCloud) {
+        return await fetch('https://api.gmi-serving.com/v1/chat/completions', {
+          method: 'POST',
+          signal: AbortSignal.timeout(90_000),
+          headers: {
+            'Authorization': `Bearer ${GMICLOUD_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: resolvedModel,
+            temperature: 0.3,
+            messages,
+          }),
+        });
+      }
+
       if (isDeepSeek) {
         let dsResponse: Response;
         try {

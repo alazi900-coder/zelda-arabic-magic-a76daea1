@@ -30,7 +30,7 @@ interface RequestBody {
   maxBytes?: number;
   glossary?: string;
   file?: string;
-  provider?: 'gemini' | 'deepseek' | 'tokenrouter' | 'mymemory' | 'google';
+  provider?: 'gemini' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'mymemory' | 'google';
   aiModel?: string;
   providerApiKey?: string;
   /** Which game this entry is from — the system prompt names it correctly instead
@@ -196,6 +196,42 @@ const DEEPSEEK_NAME_MAP: Record<string, string> = {
   'deepseek-reasoner': 'deepseek-v4-pro',
 };
 
+const GMICLOUD_NAME_MAP: Record<string, string> = {
+  'MiniMaxAI/MiniMax-M2.7': 'MiniMaxAI/MiniMax-M2.7',
+  'MiniMaxAI/MiniMax-M3': 'MiniMaxAI/MiniMax-M3',
+};
+
+async function callGmiCloud(body: RequestBody, apiKey: string, model: string): Promise<any> {
+  const resolvedModel = GMICLOUD_NAME_MAP[model] || 'MiniMaxAI/MiniMax-M2.7';
+  const resp = await fetch('https://api.gmi-serving.com/v1/chat/completions', {
+    method: 'POST',
+    signal: AbortSignal.timeout(120_000),
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: resolvedModel,
+      temperature: 0.3,
+      messages: [
+        { role: 'system', content: buildSystemPrompt(body.game) + '\n\n' + SUGGESTIONS_JSON_SCHEMA_HINT },
+        { role: 'user', content: buildUserPrompt(body) },
+      ],
+    }),
+  });
+  if (resp.status === 429) throw new Error('429: تجاوز معدّل الطلبات على GMI Cloud. أعد المحاولة بعد قليل.');
+  if (resp.status === 402) throw new Error('402: الرصيد غير كافٍ على GMI Cloud.');
+  if (resp.status === 401) throw new Error('مفتاح GMI Cloud غير صالح. تحقق من الإعدادات.');
+  if (!resp.ok) throw new Error(`GMI Cloud HTTP ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  const data = await resp.json();
+  if (data?.error) {
+    const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+    throw new Error(`GMI Cloud: ${msg}`);
+  }
+  const parsed = parseLooseJson(data?.choices?.[0]?.message?.content || '');
+  if (!parsed || !Array.isArray(parsed.suggestions)) {
+    throw new Error('لم يعد GMI Cloud بصيغة JSON صالحة');
+  }
+  return parsed;
+}
+
 async function callDeepSeek(body: RequestBody, apiKey: string, model: string): Promise<any> {
   const dsModel = DEEPSEEK_NAME_MAP[model] || 'deepseek-v4-flash';
   const thinkingEnabled = dsModel === 'deepseek-v4-pro';
@@ -326,6 +362,12 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات.' }, 400);
       }
       parsed = await callDeepSeek(body, dsKey, body.aiModel || 'deepseek-v4-flash');
+    } else if (provider === 'gmicloud') {
+      const gmiKey = body.providerApiKey || Deno.env.get('GMICLOUD_API_KEY');
+      if (!gmiKey) {
+        return jsonResponse({ error: 'يحتاج GMI Cloud مفتاح API — أضفه في الإعدادات.' }, 400);
+      }
+      parsed = await callGmiCloud(body, gmiKey, body.aiModel || 'MiniMaxAI/MiniMax-M2.7');
     } else if (provider === 'tokenrouter') {
       const trKey = body.providerApiKey || Deno.env.get('TOKENROUTER_API_KEY');
       if (!trKey) {

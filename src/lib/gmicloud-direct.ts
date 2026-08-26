@@ -5,6 +5,11 @@
 
 export const GMICLOUD_DIRECT_ENDPOINT = 'https://api.gmi-serving.com/v1/chat/completions';
 export const GMICLOUD_DIRECT_MODEL = 'MiniMaxAI/MiniMax-M2.7';
+export const GMICLOUD_DIRECT_MODELS = [
+  'MiniMaxAI/MiniMax-M2.7',
+  'MiniMaxAI/MiniMax-M3',
+] as const;
+export type GmiCloudDirectModel = (typeof GMICLOUD_DIRECT_MODELS)[number];
 
 export interface GmiCloudEntry {
   key: string;
@@ -13,6 +18,7 @@ export interface GmiCloudEntry {
 
 interface GmiCloudDirectRequest {
   apiKey?: string;
+  model?: string;
   entries: GmiCloudEntry[];
   glossary?: string;
   extraInstructions?: string;
@@ -65,6 +71,10 @@ export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Pro
     if (!request.entries.length) {
       throw new GmiCloudDirectError('لا توجد نصوص لإرسالها إلى GMICLOUD.', 400);
     }
+    const model = request.model || GMICLOUD_DIRECT_MODEL;
+    if (!GMICLOUD_DIRECT_MODELS.includes(model as GmiCloudDirectModel)) {
+      throw new GmiCloudDirectError('نموذج GMICLOUD المختار غير متاح للترجمة النصية في هذه الجلسة.', 400);
+    }
 
     const sourceByKey = Object.fromEntries(request.entries.map(({ key, original }) => [key, original]));
     const response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
@@ -75,7 +85,7 @@ export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Pro
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: GMICLOUD_DIRECT_MODEL,
+        model,
         temperature: 0.2,
         messages: [
           { role: 'system', content: buildSystemPrompt(request) },
@@ -107,7 +117,7 @@ export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Pro
       throw new GmiCloudDirectError('لم يُرجع GMICLOUD أي ترجمة قابلة للاستخدام.', 502);
     }
 
-    return new Response(JSON.stringify({ translations, providerUsed: 'GMICLOUD / MiniMax M2.7 (direct)' }), {
+    return new Response(JSON.stringify({ translations, providerUsed: `GMICLOUD / ${model.replace('MiniMaxAI/', '').replace('MiniMax-', 'MiniMax ')} (direct)` }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

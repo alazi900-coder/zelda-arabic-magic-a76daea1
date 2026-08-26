@@ -338,14 +338,21 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                   <span className="font-display">✓ MiniMax M2.7</span>
                   <span className="text-[10px] opacity-70">نموذج نصي موثّق للترجمة</span>
                 </button>
-                <div className="flex flex-col items-start p-2 rounded-md border border-dashed border-border bg-muted/30 text-xs text-muted-foreground">
-                  <span className="font-display">MiniMax M3 — غير مفعّل</span>
-                  <span className="text-[10px] opacity-70">ينتظر معرّف API نصي موثّق</span>
-                </div>
-                <div className="flex flex-col items-start p-2 rounded-md border border-dashed border-border bg-muted/30 text-xs text-muted-foreground">
-                  <span className="font-display">minimax-music-3.0 — غير متاح</span>
-                  <span className="text-[10px] opacity-70">نموذج موسيقى وليس ترجمة نصية</span>
-                </div>
+                <button
+                  onClick={() => editor.setAiModel('MiniMaxAI/MiniMax-M3')}
+                  className={`flex flex-col items-start p-2 rounded-md border text-xs transition-colors ${
+                    editor.aiModel === 'MiniMaxAI/MiniMax-M3'
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  <span className="font-display">✓ MiniMax M3</span>
+                  <span className="text-[10px] opacity-70">نموذج نصي موثّق للترجمة</span>
+                </button>
+                <button disabled title="GMI Cloud أعاد: Insufficient balance" className="flex flex-col items-start p-2 rounded-md border border-dashed border-border bg-muted/30 text-left text-xs text-muted-foreground opacity-70 cursor-not-allowed">
+                  <span className="font-display">MiniMax M2.5 — الرصيد غير كافٍ</span>
+                  <span className="text-[10px] opacity-70">موجود في الحساب لكن المزود يرفض الطلبات حالياً</span>
+                </button>
               </div>
             </div>
 

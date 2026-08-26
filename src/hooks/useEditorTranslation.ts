@@ -118,6 +118,7 @@ export function useEditorTranslation({
     if (payload.provider === 'gmicloud') {
       return requestGmiCloudDirect({
         apiKey: userGmiCloudKey,
+        model: typeof payload.aiModel === 'string' ? payload.aiModel : undefined,
         entries: (payload.entries || []) as GmiCloudEntry[],
         glossary: typeof payload.glossary === 'string' ? payload.glossary : undefined,
         extraInstructions: typeof payload.extraInstructions === 'string' ? payload.extraInstructions : undefined,

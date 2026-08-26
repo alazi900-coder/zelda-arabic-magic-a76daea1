@@ -52,6 +52,7 @@ interface TranslationAIEnhancePanelProps {
   userGeminiKey?: string;
   userDeepSeekKey?: string;
   userTokenRouterKey?: string;
+  userGmiCloudKey?: string;
   aiRoutingMode?: 'free' | 'paid' | 'auto';
 }
 
@@ -105,7 +106,7 @@ const PARALLEL_REQUESTS = 3;
 const SCAN_PASSES = 1;
 const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
-interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "tokenrouter" | "local" | "free"; }
+interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "tokenrouter" | "gmicloud" | "local" | "free"; }
 
 const MODEL_OPTIONS: ModelOption[] = [
   { value: "google-translate-check", label: "Google Translate — فحص دقة (مجاني)", group: "free" },
@@ -121,6 +122,8 @@ const MODEL_OPTIONS: ModelOption[] = [
   { value: "deepseek-v4-flash", label: "🐋 DeepSeek V4 Flash (284B/13B — اقتصادي)", group: "deepseek" },
   { value: "deepseek-v4-pro", label: "🐋 DeepSeek V4 Pro (1.6T/49B — الأقوى)", group: "deepseek" },
   { value: "tokenrouter-glm-5.2", label: "🔀 TokenRouter GLM-5.2 (مجاني)", group: "tokenrouter" },
+  { value: "MiniMaxAI/MiniMax-M2.7", label: "☁️ MiniMax M2.7 عبر GMICLOUD", group: "gmicloud" },
+  { value: "MiniMaxAI/MiniMax-M3", label: "☁️ MiniMax M3 عبر GMICLOUD", group: "gmicloud" },
 ];
 
 const GOOGLE_CHECK_CONCURRENCY = 3;
@@ -128,15 +131,17 @@ const GOOGLE_CHECK_CONCURRENCY = 3;
 const GOOGLE_PRESENCE_THRESHOLD = 0.7;
 const GOOGLE_ORDER_THRESHOLD = 0.4;
 
-function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | null {
+function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | "gmicloud" | null {
   if (model.startsWith("deepseek")) return "deepseek";
   if (model.startsWith("tokenrouter")) return "tokenrouter";
+  if (model.startsWith("MiniMaxAI/MiniMax-")) return "gmicloud";
   return null;
 }
 
 function resolveEnhanceModelForProvider(provider: string | null | undefined, currentModel: string | null | undefined): string {
   if (provider === "tokenrouter") return "tokenrouter-glm-5.2";
   if (provider === "deepseek") return currentModel?.startsWith("deepseek") ? currentModel : "deepseek-v4-flash";
+  if (provider === "gmicloud") return currentModel?.startsWith("MiniMaxAI/MiniMax-") ? currentModel : "MiniMaxAI/MiniMax-M2.7";
   return currentModel || "gemini-2.5-flash";
 }
 
@@ -243,6 +248,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   userGeminiKey: userGeminiKeyProp,
   userDeepSeekKey: userDeepSeekKeyProp,
   userTokenRouterKey: userTokenRouterKeyProp,
+  userGmiCloudKey: userGmiCloudKeyProp,
   aiRoutingMode: aiRoutingModeProp,
 }) => {
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
@@ -629,6 +635,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const deepseekKey = userDeepSeekKeyProp || readLocalStorage('userDeepSeekKey');
     // مفتاح TokenRouter مخزَّن في إعدادات المحرّر؛ نمرّره عند اختيار نموذج TokenRouter.
     const tokenRouterKey = userTokenRouterKeyProp || readLocalStorage('userTokenRouterKey');
+    const gmiCloudKey = userGmiCloudKeyProp || readLocalStorage('userGmiCloudKey');
     // مفتاح Gemini الشخصي + وضع التوجيه (مجاني/مدفوع/تلقائي) — نفس المفاتيح المستخدمة
     // في translate-entries حتى تعمل أداة التحسين مع الوضع المجاني عبر Gemini المباشر.
     const userGeminiKey = userGeminiKeyProp || readLocalStorage('userGeminiKey');
@@ -638,6 +645,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     })() as 'free' | 'paid' | 'auto';
     const providerApiKey = effectiveProvider === 'deepseek' ? (deepseekKey || undefined)
       : effectiveProvider === 'tokenrouter' ? (tokenRouterKey || undefined)
+      : effectiveProvider === 'gmicloud' ? (gmiCloudKey || undefined)
       : undefined;
 
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب

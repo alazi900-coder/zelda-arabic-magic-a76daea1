@@ -30,6 +30,7 @@ interface ContextSuggestPanelProps {
   findSimilar?: (entryKey: string, original: string, minSimilarity?: number) => TMSuggestion[];
   onApplyTranslation: (key: string, text: string) => void;
   risenVariant: 'risen1' | 'risen2';
+  userGmiCloudKey?: string;
 }
 
 // Persistent IndexedDB cache. Keyed by `ctxsugg:<msbtFile>:<index>`.
@@ -71,7 +72,7 @@ const STYLE_STYLES: Record<Suggestion["style"], { emoji: string; cls: string }> 
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
 
 const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
-  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation, risenVariant,
+  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation, risenVariant, userGmiCloudKey,
 }) => {
   const key = entry ? `${entry.msbtFile}:${entry.index}` : "";
   const currentTranslation = entry ? translations[key] || "" : "";
@@ -158,8 +159,12 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           providerApiKey = localStorage.getItem("userDeepSeekKey") || "";
         } else if (provider === "tokenrouter") {
           providerApiKey = localStorage.getItem("userTokenRouterKey") || "";
+        } else if (provider === "gmicloud") {
+          providerApiKey = userGmiCloudKey || "";
         }
-      } catch { /* localStorage unavailable */ }
+    } catch {
+      if (provider === "gmicloud") providerApiKey = userGmiCloudKey || "";
+    }
 
       const res = await fetch(getEdgeFunctionUrl("context-suggest"), {
         method: "POST",

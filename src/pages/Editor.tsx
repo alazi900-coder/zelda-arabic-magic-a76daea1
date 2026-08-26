@@ -106,6 +106,7 @@ const Editor = () => {
       const response = provider === 'gmicloud'
         ? await requestGmiCloudDirect({
             apiKey: editor.userGmiCloudKey,
+            model: editor.aiModel,
             entries: [{ key: 'test:0', original: 'Hello' }],
           })
         : await fetch(getEdgeFunctionUrl("translate-entries"), {
@@ -562,6 +563,7 @@ const Editor = () => {
               userGeminiKey={editor.userGeminiKey}
               userDeepSeekKey={editor.userDeepSeekKey}
               userTokenRouterKey={editor.userTokenRouterKey}
+              userGmiCloudKey={editor.userGmiCloudKey}
               aiRoutingMode={editor.aiRoutingMode}
             />
           )}
@@ -900,6 +902,7 @@ const Editor = () => {
               findSimilar={findSimilar}
               onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
               risenVariant={editor.risenVariant}
+              userGmiCloudKey={editor.settings.userGmiCloudKey}
             />
           </React.Suspense>
         )}

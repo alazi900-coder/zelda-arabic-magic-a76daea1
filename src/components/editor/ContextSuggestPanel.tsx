@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+/** واجهة سياق المحرر: لا تعتمد اقتراح LumenTale إلا بعد إبقاء الوسوم التقنية مطابقة للأصل. */
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,10 @@ import type { ExtractedEntry } from "./types";
 import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import { resolveGameParam } from "@/lib/game-param";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
+import {
+  compareLumenTaleTechnicalTokens,
+  describeLumenTaleTokenDifference,
+} from "@/lib/lumentale/lumentale-token-guard";
 
 interface Suggestion {
   translation: string;
@@ -88,6 +93,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
   const [editValue, setEditValue] = useState("");
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  const [applyTokenError, setApplyTokenError] = useState<string | null>(null);
 
   // Load from cache on open (now async — IndexedDB).
   useEffect(() => {
@@ -98,6 +104,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
     setContextNote("");
     setError(null);
     setFromCache(false);
+    setApplyTokenError(null);
     readCache(key).then((cached) => {
       if (cancelled || !cached) return;
       setSuggestions(cached.suggestions);
@@ -145,6 +152,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
   // same detection used elsewhere (e.g. Editor.tsx, EditorProgressStatus.tsx).
   const isRisen = /\.tab$/i.test(entry?.msbtFile || "");
   const gameParam = resolveGameParam(entry?.msbtFile, risenVariant);
+  const isLumenTale = gameParam === "lumentale";
 
   const generate = async () => {
     if (!entry) return;
@@ -219,6 +227,22 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
 
   const applyText = (text: string) => {
     if (!entry) return;
+    setApplyTokenError(null);
+
+    if (isLumenTale) {
+      const comparison = compareLumenTaleTechnicalTokens(entry.original, text);
+      if (!comparison.valid) {
+        const message = describeLumenTaleTokenDifference(comparison);
+        setApplyTokenError(message);
+        toast({
+          title: "لم يُطبّق الاقتراح",
+          description: "اقتراح LumenTale غيّر وسماً تقنياً محمياً.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     onApplyTranslation(key, text);
     toast({ title: "✅ تم التطبيق", description: "تم تحديث الترجمة" });
     onClose();
@@ -314,11 +338,23 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
                   📌 {contextNote}
                 </div>
               )}
+              {applyTokenError && (
+                <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                  <strong>لم يُطبّق اقتراح LumenTale:</strong> {applyTokenError}
+                </div>
+              )}
               {suggestions.map((s, idx) => {
                 const styleMeta = STYLE_STYLES[s.style] || STYLE_STYLES.natural;
                 const bytes = utf8Bytes(s.translation);
                 const overflow = maxBytes > 0 && bytes > maxBytes;
                 const isEditing = editingIdx === idx;
+                const candidateText = isEditing ? editValue : s.translation;
+                const tokenComparison = isLumenTale
+                  ? compareLumenTaleTechnicalTokens(entry.original, candidateText)
+                  : null;
+                const tokenError = tokenComparison && !tokenComparison.valid
+                  ? describeLumenTaleTokenDifference(tokenComparison)
+                  : null;
                 return (
                   <div key={idx} className="rounded-lg border bg-card/60 p-3 space-y-2">
                     <div className="flex items-center flex-wrap gap-1.5">
@@ -333,6 +369,15 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
                           overflow ? "bg-destructive/15 text-destructive border-destructive/40" : ""
                         }`}>
                           {bytes}/{maxBytes} B
+                        </Badge>
+                      )}
+                      {isLumenTale && (
+                        <Badge variant="outline" className={`text-[10px] ${
+                          tokenError
+                            ? "bg-destructive/15 text-destructive border-destructive/40"
+                            : "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                        }`}>
+                          {tokenError ? "⚠️ فرق في الوسوم" : "🔒 الوسوم مطابقة"}
                         </Badge>
                       )}
                     </div>
@@ -354,11 +399,21 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
                     {s.reason && !isEditing && (
                       <p className="text-xs text-muted-foreground">💡 {s.reason}</p>
                     )}
+                    {tokenError && (
+                      <p role="alert" className="text-xs text-destructive">
+                        لن يُطبّق هذا الاقتراح: {tokenError}
+                      </p>
+                    )}
 
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {isEditing ? (
                         <>
-                          <Button size="sm" onClick={() => { applyText(editValue); setEditingIdx(null); }}>
+                          <Button
+                            size="sm"
+                            disabled={Boolean(tokenError)}
+                            title={tokenError || undefined}
+                            onClick={() => { applyText(editValue); setEditingIdx(null); }}
+                          >
                             حفظ وتطبيق
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditingIdx(null)}>
@@ -367,11 +422,16 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
                         </>
                       ) : (
                         <>
-                          <Button size="sm" onClick={() => applyText(s.translation)}>
+                          <Button
+                            size="sm"
+                            disabled={Boolean(tokenError)}
+                            title={tokenError || undefined}
+                            onClick={() => applyText(s.translation)}
+                          >
                             ✅ تطبيق
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => {
-                            setEditValue(s.translation); setEditingIdx(idx);
+                            setApplyTokenError(null); setEditValue(s.translation); setEditingIdx(idx);
                           }}>
                             <Pencil className="w-3.5 h-3.5 ml-1" /> تعديل
                           </Button>

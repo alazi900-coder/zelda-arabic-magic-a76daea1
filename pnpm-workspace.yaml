@@ -1,2 +1,5 @@
+packages:
+  - .
+
 patchedDependencies:
   unityfs-js: patches/unityfs-js.patch

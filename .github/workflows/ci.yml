@@ -34,7 +34,7 @@ jobs:
           node-version: "22"
 
       - name: تثبيت الاعتمادات المقفلة
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: تشغيل بوابة الإصدار
         run: pnpm run check:ci

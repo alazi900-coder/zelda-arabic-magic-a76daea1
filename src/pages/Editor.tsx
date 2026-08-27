@@ -26,10 +26,11 @@ import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import { useTranslationMemory } from "@/hooks/useTranslationMemory";
-import QualityStatsPanel from "@/components/editor/QualityStatsPanel";
+import EditorAsyncBoundary from "@/components/editor/EditorAsyncBoundary";
+const QualityStatsPanel = React.lazy(() => import("@/components/editor/QualityStatsPanel"));
 const BatchQualityModal = React.lazy(() => import("@/components/editor/BatchQualityModal"));
-import QuickReviewMode from "@/components/editor/QuickReviewMode";
-import FindReplacePanel from "@/components/editor/FindReplacePanel";
+const QuickReviewMode = React.lazy(() => import("@/components/editor/QuickReviewMode"));
+const FindReplacePanel = React.lazy(() => import("@/components/editor/FindReplacePanel"));
 import FloatingFindReplaceButton from "@/components/editor/FloatingFindReplaceButton";
 
 
@@ -37,7 +38,7 @@ import FloatingFindReplaceButton from "@/components/editor/FloatingFindReplaceBu
 import GlossaryStatsPanel from "@/components/editor/GlossaryStatsPanel";
 import GlossaryCategoryFilter from "@/components/editor/GlossaryCategoryFilter";
 import GlossaryDuplicatesPanel from "@/components/editor/GlossaryDuplicatesPanel";
-import TranslationAIEnhancePanel from "@/components/editor/TranslationAIEnhancePanel";
+const TranslationAIEnhancePanel = React.lazy(() => import("@/components/editor/TranslationAIEnhancePanel"));
 import TranslationToolsPanel from "@/components/editor/TranslationToolsPanel";
 
 import { ToolType } from "@/components/editor/ToolHelpDialog";
@@ -551,21 +552,23 @@ const Editor = () => {
 
           {/* AI Translation Enhancement */}
           {!editor.hiddenPanels.includes('ai-enhance') && (
-            <TranslationAIEnhancePanel
-              entries={editor.filteredEntries || []}
-              translations={editor.state?.translations || {}}
-              onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
-              glossary={editor.activeGlossary}
-              extraInstructions={effectiveExtraInstructions}
-              risenVariant={editor.risenVariant}
-              translationProvider={editor.translationProvider}
-              aiModel={editor.aiModel}
-              userGeminiKey={editor.userGeminiKey}
-              userDeepSeekKey={editor.userDeepSeekKey}
-              userTokenRouterKey={editor.userTokenRouterKey}
-              userGmiCloudKey={editor.userGmiCloudKey}
-              aiRoutingMode={editor.aiRoutingMode}
-            />
+            <EditorAsyncBoundary label="تحسين الترجمة بالذكاء الاصطناعي">
+              <TranslationAIEnhancePanel
+                entries={editor.filteredEntries || []}
+                translations={editor.state?.translations || {}}
+                onApplySuggestion={(key, newText) => editor.updateTranslation(key, newText)}
+                glossary={editor.activeGlossary}
+                extraInstructions={effectiveExtraInstructions}
+                risenVariant={editor.risenVariant}
+                translationProvider={editor.translationProvider}
+                aiModel={editor.aiModel}
+                userGeminiKey={editor.userGeminiKey}
+                userDeepSeekKey={editor.userDeepSeekKey}
+                userTokenRouterKey={editor.userTokenRouterKey}
+                userGmiCloudKey={editor.userGmiCloudKey}
+                aiRoutingMode={editor.aiRoutingMode}
+              />
+            </EditorAsyncBoundary>
           )}
 
           <EditorResultsPanels editor={editor} />
@@ -761,40 +764,46 @@ const Editor = () => {
 
           {/* Quality Stats Panel */}
           {editor.showQualityStats && (
-            <QualityStatsPanel
-              qualityStats={editor.qualityStats}
-              needsImproveCount={editor.needsImproveCount}
-              translatedCount={editor.translatedCount}
-              setFilterStatus={editor.setFilterStatus}
-              setShowQualityStats={editor.setShowQualityStats}
-              onFixDamagedTags={() => setShowTagRepair(true)}
-              onFilterMissingTags={() => editor.setFilterStatus(editor.filterStatus === "missing-tags" ? "all" : "missing-tags")}
-              onFixMissingTags={() => editor.handleLocalFixSelectedTags([...editor.qualityStats.missingTagKeys])}
-            />
+            <EditorAsyncBoundary label="إحصاءات الجودة">
+              <QualityStatsPanel
+                qualityStats={editor.qualityStats}
+                needsImproveCount={editor.needsImproveCount}
+                translatedCount={editor.translatedCount}
+                setFilterStatus={editor.setFilterStatus}
+                setShowQualityStats={editor.setShowQualityStats}
+                onFixDamagedTags={() => setShowTagRepair(true)}
+                onFilterMissingTags={() => editor.setFilterStatus(editor.filterStatus === "missing-tags" ? "all" : "missing-tags")}
+                onFixMissingTags={() => editor.handleLocalFixSelectedTags([...editor.qualityStats.missingTagKeys])}
+              />
+            </EditorAsyncBoundary>
           )}
 
           {/* Quick Review Mode */}
           {editor.quickReviewMode && (
-            <QuickReviewMode
-              filteredEntries={editor.filteredEntries}
-              quickReviewIndex={editor.quickReviewIndex}
-              setQuickReviewIndex={editor.setQuickReviewIndex}
-              setQuickReviewMode={editor.setQuickReviewMode}
-              translations={editor.state.translations}
-              qualityProblemKeys={editor.qualityStats.problemKeys}
-              updateTranslation={editor.updateTranslation}
-            />
+            <EditorAsyncBoundary label="المراجعة السريعة">
+              <QuickReviewMode
+                filteredEntries={editor.filteredEntries}
+                quickReviewIndex={editor.quickReviewIndex}
+                setQuickReviewIndex={editor.setQuickReviewIndex}
+                setQuickReviewMode={editor.setQuickReviewMode}
+                translations={editor.state.translations}
+                qualityProblemKeys={editor.qualityStats.problemKeys}
+                updateTranslation={editor.updateTranslation}
+              />
+            </EditorAsyncBoundary>
           )}
 
           {/* Find & Replace */}
           {editor.showFindReplace && editor.state && (
-            <FindReplacePanel
-              entries={editor.state.entries}
-              filteredEntries={editor.filteredEntries}
-              translations={editor.state.translations}
-              onReplace={editor.handleBulkReplace}
-              onClose={() => editor.setShowFindReplace(false)}
-            />
+            <EditorAsyncBoundary label="البحث والاستبدال">
+              <FindReplacePanel
+                entries={editor.state.entries}
+                filteredEntries={editor.filteredEntries}
+                translations={editor.state.translations}
+                onReplace={editor.handleBulkReplace}
+                onClose={() => editor.setShowFindReplace(false)}
+              />
+            </EditorAsyncBoundary>
           )}
 
           {/* Draggable FAB to open Find & Replace */}

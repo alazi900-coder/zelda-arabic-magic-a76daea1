@@ -13,10 +13,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
-import BuildConfirmDialog from "@/components/editor/BuildConfirmDialog";
-import ExportEnglishDialog from "@/components/editor/ExportEnglishDialog";
-import ToolHelpDialog, { ToolType } from "@/components/editor/ToolHelpDialog";
+import EditorAsyncBoundary from "@/components/editor/EditorAsyncBoundary";
+import type { ToolType } from "@/components/editor/ToolHelpDialog";
 // Heavy dialogs split into separate chunks; mounted only when opened.
+const BuildConfirmDialog = React.lazy(() => import("@/components/editor/BuildConfirmDialog"));
+const ExportEnglishDialog = React.lazy(() => import("@/components/editor/ExportEnglishDialog"));
+const ToolHelpDialog = React.lazy(() => import("@/components/editor/ToolHelpDialog"));
 const BuildStatsDialog = React.lazy(() => import("@/components/editor/BuildStatsDialog"));
 const CompareEnginesDialog = React.lazy(() => import("@/components/editor/CompareEnginesDialog"));
 const ImportConflictDialog = React.lazy(() => import("@/components/editor/ImportConflictDialog"));
@@ -184,13 +186,17 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
           onRecheck={editor.handleCheckIntegrity}
         />
       )}
-      <BuildConfirmDialog
-        open={editor.showBuildConfirm}
-        onOpenChange={editor.setShowBuildConfirm}
-        preview={editor.buildPreview}
-        onConfirm={editor.handleBuild}
-        building={editor.building}
-      />
+      {editor.showBuildConfirm && (
+        <EditorAsyncBoundary label="تأكيد البناء">
+          <BuildConfirmDialog
+            open={editor.showBuildConfirm}
+            onOpenChange={editor.setShowBuildConfirm}
+            preview={editor.buildPreview}
+            onConfirm={editor.handleBuild}
+            building={editor.building}
+          />
+        </EditorAsyncBoundary>
+      )}
       {showDiagnostic && (
         <PreBuildDiagnostic
           open={showDiagnostic}
@@ -215,12 +221,16 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
           risenVariant={editor.risenVariant}
         />
       )}
-      <ExportEnglishDialog
-        open={showExportEnglishDialog}
-        onOpenChange={setShowExportEnglishDialog}
-        totalCount={untranslatedCount}
-        onExport={(chunkSize, format) => format === "json" ? editor.handleExportEnglishOnlyJson(chunkSize) : editor.handleExportEnglishOnly(chunkSize)}
-      />
+      {showExportEnglishDialog && (
+        <EditorAsyncBoundary label="تصدير النصوص الإنجليزية">
+          <ExportEnglishDialog
+            open={showExportEnglishDialog}
+            onOpenChange={setShowExportEnglishDialog}
+            totalCount={untranslatedCount}
+            onExport={(chunkSize, format) => format === "json" ? editor.handleExportEnglishOnlyJson(chunkSize) : editor.handleExportEnglishOnly(chunkSize)}
+          />
+        </EditorAsyncBoundary>
+      )}
       {editor.importConflicts.length > 0 && (
         <ImportConflictDialog
           open={editor.importConflicts.length > 0}
@@ -361,16 +371,20 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
       )}
 
       {/* Tool Help Dialog */}
-      <ToolHelpDialog
-        tool={showToolHelp}
-        onClose={() => {
-          const toolToRun = showToolHelp;
-          setShowToolHelp(null);
-          if (toolToRun && ['literal-detect', 'style-unify', 'consistency-check', 'alternatives', 'full-analysis'].includes(toolToRun)) {
-            editor.handleAdvancedAnalysis(toolToRun as AnalysisAction);
-          }
-        }}
-      />
+      {showToolHelp && (
+        <EditorAsyncBoundary label="شرح الأداة">
+          <ToolHelpDialog
+            tool={showToolHelp}
+            onClose={() => {
+              const toolToRun = showToolHelp;
+              setShowToolHelp(null);
+              if (toolToRun && ['literal-detect', 'style-unify', 'consistency-check', 'alternatives', 'full-analysis'].includes(toolToRun)) {
+                editor.handleAdvancedAnalysis(toolToRun as AnalysisAction);
+              }
+            }}
+          />
+        </EditorAsyncBoundary>
+      )}
     </React.Suspense>
   );
 };

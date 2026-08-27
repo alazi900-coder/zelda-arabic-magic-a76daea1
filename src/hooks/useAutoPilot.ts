@@ -32,7 +32,6 @@ export interface AutoPilotDiagnostic {
 export interface AutoPilotReport {
   totalEntries: number;
   alreadyTranslated: number;
-  fromMemory: number;
   fromGlossary: number;
   fromAI: number;
   failed: number;
@@ -156,7 +155,7 @@ export function useAutoPilot({
     const signal = abortRef.current.signal;
 
     const stats: AutoPilotReport = {
-      totalEntries: 0, alreadyTranslated: 0, fromMemory: 0,
+      totalEntries: 0, alreadyTranslated: 0,
       fromGlossary: 0, fromAI: 0, failed: 0,
       tagsFixed: 0, weakFound: 0, weakFixed: 0, duration: 0,
       isFreeRun: runMode === 'free',
@@ -262,20 +261,10 @@ export function useAutoPilot({
       }
 
       // ══════════════════════════════════════════════════════
-      // المرحلة 2 — ذاكرة الترجمة + القاموس
+      // المرحلة 2 — القاموس
       // ══════════════════════════════════════════════════════
-      setPhase("💾 ذاكرة + قاموس"); setPhaseIndex(2);
-      log(`بحث في ${Object.keys(state.translations).length} ترجمة موجودة وفي القاموس...`, 'phase', "2");
-
-      const tmMap = new Map<string, string>();
-      for (const [key, val] of Object.entries(state.translations)) {
-        if (!val.trim()) continue;
-        const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
-        if (entry) {
-          const norm = entry.original.trim().toLowerCase();
-          if (!tmMap.has(norm)) tmMap.set(norm, val);
-        }
-      }
+      setPhase("📖 القاموس"); setPhaseIndex(2);
+      log("البحث في القاموس...", 'phase', "2");
 
       const glossaryMap = parseGlossaryMap(activeGlossary);
       const freeTranslations: Record<string, string> = {};
@@ -285,8 +274,6 @@ export function useAutoPilot({
         if (signal.aborted) throw new DOMException('abort', 'AbortError');
         const key = `${e.msbtFile}:${e.index}`;
         const norm = e.original.trim().toLowerCase();
-        const tmHit = tmMap.get(norm);
-        if (tmHit) { freeTranslations[key] = tmHit; stats.fromMemory++; continue; }
         const gHit = glossaryMap.get(norm);
         if (gHit) { freeTranslations[key] = gHit; stats.fromGlossary++; continue; }
         needsAI.push(e);
@@ -294,7 +281,7 @@ export function useAutoPilot({
 
       if (Object.keys(freeTranslations).length > 0) {
         addTranslations(freeTranslations);
-        log(`✅ مجاني: ${stats.fromMemory} من الذاكرة + ${stats.fromGlossary} من القاموس`, 'success', "2");
+        log(`✅ تم تطبيق القاموس على ${stats.fromGlossary} نص`, 'success', "2");
       } else {
         log("لم تُوجد مطابقات مجانية — كل شيء يحتاج AI", 'info', "2");
       }
@@ -553,7 +540,7 @@ export function useAutoPilot({
       setReport(stats);
       setPhase("✅ مكتمل"); setPhaseIndex(5);
 
-      const total = stats.fromMemory + stats.fromGlossary + stats.fromAI;
+      const total = stats.fromGlossary + stats.fromAI;
       log(`🎉 اكتمل الوكيل! ${total} نص تُرجم خلال ${stats.duration}ث`, 'success', "✅ النتيجة");
       if (isPreview && Object.keys(pendingAcc).length > 0) {
         setPendingTranslations({ ...pendingAcc });
@@ -561,7 +548,7 @@ export function useAutoPilot({
       } else {
         toast({
           title: "✅ الوكيل التلقائي اكتمل",
-          description: `${stats.fromAI} بالذكاء الاصطناعي + ${stats.fromMemory + stats.fromGlossary} مجاناً${stats.failed > 0 ? ` | ${stats.failed} فشل` : ''}`,
+          description: `${stats.fromAI} بالذكاء الاصطناعي + ${stats.fromGlossary} من القاموس${stats.failed > 0 ? ` | ${stats.failed} فشل` : ''}`,
         });
       }
 

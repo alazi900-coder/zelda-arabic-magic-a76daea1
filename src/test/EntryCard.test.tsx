@@ -41,7 +41,6 @@ const defaultProps = {
   onRejectFuzzy: vi.fn(),
   onCompare: vi.fn(),
   onSplitNewline: vi.fn(),
-  tmSuggestions: [],
 };
 
 describe("EntryCard", () => {
@@ -60,28 +59,6 @@ describe("EntryCard", () => {
     // The translation appears in the input
     const input = screen.getByDisplayValue("مرحبا بالعالم");
     expect(input).toBeInTheDocument();
-  });
-
-  it("shows an exact translation-memory suggestion and applies it only when clicked", () => {
-    const updateTranslation = vi.fn();
-    render(
-      <EntryCard
-        {...defaultProps}
-        updateTranslation={updateTranslation}
-        tmSuggestions={[{
-          key: "other.bdat:4",
-          original: "Hello World",
-          translation: "أهلاً بالعالم",
-          similarity: 100,
-          matchType: "exact",
-        }]}
-      />
-    );
-
-    expect(screen.getByText(/ذاكرة الترجمة/)).toBeInTheDocument();
-    expect(screen.getByText("مطابقة تامة")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /أهلاً بالعالم/ }));
-    expect(updateTranslation).toHaveBeenCalledWith("test.bdat:0", "أهلاً بالعالم");
   });
 
   it("shows problem indicator when hasProblem is true", () => {

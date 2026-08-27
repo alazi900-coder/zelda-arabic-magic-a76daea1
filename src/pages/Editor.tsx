@@ -25,7 +25,6 @@ import { LUMENTALE_META_KEY } from "@/lib/lumentale/lumentale-editor-bridge";
 import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
-import { useTranslationMemory } from "@/hooks/useTranslationMemory";
 import EditorAsyncBoundary from "@/components/editor/EditorAsyncBoundary";
 const QualityStatsPanel = React.lazy(() => import("@/components/editor/QualityStatsPanel"));
 const BatchQualityModal = React.lazy(() => import("@/components/editor/BatchQualityModal"));
@@ -65,7 +64,6 @@ const ContextSuggestPanel = React.lazy(() => import("@/components/editor/Context
 
 const Editor = () => {
   const editor = useEditorState();
-  const { findSimilar } = useTranslationMemory(editor.state);
   const isMobile = useIsMobile();
   const [showDiffView, setShowDiffView] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -818,7 +816,6 @@ const Editor = () => {
             setShowDiffView={setShowDiffView}
             setCompareEntry={setCompareEntry}
             setRelatedEntry={setRelatedEntry}
-            findSimilar={findSimilar}
             buildExtraToolButtons={(entry) => [
               {
                 onClick: () => setSceneContextEntry(entry),
@@ -908,7 +905,6 @@ const Editor = () => {
               entries={editor.state?.entries || []}
               translations={editor.state?.translations || {}}
               glossary={editor.activeGlossary}
-              findSimilar={findSimilar}
               onApplyTranslation={(key, text) => editor.updateTranslation(key, text)}
               risenVariant={editor.risenVariant}
               userGmiCloudKey={typeof editor.userGmiCloudKey === "string" ? editor.userGmiCloudKey : ""}

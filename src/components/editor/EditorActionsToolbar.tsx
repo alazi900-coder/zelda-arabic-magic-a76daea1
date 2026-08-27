@@ -50,7 +50,6 @@ type EditorSubset = Pick<
   | "handleExportEnglishOnly"
   | "handleExportEnglishOnlyJson"
   | "handleExportSkillsGlossary"
-  | "handleExportTMX"
   | "handleExportTranslations"
   | "handleExportWorkspaceBackup"
   | "handleExportXLIFF"
@@ -66,7 +65,6 @@ type EditorSubset = Pick<
   | "handleImportExternalJson"
   | "handleImportGlossary"
   | "handleImportLegacyJson"
-  | "handleImportTMX"
   | "handleImportTranslations"
   | "handleImportWorkspaceBackup"
   | "handleImportXLIFF"
@@ -198,7 +196,6 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <DropdownMenuItem onClick={handleExportProcessedArabic}><Sparkles className="w-4 h-4 text-secondary" /> تصدير JSON (معالج عربي ✨)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">🌍 تصدير جميع الإنجليزية الأصلية ({editor.state?.entries?.length || 0})</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleExportAllEnglishJson}><FileDown className="w-4 h-4" /> JSON (للترجمة الخارجية)</DropdownMenuItem>
@@ -217,7 +214,6 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <DropdownMenuItem onClick={editor.handleImportExternalJson}><Upload className="w-4 h-4" /> استيراد ترجمة خارجية 🌍</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportCSV}><Upload className="w-4 h-4" /> استيراد CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportXLIFF}><Upload className="w-4 h-4" /> استيراد XLIFF 📥</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleImportTMX}><Upload className="w-4 h-4" /> استيراد TMX 📥</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={editor.handleImportLegacyJson}><Upload className="w-4 h-4" /> استيراد JSON قديم 🔄</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -465,7 +461,6 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <DropdownMenuItem onClick={handleExportProcessedArabic}><Sparkles className="w-4 h-4 text-secondary" /> تصدير JSON (معالج عربي ✨ - الملف فقط)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF (memoQ/Trados)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleExportTMX}><FileDown className="w-4 h-4" /> تصدير TMX (ذاكرة ترجمة)</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">🌍 تصدير جميع الإنجليزية الأصلية ({editor.state?.entries?.length || 0})</DropdownMenuLabel>
                   <DropdownMenuItem onClick={editor.handleExportAllEnglishJson}><FileDown className="w-4 h-4" /> JSON (للترجمة الخارجية)</DropdownMenuItem>
@@ -484,7 +479,6 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <DropdownMenuItem onClick={editor.handleImportExternalJson}><Upload className="w-4 h-4" /> استيراد ترجمة خارجية 🌍</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportCSV}><Upload className="w-4 h-4" /> استيراد CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportXLIFF}><Upload className="w-4 h-4" /> استيراد XLIFF 📥</DropdownMenuItem>
-                  <DropdownMenuItem onClick={editor.handleImportTMX}><Upload className="w-4 h-4" /> استيراد TMX 📥</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={editor.handleImportLegacyJson}><Upload className="w-4 h-4" /> استيراد JSON قديم 🔄</DropdownMenuItem>
                 </DropdownMenuContent>

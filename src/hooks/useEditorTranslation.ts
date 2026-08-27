@@ -52,7 +52,6 @@ interface UseEditorTranslationProps {
   npcMode: boolean;
   npcSplitCharLimit: number;
   aiModel: string;
-  tmAutoReuse: boolean;
   aiThrottleEnabled: boolean;
   customPromptInstructions: string;
   categoryPromptTemplates: Record<string, string>;
@@ -96,7 +95,7 @@ const LUMENTALE_TOKEN_RULE =
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, tmAutoReuse, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
 }: UseEditorTranslationProps) {
 
   // Keep all outbound translation paths on the same key policy. In particular,
@@ -211,7 +210,6 @@ export function useEditorTranslation({
 
   const [translating, setTranslating] = useState(false);
   const [translatingSingle, setTranslatingSingle] = useState<string | null>(null);
-  const [tmStats, setTmStats] = useState<{ reused: number; sent: number } | null>(null);
   const [glossarySessionStats, setGlossarySessionStats] = useState<{
     directMatches: number; lockedTerms: number; contextTerms: number;
     batchesCompleted: number; totalBatches: number; textsTranslated: number; freeTranslations: number;
@@ -429,20 +427,6 @@ export function useEditorTranslation({
     try {
       const glossaryMap = parseGlossaryMap(activeGlossary);
       const originalNorm = entry.original.trim().toLowerCase();
-      // TM exact-match reuse (gated by user setting): saves an API call when an
-      // identical original already has a translation elsewhere in the project.
-      if (tmAutoReuse) {
-        for (const [otherKey, otherTr] of Object.entries(state.translations)) {
-          if (otherKey === key || !otherTr.trim()) continue;
-          const otherEntry = state.entries.find(e => `${e.msbtFile}:${e.index}` === otherKey);
-          if (otherEntry && otherEntry.original.trim().toLowerCase() === originalNorm) {
-            updateTranslation(key, otherTr);
-            setLastSaved(`⚡ من ذاكرة الترجمة (بدون ذكاء اصطناعي)`);
-            setTimeout(() => setLastSaved(""), 3000);
-            return;
-          }
-        }
-      }
       const glossaryHit = glossaryMap.get(originalNorm);
       if (glossaryHit) {
         updateTranslation(key, glossaryHit);
@@ -530,55 +514,25 @@ export function useEditorTranslation({
       return;
     }
 
-    // Translation Memory — exact-match reuse (gated by user setting)
-    const tmReused: Record<string, string> = {};
-    const afterTM: typeof untranslated = [];
-    if (tmAutoReuse) {
-      const tmMap = new Map<string, string>();
-      for (const [key, val] of Object.entries(state.translations)) {
-        if (val.trim()) {
-          const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
-          if (entry) {
-            const norm = entry.original.trim().toLowerCase();
-            if (!tmMap.has(norm)) tmMap.set(norm, val);
-          }
-        }
-      }
-      for (const e of untranslated) {
-        const norm = e.original.trim().toLowerCase();
-        const cached = tmMap.get(norm);
-        if (cached) { tmReused[`${e.msbtFile}:${e.index}`] = cached; }
-        else { afterTM.push(e); }
-      }
-    } else {
-      // TM disabled — send everything to AI/glossary path
-      afterTM.push(...untranslated);
-    }
-
     // Glossary direct translation (free, no AI)
     const glossaryMap = parseGlossaryMap(activeGlossary);
     const glossaryReused: Record<string, string> = {};
     const needsAI: typeof untranslated = [];
-    for (const e of afterTM) {
+    for (const e of untranslated) {
       const norm = e.original.trim().toLowerCase();
       const glossaryHit = glossaryMap.get(norm);
       if (glossaryHit) { glossaryReused[`${e.msbtFile}:${e.index}`] = glossaryHit; }
       else { needsAI.push(e); }
     }
 
-    const freeTranslations = { ...tmReused, ...glossaryReused };
+    const freeTranslations = glossaryReused;
     if (Object.keys(freeTranslations).length > 0) {
       const safeFreeTranslations = autoFixTags(freeTranslations);
       setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, safeFreeTranslations) } : null);
     }
-    const tmCount = Object.keys(tmReused).length;
     const glossaryCount = Object.keys(glossaryReused).length;
-    setTmStats({ reused: tmCount + glossaryCount, sent: needsAI.length });
     if (needsAI.length === 0) {
-      const parts: string[] = [];
-      if (tmCount > 0) parts.push(`${tmCount} من الذاكرة`);
-      if (glossaryCount > 0) parts.push(`${glossaryCount} من القاموس 📖`);
-      setTranslateProgress(`✅ تم ترجمة ${tmCount + glossaryCount} نص مجاناً (${parts.join(' + ')}) — لا حاجة للذكاء الاصطناعي!`);
+      setTranslateProgress(`✅ تم تطبيق القاموس على ${glossaryCount} نص — لا حاجة للذكاء الاصطناعي!`);
       setTimeout(() => setTranslateProgress(""), 5000);
       return;
     }
@@ -1596,7 +1550,6 @@ export function useEditorTranslation({
   return {
     translating,
     translatingSingle,
-    tmStats,
     glossarySessionStats,
     failedEntries,
     pendingPageTranslations,

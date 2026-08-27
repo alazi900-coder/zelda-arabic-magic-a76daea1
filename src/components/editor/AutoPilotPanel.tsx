@@ -250,16 +250,15 @@ export function AutoPilotPanel({
 
         {/* Final report */}
         {report && !running && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-center text-xs">
             {[
-              { label: "من الذاكرة",        value: report.fromMemory,   color: "text-blue-500" },
               { label: "من القاموس",         value: report.fromGlossary, color: "text-purple-500" },
               { label: "بالذكاء الاصطناعي",  value: report.fromAI,       color: "text-green-500" },
               { label: "رموز أُصلحت",        value: report.tagsFixed,    color: "text-orange-500" },
               { label: "ضعيفة أُصلحت",       value: report.weakFixed,    color: "text-yellow-600" },
               { label: "فشل",               value: report.failed,       color: report.failed > 0 ? "text-red-500" : "text-muted-foreground" },
               { label: "الوقت",             value: `${report.duration}ث`, color: "text-muted-foreground" },
-              { label: "المجموع",           value: report.fromMemory + report.fromGlossary + report.fromAI, color: "text-primary font-bold" },
+              { label: "المجموع",           value: report.fromGlossary + report.fromAI, color: "text-primary font-bold" },
             ].map(item => (
               <div key={item.label} className="bg-background rounded p-1.5 border border-border/50">
                 <div className={`font-bold text-base ${item.color}`}>{item.value}</div>

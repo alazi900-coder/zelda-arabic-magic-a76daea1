@@ -5,7 +5,6 @@ import VirtualizedEntryList from "@/components/editor/VirtualizedEntryList";
 import { PAGE_SIZE } from "@/components/editor/types";
 import type { ExtractedEntry } from "@/components/editor/types";
 import type { useEditorState } from "@/hooks/useEditorState";
-import type { useTranslationMemory } from "@/hooks/useTranslationMemory";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -44,7 +43,6 @@ interface EditorEntryListSectionProps {
   setShowDiffView: (v: boolean) => void;
   setCompareEntry: (e: ExtractedEntry | null) => void;
   setRelatedEntry?: (e: ExtractedEntry | null) => void;
-  findSimilar: ReturnType<typeof useTranslationMemory>["findSimilar"];
   buildExtraToolButtons?: (entry: ExtractedEntry) => { onClick: () => void; icon: string; title: string; cls?: string }[];
 }
 
@@ -55,7 +53,6 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
   setShowDiffView,
   setCompareEntry,
   setRelatedEntry,
-  findSimilar,
   buildExtraToolButtons,
 }) => (
   <>
@@ -106,7 +103,6 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
         onCompare={(entry) => setCompareEntry(entry)}
         onSplitNewline={editor.handleSplitSingleEntry}
         onShowRelated={setRelatedEntry ? (entry) => setRelatedEntry(entry) : undefined}
-        findSimilar={findSimilar}
         height={Math.max(400, window.innerHeight - 300)}
         legacyCommaSplitEnabled={editor.legacyCommaSplitEnabled}
         buildExtraToolButtons={buildExtraToolButtons}

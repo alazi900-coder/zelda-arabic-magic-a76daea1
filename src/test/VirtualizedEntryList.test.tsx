@@ -48,7 +48,6 @@ const defaultProps = {
   onRejectFuzzy: noop as (k: string) => void,
   onCompare: noopEntry,
   onSplitNewline: noop as (k: string) => void,
-  findSimilar: () => [],
   height: 400,
 };
 

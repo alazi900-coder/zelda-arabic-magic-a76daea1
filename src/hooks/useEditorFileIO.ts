@@ -1179,30 +1179,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       `</xliff>`;
   };
 
-  /** Build TMX XML string */
-  const buildTmx = (entries: ExtractedEntry[], translations: Record<string, string>): string => {
-    const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const tus: string[] = [];
-    for (const entry of entries) {
-      const key = `${entry.msbtFile}:${entry.index}`;
-      const target = translations[key]?.trim() || '';
-      if (!target || target === entry.original) continue; // TMX only includes translated pairs
-      tus.push(
-        `    <tu tuid="${escXml(key)}">\n` +
-        `      <tuv xml:lang="en"><seg>${escXml(entry.original)}</seg></tuv>\n` +
-        `      <tuv xml:lang="ar"><seg>${escXml(target)}</seg></tuv>\n` +
-        `    </tu>`
-      );
-    }
-    return `<?xml version="1.0" encoding="UTF-8"?>\n` +
-      `<tmx version="1.4">\n` +
-      `  <header creationtool="Lovable Translation Editor" creationtoolversion="1.0" datatype="plaintext" segtype="sentence" adminlang="en" srclang="en" o-tmf="undefined"/>\n` +
-      `  <body>\n` +
-      tus.join('\n') + '\n' +
-      `  </body>\n` +
-      `</tmx>`;
-  };
-
   const handleExportXLIFF = () => {
     if (!state) return;
     const entriesToExport = withoutTranslationExcludedEntries(isFilterActive ? filteredEntries : state.entries);
@@ -1216,26 +1192,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     a.click();
     URL.revokeObjectURL(url);
     setLastSaved(`✅ تم تصدير ${entriesToExport.length} نص كملف XLIFF`);
-    setTimeout(() => setLastSaved(""), 4000);
-  };
-
-  const handleExportTMX = () => {
-    if (!state) return;
-    const entriesToExport = withoutTranslationExcludedEntries(isFilterActive ? filteredEntries : state.entries);
-    const tmx = buildTmx(entriesToExport, state.translations);
-    const translatedCount = entriesToExport.filter(e => {
-      const t = state.translations[`${e.msbtFile}:${e.index}`]?.trim();
-      return t && t !== e.original;
-    }).length;
-    const blob = new Blob([tmx], { type: 'application/x-tmx+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const suffix = isFilterActive ? `_${filterLabel}` : '';
-    a.download = `translation-memory${suffix}_${new Date().toISOString().slice(0, 10)}.tmx`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setLastSaved(`✅ تم تصدير ${translatedCount} زوج ترجمة كملف TMX`);
     setTimeout(() => setLastSaved(""), 4000);
   };
 
@@ -1277,169 +1233,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       } catch (err) {
         console.error('XLIFF import error:', err);
         toast({ title: "خطأ في قراءة ملف XLIFF", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
-      }
-    };
-    input.click();
-  };
-
-  /** Compute bigram similarity between two strings (0..1) */
-  const bigramSimilarity = (a: string, b: string): number => {
-    const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-    const na = normalize(a);
-    const nb = normalize(b);
-    if (na === nb) return 1;
-    if (na.length < 2 || nb.length < 2) return 0;
-    const getBigrams = (s: string): Map<string, number> => {
-      const map = new Map<string, number>();
-      for (let i = 0; i < s.length - 1; i++) {
-        const bg = s.slice(i, i + 2);
-        map.set(bg, (map.get(bg) || 0) + 1);
-      }
-      return map;
-    };
-    const bigramsA = getBigrams(na);
-    const bigramsB = getBigrams(nb);
-    let intersection = 0;
-    for (const [bg, count] of bigramsA) {
-      intersection += Math.min(count, bigramsB.get(bg) || 0);
-    }
-    const totalA = na.length - 1;
-    const totalB = nb.length - 1;
-    return (2 * intersection) / (totalA + totalB);
-  };
-
-  /** Import TMX file and match translations by tuid, source text, or fuzzy match */
-  const handleImportTMX = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.tmx,application/x-tmx+xml';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const text = await readFileAsText(file);
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(text, 'text/xml');
-        const parseError = doc.querySelector('parsererror');
-        if (parseError) { toast({ title: "ملف TMX غير صالح", variant: "destructive" }); return; }
-
-        const sourceToArabic = new Map<string, string>();
-        const tuidToArabic = new Map<string, string>();
-        const tus = doc.querySelectorAll('tu');
-
-        tus.forEach(tu => {
-          const tuid = tu.getAttribute('tuid') || '';
-          const tuvs = tu.querySelectorAll('tuv');
-          let srcText = '';
-          let arText = '';
-          tuvs.forEach(tuv => {
-            const lang = (tuv.getAttribute('xml:lang') || tuv.getAttribute('lang') || '').toLowerCase();
-            const seg = tuv.querySelector('seg');
-            if (!seg?.textContent) return;
-            if (lang.startsWith('en')) srcText = seg.textContent.trim();
-            if (lang.startsWith('ar')) arText = seg.textContent.trim();
-          });
-          if (arText) {
-            if (tuid) tuidToArabic.set(tuid, arText);
-            if (srcText) sourceToArabic.set(srcText, arText);
-          }
-        });
-
-        if (tuidToArabic.size === 0 && sourceToArabic.size === 0) {
-          toast({ title: "لم يتم العثور على ترجمات عربية في ملف TMX", variant: "destructive" });
-          return;
-        }
-
-        const allowedKeys = isFilterActive && filteredEntries.length < (state?.entries.length || 0)
-          ? new Set(filteredEntries.map(e => `${e.msbtFile}:${e.index}`))
-          : null;
-
-        const FUZZY_THRESHOLD = 0.6; // minimum similarity for fuzzy match
-        const updates: Record<string, string> = {};
-        const fuzzyMatches: Record<string, number> = {}; // key → similarity score
-        const entriesToCheck = isFilterActive ? filteredEntries : (state?.entries || []);
-        const sourceTexts = Array.from(sourceToArabic.keys());
-
-        let exactCount = 0;
-        let fuzzyCount = 0;
-
-        for (const entry of entriesToCheck) {
-          const key = `${entry.msbtFile}:${entry.index}`;
-          if (allowedKeys && !allowedKeys.has(key)) continue;
-          if (isTranslationExcludedText(entry.original, entry.msbtFile)) continue;
-
-          // Priority 1: match by tuid (exact key match)
-          if (tuidToArabic.has(key)) {
-            updates[key] = normalizeArabicPresentationForms(tuidToArabic.get(key)!);
-            exactCount++;
-            continue;
-          }
-          // Priority 2: match by exact source text
-          if (sourceToArabic.has(entry.original)) {
-            updates[key] = normalizeArabicPresentationForms(sourceToArabic.get(entry.original)!);
-            exactCount++;
-            continue;
-          }
-          // Priority 3: fuzzy match by source text similarity
-          let bestScore = 0;
-          let bestTranslation = '';
-          for (const src of sourceTexts) {
-            // Skip very different lengths (optimization)
-            const lenRatio = Math.min(entry.original.length, src.length) / Math.max(entry.original.length, src.length);
-            if (lenRatio < 0.5) continue;
-            const score = bigramSimilarity(entry.original, src);
-            if (score > bestScore) {
-              bestScore = score;
-              bestTranslation = sourceToArabic.get(src)!;
-            }
-          }
-          if (bestScore >= FUZZY_THRESHOLD) {
-            updates[key] = normalizeArabicPresentationForms(bestTranslation);
-            fuzzyMatches[key] = Math.round(bestScore * 100);
-            fuzzyCount++;
-          }
-        }
-
-        if (Object.keys(updates).length === 0) {
-          toast({ title: "لم يتم مطابقة أي ترجمة", description: `الملف يحتوي ${tuidToArabic.size + sourceToArabic.size} زوج ترجمة لكن لم يتطابق أي منها مع النصوص الحالية.`, variant: "destructive" });
-          return;
-        }
-
-        // If there are fuzzy matches, ask for confirmation
-        if (fuzzyCount > 0) {
-          const sampleKeys = Object.keys(fuzzyMatches).slice(0, 3);
-          const entryMap = new Map((state?.entries || []).map(e => [`${e.msbtFile}:${e.index}`, e]));
-          const samples = sampleKeys.map(k => {
-            const e = entryMap.get(k);
-            return `• "${(e?.original || k).slice(0, 50)}..." → ${fuzzyMatches[k]}% تشابه`;
-          }).join('\n');
-          const confirmMsg = `تم العثور على:\n• ${exactCount} مطابقة تامة\n• ${fuzzyCount} مطابقة جزئية\n\nأمثلة على المطابقة الجزئية:\n${samples}\n\nهل تريد تطبيق المطابقات الجزئية أيضاً؟`;
-          if (!confirm(confirmMsg)) {
-            // Remove fuzzy matches, keep only exact
-            for (const k of Object.keys(fuzzyMatches)) {
-              delete updates[k];
-            }
-            fuzzyCount = 0;
-          }
-        }
-
-        if (Object.keys(updates).length === 0) {
-          toast({ title: "لم يتم تطبيق أي ترجمة", description: "بعد إلغاء المطابقات الجزئية." });
-          return;
-        }
-
-        setState(prev => {
-          if (!prev) return null;
-          const newFuzzy = { ...(prev.fuzzyScores || {}), ...fuzzyMatches };
-          return { ...prev, ...mergeGuardedTranslations(prev, updates), fuzzyScores: newFuzzy };
-        });
-        const totalPairs = tuidToArabic.size + sourceToArabic.size;
-        const fuzzyNote = fuzzyCount > 0 ? ` (${fuzzyCount} جزئية)` : '';
-        setLastSaved(`✅ تم استيراد ${Object.keys(updates).length} ترجمة من TMX${fuzzyNote} (${totalPairs} زوج في الملف) — ${file.name}`);
-        setTimeout(() => setLastSaved(""), 5000);
-      } catch (err) {
-        console.error('TMX import error:', err);
-        toast({ title: "خطأ في قراءة ملف TMX", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       }
     };
     input.click();
@@ -2075,9 +1868,7 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     handleExportAllEnglishTxt,
     handleImportExternalJson,
     handleExportXLIFF,
-    handleExportTMX,
     handleImportXLIFF,
-    handleImportTMX,
     handleImportLegacyJson,
     normalizeArabicPresentationForms,
     isFilterActive,

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Copy, Eye, Check, X, Table2, Columns3, History, GitCompareArrows, Type, SplitSquareHorizontal, Languages, Scale, Gamepad2, ListOrdered, Shield, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { measureEntryBytes } from "@/lib/entry-bytes";
-import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import DebouncedInput from "./DebouncedInput";
 import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
 import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
@@ -105,7 +104,7 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
     return { label: tag.length > 25 ? tag.slice(0, 23) + '…]' : tag, color: 'bg-orange-500/15 text-orange-400 border-orange-500/25', title: `وسم: ${tag}` };
   }
   // Escaped bracket tags \[Name\]
-  const escapedMatch = tag.match(/\\?\[\s*([A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*)\s*\\?\]/);
+  const escapedMatch = tag.match(/\\?\[\s*([A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*)\s*\\?\]/);
   if (escapedMatch) {
     return { label: `\\[${escapedMatch[1]}\\]`, color: 'bg-rose-500/15 text-rose-400 border-rose-500/25', title: `عبارة محمية: ${tag}` };
   }
@@ -196,7 +195,6 @@ interface EntryCardProps {
   onCompare?: (entry: ExtractedEntry) => void;
   onSplitNewline?: (key: string) => void;
   onShowRelated?: (entry: ExtractedEntry) => void;
-  tmSuggestions?: TMSuggestion[];
   legacyCommaSplitEnabled?: boolean;
   extraToolButtons?: { onClick: () => void; icon: string; title: string; cls?: string }[];
   risenVariant?: 'risen1' | 'risen2';
@@ -231,7 +229,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage,
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
   handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag,
-  onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, tmSuggestions,
+  onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated,
   legacyCommaSplitEnabled, extraToolButtons, risenVariant,
 }) => {
   const key = `${entry.msbtFile}:${entry.index}`;
@@ -379,32 +377,6 @@ const EntryCard: React.FC<EntryCardProps> = ({
                   {m.term} → {m.translation}
                 </span>
               ))}
-            </div>
-          )}
-          {tmSuggestions && tmSuggestions.length > 0 && (
-            <div className="mb-3 rounded-md border border-primary/20 bg-primary/5 p-2" aria-label="اقتراحات ذاكرة الترجمة">
-              <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-primary">
-                <BookOpen className="h-3.5 w-3.5" />
-                ذاكرة الترجمة — {tmSuggestions.length} اقتراح{tmSuggestions.length === 1 ? '' : 'ات'}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {tmSuggestions.map((suggestion) => (
-                  <Button
-                    key={suggestion.key}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-auto min-h-8 justify-between gap-2 whitespace-normal border-primary/20 bg-background px-2 py-1.5 text-right hover:bg-primary/10"
-                    onClick={() => updateTranslation(key, suggestion.translation)}
-                    title={`استخدام هذه الترجمة من: ${suggestion.original}`}
-                  >
-                    <span className="min-w-0 flex-1 break-words" dir="auto">{suggestion.translation}</span>
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${suggestion.matchType === 'exact' ? 'bg-emerald-500/15 text-emerald-700' : 'bg-primary/10 text-primary'}`}>
-                      {suggestion.matchType === 'exact' ? 'مطابقة تامة' : `${suggestion.similarity}% تشابه`}
-                    </span>
-                  </Button>
-                ))}
-              </div>
             </div>
           )}
           {editorOriginal.includes('\n') && (() => {

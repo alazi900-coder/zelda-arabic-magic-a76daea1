@@ -10,7 +10,6 @@ import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { idbGet, idbSet } from "@/lib/idb-storage";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 import type { ExtractedEntry } from "./types";
-import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 import { resolveGameParam } from "@/lib/game-param";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
 import {
@@ -33,7 +32,6 @@ interface ContextSuggestPanelProps {
   entries: ExtractedEntry[];
   translations: Record<string, string>;
   glossary?: string;
-  findSimilar?: (entryKey: string, original: string, minSimilarity?: number) => TMSuggestion[];
   onApplyTranslation: (key: string, text: string) => void;
   risenVariant: 'risen1' | 'risen2';
   userGmiCloudKey?: string;
@@ -80,7 +78,7 @@ const STYLE_STYLES: Record<Suggestion["style"], { emoji: string; cls: string }> 
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
 
 const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
-  open, onClose, entry, entries, translations, glossary, findSimilar, onApplyTranslation, risenVariant, userGmiCloudKey, translationProvider, aiModel: selectedAiModel,
+  open, onClose, entry, entries, translations, glossary, onApplyTranslation, risenVariant, userGmiCloudKey, translationProvider, aiModel: selectedAiModel,
 }) => {
   const key = entry ? `${entry.msbtFile}:${entry.index}` : "";
   const currentTranslation = entry ? translations[key] || "" : "";
@@ -131,18 +129,6 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
       }));
   }, [entry, entries, translations]);
 
-  // Translation Memory examples — top 3 similar previously-translated entries.
-  const tmExamples = useMemo(() => {
-    if (!entry || !findSimilar) return [];
-    try {
-      return findSimilar(key, entry.original, 40).slice(0, 3).map((m) => ({
-        original: m.original,
-        translation: m.translation,
-        similarity: m.similarity,
-      }));
-    } catch { return []; }
-  }, [entry, key, findSimilar]);
-
   const glossarySnippet = useMemo(() => {
     if (!glossary?.trim()) return "";
     return glossary.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).slice(0, 40).join("\n");
@@ -182,7 +168,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           apiKey: providerApiKey,
           model: aiModel,
           system: "You are an Arabic video-game localization editor. Return ONLY one JSON object with keys suggestions and contextNote. suggestions must be an array of up to three objects with translation, style (formal, natural, or creative), styleLabel in Arabic, reason in Arabic, and confidence from 0 to 1. Preserve every technical token, variable, control code, number, punctuation-bearing game code, and line-break marker exactly. Do not use Markdown.",
-          user: JSON.stringify({ target: { original: entry.original, translation: currentTranslation }, context: contextWindow, tmExamples, maxBytes: entry.maxBytes || 0, glossary: glossarySnippet, game: gameParam, speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined }),
+          user: JSON.stringify({ target: { original: entry.original, translation: currentTranslation }, context: contextWindow, maxBytes: entry.maxBytes || 0, glossary: glossarySnippet, game: gameParam, speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined }),
         });
         const sg: Suggestion[] = Array.isArray(data.suggestions) ? data.suggestions : [];
         const note = typeof data.contextNote === "string" ? data.contextNote : "";
@@ -198,7 +184,6 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
         body: JSON.stringify({
           target: { original: entry.original, translation: currentTranslation },
           context: contextWindow,
-          tmExamples,
           maxBytes: entry.maxBytes || 0,
           glossary: glossarySnippet,
           file: entry.msbtFile.split(":")[1] || entry.msbtFile,
@@ -299,7 +284,6 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           {/* Signal which contextual sources will be fed to the model */}
           <div className="flex flex-wrap gap-1.5 pt-1">
             <Badge variant="outline" className="text-[10px]">📑 سياق: {contextWindow.length}</Badge>
-            <Badge variant="outline" className="text-[10px]">🧠 ذاكرة TM: {tmExamples.length}</Badge>
             {maxBytes > 0 && <Badge variant="outline" className="text-[10px]">🔒 حد: {maxBytes} B</Badge>}
             {fromCache && suggestions.length > 0 && (
               <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-600 border-amber-500/30">⚡ من الذاكرة</Badge>

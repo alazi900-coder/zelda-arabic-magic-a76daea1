@@ -43,7 +43,6 @@ type EditorSubset = Pick<
   | "buildProgress" | "buildStats" | "setBuildStats"
   | "bdatFileStats" | "building" | "dismissBuildProgress"
   | "cloudStatus"
-  | "tmStats"
   | "aiRequestsToday" | "aiRequestsMonth"
   | "glossarySessionStats"
 >;
@@ -239,13 +238,6 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
       )}
       {editor.cloudStatus && (
         <Card className="mb-4 border-primary/30 bg-primary/5"><CardContent className="p-4 text-center font-display">{editor.cloudStatus}</CardContent></Card>
-      )}
-      {editor.tmStats && (
-        <Card className="mb-4 border-secondary/30 bg-secondary/5">
-          <CardContent className="p-4 text-center font-display">
-            🧠 ذاكرة الترجمة: أُعيد استخدام {editor.tmStats.reused} ترجمة — أُرسل {editor.tmStats.sent} للذكاء الاصطناعي
-          </CardContent>
-        </Card>
       )}
 
       {/* AI Request Counter */}

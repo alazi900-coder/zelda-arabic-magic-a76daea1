@@ -61,7 +61,7 @@ globalThis.Blob = class extends OriginalBlob {
       capturedBlobTexts.push(parts.map(p => typeof p === 'string' ? p : '').join(''));
     }
   }
-} as any;
+} as typeof Blob;
 
 function createHookParams(state: EditorState | null, filteredEntries?: ExtractedEntry[], filterLabel?: string) {
   return {
@@ -279,28 +279,6 @@ describe('Translation Flow Integration Tests', () => {
     });
   });
 
-  describe('Export TMX', () => {
-    it('should export translations as TMX XML', async () => {
-      const entries = makeEntries(['file1:0']);
-      const translations: Record<string, string> = {
-        'file1:0': 'ترجمة TMX',
-      };
-      const state = makeState(entries, translations);
-      const params = createHookParams(state);
-
-      capturedBlobTexts.length = 0;
-      mockClick.mockClear();
-
-      const { result } = renderHook(() => useEditorFileIO(params));
-      act(() => result.current.handleExportTMX());
-
-      const blobText = await capturedBlobTexts[capturedBlobTexts.length - 1];
-      expect(blobText).toContain('<?xml');
-      expect(blobText).toContain('tmx');
-      expect(blobText).toContain('ترجمة TMX');
-    });
-  });
-
   describe('Null state safety', () => {
     it('should not crash any export handler with null state', () => {
       const params = createHookParams(null);
@@ -309,7 +287,6 @@ describe('Translation Flow Integration Tests', () => {
       expect(() => result.current.handleExportTranslations()).not.toThrow();
       expect(() => result.current.handleExportCSV()).not.toThrow();
       expect(() => result.current.handleExportXLIFF()).not.toThrow();
-      expect(() => result.current.handleExportTMX()).not.toThrow();
       expect(result.current.getUntranslatedCount()).toBe(0);
     });
   });

@@ -2,7 +2,6 @@ import React, { useCallback, useRef, useEffect } from "react";
 import { VariableSizeList as VList } from "react-window";
 import type { ExtractedEntry } from "./types";
 import EntryCard from "./EntryCard";
-import type { TMSuggestion } from "@/hooks/useTranslationMemory";
 
 interface VirtualizedEntryListProps {
   entries: ExtractedEntry[];
@@ -36,7 +35,6 @@ interface VirtualizedEntryListProps {
   onCompare: (entry: ExtractedEntry) => void;
   onSplitNewline: (key: string) => void;
   onShowRelated?: (entry: ExtractedEntry) => void;
-  findSimilar: (key: string, original: string) => TMSuggestion[];
   height?: number;
   legacyCommaSplitEnabled?: boolean;
   buildExtraToolButtons?: (entry: ExtractedEntry) => { onClick: () => void; icon: string; title: string; cls?: string }[];
@@ -69,7 +67,6 @@ const VirtualizedEntryList = React.memo(({
   onCompare,
   onSplitNewline,
   onShowRelated,
-  findSimilar,
   height = 600,
   legacyCommaSplitEnabled,
   buildExtraToolButtons,
@@ -129,7 +126,6 @@ const VirtualizedEntryList = React.memo(({
             onCompare={onCompare}
             onSplitNewline={onSplitNewline}
             onShowRelated={onShowRelated}
-            tmSuggestions={findSimilar(key, entry.original)}
             legacyCommaSplitEnabled={legacyCommaSplitEnabled}
             extraToolButtons={buildExtraToolButtons?.(entry)}
             risenVariant={risenVariant}
@@ -137,7 +133,7 @@ const VirtualizedEntryList = React.memo(({
         </RowMeasurer>
       </div>
     );
-  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, findSimilar, setRowHeight, legacyCommaSplitEnabled, risenVariant]);
+  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, setRowHeight, legacyCommaSplitEnabled, risenVariant]);
 
   return (
     <VList

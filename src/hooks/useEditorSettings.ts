@@ -221,19 +221,6 @@ export function useEditorSettings() {
     try { localStorage.setItem('autoSmartReview', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  // === Translation Memory auto-reuse (skip AI for previously-translated identical originals) ===
-  // Default ON — significantly reduces API calls. User can opt out if old translations are unreliable.
-  const [tmAutoReuse, _setTmAutoReuse] = useState(() => {
-    try {
-      const v = localStorage.getItem('tmAutoReuse');
-      return v === null ? true : v === 'true';
-    } catch { return true; }
-  });
-  const setTmAutoReuse = useCallback((v: boolean) => {
-    _setTmAutoReuse(v);
-    try { localStorage.setItem('tmAutoReuse', String(v)); } catch { /* localStorage unavailable - ignore */ }
-  }, []);
-
   // === Custom prompt instructions (appended to every AI prompt, all categories) ===
   const [customPromptInstructions, _setCustomPromptInstructions] = useState<string>(() => {
     try { return localStorage.getItem('customPromptInstructions') || ''; } catch { return ''; }
@@ -374,7 +361,6 @@ export function useEditorSettings() {
     npcSplitCharLimit, setNpcSplitCharLimit,
     newlineSplitCharLimit, setNewlineSplitCharLimit,
     autoSmartReview, setAutoSmartReview,
-    tmAutoReuse, setTmAutoReuse,
     aiThrottleEnabled, setAiThrottleEnabled,
     customPromptInstructions, setCustomPromptInstructions,
     categoryPromptTemplates, setCategoryPromptTemplate,

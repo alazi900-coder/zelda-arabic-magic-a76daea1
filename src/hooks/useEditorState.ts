@@ -9,6 +9,12 @@ import {
   readEditorWorkspace,
   type EditorWorkspaceSnapshot,
 } from "@/lib/editor-workspace";
+import {
+  createEditorWorkspaceBackup,
+  downloadEditorWorkspaceBackup,
+  parseEditorWorkspaceBackup,
+  restoreEditorState,
+} from "@/lib/editor-workspace-backup";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -748,6 +754,120 @@ export function useEditorState() {
       setLastSaved("تمت إعادة ضبط مساحة العمل لهذه الجلسة فقط");
     }
   }, [applyWorkspace]);
+
+  const currentWorkspaceSnapshot = useCallback((): EditorWorkspaceSnapshot => ({
+    version: 1,
+    search,
+    filterFile,
+    filterCategory,
+    filterStatus,
+    filterTechnical,
+    filterTable,
+    filterColumn,
+    filtersOpen,
+  }), [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filtersOpen]);
+
+  const resolveBackupGame = useCallback(async () => {
+    return editorSourceGame || (await idbGet<string>("editor-source-game")) || "editor";
+  }, [editorSourceGame]);
+
+  /** تصدير صريح لبيانات النصوص ومساحة العمل، وليس لإعدادات أو مفاتيح الذكاء. */
+  const handleExportWorkspaceBackup = useCallback(async () => {
+    if (!state) {
+      toast({ title: "لا توجد بيانات لحفظها", description: "افتح ملفات اللعبة أولاً ثم أنشئ النسخة الاحتياطية.", variant: "destructive" });
+      return;
+    }
+    try {
+      const sourceGame = await resolveBackupGame();
+      const backup = createEditorWorkspaceBackup({
+        state,
+        workspace: currentWorkspaceSnapshot(),
+        sourceGame,
+        appVersion: APP_VERSION,
+      });
+      downloadEditorWorkspaceBackup(backup);
+      setLastSaved(`تم تنزيل نسخة احتياطية: ${Object.keys(state.translations).length} ترجمة`);
+      toast({ title: "تم تنزيل النسخة الاحتياطية", description: "تتضمن الترجمات ومساحة العمل فقط؛ لا تتضمن المفاتيح أو ملفات اللعبة." });
+    } catch (error) {
+      console.error("[backup] export failed:", error);
+      toast({ title: "تعذّر إنشاء النسخة الاحتياطية", description: "لم تُغيّر بيانات المحرر.", variant: "destructive" });
+    }
+  }, [state, resolveBackupGame, currentWorkspaceSnapshot]);
+
+  const applyWorkspaceBackup = useCallback(async (rawBackup: unknown, sourceName: string) => {
+    if (!state) return;
+    const parsed = parseEditorWorkspaceBackup(rawBackup);
+    if (!parsed.ok) {
+      toast({ title: "رفض النسخة الاحتياطية", description: parsed.reason, variant: "destructive" });
+      return;
+    }
+    const backup = parsed.backup;
+    const currentGame = await resolveBackupGame();
+    const translationCount = Object.keys(backup.editorState.translations).length;
+    const gameWarning = backup.sourceGame && backup.sourceGame !== currentGame
+      ? `\n\nتنبيه: هذه النسخة تخص «${backup.sourceGame}» بينما اللعبة المفتوحة «${currentGame}».`
+      : "";
+    const confirmed = window.confirm(
+      `استعادة ${translationCount} ترجمة من «${sourceName}»؟\n\nسيُحفظ تلقائياً وضعك الحالي أولاً، ثم تُستبدل الترجمات ومساحة العمل فقط. المفاتيح وملفات اللعبة لا تتغير.${gameWarning}`,
+    );
+    if (!confirmed) return;
+
+    try {
+      const beforeImport = createEditorWorkspaceBackup({
+        state,
+        workspace: currentWorkspaceSnapshot(),
+        sourceGame: currentGame,
+        appVersion: APP_VERSION,
+      });
+      await idbSet(`editorWorkspaceBackup:before-import:${currentGame}`, beforeImport);
+
+      const restored = restoreEditorState(backup.editorState);
+      await saveToIDB(restored);
+      await idbSet(editorWorkspaceStorageKey(currentGame), backup.workspace);
+      setPreviousTranslations(state.translations);
+      setState(restored);
+      applyWorkspace(backup.workspace);
+      setPinnedKeys(null);
+      setIsSearchPinned(false);
+      setCurrentPage(0);
+      setLastSaved(`تمت استعادة ${translationCount} ترجمة من نسخة احتياطية`);
+      toast({ title: "تمت الاستعادة بأمان", description: "حُفظت حالتك السابقة محلياً ويمكن استعادتها من قائمة النسخة الاحتياطية." });
+    } catch (error) {
+      console.error("[backup] import failed:", error);
+      toast({ title: "تعذّرت الاستعادة", description: "أُوقفت العملية قبل تغيير واجهة المحرر.", variant: "destructive" });
+    }
+  }, [state, resolveBackupGame, currentWorkspaceSnapshot, saveToIDB, applyWorkspace]);
+
+  const handleImportWorkspaceBackup = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        await applyWorkspaceBackup(JSON.parse(await file.text()), file.name);
+      } catch {
+        toast({ title: "ملف JSON غير صالح", description: "لم تُغيّر بيانات المحرر.", variant: "destructive" });
+      }
+    };
+    input.click();
+  }, [applyWorkspaceBackup]);
+
+  const handleRestorePreImportWorkspaceBackup = useCallback(async () => {
+    try {
+      const currentGame = await resolveBackupGame();
+      const backup = await idbGet<unknown>(`editorWorkspaceBackup:before-import:${currentGame}`);
+      if (!backup) {
+        toast({ title: "لا توجد نسخة تلقائية للاستعادة", description: "تُنشأ هذه النسخة عند تأكيد استيراد نسخة احتياطية." });
+        return;
+      }
+      await applyWorkspaceBackup(backup, "النسخة التلقائية قبل آخر استيراد");
+    } catch (error) {
+      console.error("[backup] recovery lookup failed:", error);
+      toast({ title: "تعذّر قراءة النسخة التلقائية", variant: "destructive" });
+    }
+  }, [resolveBackupGame, applyWorkspaceBackup]);
 
   // === Computed values ===
   const msbtFiles = useMemo(() => {
@@ -1972,6 +2092,7 @@ export function useEditorState() {
     handleSuggestShorterTranslations, handleApplyShorterTranslation, handleApplyAllShorterTranslations,
     handleFixAllStuckCharacters, handleFixMixedLanguage,
     ...fileIO,
+    handleExportWorkspaceBackup, handleImportWorkspaceBackup, handleRestorePreImportWorkspaceBackup,
     handleImproveTranslations, handleApplyImprovement, handleApplyAllImprovements,
     handleImproveSingleTranslation,
     handleCheckConsistency, handleApplyConsistencyFix, handleApplyAllConsistencyFixes,

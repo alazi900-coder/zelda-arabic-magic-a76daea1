@@ -52,6 +52,7 @@ type EditorSubset = Pick<
   | "handleExportSkillsGlossary"
   | "handleExportTMX"
   | "handleExportTranslations"
+  | "handleExportWorkspaceBackup"
   | "handleExportXLIFF"
   | "handleFixAllReversed"
   | "handleFixAllStuckCharacters"
@@ -67,6 +68,7 @@ type EditorSubset = Pick<
   | "handleImportLegacyJson"
   | "handleImportTMX"
   | "handleImportTranslations"
+  | "handleImportWorkspaceBackup"
   | "handleImportXLIFF"
   | "handleImproveTranslations"
   | "handleLoadBundledTranslations"
@@ -78,6 +80,7 @@ type EditorSubset = Pick<
   | "handleMergeToBundled"
   | "handleProofreadBundled"
   | "handleReviewTranslations"
+  | "handleRestorePreImportWorkspaceBackup"
   | "handleSaveBundledTranslations"
   | "handleSaveGlossaryToCloud"
   | "handleScanAllSplits"
@@ -191,6 +194,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                     </div>
                   )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleExportWorkspaceBackup}><Save className="w-4 h-4" /> نسخة احتياطية (الترجمات + مساحة العمل)</DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportProcessedArabic}><Sparkles className="w-4 h-4 text-secondary" /> تصدير JSON (معالج عربي ✨)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF</DropdownMenuItem>
@@ -206,6 +210,9 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}><FileText className="w-4 h-4" /> تصدير مخصص (تقسيم + ZIP) ⚙️</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">📥 استيراد</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleImportWorkspaceBackup}><Upload className="w-4 h-4" /> استعادة نسخة احتياطية مؤكدة</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleRestorePreImportWorkspaceBackup}><RotateCcw className="w-4 h-4" /> استعادة الوضع قبل آخر استيراد</DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={editor.handleImportTranslations}><Upload className="w-4 h-4" /> استيراد JSON</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportExternalJson}><Upload className="w-4 h-4" /> استيراد ترجمة خارجية 🌍</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportCSV}><Upload className="w-4 h-4" /> استيراد CSV</DropdownMenuItem>
@@ -454,6 +461,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                     </div>
                   )}
                   <DropdownMenuItem onClick={editor.handleExportTranslations}><Download className="w-4 h-4" /> تصدير JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleExportWorkspaceBackup}><Save className="w-4 h-4" /> نسخة احتياطية (الترجمات + مساحة العمل)</DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportProcessedArabic}><Sparkles className="w-4 h-4 text-secondary" /> تصدير JSON (معالج عربي ✨ - الملف فقط)</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportCSV}><FileDown className="w-4 h-4" /> تصدير CSV{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleExportXLIFF}><FileDown className="w-4 h-4" /> تصدير XLIFF (memoQ/Trados)</DropdownMenuItem>
@@ -469,6 +477,9 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <DropdownMenuItem onClick={() => setShowExportEnglishDialog(true)}>⚙️ تصدير مخصص (تقسيم + ZIP)</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs">📥 استيراد</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={editor.handleImportWorkspaceBackup}><Upload className="w-4 h-4" /> استعادة نسخة احتياطية مؤكدة</DropdownMenuItem>
+                  <DropdownMenuItem onClick={editor.handleRestorePreImportWorkspaceBackup}><RotateCcw className="w-4 h-4" /> استعادة الوضع قبل آخر استيراد</DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={editor.handleImportTranslations}><Upload className="w-4 h-4" /> استيراد JSON{editor.isFilterActive ? ` (${editor.filterLabel})` : ''}</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportExternalJson}><Upload className="w-4 h-4" /> استيراد ترجمة خارجية 🌍</DropdownMenuItem>
                   <DropdownMenuItem onClick={editor.handleImportCSV}><Upload className="w-4 h-4" /> استيراد CSV</DropdownMenuItem>

@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.0",
+    date: "2026-08-27",
+    changes: [
+      { kind: "changed", text: "**توحّد عقد MiniMax المباشر داخل ناقل GMI Cloud.** تمر طلبات النماذج المعتمدة عبر مسار واحد يحافظ على معرف النموذج الدقيق، والتحقق من النتيجة المنظمة، وإلغاء الطلب." },
+      { kind: "fixed", text: "**يبقى اختيار MiniMax معزولاً عن المزوّدات الأخرى.** تستمر إعادة المحاولة المحدودة مع GMI Cloud فقط، ولا يتحول فشل MiniMax إلى Google أو Lovable أو مزوّد بديل." },
+      { kind: "added", text: "**أضيفت اختبارات انحدار للعقد المباشر.** تثبت قائمة M2.7 وM3 المسموح بها، الطلب الموثق بمفتاح Bearer، رفض المعرفات غير المعتمدة، وتطبيع نتيجة الترجمة." },
+    ],
+  },
+  {
     version: "2.2.9",
     date: "2026-08-27",
     changes: [

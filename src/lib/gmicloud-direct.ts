@@ -60,6 +60,23 @@ function errorMessage(payload: unknown, status: number): string {
   return `تعذر الاتصال بـ GMICLOUD (HTTP ${status}).`;
 }
 
+export function isGmiCloudDirectModel(model: string | undefined): model is GmiCloudDirectModel {
+  return Boolean(model && GMICLOUD_DIRECT_MODELS.includes(model as GmiCloudDirectModel));
+}
+
+export function formatGmiCloudDirectModel(model: string | undefined): string {
+  const resolved = model || GMICLOUD_DIRECT_MODEL;
+  return resolved.replace('MiniMaxAI/', '').replace('MiniMax-', 'MiniMax ');
+}
+
+function resolveGmiCloudDirectModel(model: string | undefined, toolLabel: string): GmiCloudDirectModel {
+  const resolved = model || GMICLOUD_DIRECT_MODEL;
+  if (!isGmiCloudDirectModel(resolved)) {
+    throw new GmiCloudDirectError(`نموذج GMICLOUD المختار غير متاح لـ${toolLabel} في هذه الجلسة.`, 400);
+  }
+  return resolved;
+}
+
 function isRetryableGmiStatus(status: number): boolean {
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
@@ -88,18 +105,20 @@ function retryableConnectionError(error: unknown, signal?: AbortSignal): never |
   throw error;
 }
 
+interface GmiCloudCompletionRequest extends GmiCloudJsonRequest {
+  toolLabel: string;
+}
+
 /**
- * نقل JSON مباشر لأدوات المحرر. عند اختيار MiniMax لا يستدعي هذا المسار
- * Lovable أو Gemini أو أي دالة خلفية، ويستخدم مفتاح الجلسة فقط.
+ * نقطة الاتصال الوحيدة بطلبات MiniMax المباشرة داخل المحرر. تبقى هذه الدالة
+ * على الاتصال بـ GMICLOUD فقط، وتشارك قواعد المفتاح والنموذج والإلغاء وإعادة المحاولة
+ * بين الترجمة والتحسين والسياق والمقارنة.
  */
-export async function requestGmiCloudJson<T extends Record<string, unknown>>(request: GmiCloudJsonRequest): Promise<T> {
+async function requestGmiCloudCompletion(request: GmiCloudCompletionRequest): Promise<{ content: string; model: GmiCloudDirectModel }> {
   if (!request.apiKey?.trim()) {
     throw new GmiCloudDirectError('يحتاج GMICLOUD مفتاح API في حقل GMICLOUD داخل المحرر.', 400);
   }
-  const model = request.model || GMICLOUD_DIRECT_MODEL;
-  if (!GMICLOUD_DIRECT_MODELS.includes(model as GmiCloudDirectModel)) {
-    throw new GmiCloudDirectError('نموذج GMICLOUD المختار غير متاح لهذه الأداة في هذه الجلسة.', 400);
-  }
+  const model = resolveGmiCloudDirectModel(request.model, request.toolLabel);
 
   let response: Response | undefined;
   let payload: unknown = null;
@@ -144,6 +163,15 @@ export async function requestGmiCloudJson<T extends Record<string, unknown>>(req
   if (typeof content !== 'string') {
     throw new GmiCloudDirectError('استجابة GMICLOUD لا تحتوي نصاً صالحاً.', 502);
   }
+  return { content, model };
+}
+
+/**
+ * نقل JSON مباشر لأدوات المحرر. عند اختيار MiniMax لا يستدعي هذا المسار
+ * Lovable أو Gemini أو أي دالة خلفية، ويستخدم مفتاح الجلسة فقط.
+ */
+export async function requestGmiCloudJson<T extends Record<string, unknown>>(request: GmiCloudJsonRequest): Promise<T> {
+  const { content } = await requestGmiCloudCompletion({ ...request, toolLabel: 'هذه الأداة' });
   const parsed = safeJson(content);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new GmiCloudDirectError('استجابة GMICLOUD ليست كائن JSON صالحاً.', 502);
@@ -165,61 +193,18 @@ Preserve every technical token, control code, placeholder, rich-text tag, variab
 
 export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Promise<Response> {
   try {
-    if (!request.apiKey?.trim()) {
-      throw new GmiCloudDirectError('يحتاج GMICLOUD مفتاح API في حقل GMICLOUD داخل المحرر.', 400);
-    }
     if (!request.entries.length) {
       throw new GmiCloudDirectError('لا توجد نصوص لإرسالها إلى GMICLOUD.', 400);
     }
-    const model = request.model || GMICLOUD_DIRECT_MODEL;
-    if (!GMICLOUD_DIRECT_MODELS.includes(model as GmiCloudDirectModel)) {
-      throw new GmiCloudDirectError('نموذج GMICLOUD المختار غير متاح للترجمة النصية في هذه الجلسة.', 400);
-    }
 
     const sourceByKey = Object.fromEntries(request.entries.map(({ key, original }) => [key, original]));
-    let payload: unknown = null;
-    let response: Response | undefined;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        response = await fetch(GMICLOUD_DIRECT_ENDPOINT, {
-          method: 'POST',
-          signal: request.signal,
-          headers: {
-            Authorization: `Bearer ${request.apiKey.trim()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            temperature: 0.2,
-            messages: [
-              { role: 'system', content: buildSystemPrompt(request) },
-              { role: 'user', content: JSON.stringify(sourceByKey) },
-            ],
-          }),
-        });
-      } catch (error) {
-        retryableConnectionError(error, request.signal);
-        if (attempt === 2) {
-          throw new GmiCloudDirectError('تعذر الاتصال بـ GMICLOUD بعد محاولات محدودة. أعد المحاولة لاحقاً.', 502);
-        }
-        await waitForRetry(700 * (attempt + 1), request.signal);
-        continue;
-      }
-
-      const raw = await response.text();
-      try { payload = raw ? JSON.parse(raw) : null; } catch { /* handled below for successful text */ }
-      if (response.ok || !isRetryableGmiStatus(response.status) || attempt === 2) break;
-      await waitForRetry(700 * (attempt + 1), request.signal);
-    }
-    if (!response) throw new GmiCloudDirectError('تعذر بدء طلب GMICLOUD.', 502);
-    if (!response.ok) throw new GmiCloudDirectError(errorMessage(payload, response.status), response.status);
-
-    const content = payload && typeof payload === 'object'
-      ? (payload as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content
-      : undefined;
-    if (typeof content !== 'string') throw new GmiCloudDirectError('استجابة GMICLOUD لا تحتوي نص ترجمة صالحاً.', 502);
-
-    const parsed = safeJson(content);
+    const parsed = await requestGmiCloudJson<Record<string, unknown>>({
+      apiKey: request.apiKey,
+      model: request.model,
+      system: buildSystemPrompt(request),
+      user: JSON.stringify(sourceByKey),
+      signal: request.signal,
+    });
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new GmiCloudDirectError('استجابة GMICLOUD ليست خريطة ترجمات صالحة.', 502);
     }
@@ -232,7 +217,7 @@ export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Pro
       throw new GmiCloudDirectError('لم يُرجع GMICLOUD أي ترجمة قابلة للاستخدام.', 502);
     }
 
-    return new Response(JSON.stringify({ translations, providerUsed: `GMICLOUD / ${model.replace('MiniMaxAI/', '').replace('MiniMax-', 'MiniMax ')} (direct)` }), {
+    return new Response(JSON.stringify({ translations, providerUsed: `GMICLOUD / ${formatGmiCloudDirectModel(request.model)} (direct)` }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

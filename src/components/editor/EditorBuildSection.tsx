@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-/** STYLE: بناء Kingdom Hearts يبقى مختصراً؛ يخرج BBS0–BBS3 كاملة أو ISO محلياً من الجلسة الموثوقة فقط. */
+/** STYLE: تبقى أدوات البناء مقتصرة على اللعبة المختارة؛ تعرض مراجعة LumenTale حقائق الجلسة ولا تعد بنتيجة قبل تحقق UnityFS الفعلي. */
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -18,6 +18,7 @@ import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-edito
 import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
 import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
 import { buildLumenTaleBundle, LUMENTALE_BUFFER_KEY, LUMENTALE_META_KEY, type LumenTaleBundleMeta } from "@/lib/lumentale/lumentale-editor-bridge";
+import { createLumenTalePreBuildReport, type LumenTalePreBuildReport } from "@/lib/lumentale/lumentale-prebuild-report";
 import { buildGtaIvAmericanOutput, GTAIV_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
@@ -127,6 +128,29 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
   const [showSkippedDialog, setShowSkippedDialog] = useState(false);
   const [showLumenTalePreBuild, setShowLumenTalePreBuild] = useState(false);
+  const [lumenTaleReport, setLumenTaleReport] = useState<LumenTalePreBuildReport | null>(null);
+  const [lumenTaleReportError, setLumenTaleReportError] = useState<string | null>(null);
+  const [lumenTaleReportLoading, setLumenTaleReportLoading] = useState(false);
+
+  const handleOpenLumenTalePreBuild = async () => {
+    setShowLumenTalePreBuild(true);
+    setLumenTaleReport(null);
+    setLumenTaleReportError(null);
+    setLumenTaleReportLoading(true);
+    try {
+      const meta = await idbGet<LumenTaleBundleMeta>(LUMENTALE_META_KEY);
+      if (!meta?.tables?.length) {
+        setLumenTaleReportError("لم يُعثر على خريطة هوية الحزمة. عد إلى صفحة LumenTale وافتح الحزمة من جديد.");
+        return;
+      }
+      setLumenTaleReport(createLumenTalePreBuildReport(meta, editor.state?.entries || [], editor.state?.translations || {}));
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setLumenTaleReportError(`تعذر قراءة بيانات مراجعة الحزمة محلياً (${detail}).`);
+    } finally {
+      setLumenTaleReportLoading(false);
+    }
+  };
 
   const handleMother3Build = async () => {
     setM3Building(true);
@@ -770,9 +794,35 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6">
+              {lumenTaleReportLoading && (
+                <p className="flex items-center gap-2 text-muted-foreground" aria-live="polite">
+                  <Loader2 className="h-4 w-4 animate-spin" /> جارٍ قراءة خريطة الحزمة محلياً…
+                </p>
+              )}
+              {lumenTaleReportError && (
+                <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive" role="alert">
+                  {lumenTaleReportError}
+                </p>
+              )}
+              {lumenTaleReport && (
+                <div className="space-y-2 rounded-md border border-primary/15 bg-background/60 p-2.5" aria-label="حقائق الحزمة المفتوحة">
+                  <p className="font-display font-bold text-foreground">حقائق الحزمة المفتوحة</p>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <dt>المصدر</dt><dd className="font-mono text-foreground break-all" dir="ltr">{lumenTaleReport.sourceName}</dd>
+                    <dt>الجداول</dt><dd className="text-foreground">{lumenTaleReport.tableCount.toLocaleString("ar")}</dd>
+                    <dt>صفوف المصدر</dt><dd className="text-foreground">{lumenTaleReport.sourceRows.toLocaleString("ar")}</dd>
+                    <dt>الترجمات القابلة للكتابة</dt><dd className="text-foreground">{lumenTaleReport.changedLines.toLocaleString("ar")} داخل {lumenTaleReport.changedTables.toLocaleString("ar")} جدول</dd>
+                  </dl>
+                  {lumenTaleReport.blockingIssues.length > 0 && (
+                    <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive" role="alert">
+                      أوقف التقرير البناء: {lumenTaleReport.blockingIssues.length.toLocaleString("ar")} سطر لا يطابق عقد الوسوم أو هوية الحزمة. راجع «سلامة» وعد إلى السطر المعني قبل المحاولة.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="flex items-start gap-2">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <p>سيتحقق الباني من هوية المورد و<code className="font-mono text-xs">m_Id</code> قبل الكتابة؛ وعند عدم تطابقها سيوقف البناء للحماية.</p>
+                <p>عند التنفيذ سيتحقق الباني من هوية المورد و<code className="font-mono text-xs">m_Id</code> قبل الكتابة؛ وعند عدم تطابقها سيوقف البناء للحماية.</p>
               </div>
               <div className="flex items-start gap-2">
                 <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -780,7 +830,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               </div>
               <div className="flex items-start gap-2">
                 <FileDown className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <p>سيُنزّل ملف جديد فقط؛ ستبقى الحزمة الأصلية المفتوحة دون تعديل.</p>
+                <p>بعد الكتابة، يعيد الباني فتح الناتج ويتحقق من LZ4HC والجداول والصفوف والنصوص المعدلة قبل التنزيل. سيُنزّل ملف جديد فقط؛ ستبقى الحزمة الأصلية المفتوحة دون تعديل.</p>
               </div>
             </div>
             <DialogFooter className="gap-2 sm:justify-start">
@@ -790,7 +840,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                   setShowLumenTalePreBuild(false);
                   void handleLumenTaleBuild();
                 }}
-                disabled={lumenTaleBuilding}
+                disabled={lumenTaleBuilding || lumenTaleReportLoading || !lumenTaleReport || lumenTaleReport.blockingIssues.length > 0}
               >
                 {lumenTaleBuilding ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <FileDown className="ml-2 h-4 w-4" />}
                 تأكيد البناء والتنزيل
@@ -931,7 +981,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             {gmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف GameMaker معرّب وتنزيله
           </Button>
         ) : isLumenTale ? (
-          <Button size="lg" onClick={() => setShowLumenTalePreBuild(true)} disabled={lumenTaleBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يفتح مراجعة الحماية قبل بناء نسخة Bundle محلية من الحزمة المفتوحة">
+          <Button size="lg" onClick={() => void handleOpenLumenTalePreBuild()} disabled={lumenTaleBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يفتح مراجعة الحماية قبل بناء نسخة Bundle محلية من الحزمة المفتوحة">
             {lumenTaleBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء Bundle LumenTale معرّب وتنزيله
           </Button>
         ) : (

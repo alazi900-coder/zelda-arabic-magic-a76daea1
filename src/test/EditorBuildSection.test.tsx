@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import EditorBuildSection from "@/components/editor/EditorBuildSection";
 
+vi.mock("@/lib/idb-storage", () => ({
+  idbGet: vi.fn(() => Promise.resolve(undefined)),
+}));
+
 function makeEditor(overrides: Partial<Parameters<typeof EditorBuildSection>[0]["editor"]> = {}) {
   return {
     state: { entries: [], translations: {}, protectedEntries: new Set<string>(), technicalBypass: new Set<string>() },
@@ -63,7 +67,7 @@ describe("EditorBuildSection — unprocessed-Arabic warning banner on Risen sess
 });
 
 describe("EditorBuildSection — LumenTale pre-build review", () => {
-  it("opens a local-only safety review before a Bundle can be downloaded", () => {
+  it("opens a local-only safety review before a Bundle can be downloaded", async () => {
     render(
       <EditorBuildSection
         editor={makeEditor()}
@@ -81,5 +85,6 @@ describe("EditorBuildSection — LumenTale pre-build review", () => {
     expect(screen.getByText("مراجعة قبل بناء حزمة LumenTale")).toBeInTheDocument();
     expect(screen.getByText(/لا تُرفع الحزمة أو الترجمات إلى خادم/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /تأكيد البناء والتنزيل/ })).toBeInTheDocument();
+    expect(await screen.findByText(/لم يُعثر على خريطة هوية الحزمة/)).toBeInTheDocument();
   });
 });

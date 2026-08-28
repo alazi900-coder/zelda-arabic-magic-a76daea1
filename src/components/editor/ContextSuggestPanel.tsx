@@ -16,6 +16,7 @@ import {
   compareLumenTaleTechnicalTokens,
   describeLumenTaleTokenDifference,
 } from "@/lib/lumentale/lumentale-token-guard";
+import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 
 interface Suggestion {
   translation: string;
@@ -139,6 +140,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
   const isRisen = /\.tab$/i.test(entry?.msbtFile || "");
   const gameParam = resolveGameParam(entry?.msbtFile, risenVariant);
   const isLumenTale = gameParam === "lumentale";
+  const isPokemonXp = gameParam === "pokemon-xp";
 
   const generate = async () => {
     if (!entry) return;
@@ -167,7 +169,7 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
         const data = await requestGmiCloudJson<{ suggestions?: Suggestion[]; contextNote?: string }>({
           apiKey: providerApiKey,
           model: aiModel,
-          system: "You are an Arabic video-game localization editor. Return ONLY one JSON object with keys suggestions and contextNote. suggestions must be an array of up to three objects with translation, style (formal, natural, or creative), styleLabel in Arabic, reason in Arabic, and confidence from 0 to 1. Preserve every technical token, variable, control code, number, punctuation-bearing game code, and line-break marker exactly. Do not use Markdown.",
+          system: `You are an Arabic video-game localization editor. Return ONLY one JSON object with keys suggestions and contextNote. suggestions must be an array of up to three objects with translation, style (formal, natural, or creative), styleLabel in Arabic, reason in Arabic, and confidence from 0 to 1. Preserve every technical token, variable, control code, number, punctuation-bearing game code, and line-break marker exactly. Do not use Markdown.${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,
           user: JSON.stringify({ target: { original: entry.original, translation: currentTranslation }, context: contextWindow, maxBytes: entry.maxBytes || 0, glossary: glossarySnippet, game: gameParam, speaker: isRisen ? { owner: entry.risenOwner, role: entry.risenRole } : undefined }),
         });
         const sg: Suggestion[] = Array.isArray(data.suggestions) ? data.suggestions : [];
@@ -224,6 +226,16 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           description: "اقتراح LumenTale غيّر وسماً تقنياً محمياً.",
           variant: "destructive",
         });
+        return;
+      }
+    }
+
+    if (isPokemonXp) {
+      const validation = validatePokemonXpTechnicalTokens(entry.original, text);
+      if (!validation.valid) {
+        const message = validation.reason || "غيّر الاقتراح أمراً تقنياً محمياً.";
+        setApplyTokenError(message);
+        toast({ title: "لم يُطبّق الاقتراح", description: message, variant: "destructive" });
         return;
       }
     }

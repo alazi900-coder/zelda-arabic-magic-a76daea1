@@ -1,6 +1,23 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
+const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+const POKEMON_XP_UNSAFE_ADDITIONS = /[\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+const POKEMON_XP_TOKEN_RULE = `Pokémon XP contract: Pokémon Unbreakable Ties uses Pokémon Essentials / RPG Maker XP, not Pokémon GBA or Xenoblade. __PKXP_N__ values are executable message commands. Preserve each one once and in the same order; never translate, remove, move, duplicate, or create them. Do not add BiDi controls, Arabic Presentation Forms, or automatic tashkeel.`;
+
+function pokemonXpTokens(text: string): string[] {
+  return [...(text || '').matchAll(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'))].map((match) => match[0]);
+}
+
+function preservesPokemonXpContract(source: string, candidate: string): boolean {
+  const sourceTokens = pokemonXpTokens(source);
+  const candidateTokens = pokemonXpTokens(candidate);
+  if (sourceTokens.length !== candidateTokens.length || sourceTokens.some((token, index) => token !== candidateTokens[index])) return false;
+  const sourceUnsafe = source.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  const candidateUnsafe = candidate.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  return candidateUnsafe.every((mark, index) => mark === sourceUnsafe[index]);
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -27,9 +44,10 @@ Deno.serve(async (req) => {
     const { entries, glossary, game } = await req.json() as {
       entries: ConsistencyEntry[];
       glossary?: string;
-      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
+      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon-xp';
     };
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
+    const isPokemonXp = game === 'pokemon-xp';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ groups: [], aiSuggestions: [] }), {
@@ -81,6 +99,7 @@ Deno.serve(async (req) => {
     // one shared tag list per group (term + all its variants), so a returned
     // "best" pick can be unmasked regardless of which variant it echoes.
     const groupTagsByIndex: string[][] = [];
+    const pokemonXpTokensByGroup: string[][] = [];
     const promptGroups = isRisen
       ? groupsToCheck.map((g) => {
           const { mask, tags } = createRisenMasker();
@@ -88,9 +107,19 @@ Deno.serve(async (req) => {
           groupTagsByIndex.push(tags);
           return maskedGroup;
         })
+      : isPokemonXp
+        ? groupsToCheck.map((g) => {
+            const tokens = pokemonXpTokens(g.term);
+            pokemonXpTokensByGroup.push(tokens);
+            let occurrence = 0;
+            const mask = (value: string) => (value || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), () => `__PKXP_${occurrence++}__`);
+            return { term: mask(g.term), variants: g.variants.map((v) => ({ ...v, translation: mask(v.translation) })) };
+          })
       : groupsToCheck;
 
     const prompt = `أنت خبير في اتساق مصطلحات ترجمة ألعاب الفيديو. لكل مصطلح إنجليزي أدناه، هناك عدة ترجمات عربية مختلفة مستخدمة في الملفات. اختر أفضل ترجمة واحدة لكل مصطلح واشرح السبب بجملة واحدة.
+
+${isPokemonXp ? POKEMON_XP_TOKEN_RULE : ''}
 
 ${glossary ? `القاموس المرجعي:\n${glossary}\n\n` : ''}المصطلحات:
 ${promptGroups.map((g, i) => `[${i}] "${g.term}" → الترجمات: ${[...new Set(g.variants.map(v => `"${v.translation}"`))].join(' | ')}`).join('\n')}
@@ -146,6 +175,12 @@ ${promptGroups.map((g, i) => `[${i}] "${g.term}" → الترجمات: ${[...new
             const tags = groupTagsByIndex[i];
             return tags ? { best: unmaskRisenTags(s.best, tags), reason: unmaskRisenTags(s.reason, tags) } : s;
           });
+        } else if (isPokemonXp) {
+          aiSuggestions = aiSuggestions.map((s, i) => {
+            const tokens = pokemonXpTokensByGroup[i] || [];
+            const best = (s.best || '').replace(/__PKXP_(\d+)__/g, (placeholder: string, rawIndex: string) => tokens[Number(rawIndex)] ?? placeholder);
+            return { ...s, best };
+          }).filter((s, i) => preservesPokemonXpContract(groupsToCheck[i]?.term || '', s.best || ''));
         }
       } catch (e) {
         console.error('Failed to parse AI suggestions:', e);

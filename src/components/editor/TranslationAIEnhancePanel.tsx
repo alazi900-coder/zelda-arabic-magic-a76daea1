@@ -39,6 +39,7 @@ import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
 import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -258,11 +259,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const gameParam = resolveGameParam(entries[0]?.msbtFile, risenVariant);
   const isLumenTale = gameParam === "lumentale";
   const isGtaIv = gameParam === "gtaiv";
+  const isPokemonXp = gameParam === "pokemon-xp";
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
     }
     if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
+    if (isPokemonXp) return validatePokemonXpTechnicalTokens(original, suggestion).reason;
     if (isGtaIv) {
       const dollarRepair = repairGtaIvDollarAmountSequence(original, suggestion);
       if (!dollarRepair.safe) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";
@@ -762,7 +765,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           apiKey: gmiCloudKey,
           model: requestModel,
           signal: abortSignal,
-          system: `You are an Arabic video-game localization QA editor. Analyze only the supplied translations. Preserve every technical token, variable, control code, placeholder, rich-text tag, number, and line-break marker exactly. Return ONLY valid JSON with this exact top-level shape: ${responseShape}. Include an item only when a genuine improvement is needed. Reasons must be concise Arabic.`,
+          system: `You are an Arabic video-game localization QA editor. Analyze only the supplied translations. Preserve every technical token, variable, control code, placeholder, rich-text tag, number, and line-break marker exactly. Return ONLY valid JSON with this exact top-level shape: ${responseShape}. Include an item only when a genuine improvement is needed. Reasons must be concise Arabic.${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,
           user: JSON.stringify({ mode, entries: textsToAnalyze, glossary, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules, builtinOverrides: currentBuiltinOverrides, game: gameParam, extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined }),
         });
         return { data, error: null };

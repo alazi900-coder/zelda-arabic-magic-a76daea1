@@ -36,7 +36,7 @@ interface RequestBody {
   /** Which game this entry is from — the system prompt names it correctly instead
    * of always assuming Xenoblade. Defaults to Xenoblade for backward compatibility
    * with callers that don't send it yet. */
-  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'lumentale';
+  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'lumentale' | 'pokemon' | 'pokemon-xp';
   /** Risen: the speaking NPC (Owner/Role fields from infos.tab), when known. */
   speaker?: Speaker;
   /** Risen: the entry's raw id/key (e.g. "HUD2_Damage_Edge") — grounds the model instead of it guessing from a bare filename. */
@@ -54,15 +54,49 @@ const GAME_LABELS: Record<string, string> = {
   mother3: 'لعبة MOTHER 3 (سلسلة MOTHER/EarthBound لـ Shigesato Itoi ونينتندو — أسلوب بسيط دافئ طريف)',
   metroidprime: 'لعبة Metroid Prime Remastered (سلسلة Metroid لـ Nintendo/Retro Studios — استكشاف/إطلاق نار من منظور شخصي في عالم خيال علمي)',
   lumentale: 'لعبة LumenTale: Memories of Trey',
+  'pokemon-xp': 'لعبة Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)',
 };
+
+const POKEMON_XP_TOKEN_PATTERN = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+
+function extractPokemonXpTokens(text: string): string[] {
+  return Array.from(text.matchAll(new RegExp(POKEMON_XP_TOKEN_PATTERN.source, 'gi')), (match) => match[0]);
+}
+
+function preservesPokemonXpTokens(source: string, candidate: string): boolean {
+  const expected = extractPokemonXpTokens(source);
+  const actual = extractPokemonXpTokens(candidate);
+  return expected.length === actual.length && expected.every((token, index) => token === actual[index]);
+}
+
+function maskPokemonXpPayload(body: RequestBody): { body: RequestBody; tokens: string[] } {
+  const tokens: string[] = [];
+  const mask = (text: string) => text.replace(new RegExp(POKEMON_XP_TOKEN_PATTERN.source, 'gi'), (token) => `⟪PKXP_${tokens.push(token) - 1}⟫`);
+  return {
+    tokens,
+    body: {
+      ...body,
+      target: { ...body.target, original: mask(body.target.original), translation: mask(body.target.translation || '') },
+      context: body.context.map((entry) => ({ ...entry, original: mask(entry.original), translation: mask(entry.translation || '') })),
+    },
+  };
+}
+
+function unmaskPokemonXpTokens(text: string, tokens: string[]): string {
+  return text.replace(/⟪PKXP_(\d+)⟫/g, (placeholder, rawIndex: string) => tokens[Number(rawIndex)] ?? placeholder);
+}
 
 function buildSystemPrompt(game?: string): string {
   const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
   const isMother3 = game === 'mother3';
   const isMetroidPrime = game === 'metroidprime';
+  const isPokemonXp = game === 'pokemon-xp';
   const gameLabel = GAME_LABELS[game || 'xenoblade'] || GAME_LABELS.xenoblade;
   const risenTagRule = isRisen
     ? '\n7. الأقواس ⟦0⟧, ⟦1⟧, ... في النص المستهدف رموز Risen محمية — انسخها كما هي بالضبط في كل اقتراح، بنفس موضعها النسبي، ولا تحاول ترجمة ما قد تمثله (لا تراها أصلاً، فقط رمزها).'
+    : '';
+  const pokemonXpRule = isPokemonXp
+    ? '\n7. هذه لعبة Pokémon Essentials على RPG Maker XP، وليست ROM لـGBA ولا لعبة Xenoblade. الرموز ⟪PKXP_0⟫، ⟪PKXP_1⟫، ... أوامر تنفيذية مقنّعة (مثل \\PN و\\v[1] و\\n). انسخها مرة واحدة وبالترتيب نفسه ولا تترجمها أو تنقلها أو تضفها. لا تضف علامات BiDi خفية أو تشكيلًا آليًا أو Arabic Presentation Forms، ولا تفرض {FD:xx} أو حد ROM أو صندوق سطرين.'
     : '';
   const forgetOtherGame = isMetroidPrime
     ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
@@ -83,7 +117,7 @@ ${forgetOtherGame}قدّم 3 اقتراحات مختلفة لترجمة النص
 3. لا تخترع شخصيات أو معلومات. استخدم السياق المُعطى (وهوية المتحدث إن وُجدت) لفهم نبرة الحديث فقط.
 4. اشرح سبب كل اقتراح في جملة عربية موجزة (≤ 15 كلمة).
 5. confidence رقم بين 0 و 1 يعكس ثقتك في ملاءمة الاقتراح للسياق.
-6. contextNote: ملاحظة عربية قصيرة جداً (سطر واحد) عن السياق العام.${risenTagRule}`;
+6. contextNote: ملاحظة عربية قصيرة جداً (سطر واحد) عن السياق العام.${risenTagRule}${pokemonXpRule}`;
 }
 
 const SUGGESTIONS_JSON_SCHEMA_HINT = `أعد JSON بالشكل التالي بالضبط ولا تضف أي نص خارجه:
@@ -357,33 +391,44 @@ Deno.serve(async (req) => {
 
   try {
     let parsed: any;
+    const pokemonXpMask = body.game === 'pokemon-xp' ? maskPokemonXpPayload(body) : null;
+    const providerBody = pokemonXpMask?.body || body;
     if (provider === 'deepseek') {
       const dsKey = body.providerApiKey || Deno.env.get('DEEPSEEK_API_KEY');
       if (!dsKey) {
         return jsonResponse({ error: 'يحتاج DeepSeek مفتاح API — أضفه في الإعدادات.' }, 400);
       }
-      parsed = await callDeepSeek(body, dsKey, body.aiModel || 'deepseek-v4-flash');
+      parsed = await callDeepSeek(providerBody, dsKey, body.aiModel || 'deepseek-v4-flash');
     } else if (provider === 'gmicloud') {
       const gmiKey = body.providerApiKey || Deno.env.get('GMICLOUD_API_KEY');
       if (!gmiKey) {
         return jsonResponse({ error: 'يحتاج GMI Cloud مفتاح API — أضفه في الإعدادات.' }, 400);
       }
-      parsed = await callGmiCloud(body, gmiKey, body.aiModel || 'MiniMaxAI/MiniMax-M2.7');
+      parsed = await callGmiCloud(providerBody, gmiKey, body.aiModel || 'MiniMaxAI/MiniMax-M2.7');
     } else if (provider === 'tokenrouter') {
       const trKey = body.providerApiKey || Deno.env.get('TOKENROUTER_API_KEY');
       if (!trKey) {
         return jsonResponse({ error: 'يحتاج TokenRouter مفتاح API — أضفه في الإعدادات.' }, 400);
       }
-      parsed = await callTokenRouter(body, trKey);
+      parsed = await callTokenRouter(providerBody, trKey);
     } else {
       // Default: Lovable AI Gateway. mymemory/google don't expose chat — fall back to Lovable.
       const apiKey = Deno.env.get('LOVABLE_API_KEY');
       if (!apiKey) return jsonResponse({ error: 'Missing LOVABLE_API_KEY' }, 500);
-      parsed = await callLovable(body, apiKey, DEFAULT_LOVABLE_MODEL);
+      parsed = await callLovable(providerBody, apiKey, DEFAULT_LOVABLE_MODEL);
     }
     if (risenTags.length > 0 && Array.isArray(parsed?.suggestions)) {
       for (const s of parsed.suggestions) {
         if (typeof s?.translation === 'string') s.translation = unmaskRisenTags(s.translation, risenTags);
+      }
+    }
+    if (pokemonXpMask && Array.isArray(parsed?.suggestions)) {
+      parsed.suggestions = parsed.suggestions
+        .filter((suggestion: unknown): suggestion is { translation: string } => typeof (suggestion as { translation?: unknown })?.translation === 'string')
+        .map((suggestion: { translation: string }) => ({ ...suggestion, translation: unmaskPokemonXpTokens(suggestion.translation, pokemonXpMask.tokens) }))
+        .filter((suggestion: { translation: string }) => preservesPokemonXpTokens(body.target.original, suggestion.translation));
+      if (parsed.suggestions.length === 0) {
+        return jsonResponse({ error: 'رُفضت اقتراحات الذكاء لأنها غيّرت أوامر Pokémon Essentials التقنية.' }, 422);
       }
     }
     return jsonResponse(parsed);

@@ -2,6 +2,12 @@
  * GMICLOUD direct-only transport: session API key → api.gmi-serving.com.
  * This module must never fall back to Gemini, Lovable AI, or an Edge Function.
  */
+import {
+  maskPokemonXpTechnicalTokens,
+  POKEMON_XP_TOKEN_RULE,
+  unmaskPokemonXpTechnicalTokens,
+  validatePokemonXpTechnicalTokens,
+} from '@/lib/pokemon-xp/pokemon-xp-rules';
 
 export const GMICLOUD_DIRECT_ENDPOINT = 'https://api.gmi-serving.com/v1/chat/completions';
 export const GMICLOUD_DIRECT_MODEL = 'MiniMaxAI/MiniMax-M2.7';
@@ -185,10 +191,11 @@ function buildSystemPrompt({ glossary, extraInstructions, game }: Omit<GmiCloudD
     : '';
   const extraRule = extraInstructions?.trim() ? `\nPROJECT RULES:\n${extraInstructions.trim()}` : '';
   const gameRule = game ? `\nGAME CONTEXT: ${game}` : '';
+  const pokemonXpRule = game === 'pokemon-xp' ? `\nPOKÉMON ESSENTIALS CONTRACT:\n${POKEMON_XP_TOKEN_RULE}` : '';
 
   return `You are a professional video-game translator. Translate each English value to natural Arabic.
 Return ONLY one valid JSON object whose keys are exactly the supplied keys and whose values are the Arabic translations.
-Preserve every technical token, control code, placeholder, rich-text tag, variable, number, line break, and punctuation-bearing game code exactly and in the same relative position. Never add markdown or explanatory text.${gameRule}${glossaryRule}${extraRule}`;
+Preserve every technical token, control code, placeholder, rich-text tag, variable, number, line break, and punctuation-bearing game code exactly and in the same relative position. Never add markdown or explanatory text.${gameRule}${pokemonXpRule}${glossaryRule}${extraRule}`;
 }
 
 export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Promise<Response> {
@@ -197,7 +204,13 @@ export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Pro
       throw new GmiCloudDirectError('لا توجد نصوص لإرسالها إلى GMICLOUD.', 400);
     }
 
-    const sourceByKey = Object.fromEntries(request.entries.map(({ key, original }) => [key, original]));
+    const pokemonXpMasks = request.game === 'pokemon-xp'
+      ? new Map(request.entries.map(({ key, original }) => [key, maskPokemonXpTechnicalTokens(original)]))
+      : null;
+    const sourceByKey = Object.fromEntries(request.entries.map(({ key, original }) => {
+      const mask = pokemonXpMasks?.get(key);
+      return [key, mask ? mask.text : original];
+    }));
     const parsed = await requestGmiCloudJson<Record<string, unknown>>({
       apiKey: request.apiKey,
       model: request.model,
@@ -209,9 +222,12 @@ export async function requestGmiCloudDirect(request: GmiCloudDirectRequest): Pro
       throw new GmiCloudDirectError('استجابة GMICLOUD ليست خريطة ترجمات صالحة.', 502);
     }
     const translations: Record<string, string> = {};
-    for (const { key } of request.entries) {
+    for (const { key, original } of request.entries) {
       const value = (parsed as Record<string, unknown>)[key];
-      if (typeof value === 'string') translations[key] = value;
+      if (typeof value !== 'string') continue;
+      const mask = pokemonXpMasks?.get(key);
+      const restored = mask ? unmaskPokemonXpTechnicalTokens(value, mask.tokens) : value;
+      if (!mask || validatePokemonXpTechnicalTokens(original, restored).valid) translations[key] = restored;
     }
     if (Object.keys(translations).length === 0) {
       throw new GmiCloudDirectError('لم يُرجع GMICLOUD أي ترجمة قابلة للاستخدام.', 502);

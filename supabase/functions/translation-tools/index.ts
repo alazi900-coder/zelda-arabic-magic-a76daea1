@@ -9,6 +9,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+
+function createPokemonXpMasker() {
+  const tokens: string[] = [];
+  return {
+    mask(text: string): string {
+      return (text || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), (token) => {
+        const index = tokens.length;
+        tokens.push(token);
+        return `__PXPTOKEN_${index}__`;
+      });
+    },
+    unmask(text: string): string {
+      let malformed = false;
+      const restored = (text || '').replace(/__PXPTOKEN_(\d+)__/g, (placeholder, rawIndex) => {
+        const token = tokens[Number(rawIndex)];
+        if (token === undefined) {
+          malformed = true;
+          return placeholder;
+        }
+        return token;
+      });
+      return malformed ? '' : restored;
+    },
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -23,8 +50,14 @@ Deno.serve(async (req) => {
     // masker for the whole request is enough; unmask the final result once.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const isMother3 = game === 'mother3';
+    const isMetroidPrime = game === 'metroidprime';
+    const isPokemonXp = game === 'pokemon-xp';
     const masker = isRisen ? createRisenMasker() : null;
-    const pt = (s: string): string => (masker && typeof s === 'string' ? masker.mask(s) : s);
+    const pokemonXpMasker = isPokemonXp ? createPokemonXpMasker() : null;
+    const pt = (s: string): string => {
+      const risenSafe = masker && typeof s === 'string' ? masker.mask(s) : s;
+      return pokemonXpMasker && typeof risenSafe === 'string' ? pokemonXpMasker.mask(risenSafe) : risenSafe;
+    };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -176,6 +209,10 @@ ${guide}
       userPrompt = `Translate to Arabic:\n\n${pt(text)}`;
     }
 
+    if (isPokemonXp) {
+      systemPrompt += `\n\nPokémon Unbreakable Ties / Pokémon Essentials rule: each __PXPTOKEN_n__ is a protected runtime command from the source (such as \\PN, \\v[1], \\c[2], \\n, \\wt[10], \\dxn[Name], or \\b). Copy every placeholder exactly once and in the original order. Never create, delete, translate, renumber, or move one. Do not add Arabic diacritics, Presentation Forms, or invisible BiDi marks. This is RPG Maker XP / Pokémon Essentials, not Pokémon GBA, Ruby Destiny, or Xenoblade.`;
+    }
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -212,6 +249,7 @@ ${guide}
     const data = await response.json();
     let result = data.choices?.[0]?.message?.content?.trim() || '';
     if (masker) result = unmaskRisenTags(result, masker.tags);
+    if (pokemonXpMasker) result = pokemonXpMasker.unmask(result);
 
     return new Response(JSON.stringify({ result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

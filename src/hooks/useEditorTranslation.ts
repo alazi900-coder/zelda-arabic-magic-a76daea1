@@ -21,6 +21,8 @@ import { requestGmiCloudDirect, type GmiCloudEntry } from "@/lib/gmicloud-direct
 import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
 import { cacheLookupMany, cacheStoreMany } from "@/lib/translation-cache";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
+import { categorizePokemonXpEntry } from "@/lib/pokemon-xp/categories";
+import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 
 const NPC_FILE_RE = /msg_(ask|cq|fev|nq|sq|tlk|tq)/i;
 
@@ -191,6 +193,7 @@ export function useEditorTranslation({
   // sessions never have a `.tab` msbtFile, so this stays false for them.
   const isRisenSource = /\.tab$/i.test(state?.entries?.[0]?.msbtFile || "");
   const isLumenTaleSource = state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
+  const isPokemonXpSource = state?.entries?.[0]?.msbtFile.startsWith("pokemon-xp/") ?? false;
   // Resolved AI `game` param (mother3 / risen1|2 / xenoblade) from entry shape.
   const gameParam = resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant);
 
@@ -204,6 +207,7 @@ export function useEditorTranslation({
       base?.trim(),
       isRisenSource ? RISEN_LINE_STRUCTURE_RULE : "",
       isLumenTaleSource ? LUMENTALE_TOKEN_RULE : "",
+      isPokemonXpSource ? POKEMON_XP_TOKEN_RULE : "",
     ].filter(Boolean);
     return parts.length ? parts.join("\n\n") : undefined;
   };
@@ -401,8 +405,15 @@ export function useEditorTranslation({
       }
       // Auto-sync line count to match English source
       result = autoSyncLines(key, result, entry);
-      // Fix BiDi alignment for mixed Arabic/English
-      result = fixMixedBidi(result);
+      // Pokémon Essentials commands and font handling own bidirectional display.
+      if (!isPokemonXpSource) result = fixMixedBidi(result);
+      if (isPokemonXpSource && entry) {
+        const tokenValidation = validatePokemonXpTechnicalTokens(entry.original, result);
+        if (!tokenValidation.valid) {
+          console.warn(`[pokemon-xp] skipped unsafe batch result for ${key}: ${tokenValidation.reason}`);
+          continue;
+        }
+      }
       fixed[key] = result;
     }
     return fixed;
@@ -459,8 +470,16 @@ export function useEditorTranslation({
         }
         // Auto-sync line count to match English source
         processed = autoSyncLines(key, processed, entry);
-        // Fix BiDi alignment for mixed Arabic/English
-        processed = fixMixedBidi(processed);
+        if (isPokemonXpSource) {
+          const tokenValidation = validatePokemonXpTechnicalTokens(entry.original, processed);
+          if (!tokenValidation.valid) {
+            toast({ title: "حُميت أوامر Pokémon Essentials", description: tokenValidation.reason, variant: "destructive" });
+            return;
+          }
+        } else {
+          // Fix BiDi alignment for mixed Arabic/English outside Essentials.
+          processed = fixMixedBidi(processed);
+        }
         updateTranslation(key, processed);
       }
     } catch (err) {
@@ -482,6 +501,7 @@ export function useEditorTranslation({
     if (/^(bank_\d+|names_\w+|menu_\w+)$/.test(e.msbtFile)) return categorizeMother3Entry(e);
     if (/^TEXT_/.test(e.msbtFile)) return categorizeMetroidPrimeEntry(e);
     if (e.msbtFile.startsWith("lumentale/")) return categorizeLumenTaleEntry(e);
+    if (e.msbtFile.startsWith("pokemon-xp/")) return categorizePokemonXpEntry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

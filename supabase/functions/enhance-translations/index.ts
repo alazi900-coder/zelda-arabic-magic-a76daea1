@@ -159,6 +159,18 @@ function isCategoryEnabled(category: string | undefined, enabledSet: Set<string>
   return family.some(id => enabledSet.has(id));
 }
 const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+const ARABIC_DIACRITICS_REGEX = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/;
+
+function extractPokemonXpTokens(text: string): string[] {
+  return [...(text || '').matchAll(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'))].map(match => match[0]);
+}
+
+function preservesPokemonXpTechnicalTokenSequence(original: string, candidate: string): boolean {
+  const expected = extractPokemonXpTokens(original);
+  const actual = extractPokemonXpTokens(candidate);
+  return expected.length === actual.length && expected.every((token, index) => token === actual[index]);
+}
 
 function extractTechTags(text: string): string[] {
   return [...(text || '').matchAll(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags))].map(m => m[0]);
@@ -250,7 +262,7 @@ function preservesGtaIvDollarAmountSequence(original: string, candidate: string)
   return before.length === after.length && before.every((amount, index) => normalize(amount) === normalize(after[index] || ''));
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false): boolean {
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
@@ -258,6 +270,10 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
     (!isGtaIv || (
       preservesGtaIvRuntimeTokenSequence(original, suggested) &&
       preservesGtaIvDollarAmountSequence(original, suggested)
+    )) &&
+    (!isPokemonXp || (
+      preservesPokemonXpTechnicalTokenSequence(original, suggested) &&
+      !ARABIC_DIACRITICS_REGEX.test(suggested)
     ));
 }
 
@@ -516,7 +532,7 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'lumentale' | 'gtaiv';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'pokemon-xp' | 'lumentale' | 'gtaiv';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
@@ -533,6 +549,7 @@ Deno.serve(async (req) => {
     const isMother3 = game === 'mother3';
     const isMetroidPrime = game === 'metroidprime';
     const isPokemon = game === 'pokemon';
+    const isPokemonXp = game === 'pokemon-xp';
     const isLumenTale = game === 'lumentale';
     const isGtaIv = game === 'gtaiv';
     const gameLabel = isLumenTale
@@ -541,6 +558,8 @@ Deno.serve(async (req) => {
       ? 'Grand Theft Auto IV (GTA IV)'
       : isPokemon
       ? 'Pokémon Ruby Destiny: Reign of Legends (تعديل على Pokémon Ruby)'
+      : isPokemonXp
+      ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)'
       : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isMetroidPrime
       ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
@@ -552,6 +571,8 @@ Deno.serve(async (req) => {
       ? '\nهذه مراجعة خاصة بـ LumenTale: Memories of Trey. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى.\n'
       : isGtaIv
       ? '\nهذه مراجعة خاصة بـ GTA IV. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى. استند فقط إلى النص والقاموس المعطى، ولا تغيّر رموز GTA IV المحاطة بعلامتي ~ ولا أي مبلغ دولار ظاهر مثل $100 أو $20m.\n'
+      : isPokemonXp
+      ? '\nهذه مراجعة خاصة بـ Pokémon Unbreakable Ties المبنية على Pokémon Essentials / RPG Maker XP. لا تفترض سياق Pokémon GBA أو Ruby Destiny أو Xenoblade. استند حصراً إلى النص والقاموس المعطى، ولا تخترع أحداثاً أو أسماء أو أوامر.\n'
       : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
@@ -580,13 +601,47 @@ Deno.serve(async (req) => {
       return tags ? unmaskRisenTags(text, tags) : text;
     };
 
+    // لا يصل أمر Essentials الخام إلى النموذج: تحفظ القائمة من المصدر، وتستعاد
+    // بعد الإجابة. هذا يمنع ترجمة \PN أو تغيير \v[1] و\wt[10] و\dxn[Name].
+    const pokemonXpTokensByKey = new Map<string, string[]>();
+    const maskPokemonXpText = (text: string): string => {
+      let occurrence = 0;
+      return (text || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), () => `__PXPTOKEN_${occurrence++}__`);
+    };
+    const pokemonXpPromptEntries: EnhanceEntry[] = isPokemonXp
+      ? promptEntries.map((entry) => {
+          pokemonXpTokensByKey.set(entry.key, extractPokemonXpTokens(entry.original));
+          return {
+            ...entry,
+            original: maskPokemonXpText(entry.original),
+            translation: maskPokemonXpText(entry.translation),
+          };
+        })
+      : promptEntries;
+    const unmaskPokemonXpSuggestion = (key: string, text: string): string => {
+      const tokens = pokemonXpTokensByKey.get(key);
+      if (!tokens) return text;
+      let malformed = false;
+      const restored = (text || '').replace(/__PXPTOKEN_(\d+)__/g, (placeholder, rawIndex) => {
+        const token = tokens[Number(rawIndex)];
+        if (token === undefined) {
+          malformed = true;
+          return placeholder;
+        }
+        return token;
+      });
+      return malformed ? '' : restored;
+    };
+    const restoreSuggestion = (key: string, text: string): string =>
+      unmaskPokemonXpSuggestion(key, unmaskSuggestion(key, text));
+
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
     const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isLumenTale || isGtaIv
+    const properNounsSection = isRisen || isMother3 || isPokemon || isPokemonXp || isLumenTale || isGtaIv
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -598,18 +653,25 @@ Deno.serve(async (req) => {
         'من نوع {FD:xx} — وهي قيم تضعها اللعبة وقت التشغيل مثل اسم اللاعب. لا وسوم أخرى في هذه اللعبة، فلا تُضِف وسماً من لعبة أخرى'
       );
     }
+    if (isPokemonXp) {
+      ruleSections.protect = `${ruleSections.protect}\n⚠️ عقد Pokémon Essentials ثابت: كل __PXPTOKEN_n__ يمثل أمراً من الأصل مثل \\PN أو \\v[1] أو \\c[2] أو \\n أو \\wt[10] أو \\dxn[Name] أو \\b. انقله كما هو وبالعدد والترتيب نفسه؛ لا تضف placeholder ولا تحذفه ولا تغيّر رقمه أو محتواه.`;
+    }
     if (isLumenTale) {
       ruleSections.protect = ruleSections.protect.replace(
         '⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.',
         '⚠️ عقد LumenTale التقني ثابت: انقل كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل حرفاً بحرف وبالترتيب نفسه. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
       );
     }
-    const strictTokenSafetyRule = isLumenTale
+    const strictTokenSafetyRule = isPokemonXp
+      ? 'قاعدة أمان غير قابلة للتجاوز في Pokémon Essentials: كل __PXPTOKEN_n__ في الأصل يجب أن يظهر في suggestion وكل بديل بالقيمة والترتيب نفسيهما. لا تضف أو تحذف أو تعيد ترتيب placeholder، ولا تضف علامات BiDi خفية أو تشكيلًا عربياً أو Presentation Forms.'
+      : isLumenTale
       ? 'قاعدة أمان غير قابلة للتجاوز في LumenTale: يجب أن يحتوي الاقتراح على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
       : isGtaIv
       ? 'قاعدة أمان غير قابلة للتجاوز في GTA IV: يجب أن يحتوي الاقتراح على كل رمز بين ~...~ وكل مبلغ دولار ظاهر من الأصل (مثل $100 و$20m) بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تنقل أيّاً منها، ولا تترك علامة ~ منفردة.'
       : 'قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
-    const strictTokenSafetyBullet = isLumenTale
+    const strictTokenSafetyBullet = isPokemonXp
+      ? '- في Pokémon Essentials يجب أن يحتوي suggested وكل بديل على كل __PXPTOKEN_n__ من الأصل بالقيمة والترتيب نفسيهما، ومن دون علامات BiDi خفية أو تشكيل أو Presentation Forms.'
+      : isLumenTale
       ? '- في LumenTale يجب أن يحتوي suggested وكل بديل على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف.'
       : isGtaIv
       ? '- في GTA IV يجب أن يحتوي suggested وكل بديل على كل رمز بين ~...~ وكل مبلغ دولار ظاهر بالقيمة والترتيب نفسيهما حرفاً بحرف، ومن دون علامة ~ منفردة.'
@@ -950,7 +1012,7 @@ Deno.serve(async (req) => {
     // Grammar check mode — فحص قواعديّ صارم بدون تعديلات أسلوبيّة.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'grammar') {
-      const chunkResult = await processInChunks(entries, promptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
+      const chunkResult = await processInChunks(entries, pokemonXpPromptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
         const grammarPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. صنّف كلّ ترجمة بها مشكلة إلى **فئة واحدة فقط** (wrong / reorder / weak) بناءً على القواعد المُفعَّلة أدناه:
 ${forgetOtherGame}
 
@@ -1021,12 +1083,12 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
             fixExplanation: i.fix_explanation || i.fixExplanation || '',
             // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها) — أكثر تساهلاً
             // من رفض الاقتراح بالكامل، يكفي تنظيفه.
-            suggestion: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', i.suggestion || '')),
+            suggestion: stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', i.suggestion || '')),
             severity: i.severity || 'medium',
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp) &&
           isCategoryEnabled(i.category, ruleSections.enabledSet) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1046,7 +1108,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
     // نهائيّاً واحداً لكلّ مدخل يجمع كلّ الإصلاحات معاً (بلا تصادم).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (mode === 'combined') {
-      const chunkResult = await processInChunks(entries, promptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
+      const chunkResult = await processInChunks(entries, pokemonXpPromptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
         const combinedPrompt = `أنت مدقّق ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تُبلّغ عن أي نوع مشكلة غير مذكور في القواعد المُفعَّلة. أعِد **نصّاً نهائيّاً واحداً** يجمع الإصلاحات المسموح بها فقط في حقل suggested.
 ${forgetOtherGame}
 
@@ -1121,10 +1183,10 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         const mappedResults = passResult.merged.map((r) => {
           const entry = entriesChunk[r.index ?? -1];
           // إزالة علامات التشكيل تلقائيّاً من الاقتراح والبدائل.
-          const cleanedSuggested = stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', r.suggested || ''));
+          const cleanedSuggested = stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', r.suggested || ''));
           const cleanedAlternatives = Array.isArray(r.alternatives)
             ? r.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-              .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
+              .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
             : [];
           return {
             key: entry?.key || '',
@@ -1145,7 +1207,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp) &&
             isTypeEnabled(r.type, ruleSections.enabledSet) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1163,7 +1225,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Enhance mode — تحسين صياغة + اقتراح بدائل (مع التزام صارم بالقاموس).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    const chunkResult = await processInChunks(entries, promptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
+    const chunkResult = await processInChunks(entries, pokemonXpPromptEntries, CHUNK, CONCURRENCY, async (entriesChunk, promptEntriesChunk) => {
       const enhancePrompt = `أنت مراجع ترجمة عربيّة لـ ${gameLabel}. افحص فقط القواعد المُفعَّلة أدناه، ولا تقترح أي تعديل خارجها.
 ${forgetOtherGame}
 
@@ -1210,7 +1272,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         passes || 1,
         () => callOnceParse(
           [
-	            { role: 'system', content: isRisen || isMother3 || isLumenTale
+	            { role: 'system', content: isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv
               ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
               : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
             { role: 'user', content: enhancePrompt },
@@ -1230,11 +1292,11 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
             original,
             current,
           // إزالة علامات التشكيل تلقائيّاً (خطّ اللعبة لا يدعمها).
-          suggested: stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', s.suggested || '')),
+          suggested: stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', s.suggested || '')),
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
-              .map((a) => stripGameUnsupportedMarks(unmaskSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv))
+              .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1242,7 +1304,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp) &&
         isTypeEnabled(s.type, ruleSections.enabledSet) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

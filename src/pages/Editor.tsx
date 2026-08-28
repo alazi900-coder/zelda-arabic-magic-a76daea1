@@ -19,6 +19,7 @@ import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
 import { buildWolfCategories } from "@/lib/wolfrpg/wolf-categories";
 import { DS_FILE_RE, dsCategories } from "@/lib/dragonsword/ds-categories";
 import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { buildPokemonXpCategories } from "@/lib/pokemon-xp/categories";
 import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
 import { lumentaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { LUMENTALE_META_KEY } from "@/lib/lumentale/lumentale-editor-bridge";
@@ -215,6 +216,7 @@ const Editor = () => {
     if (isMother3Entries) return buildMother3Categories(entries);
     if (isMetroidPrimeEntries) return buildMetroidPrimeCategories(entries);
     if (isWolfensteinEntries) return buildWolfCategories(entries);
+    if (isPokemonXpEntries) return buildPokemonXpCategories(entries);
     if (isPokemonEntries) return buildPkmCategories(entries);
     if (isGameMakerEntries) return FILE_CATEGORIES;
     if (isDragonSwordEntries) return dsCategories(entries);
@@ -222,7 +224,7 @@ const Editor = () => {
     if (isGtaIvEntries) return GTAIV_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonXpEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {

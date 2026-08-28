@@ -4,6 +4,38 @@ import { RISEN_FORGET_OTHER_GAME_RULE_EN } from "../_shared/risen-persona-guard.
 import { MOTHER3_FORGET_OTHER_GAME_RULE_EN } from "../_shared/mother3-persona-guard.ts";
 import { METROID_PRIME_FORGET_OTHER_GAME_RULE_EN } from '../_shared/metroid-prime-persona-guard.ts';
 
+const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+const POKEMON_XP_UNSAFE_ADDITIONS = /[\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+const POKEMON_XP_TOKEN_RULE = `This is Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP), not Pokémon GBA or Xenoblade. __PKXP_N__ values are executable message commands. Preserve each placeholder once and in the exact same order. Never translate, delete, move, duplicate, or create one. Do not add BiDi controls, Arabic Presentation Forms, or automatic tashkeel.`;
+
+function pokemonXpTokens(text: string): string[] {
+  return [...(text || '').matchAll(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'))].map((match) => match[0]);
+}
+
+function maskPokemonXpText(text: string, tokens: string[]): string {
+  let index = 0;
+  return (text || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), () => `__PKXP_${index++}__`);
+}
+
+function unmaskPokemonXpText(text: string, tokens: string[]): string {
+  return (text || '').replace(/__PKXP_(\d+)__/g, (placeholder, rawIndex: string) => tokens[Number(rawIndex)] ?? placeholder);
+}
+
+function preservesPokemonXpContract(source: string, candidate: string): boolean {
+  const sourceTokens = pokemonXpTokens(source);
+  const candidateTokens = pokemonXpTokens(candidate);
+  if (sourceTokens.length !== candidateTokens.length || sourceTokens.some((token, index) => token !== candidateTokens[index])) return false;
+  const sourceUnsafe = source.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  const candidateUnsafe = candidate.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  const allowance = new Map<string, number>();
+  sourceUnsafe.forEach((mark) => allowance.set(mark, (allowance.get(mark) || 0) + 1));
+  return candidateUnsafe.every((mark) => {
+    const remaining = allowance.get(mark) || 0;
+    allowance.set(mark, remaining - 1);
+    return remaining > 0;
+  });
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -18,7 +50,7 @@ Deno.serve(async (req) => {
     const { entries, glossary, game } = await req.json() as {
       entries: { key: string; original: string; translation: string }[];
       glossary?: string;
-      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
+      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon-xp';
     };
 
     if (!entries || entries.length === 0) {
@@ -32,13 +64,22 @@ Deno.serve(async (req) => {
     // without masking it would happily "translate" a bare tag too.
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const isMother3 = game === 'mother3';
+    const isMetroidPrime = game === 'metroidprime';
+    const isPokemonXp = game === 'pokemon-xp';
     const risenTagsByIndex: string[][] = [];
+    const pokemonXpTokensByIndex: string[][] = [];
     const promptEntries = isRisen
       ? entries.map((e) => {
           const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
           risenTagsByIndex.push(tags);
           return { ...e, original: maskedA, translation: maskedB };
         })
+      : isPokemonXp
+        ? entries.map((e) => {
+            const tokens = pokemonXpTokens(e.original);
+            pokemonXpTokensByIndex.push(tokens);
+            return { ...e, original: maskPokemonXpText(e.original, tokens), translation: maskPokemonXpText(e.translation, tokens) };
+          })
       : entries;
 
     const textsBlock = promptEntries.map((e, i) =>
@@ -50,9 +91,9 @@ Deno.serve(async (req) => {
       glossarySection = `\n\nUse this glossary for consistent terminology:\n${glossary}\n`;
     }
 
-    const gameNameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles';
+    const gameNameLabel = isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles';
     const prompt = `You are a professional Arabic game translator for ${gameNameLabel}.
-${isMetroidPrime ? '\n' + METROID_PRIME_FORGET_OTHER_GAME_RULE_EN + '\n' : isMother3 ? '\n' + MOTHER3_FORGET_OTHER_GAME_RULE_EN + '\n' : isRisen ? '\n' + RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}
+${isPokemonXp ? '\n' + POKEMON_XP_TOKEN_RULE + '\n' : isMetroidPrime ? '\n' + METROID_PRIME_FORGET_OTHER_GAME_RULE_EN + '\n' : isMother3 ? '\n' + MOTHER3_FORGET_OTHER_GAME_RULE_EN + '\n' : isRisen ? '\n' + RISEN_FORGET_OTHER_GAME_RULE_EN + '\n' : ''}
 The following translations contain a mix of Arabic and English text. Your job is to translate the remaining English words into Arabic while keeping the sentence natural and coherent.
 
 CRITICAL RULES:
@@ -117,7 +158,9 @@ ${textsBlock}`;
     for (let i = 0; i < Math.min(entries.length, translations.length); i++) {
       if (translations[i]?.trim()) {
         const tags = risenTagsByIndex[i];
-        result[entries[i].key] = tags ? unmaskRisenTags(translations[i], tags) : translations[i];
+        const pokemonXpTokensForEntry = pokemonXpTokensByIndex[i];
+        const restored = pokemonXpTokensForEntry ? unmaskPokemonXpText(translations[i], pokemonXpTokensForEntry) : tags ? unmaskRisenTags(translations[i], tags) : translations[i];
+        if (!isPokemonXp || preservesPokemonXpContract(entries[i].original, restored)) result[entries[i].key] = restored;
       }
     }
 

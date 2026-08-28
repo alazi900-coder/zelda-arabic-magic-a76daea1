@@ -21,7 +21,44 @@ interface ReqBody {
   engine?: "lovable" | "deepseek" | "tokenrouter";
   aiModel?: string;          // gemini-3-flash-preview | gpt-5 | deepseek-v4-pro | deepseek-v4-flash …
   providerApiKey?: string;   // DeepSeek/TokenRouter key from UI settings (optional)
-  game?: "xenoblade" | "risen" | "risen2" | "mother3" | "metroidprime";
+  game?: "xenoblade" | "risen" | "risen2" | "mother3" | "metroidprime" | "pokemon-xp";
+}
+
+const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+const POKEMON_XP_UNSAFE_ADDITIONS = /[\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+const POKEMON_XP_TOKEN_RULE = `Pokémon Unbreakable Ties runs on Pokémon Essentials / RPG Maker XP, not Pokémon GBA or Xenoblade. __PKXP_N__ placeholders are executable message commands. Preserve every placeholder once and in the same order. Do not add BiDi controls, Arabic Presentation Forms, or automatic tashkeel.`;
+
+function pokemonXpTokens(text: string): string[] {
+  return [...(text || '').matchAll(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'))].map((match) => match[0]);
+}
+
+function maskPokemonXpPair(original: string, translation: string): { original: string; translation: string; tokens: string[] } {
+  const tokens = pokemonXpTokens(original);
+  let originalIndex = 0;
+  let translationIndex = 0;
+  const maskOriginal = (original || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), () => `__PKXP_${originalIndex++}__`);
+  const maskTranslation = (translation || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), () => `__PKXP_${translationIndex++}__`);
+  return { original: maskOriginal, translation: maskTranslation, tokens };
+}
+
+function restorePokemonXpTokens(text: string, tokens: string[]): string {
+  return (text || '').replace(/__PKXP_(\d+)__/g, (placeholder, rawIndex: string) => tokens[Number(rawIndex)] ?? placeholder);
+}
+
+function preservesPokemonXpContract(source: string, candidate: string): boolean {
+  const sourceTokens = pokemonXpTokens(source);
+  const candidateTokens = pokemonXpTokens(candidate);
+  const sameSequence = sourceTokens.length === candidateTokens.length && sourceTokens.every((token, index) => token === candidateTokens[index]);
+  if (!sameSequence) return false;
+  const sourceUnsafe = source.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  const candidateUnsafe = candidate.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  const allowance = new Map<string, number>();
+  sourceUnsafe.forEach((mark) => allowance.set(mark, (allowance.get(mark) || 0) + 1));
+  return candidateUnsafe.every((mark) => {
+    const remaining = allowance.get(mark) || 0;
+    allowance.set(mark, remaining - 1);
+    return remaining > 0;
+  });
 }
 
 // PUA tags (U+E000..U+E0FF) و U+FFF9..U+FFFC + وسوم XC3 النصّية بين معقوفات.
@@ -50,7 +87,7 @@ function countEffectiveLines(text: string): number {
   return hard + real + 1;
 }
 
-function buildPrompt(entries: SmartFixEntry[], isRisen?: boolean, isMother3?: boolean, isMetroidPrime?: boolean): string {
+function buildPrompt(entries: SmartFixEntry[], isRisen?: boolean, isMother3?: boolean, isMetroidPrime?: boolean, isPokemonXp?: boolean): string {
   const items = entries.map((e, i) => {
     const oLines = countEffectiveLines(e.original);
     return `### ${i + 1} (key=${e.key}) — أسطر الأصل ≈ ${oLines}
@@ -60,7 +97,7 @@ ${e.original}
 ${e.translation}`;
   }).join("\n\n");
 
-  const gameNameLabel = isMetroidPrime ? "Metroid Prime Remastered" : isMother3 ? "MOTHER 3" : isRisen ? "Risen" : "Xenoblade Chronicles 1";
+  const gameNameLabel = isPokemonXp ? "Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)" : isMetroidPrime ? "Metroid Prime Remastered" : isMother3 ? "MOTHER 3" : isRisen ? "Risen" : "Xenoblade Chronicles 1";
   const forgetOtherGame = isMetroidPrime
     ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
     : isMother3
@@ -70,6 +107,7 @@ ${e.translation}`;
     : "";
   return `أنت مُصحِّح ترجمة عربية للعبة ${gameNameLabel}. لكل عنصر، أعد كتابة الترجمة العربية بحيث:
 ${forgetOtherGame}
+${isPokemonXp ? `\n${POKEMON_XP_TOKEN_RULE}\n` : ''}
 
 1) تحتوي على **نفس مجموعة الرموز التقنية وبنفس الترتيب تماماً** مثل الأصل الإنجليزي. الرموز هي:
    - رموز PUA الخفية في النطاق U+E000..U+E0FF و U+FFF9..U+FFFC (انسخها كما هي).
@@ -324,13 +362,21 @@ Deno.serve(async (req) => {
     const isRisen = body.game === "risen" || body.game === "risen1" || body.game === "risen2";
     const isMother3 = body.game === "mother3";
     const isMetroidPrime = body.game === "metroidprime";
+    const isPokemonXp = body.game === "pokemon-xp";
     const risenTagsByKey = new Map<string, string[]>();
+    const pokemonXpTokensByKey = new Map<string, string[]>();
     const promptEntries: SmartFixEntry[] = isRisen
       ? body.entries.map((e) => {
           const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
           risenTagsByKey.set(e.key, tags);
           return { ...e, original: maskedA, translation: maskedB };
         })
+      : isPokemonXp
+        ? body.entries.map((e) => {
+            const masked = maskPokemonXpPair(e.original, e.translation);
+            pokemonXpTokensByKey.set(e.key, masked.tokens);
+            return { ...e, original: masked.original, translation: masked.translation };
+          })
       : body.entries;
 
     const engine = body.engine || "lovable";
@@ -361,7 +407,7 @@ Deno.serve(async (req) => {
         });
       }
       const model = DEEPSEEK_NAME_MAP[body.aiModel || "deepseek-v4-pro"] || "deepseek-v4-pro";
-      content = await callDeepSeek(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime), model, apiKey);
+      content = await callDeepSeek(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime, isPokemonXp), model, apiKey);
     } else if (engine === "tokenrouter") {
       const apiKey = (body.providerApiKey && body.providerApiKey.trim()) || Deno.env.get("TOKENROUTER_API_KEY");
       if (!apiKey) {
@@ -369,11 +415,11 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      content = await callTokenRouter(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime), apiKey);
+      content = await callTokenRouter(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime, isPokemonXp), apiKey);
     } else {
       const model = GATEWAY_MAP[body.aiModel || "gemini-3-flash-preview"] || "google/gemini-3-flash-preview";
       try {
-        content = await callLovable(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime), model);
+        content = await callLovable(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime, isPokemonXp), model);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         // Auto-fallback to direct Gemini when Lovable AI is out of credits or rate-limited.
@@ -381,7 +427,7 @@ Deno.serve(async (req) => {
         const geminiKey = Deno.env.get("GEMINI_API_KEY");
         if (isQuota && geminiKey) {
           console.log(`[smart-tag-fix] Lovable AI ${msg.slice(0, 8)} — fallback to Gemini direct`);
-          content = await callGeminiDirect(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime), geminiKey);
+          content = await callGeminiDirect(buildPrompt(promptEntries, isRisen, isMother3, isMetroidPrime, isPokemonXp), geminiKey);
           usedFallback = "gemini-direct";
         } else {
           throw e;
@@ -397,12 +443,13 @@ Deno.serve(async (req) => {
       const src = byKey.get(r?.key);
       if (!src || typeof r.text !== "string" || !r.text.trim()) continue;
       const risenTags = risenTagsByKey.get(src.key);
-      const restoredText = risenTags ? unmaskRisenTags(r.text, risenTags) : r.text;
+      const pokemonXpTokensForEntry = pokemonXpTokensByKey.get(src.key);
+      const restoredText = pokemonXpTokensForEntry ? restorePokemonXpTokens(r.text, pokemonXpTokensForEntry) : risenTags ? unmaskRisenTags(r.text, risenTags) : r.text;
       let cleaned = stripDiacritics(restoredText);
-      let safe = tagSignature(src.original) === tagSignature(cleaned);
+      let safe = isPokemonXp ? preservesPokemonXpContract(src.original, cleaned) : tagSignature(src.original) === tagSignature(cleaned);
       let grafted = false;
       // إصلاح ذاتي: إذا اختلّ تسلسل الرموز، نحاول زرع رموز الأصل في الاقتراح.
-      if (!safe) {
+      if (!safe && !isPokemonXp) {
         const repaired = graftOriginalTags(src.original, cleaned);
         if (repaired && tagSignature(src.original) === tagSignature(repaired)) {
           cleaned = repaired;
@@ -416,7 +463,9 @@ Deno.serve(async (req) => {
         grafted,
         reason: safe
           ? (grafted ? "تمّ زرع رموز الأصل تلقائياً في النصّ المقترح" : undefined)
-          : "تسلسل الرموز التقنية في الاقتراح لا يطابق الأصل — راجع يدوياً قبل القبول",
+          : isPokemonXp
+            ? "اقتراح الذكاء غيّر أمراً من Pokémon Essentials أو أضاف محارف اتجاه غير مسموحة — راجع يدوياً قبل القبول"
+            : "تسلسل الرموز التقنية في الاقتراح لا يطابق الأصل — راجع يدوياً قبل القبول",
       };
     }
 

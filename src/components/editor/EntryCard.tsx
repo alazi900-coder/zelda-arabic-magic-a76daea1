@@ -17,6 +17,7 @@ import {
 } from "@/lib/balance-lines";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
 import { resolveGameParam } from "@/lib/game-param";
+import { validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 import { countEffectiveLines, countLines } from "@/lib/text-tokens";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
 import { processArabicText, hasArabicChars as hasArabicContent } from "@/lib/arabic-processing";
@@ -238,6 +239,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   const editorTranslation = isGtaIvEntry ? gtaIvRuntimeTextToEditorText(translation) : translation;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
   const gameParam = resolveGameParam(entry.msbtFile, risenVariant);
+  const isPokemonXpEntry = gameParam === "pokemon-xp";
   const isTech = isTechnicalText(entry.original, entry.msbtFile);
   // A run of bytes out of a graphics table can end in the terminator and read
   // as letters, so it reaches the editor looking like a line. It is flagged
@@ -320,7 +322,10 @@ const EntryCard: React.FC<EntryCardProps> = ({
       });
       if (!response.ok) throw new Error(`خطأ ${response.status}`);
       const data = await response.json();
-      setAlternatives(data.alternatives || []);
+      const safeAlternatives = (data.alternatives || []).filter((alternative: { text?: string }) =>
+        !isPokemonXpEntry || (typeof alternative.text === "string" && validatePokemonXpTechnicalTokens(entry.original, alternative.text).valid),
+      );
+      setAlternatives(safeAlternatives);
     } catch (_e) {
       toast({ title: "خطأ", description: "فشل في جلب البدائل", variant: "destructive" });
     } finally {
@@ -855,7 +860,15 @@ const EntryCard: React.FC<EntryCardProps> = ({
                       variant="ghost"
                       size="sm"
                       className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:bg-primary/10 shrink-0"
-                      onClick={() => { updateTranslation(key, alt.text); setAlternatives(null); }}
+                      onClick={() => {
+                        const validation = validatePokemonXpTechnicalTokens(entry.original, alt.text);
+                        if (isPokemonXpEntry && !validation.valid) {
+                          toast({ title: "بديل غير آمن", description: validation.reason || "غيّر البديل أمراً تقنياً.", variant: "destructive" });
+                          return;
+                        }
+                        updateTranslation(key, alt.text);
+                        setAlternatives(null);
+                      }}
                       title="استخدام هذا البديل"
                     >
                       استخدام

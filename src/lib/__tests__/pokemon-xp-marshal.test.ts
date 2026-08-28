@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { extractTags } from "@/lib/tag-extractor";
 import { extractPokemonXpEntries } from "@/lib/pokemon-xp/pokemon-xp-editor-bridge";
 import { RubyMarshalParseError, parseRubyMarshal } from "@/lib/pokemon-xp/ruby-marshal";
+import {
+  extractPokemonXpTokens,
+  validatePokemonXpTechnicalTokens,
+} from "@/lib/pokemon-xp/pokemon-xp-rules";
 
 function bytes(...values: number[]): ArrayBuffer {
   return Uint8Array.from(values).buffer;
@@ -41,5 +45,17 @@ describe("Pokémon Essentials — technical commands", () => {
       original: "Hello \\PN \\v[1] \\c[2]",
     }]);
     expect([...report.categories.escape_seq.keys()]).toEqual(["\\PN", "\\v[1]", "\\c[2]"]);
+  });
+
+  it("requires every Essentials command to remain literal and ordered", () => {
+    const source = "Hello \\PN \\v[1] \\wt[10] \\dxn[Oak] \\b";
+    expect(extractPokemonXpTokens(source)).toEqual(["\\PN", "\\v[1]", "\\wt[10]", "\\dxn[Oak]", "\\b"]);
+    expect(validatePokemonXpTechnicalTokens(source, "مرحباً \\PN \\v[1] \\wt[10] \\dxn[Oak] \\b").valid).toBe(true);
+    expect(validatePokemonXpTechnicalTokens(source, "مرحباً \\PN \\v[2] \\wt[10] \\dxn[Oak] \\b").valid).toBe(false);
+    expect(validatePokemonXpTechnicalTokens(source, "مرحباً \\PN \\wt[10] \\v[1] \\dxn[Oak] \\b").valid).toBe(false);
+  });
+
+  it("rejects suggestions that introduce invisible direction controls", () => {
+    expect(validatePokemonXpTechnicalTokens("Choose \\PN", "اختر‎ \\PN").valid).toBe(false);
   });
 });

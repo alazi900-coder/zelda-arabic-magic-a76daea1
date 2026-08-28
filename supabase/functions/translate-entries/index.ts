@@ -224,6 +224,16 @@ Hard constraints, because of how this game stores its text:
 4. Names written in CAPITALS in the English text (towns, characters, Pokémon, items) are the game's own proper nouns. Leave them in Latin script unless Arabic has a settled, widely used equivalent, and then use that same equivalent everywhere.
 5. Numbers and digits stay as they are.`;
 
+/** Kept separate from POKEMON_SYSTEM_PROMPT: Essentials is not a GBA ROM. */
+const POKEMON_XP_SYSTEM_PROMPT = `You are a professional video-game text translator working on Pokémon Unbreakable Ties, a Pokémon Essentials game made with RPG Maker XP. This is NOT Pokémon Ruby Destiny, NOT a Game Boy Advance ROM, and NOT Xenoblade Chronicles, Risen, MOTHER 3, Metroid Prime, or Wolfenstein. Never import lore, terminology, storage limits, or message rules from those games.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة"}. No prose or markdown fences.
+2. Translate to natural, modern Arabic suitable for Pokémon. Do not invent events, names, or facts absent from the source. Use the supplied glossary consistently.
+3. PKXP_0, PKXP_1, … are masked Pokémon Essentials message commands such as \\PN, \\v[1], \\c[2], \\n, \\wt[10] and \\dxn[Name]. They are executable code, never words. Copy every PKXP_N placeholder exactly once and in exactly the same order; never translate, delete, move, duplicate, or create one.
+4. Do not add hidden BiDi controls, Arabic presentation-form characters, or automatic Arabic diacritics. The game font and writer are validated separately.
+5. Do not impose GBA ROM byte limits, {FD:xx} placeholders, a two-line dialogue box, or manual re-wrapping rules. Preserve only the source's actual structure.`;
+
 const METROIDPRIME_SYSTEM_PROMPT = `You are a professional video game text translator working on Metroid Prime Remastered (Nintendo / Retro Studios — the Metroid series). This is NOT Xenoblade Chronicles, NOT the Risen series, and NOT MOTHER 3 — never import their terminology, characters, or lore.
 
 STRICT OUTPUT RULES (highest priority — violations are hard failures):
@@ -254,16 +264,23 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
+  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
   const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
   const isRisen2 = game === 'risen2';
   const isMother3 = game === 'mother3';
-  const gameLabel = isMother3 ? 'MOTHER 3' : isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+  const isPokemonXp = game === 'pokemon-xp';
+  const gameLabel = isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isMother3 ? 'MOTHER 3' : isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
-  const universeBlock = isMother3
+  const universeBlock = isPokemonXp
+    ? `POKÉMON UNBREAKABLE TIES / POKÉMON ESSENTIALS — KEY KNOWLEDGE:
+• This is an RPG Maker XP game using Pokémon Essentials message commands. It is not a GBA ROM hack. Never apply GBA byte limits, {FD:xx} variables, or a forced two-line message-box rule.
+• Pokémon vocabulary includes trainers, Pokémon, moves, types, Poké Balls, Pokédex, Pokémon Centers, Gyms, badges, abilities and items. Do not invent a story detail or proper name absent from the source or glossary.
+• Commands are masked as PKXP_N. They must remain one-for-one and in their exact input order. They will be restored only after validation.
+• Tone: clear, warm, everyday modern Arabic. UI stays concise; dialogue should sound human rather than literary.`
+    : isMother3
     ? `MOTHER 3 UNIVERSE — KEY KNOWLEDGE:
 • Setting: Game Boy Advance RPG in the MOTHER/EarthBound series (Shigesato Itoi / Nintendo). A quirky, heartfelt story set on the Nowhere Islands and in Tazmily Village — family, nature, and a strange industrial takeover by the Pigmask Army — following the boy Lucas.
 • This is a DIFFERENT game from Xenoblade Chronicles AND from Risen — do NOT use their terminology, characters, or lore under any circumstance.
@@ -296,7 +313,9 @@ function buildXC1UserPrompt(opts: {
 • Antagonists: Zanza (زانزا), Egil (إيجل), Metal Face (الوجه المعدني).
 • Key terms: Monado (المونادو), Ether (إيثر), Colony 9 (المستعمرة 9), Mechon (ميكون), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا).`;
 
-  const npcVoiceRule = isMother3
+  const npcVoiceRule = isPokemonXp
+    ? 'Pokémon Essentials dialogue — use natural, warm everyday Arabic matching the source tone. Do not assume speakers, locations, or Pokémon names that were not provided.'
+    : isMother3
     ? 'NPC dialogue — use natural, warm, everyday spoken Arabic with MOTHER 3\'s gentle humor, matching the tone implied by the text and any speaker info given in context. Do NOT assume Xenoblade or Risen characters — this is a different game.'
     : isRisen
     ? 'NPC dialogue — use natural modern spoken Arabic matching the tone implied by the text and any speaker info given in context. Do NOT assume Xenoblade characters (Shulk, Reyn, etc.) — this is a different game.'
@@ -342,6 +361,18 @@ const PROTECTED_ABBREVIATIONS = [
   'm', 'x', 'g', 'kg', 'km', 'cm', 'mm',
 ];
 const ABBREV_PATTERN = new RegExp(`\\b(${PROTECTED_ABBREVIATIONS.join('|')})\\b`, 'g');
+const POKEMON_XP_COMMAND_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+
+function extractPokemonXpCommands(text: string): string[] {
+  const regex = new RegExp(POKEMON_XP_COMMAND_REGEX.source, 'gi');
+  return Array.from(text.matchAll(regex), (match) => match[0]);
+}
+
+function hasExactPokemonXpCommandSequence(source: string, candidate: string): boolean {
+  const expected = extractPokemonXpCommands(source);
+  const actual = extractPokemonXpCommands(candidate);
+  return expected.length === actual.length && expected.every((token, index) => token === actual[index]);
+}
 
 // Risen 1's own tag formats (confirmed from real extracted strings) — masked
 // proactively with a ⟦N⟧ marker distinct from TAG_N, only when _game ===
@@ -355,6 +386,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   const tags = new Map<string, string>();
   let counter = 0;
   let risenCounter = 0;
+  let pokemonXpCounter = 0;
 
   // First: shield literal newlines as NEWLINE_N placeholders
   const nlParts = text.split('\n');
@@ -393,12 +425,19 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   // Collect all matches. Risen tags go first so they win any overlap against
   // the generic Xenoblade patterns below (e.g. <Exit> would otherwise also
   // match the generic HTML-like-tag pattern and get a TAG_N instead of ⟦N⟧).
-  const matches: { start: number; end: number; original: string; risen?: boolean }[] = [];
+  const matches: { start: number; end: number; original: string; risen?: boolean; pokemonXp?: boolean }[] = [];
   if (_game === 'risen' || _game === 'risen2') {
     const risenRegex = new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags);
     let rMatch: RegExpExecArray | null;
     while ((rMatch = risenRegex.exec(shielded)) !== null) {
       matches.push({ start: rMatch.index, end: rMatch.index + rMatch[0].length, original: rMatch[0], risen: true });
+    }
+  }
+  if (_game === 'pokemon-xp') {
+    const commandRegex = new RegExp(POKEMON_XP_COMMAND_REGEX.source, 'gi');
+    let commandMatch: RegExpExecArray | null;
+    while ((commandMatch = commandRegex.exec(shielded)) !== null) {
+      matches.push({ start: commandMatch.index, end: commandMatch.index + commandMatch[0].length, original: commandMatch[0], pokemonXp: true });
     }
   }
   for (const pattern of patterns) {
@@ -421,7 +460,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   let lastEnd = 0;
   for (const m of matches) {
     cleaned += shielded.slice(lastEnd, m.start);
-    const placeholder = m.risen ? `⟦${risenCounter++}⟧` : `TAG_${counter++}`;
+    const placeholder = m.pokemonXp ? `PKXP_${pokemonXpCounter++}` : m.risen ? `⟦${risenCounter++}⟧` : `TAG_${counter++}`;
     tags.set(placeholder, m.original);
     cleaned += placeholder;
     lastEnd = m.end;
@@ -531,7 +570,18 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' = 'xenoblade';
+
+function getGameSystemPrompt(): string {
+  if (_game === 'pokemon-xp') return POKEMON_XP_SYSTEM_PROMPT;
+  if (_game === 'pokemon') return POKEMON_SYSTEM_PROMPT;
+  if (_game === 'wolfenstein') return WOLFENSTEIN_SYSTEM_PROMPT;
+  if (_game === 'metroidprime') return METROIDPRIME_SYSTEM_PROMPT;
+  if (_game === 'mother3') return MOTHER3_SYSTEM_PROMPT;
+  if (_game === 'risen2') return RISEN2_SYSTEM_PROMPT;
+  if (_game === 'risen') return RISEN_SYSTEM_PROMPT;
+  return XC1_SYSTEM_PROMPT;
+}
 
 /** Check if an entry key belongs to an NPC dialogue file */
 function isNpcDialogue(key: string): boolean {
@@ -600,6 +650,16 @@ function detectCategoryHint(sampleKey: string, sampleText: string): string {
 function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>, entryKey?: string): string {
   const restored = restoreTags(translated, tags);
   const enforced = enforceTagIntegrity(original, restored);
+
+  // Essentials commands are executable and their relative order is meaningful.
+  // Return the original as a fail-closed response if a provider damages them.
+  if (_game === 'pokemon-xp' && !hasExactPokemonXpCommandSequence(original, enforced)) {
+    console.warn(`[pokemon-xp] rejected malformed command sequence${entryKey ? ` key=${entryKey}` : ''}`);
+    return original;
+  }
+
+  // The XP message layer owns these commands; generic rewrapping is not safe.
+  if (_game === 'pokemon-xp') return enforced;
 
   // NPC dialogue: limit lines (configurable, default 2)
   const maxLines = _npcMode && entryKey && isNpcDialogue(entryKey) ? (_npcMaxLines ?? 2) : undefined;
@@ -1440,7 +1500,7 @@ async function translateWithOpenAICompat(
     temperature: 0.3,
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: _game === 'pokemon' ? POKEMON_SYSTEM_PROMPT : _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+      { role: 'system', content: getGameSystemPrompt() },
       { role: 'user', content: prompt },
     ],
   });
@@ -1879,7 +1939,7 @@ async function translateWithAI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: _game === 'pokemon' ? POKEMON_SYSTEM_PROMPT : _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: getGameSystemPrompt() }] },
           generationConfig: { temperature: 0.3 },
         }),
       });
@@ -1976,7 +2036,7 @@ async function translateWithAI(
           body: JSON.stringify({
             model: lovableModel,
             messages: [
-              { role: 'system', content: _game === 'pokemon' ? POKEMON_SYSTEM_PROMPT : _game === 'wolfenstein' ? WOLFENSTEIN_SYSTEM_PROMPT : _game === 'metroidprime' ? METROIDPRIME_SYSTEM_PROMPT : _game === 'mother3' ? MOTHER3_SYSTEM_PROMPT : _game === 'risen2' ? RISEN2_SYSTEM_PROMPT : _game === 'risen' ? RISEN_SYSTEM_PROMPT : XC1_SYSTEM_PROMPT },
+              { role: 'system', content: getGameSystemPrompt() },
               { role: 'user', content: aiPrompt },
             ],
           }),
@@ -2080,7 +2140,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -2092,7 +2152,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'pokemon-xp' ? 'pokemon-xp' : game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

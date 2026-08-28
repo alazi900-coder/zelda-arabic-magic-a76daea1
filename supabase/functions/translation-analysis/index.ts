@@ -18,6 +18,32 @@ interface AnalysisEntry {
 
 type AnalysisAction = 'literal-detect' | 'style-unify' | 'consistency-check' | 'alternatives' | 'full-analysis';
 
+const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+
+function maskPokemonXpPair(original: string, translation: string): { maskedA: string; maskedB: string; tokens: string[] } {
+  const tokens: string[] = [];
+  const mask = (text: string) => (text || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), (token) => {
+    const index = tokens.length;
+    tokens.push(token);
+    return `__PXPTOKEN_${index}__`;
+  });
+  return { maskedA: mask(original), maskedB: mask(translation), tokens };
+}
+
+function unmaskPokemonXpTokens(text: unknown, tokens: string[] | undefined): unknown {
+  if (!tokens || typeof text !== 'string') return text;
+  let malformed = false;
+  const restored = text.replace(/__PXPTOKEN_(\d+)__/g, (placeholder, rawIndex) => {
+    const token = tokens[Number(rawIndex)];
+    if (token === undefined) {
+      malformed = true;
+      return placeholder;
+    }
+    return token;
+  });
+  return malformed ? '' : restored;
+}
+
 const gatewayModelMap: Record<string, string> = {
   'gemini-2.5-flash': 'google/gemini-2.5-flash',
   'gemini-2.5-pro': 'google/gemini-2.5-pro',
@@ -25,10 +51,12 @@ const gatewayModelMap: Record<string, string> = {
   'gpt-5': 'openai/gpt-5',
 };
 
-function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean, isMother3?: boolean, isMetroidPrime?: boolean): string {
+function buildPrompt(action: AnalysisAction, entries: AnalysisEntry[], glossary?: string, styleGuide?: string, isRisen?: boolean, isMother3?: boolean, isMetroidPrime?: boolean, isPokemonXp?: boolean): string {
   const glossarySection = glossary ? `\nالقاموس المعتمد (التزم بهذه المصطلحات):\n${glossary.split('\n').slice(0, 100).join('\n')}` : '';
-  const gameNameLabel = isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
-  const forgetOtherGame = isMetroidPrime
+  const gameNameLabel = isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
+  const forgetOtherGame = isPokemonXp
+    ? '\nسياق ثابت: هذه Pokémon Essentials على RPG Maker XP، وليست Pokémon GBA أو Ruby Destiny أو Xenoblade. كل __PXPTOKEN_n__ يمثل أمراً تقنياً أصلياً؛ انسخه مرة واحدة وبالترتيب نفسه ولا تنشئ أو تحذف أو تعيد ترقيم أي رمز، ولا تضف علامات BiDi مخفية أو تشكيلًا أو Presentation Forms.\n'
+    : isMetroidPrime
     ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
     : isMother3
     ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
@@ -212,21 +240,25 @@ function parseAIResponse(content: string): any {
 /** Unmask every Risen-tag-bearing field across the 4 possible result shapes
  * this endpoint returns (results[]/inconsistencies[]), using each entry's
  * own tag list (looked up via the `index` field the model echoes back). */
-function unmaskAnalysisResult(parsed: any, risenTagsByIndex: string[][]): any {
+function unmaskAnalysisResult(parsed: any, risenTagsByIndex: string[][], pokemonXpTokensByIndex: string[][] = []): any {
   const unmaskWith = (tags: string[] | undefined, text: unknown): unknown =>
     tags && typeof text === 'string' ? unmaskRisenTags(text, tags) : text;
+  const restoreWith = (index: unknown, text: unknown): unknown => {
+    const risenTags = typeof index === 'number' ? risenTagsByIndex[index] : undefined;
+    const risenRestored = unmaskWith(risenTags, text);
+    const pokemonXpTokens = typeof index === 'number' ? pokemonXpTokensByIndex[index] : undefined;
+    return unmaskPokemonXpTokens(risenRestored, pokemonXpTokens);
+  };
 
   if (Array.isArray(parsed?.results)) {
     parsed.results = parsed.results.map((r: any) => {
-      const tags = typeof r?.index === 'number' ? risenTagsByIndex[r.index] : undefined;
-      if (!tags) return r;
       const out = { ...r };
-      out.naturalVersion = unmaskWith(tags, out.naturalVersion);
-      out.unifiedVersion = unmaskWith(tags, out.unifiedVersion);
-      out.recommended = unmaskWith(tags, out.recommended);
+      out.naturalVersion = restoreWith(r?.index, out.naturalVersion);
+      out.unifiedVersion = restoreWith(r?.index, out.unifiedVersion);
+      out.recommended = restoreWith(r?.index, out.recommended);
       if (Array.isArray(out.alternatives)) {
         out.alternatives = out.alternatives.map((a: any) =>
-          a && typeof a.text === 'string' ? { ...a, text: unmaskRisenTags(a.text, tags) } : a);
+          a && typeof a.text === 'string' ? { ...a, text: restoreWith(r?.index, a.text) } : a);
       }
       return out;
     });
@@ -236,13 +268,11 @@ function unmaskAnalysisResult(parsed: any, risenTagsByIndex: string[][]): any {
       const out = { ...g };
       if (Array.isArray(out.variants)) {
         out.variants = out.variants.map((v: any) => {
-          const tags = typeof v?.index === 'number' ? risenTagsByIndex[v.index] : undefined;
-          return tags && typeof v.text === 'string' ? { ...v, text: unmaskRisenTags(v.text, tags) } : v;
+          return v && typeof v.text === 'string' ? { ...v, text: restoreWith(v?.index, v.text) } : v;
         });
       }
       // `recommended` has no index of its own — best-effort: reuse the first variant's tags.
-      const firstTags = typeof out.variants?.[0]?.index === 'number' ? risenTagsByIndex[out.variants[0].index] : undefined;
-      out.recommended = unmaskWith(firstTags, out.recommended);
+      out.recommended = restoreWith(out.variants?.[0]?.index, out.recommended);
       return out;
     });
   }
@@ -261,7 +291,7 @@ Deno.serve(async (req) => {
       glossary?: string;
       aiModel?: string;
       styleGuide?: string;
-      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
+      game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon-xp';
     };
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -281,8 +311,16 @@ Deno.serve(async (req) => {
     const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
     const isMother3 = game === 'mother3';
     const isMetroidPrime = game === 'metroidprime';
+    const isPokemonXp = game === 'pokemon-xp';
     const risenTagsByIndex: string[][] = [];
-    const promptEntries: AnalysisEntry[] = isRisen
+    const pokemonXpTokensByIndex: string[][] = [];
+    const promptEntries: AnalysisEntry[] = isPokemonXp
+      ? entries.map((e) => {
+          const { maskedA, maskedB, tokens } = maskPokemonXpPair(e.original, e.translation);
+          pokemonXpTokensByIndex.push(tokens);
+          return { ...e, original: maskedA, translation: maskedB };
+        })
+      : isRisen
       ? entries.map((e) => {
           const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
           risenTagsByIndex.push(tags);
@@ -290,7 +328,7 @@ Deno.serve(async (req) => {
         })
       : entries;
 
-    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide, isRisen, isMother3, isMetroidPrime);
+    const prompt = buildPrompt(action, promptEntries, glossary, styleGuide, isRisen, isMother3, isMetroidPrime, isPokemonXp);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -329,7 +367,7 @@ Deno.serve(async (req) => {
     const aiResult = await response.json();
     const content = aiResult.choices?.[0]?.message?.content || '';
     let parsed = parseAIResponse(content);
-    if (isRisen) parsed = unmaskAnalysisResult(parsed, risenTagsByIndex);
+    if (isRisen || isPokemonXp) parsed = unmaskAnalysisResult(parsed, risenTagsByIndex, pokemonXpTokensByIndex);
 
     return new Response(JSON.stringify({ action, ...parsed }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

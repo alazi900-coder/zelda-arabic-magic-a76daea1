@@ -93,7 +93,7 @@ const PATTERNS: Record<Category, RegExp> = {
   // Pokémon Essentials/RPG Maker XP uses visible control codes such as
   // \PN, \v[1] and \c[2]. Keep this focused list to avoid treating ordinary
   // backslash paths as tags in unrelated games.
-  escape_seq: /\\[xu][0-9A-Fa-f]{2,8}|\\[ntr0]|\\(?:PN|PM|[VvNnPpCcIiWwLl]\[[^\]\r\n]{0,32}\]|[Gg]|\{|\}|\\)/g,
+  escape_seq: /\\[xu][0-9A-Fa-f]{2,8}|\\[ntr0]|\\(?:PN|PM|(?:wt|dxn|[VvCcPpIiWwLl])\[[^\]\r\n]{0,80}\]|[bBGg]|\{|\}|\\)/g,
   pua_chars: /[\uE000-\uE0FF]+/g,
   control_chars: /[\uFFF9-\uFFFC\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
   dollar_vars: /\$\w+/g,

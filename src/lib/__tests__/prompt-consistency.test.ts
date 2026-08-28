@@ -21,11 +21,14 @@ describe("translate-entries prompt consistency", () => {
     expect(matches.length).toBe(1);
   });
 
-  it("references XC1_SYSTEM_PROMPT from at least every provider call site", () => {
-    // OpenAI-compat path, Gemini direct path, Lovable AI path → 3 sites min.
-    const refs = SOURCE.match(/XC1_SYSTEM_PROMPT/g) || [];
-    // 1 declaration + at least 3 usages = 4
-    expect(refs.length).toBeGreaterThanOrEqual(4);
+  it("uses one game-aware prompt selector for every provider", () => {
+    const selectors = SOURCE.match(/function\s+getGameSystemPrompt\s*\(/g) || [];
+    const usages = SOURCE.match(/getGameSystemPrompt\s*\(\)/g) || [];
+    expect(selectors).toHaveLength(1);
+    // Declaration + use in the shared request builder prevents providers from
+    // drifting into different game contexts.
+    expect(usages.length).toBeGreaterThanOrEqual(2);
+    expect(SOURCE).toContain('POKEMON_XP_SYSTEM_PROMPT');
   });
 
   it("does not contain legacy 'Xenoblade Chronicles 3' references in prompts", () => {

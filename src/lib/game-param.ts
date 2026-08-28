@@ -27,6 +27,7 @@ export type GameParam =
   | "metroidprime"
   | "wolfenstein"
   | "pokemon"
+  | "pokemon-xp"
   | "lumentale"
   | "gtaiv";
 
@@ -40,7 +41,7 @@ export function resolveGameParam(
   if (/\.tab$/i.test(f)) return risenVariant;
   if (/^TEXT_/.test(f)) return "metroidprime";
   if (/^wolf_b\d+_s\d+$/.test(f)) return "wolfenstein";
-  if (f.startsWith("pokemon-xp/")) return "pokemon";
+  if (f.startsWith("pokemon-xp/")) return "pokemon-xp";
   if (PKM_FILE_RE.test(f)) return "pokemon";
   if (f.startsWith("lumentale/")) return "lumentale";
   if (f.startsWith("gtaiv/")) return "gtaiv";

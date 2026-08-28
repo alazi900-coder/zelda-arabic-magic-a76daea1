@@ -3,6 +3,7 @@ import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { resolveGameParam } from "@/lib/game-param";
 import { hasArabicPresentationForms, removeArabicPresentationForms } from "@/lib/arabic-processing";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
+import { validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 import type {
   EditorState, ExtractedEntry,
   ReviewResults, ShortSuggestion, ImproveResult,
@@ -801,13 +802,22 @@ export function useEditorReview(params: UseEditorReviewParams) {
   };
 
   const handleApplyImprovement = (key: string, improved: string) => {
+    const entry = state?.entries.find((item) => `${item.msbtFile}:${item.index}` === key);
+    if (gameParam === 'pokemon-xp' && entry && !validatePokemonXpTechnicalTokens(entry.original, improved).valid) {
+      toast({ title: "لم يُطبّق الاقتراح", description: "غيّر اقتراح الذكاء أمراً تقنياً من Pokémon Essentials.", variant: "destructive" });
+      return;
+    }
     setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: improved }) } : null);
   };
 
   const handleApplyAllImprovements = () => {
     if (!state || !improveResults) return;
     const updates: Record<string, string> = {};
-    improveResults.forEach((item) => { if (item.improvedBytes <= item.maxBytes || item.maxBytes === 0) updates[item.key] = item.improved; });
+    improveResults.forEach((item) => {
+      const entry = state.entries.find((candidate) => `${candidate.msbtFile}:${candidate.index}` === item.key);
+      const isSafe = gameParam !== 'pokemon-xp' || !entry || validatePokemonXpTechnicalTokens(entry.original, item.improved).valid;
+      if ((item.improvedBytes <= item.maxBytes || item.maxBytes === 0) && isSafe) updates[item.key] = item.improved;
+    });
     setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setImproveResults(null);
     setLastSaved(`✅ تم تطبيق ${Object.keys(updates).length} تحسين`);
@@ -865,6 +875,10 @@ export function useEditorReview(params: UseEditorReviewParams) {
     if (!consistencyResults || !state) return;
     const group = consistencyResults.groups[groupIndex];
     if (!group) return;
+    if (gameParam === 'pokemon-xp' && !validatePokemonXpTechnicalTokens(group.term, bestTranslation).valid) {
+      toast({ title: "لم يُطبّق الاقتراح", description: "غيّر اقتراح الاتساق أمراً تقنياً من Pokémon Essentials.", variant: "destructive" });
+      return;
+    }
     const updates: Record<string, string> = {};
     for (const v of group.variants) { updates[v.key] = bestTranslation; }
     setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
@@ -881,7 +895,10 @@ export function useEditorReview(params: UseEditorReviewParams) {
     let count = 0;
     consistencyResults.groups.forEach((group, i) => {
       const best = consistencyResults.aiSuggestions[i]?.best;
-      if (best) { for (const v of group.variants) { updates[v.key] = best; } count++; }
+      if (best && (gameParam !== 'pokemon-xp' || validatePokemonXpTechnicalTokens(group.term, best).valid)) {
+        for (const v of group.variants) { updates[v.key] = best; }
+        count++;
+      }
     });
     setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, updates) } : null);
     setConsistencyResults(null);

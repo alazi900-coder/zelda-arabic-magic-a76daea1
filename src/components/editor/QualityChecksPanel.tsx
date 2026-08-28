@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Wrench, X, Sparkles, Search, Loader2, Check, RefreshCw } from "lucide-react";
 import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { resolveGameParam } from "@/lib/game-param";
+import { validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -308,7 +309,17 @@ const FIXABLE_TYPES = new Set(["extra_spaces_check", "punctuation_check", "gramm
 export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, onNavigateToEntry, glossary, risenVariant }: QualityChecksPanelProps) {
   const isRisen = /\.tab$/i.test(state.entries[0]?.msbtFile || "");
   const gameParam = resolveGameParam(state.entries[0]?.msbtFile, risenVariant);
+  const isPokemonXp = gameParam === "pokemon-xp";
   const qualitySettingsKey = `lumentale:quality-checks:${gameParam || "default"}`;
+
+  const acceptPokemonXpSuggestion = useCallback((key: string, candidate: string, originalOverride?: string): boolean => {
+    if (!isPokemonXp) return true;
+    const original = originalOverride ?? state.entries.find((entry) => entry.key === key)?.original ?? "";
+    const validation = validatePokemonXpTechnicalTokens(original, candidate);
+    if (validation.valid) return true;
+    toast({ title: "اقتراح غير آمن", description: validation.reason || "غيّر الاقتراح أمراً تقنياً.", variant: "destructive" });
+    return false;
+  }, [isPokemonXp, state.entries]);
   const [enabledChecks, setEnabledChecks] = useState<EnabledQualityChecks>(() => readEnabledChecks(qualitySettingsKey));
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -465,7 +476,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
               game: gameParam,
             },
           });
-          if (!error && data?.result) {
+          if (!error && data?.result && acceptPokemonXpSuggestion(issue.key, data.result, issue.original)) {
             setAiSuggestions(prev => ({ ...prev, [issue.key]: data.result }));
             aiCount++;
           }
@@ -478,7 +489,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
 
     setAutoFixProgress('');
     setAutoFixRunning(false);
-  }, [results.issues, onApplyFix, isEnabled, isRisen]);
+  }, [results.issues, onApplyFix, isEnabled, isRisen, acceptPokemonXpSuggestion]);
 
   // === Feature 2: AI Fix suggestion ===
   const handleAiFix = useCallback(async (issue: QualityIssue) => {
@@ -495,7 +506,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
         },
       });
       if (error) throw error;
-      if (data?.result) {
+      if (data?.result && acceptPokemonXpSuggestion(issue.key, data.result, issue.original)) {
         setAiSuggestions(prev => ({ ...prev, [issue.key]: data.result }));
       }
     } catch (_e) {
@@ -503,7 +514,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     } finally {
       setAiFixing(prev => ({ ...prev, [issue.key]: false }));
     }
-  }, [isRisen]);
+  }, [isRisen, acceptPokemonXpSuggestion]);
 
   // === Feature 3: Context check ===
   const handleContextCheck = useCallback(async () => {
@@ -524,7 +535,10 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
       if (data?.result) {
         try {
           const parsed = JSON.parse(data.result.replace(/```json\n?|```/g, ''));
-          setContextResults(Array.isArray(parsed) ? parsed : []);
+          const safeResults = Array.isArray(parsed)
+            ? parsed.filter((item) => !item?.suggestion || acceptPokemonXpSuggestion(item.key, item.suggestion))
+            : [];
+          setContextResults(safeResults);
           toast({ title: "✅ تم الفحص السياقي", description: `تم فحص ${entries.length} نص — ${parsed.length} مشكلة سياقية` });
         } catch {
           toast({ title: "تحذير", description: "تعذر تحليل نتائج الفحص السياقي", variant: "destructive" });
@@ -535,7 +549,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     } finally {
       setContextChecking(false);
     }
-  }, [results.issues, activeFilter, glossary, isRisen]);
+  }, [results.issues, activeFilter, glossary, isRisen, acceptPokemonXpSuggestion]);
 
   // === Feature 4: Batch improve ===
   const handleBatchImprove = useCallback(async () => {
@@ -559,7 +573,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
           if (Array.isArray(parsed)) {
             const map: Record<string, string> = {};
             for (const item of parsed) {
-              if (item.key && item.improved) map[item.key] = item.improved;
+              if (item.key && item.improved && acceptPokemonXpSuggestion(item.key, item.improved)) map[item.key] = item.improved;
             }
             setImproveResults(map);
             toast({ title: "✅ تم التحسين", description: `${Object.keys(map).length} ترجمة محسّنة جاهزة للمراجعة` });
@@ -573,17 +587,19 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
     } finally {
       setBatchImproving(false);
     }
-  }, [results.issues, activeFilter, improvementStyle, glossary, isRisen]);
+  }, [results.issues, activeFilter, improvementStyle, glossary, isRisen, acceptPokemonXpSuggestion]);
 
   const applyAllImproved = useCallback(() => {
     let count = 0;
     for (const [key, improved] of Object.entries(improveResults)) {
-      onApplyFix(key, improved);
-      count++;
+      if (acceptPokemonXpSuggestion(key, improved)) {
+        onApplyFix(key, improved);
+        count++;
+      }
     }
     setImproveResults({});
     toast({ title: "✅ تم التطبيق", description: `تم تطبيق ${count} تحسين` });
-  }, [improveResults, onApplyFix]);
+  }, [improveResults, onApplyFix, acceptPokemonXpSuggestion]);
 
   // Check if any quality feature is enabled
   const anyEnabled = QUALITY_CHECK_IDS.some(isEnabled);
@@ -780,7 +796,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
                     {cr.suggestion && (
                       <div className="flex items-center gap-2 mt-1">
                         <p className="text-emerald-400 flex-1" dir="rtl">💡 {cr.suggestion}</p>
-                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={() => { onApplyFix(cr.key, cr.suggestion!); setContextResults(prev => prev.filter((_, i) => i !== idx)); }}>
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={() => { if (acceptPokemonXpSuggestion(cr.key, cr.suggestion!)) { onApplyFix(cr.key, cr.suggestion!); setContextResults(prev => prev.filter((_, i) => i !== idx)); } }}>
                           <Check className="w-3 h-3" /> تطبيق
                         </Button>
                       </div>
@@ -812,7 +828,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
                       <p className="text-muted-foreground line-through" dir="rtl">{original?.translation}</p>
                       <p className="text-accent" dir="rtl">{improved}</p>
                       <div className="flex gap-1 mt-1">
-                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={() => { onApplyFix(key, improved); setImproveResults(prev => { const n = { ...prev }; delete n[key]; return n; }); }}>
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={() => { if (acceptPokemonXpSuggestion(key, improved)) { onApplyFix(key, improved); setImproveResults(prev => { const n = { ...prev }; delete n[key]; return n; }); } }}>
                           <Check className="w-3 h-3" /> قبول
                         </Button>
                         <Button size="sm" variant="ghost" className="text-xs h-5 text-destructive" onClick={() => setImproveResults(prev => { const n = { ...prev }; delete n[key]; return n; })}>
@@ -851,7 +867,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
                           onClick={(e) => {
                             e.stopPropagation();
                             const fix = issue.issues.find(i => i.fix)?.fix;
-                            if (fix) onApplyFix(issue.key, fix);
+                            if (fix && acceptPokemonXpSuggestion(issue.key, fix, issue.original)) onApplyFix(issue.key, fix);
                           }}
                         >
                           <Wrench className="w-3 h-3" /> إصلاح
@@ -880,7 +896,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
                     <div className="mt-1 bg-primary/5 border border-primary/20 rounded p-2 space-y-1">
                       <p className="text-xs text-primary" dir="rtl">💡 {aiSuggestions[issue.key]}</p>
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={(e) => { e.stopPropagation(); onApplyFix(issue.key, aiSuggestions[issue.key]); setAiSuggestions(prev => { const n = { ...prev }; delete n[issue.key]; return n; }); }}>
+                        <Button size="sm" variant="ghost" className="text-xs h-5 text-emerald-400" onClick={(e) => { e.stopPropagation(); if (acceptPokemonXpSuggestion(issue.key, aiSuggestions[issue.key], issue.original)) { onApplyFix(issue.key, aiSuggestions[issue.key]); setAiSuggestions(prev => { const n = { ...prev }; delete n[issue.key]; return n; }); } }}>
                           <Check className="w-3 h-3" /> قبول
                         </Button>
                         <Button size="sm" variant="ghost" className="text-xs h-5 text-destructive" onClick={(e) => { e.stopPropagation(); setAiSuggestions(prev => { const n = { ...prev }; delete n[issue.key]; return n; }); }}>

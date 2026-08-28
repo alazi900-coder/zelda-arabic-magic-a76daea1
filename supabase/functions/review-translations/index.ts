@@ -4,6 +4,23 @@ import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts"
 import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
 import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-persona-guard.ts';
 
+const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
+const POKEMON_XP_UNSAFE_ADDITIONS = /[\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+const POKEMON_XP_TOKEN_RULE = `Pokémon XP contract: this is Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP), not Pokémon GBA or Xenoblade. __PKXP_N__ values are masked executable message commands. Preserve every placeholder once and in the same order. Never translate, remove, duplicate, move, or create them. Do not add BiDi controls, Arabic Presentation Forms, or automatic tashkeel.`;
+
+function pokemonXpTokens(text: string): string[] {
+  return [...(text || '').matchAll(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'))].map((match) => match[0]);
+}
+
+function preservesPokemonXpContract(source: string, candidate: string): boolean {
+  const sourceTokens = pokemonXpTokens(source);
+  const candidateTokens = pokemonXpTokens(candidate);
+  if (sourceTokens.length !== candidateTokens.length || sourceTokens.some((token, index) => token !== candidateTokens[index])) return false;
+  const sourceUnsafe = source.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  const candidateUnsafe = candidate.match(POKEMON_XP_UNSAFE_ADDITIONS) || [];
+  return candidateUnsafe.every((mark, index) => mark === sourceUnsafe[index]);
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -51,7 +68,7 @@ Deno.serve(async (req) => {
         action?: 'review' | 'suggest-short' | 'improve' | 'smart-review' | 'grammar-check' | 'context-review' | 'quick-alternatives' | 'auto-correct' | 'detect-weak' | 'context-retranslate';
         aiModel?: string;
         contextEntries?: { key: string; original: string; translation: string }[];
-        game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime';
+        game?: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon-xp';
       };
 
       // Mask Risen tags before ANY prompt text is built, across every action
@@ -62,8 +79,11 @@ Deno.serve(async (req) => {
       // `unmaskFor(key, text)` restores a model-returned string afterward.
       const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
       const isMother3 = game === 'mother3';
+      const isMetroidPrime = game === 'metroidprime';
+      const isPokemonXp = game === 'pokemon-xp';
       const risenTagsByKey = new Map<string, string[]>();
       const maskedByKey = new Map<string, { original: string; translation: string }>();
+      const pokemonXpTokensByKey = new Map<string, string[]>();
       if (isRisen) {
         for (const e of [...entries, ...(contextEntries || [])]) {
           if (maskedByKey.has(e.key)) continue;
@@ -72,12 +92,27 @@ Deno.serve(async (req) => {
           maskedByKey.set(e.key, { original: maskedA, translation: maskedB });
         }
       }
+      if (isPokemonXp) {
+        for (const e of [...entries, ...(contextEntries || [])]) {
+          if (maskedByKey.has(e.key)) continue;
+          const tokens: string[] = [];
+          const mask = (value: string) => (value || '').replace(new RegExp(POKEMON_XP_TOKEN_REGEX.source, 'gi'), (token) => `__PKXP_${tokens.push(token) - 1}__`);
+          pokemonXpTokensByKey.set(e.key, tokens);
+          maskedByKey.set(e.key, { original: mask(e.original), translation: mask(e.translation) });
+        }
+      }
       const promptText = (e: { key: string; original: string; translation: string }) =>
-        isRisen ? (maskedByKey.get(e.key) || e) : e;
+        isRisen || isPokemonXp ? (maskedByKey.get(e.key) || e) : e;
       const unmaskFor = (key: string, text: string): string => {
+        if (isPokemonXp) {
+          const tokens = pokemonXpTokensByKey.get(key) || [];
+          return (text || '').replace(/__PKXP_(\d+)__/g, (placeholder, rawIndex: string) => tokens[Number(rawIndex)] ?? placeholder);
+        }
         const tags = risenTagsByKey.get(key);
         return tags ? unmaskRisenTags(text, tags) : text;
       };
+      const safePokemonXpResult = (entry: ReviewEntry, candidate: string) =>
+        !isPokemonXp || preservesPokemonXpContract(entry.original, candidate);
 
       // Map aiModel to gateway model name
       const gatewayModelMap: Record<string, string> = {
@@ -194,9 +229,9 @@ ${tooLongEntries.map((e, i) => {
         for (let c = 0; c < translatedEntries.length; c += CHUNK_SIZE) {
           const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
 
-          const gameNameLabel = isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
+          const gameNameLabel = isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 3';
           const prompt = `أنت مدقق لغوي متخصص في ترجمة ألعاب الفيديو (${gameNameLabel}). حلّل كل ترجمة وأبلغ عن المشاكل الواضحة فقط:
-${isMetroidPrime ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n` : isMother3 ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n` : isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
+${isPokemonXp ? POKEMON_XP_TOKEN_RULE : isMetroidPrime ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n` : isMother3 ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n` : isRisen ? `\n${RISEN_FORGET_OTHER_GAME_RULE}\n` : ''}
 
 ⚠️ تعليمات حاسمة:
 - أبلغ فقط عن المشاكل الواضحة والمؤكدة — لا تقترح تغييرات ذوقية أو تفضيلات شخصية
@@ -261,13 +296,15 @@ AR: "${pt.translation}"`; }).join('\n\n')}
             const findings: any[] = JSON.parse(sanitized);
             for (const f of findings) {
               if (typeof f.i === 'number' && f.i >= 0 && f.i < chunk.length) {
+                const fix = unmaskFor(chunk[f.i].key, f.fix || '');
+                if (!safePokemonXpResult(chunk[f.i], fix)) continue;
                 allFindings.push({
                   key: chunk[f.i].key,
                   original: chunk[f.i].original,
                   current: chunk[f.i].translation,
                   type: f.type || 'naturalness',
                   issue: f.issue || '',
-                  fix: unmaskFor(chunk[f.i].key, f.fix || ''),
+                  fix,
                 });
               }
             }
@@ -297,6 +334,7 @@ AR: "${pt.translation}"`; }).join('\n\n')}
           const chunk = translatedEntries.slice(c, c + CHUNK_SIZE);
 
           const prompt = `أنت مدقق نحوي وإملائي متخصص في اللغة العربية. حلّل كل ترجمة وأبلغ عن الأخطاء الواضحة فقط:
+${isPokemonXp ? POKEMON_XP_TOKEN_RULE : ''}
 
 ⚠️ تعليمات حاسمة:
 - أبلغ فقط عن الأخطاء النحوية والإملائية الواضحة والمؤكدة
@@ -360,13 +398,15 @@ AR: "${pt.translation}"`; }).join('\n\n')}
             const findings: any[] = JSON.parse(sanitized);
             for (const f of findings) {
               if (typeof f.i === 'number' && f.i >= 0 && f.i < chunk.length) {
+                const fix = unmaskFor(chunk[f.i].key, f.fix || '');
+                if (!safePokemonXpResult(chunk[f.i], fix)) continue;
                 allFindings.push({
                   key: chunk[f.i].key,
                   original: chunk[f.i].original,
                   current: chunk[f.i].translation,
                   type: f.type || 'spelling',
                   issue: f.issue || '',
-                  fix: unmaskFor(chunk[f.i].key, f.fix || ''),
+                  fix,
                 });
               }
             }
@@ -401,6 +441,7 @@ AR: "${pt.translation}"`; }).join('\n\n')}
             : '';
 
           const prompt = `أنت مراجع ترجمات ألعاب فيديو متخصص في السياق. مهمتك: تحليل كل ترجمة في سياقها (الجمل المحيطة والأحداث) وتحسينها.
+${isPokemonXp ? POKEMON_XP_TOKEN_RULE : ''}
 
 المشاكل التي يجب كشفها:
 1. **context-mismatch** — الترجمة صحيحة لغوياً لكنها لا تناسب سياق اللعبة أو المشهد
@@ -456,13 +497,15 @@ AR: "${pt.translation}"`; }).join('\n\n')}
             const findings: any[] = JSON.parse(sanitized);
             for (const f of findings) {
               if (typeof f.i === 'number' && f.i >= 0 && f.i < chunk.length) {
+                const fix = unmaskFor(chunk[f.i].key, f.fix || '');
+                if (!safePokemonXpResult(chunk[f.i], fix)) continue;
                 allFindings.push({
                   key: chunk[f.i].key,
                   original: chunk[f.i].original,
                   current: chunk[f.i].translation,
                   type: f.type || 'improvement',
                   issue: f.issue || '',
-                  fix: unmaskFor(chunk[f.i].key, f.fix || ''),
+                  fix,
                 });
               }
             }
@@ -491,6 +534,7 @@ AR: "${pt.translation}"`; }).join('\n\n')}
 
         const entryPt = promptText(entry);
         const prompt = `أنت مترجم ألعاب فيديو محترف. أعطني 3 بدائل مختلفة للترجمة التالية بأساليب متنوعة:
+${isPokemonXp ? POKEMON_XP_TOKEN_RULE : ''}
 
 النص الأصلي: "${entryPt.original}"
 الترجمة الحالية: "${entryPt.translation}"
@@ -539,7 +583,9 @@ ${contextBlock}
 
         const sanitized = jsonMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
         let alternatives: { style?: string; text?: string; reason?: string }[] = JSON.parse(sanitized);
-        alternatives = alternatives.map((a) => ({ ...a, text: unmaskFor(entry.key, a.text || '') }));
+        alternatives = alternatives
+          .map((a) => ({ ...a, text: unmaskFor(entry.key, a.text || '') }))
+          .filter((a) => safePokemonXpResult(entry, a.text || ''));
 
         return new Response(JSON.stringify({ alternatives }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

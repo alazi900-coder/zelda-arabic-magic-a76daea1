@@ -31,6 +31,7 @@ interface EditorGameSafetySectionProps {
 const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ editor }) => {
   if (!editor.state) return null;
   const state = editor.state;
+  const isPokemonXpSession = state.entries.some((entry) => entry.msbtFile.startsWith("pokemon-xp/"));
 
   // Honor the editor's active filters/search when scanning so users can scope
   // the deep diagnostic to the current view (cards/search/file/category/table/column/pinned).
@@ -66,14 +67,16 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
         </div>
       </div>
 
-      {/* message.conf warning */}
-      <div className="p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 text-xs space-y-1" dir="rtl">
-        <p className="font-bold text-yellow-400">⚠️ إعدادات مود السويتش (message.conf)</p>
-        <p className="text-muted-foreground">
-          إذا استمر التهنيج رغم إصلاح النصوص، قد يكون السبب حدود ذاكرة المحرك. عدّل ملف <code className="bg-muted/40 px-1 rounded">message.conf</code> في مود السويتش:
-        </p>
-        <pre className="bg-muted/20 p-2 rounded font-mono text-[11px]">TelegraphMax = 8192{"\n"}MessageTypeMax = 1024</pre>
-      </div>
+      {/* This warning applies only to Switch mod sessions, never to Pokémon Essentials/RPG Maker XP. */}
+      {!isPokemonXpSession && (
+        <div className="p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 text-xs space-y-1" dir="rtl">
+          <p className="font-bold text-yellow-400">⚠️ إعدادات مود السويتش (message.conf)</p>
+          <p className="text-muted-foreground">
+            إذا استمر التهنيج رغم إصلاح النصوص، قد يكون السبب حدود ذاكرة المحرك. عدّل ملف <code className="bg-muted/40 px-1 rounded">message.conf</code> في مود السويتش:
+          </p>
+          <pre className="bg-muted/20 p-2 rounded font-mono text-[11px]">TelegraphMax = 8192{"\n"}MessageTypeMax = 1024</pre>
+        </div>
+      )}
 
       <DeepDiagnosticPanel
         state={state}

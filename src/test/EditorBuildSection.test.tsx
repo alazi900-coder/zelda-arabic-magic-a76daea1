@@ -88,3 +88,24 @@ describe("EditorBuildSection — LumenTale pre-build review", () => {
     expect(await screen.findByText(/لم يُعثر على خريطة هوية الحزمة/)).toBeInTheDocument();
   });
 });
+
+describe("EditorBuildSection — Pokémon XP safety boundary", () => {
+  it("does not expose a builder for english.dat and explains why", () => {
+    render(
+      <EditorBuildSection
+        editor={makeEditor()}
+        isPokemonXp
+        unprocessedArabicCount={0}
+        showBuildSection
+        setShowBuildSection={vi.fn()}
+        setShowArabicProcessConfirm={vi.fn()}
+        setShowDiagnostic={vi.fn()}
+      />
+    );
+
+    const warning = screen.getByText("english.dat").parentElement;
+    expect(warning).toHaveTextContent("تصدير english.dat معطّل مؤقتاً");
+    expect(screen.queryByRole("button", { name: /بناء .*english/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/لن ينشئ المحرر ملف Marshal غير متحقق منه/)).toBeInTheDocument();
+  });
+});

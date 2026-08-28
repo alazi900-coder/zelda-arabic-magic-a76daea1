@@ -19,6 +19,18 @@ import emeraldFontBg from "@/assets/covers/pokemon-cover.jpg";
 
 const games = [
   {
+    title: "Pokémon Unbreakable Ties",
+    subtitle: "نصوص RPG Maker XP",
+    desc: "يفتح جدول اللغة الإنجليزي english.dat محلياً، ويعرض الرسائل المنظمة في المحرر مع حماية أوامر Pokémon Essentials. بناء ملف اللعبة مقفل حتى التحقق المستقل من إعادة كتابة Marshal.",
+    link: "/pokemon-unbreakable-ties",
+    image: pokemonBg,
+    formats: ["english.dat", "RPG Maker XP", "READ/EDIT"],
+    cardClass: "border-[hsl(48,80%,52%)]/35 hover:border-[hsl(48,90%,65%)]/70",
+    formatClass: "bg-[hsl(48,80%,52%)]/20 text-[hsl(52,95%,76%)] border-[hsl(48,80%,52%)]/35",
+    subtitleClass: "text-[hsl(52,95%,76%)]",
+    arrowClass: "text-[hsl(52,95%,76%)]",
+  },
+  {
     title: "Grand Theft Auto IV",
     subtitle: "فاحص ملفات لغة GTA IV",
     desc: "يتحقق محلياً من بنية GXT وOXT: الجداول والمفاتيح وكتل النص، من دون تحرير أو بناء قبل فحص خط اللعبة وخريطة ترميز العربية.",

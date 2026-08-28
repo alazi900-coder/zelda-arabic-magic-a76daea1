@@ -44,6 +44,8 @@ interface EditorBuildSectionProps {
   isMetroidPrime?: boolean;
   isWolfenstein?: boolean;
   isPokemon?: boolean;
+  /** Pokémon Essentials/RPG Maker XP: editing/exporting translations only until a safe Marshal writer exists. */
+  isPokemonXp?: boolean;
   isGameMaker?: boolean;
   isDragonSword?: boolean;
   isKingdomHearts?: boolean;
@@ -82,6 +84,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isMetroidPrime = false,
   isWolfenstein = false,
   isPokemon = false,
+  isPokemonXp = false,
   isGameMaker = false,
   isDragonSword = false,
   isKingdomHearts = false,
@@ -859,7 +862,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isKingdomHearts && !isLumenTale && !isGtaIv && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -889,13 +892,13 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isKingdomHearts || isLumenTale || isGtaIv}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv}
           className="flex-1 min-w-[200px] font-display font-bold"
-          title={isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
+          title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
           {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
         </Button>
-        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv} className="font-body gap-1 shrink-0" title={isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
+        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv || isPokemonXp} className="font-body gap-1 shrink-0" title={isPokemonXp ? "Pokémon XP لا يطبق المعالجة العامة على حالة المحرر." : isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
           <RotateCcw className="w-4 h-4" />
           <span className="hidden sm:inline">تراجع</span>
         </Button>
@@ -923,7 +926,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               toast({ title: "✅ تم التصدير", description: `${Object.keys(processed).length} ترجمة بعد المعالجة العربية` })
             );
           }}
-          disabled={editor.applyingArabic || isGtaIv}
+          disabled={editor.applyingArabic || isGtaIv || isPokemonXp}
           className="font-body gap-1 shrink-0"
           title="تصدير الترجمات بعد تطبيق المعالجة العربية"
         >
@@ -938,7 +941,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <ShieldCheck className="w-4 h-4" />
           <span className="hidden sm:inline">سلامة</span>
         </Button>
-        {isGtaIv ? (
+        {isPokemonXp ? (
+          <div className="flex-1 min-w-[200px] rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+            تصدير <code>english.dat</code> معطّل مؤقتاً: حرّر النصوص وصدّر الترجمات للمراجعة، ولن ينشئ المحرر ملف Marshal غير متحقق منه.
+          </div>
+        ) : isGtaIv ? (
           <Button size="lg" onClick={handleGtaIvBuild} disabled={gtaIvBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يشكّل العربية عند البناء ثم يتحقق من بنية GXT والرموز التقنية قبل التنزيل">
             {gtaIvBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء american.gxt معرّب وتنزيله
           </Button>

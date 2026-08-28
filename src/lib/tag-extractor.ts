@@ -90,7 +90,10 @@ const PATTERNS: Record<Category, RegExp> = {
   // \uNNNN are real hex escapes, but \n is the single-char newline escape —
   // including 'n' there let "\n12" (newline followed by literal digits "12")
   // get misparsed as a bogus hex escape "\n12" instead of \n + "12".
-  escape_seq: /\\[xu][0-9A-Fa-f]{2,8}|\\[ntr0]/g,
+  // Pokémon Essentials/RPG Maker XP uses visible control codes such as
+  // \PN, \v[1] and \c[2]. Keep this focused list to avoid treating ordinary
+  // backslash paths as tags in unrelated games.
+  escape_seq: /\\[xu][0-9A-Fa-f]{2,8}|\\[ntr0]|\\(?:PN|PM|[VvNnPpCcIiWwLl]\[[^\]\r\n]{0,32}\]|[Gg]|\{|\}|\\)/g,
   pua_chars: /[\uE000-\uE0FF]+/g,
   control_chars: /[\uFFF9-\uFFFC\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
   dollar_vars: /\$\w+/g,

@@ -159,7 +159,7 @@ class Reader {
   private readHash(depth: number, withDefault: boolean): RubyMarshalHash {
     const length = this.readLong();
     if (length < 0 || length > 2_000_000) throw this.fail("طول جدول غير صالح");
-    const hash = this.track({ kind: "hash", pairs: [] as Array<[RubyMarshalValue, RubyMarshalValue]> });
+    const hash: RubyMarshalHash = this.track({ kind: "hash", pairs: [] as Array<[RubyMarshalValue, RubyMarshalValue]> });
     for (let index = 0; index < length; index++) hash.pairs.push([this.readValue(depth), this.readValue(depth)]);
     if (withDefault) hash.defaultValue = this.readValue(depth);
     return hash;

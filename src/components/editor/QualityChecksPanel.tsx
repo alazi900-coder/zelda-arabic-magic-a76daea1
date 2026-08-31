@@ -314,7 +314,7 @@ export default function QualityChecksPanel({ state, onApplyFix, onFilterByKeys, 
 
   const acceptPokemonXpSuggestion = useCallback((key: string, candidate: string, originalOverride?: string): boolean => {
     if (!isPokemonXp) return true;
-    const original = originalOverride ?? state.entries.find((entry) => entry.key === key)?.original ?? "";
+    const original = originalOverride ?? state.entries.find((entry) => `${entry.msbtFile}:${entry.index}` === key)?.original ?? "";
     const validation = validatePokemonXpTechnicalTokens(original, candidate);
     if (validation.valid) return true;
     toast({ title: "اقتراح غير آمن", description: validation.reason || "غيّر الاقتراح أمراً تقنياً.", variant: "destructive" });

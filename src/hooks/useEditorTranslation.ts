@@ -814,7 +814,7 @@ export function useEditorTranslation({
         if (totalGlossaryStats.contextTerms > 0) glossaryParts.push(`📋 ${totalGlossaryStats.contextTerms} مصطلح سياقي`);
         const glossaryInfo = glossaryParts.length > 0 ? ` | القاموس: ${glossaryParts.join(' + ')}` : '';
         const failedInfo = failed.length > 0 ? ` | ⚠️ ${failed.length} نص فشل (انقر تكرار)` : '';
-        setTranslateProgress(`✅ تم ترجمة ${total} نص بنجاح${tmCount > 0 ? ` + ${tmCount} من الذاكرة` : ''}${glossaryInfo}${failedInfo}`);
+        setTranslateProgress(`✅ تم ترجمة ${total} نص بنجاح${glossaryInfo}${failedInfo}`);
         setTimeout(() => setTranslateProgress(""), 8000);
       }
     } catch (err) {
@@ -1034,7 +1034,6 @@ export function useEditorTranslation({
       }
       const tmCount = Object.keys(tmReused).length;
       const glossaryCount = Object.keys(glossaryReused).length;
-      setTmStats({ reused: tmCount + glossaryCount, sent: 0 });
       const parts: string[] = [];
       if (tmCount > 0) parts.push(`${tmCount} من الذاكرة`);
       if (glossaryCount > 0) parts.push(`${glossaryCount} من القاموس 📖`);
@@ -1050,7 +1049,6 @@ export function useEditorTranslation({
     // AI mode: translate in batches of 10
     const PAGE_AI_BATCH = 10;
     const needsAI = candidates;
-    setTmStats({ reused: 0, sent: needsAI.length });
     if (needsAI.length === 0) {
       setTranslateProgress(`✅ لا توجد نصوص تحتاج ترجمة`);
       setTimeout(() => setTranslateProgress(""), 5000);

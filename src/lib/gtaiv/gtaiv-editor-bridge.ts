@@ -1,6 +1,7 @@
 /** GTA IV integration with the shared translation editor.
  * Design: GTA IV uses `gtaiv/<TABLE>` identities; the existing shared editor
- * remains the only editor UI. This module reads source English GXT only.
+ * remains the only editor UI. This module targets the Russian-slot Arabic
+ * mod's `russian.gxt` — see `gtaiv-ru-charmap.ts` for how its font was read.
  */
 import type { ExtractedEntry } from "@/components/editor/types";
 import {
@@ -11,30 +12,31 @@ import {
   rebuildGtaIvGxt,
 } from "./gxt-format";
 import { gtaIvEditorTextToRuntimeText } from "./gtaiv-line-split";
+import { GTAIV_RU_CUSTOM_UNITS } from "./gtaiv-ru-charmap";
 
 export const GTAIV_SOURCE_GAME = "gtaiv";
-export const GTAIV_BUFFER_KEY = "gtaiv:american-gxt-buffer";
-export const GTAIV_SOURCE_NAME_KEY = "gtaiv:american-gxt-name";
+export const GTAIV_BUFFER_KEY = "gtaiv:russian-gxt-buffer";
+export const GTAIV_SOURCE_NAME_KEY = "gtaiv:russian-gxt-name";
 
 export interface GtaIvEditorImport {
   entries: ExtractedEntry[];
   tableCount: number;
 }
 
-export interface GtaIvAmericanBuild {
+export interface GtaIvRuBuild {
   buffer: ArrayBuffer;
-  filename: "american.gxt";
+  filename: "russian.gxt";
   translatedLines: number;
 }
 
 /**
- * Style contract: the current Arabic-over-English font dedicates 96..239 to
- * Arabic presentation forms. Runtime tokens are interpreted by GTA IV rather
- * than rendered as glyphs, so their contents remain exempt. Any visible raw
- * English unit in that interval would render as Arabic art and corrupt menus.
+ * Style contract: the Russian-slot mod's font draws Arabic on 124 specific,
+ * non-contiguous glyph units (`GTAIV_RU_CUSTOM_UNITS`) — not a range, unlike
+ * the disproven English-font assumption this replaced. Runtime tokens are
+ * interpreted by GTA IV rather than rendered as glyphs, so their contents
+ * remain exempt. Any visible raw ASCII sitting on one of those units would
+ * render as Arabic art and corrupt menus or untranslated lines.
  */
-const gtaIvArabicInputUnitStart = 96;
-const gtaIvArabicInputUnitEnd = 239;
 const gtaIvRuntimeTokenPattern = /~[^~]+~/g;
 
 interface GtaIvVisibleUnitConflict {
@@ -48,7 +50,7 @@ function findVisibleGtaIvArabicUnitConflict(text: string): GtaIvVisibleUnitConfl
     const piece = pieces[pieceIndex] ?? "";
     for (let index = 0; index < piece.length; index += 1) {
       const unit = piece.charCodeAt(index);
-      if (unit >= gtaIvArabicInputUnitStart && unit <= gtaIvArabicInputUnitEnd) {
+      if (GTAIV_RU_CUSTOM_UNITS.has(unit)) {
         return { unit, character: piece[index] ?? "" };
       }
     }
@@ -64,7 +66,7 @@ export function extractGtaIvEntries(buffer: ArrayBuffer): GtaIvEditorImport {
     msbtFile: `gtaiv/${table.name}`,
     index: entry.crc >>> 0,
     label: `${table.name} · 0x${(entry.crc >>> 0).toString(16).padStart(8, "0")}`,
-    original: decodeGtaIvArabicFontUnits(entry.textUnits),
+    original: decodeGtaIvArabicFontUnits(entry.textUnits, true),
     // GXT size can only be measured after its Arabic glyph encoding is fixed.
     // A zero budget tells generic editor checks not to invent a byte limit.
     maxBytes: 0,
@@ -79,13 +81,13 @@ function gtaIvEntryIdentity(entry: Pick<ExtractedEntry, "msbtFile" | "index">): 
 
 /**
  * Builds only the rows changed in the shared editor. The raw source is parsed
- * again so a stale editor state can never target a different American GXT.
+ * again so a stale editor state can never target a different russian.gxt.
  */
-export function buildGtaIvAmericanOutput(
+export function buildGtaIvRuOutput(
   source: ArrayBuffer,
   entries: readonly ExtractedEntry[],
   translations: Readonly<Record<string, string>>,
-): GtaIvAmericanBuild {
+): GtaIvRuBuild {
   const parsedSource = parseGtaIvGxt(source);
   const sourceByIdentity = new Map(parsedSource.tables.flatMap((table) => table.entries.map((entry) => [
     `${table.name}:${entry.crc >>> 0}`,
@@ -98,9 +100,9 @@ export function buildGtaIvAmericanOutput(
     const identity = gtaIvEntryIdentity(entry);
     if (!identity) continue;
     const sourceEntry = sourceByIdentity.get(identity);
-    if (!sourceEntry) throw new Error("حالة المحرر لا تطابق ملف american.gxt المحفوظ. أعد استيراد المصدر الإنجليزي.");
-    if (gtaIvRawUnitsToString(sourceEntry.textUnits) !== entry.original) {
-      throw new Error("تم تغيير مصدر american.gxt منذ فتح المحرر. أعد استيراده قبل البناء.");
+    if (!sourceEntry) throw new Error("حالة المحرر لا تطابق ملف russian.gxt المحفوظ. أعد استيراد المصدر.");
+    if (decodeGtaIvArabicFontUnits(sourceEntry.textUnits, true) !== entry.original) {
+      throw new Error("تم تغيير مصدر russian.gxt منذ فتح المحرر. أعد استيراده قبل البناء.");
     }
     const key = `${entry.msbtFile}:${entry.index}`;
     const translation = translations[key];
@@ -126,7 +128,7 @@ export function buildGtaIvAmericanOutput(
   if (visibleConflicts.length > 0) {
     const first = visibleConflicts[0];
     throw new Error(
-      `لا يمكن بناء american.gxt مع الخط العربي الحالي: بقيت ${visibleConflicts.length} سطور تستخدم محارف إنجليزية مرئية في نطاق وحدات العربية 96–239 (أولها ${first.table} · 0x${first.crc.toString(16).padStart(8, "0")} بالحرف «${first.character}» والوحدة ${first.unit}). ترجم هذه السطور أو لا تستخدم حزمة الخط العربي الحالية؛ الوسوم بين ~...~ مستثناة.`,
+      `لا يمكن بناء russian.gxt: بقيت ${visibleConflicts.length} سطور تستخدم محارف مرئية تقع على إحدى خانات الخطّ العربي المخصّصة لهذا المود (أولها ${first.table} · 0x${first.crc.toString(16).padStart(8, "0")} بالحرف «${first.character}» والوحدة ${first.unit}). ترجم هذه السطور؛ الوسوم بين ~...~ مستثناة.`,
     );
   }
 
@@ -152,5 +154,5 @@ export function buildGtaIvAmericanOutput(
     }
   }
 
-  return { buffer, filename: "american.gxt", translatedLines: replacements.length };
+  return { buffer, filename: "russian.gxt", translatedLines: replacements.length };
 }

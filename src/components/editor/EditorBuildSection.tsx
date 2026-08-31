@@ -19,7 +19,7 @@ import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-works
 import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
 import { buildLumenTaleBundle, LUMENTALE_BUFFER_KEY, LUMENTALE_META_KEY, type LumenTaleBundleMeta } from "@/lib/lumentale/lumentale-editor-bridge";
 import { createLumenTalePreBuildReport, type LumenTalePreBuildReport } from "@/lib/lumentale/lumentale-prebuild-report";
-import { buildGtaIvAmericanOutput, GTAIV_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
+import { buildGtaIvRuOutput, GTAIV_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -531,9 +531,9 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     setGtaIvBuilding(true);
     try {
       const source = await idbGet<ArrayBuffer>(GTAIV_BUFFER_KEY);
-      if (!source) throw new Error("لم يُعثر على american.gxt المصدر. أعد فتحه من قسم GTA IV أولاً.");
-      if (!editor.state) throw new Error("لا توجد جلسة ترجمة مفتوحة لبناء american.gxt.");
-      const result = buildGtaIvAmericanOutput(source, editor.state.entries, editor.state.translations || {});
+      if (!source) throw new Error("لم يُعثر على russian.gxt المصدر. أعد فتحه من قسم GTA IV أولاً.");
+      if (!editor.state) throw new Error("لا توجد جلسة ترجمة مفتوحة لبناء russian.gxt.");
+      const result = buildGtaIvRuOutput(source, editor.state.entries, editor.state.translations || {});
       const blob = new Blob([result.buffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -543,12 +543,12 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       URL.revokeObjectURL(url);
       const { toast } = await import("@/hooks/use-toast");
       toast({
-        title: "تم بناء american.gxt",
+        title: "تم بناء russian.gxt",
         description: `${result.translatedLines} سطر مترجم. تم التحقق من الجداول وCRC والرموز التقنية قبل التنزيل.`,
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");
-      toast({ title: "خطأ في بناء american.gxt", description: (err as Error).message, variant: "destructive" });
+      toast({ title: "خطأ في بناء russian.gxt", description: (err as Error).message, variant: "destructive" });
     } finally {
       setGtaIvBuilding(false);
     }
@@ -947,7 +947,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           </div>
         ) : isGtaIv ? (
           <Button size="lg" onClick={handleGtaIvBuild} disabled={gtaIvBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يشكّل العربية عند البناء ثم يتحقق من بنية GXT والرموز التقنية قبل التنزيل">
-            {gtaIvBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء american.gxt معرّب وتنزيله
+            {gtaIvBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء russian.gxt معرّب وتنزيله
           </Button>
         ) : isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">

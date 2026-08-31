@@ -14,11 +14,16 @@ import {
   repairGtaIvRuntimeTokenSequence,
   analyzeGtaIvUnsupportedCharacters,
   gtaIvArabicInputUnitForPresentationForm,
-  gtaIvArabicPresentationFormInputUnits,
   validateGtaIvDollarAmountSequence,
   validateGtaIvRuntimeTokenSequence,
 } from "./gxt-format";
-import { buildGtaIvAmericanOutput, extractGtaIvEntries } from "./gtaiv-editor-bridge";
+import { buildGtaIvRuOutput, extractGtaIvEntries } from "./gtaiv-editor-bridge";
+import { GTAIV_RU_CODEPOINT_TO_UNIT, GTAIV_RU_CUSTOM_UNITS, GTAIV_RU_UNIT_TO_CODEPOINT } from "./gtaiv-ru-charmap";
+
+/** Looks up the unit for a logical Arabic char the same way the encoder does: shape it, then map. */
+function ruUnitsFor(logicalArabic: string): number[] {
+  return Array.from(encodeGtaIvArabicText("", logicalArabic).textUnits);
+}
 
 function makeGxt(crc = 0x12345678): ArrayBuffer {
   const bytes = new Uint8Array(72);
@@ -197,28 +202,28 @@ describe("GTA IV GXT/OXT structural reader", () => {
       .toMatchObject({ text: "ادفع 700$ و$20", changed: false, safe: false });
   });
 
-  it("uses the verified consecutive original-English input units for shaped Arabic Presentation Forms", () => {
+  it("uses the Russian-slot mod's own measured glyph units for shaped Arabic Presentation Forms", () => {
     const encoded = encodeGtaIvArabicText("", "تؤبسك");
     expect(encoded.processedText).toBe("ﻚﺴﺑﺆﺗ");
-    expect(Array.from(encoded.textUnits)).toEqual([202, 164, 129, 118, 135]);
+    expect(Array.from(encoded.textUnits)).toEqual(
+      [...encoded.processedText].map((char) => GTAIV_RU_CODEPOINT_TO_UNIT.get(char.charCodeAt(0))),
+    );
 
     const alef = encodeGtaIvArabicText("", "ا");
     expect(alef.processedText).toBe("ﺍ");
-    expect(Array.from(alef.textUnits)).toEqual([125]);
+    expect(gtaIvArabicInputUnitForPresentationForm(alef.processedText.charCodeAt(0))).toBe(alef.textUnits[0]);
   });
 
-  it("maps every Arabic Presentation Form to the matching original-English input unit", () => {
-    expect(gtaIvArabicPresentationFormInputUnits).toHaveLength(144);
-    expect(new Set(gtaIvArabicPresentationFormInputUnits).size).toBe(144);
-    expect(gtaIvArabicInputUnitForPresentationForm(0xfe70)).toBe(96);
-    expect(gtaIvArabicInputUnitForPresentationForm(0xfe99)).toBe(137);
-    expect(gtaIvArabicInputUnitForPresentationForm(0xfee0)).toBe(208);
-    expect(gtaIvArabicInputUnitForPresentationForm(0xfef9)).toBe(233);
-    expect(gtaIvArabicInputUnitForPresentationForm(0xfeff)).toBe(239);
-    for (let index = 0; index < 144; index += 1) {
-      expect(gtaIvArabicInputUnitForPresentationForm(0xfe70 + index))
-        .toBe(96 + index);
-      expect(gtaIvArabicPresentationFormInputUnits[index]).toBe(96 + index);
+  it("maps every one of the mod's 124 measured glyph units to a distinct Arabic Presentation Form", () => {
+    expect(GTAIV_RU_UNIT_TO_CODEPOINT.size).toBe(124);
+    expect(new Set(GTAIV_RU_UNIT_TO_CODEPOINT.values()).size).toBe(124);
+    expect(GTAIV_RU_CUSTOM_UNITS.size).toBe(124);
+    // The map and its inverse must agree perfectly both ways — a round trip
+    // through every unit and every code point returns to where it started.
+    for (const [unit, codePoint] of GTAIV_RU_UNIT_TO_CODEPOINT) {
+      expect(GTAIV_RU_CODEPOINT_TO_UNIT.get(codePoint)).toBe(unit);
+      expect(gtaIvArabicInputUnitForPresentationForm(codePoint)).toBe(unit);
+      expect(GTAIV_RU_CUSTOM_UNITS.has(unit)).toBe(true);
     }
   });
 
@@ -282,11 +287,11 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(encoded.processedText).not.toContain("ملايين");
   });
 
-  it("refuses an Arabic character not represented by English v3", () => {
+  it("refuses an Arabic character not represented by the Russian-slot mod's font", () => {
     expect(() => encodeGtaIvArabicText("", "پ")).toThrow("غير مدعوم");
   });
 
-  it("reports each unsupported GTA IV English-font character with its code point and count", () => {
+  it("reports each unsupported character with its code point and count", () => {
     const report = analyzeGtaIvUnsupportedCharacters("قال «نعم» ثم «لا» ☃");
     expect(report.unsupported).toEqual([
       { character: "«", unicode: "U+00AB", count: 2 },
@@ -305,29 +310,33 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(() => encodeGtaIvArabicText("Copyright", "حقوق ©")).toThrow("U+00A9");
   });
 
-  it("builds american.gxt from the shared editor identity and re-parses the encoded row", () => {
+  it("builds russian.gxt from the shared editor identity and re-parses the encoded row", () => {
     const source = makeGxt(0x00009b22);
     const imported = extractGtaIvEntries(source);
     const row = imported.entries[0];
-    const result = buildGtaIvAmericanOutput(source, imported.entries, {
+    const result = buildGtaIvRuOutput(source, imported.entries, {
       [`${row.msbtFile}:${row.index}`]: "تؤبسك",
     });
-    expect(result).toMatchObject({ filename: "american.gxt", translatedLines: 1 });
+    expect(result).toMatchObject({ filename: "russian.gxt", translatedLines: 1 });
     const output = parseGtaIvGxt(result.buffer);
-    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([202, 164, 129, 118, 135]);
-    expect(extractGtaIvEntries(result.buffer).entries[0].original)
-      .toBe(gtaIvRawUnitsToString(new Uint16Array([202, 164, 129, 118, 135])));
+    const expectedUnits = ruUnitsFor("تؤبسك");
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual(expectedUnits);
+    // extractGtaIvEntries decodes Russian-mod rows by default, so re-importing
+    // the just-built file must read back the same logical Arabic it was given.
+    expect(extractGtaIvEntries(result.buffer).entries[0].original).toBe("تؤبسك");
     expect(decodeGtaIvArabicFontUnits(output.tables[0].entries[0].textUnits, true)).toBe("تؤبسك");
   });
 
-  it("refuses a mixed GXT that would render an untranslated English lowercase letter as Arabic art", () => {
+  it("refuses a mixed GXT that would render untranslated visible text on one of the mod's Arabic units", () => {
     const source = makeGxt(0x00009b22);
     const sourceBytes = new Uint8Array(source);
-    // TDAT contains `ab\0`: both visible units fall inside 96..239.
-    sourceBytes.set([0x61, 0x00, 0x62, 0x00, 0x00, 0x00], 48);
+    // TDAT contains `{}\0` — unit 123 ('{') and unit 125 ('}') both sit on
+    // this mod's Arabic glyph units (they draw آ, not literal braces here).
+    sourceBytes.set([0x7b, 0x00, 0x7d, 0x00, 0x00, 0x00], 48);
     const imported = extractGtaIvEntries(source);
-    expect(() => buildGtaIvAmericanOutput(source, imported.entries, {})).toThrow(
-      "تستخدم محارف إنجليزية مرئية في نطاق وحدات العربية 96–239",
+    expect(GTAIV_RU_CUSTOM_UNITS.has(0x7b)).toBe(true);
+    expect(() => buildGtaIvRuOutput(source, imported.entries, {})).toThrow(
+      "تستخدم محارف مرئية تقع على إحدى خانات الخطّ العربي",
     );
   });
 

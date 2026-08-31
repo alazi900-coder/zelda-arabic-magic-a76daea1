@@ -3,11 +3,13 @@
  *
  * Scope: inspect and reconcile text identities, then perform a verified binary
  * GXT rebuild. It never reads or emits font resources. Arabic text is shaped
- * locally then converted to the consecutive input units 96..239 required by
- * the matching Arabic-over-original-English font resource.
+ * locally then converted to the specific, measured glyph units the Russian-
+ * slot Arabic mod's own font uses — see `gtaiv-ru-charmap.ts` for how that
+ * table was built and verified.
  */
 
 import { processArabicText, removeArabicPresentationForms, reverseBidi } from "@/lib/arabic-processing";
+import { GTAIV_RU_CODEPOINT_TO_UNIT, GTAIV_RU_UNIT_TO_CODEPOINT } from "./gtaiv-ru-charmap";
 
 export interface GtaIvGxtTableSummary {
   name: string;
@@ -149,39 +151,15 @@ const ascii = new TextDecoder("ascii");
 const hexCrc = /^0x([0-9a-f]{8})$/i;
 
 /**
- * The Arabic-over-original-English font resource assigns input units 96..239
- * to the 144 Arabic presentation-form glyph images. These units overlap
- * visible English/Latin input, so a built GXT must not retain visible source
- * text in that interval. GXT writes input units, never WTD glyph-cell values.
+ * The Russian-slot mod's font draws Arabic across 124 specific, non-
+ * contiguous glyph units (measured from its own `fonts_r.dat`/`fonts_r.wtd`,
+ * not assumed) — see `gtaiv-ru-charmap.ts`. Ordinary ASCII stays ASCII; only
+ * these 124 units carry Arabic art, so a built GXT must not retain visible
+ * source text on one of them. GXT writes these input units, never WTD
+ * glyph-cell coordinates.
  */
-const gtaIvArabicPresentationFormStart = 0xfe70;
-const gtaIvArabicPresentationFormEnd = 0xfeff;
-const gtaIvArabicPresentationFormCount = gtaIvArabicPresentationFormEnd - gtaIvArabicPresentationFormStart + 1;
-const gtaIvArabicInputUnitStart = 96;
-const gtaIvArabicInputUnitEnd = gtaIvArabicInputUnitStart + gtaIvArabicPresentationFormCount - 1;
-
-/**
- * Input-unit sequence consumed by the new original-English fonts.dat resource,
- * in presentation-form order U+FE70..U+FEFF. This deliberate sequence contains
- * 126 as data; it is not an ASCII tilde inside a binary GXT entry.
- */
-export const gtaIvArabicPresentationFormInputUnits = Array.from(
-  { length: gtaIvArabicPresentationFormCount },
-  (_, index) => gtaIvArabicInputUnitStart + index,
-) as readonly number[];
-
-if (gtaIvArabicPresentationFormInputUnits.length !== gtaIvArabicPresentationFormCount
-  || gtaIvArabicPresentationFormInputUnits.at(-1) !== gtaIvArabicInputUnitEnd) {
-  throw new Error("خريطة وحدات الأشكال العربية في GTA IV غير مكتملة.");
-}
-
-const gtaIvPresentationFormByUnit = new Map<number, number>(
-  gtaIvArabicPresentationFormInputUnits.map((unit, index) => [unit, gtaIvArabicPresentationFormStart + index]),
-);
-
 export function gtaIvArabicInputUnitForPresentationForm(code: number): number | undefined {
-  if (code < gtaIvArabicPresentationFormStart || code > gtaIvArabicPresentationFormEnd) return undefined;
-  return gtaIvArabicInputUnitStart + code - gtaIvArabicPresentationFormStart;
+  return GTAIV_RU_CODEPOINT_TO_UNIT.get(code);
 }
 
 const gtaIvArabicPunctuationToAscii: Record<string, string> = {
@@ -219,12 +197,12 @@ export interface GtaIvArabicEncoding {
   textUnits: Uint16Array;
 }
 
-function isGtaIvEnglishV3CharacterSupported(char: string, sourceExtendedUnits?: Map<number, number>): boolean {
+function isGtaIvRuCharacterSupported(char: string, sourceExtendedUnits?: Map<number, number>): boolean {
   const code = char.codePointAt(0) ?? 0;
-  if (code >= gtaIvArabicPresentationFormStart && code <= gtaIvArabicPresentationFormEnd) return true;
-  // The source american.gxt can contain verified legacy Latin-1 glyph units
-  // such as © and NBSP. They are safe only when the same unit already occurs
-  // in this exact source row; a new extended glyph still has no audited slot.
+  if (GTAIV_RU_CODEPOINT_TO_UNIT.has(code)) return true;
+  // The source GXT row can contain verified legacy Latin-1 glyph units such as
+  // © and NBSP. They are safe only when the same unit already occurs in this
+  // exact source row; a new extended glyph still has no audited slot.
   if (code > 0x7f && code <= 0xff && (sourceExtendedUnits?.get(code) ?? 0) > 0) return true;
   return code > 0 && code <= 0x7f;
 }
@@ -241,8 +219,9 @@ function gtaIvSourceExtendedUnitBudget(sourceText: string): Map<number, number> 
 
 /**
  * Applies the exact preparation used by the GTA IV builder, then reports every
- * remaining character that cannot be represented by the audited English v3
- * font. It is safe to call while editing: it never validates or mutates text.
+ * remaining character that cannot be represented by the Russian-slot mod's
+ * own font. It is safe to call while editing: it never validates or mutates
+ * text.
  */
 export function analyzeGtaIvUnsupportedCharacters(translation: string, sourceText = ""): GtaIvUnsupportedCharacterAnalysis {
   const pieces = translation.split(/(~[^~]+~)/g);
@@ -255,7 +234,7 @@ export function analyzeGtaIvUnsupportedCharacters(translation: string, sourceTex
   for (const char of processedText) {
     const codePoint = char.codePointAt(0) ?? 0;
     const sourceCount = sourceExtendedUnits.get(codePoint) ?? 0;
-    if (isGtaIvEnglishV3CharacterSupported(char, sourceExtendedUnits)) {
+    if (isGtaIvRuCharacterSupported(char, sourceExtendedUnits)) {
       if (codePoint > 0x7f && codePoint <= 0xff && sourceCount > 0) {
         sourceExtendedUnits.set(codePoint, sourceCount - 1);
       }
@@ -327,16 +306,15 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
   const { processedText, unsupported } = analyzeGtaIvUnsupportedCharacters(normalizedTranslation, sourceText);
   if (unsupported.length > 0) {
     const first = unsupported[0];
-    fail(`المحرف «${first.character}» (${first.unicode}) غير مدعوم في خط GTA IV المرجعي.`);
+    fail(`المحرف «${first.character}» (${first.unicode}) غير مدعوم في خطّ مود GTA IV الروسي.`);
   }
   const units: number[] = [];
 
   for (const char of processedText) {
     const code = char.charCodeAt(0);
-    if (code >= gtaIvArabicPresentationFormStart && code <= gtaIvArabicPresentationFormEnd) {
-      const unit = gtaIvArabicInputUnitForPresentationForm(code);
-      if (unit === undefined) fail(`لا توجد وحدة إدخال للشكل العربي U+${code.toString(16).toUpperCase()}.`);
-      units.push(unit);
+    const ruUnit = GTAIV_RU_CODEPOINT_TO_UNIT.get(code);
+    if (ruUnit !== undefined) {
+      units.push(ruUnit);
       continue;
     }
     if (code > 0 && code <= 0x7f) {
@@ -350,7 +328,7 @@ export function encodeGtaIvArabicText(sourceText: string, translation: string): 
       units.push(code);
       continue;
     }
-    fail(`المحرف «${char}» غير مدعوم في خط GTA IV المرجعي.`);
+    fail(`المحرف «${char}» غير مدعوم في خطّ مود GTA IV الروسي.`);
   }
   return { processedText, textUnits: new Uint16Array(units) };
 }
@@ -377,25 +355,26 @@ function processGtaIvArabicPiece(value: string): string {
 }
 
 /**
- * Returns the literal UTF-16 representation stored in a GXT entry.
- * This is suitable for the English source file; it does not decode the
- * custom Arabic glyph identifiers used by the separate Russian-slot mod.
+ * Returns the literal UTF-16 representation stored in a GXT entry, i.e. each
+ * unit read back as its own numeric value. This is what a plain English GXT
+ * row is; it does not decode the Russian-slot mod's custom Arabic glyph units.
  */
 export function gtaIvRawUnitsToString(units: Uint16Array): string {
   return textFromUnits(units);
 }
 
 /**
- * Decodes units from an already built Arabic GXT back to logical Arabic. The
- * caller must opt in because the verified Arabic input range 97..240 overlaps
- * ordinary English ASCII and therefore cannot be auto-detected safely.
+ * Decodes units from the Russian-slot Arabic mod's GXT back to logical
+ * Arabic. The caller must opt in because its 124 custom units are specific,
+ * measured glyph-atlas positions (see `gtaiv-ru-charmap.ts`) that this
+ * function has no way to tell apart from ordinary ASCII without being told.
  */
 export function decodeGtaIvArabicFontUnits(units: Uint16Array, encodedArabic = false): string {
   if (!encodedArabic) return textFromUnits(units);
 
   let presentationText = "";
   for (const unit of units) {
-    presentationText += String.fromCharCode(gtaIvPresentationFormByUnit.get(unit) ?? unit);
+    presentationText += String.fromCharCode(GTAIV_RU_UNIT_TO_CODEPOINT.get(unit) ?? unit);
   }
   return removeArabicPresentationForms(reverseBidi(presentationText));
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasTechnicalTags,
   isGtaIvRuntimeOnlyText,
+  isGtaIvScriptLabelText,
   isTechnicalText,
   isTranslationExcludedText,
 } from "@/components/editor/types";
@@ -38,6 +39,32 @@ describe("GTA IV technical-only rows", () => {
   it("does not apply the GTA IV standalone-token rule to other games", () => {
     expect(isGtaIvRuntimeOnlyText("~MOUSE_WHEEL~", "other-game/MAIN")).toBe(false);
     expect(isTranslationExcludedText("~MOUSE_WHEEL~", "other-game/MAIN")).toBe(false);
+  });
+
+  it("recognizes internal mission/script event labels as excluded, not real dialogue", () => {
+    for (const label of [
+      "FCJ_ACT_DARTS_LEAVE_LOST",
+      "FIN1A_A_KC",
+      "FIN1E_OA",
+      "FM2_PA",
+      "GCA_ACT_CALL_DATE_YES",
+      "GCK2_STUPID_FI",
+    ]) {
+      expect(isGtaIvScriptLabelText(label, gtaivFile)).toBe(true);
+      expect(isTechnicalText(label, gtaivFile)).toBe(true);
+      expect(isTranslationExcludedText(label, gtaivFile)).toBe(true);
+    }
+  });
+
+  it("does not treat a real sentence, or a single ALL-CAPS word, as a script label", () => {
+    expect(isGtaIvScriptLabelText("BRAKE", gtaivFile)).toBe(false);
+    expect(isGtaIvScriptLabelText("Press ~PAD_X~ to focus on the bike", gtaivFile)).toBe(false);
+    expect(isGtaIvScriptLabelText("Niko is late for the meeting", gtaivFile)).toBe(false);
+  });
+
+  it("does not apply the GTA IV script-label rule to other games", () => {
+    expect(isGtaIvScriptLabelText("FCJ_ACT_DARTS_LEAVE_LOST", "other-game/MAIN")).toBe(false);
+    expect(isTranslationExcludedText("FCJ_ACT_DARTS_LEAVE_LOST", "other-game/MAIN")).toBe(false);
   });
 
   it("includes GTA IV runtime tokens in the editor highlight pattern", () => {

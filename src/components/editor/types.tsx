@@ -586,9 +586,18 @@ export function isGtaIvRuntimeOnlyText(text: string, msbtFile?: string): boolean
   return !!msbtFile?.startsWith("gtaiv/") && GTAIV_RUNTIME_ONLY_LINE_RE.test(text.trim());
 }
 
+/** Mission/script event labels (e.g. "FCJ_ACT_DARTS_LEAVE_LOST", "GCA_ACT_CALL_DATE_YES")
+ * stored in the same GXT tables as real dialogue for engine reasons — internal
+ * identifiers the game never shows a player, never real sentences. */
+const GTAIV_SCRIPT_LABEL_RE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
+
+export function isGtaIvScriptLabelText(text: string, msbtFile?: string): boolean {
+  return !!msbtFile?.startsWith("gtaiv/") && GTAIV_SCRIPT_LABEL_RE.test(text.trim());
+}
+
 /** Rows that must remain in the source but must never be sent to translation exchange or AI. */
 export function isTranslationExcludedText(text: string, msbtFile?: string): boolean {
-  return isGtaIvRuntimeOnlyText(text, msbtFile);
+  return isGtaIvRuntimeOnlyText(text, msbtFile) || isGtaIvScriptLabelText(text, msbtFile);
 }
 
 // Check if text contains technical tag markers (PUA, control chars, Reshef #0–#5,
@@ -739,6 +748,8 @@ export function isTechnicalText(text: string, msbtFile?: string): boolean {
   // GTA IV control rows such as ~MOUSE_WHEEL~ have no human-readable text.
   // Keep them in the GXT source, but never send them to an AI translator.
   if (isGtaIvRuntimeOnlyText(t, msbtFile)) return true;
+  // GTA IV mission/script event labels (e.g. "FCJ_ACT_DARTS_LEAVE_LOST") — internal identifiers, not dialogue.
+  if (isGtaIvScriptLabelText(t, msbtFile)) return true;
   // Pure hex/numeric/path-like identifiers (e.g. "a1b2c3", "path/to/file")
   if (/^[0-9A-Fa-f\-\._:\/]+$/.test(t)) return true;
   // camelCase or snake_case identifiers (e.g. "getItemName", "item_name")

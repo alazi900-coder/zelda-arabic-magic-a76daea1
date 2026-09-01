@@ -32,7 +32,7 @@ import { useEditorCleanup } from "@/hooks/useEditorCleanup";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
 import { deepDiagPredicates, matchesDeepDiagFilter } from "@/lib/deep-diagnostic-predicates";
 import { useAutoPilot } from "@/hooks/useAutoPilot";
-import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasArabicChars, unReverseBidi, isTechnicalText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
+import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasArabicChars, unReverseBidi, isTechnicalText, isTranslationExcludedText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
 import {
   scanTranslationsForRestore,
   buildRestoreUpdates,
@@ -1073,7 +1073,11 @@ export function useEditorState() {
     return state.entries.filter(e => {
       const key = `${e.msbtFile}:${e.index}`;
       const translation = state.translations[key] || '';
-      const isTranslated = translation.trim() !== '';
+      // Rows excluded from translation entirely (e.g. GTA IV script-event
+      // labels) never need a human translation, so they never count as
+      // "untranslated" — matching how they're already skipped everywhere
+      // else (AI batching, export).
+      const isTranslated = translation.trim() !== '' || isTranslationExcludedText(e.original, e.msbtFile);
       const isTechnical = isTechnicalText(e.original, e.msbtFile);
       const matchSearch = !search ||
         e.original.toLowerCase().includes(search.toLowerCase()) ||

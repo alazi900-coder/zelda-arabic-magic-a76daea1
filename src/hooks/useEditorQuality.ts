@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { hasArabicPresentationForms } from "@/lib/arabic-processing";
-import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasTechnicalTags } from "@/components/editor/types";
+import { ExtractedEntry, EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasTechnicalTags, isTranslationExcludedText } from "@/components/editor/types";
 import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -71,13 +71,19 @@ const CHUNK_SIZE = 5000;
 
 export function computeEntryResult(entry: ExtractedEntry, translation: string, cat: string): EntryCacheResult {
   const trimmed = translation.trim();
-  const isTranslated = trimmed !== '';
+  const hasContent = trimmed !== '';
+  // Rows excluded from translation entirely (e.g. GTA IV script-event
+  // labels) never need a human translation, so they count as done here too
+  // — otherwise overall progress could never reach 100%. Quality checks
+  // below still gate on hasContent: running them against a synthetic
+  // "translated" empty string would falsely flag these as too-short.
+  const isTranslated = hasContent || isTranslationExcludedText(entry.original, entry.msbtFile);
   let qTooLong = false, qNearLimit = false, qMissingTags = false, qPlaceholderMismatch = false;
   let damagedTags = false;
   let tagOrderMismatch = false;
   let niTooShort = false, niTooLong = false, niStuck = false, niMixed = false;
 
-  if (isTranslated) {
+  if (hasContent) {
     if (entry.maxBytes > 0) {
       const bytes = encoder.encode(trimmed).length;
       if (bytes > entry.maxBytes) qTooLong = true;

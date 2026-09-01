@@ -43,6 +43,18 @@ const games = [
     arrowClass: "text-[hsl(25,85%,74%)]",
   },
   {
+    title: "Fire Emblem 12",
+    subtitle: "ترجمة روم Fire Emblem: Shin Monshou no Nazo (NDS)",
+    desc: "يفتح ملف الروم (.nds) محلياً، يستخرج كل نصٍّ قابلٍ للترجمة، ويرسم الحروف العربية داخل خانات خطّ اللعبة غير المستخدمة. البناء يكتب نسخةً معرَّبة من الروم نفسه، بلا قيدٍ على طول الترجمة.",
+    link: "/fire-emblem-12",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='f' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%23131b2e'/%3E%3Cstop offset='.55' stop-color='%23213257'/%3E%3Cstop offset='1' stop-color='%236b2a3a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23f)'/%3E%3Cpath d='M800 120l340 620H460z' fill='%23f2d7b1' opacity='.14'/%3E%3Cpath d='M800 220l40 70-40 34-40-34z' fill='%23cbd8ff' opacity='.65'/%3E%3C/svg%3E",
+    formats: [".NDS", "NitroFS", "DS"],
+    cardClass: "border-[hsl(225,45%,45%)]/35 hover:border-[hsl(340,50%,60%)]/70",
+    formatClass: "bg-[hsl(225,45%,45%)]/20 text-[hsl(220,80%,80%)] border-[hsl(225,45%,45%)]/35",
+    subtitleClass: "text-[hsl(220,80%,80%)]",
+    arrowClass: "text-[hsl(220,80%,80%)]",
+  },
+  {
     title: "Kingdom Hearts: Birth by Sleep",
     subtitle: "نصوص كينغدوم هارتس BBS",
     desc: "يفتح كل ملفات CTD دفعة واحدة أو من أرشيف ZIP، ويعرض نصوص كل ملف باسمه، ثم يبني ZIP واحداً بالملفات المعدّلة مع حفظ وسوم التحكم التقنية.",

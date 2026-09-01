@@ -129,6 +129,7 @@ interface EditorActionsToolbarProps {
   setFontTestWord: (v: string) => void;
   setShowArabicProcessConfirm: (v: boolean) => void;
   isGtaIv?: boolean;
+  isFe12?: boolean;
 }
 
 const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
@@ -143,6 +144,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
   setFontTestWord,
   setShowArabicProcessConfirm,
   isGtaIv = false,
+  isFe12 = false,
 }) => {
   const handleExportProcessedArabic = React.useCallback(async () => {
     const st = editor.state;
@@ -341,7 +343,7 @@ const EditorActionsToolbar: React.FC<EditorActionsToolbarProps> = ({
                   <Button variant="outline" size="sm" className="font-body text-xs"><MoreVertical className="w-3 h-3" /> أدوات</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-card border-border z-[100] w-[min(calc(100vw-1.5rem),360px)] max-w-[360px] max-h-[70vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-                  {!isGtaIv && <>
+                  {!isGtaIv && !isFe12 && <>
                     {/* ─── معالجة عربية ─── */}
                     <DropdownMenuLabel className="text-xs text-primary/80">🔤 معالجة عربية</DropdownMenuLabel>
                     <DropdownMenuItem onClick={() => setShowArabicProcessConfirm(true)} disabled={editor.applyingArabic}><Sparkles className="w-4 h-4" /> تطبيق المعالجة العربية ✨</DropdownMenuItem>

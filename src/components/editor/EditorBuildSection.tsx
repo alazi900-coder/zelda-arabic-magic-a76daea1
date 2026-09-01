@@ -20,6 +20,7 @@ import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
 import { buildLumenTaleBundle, LUMENTALE_BUFFER_KEY, LUMENTALE_META_KEY, type LumenTaleBundleMeta } from "@/lib/lumentale/lumentale-editor-bridge";
 import { createLumenTalePreBuildReport, type LumenTalePreBuildReport } from "@/lib/lumentale/lumentale-prebuild-report";
 import { buildGtaIvRuOutput, GTAIV_BUFFER_KEY, GTAIV_CONTAINER_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
+import { buildFireEmblem12Rom, FE12_BUFFER_KEY, type Fe12UnsupportedCharacter } from "@/lib/fireemblem12/fe12-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -51,6 +52,7 @@ interface EditorBuildSectionProps {
   isKingdomHearts?: boolean;
   isLumenTale?: boolean;
   isGtaIv?: boolean;
+  isFe12?: boolean;
   khbbsUnsupportedCount?: number;
   khbbsUnsupportedCharacters?: KHBBSUnsupportedCharacter[];
   khbbsUnsupportedFilterActive?: boolean;
@@ -90,6 +92,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isKingdomHearts = false,
   isLumenTale = false,
   isGtaIv = false,
+  isFe12 = false,
   khbbsUnsupportedCount = 0,
   khbbsUnsupportedCharacters = [],
   khbbsUnsupportedFilterActive = false,
@@ -115,6 +118,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [khbbsIsoBuilding, setKHBbsIsoBuilding] = useState(false);
   const [lumenTaleBuilding, setLumenTaleBuilding] = useState(false);
   const [gtaIvBuilding, setGtaIvBuilding] = useState(false);
+  const [fe12Building, setFe12Building] = useState(false);
+  const [fe12UnsupportedCharacters, setFe12UnsupportedCharacters] = useState<Fe12UnsupportedCharacter[]>([]);
   const khbbsIsoInputRef = useRef<HTMLInputElement>(null);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
@@ -556,6 +561,37 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
+  const handleFe12Build = async () => {
+    setFe12Building(true);
+    try {
+      const romBuffer = await idbGet<ArrayBuffer>(FE12_BUFFER_KEY);
+      if (!romBuffer) throw new Error("لم يُعثر على ملف الروم. أعد فتحه من صفحة Fire Emblem 12 أولاً.");
+      if (!editor.state) throw new Error("لا توجد جلسة ترجمة مفتوحة لبناء الروم.");
+      const result = buildFireEmblem12Rom(romBuffer, editor.state.entries, editor.state.translations || {});
+      setFe12UnsupportedCharacters(result.unsupportedCharacters);
+      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      const unsupportedNote = result.unsupportedCharacters.length > 0
+        ? ` — ${result.unsupportedCharacters.length} حرفاً غير مدعوم في الخطّ حُذف من الترجمة (راجع القائمة).`
+        : "";
+      toast({
+        title: "تم بناء روم Fire Emblem 12",
+        description: `${result.translatedLines} سطر مترجم. الحروف العربية مرسومةٌ داخل الخطّ وكل ملفٍّ مُترجَم أُعيد ضغطه.${unsupportedNote}`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء روم Fire Emblem 12", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setFe12Building(false);
+    }
+  };
+
   return (
   <Collapsible open={showBuildSection} onOpenChange={setShowBuildSection}>
     <div className="flex items-center justify-between mb-3">
@@ -864,7 +900,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && !isFe12 && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -894,13 +930,13 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12}
           className="flex-1 min-w-[200px] font-display font-bold"
-          title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
+          title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isFe12 ? "Fire Emblem 12 يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
           {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
         </Button>
-        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv || isPokemonXp} className="font-body gap-1 shrink-0" title={isPokemonXp ? "Pokémon XP لا يطبق المعالجة العامة على حالة المحرر." : isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
+        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv || isFe12 || isPokemonXp} className="font-body gap-1 shrink-0" title={isPokemonXp ? "Pokémon XP لا يطبق المعالجة العامة على حالة المحرر." : isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : isFe12 ? "Fire Emblem 12 لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
           <RotateCcw className="w-4 h-4" />
           <span className="hidden sm:inline">تراجع</span>
         </Button>
@@ -951,6 +987,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <Button size="lg" onClick={handleGtaIvBuild} disabled={gtaIvBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يشكّل العربية عند البناء ثم يتحقق من بنية GXT والرموز التقنية قبل التنزيل">
             {gtaIvBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء russian.gxt معرّب وتنزيله
           </Button>
+        ) : isFe12 ? (
+          <Button size="lg" onClick={handleFe12Build} disabled={fe12Building} className="flex-1 min-w-[200px] font-display font-bold" title="يرسم الأبجدية العربية داخل الخط ويشكّل النصوص عند البناء ثم ينزّل الروم">
+            {fe12Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم معرّب وتنزيله
+          </Button>
         ) : isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">
             {m3Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM معرّب وتنزيله
@@ -999,6 +1039,19 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           </Button>
         )}
       </div>
+
+      {isFe12 && fe12UnsupportedCharacters.length > 0 && (
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/8 p-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-sm font-bold text-destructive">⚠️ {fe12UnsupportedCharacters.length} حرفاً غير مدعومٍ في خطّ اللعبة</p>
+            <p className="mt-0.5 font-body text-xs text-muted-foreground">حُذفت هذه الحروف من الترجمة المبنيَّة بدل رفض البناء بالكامل — راجع الأسطر المتأثّرة وبدّل الصياغة إن لزم.</p>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              {fe12UnsupportedCharacters.map((item) => `${item.character || "؟"}(×${item.count})`).join(" ")}
+            </p>
+          </div>
+        </div>
+      )}
     </CollapsibleContent>
   </Collapsible>
   );

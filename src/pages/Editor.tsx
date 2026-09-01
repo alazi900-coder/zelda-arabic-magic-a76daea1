@@ -151,6 +151,7 @@ const Editor = () => {
   const isKingdomHeartsEntries = KHBBS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isLumenTaleEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
   const isGtaIvEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("gtaiv/") ?? false;
+  const isFe12Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("fe12/") ?? false;
 
   // LumenTale can contain an intentionally empty table. It has no editor rows,
   // so it is represented only by the immutable bundle metadata and must still
@@ -719,6 +720,7 @@ const Editor = () => {
             setFontTestWord={setFontTestWord}
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
             isGtaIv={isGtaIvEntries}
+            isFe12={isFe12Entries}
           />
 
           <EditorBuildSection
@@ -734,6 +736,7 @@ const Editor = () => {
             isKingdomHearts={isKingdomHeartsEntries}
             isLumenTale={isLumenTaleEntries}
             isGtaIv={isGtaIvEntries}
+            isFe12={isFe12Entries}
             khbbsUnsupportedCount={editor.khbbsUnsupportedCount}
             khbbsUnsupportedCharacters={editor.khbbsUnsupportedCharacters}
             khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}

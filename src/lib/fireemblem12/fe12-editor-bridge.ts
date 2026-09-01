@@ -9,6 +9,9 @@
  * a real LZ11 encoder, and writes each changed file into a ROM copy via
  * `nds-rom-builder.ts` (in place if it still fits, otherwise into the
  * cartridge's unused padding — never past the ROM's own end).
+ *
+ * A handful of records (gender selection, `NO_FONT_DATA_KEY_SUFFIXES`) are
+ * excluded rather than translated — see that constant's comment for why.
  */
 import type { ExtractedEntry } from "@/components/editor/types";
 import { reshapeArabic, reverseBidi } from "@/lib/arabic-processing";
@@ -67,6 +70,28 @@ function splitFe12Wrapper(text: string): Fe12Wrapper | null {
   return { prefix, middle, suffix };
 }
 
+// Records rendered by the game's short single-byte-per-character list
+// widgets (gender selection, at minimum — other short list screens may
+// share the same rendering path). Verified this session, at length, with a
+// real emulator and a real hardware-level debugger (GDB attached to the
+// running ARM9 core): these widgets do not read glyph shapes from any ROM
+// data file at render time at all — editing fonts/talk produces kanji-like
+// corruption (2-byte codes read one raw byte at a time), and editing
+// fonts/alpha (the dedicated single-byte ASCII font, confirmed structurally
+// identical to fonts/talk and genuinely used for these widgets) has zero
+// effect on what's displayed, even for a byte overwriting only a glyph
+// that's never used anywhere in the game's own text — meaning the pixel
+// shapes are baked into the ARM9 executable itself, not any editable file.
+// Excluded rather than translated: translating them would silently replace
+// working English with "??" placeholders, which is worse than leaving them
+// alone.
+const NO_FONT_DATA_KEY_SUFFIXES = ["MPID_BOY", "MPID_GIRL", "_GENDER_M", "_GENDER_F"];
+
+function hasNoEditableFontData(key: string | undefined): boolean {
+  if (!key) return false;
+  return NO_FONT_DATA_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix));
+}
+
 function hasUnexpectedControlByte(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i);
@@ -121,7 +146,7 @@ export function extractFireEmblem12Entries(romBuffer: ArrayBuffer): Fe12EditorIm
     for (const record of parsed.records) {
       if (claimedOffsets.has(record.textOffset)) continue; // duplicate string — translating the first covers this one too
       const wrapper = splitFe12Wrapper(record.text);
-      if (!wrapper) {
+      if (!wrapper || hasNoEditableFontData(record.key)) {
         excludedRecordCount++;
         continue;
       }

@@ -41,6 +41,7 @@ function buildFixtureRom() {
     { key: "MBAD_MULTI", text: `${OPEN}a${OPEN}b${CLOSE}` }, // two opens — excluded
     { key: "MBAD_CTRL", text: "x\x05y" }, // stray control byte — excluded
     { key: "MJID_MERCENARY_DUP", text: "Mercenary" }, // same original text, different key — will share an offset once parsed
+    { key: "MPID_BOY", text: "Boy" }, // gender-selection widget — excluded, no editable font data
   ]);
   const systemCompressed = compressLz11(systemFileBytes);
 
@@ -76,6 +77,13 @@ describe("fe12-editor-bridge", () => {
     const wrapped = imported.entries.find((e) => e.label.includes("MPID_ANNA"))!;
     expect(wrapped.original).toBe("Welcome!\nToday, another hero will be born.");
     expect(wrapped.msbtFile).toBe("fe12/m/System");
+  });
+
+  it("excludes gender-selection-widget records instead of translating them", () => {
+    const { rom } = buildFixtureRom();
+    const imported = extractFireEmblem12Entries(rom);
+
+    expect(imported.entries.some((e) => e.label.includes("MPID_BOY"))).toBe(false);
   });
 
   it("caps class-name (MJID_) records at their original length, and leaves other records uncapped", () => {

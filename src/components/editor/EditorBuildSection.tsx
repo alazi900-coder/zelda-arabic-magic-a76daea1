@@ -19,7 +19,7 @@ import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-works
 import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
 import { buildLumenTaleBundle, LUMENTALE_BUFFER_KEY, LUMENTALE_META_KEY, type LumenTaleBundleMeta } from "@/lib/lumentale/lumentale-editor-bridge";
 import { createLumenTalePreBuildReport, type LumenTalePreBuildReport } from "@/lib/lumentale/lumentale-prebuild-report";
-import { buildGtaIvRuOutput, GTAIV_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
+import { buildGtaIvRuOutput, GTAIV_BUFFER_KEY, GTAIV_CONTAINER_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -530,10 +530,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const handleGtaIvBuild = async () => {
     setGtaIvBuilding(true);
     try {
-      const source = await idbGet<ArrayBuffer>(GTAIV_BUFFER_KEY);
-      if (!source) throw new Error("لم يُعثر على russian.gxt المصدر. أعد فتحه من قسم GTA IV أولاً.");
+      const englishSource = await idbGet<ArrayBuffer>(GTAIV_BUFFER_KEY);
+      const russianContainer = await idbGet<ArrayBuffer>(GTAIV_CONTAINER_BUFFER_KEY);
+      if (!englishSource || !russianContainer) throw new Error("لم يُعثر على ملفّي american.gxt وrussian.gxt. أعد فتحهما من قسم GTA IV أولاً.");
       if (!editor.state) throw new Error("لا توجد جلسة ترجمة مفتوحة لبناء russian.gxt.");
-      const result = buildGtaIvRuOutput(source, editor.state.entries, editor.state.translations || {});
+      const result = buildGtaIvRuOutput(englishSource, russianContainer, editor.state.entries, editor.state.translations || {});
       const blob = new Blob([result.buffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -544,7 +545,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       const { toast } = await import("@/hooks/use-toast");
       toast({
         title: "تم بناء russian.gxt",
-        description: `${result.translatedLines} سطر مترجم. تم التحقق من الجداول وCRC والرموز التقنية قبل التنزيل.`,
+        description: `${result.translatedLines} سطر مترجم. تم التحقق من الجداول وCRC والرموز التقنية قبل التنزيل.`
+          + (result.skippedNoContainerMatch > 0 ? ` — ${result.skippedNoContainerMatch} سطراً مترجَماً لا مقابل له في russian.gxt فتُرك.` : ""),
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");

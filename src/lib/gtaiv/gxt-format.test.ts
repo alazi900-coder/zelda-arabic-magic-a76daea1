@@ -25,14 +25,14 @@ function ruUnitsFor(logicalArabic: string): number[] {
   return Array.from(encodeGtaIvArabicText("", logicalArabic).textUnits);
 }
 
-function makeGxt(crc = 0x12345678): ArrayBuffer {
+function makeGxt(crc = 0x12345678, tableName = "MAIN"): ArrayBuffer {
   const bytes = new Uint8Array(72);
   const view = new DataView(bytes.buffer);
   view.setUint16(0, 4, true);
   view.setUint16(2, 16, true);
   bytes.set([0x54, 0x41, 0x42, 0x4c], 4); // TABL
   view.setUint32(8, 12, true);
-  bytes.set([0x4d, 0x41, 0x49, 0x4e], 12); // MAIN
+  bytes.set(new TextEncoder().encode(tableName.slice(0, 8)), 12); // table name, zero-padded
   view.setUint32(20, 24, true);
   bytes.set([0x54, 0x4b, 0x45, 0x59], 24); // TKEY
   view.setUint32(28, 8, true);
@@ -310,34 +310,71 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(() => encodeGtaIvArabicText("Copyright", "حقوق ©")).toThrow("U+00A9");
   });
 
-  it("builds russian.gxt from the shared editor identity and re-parses the encoded row", () => {
-    const source = makeGxt(0x00009b22);
-    const imported = extractGtaIvEntries(source);
+  it("builds russian.gxt from an English source into a Russian container, matching table names case-insensitively", () => {
+    const englishSource = makeGxt(0x00009b22, "MAIN");
+    // The mod's own container spells its table name lowercase — a real,
+    // measured difference between american.gxt and russian.gxt.
+    const russianContainer = makeGxt(0x00009b22, "main");
+    const imported = extractGtaIvEntries(englishSource);
     const row = imported.entries[0];
-    const result = buildGtaIvRuOutput(source, imported.entries, {
+    expect(row.original).toBe("Hi");
+    const result = buildGtaIvRuOutput(englishSource, russianContainer, imported.entries, {
       [`${row.msbtFile}:${row.index}`]: "تؤبسك",
     });
-    expect(result).toMatchObject({ filename: "russian.gxt", translatedLines: 1 });
+    expect(result).toMatchObject({ filename: "russian.gxt", translatedLines: 1, skippedNoContainerMatch: 0 });
     const output = parseGtaIvGxt(result.buffer);
     const expectedUnits = ruUnitsFor("تؤبسك");
     expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual(expectedUnits);
-    // extractGtaIvEntries decodes Russian-mod rows by default, so re-importing
-    // the just-built file must read back the same logical Arabic it was given.
-    expect(extractGtaIvEntries(result.buffer).entries[0].original).toBe("تؤبسك");
     expect(decodeGtaIvArabicFontUnits(output.tables[0].entries[0].textUnits, true)).toBe("تؤبسك");
   });
 
-  it("refuses a mixed GXT that would render untranslated visible text on one of the mod's Arabic units", () => {
-    const source = makeGxt(0x00009b22);
-    const sourceBytes = new Uint8Array(source);
-    // TDAT contains `{}\0` — unit 123 ('{') and unit 125 ('}') both sit on
-    // this mod's Arabic glyph units (they draw آ, not literal braces here).
-    sourceBytes.set([0x7b, 0x00, 0x7d, 0x00, 0x00, 0x00], 48);
-    const imported = extractGtaIvEntries(source);
+  it("leaves an untranslated line exactly as the Russian container already had it", () => {
+    const englishSource = makeGxt(0x00009b22);
+    const russianContainer = makeGxt(0x00009b22);
+    const imported = extractGtaIvEntries(englishSource);
+    const result = buildGtaIvRuOutput(englishSource, russianContainer, imported.entries, {});
+    expect(result.translatedLines).toBe(0);
+    const output = parseGtaIvGxt(result.buffer);
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([0x48, 0x69]); // unchanged "Hi"
+  });
+
+  it("skips a translated line with no matching identity in the Russian container instead of failing the build", () => {
+    const englishSource = makeGxt(0x00009b22);
+    const russianContainer = makeGxt(0xdeadbeef); // different CRC — no match
+    const imported = extractGtaIvEntries(englishSource);
+    const row = imported.entries[0];
+    const result = buildGtaIvRuOutput(englishSource, russianContainer, imported.entries, {
+      [`${row.msbtFile}:${row.index}`]: "تؤبسك",
+    });
+    expect(result).toMatchObject({ translatedLines: 0, skippedNoContainerMatch: 1 });
+  });
+
+  it("leaves the Russian container's own untranslated content untouched, even if it already collides with an Arabic unit", () => {
+    // The community mod's container is only partially translated; some
+    // untouched rows still hold raw Latin-1 text that happens to collide
+    // with a repainted Arabic unit. That is a pre-existing condition of the
+    // container, not something this build introduces — it must not block.
+    const englishSource = makeGxt(0x00009b22);
+    const russianContainer = makeGxt(0x00009b22);
+    const containerBytes = new Uint8Array(russianContainer);
+    containerBytes.set([0x7b, 0x00, 0x7d, 0x00, 0x00, 0x00], 48); // `{}` — unit 123/125
+    const imported = extractGtaIvEntries(englishSource);
     expect(GTAIV_RU_CUSTOM_UNITS.has(0x7b)).toBe(true);
-    expect(() => buildGtaIvRuOutput(source, imported.entries, {})).toThrow(
-      "تستخدم محارف مرئية تقع على إحدى خانات الخطّ العربي",
-    );
+    const result = buildGtaIvRuOutput(englishSource, russianContainer, imported.entries, {});
+    expect(result.translatedLines).toBe(0);
+    const output = parseGtaIvGxt(result.buffer);
+    expect(Array.from(output.tables[0].entries[0].textUnits)).toEqual([0x7b, 0x7d]);
+  });
+
+  it("refuses a translation whose own processed text would land a literal character on one of the mod's Arabic units", () => {
+    const englishSource = makeGxt(0x00009b22);
+    const russianContainer = makeGxt(0x00009b22);
+    const imported = extractGtaIvEntries(englishSource);
+    const row = imported.entries[0];
+    expect(GTAIV_RU_CUSTOM_UNITS.has(0x7b)).toBe(true);
+    expect(() => buildGtaIvRuOutput(englishSource, russianContainer, imported.entries, {
+      [`${row.msbtFile}:${row.index}`]: "مرحبا {",
+    })).toThrow("تستخدم محارف مرئية تقع على إحدى خانات الخطّ العربي");
   });
 
 });

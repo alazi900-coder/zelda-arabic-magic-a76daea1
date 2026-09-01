@@ -1,22 +1,27 @@
 /** GTA IV integration with the shared translation editor.
- * Design: GTA IV uses `gtaiv/<TABLE>` identities; the existing shared editor
- * remains the only editor UI. This module targets the Russian-slot Arabic
- * mod's `russian.gxt` — see `gtaiv-ru-charmap.ts` for how its font was read.
+ * Design: translate from `american.gxt` (plain English, no font quirks) and
+ * build into `russian.gxt` (the Russian-slot Arabic mod's own GXT, which
+ * alone has the font capable of drawing Arabic — see `gtaiv-ru-charmap.ts`
+ * for how it was read). Untranslated lines keep whatever the container
+ * already had; `~...~` runtime tokens and dollar amounts are always checked
+ * against the English original, never against the container's old text.
  */
 import type { ExtractedEntry } from "@/components/editor/types";
 import {
-  decodeGtaIvArabicFontUnits,
   encodeGtaIvArabicText,
   gtaIvRawUnitsToString,
   parseGtaIvGxt,
   rebuildGtaIvGxt,
+  type GtaIvParsedGxtTable,
 } from "./gxt-format";
 import { gtaIvEditorTextToRuntimeText } from "./gtaiv-line-split";
 import { GTAIV_RU_CUSTOM_UNITS } from "./gtaiv-ru-charmap";
 
 export const GTAIV_SOURCE_GAME = "gtaiv";
-export const GTAIV_BUFFER_KEY = "gtaiv:russian-gxt-buffer";
-export const GTAIV_SOURCE_NAME_KEY = "gtaiv:russian-gxt-name";
+export const GTAIV_BUFFER_KEY = "gtaiv:english-gxt-buffer";
+export const GTAIV_SOURCE_NAME_KEY = "gtaiv:english-gxt-name";
+export const GTAIV_CONTAINER_BUFFER_KEY = "gtaiv:russian-container-buffer";
+export const GTAIV_CONTAINER_NAME_KEY = "gtaiv:russian-container-name";
 
 export interface GtaIvEditorImport {
   entries: ExtractedEntry[];
@@ -27,6 +32,10 @@ export interface GtaIvRuBuild {
   buffer: ArrayBuffer;
   filename: "russian.gxt";
   translatedLines: number;
+  /** Translated lines whose identity has no matching row in the Russian
+   * container (a small, expected gap — see the 99.8% coverage check this
+   * design was based on). They cannot be built; nothing else is affected. */
+  skippedNoContainerMatch: number;
 }
 
 /**
@@ -58,6 +67,7 @@ function findVisibleGtaIvArabicUnitConflict(text: string): GtaIvVisibleUnitConfl
   return null;
 }
 
+/** Extracts entries from the plain English `american.gxt` — this is what the editor shows and translates from. */
 export function extractGtaIvEntries(buffer: ArrayBuffer): GtaIvEditorImport {
   const parsed = parseGtaIvGxt(buffer);
   const entries = parsed.tables.flatMap((table) => table.entries.map((entry) => ({
@@ -66,7 +76,7 @@ export function extractGtaIvEntries(buffer: ArrayBuffer): GtaIvEditorImport {
     msbtFile: `gtaiv/${table.name}`,
     index: entry.crc >>> 0,
     label: `${table.name} · 0x${(entry.crc >>> 0).toString(16).padStart(8, "0")}`,
-    original: decodeGtaIvArabicFontUnits(entry.textUnits, true),
+    original: gtaIvRawUnitsToString(entry.textUnits),
     // GXT size can only be measured after its Arabic glyph encoding is fixed.
     // A zero budget tells generic editor checks not to invent a byte limit.
     maxBytes: 0,
@@ -80,29 +90,41 @@ function gtaIvEntryIdentity(entry: Pick<ExtractedEntry, "msbtFile" | "index">): 
 }
 
 /**
- * Builds only the rows changed in the shared editor. The raw source is parsed
- * again so a stale editor state can never target a different russian.gxt.
+ * Builds only the rows changed in the shared editor. `englishSource` is
+ * re-parsed so a stale editor state can never target a different english
+ * file; `russianContainer` is the actual GXT being built — its table names
+ * are matched case-insensitively against the English ones (the mod's own
+ * tables are lowercase, american.gxt's are uppercase).
  */
 export function buildGtaIvRuOutput(
-  source: ArrayBuffer,
+  englishSource: ArrayBuffer,
+  russianContainer: ArrayBuffer,
   entries: readonly ExtractedEntry[],
   translations: Readonly<Record<string, string>>,
 ): GtaIvRuBuild {
-  const parsedSource = parseGtaIvGxt(source);
-  const sourceByIdentity = new Map(parsedSource.tables.flatMap((table) => table.entries.map((entry) => [
+  const parsedEnglish = parseGtaIvGxt(englishSource);
+  const englishByIdentity = new Map(parsedEnglish.tables.flatMap((table) => table.entries.map((entry) => [
     `${table.name}:${entry.crc >>> 0}`,
     { table: table.name, crc: entry.crc >>> 0, textUnits: entry.textUnits },
   ])));
+
+  const parsedContainer = parseGtaIvGxt(russianContainer);
+  const containerTablesByUpperName = new Map<string, GtaIvParsedGxtTable>();
+  for (const table of parsedContainer.tables) {
+    containerTablesByUpperName.set(table.name.toUpperCase(), table);
+  }
+
   const replacements: { table: string; crc: number; textUnits: Uint16Array }[] = [];
   const translatedPresentationText = new Map<string, string>();
+  let skippedNoContainerMatch = 0;
 
   for (const entry of entries) {
     const identity = gtaIvEntryIdentity(entry);
     if (!identity) continue;
-    const sourceEntry = sourceByIdentity.get(identity);
-    if (!sourceEntry) throw new Error("حالة المحرر لا تطابق ملف russian.gxt المحفوظ. أعد استيراد المصدر.");
-    if (decodeGtaIvArabicFontUnits(sourceEntry.textUnits, true) !== entry.original) {
-      throw new Error("تم تغيير مصدر russian.gxt منذ فتح المحرر. أعد استيراده قبل البناء.");
+    const englishEntry = englishByIdentity.get(identity);
+    if (!englishEntry) throw new Error("حالة المحرر لا تطابق ملف الإنجليزي المحفوظ. أعد استيراد المصدر.");
+    if (gtaIvRawUnitsToString(englishEntry.textUnits) !== entry.original) {
+      throw new Error("تم تغيير مصدر الإنجليزي منذ فتح المحرر. أعد استيراده قبل البناء.");
     }
     const key = `${entry.msbtFile}:${entry.index}`;
     const translation = translations[key];
@@ -110,19 +132,31 @@ export function buildGtaIvRuOutput(
     // a real line. Collapse it here, immediately before GXT encoding.
     const runtimeTranslation = translation ? gtaIvEditorTextToRuntimeText(translation) : translation;
     if (!runtimeTranslation || runtimeTranslation === entry.original) continue;
+
+    const containerTable = containerTablesByUpperName.get(englishEntry.table.toUpperCase());
+    const containerEntry = containerTable?.entries.find((candidate) => (candidate.crc >>> 0) === englishEntry.crc);
+    if (!containerTable || !containerEntry) {
+      skippedNoContainerMatch += 1;
+      continue;
+    }
+
     const encoded = encodeGtaIvArabicText(entry.original, runtimeTranslation);
-    replacements.push({ table: sourceEntry.table, crc: sourceEntry.crc, textUnits: encoded.textUnits });
-    translatedPresentationText.set(`${sourceEntry.table}:${sourceEntry.crc >>> 0}`, encoded.processedText);
+    replacements.push({ table: containerTable.name, crc: containerEntry.crc >>> 0, textUnits: encoded.textUnits });
+    translatedPresentationText.set(`${containerTable.name}:${containerEntry.crc >>> 0}`, encoded.processedText);
   }
 
   const replacementByIdentity = new Map(replacements.map((entry) => [`${entry.table}:${entry.crc >>> 0}`, entry.textUnits]));
+  // Only the rows this build actually writes are checked here. The
+  // container's own untouched rows are the community mod's pre-existing
+  // content — some are genuinely still untranslated and already collide
+  // with the repainted Arabic units in the shipped mod itself; that is not
+  // a defect this build introduces or can fix, so it is left as-is.
   const visibleConflicts: { table: string; crc: number; unit: number; character: string }[] = [];
-  for (const table of parsedSource.tables) {
-    for (const entry of table.entries) {
-      const identity = `${table.name}:${entry.crc >>> 0}`;
-      const renderedText = translatedPresentationText.get(identity) ?? gtaIvRawUnitsToString(entry.textUnits);
-      const conflict = findVisibleGtaIvArabicUnitConflict(renderedText);
-      if (conflict) visibleConflicts.push({ table: table.name, crc: entry.crc >>> 0, ...conflict });
+  for (const [identity, renderedText] of translatedPresentationText) {
+    const conflict = findVisibleGtaIvArabicUnitConflict(renderedText);
+    if (conflict) {
+      const [table, crc] = identity.split(":");
+      visibleConflicts.push({ table, crc: Number(crc), ...conflict });
     }
   }
   if (visibleConflicts.length > 0) {
@@ -132,12 +166,12 @@ export function buildGtaIvRuOutput(
     );
   }
 
-  const buffer = rebuildGtaIvGxt(source, replacements);
+  const buffer = rebuildGtaIvGxt(russianContainer, replacements);
   const parsedOutput = parseGtaIvGxt(buffer);
-  if (parsedOutput.tables.length !== parsedSource.tables.length) throw new Error("فشل تحقق البناء: عدد الجداول تغير.");
+  if (parsedOutput.tables.length !== parsedContainer.tables.length) throw new Error("فشل تحقق البناء: عدد الجداول تغير.");
 
-  for (let tableIndex = 0; tableIndex < parsedSource.tables.length; tableIndex += 1) {
-    const originalTable = parsedSource.tables[tableIndex];
+  for (let tableIndex = 0; tableIndex < parsedContainer.tables.length; tableIndex += 1) {
+    const originalTable = parsedContainer.tables[tableIndex];
     const outputTable = parsedOutput.tables[tableIndex];
     if (!outputTable || outputTable.name !== originalTable.name || outputTable.entries.length !== originalTable.entries.length) {
       throw new Error("فشل تحقق البناء: ترتيب جداول GXT تغير.");
@@ -154,5 +188,5 @@ export function buildGtaIvRuOutput(
     }
   }
 
-  return { buffer, filename: "russian.gxt", translatedLines: replacements.length };
+  return { buffer, filename: "russian.gxt", translatedLines: replacements.length, skippedNoContainerMatch };
 }

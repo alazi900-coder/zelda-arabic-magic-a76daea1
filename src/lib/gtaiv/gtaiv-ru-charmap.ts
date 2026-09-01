@@ -48,10 +48,14 @@
  * wrong ligature variant is a cosmetic glitch, not a different word.
  */
 
-/** unit → Arabic presentation-form code point (U+FE70..U+FEFF range, plus U+061F and U+0621). */
+/** unit → Arabic presentation-form code point (U+FE70..U+FEFF range, plus U+061F).
+ * Unit 93 (hamza) maps to 0xFE80 — hamza's own isolated *presentation* form —
+ * not the bare letter 0x0621, because the shaping pipeline (arabic-processing.ts)
+ * always emits 0x0621 as 0xFE80 before this table ever sees it; mapping the
+ * unshaped codepoint left the glyph unreachable and hamza wrongly "unsupported". */
 const UNIT_TO_CODEPOINT_PAIRS: readonly [number, number][] = [
   [91, 0x061f],
-  [93, 0x0621],
+  [93, 0xfe80],
   [123, 0xfe81],
   [124, 0xfeed],
   [125, 0xfe82],

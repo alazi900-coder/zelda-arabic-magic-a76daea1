@@ -214,6 +214,16 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(gtaIvArabicInputUnitForPresentationForm(alef.processedText.charCodeAt(0))).toBe(alef.textUnits[0]);
   });
 
+  it("supports a standalone hamza — the shaping pipeline always emits its 0xFE80 presentation form, not the bare 0x0621 letter", () => {
+    const hamza = encodeGtaIvArabicText("", "ء");
+    expect(hamza.processedText).toBe("ﺀ");
+    expect(hamza.processedText.charCodeAt(0)).toBe(0xfe80);
+    expect(gtaIvArabicInputUnitForPresentationForm(0xfe80)).toBeDefined();
+    expect(decodeGtaIvArabicFontUnits(hamza.textUnits, true)).toBe("ء");
+    expect(() => encodeGtaIvArabicText("", "دعاء")).not.toThrow();
+    expect(decodeGtaIvArabicFontUnits(encodeGtaIvArabicText("", "دعاء").textUnits, true)).toBe("دعاء");
+  });
+
   it("maps every one of the mod's 124 measured glyph units to a distinct Arabic Presentation Form", () => {
     expect(GTAIV_RU_UNIT_TO_CODEPOINT.size).toBe(124);
     expect(new Set(GTAIV_RU_UNIT_TO_CODEPOINT.values()).size).toBe(124);

@@ -67,20 +67,45 @@ function findVisibleGtaIvArabicUnitConflict(text: string): GtaIvVisibleUnitConfl
   return null;
 }
 
-/** Extracts entries from the plain English `american.gxt` — this is what the editor shows and translates from. */
-export function extractGtaIvEntries(buffer: ArrayBuffer): GtaIvEditorImport {
+function buildContainerTableIndex(parsedContainer: ReturnType<typeof parseGtaIvGxt>): Map<string, GtaIvParsedGxtTable> {
+  const byUpperName = new Map<string, GtaIvParsedGxtTable>();
+  for (const table of parsedContainer.tables) byUpperName.set(table.name.toUpperCase(), table);
+  return byUpperName;
+}
+
+/**
+ * Extracts entries from the plain English `american.gxt` — this is what the
+ * editor shows and translates from. When `russianContainer` is also given,
+ * each entry is flagged with whether the community mod itself ever
+ * translated that line (its container row already uses one of the mod's 124
+ * Arabic glyph units) — a line the mod left untranslated may still render
+ * garbled in-game even though this tool never touched it; see
+ * `buildGtaIvRuOutput`'s doc comment for why that is not this build's bug.
+ */
+export function extractGtaIvEntries(buffer: ArrayBuffer, russianContainer?: ArrayBuffer): GtaIvEditorImport {
   const parsed = parseGtaIvGxt(buffer);
-  const entries = parsed.tables.flatMap((table) => table.entries.map((entry) => ({
-    // Table + original CRC is the stable GXT identity. Do not substitute an
-    // ordinal index: the exact CRC must be preserved for a later GXT builder.
-    msbtFile: `gtaiv/${table.name}`,
-    index: entry.crc >>> 0,
-    label: `${table.name} · 0x${(entry.crc >>> 0).toString(16).padStart(8, "0")}`,
-    original: gtaIvRawUnitsToString(entry.textUnits),
-    // GXT size can only be measured after its Arabic glyph encoding is fixed.
-    // A zero budget tells generic editor checks not to invent a byte limit.
-    maxBytes: 0,
-  })));
+  const containerTablesByUpperName = russianContainer ? buildContainerTableIndex(parseGtaIvGxt(russianContainer)) : null;
+
+  const entries = parsed.tables.flatMap((table) => {
+    const containerTable = containerTablesByUpperName?.get(table.name.toUpperCase());
+    return table.entries.map((entry) => {
+      const containerEntry = containerTable?.entries.find((candidate) => (candidate.crc >>> 0) === (entry.crc >>> 0));
+      return {
+        // Table + original CRC is the stable GXT identity. Do not substitute
+        // an ordinal index: the exact CRC must be preserved for a later GXT builder.
+        msbtFile: `gtaiv/${table.name}`,
+        index: entry.crc >>> 0,
+        label: `${table.name} · 0x${(entry.crc >>> 0).toString(16).padStart(8, "0")}`,
+        original: gtaIvRawUnitsToString(entry.textUnits),
+        // GXT size can only be measured after its Arabic glyph encoding is fixed.
+        // A zero budget tells generic editor checks not to invent a byte limit.
+        maxBytes: 0,
+        gtaivNeedsModTranslation: containerTablesByUpperName
+          ? Boolean(containerEntry && !containerEntry.textUnits.some((unit) => GTAIV_RU_CUSTOM_UNITS.has(unit)))
+          : undefined,
+      };
+    });
+  });
   return { entries, tableCount: parsed.tables.length };
 }
 
@@ -109,10 +134,7 @@ export function buildGtaIvRuOutput(
   ])));
 
   const parsedContainer = parseGtaIvGxt(russianContainer);
-  const containerTablesByUpperName = new Map<string, GtaIvParsedGxtTable>();
-  for (const table of parsedContainer.tables) {
-    containerTablesByUpperName.set(table.name.toUpperCase(), table);
-  }
+  const containerTablesByUpperName = buildContainerTableIndex(parsedContainer);
 
   const replacements: { table: string; crc: number; textUnits: Uint16Array }[] = [];
   const translatedPresentationText = new Map<string, string>();

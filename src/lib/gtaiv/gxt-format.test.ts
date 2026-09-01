@@ -310,6 +310,27 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(() => encodeGtaIvArabicText("Copyright", "حقوق ©")).toThrow("U+00A9");
   });
 
+  it("flags a line as needing mod translation only when its container row has none of the mod's Arabic glyph units", () => {
+    const englishSource = makeGxt(0x00009b22);
+
+    // no container given yet — flag stays undefined
+    expect(extractGtaIvEntries(englishSource).entries[0].gtaivNeedsModTranslation).toBeUndefined();
+
+    // container row still holds raw "Hi" — the mod never translated it
+    const untranslatedContainer = makeGxt(0x00009b22);
+    expect(extractGtaIvEntries(englishSource, untranslatedContainer).entries[0].gtaivNeedsModTranslation).toBe(true);
+
+    // container row already uses one of the mod's Arabic units (194 = alef isolated)
+    const translatedContainer = makeGxt(0x00009b22);
+    new Uint8Array(translatedContainer).set([0xc2, 0x00, 0x00, 0x00], 48);
+    expect(GTAIV_RU_CUSTOM_UNITS.has(194)).toBe(true);
+    expect(extractGtaIvEntries(englishSource, translatedContainer).entries[0].gtaivNeedsModTranslation).toBe(false);
+
+    // identity with no match in the container at all — never flagged (can't be built either way)
+    const mismatchedContainer = makeGxt(0xdeadbeef);
+    expect(extractGtaIvEntries(englishSource, mismatchedContainer).entries[0].gtaivNeedsModTranslation).toBe(false);
+  });
+
   it("builds russian.gxt from an English source into a Russian container, matching table names case-insensitively", () => {
     const englishSource = makeGxt(0x00009b22, "MAIN");
     // The mod's own container spells its table name lowercase — a real,

@@ -41,6 +41,7 @@ type EditorSubset = Pick<
   | "multiLineCount"
   | "fuzzyCount"
   | "byteOverflowCount"
+  | "gtaIvNeedsModCount"
   | "deepDiagnosticCounts"
   | "quickReviewMode"
   | "setQuickReviewMode"
@@ -178,6 +179,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر كبير ({editor.deepDiagnosticCounts.newlineDiff})</option>}
             {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 ترجمة مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
             {isRisen && <option value="long-texts">📏 نصوص طويلة (35+)</option>}
+            {isGtaIv && editor.gtaIvNeedsModCount > 0 && <option value="gtaiv-needs-mod">🎭 لم تُترجم في المود ({editor.gtaIvNeedsModCount})</option>}
           </select>
           <select value={editor.filterFile} onChange={e => editor.setFilterFile(e.target.value)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[200px]">
             <option value="all">كل الملفات</option>
@@ -258,6 +260,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر ({editor.deepDiagnosticCounts.newlineDiff})</option>}
           {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
           {isRisen && <option value="long-texts">📏 نصوص طويلة (35+)</option>}
+          {isGtaIv && editor.gtaIvNeedsModCount > 0 && <option value="gtaiv-needs-mod">🎭 لم تُترجم في المود ({editor.gtaIvNeedsModCount})</option>}
         </select>
         <select value={editor.filterFile} onChange={e => editor.setFilterFile(e.target.value)} className="w-full px-3 py-2 rounded bg-background border border-border font-body text-sm">
           <option value="all">كل الملفات</option>

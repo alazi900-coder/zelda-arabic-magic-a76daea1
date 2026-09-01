@@ -34,7 +34,7 @@ export interface BatchQualityStats {
 }
 
 const ARABIC_RE = /[\u0600-\u06FF]/;
-const TAG_RE = /(TAG_\d+|⟪T\d+⟫)/g;
+const TAG_RE = /(TAG_\d+|⟪T\d+⟫|GTAIV_\d+)/g;
 
 /** Compute quality stats by comparing AI output vs requested entries. */
 function computeQualityStats(
@@ -248,6 +248,21 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
 6. Metroid proper nouns (Samus Aran → ساموس آران, Chozo → تشوزو, Space Pirates → قراصنة الفضاء, Metroids → ميترويدات, Phazon → فيزون, Tallon IV → تالون 4, Galactic Federation → الاتحاد المجرّي, Varia Suit → بدلة فاريا, Morph Ball → كرة التحول, Scan Visor → ماسح الرؤية, Ice/Wave/Plasma/Power Beam → شعاع جليدي/موجي/بلازما/الطاقة, Missile → صاروخ, Grapple Beam → شعاع الخطاف). NEVER substitute names from other games (Monado/Ether/PSI have NO meaning here). Tone is terse and technical — HUD/pickup names stay very short; Scan Visor entries mimic a research/military log; do NOT add literary flourish absent from the English source.`;
 
+const GTAIV_SYSTEM_PROMPT = `You are a professional video game text translator working on Grand Theft Auto IV (Rockstar North) — a gritty, satirical open-world crime game set in Liberty City, a parody of New York. The protagonist Niko Bellic is an Eastern-European war veteran and ex-smuggler pulled into the city's organized crime scene by his cousin Roman. The writing is dark comedy: profane, cynical, mocking American consumerism, media and politics — never epic fantasy, never JRPG, never solemn. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, NOT Wolfenstein, and NOT any Pokémon game — never import their terminology, characters, or lore.
+
+VOICE: Modern spoken Arabic (لهجة عربية حديثة قريبة من العامية المفهومة، لا فصحى رسمية جافة) that fits a crime-satire adult game — blunt, streetwise, sarcastic where the English is sarcastic. Radio ads and in-game websites are absurdist parody (advertising, cable news, talk radio) — keep that mocking tone, don't flatten it into a neutral announcement. Mission dialogue is often crude, angry, or darkly funny between criminals; menu/HUD/subtitle text is short and functional. Mild profanity in the English source may be translated with an equivalent Arabic register appropriate to the context — do not sanitize it into overly polite phrasing, and do not invent profanity that is not implied by the source.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. Real-world proper nouns (Liberty City, street/brand names, radio station names) are usually transliterated phonetically into Arabic rather than translated literally.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - GTAIV_0, GTAIV_1, ... — masked runtime tokens (originally written between tildes, e.g. ~n~, ~z~, ~s~, ~INPUT_FRONTEND_ACCEPT~). These are engine commands (line breaks, colors, button prompts), not words. Never translate, describe, or explain what one might mean.
+   - TAG_0, TAG_1, ... — other technical placeholders, if any appear.
+   Treat all of these as opaque tokens.
+4. TAG POSITION RULE (CRITICAL): Each GTAIV_N/TAG_N MUST stay in the SAME RELATIVE POSITION as in the input — never moved to the end or clustered together. If the input is "GTAIV_0 some text GTAIV_1", the output must place GTAIV_0 before the translated text and GTAIV_1 after it.
+5. Dollar amounts such as $100, $5,000, $20m MUST appear in the output with the exact same digits and suffix as the source, in the same relative position. Never convert currency, never drop the amount, never invent a different one.
+6. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
+
 
 /**
  * Build the user-facing prompt with full universe knowledge, ordered rules,
@@ -264,7 +279,7 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp';
+  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' | 'gtaiv';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
@@ -272,9 +287,16 @@ function buildXC1UserPrompt(opts: {
   const isRisen2 = game === 'risen2';
   const isMother3 = game === 'mother3';
   const isPokemonXp = game === 'pokemon-xp';
-  const gameLabel = isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isMother3 ? 'MOTHER 3' : isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+  const isGtaIv = game === 'gtaiv';
+  const gameLabel = isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isGtaIv ? 'Grand Theft Auto IV' : isMother3 ? 'MOTHER 3' : isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
-  const universeBlock = isPokemonXp
+  const universeBlock = isGtaIv
+    ? `GRAND THEFT AUTO IV — KEY KNOWLEDGE:
+• Setting: Liberty City, a satirical parody of New York City. Protagonist Niko Bellic, an Eastern-European immigrant war veteran, is drawn into organized crime by his cousin Roman Bellic (who runs a struggling taxi company and gets into gambling debt).
+• Recurring characters (transliterate consistently): Niko Bellic (نيكو بيليتش), Roman Bellic (رومان بيليتش), Packie McReary (باكي مكريري), Brucie Kibbutz (بروسي كيبوتز), Little Jacob (ليتل جايكوب), Dwayne Forge (دوين فورج), Playboy X (بلاي بوي إكس).
+• The game constantly parodies real American media, brands, TV and radio — invented in-universe names (radio stations, websites, products) are satire, not real brands; keep the mocking, exaggerated tone when translating them rather than making them sound like genuine advertising.
+• This is a DIFFERENT game from Xenoblade Chronicles, Risen, MOTHER 3, Metroid Prime, Wolfenstein, and Pokémon — do NOT use their terminology, characters, or lore under any circumstance.`
+    : isPokemonXp
     ? `POKÉMON UNBREAKABLE TIES / POKÉMON ESSENTIALS — KEY KNOWLEDGE:
 • This is an RPG Maker XP game using Pokémon Essentials message commands. It is not a GBA ROM hack. Never apply GBA byte limits, {FD:xx} variables, or a forced two-line message-box rule.
 • Pokémon vocabulary includes trainers, Pokémon, moves, types, Poké Balls, Pokédex, Pokémon Centers, Gyms, badges, abilities and items. Do not invent a story detail or proper name absent from the source or glossary.
@@ -313,7 +335,9 @@ function buildXC1UserPrompt(opts: {
 • Antagonists: Zanza (زانزا), Egil (إيجل), Metal Face (الوجه المعدني).
 • Key terms: Monado (المونادو), Ether (إيثر), Colony 9 (المستعمرة 9), Mechon (ميكون), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا).`;
 
-  const npcVoiceRule = isPokemonXp
+  const npcVoiceRule = isGtaIv
+    ? "Mission/street dialogue — blunt, streetwise modern spoken Arabic, sarcastic where the English is sarcastic. Do not soften profanity into overly polite phrasing, and do not invent profanity the source doesn't imply. Radio/TV/web parody text keeps its mocking, exaggerated tone."
+    : isPokemonXp
     ? 'Pokémon Essentials dialogue — use natural, warm everyday Arabic matching the source tone. Do not assume speakers, locations, or Pokémon names that were not provided.'
     : isMother3
     ? 'NPC dialogue — use natural, warm, everyday spoken Arabic with MOTHER 3\'s gentle humor, matching the tone implied by the text and any speaker info given in context. Do NOT assume Xenoblade or Risen characters — this is a different game.'
@@ -387,6 +411,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   let counter = 0;
   let risenCounter = 0;
   let pokemonXpCounter = 0;
+  let gtaivCounter = 0;
 
   // First: shield literal newlines as NEWLINE_N placeholders
   const nlParts = text.split('\n');
@@ -425,7 +450,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   // Collect all matches. Risen tags go first so they win any overlap against
   // the generic Xenoblade patterns below (e.g. <Exit> would otherwise also
   // match the generic HTML-like-tag pattern and get a TAG_N instead of ⟦N⟧).
-  const matches: { start: number; end: number; original: string; risen?: boolean; pokemonXp?: boolean }[] = [];
+  const matches: { start: number; end: number; original: string; risen?: boolean; pokemonXp?: boolean; gtaiv?: boolean }[] = [];
   if (_game === 'risen' || _game === 'risen2') {
     const risenRegex = new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags);
     let rMatch: RegExpExecArray | null;
@@ -438,6 +463,17 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     let commandMatch: RegExpExecArray | null;
     while ((commandMatch = commandRegex.exec(shielded)) !== null) {
       matches.push({ start: commandMatch.index, end: commandMatch.index + commandMatch[0].length, original: commandMatch[0], pokemonXp: true });
+    }
+  }
+  if (_game === 'gtaiv') {
+    // GTA IV runtime tokens (~n~, ~z~, ~s~, ~INPUT_FRONTEND_ACCEPT~...) are
+    // literal tilde-delimited engine commands in the raw text — mask them
+    // before the model ever sees them, same as every other game's own tag
+    // syntax. Mirrors gtaIvRuntimeTokenPattern in src/lib/gtaiv/gtaiv-editor-bridge.ts.
+    const gtaivRegex = /~[^~]+~/g;
+    let gMatch: RegExpExecArray | null;
+    while ((gMatch = gtaivRegex.exec(shielded)) !== null) {
+      matches.push({ start: gMatch.index, end: gMatch.index + gMatch[0].length, original: gMatch[0], gtaiv: true });
     }
   }
   for (const pattern of patterns) {
@@ -460,7 +496,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   let lastEnd = 0;
   for (const m of matches) {
     cleaned += shielded.slice(lastEnd, m.start);
-    const placeholder = m.pokemonXp ? `PKXP_${pokemonXpCounter++}` : m.risen ? `⟦${risenCounter++}⟧` : `TAG_${counter++}`;
+    const placeholder = m.pokemonXp ? `PKXP_${pokemonXpCounter++}` : m.risen ? `⟦${risenCounter++}⟧` : m.gtaiv ? `GTAIV_${gtaivCounter++}` : `TAG_${counter++}`;
     tags.set(placeholder, m.original);
     cleaned += placeholder;
     lastEnd = m.end;
@@ -570,9 +606,10 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' | 'gtaiv' = 'xenoblade';
 
 function getGameSystemPrompt(): string {
+  if (_game === 'gtaiv') return GTAIV_SYSTEM_PROMPT;
   if (_game === 'pokemon-xp') return POKEMON_XP_SYSTEM_PROMPT;
   if (_game === 'pokemon') return POKEMON_SYSTEM_PROMPT;
   if (_game === 'wolfenstein') return WOLFENSTEIN_SYSTEM_PROMPT;
@@ -2140,7 +2177,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' | 'gtaiv';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -2152,7 +2189,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'pokemon-xp' ? 'pokemon-xp' : game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

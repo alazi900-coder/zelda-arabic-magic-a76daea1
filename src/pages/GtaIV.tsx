@@ -26,6 +26,22 @@ export default function GtaIV() {
   const [selectedTable, setSelectedTable] = useState("ALL");
   const navigate = useNavigate();
 
+  /** Re-extracts and re-writes editor state whenever either file changes,
+   * so the "needs mod translation" flag fills in as soon as both are
+   * present, regardless of upload order. */
+  const syncEditorState = useCallback(async (englishBuffer: ArrayBuffer, russianContainerBuffer: ArrayBuffer | null) => {
+    const imported = extractGtaIvEntries(englishBuffer, russianContainerBuffer ?? undefined);
+    const oldState = await idbGet<{ translations?: Record<string, string> }>("editorState:gtaiv");
+    const allowed = new Set(imported.entries.map((entry) => `${entry.msbtFile}:${entry.index}`));
+    const translations = Object.fromEntries(Object.entries(oldState?.translations || {}).filter(([key, value]) => allowed.has(key) && value));
+    const editorState = { entries: imported.entries, translations, freshExtraction: true };
+    const originals = Object.fromEntries(imported.entries.map((entry) => [`${entry.msbtFile}:${entry.index}`, entry.original]));
+    await idbSet("editorState", editorState);
+    await idbSet("editorState:gtaiv", editorState);
+    await idbSet("editor-source-game", GTAIV_SOURCE_GAME);
+    await idbSet("originalTexts", originals);
+  }, []);
+
   const inspectEnglishGxt = useCallback(async (file: File) => {
     setBusy(true);
     try {
@@ -44,25 +60,17 @@ export default function GtaIV() {
       setSourceName(file.name);
       setQuery("");
       setSelectedTable("ALL");
-      const imported = extractGtaIvEntries(buffer);
-      const oldState = await idbGet<{ translations?: Record<string, string> }>("editorState:gtaiv");
-      const allowed = new Set(imported.entries.map((entry) => `${entry.msbtFile}:${entry.index}`));
-      const translations = Object.fromEntries(Object.entries(oldState?.translations || {}).filter(([key, value]) => allowed.has(key) && value));
-      const editorState = { entries: imported.entries, translations, freshExtraction: true };
-      const originals = Object.fromEntries(imported.entries.map((entry) => [`${entry.msbtFile}:${entry.index}`, entry.original]));
-      await idbSet("editorState", editorState);
-      await idbSet("editorState:gtaiv", editorState);
-      await idbSet("editor-source-game", GTAIV_SOURCE_GAME);
-      await idbSet("originalTexts", originals);
       await idbSet(GTAIV_BUFFER_KEY, buffer.slice(0));
       await idbSet(GTAIV_SOURCE_NAME_KEY, file.name);
+      const existingContainer = await idbGet<ArrayBuffer>(GTAIV_CONTAINER_BUFFER_KEY);
+      await syncEditorState(buffer, existingContainer ?? null);
       toast.success(`قُرئ المصدر الإنجليزي: ${summary.entries.toLocaleString("ar")} سطراً.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر قراءة american.gxt.");
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [syncEditorState]);
 
   const inspectRussianContainer = useCallback(async (file: File) => {
     setBusy(true);
@@ -73,13 +81,15 @@ export default function GtaIV() {
       setContainer({ name: file.name, summary });
       await idbSet(GTAIV_CONTAINER_BUFFER_KEY, buffer.slice(0));
       await idbSet(GTAIV_CONTAINER_NAME_KEY, file.name);
+      const existingEnglish = await idbGet<ArrayBuffer>(GTAIV_BUFFER_KEY);
+      if (existingEnglish) await syncEditorState(existingEnglish, buffer);
       toast.success(`قُرئت حاوية البناء: ${summary.entries.toLocaleString("ar")} سطراً.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر قراءة russian.gxt.");
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [syncEditorState]);
 
   const bothReady = Boolean(gxt && container);
 

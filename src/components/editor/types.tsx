@@ -2,7 +2,7 @@ import React from "react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { hasRisenTags } from "@/lib/risen-tag-guard";
 
-export type FilterStatus = "all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "no-tags" | "damaged-tags" | "missing-tags" | "fuzzy" | "byte-overflow" | "has-newlines" | "translation-has-newline" | "xeno-n-missing" | "excessive-lines" | "byte-budget" | "newline-diff" | "identical-original" | "long-texts" | "khbbs-unsupported" | "gtaiv-unsupported";
+export type FilterStatus = "all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "no-tags" | "damaged-tags" | "missing-tags" | "fuzzy" | "byte-overflow" | "has-newlines" | "translation-has-newline" | "xeno-n-missing" | "excessive-lines" | "byte-budget" | "newline-diff" | "identical-original" | "long-texts" | "khbbs-unsupported" | "gtaiv-unsupported" | "gtaiv-needs-mod";
 
 export type FilterTechnical = "all" | "only" | "exclude";
 
@@ -18,6 +18,10 @@ export interface ExtractedEntry {
   risenOwner?: string;
   /** Risen 3: category id resolved from the string-key map at extraction time. */
   risen3Cat?: string;
+  /** GTA IV: true when the matching row in the Russian container has zero of
+   * the mod's Arabic glyph units — i.e. the community mod itself never
+   * translated this line. Undefined until both GTA IV files are loaded. */
+  gtaivNeedsModTranslation?: boolean;
 }
 
 

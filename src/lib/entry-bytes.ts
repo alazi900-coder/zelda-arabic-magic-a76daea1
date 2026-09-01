@@ -15,6 +15,28 @@
 
 import { encodeArabicForPkm } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
+import { reshapeArabic, reverseBidi } from "@/lib/arabic-processing";
+import { ARABIC_GLYPH_RASTERS } from "@/lib/fireemblem12/fe12-arabic-charmap";
+
+/**
+ * Bytes Fire Emblem 12 will actually spend on `text`: 1 for each ASCII
+ * character (passed through as-is), 2 for each Arabic character that has a
+ * slot in the game's patched font (`fe12-arabic-charmap.ts`; every mapped
+ * codepoint is addressed by a 2-byte Shift-JIS-style code), 0 for a
+ * character with no slot at all — it will not be written, matching what
+ * `buildFireEmblem12Rom`'s `encodeFe12Arabic` actually does (drops it,
+ * reports it as unsupported) rather than promising room it cannot use.
+ */
+function measureFe12Bytes(text: string): number {
+  const visual = reverseBidi(reshapeArabic(text));
+  let bytes = 0;
+  for (const ch of visual) {
+    const codepoint = ch.codePointAt(0)!;
+    if (codepoint < 0x80) bytes += 1;
+    else if (ARABIC_GLYPH_RASTERS.has(codepoint)) bytes += 2;
+  }
+  return bytes;
+}
 
 /**
  * Bytes this text will occupy in `msbtFile`'s game, excluding any terminator.
@@ -28,6 +50,9 @@ export function measureEntryBytes(msbtFile: string | undefined, text: string): n
   if (msbtFile && PKM_FILE_RE.test(msbtFile)) {
     const encoded = encodeArabicForPkm(text);
     return encoded.bytes.length + encoded.unmapped.length;
+  }
+  if (msbtFile && msbtFile.startsWith("fe12/")) {
+    return measureFe12Bytes(text);
   }
   return new TextEncoder().encode(text).length;
 }

@@ -126,12 +126,19 @@ export function extractFireEmblem12Entries(romBuffer: ArrayBuffer): Fe12EditorIm
         continue;
       }
       claimedOffsets.add(record.textOffset);
+      // Class names (m/System, key MJID_*) render into a fixed-size UI
+      // widget on the character-creation screen — verified this session
+      // with a real emulator (control-test matrix): a same-length
+      // replacement rendered fine, but any longer one (Arabic or plain
+      // ASCII) corrupted the class-preview sprite. Zero growth over the
+      // original is the only bound actually proven safe, so that's the cap.
+      const isClassName = (record.key ?? "").startsWith("MJID_");
       entries.push({
         msbtFile: `fe12/${entry.path}`,
         index: record.index,
         label: `${entry.path} · ${record.key || `#${record.index}`}`,
         original: wrapper.middle,
-        maxBytes: 0,
+        maxBytes: isClassName ? wrapper.middle.length : 0,
       });
     }
   }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import { buildFireEmblem12Rom, extractFireEmblem12Entries } from "./fe12-editor-bridge";
 import { buildSyntheticFont, busyRaster } from "./fe12-font-test-fixtures";
 import { buildFe12TextFile, parseFe12TextFile, type Fe12TextFile } from "./fe12-textfile";
@@ -75,6 +76,33 @@ describe("fe12-editor-bridge", () => {
     const wrapped = imported.entries.find((e) => e.label.includes("MPID_ANNA"))!;
     expect(wrapped.original).toBe("Welcome!\nToday, another hero will be born.");
     expect(wrapped.msbtFile).toBe("fe12/m/System");
+  });
+
+  it("caps class-name (MJID_) records at their original length, and leaves other records uncapped", () => {
+    const { rom } = buildFixtureRom();
+    const imported = extractFireEmblem12Entries(rom);
+
+    const mercenaryEntry = imported.entries.find((e) => e.label.includes("MJID_MERCENARY"))!;
+    expect(mercenaryEntry.maxBytes).toBe("Mercenary".length);
+
+    const maleEntry = imported.entries.find((e) => e.label.includes("MSEX_M"))!;
+    expect(maleEntry.maxBytes).toBe(0);
+
+    const wrapped = imported.entries.find((e) => e.label.includes("MPID_ANNA"))!;
+    expect(wrapped.maxBytes).toBe(0);
+  });
+
+  it("measures fe12 translation length the way it will actually be written to the ROM, not raw UTF-8", () => {
+    // Plain ASCII: one byte per character, same as UTF-8.
+    expect(measureEntryBytes("fe12/m/System", "TestArab!")).toBe(9);
+    // Every mapped Arabic presentation form costs 2 bytes (its Shift-JIS-style
+    // font code), not the 2-3 UTF-8 bytes a raw codepoint would take — and
+    // the count matches the shaped+reversed form count, not the input length.
+    // "مرتزق" shapes+reverses to 5 presentation forms -> 10 bytes.
+    expect(measureEntryBytes("fe12/m/System", "مرتزق")).toBe(10);
+    // A character with no slot in the 124-form charmap (e.g. tatweel) is
+    // dropped at build time, so it must count as 0 bytes here too.
+    expect(measureEntryBytes("fe12/m/System", "ـ")).toBe(0);
   });
 
   it("builds a ROM with the translated text encoded through the Arabic charmap, preserving the dialogue wrapper", () => {

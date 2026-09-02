@@ -51,8 +51,15 @@ export interface PkmTable {
 const LETTER_START = 0xbb; // 'A'
 const LETTER_END = 0xee; // 'z'
 
-/** Bytes that may appear inside a line without ending it. */
-function isTextByte(b: number): boolean {
+/**
+ * Bytes that may appear inside a line without ending it.
+ *
+ * `codec` matters for the build made from source: its Arabic sits in codes
+ * below this range, so without it every translated line is invisible to the
+ * scan and the ROM looks almost empty.
+ */
+function isTextByte(b: number, codec?: PkmCodec): boolean {
+  if (codec?.readsOwnArabic && codec.tables.byteToArabic.has(b)) return true;
   if (b === 0x00) return true; // space
   if (b >= 0xa1 && b <= 0xee) return true; // digits, punctuation, letters
   if (b === 0xfa || b === 0xfb || b === 0xfe) return true; // scroll, paragraph, newline
@@ -97,15 +104,16 @@ export function scanPkmStrings(rom: Uint8Array, options: ScanOptions = {}): PkmS
   const out: PkmString[] = [];
   let i = 0;
   while (i < rom.length) {
-    if (!isTextByte(rom[i])) {
+    if (!isTextByte(rom[i], codec)) {
       i++;
       continue;
     }
     let start = i;
     let letters = 0;
-    while (i < rom.length && isTextByte(rom[i])) {
+    while (i < rom.length && isTextByte(rom[i], codec)) {
       const b = rom[i];
-      if (b >= LETTER_START && b <= LETTER_END) letters++;
+      if ((b >= LETTER_START && b <= LETTER_END)
+       || (codec.readsOwnArabic && codec.tables.byteToArabic.has(b))) letters++;
       if (b === PKM_VARIABLE) i++; // its argument byte is not text
       else if (b === PKM_FORMAT) i += pkmFormatLength(rom[i + 1] ?? 0) - 1;
       i++;
@@ -483,7 +491,12 @@ export function applyPkmTranslations(
       continue;
     }
     const encoded = encodeArabicWithTables(value, codec.tables, {
-      reverse: !(options.rtl === "all" || (options.rtl === "dialogue" && looksLikeDialogue(s))),
+      // The build made from source mirrors every glyph as it draws, so its
+      // lines are stored in reading order. Reversing here would reverse them
+      // twice and put every word back to front.
+      reverse: codec.noReverse
+        ? false
+        : !(options.rtl === "all" || (options.rtl === "dialogue" && looksLikeDialogue(s))),
     });
     encoded.unmapped.forEach((c) => unmapped.add(c));
     const needed = encoded.bytes.length + 1; // + terminator

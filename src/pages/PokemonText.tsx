@@ -12,7 +12,7 @@ import {
   PKM_GAME_KEY,
   PKM_SOURCE_GAME,
 } from "@/lib/pokemon/pkm-editor-bridge";
-import { PKM_CODECS, type PkmGame } from "@/lib/pokemon/pkm-codec";
+import { PKM_CODECS, pkmCodecByGame, type PkmGame } from "@/lib/pokemon/pkm-codec";
 import { APP_VERSION } from "@/lib/version";
 
 /**
@@ -51,12 +51,15 @@ export default function PokemonText() {
         // translation belonging to the rest. A ROM carrying the *other* game's
         // font is refused by the same check, because building on it gives the
         // wrong letter for every letter.
-        if (isBuiltPkmRom(rom, game)) {
+        // The build made from source is the opposite case: its Arabic is in
+        // the tool's own tables, the scanner reads it, and it carries the
+        // English it replaced. It is the only file there is to open.
+        if (!pkmCodecByGame(game).readsOwnArabic && isBuiltPkmRom(rom, game)) {
           throw new Error(
             "هذا روم مبني (يحمل خطّاً عربياً) — افتح الروم الأصلي. الأسطر المكتوبة بالعربية لا يقرأها المستخرِج، وفتحه هنا كان يمسح ترجماتها."
           );
         }
-        const { entries, textBytes } = extractPkmEntries(rom, game);
+        const { entries, textBytes, translations: inRom } = extractPkmEntries(rom, game);
         if (entries.length === 0) {
           throw new Error("لم يُعثر على نصوص في هذا الروم");
         }
@@ -66,7 +69,12 @@ export default function PokemonText() {
         // name has changed once already, and matching on it dropped every
         // saved translation for a renamed list.
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
-        const translations = restorePkmTranslations(entries, existing?.translations || {});
+        // What the ROM already says comes first; anything saved from an earlier
+        // session that the ROM does not carry is kept on top of it.
+        const translations = {
+          ...(inRom || {}),
+          ...restorePkmTranslations(entries, existing?.translations || {}),
+        };
 
         await idbSet("editorState", { entries, translations, freshExtraction: true });
         await idbSet("editor-source-game", PKM_SOURCE_GAME);
@@ -112,9 +120,11 @@ export default function PokemonText() {
         </div>
 
         <p className="mb-4 text-sm text-muted-foreground">
-          اختر لعبتك وارفع رومها في مربّعها. اللعبتان على محرّك واحد، لكن لكلٍّ منهما خانات حروفٍ
-          مختلفة — ورفعُ روم في المربّع الخطأ يكتب النصّ بخانات اللعبة الأخرى، فتظهر حروفٌ عربية
-          كلّها خاطئة.
+          اختر لعبتك وارفع رومها في مربّعها. الألعاب على محرّك واحد، لكن لكلٍّ منها خانات حروفٍ
+          مختلفة — ورفعُ روم في المربّع الخطأ يكتب النصّ بخانات لعبةٍ أخرى، فتظهر حروفٌ عربية
+          كلّها خاطئة. البناء من الكود المصدري وحده يُرفع <strong>معرَّباً</strong>: نصوصه العربية
+          يقرأها المستخرِج، ومعها جدولٌ بداخله يحمل الإنجليزية التي حلّت محلّها — فترى الأصل
+          والترجمة معاً من ملف واحد.
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -143,11 +153,17 @@ export default function PokemonText() {
               )}
               <span className="text-lg font-medium">{codec.name}</span>
               <span className="text-xs text-muted-foreground">
-                {codec.game === "emerald"
+                {codec.game === "emerald-source"
+                  ? "١٢٩ خانةً اختيرت وقت التجميع — كلّها بايت واحد"
+                  : codec.game === "emerald"
                   ? "١٢٨ خانةً فارغةً أو لحروفٍ مشكولة"
                   : "١٢٩ خانةً من خانات الكانا"}
               </span>
-              <span className="text-xs text-muted-foreground">ارفع ملف ‎.gba‎ الأصلي</span>
+              <span className="text-xs text-muted-foreground">
+                {codec.readsOwnArabic
+                  ? "ارفع الروم المبني نفسه — نصوصه ومرجعها الإنجليزي بداخله"
+                  : "ارفع ملف ‎.gba‎ الأصلي"}
+              </span>
               <input
                 type="file"
                 accept=".gba"

@@ -19,6 +19,7 @@ import { applyEmeraldArabicKeyboard } from "@/lib/gba/emerald-keyboard";
 import { applyEmeraldShapePatch } from "@/lib/gba/emerald-shape";
 import { applyEmeraldNameFieldPatch } from "@/lib/gba/emerald-name-field";
 import { indexPkmPointers } from "./pkm-pointers";
+import { readEmeraldSourceReference, toLogicalArabic } from "@/lib/gba/emerald-source-arabic";
 import { pkmEntryFile } from "./pkm-categories";
 
 export const PKM_BUFFER_KEY = "pokemonSourceBuffer";
@@ -61,6 +62,15 @@ export interface PkmExtractResult {
   strings: PkmString[];
   /** Total bytes those lines occupy, for showing how much of the ROM is text. */
   textBytes: number;
+  /**
+   * Translations already in the ROM, for the build made from source.
+   *
+   * That ROM's lines are Arabic already, and the English they replaced is in
+   * the table the build wrote into its padding. So the editor gets the English
+   * as the original and the Arabic as a translation it can edit — the same two
+   * columns as any other game, from one file.
+   */
+  translations?: Record<string, string>;
 }
 
 /**
@@ -83,14 +93,22 @@ export function extractPkmEntries(rom: Uint8Array, game?: PkmGame): PkmExtractRe
   const codec = game ? pkmCodecByGame(game) : pkmCodecFor(rom);
   const pointers = indexPkmPointers(rom);
   const strings = scanPkmStrings(rom, { pointers, codec });
+  const reference = codec.readsOwnArabic ? readEmeraldSourceReference(rom) : null;
+  const translations: Record<string, string> = {};
   // A list whose entries are reached by pointer can have its entries moved one
   // by one; one the game counts through by index cannot.
   markPointedTables(strings, pointers);
-  const entries: ExtractedEntry[] = strings.map((s) => ({
-    msbtFile: pkmEntryFile(s.table?.kind),
+  const entries: ExtractedEntry[] = strings.map((s) => {
+    // A line the build translated: the table says what it used to be, so the
+    // English is the original and what is in the ROM is the translation.
+    const english = reference?.english.get(s.offset);
+    const file = pkmEntryFile(s.table?.kind);
+    if (english) translations[`${file}:${s.offset}`] = toLogicalArabic(s.text);
+    return {
+    msbtFile: file,
     index: s.offset,
-    label: preview(s.text),
-    original: s.text,
+    label: preview(english ?? s.text),
+    original: english ?? s.text,
     // Dialogue that can be moved has the ROM's limit lifted entirely; a short
     // line that can be moved reaches the measured floor; anything the game
     // finds by index keeps its slot.
@@ -99,8 +117,14 @@ export function extractPkmEntries(rom: Uint8Array, game?: PkmGame): PkmExtractRe
       : pointers.to(s.offset).length > 0
       ? pkmLineLimit(s, pointers)
       : s.capacity - 1,
-  }));
-  return { entries, strings, textBytes: strings.reduce((n, s) => n + s.capacity, 0) };
+    };
+  });
+  return {
+    entries,
+    strings,
+    textBytes: strings.reduce((n, s) => n + s.capacity, 0),
+    translations: reference ? translations : undefined,
+  };
 }
 
 /**
@@ -207,6 +231,11 @@ export function buildPkmRom(
     if (m) byOffset[m[1]] = value;
   }
 
+  if ((options.rtl || options.keyboard) && codec.noReverse) {
+    return {
+      error: "هذا البناء يحمل الاتجاه ولوحة الإدخال في كوده أصلاً — لا شيء يُرقَّع فيه",
+    };
+  }
   if (options.rtl && codec.game !== "emerald") {
     return { error: "اتجاه الحوار من اليمين مرقوعٌ في Pokémon Emerald وحدها" };
   }

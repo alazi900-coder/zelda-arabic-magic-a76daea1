@@ -61025,6 +61025,22 @@ index 3eb2835d6..ce574dc65 100644
      /*0x0C*/ u16 height; //in decimeters
      /*0x0E*/ u16 weight; //in hectograms
      /*0x10*/ const u8 *description;
+diff --git a/include/text.h b/include/text.h
+index 3799a87a4..8b3284630 100644
+--- a/include/text.h
++++ b/include/text.h
+@@ -63,6 +63,11 @@ struct TextPrinterSubStruct
+     u8 downArrowYPosIdx:2;
+     bool8 hasFontIdBeenSet:1;
+     u8 autoScrollDelay;
++    // The base letter just drawn, when it can join to what follows. Arabic is
++    // shaped as it draws (see ShapeArabicChar), and a letter's form depends on
++    // its neighbours, so the printer has to remember what came before it.
++    // subStructFields is 7 bytes and only 3 were spoken for.
++    u8 arabicPrev;
+ };
+ 
+ struct TextPrinterTemplate
 diff --git a/src/battle_controller_player.c b/src/battle_controller_player.c
 index 45bf1a17e..ba0586174 100644
 --- a/src/battle_controller_player.c
@@ -83565,10 +83581,18 @@ index 438cafbb0..0cc578cf2 100644
 +const u8 gText_Berry[] = _("ﺗﻮﺕ");
 +const u8 gText_Berries[] = _("ﺗﻮﺕ");
 diff --git a/src/text.c b/src/text.c
-index 398aaba26..d846f4533 100644
+index 398aaba26..196c7c7f8 100644
 --- a/src/text.c
 +++ b/src/text.c
-@@ -611,7 +611,8 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
+@@ -7,6 +7,7 @@
+ #include "constants/songs.h"
+ #include "string_util.h"
+ #include "window.h"
++#include "data/arabic_shaping.h"
+ #include "text.h"
+ #include "blit.h"
+ #include "menu.h"
+@@ -611,7 +612,8 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
      if ((glyphHeight = (template->height * 8) - textPrinter->printerTemplate.currentY) > gCurGlyph.height)
          glyphHeight = gCurGlyph.height;
  
@@ -83578,7 +83602,93 @@ index 398aaba26..d846f4533 100644
      currY = textPrinter->printerTemplate.currentY;
      glyphPixels = gCurGlyph.gfxBufferTop;
      windowTiles = window->tileData;
-@@ -663,9 +664,12 @@ void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
+@@ -646,6 +648,85 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
+     }
+ }
+ 
++/**
++ * The Arabic letter to draw for this byte, given the letters around it.
++ *
++ * Text that came from the translation file is already shaped, but text the
++ * game puts together while it runs is not: a name the player typed, or a name
++ * substituted into a sentence, only meets its neighbours here. So every byte
++ * is read back to its base letter and shaped again from what actually sits
++ * beside it -- an already-shaped line comes out unchanged, and a seam that was
++ * never shaped is joined.
++ *
++ * lam followed by an alef is one glyph in Arabic, never two, so that pair is
++ * consumed together.
++ */
++static u16 ShapeArabicChar(struct TextPrinter *textPrinter, u16 currChar)
++{
++    struct TextPrinterSubStruct *subStruct = (struct TextPrinterSubStruct *)(&textPrinter->subStructFields);
++    const u8 *next;
++    u8 base, nextBase, form;
++    u32 i;
++
++    if (currChar >= 0x100)
++    {
++        subStruct->arabicPrev = 0;
++        return currChar;
++    }
++    base = sArabicBaseOf[currChar];
++    if (base == ARABIC_NO_BASE)
++    {
++        subStruct->arabicPrev = 0;
++        return currChar;
++    }
++
++    // What follows, stepping over the codes that carry arguments. A line break
++    // or the end of the string is not a neighbour: nothing joins across it.
++    next = textPrinter->printerTemplate.currentChar;
++    while (*next == EXT_CTRL_CODE_BEGIN)
++        next += 2 + GetExtCtrlCodeLength(next[1]);
++    nextBase = (*next < 0x100) ? sArabicBaseOf[*next] : ARABIC_NO_BASE;
++
++    // A lam-alef glyph is already both letters: it only chooses between its
++    // own two forms, and nothing joins out of it.
++    if (base == ARABIC_BASE_LIGATURE)
++    {
++        currChar = sArabicLamAlef[sArabicLigatureOf[currChar]][subStruct->arabicPrev ? 2 : 1];
++        subStruct->arabicPrev = 0;
++        return currChar;
++    }
++
++    if (base == ARABIC_BASE_LAM && nextBase != ARABIC_NO_BASE)
++    {
++        for (i = 0; i < ARRAY_COUNT(sArabicLamAlef); i++)
++        {
++            if (sArabicLamAlef[i][0] == nextBase)
++            {
++                textPrinter->printerTemplate.currentChar = next + 1;
++                currChar = sArabicLamAlef[i][subStruct->arabicPrev ? 2 : 1];
++                subStruct->arabicPrev = 0; // an alef never joins forward
++                return currChar;
++            }
++        }
++    }
++
++    form = 0;
++    if (subStruct->arabicPrev)
++        form |= ARABIC_FORM_FINAL;
++    // A letter joins forward only if it has an initial form at all.
++    if (nextBase != ARABIC_NO_BASE && sArabicForms[base][ARABIC_FORM_INITIAL])
++        form |= ARABIC_FORM_INITIAL;
++
++    if (sArabicForms[base][form])
++        currChar = sArabicForms[base][form];
++    else if (sArabicForms[base][form & ARABIC_FORM_FINAL])
++        currChar = sArabicForms[base][form & ARABIC_FORM_FINAL];
++
++    // base + 1, so zero keeps meaning "nothing joins into this one"
++    subStruct->arabicPrev = (form & ARABIC_FORM_INITIAL) ? base + 1 : 0;
++    return currChar;
++}
++
+ void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
+ {
+     struct Window *window;
+@@ -663,9 +744,12 @@ void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
          glyph = &gCurGlyph;
          glyphHeight = &glyph->height;
  
@@ -83592,7 +83702,7 @@ index 398aaba26..d846f4533 100644
              textPrinter->printerTemplate.currentY,
              width,
              *glyphHeight,
-@@ -788,6 +792,8 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -788,6 +872,8 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
  {
      struct TextPrinterSubStruct *subStruct = (struct TextPrinterSubStruct *)(&textPrinter->subStructFields);
      const u8 *arrowTiles;
@@ -83601,7 +83711,7 @@ index 398aaba26..d846f4533 100644
  
      if (gTextFlags.autoScroll == 0)
      {
-@@ -800,7 +806,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -800,7 +886,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
              FillWindowPixelRect(
                  textPrinter->printerTemplate.windowId,
                  textPrinter->printerTemplate.bgColor << 4 | textPrinter->printerTemplate.bgColor,
@@ -83610,7 +83720,7 @@ index 398aaba26..d846f4533 100644
                  textPrinter->printerTemplate.currentY,
                  8,
                  16);
-@@ -823,7 +829,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -823,7 +909,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
                  sDownArrowYCoords[subStruct->downArrowYPosIdx],
                  8,
                  16,
@@ -83619,7 +83729,7 @@ index 398aaba26..d846f4533 100644
                  textPrinter->printerTemplate.currentY,
                  8,
                  16);
-@@ -837,10 +843,13 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -837,10 +923,13 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
  
  void TextPrinterClearDownArrow(struct TextPrinter *textPrinter)
  {
@@ -83634,6 +83744,23 @@ index 398aaba26..d846f4533 100644
          textPrinter->printerTemplate.currentY,
          8,
          16);
+@@ -968,6 +1057,7 @@ static u16 RenderText(struct TextPrinter *textPrinter)
+         case CHAR_NEWLINE:
+             textPrinter->printerTemplate.currentX = textPrinter->printerTemplate.x;
+             textPrinter->printerTemplate.currentY += (gFonts[textPrinter->printerTemplate.fontId].maxLetterHeight + textPrinter->printerTemplate.lineSpacing);
++            subStruct->arabicPrev = 0;
+             return RENDER_REPEAT;
+         case PLACEHOLDER_BEGIN:
+             textPrinter->printerTemplate.currentChar++;
+@@ -1120,6 +1210,8 @@ static u16 RenderText(struct TextPrinter *textPrinter)
+             return RENDER_FINISH;
+         }
+ 
++        currChar = ShapeArabicChar(textPrinter, currChar);
++
+         switch (subStruct->fontId)
+         {
+         case FONT_SMALL:
 diff --git a/src/title_screen.c b/src/title_screen.c
 index 118e5775b..a05ac55e6 100644
 --- a/src/title_screen.c

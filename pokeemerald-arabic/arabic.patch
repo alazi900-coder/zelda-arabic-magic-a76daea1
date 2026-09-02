@@ -81016,6 +81016,59 @@ index 0bad35eb0..f681502a4 100644
  
  
  //==================
+diff --git a/src/naming_screen.c b/src/naming_screen.c
+index ca3be258b..0ca583b4b 100644
+--- a/src/naming_screen.c
++++ b/src/naming_screen.c
+@@ -278,11 +278,13 @@ static const struct WindowTemplate sWindowTemplates[WIN_COUNT + 1] =
+ // This handles what characters get inserted when a key is pressed
+ // The keys shown on the keyboard are handled separately by sNamingScreenKeyboardText
+ static const u8 sKeyboardChars[KBPAGE_COUNT][KBROW_COUNT][KBCOL_COUNT] = {
++    // The Arabic page. Each key is the letter's isolated form; the shaper in
++    // text.c gives it its joining form once it sits in a name beside others.
+     [KEYBOARD_LETTERS_LOWER] = {
+-        __("abcdef ."),
+-        __("ghijkl ,"),
+-        __("mnopqrs "),
+-        __("tuvwxyz "),
++        __("ﺍﺏﺕﺙﺝﺡﺥﺩ"),
++        __("ﺫﺭﺯﺱﺵﺹﺽﻁ"),
++        __("ﻅﻉﻍﻑﻕﻙﻝﻡ"),
++        __("ﻥﻩﻭﻱﺓﻯﺀﺁ"),
+     },
+     [KEYBOARD_LETTERS_UPPER] = {
+         __("ABCDEF ."),
+@@ -303,10 +305,14 @@ static const u8 sPageColumnCounts[KBPAGE_COUNT] = {
+     [KEYBOARD_LETTERS_UPPER] = KBCOL_COUNT,
+     [KEYBOARD_SYMBOLS]       = 6
+ };
++// Mirrored, because the rows themselves draw mirrored (see CopyGlyphToWindow):
++// the first key of a row is the rightmost one on screen, so the cursor's first
++// column has to be the rightmost too. The Latin pages needed this as much as
++// the Arabic one -- their rows were already drawing reversed under the cursor.
+ static const u8 sPageColumnXPos[KBPAGE_COUNT][KBCOL_COUNT] = {
+-    [KEYBOARD_LETTERS_LOWER] = {0, 12, 24, 56, 68, 80, 92, 123},
+-    [KEYBOARD_LETTERS_UPPER] = {0, 12, 24, 56, 68, 80, 92, 123},
+-    [KEYBOARD_SYMBOLS]       = {0, 22, 44, 66, 88, 110}
++    [KEYBOARD_LETTERS_LOWER] = {125, 109, 93, 77, 61, 45, 29, 13},
++    [KEYBOARD_LETTERS_UPPER] = {122, 110, 98, 66, 54, 42, 30, 0},
++    [KEYBOARD_SYMBOLS]       = {122, 100, 78, 56, 34, 12}
+ };
+ 
+ static const struct NamingScreenTemplate *const sNamingScreenTemplates[];
+@@ -1606,8 +1612,10 @@ static void HandleDpadMovement(struct Task *task)
+         [INPUT_NONE]       = 0,
+         [INPUT_DPAD_UP]    = 0,
+         [INPUT_DPAD_DOWN]  = 0,
+-        [INPUT_DPAD_LEFT]  = -1,
+-        [INPUT_DPAD_RIGHT] = 1
++        // The keys read right to left, so the column the player sees to their
++        // right is the one before this in the row.
++        [INPUT_DPAD_LEFT]  = 1,
++        [INPUT_DPAD_RIGHT] = -1
+     };
+ 
+     const s16 sDpadDeltaY[] =
 diff --git a/src/string_util.c b/src/string_util.c
 index ed7bbb858..f455cbf67 100644
 --- a/src/string_util.c
@@ -83581,7 +83634,7 @@ index 438cafbb0..0cc578cf2 100644
 +const u8 gText_Berry[] = _("ﺗﻮﺕ");
 +const u8 gText_Berries[] = _("ﺗﻮﺕ");
 diff --git a/src/text.c b/src/text.c
-index 398aaba26..196c7c7f8 100644
+index 398aaba26..ff26cc4b9 100644
 --- a/src/text.c
 +++ b/src/text.c
 @@ -7,6 +7,7 @@
@@ -83602,7 +83655,7 @@ index 398aaba26..196c7c7f8 100644
      currY = textPrinter->printerTemplate.currentY;
      glyphPixels = gCurGlyph.gfxBufferTop;
      windowTiles = window->tileData;
-@@ -646,6 +648,85 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
+@@ -646,6 +648,92 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
      }
  }
  
@@ -83642,8 +83695,15 @@ index 398aaba26..196c7c7f8 100644
 +    // or the end of the string is not a neighbour: nothing joins across it.
 +    next = textPrinter->printerTemplate.currentChar;
 +    while (*next == EXT_CTRL_CODE_BEGIN)
++    {
++        // A code that moves the pen ends the run: the keys of a keyboard row
++        // are laid out with these and must not join into one another.
++        if (next[1] == EXT_CTRL_CODE_CLEAR || next[1] == EXT_CTRL_CODE_CLEAR_TO
++         || next[1] == EXT_CTRL_CODE_SKIP_TO)
++            break;
 +        next += 2 + GetExtCtrlCodeLength(next[1]);
-+    nextBase = (*next < 0x100) ? sArabicBaseOf[*next] : ARABIC_NO_BASE;
++    }
++    nextBase = (*next < 0x100 && *next != EXT_CTRL_CODE_BEGIN) ? sArabicBaseOf[*next] : ARABIC_NO_BASE;
 +
 +    // A lam-alef glyph is already both letters: it only chooses between its
 +    // own two forms, and nothing joins out of it.
@@ -83688,7 +83748,7 @@ index 398aaba26..196c7c7f8 100644
  void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
  {
      struct Window *window;
-@@ -663,9 +744,12 @@ void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
+@@ -663,9 +751,12 @@ void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
          glyph = &gCurGlyph;
          glyphHeight = &glyph->height;
  
@@ -83702,7 +83762,7 @@ index 398aaba26..196c7c7f8 100644
              textPrinter->printerTemplate.currentY,
              width,
              *glyphHeight,
-@@ -788,6 +872,8 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -788,6 +879,8 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
  {
      struct TextPrinterSubStruct *subStruct = (struct TextPrinterSubStruct *)(&textPrinter->subStructFields);
      const u8 *arrowTiles;
@@ -83711,7 +83771,7 @@ index 398aaba26..196c7c7f8 100644
  
      if (gTextFlags.autoScroll == 0)
      {
-@@ -800,7 +886,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -800,7 +893,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
              FillWindowPixelRect(
                  textPrinter->printerTemplate.windowId,
                  textPrinter->printerTemplate.bgColor << 4 | textPrinter->printerTemplate.bgColor,
@@ -83720,7 +83780,7 @@ index 398aaba26..196c7c7f8 100644
                  textPrinter->printerTemplate.currentY,
                  8,
                  16);
-@@ -823,7 +909,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -823,7 +916,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
                  sDownArrowYCoords[subStruct->downArrowYPosIdx],
                  8,
                  16,
@@ -83729,7 +83789,7 @@ index 398aaba26..196c7c7f8 100644
                  textPrinter->printerTemplate.currentY,
                  8,
                  16);
-@@ -837,10 +923,13 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -837,10 +930,13 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
  
  void TextPrinterClearDownArrow(struct TextPrinter *textPrinter)
  {
@@ -83744,7 +83804,7 @@ index 398aaba26..196c7c7f8 100644
          textPrinter->printerTemplate.currentY,
          8,
          16);
-@@ -968,6 +1057,7 @@ static u16 RenderText(struct TextPrinter *textPrinter)
+@@ -968,6 +1064,7 @@ static u16 RenderText(struct TextPrinter *textPrinter)
          case CHAR_NEWLINE:
              textPrinter->printerTemplate.currentX = textPrinter->printerTemplate.x;
              textPrinter->printerTemplate.currentY += (gFonts[textPrinter->printerTemplate.fontId].maxLetterHeight + textPrinter->printerTemplate.lineSpacing);
@@ -83752,7 +83812,28 @@ index 398aaba26..196c7c7f8 100644
              return RENDER_REPEAT;
          case PLACEHOLDER_BEGIN:
              textPrinter->printerTemplate.currentChar++;
-@@ -1120,6 +1210,8 @@ static u16 RenderText(struct TextPrinter *textPrinter)
+@@ -1061,6 +1158,7 @@ static u16 RenderText(struct TextPrinter *textPrinter)
+                 m4aMPlayContinue(&gMPlayInfo_BGM);
+                 return RENDER_REPEAT;
+             case EXT_CTRL_CODE_CLEAR:
++                subStruct->arabicPrev = 0;
+                 width = *textPrinter->printerTemplate.currentChar;
+                 textPrinter->printerTemplate.currentChar++;
+                 if (width > 0)
+@@ -1071,10 +1169,12 @@ static u16 RenderText(struct TextPrinter *textPrinter)
+                 }
+                 return RENDER_REPEAT;
+             case EXT_CTRL_CODE_SKIP_TO:
++                subStruct->arabicPrev = 0;
+                 textPrinter->printerTemplate.currentX = *textPrinter->printerTemplate.currentChar + textPrinter->printerTemplate.x;
+                 textPrinter->printerTemplate.currentChar++;
+                 return RENDER_REPEAT;
+             case EXT_CTRL_CODE_CLEAR_TO:
++                subStruct->arabicPrev = 0;
+                 {
+                     widthHelper = *textPrinter->printerTemplate.currentChar;
+                     widthHelper += textPrinter->printerTemplate.x;
+@@ -1120,6 +1220,8 @@ static u16 RenderText(struct TextPrinter *textPrinter)
              return RENDER_FINISH;
          }
  
@@ -83761,6 +83842,29 @@ index 398aaba26..196c7c7f8 100644
          switch (subStruct->fontId)
          {
          case FONT_SMALL:
+diff --git a/src/text_input_strings.c b/src/text_input_strings.c
+index 0fdaa875e..1a7b632e5 100644
+--- a/src/text_input_strings.c
++++ b/src/text_input_strings.c
+@@ -6,11 +6,13 @@ const u8 gText_EasyChatKeyboard_GHIJKL[] = _("{CLEAR 11}G{CLEAR 6}H{CLEAR 6}I{CL
+ const u8 gText_EasyChatKeyboard_MNOPQRS[] = _("{CLEAR 11}M{CLEAR 6}N{CLEAR 6}O{CLEAR 26}P{CLEAR 6}Q{CLEAR 6}R{CLEAR 6}S{CLEAR 26} ");
+ const u8 gText_EasyChatKeyboard_TUVWXYZ[] = _("{CLEAR 11}T{CLEAR 6}U{CLEAR 6}V{CLEAR 26}W{CLEAR 6}X{CLEAR 6}Y{CLEAR 6}Z{CLEAR 26} ");
+ 
+-// Naming Screen keyboard
+-const u8 gText_NamingScreenKeyboard_abcdef[] = _("{CLEAR 11}a{CLEAR 6}b{CLEAR 6}c{CLEAR 26}d{CLEAR 6}e{CLEAR 6}f{CLEAR 6} {CLEAR 30}.");
+-const u8 gText_NamingScreenKeyboard_ghijkl[] = _("{CLEAR 11}g{CLEAR 6}h{CLEAR 7}i{CLEAR 27}j{CLEAR 7}k{CLEAR 7}l{CLEAR 7} {CLEAR 30},");
+-const u8 gText_NamingScreenKeyboard_mnopqrs[] = _("{CLEAR 11}m{CLEAR 6}n{CLEAR 6}o{CLEAR 26}p{CLEAR 6}q{CLEAR 7}r{CLEAR 6}s{CLEAR 27} ");
+-const u8 gText_NamingScreenKeyboard_tuvwxyz[] = _("{CLEAR 11}t{CLEAR 6}u{CLEAR 6}v{CLEAR 26}w{CLEAR 6}x{CLEAR 6}y{CLEAR 6}z{CLEAR 26} ");
++// Naming Screen keyboard. The Arabic page is laid out on a 16px grid with
++// CLEAR_TO, which also keeps each key a letter of its own: a code that moves
++// the pen breaks the joining run (see ShapeArabicChar).
++const u8 gText_NamingScreenKeyboard_abcdef[] = _("{CLEAR_TO 8}ﺍ{CLEAR_TO 24}ﺏ{CLEAR_TO 40}ﺕ{CLEAR_TO 56}ﺙ{CLEAR_TO 72}ﺝ{CLEAR_TO 88}ﺡ{CLEAR_TO 104}ﺥ{CLEAR_TO 120}ﺩ");
++const u8 gText_NamingScreenKeyboard_ghijkl[] = _("{CLEAR_TO 8}ﺫ{CLEAR_TO 24}ﺭ{CLEAR_TO 40}ﺯ{CLEAR_TO 56}ﺱ{CLEAR_TO 72}ﺵ{CLEAR_TO 88}ﺹ{CLEAR_TO 104}ﺽ{CLEAR_TO 120}ﻁ");
++const u8 gText_NamingScreenKeyboard_mnopqrs[] = _("{CLEAR_TO 8}ﻅ{CLEAR_TO 24}ﻉ{CLEAR_TO 40}ﻍ{CLEAR_TO 56}ﻑ{CLEAR_TO 72}ﻕ{CLEAR_TO 88}ﻙ{CLEAR_TO 104}ﻝ{CLEAR_TO 120}ﻡ");
++const u8 gText_NamingScreenKeyboard_tuvwxyz[] = _("{CLEAR_TO 8}ﻥ{CLEAR_TO 24}ﻩ{CLEAR_TO 40}ﻭ{CLEAR_TO 56}ﻱ{CLEAR_TO 72}ﺓ{CLEAR_TO 88}ﻯ{CLEAR_TO 104}ﺀ{CLEAR_TO 120}ﺁ");
+ const u8 gText_NamingScreenKeyboard_ABCDEF[] = _("{CLEAR 11}A{CLEAR 6}B{CLEAR 6}C{CLEAR 26}D{CLEAR 6}E{CLEAR 6}F{CLEAR 6} {CLEAR 30}.");
+ const u8 gText_NamingScreenKeyboard_GHIJKL[] = _("{CLEAR 11}G{CLEAR 6}H{CLEAR 6}I{CLEAR 26}J{CLEAR 6}K{CLEAR 6}L{CLEAR 6} {CLEAR 30},");
+ const u8 gText_NamingScreenKeyboard_MNOPQRS[] = _("{CLEAR 11}M{CLEAR 6}N{CLEAR 6}O{CLEAR 26}P{CLEAR 6}Q{CLEAR 6}R{CLEAR 6}S{CLEAR 26} ");
 diff --git a/src/title_screen.c b/src/title_screen.c
 index 118e5775b..a05ac55e6 100644
 --- a/src/title_screen.c

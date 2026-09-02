@@ -81017,7 +81017,7 @@ index 0bad35eb0..f681502a4 100644
  
  //==================
 diff --git a/src/naming_screen.c b/src/naming_screen.c
-index ca3be258b..0ca583b4b 100644
+index ca3be258b..5136ed9b7 100644
 --- a/src/naming_screen.c
 +++ b/src/naming_screen.c
 @@ -278,11 +278,13 @@ static const struct WindowTemplate sWindowTemplates[WIN_COUNT + 1] =
@@ -81069,6 +81069,42 @@ index ca3be258b..0ca583b4b 100644
      };
  
      const s16 sDpadDeltaY[] =
+@@ -1897,22 +1905,26 @@ static void NamingScreen_Dummy(u8 bg, u8 page)
+ 
+ static void DrawTextEntry(void)
+ {
+-    u8 i;
+-    u8 temp[2];
+-    u16 extraWidth;
++    u8 i, n;
++    u8 text[POKEMON_NAME_BUFFER_SIZE];
+     u8 maxChars = sNamingScreen->template->maxChars;
+     u16 x = sNamingScreen->inputCharBaseXPos - 0x40;
+ 
+     FillWindowPixelBuffer(sNamingScreen->windows[WIN_TEXT_ENTRY], PIXEL_FILL(1));
+ 
+-    for (i = 0; i < maxChars; i++)
++    // Printed as one string, not a letter at a time on an 8px grid. Arabic
++    // letters have to see their neighbours to take their joining form (see
++    // ShapeArabicChar), and each drawn alone came out isolated and evenly
++    // spaced -- letters side by side rather than a word.
++    for (i = 0, n = 0; i < maxChars; i++)
+     {
+-        temp[0] = sNamingScreen->textBuffer[i];
+-        temp[1] = gText_ExpandedPlaceholder_Empty[0];
+-        extraWidth = (IsWideLetter(temp[0]) == TRUE) ? 2 : 0;
+-
+-        AddTextPrinterParameterized(sNamingScreen->windows[WIN_TEXT_ENTRY], FONT_NORMAL, temp, i * 8 + x + extraWidth, 1, TEXT_SKIP_DRAW, NULL);
++        if (sNamingScreen->textBuffer[i] == EOS)
++            break;
++        text[n++] = sNamingScreen->textBuffer[i];
+     }
++    text[n] = EOS;
++
++    AddTextPrinterParameterized(sNamingScreen->windows[WIN_TEXT_ENTRY], FONT_NORMAL, text, x, 1, TEXT_SKIP_DRAW, NULL);
+ 
+     TryDrawGenderIcon();
+     CopyWindowToVram(sNamingScreen->windows[WIN_TEXT_ENTRY], COPYWIN_GFX);
 diff --git a/src/string_util.c b/src/string_util.c
 index ed7bbb858..f455cbf67 100644
 --- a/src/string_util.c

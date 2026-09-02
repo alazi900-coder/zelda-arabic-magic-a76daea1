@@ -1206,7 +1206,7 @@ z17y(UN)uy;AcQd#%g1&ePQJi)vy=AoOuivXuPLBgid4yP`PC3&0#&Y_#BJjX$S1L2
 uF2?s=jCmJ7ap&*#`y|@7ZQHhO|H9tI#tcAU0mWSa0000<MNUMnLSTZ~#m}1n
 
 diff --git a/src/battle_controller_player.c b/src/battle_controller_player.c
-index 45bf1a17e..501efaa89 100644
+index 45bf1a17e..ba0586174 100644
 --- a/src/battle_controller_player.c
 +++ b/src/battle_controller_player.c
 @@ -263,7 +263,9 @@ static void HandleInputChooseAction(void)
@@ -1229,47 +1229,7 @@ index 45bf1a17e..501efaa89 100644
      {
          if (!(gActionSelectionCursor[gActiveBattler] & 1)) // if is B_ACTION_USE_MOVE or B_ACTION_SWITCH
          {
-@@ -546,7 +548,9 @@ static void HandleInputChooseMove(void)
-         BtlController_EmitTwoReturnValues(B_COMM_TO_ENGINE, B_ACTION_EXEC_SCRIPT, 0xFFFF);
-         PlayerBufferExecCompleted();
-     }
--    else if (JOY_NEW(DPAD_LEFT))
-+    // The menu reads right to left (see CopyGlyphToWindow), so the cell the
-+    // player sees to their right is the one the cursor bit calls left.
-+    else if (JOY_NEW(DPAD_RIGHT))
-     {
-         if (gMoveSelectionCursor[gActiveBattler] & 1)
-         {
-@@ -558,7 +562,7 @@ static void HandleInputChooseMove(void)
-             MoveSelectionDisplayMoveType();
-         }
-     }
--    else if (JOY_NEW(DPAD_RIGHT))
-+    else if (JOY_NEW(DPAD_LEFT))
-     {
-         if (!(gMoveSelectionCursor[gActiveBattler] & 1)
-          && (gMoveSelectionCursor[gActiveBattler] ^ 1) < gNumberOfMovesToChoose)
-@@ -774,7 +778,9 @@ static void HandleMoveSwitching(void)
-         MoveSelectionDisplayPPNumber();
-         MoveSelectionDisplayMoveType();
-     }
--    else if (JOY_NEW(DPAD_LEFT))
-+    // The menu reads right to left (see CopyGlyphToWindow), so the cell the
-+    // player sees to their right is the one the cursor bit calls left.
-+    else if (JOY_NEW(DPAD_RIGHT))
-     {
-         if (gMultiUsePlayerCursor & 1)
-         {
-@@ -792,7 +798,7 @@ static void HandleMoveSwitching(void)
-                 MoveSelectionCreateCursorAt(gMultiUsePlayerCursor, 27);
-         }
-     }
--    else if (JOY_NEW(DPAD_RIGHT))
-+    else if (JOY_NEW(DPAD_LEFT))
-     {
-         if (!(gMultiUsePlayerCursor & 1) && (gMultiUsePlayerCursor ^ 1) < gNumberOfMovesToChoose)
-         {
-@@ -1513,7 +1519,7 @@ static void MoveSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
+@@ -1513,7 +1515,7 @@ static void MoveSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
      src[0] = baseTileNum + 1;
      src[1] = baseTileNum + 2;
  
@@ -1278,7 +1238,7 @@ index 45bf1a17e..501efaa89 100644
      CopyBgTilemapBufferToVram(0);
  }
  
-@@ -1523,7 +1529,7 @@ static void MoveSelectionDestroyCursorAt(u8 cursorPosition)
+@@ -1523,7 +1525,7 @@ static void MoveSelectionDestroyCursorAt(u8 cursorPosition)
      src[0] = 0x1016;
      src[1] = 0x1016;
  
@@ -1287,7 +1247,7 @@ index 45bf1a17e..501efaa89 100644
      CopyBgTilemapBufferToVram(0);
  }
  
-@@ -1533,7 +1539,7 @@ void ActionSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
+@@ -1533,7 +1535,7 @@ void ActionSelectionCreateCursorAt(u8 cursorPosition, u8 baseTileNum)
      src[0] = 1;
      src[1] = 2;
  
@@ -1296,7 +1256,7 @@ index 45bf1a17e..501efaa89 100644
      CopyBgTilemapBufferToVram(0);
  }
  
-@@ -1543,7 +1549,7 @@ void ActionSelectionDestroyCursorAt(u8 cursorPosition)
+@@ -1543,7 +1545,7 @@ void ActionSelectionDestroyCursorAt(u8 cursorPosition)
      src[0] = 0x1016;
      src[1] = 0x1016;
  
@@ -1905,7 +1865,7 @@ index ed7bbb858..f455cbf67 100644
      return dest;
  }
 diff --git a/src/text.c b/src/text.c
-index 398aaba26..bd39da85c 100644
+index 398aaba26..d846f4533 100644
 --- a/src/text.c
 +++ b/src/text.c
 @@ -611,7 +611,8 @@ void CopyGlyphToWindow(struct TextPrinter *textPrinter)
@@ -1918,7 +1878,21 @@ index 398aaba26..bd39da85c 100644
      currY = textPrinter->printerTemplate.currentY;
      glyphPixels = gCurGlyph.gfxBufferTop;
      windowTiles = window->tileData;
-@@ -788,6 +789,8 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -663,9 +664,12 @@ void ClearTextSpan(struct TextPrinter *textPrinter, u32 width)
+         glyph = &gCurGlyph;
+         glyphHeight = &glyph->height;
+ 
++        // The span has to be cleared where the glyphs it covers are actually
++        // drawn -- mirrored (see CopyGlyphToWindow) -- or a CLEAR_TO in the
++        // middle of a line wipes out letters that were already printed.
+         FillBitmapRect4Bit(
+             &pixels_data,
+-            textPrinter->printerTemplate.currentX,
++            pixels_data.width - textPrinter->printerTemplate.currentX - width,
+             textPrinter->printerTemplate.currentY,
+             width,
+             *glyphHeight,
+@@ -788,6 +792,8 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
  {
      struct TextPrinterSubStruct *subStruct = (struct TextPrinterSubStruct *)(&textPrinter->subStructFields);
      const u8 *arrowTiles;
@@ -1927,7 +1901,7 @@ index 398aaba26..bd39da85c 100644
  
      if (gTextFlags.autoScroll == 0)
      {
-@@ -800,7 +803,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -800,7 +806,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
              FillWindowPixelRect(
                  textPrinter->printerTemplate.windowId,
                  textPrinter->printerTemplate.bgColor << 4 | textPrinter->printerTemplate.bgColor,
@@ -1936,7 +1910,7 @@ index 398aaba26..bd39da85c 100644
                  textPrinter->printerTemplate.currentY,
                  8,
                  16);
-@@ -823,7 +826,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -823,7 +829,7 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
                  sDownArrowYCoords[subStruct->downArrowYPosIdx],
                  8,
                  16,
@@ -1945,7 +1919,7 @@ index 398aaba26..bd39da85c 100644
                  textPrinter->printerTemplate.currentY,
                  8,
                  16);
-@@ -837,10 +840,13 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
+@@ -837,10 +843,13 @@ void TextPrinterDrawDownArrow(struct TextPrinter *textPrinter)
  
  void TextPrinterClearDownArrow(struct TextPrinter *textPrinter)
  {

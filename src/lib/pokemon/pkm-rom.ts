@@ -51,15 +51,8 @@ export interface PkmTable {
 const LETTER_START = 0xbb; // 'A'
 const LETTER_END = 0xee; // 'z'
 
-/**
- * Bytes that may appear inside a line without ending it.
- *
- * `codec` matters for the build made from source: its Arabic sits in codes
- * below this range, so without it every translated line is invisible to the
- * scan and the ROM looks almost empty.
- */
-function isTextByte(b: number, codec?: PkmCodec): boolean {
-  if (codec?.readsOwnArabic && codec.tables.byteToArabic.has(b)) return true;
+/** Bytes that may appear inside a line without ending it. */
+function isTextByte(b: number): boolean {
   if (b === 0x00) return true; // space
   if (b >= 0xa1 && b <= 0xee) return true; // digits, punctuation, letters
   if (b === 0xfa || b === 0xfb || b === 0xfe) return true; // scroll, paragraph, newline
@@ -104,16 +97,15 @@ export function scanPkmStrings(rom: Uint8Array, options: ScanOptions = {}): PkmS
   const out: PkmString[] = [];
   let i = 0;
   while (i < rom.length) {
-    if (!isTextByte(rom[i], codec)) {
+    if (!isTextByte(rom[i])) {
       i++;
       continue;
     }
     let start = i;
     let letters = 0;
-    while (i < rom.length && isTextByte(rom[i], codec)) {
+    while (i < rom.length && isTextByte(rom[i])) {
       const b = rom[i];
-      if ((b >= LETTER_START && b <= LETTER_END)
-       || (codec.readsOwnArabic && codec.tables.byteToArabic.has(b))) letters++;
+      if (b >= LETTER_START && b <= LETTER_END) letters++;
       if (b === PKM_VARIABLE) i++; // its argument byte is not text
       else if (b === PKM_FORMAT) i += pkmFormatLength(rom[i + 1] ?? 0) - 1;
       i++;

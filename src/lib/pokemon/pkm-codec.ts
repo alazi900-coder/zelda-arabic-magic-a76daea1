@@ -33,7 +33,7 @@ import {
 import {
   emeraldSourceCharTables,
   isEmeraldSourceRom,
-  readEmeraldSourceReference,
+  isTranslatedSourceRom,
 } from "@/lib/gba/emerald-source-arabic";
 
 export interface PkmCodec {
@@ -48,16 +48,6 @@ export interface PkmCodec {
   applyFont(rom: Uint8Array): Uint8Array;
   /** True when this ROM already carries them — it came out of a build. */
   hasFont(rom: Uint8Array): boolean;
-  /**
-   * True when a ROM already carrying Arabic is the right file to open.
-   *
-   * For the patched games it never is: their scanner reads text by the English
-   * character set, Arabic is invisible to it, and opening one drops every
-   * translated line. The source build is the opposite case — its Arabic is in
-   * the tables above, so the scanner reads it, and it is the only file there
-   * is to open.
-   */
-  readsOwnArabic?: boolean;
   /** No glyphs to inject: the build compiled the font in. */
   skipFontInjection?: boolean;
   /** This engine mirrors as it draws, so a line is stored in reading order. */
@@ -106,21 +96,20 @@ const EMERALD: PkmCodec = {
 /**
  * The build made from the pokeemerald source.
  *
- * Nothing is injected into it and nothing is reversed: it carries its own font
- * and mirrors its own drawing. The region kept clear of relocated lines is the
- * table of English originals the build wrote into its padding, not a font.
+ * Nothing is injected into it and nothing is reversed: the Arabic glyphs were
+ * compiled into its font, and the engine mirrors every window as it draws, so
+ * a line is stored in reading order. The file to open is the English variant,
+ * whose lines the scanner reads exactly as it reads retail Emerald's; `hasFont`
+ * therefore means "this build is already translated", which is the one file
+ * that must not be opened.
  */
 const EMERALD_SOURCE: PkmCodec = {
   game: "emerald-source",
   name: "Pokémon Emerald (بناء من الكود المصدري)",
   tables: emeraldSourceCharTables(),
-  fontRegion: (rom) => {
-    const ref = readEmeraldSourceReference(rom);
-    return ref ? [ref.region] : [];
-  },
+  fontRegion: () => [],
   applyFont: (rom) => rom,
-  hasFont: isEmeraldSourceRom,
-  readsOwnArabic: true,
+  hasFont: isTranslatedSourceRom,
   skipFontInjection: true,
   noReverse: true,
 };
@@ -148,8 +137,8 @@ export function pkmCodecByGame(game: PkmGame): PkmCodec {
  */
 export function pkmCodecFor(rom: Uint8Array): PkmCodec {
   // The source build is the one case the header cannot tell apart from retail
-  // Emerald, and the one case that can be recognised for certain: it carries
-  // the table of English originals its own build wrote.
+  // Emerald, and the one case that can be recognised for certain: the build
+  // compiles a marker of its own into the ROM.
   if (isEmeraldSourceRom(rom)) return EMERALD_SOURCE;
   return pkmRomTitle(rom).startsWith("POKEMON EMER") ? EMERALD : RUBY_DESTINY;
 }
@@ -162,6 +151,8 @@ export function pkmCodecFor(rom: Uint8Array): PkmCodec {
  * byte is written costs nothing and saves a build.
  */
 export function pkmForeignFont(rom: Uint8Array, chosen: PkmCodec): PkmCodec | null {
-  if (chosen.readsOwnArabic) return null;
-  return PKM_CODECS.find((c) => c.game !== chosen.game && !c.readsOwnArabic && c.hasFont(rom)) ?? null;
+  if (chosen.skipFontInjection) return null;
+  return PKM_CODECS.find(
+    (c) => c.game !== chosen.game && !c.skipFontInjection && c.hasFont(rom)
+  ) ?? null;
 }

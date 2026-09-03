@@ -151,53 +151,59 @@ export function toLogicalArabic(text: string): string {
   return out;
 }
 
-/** Written by the build's emit_reference.py, at the head of the table. */
-const REFERENCE_MAGIC = "PKMARABICREF1";
+/**
+ * The marker the build compiles into itself, in plain ASCII.
+ *
+ * The cartridge header of this build is the retail one, byte for byte, so the
+ * header cannot tell them apart — and getting it wrong matters, because the
+ * two use completely different character sets. The build says so itself
+ * instead: `src/text.c` carries this tag, and the two letters after it say
+ * whether its text is still English or already Arabic.
+ */
+const BUILD_TAG = "PKMARABICSRC1";
 
-function findReference(rom: Uint8Array): number {
-  const magic = [...REFERENCE_MAGIC].map((c) => c.charCodeAt(0));
-  // The table lives in the padding past the ROM's own data, so the search
-  // starts where that padding can begin rather than scanning the whole file.
-  for (let i = 0; i + magic.length < rom.length; i++) {
+function findTag(rom: Uint8Array): number {
+  const m = [...BUILD_TAG].map((c) => c.charCodeAt(0));
+  for (let i = 0; i + m.length + 2 <= rom.length; i++) {
     let hit = true;
-    for (let k = 0; k < magic.length; k++) {
-      if (rom[i + k] !== magic[k]) { hit = false; break; }
+    for (let k = 0; k < m.length; k++) {
+      if (rom[i + k] !== m[k]) { hit = false; break; }
     }
     if (hit) return i;
   }
   return -1;
 }
 
-/** True when this ROM came out of the pokeemerald build -- it carries the table. */
+/** True when this ROM came out of the pokeemerald build, either variant. */
 export function isEmeraldSourceRom(rom: Uint8Array): boolean {
-  return findReference(rom) >= 0;
-}
-
-export interface EmeraldSourceReference {
-  /** Where the table sits, so a relocated line is never written over it. */
-  region: { start: number; length: number };
-  /** line offset in this ROM -> the English it replaced */
-  english: Map<number, string>;
+  return findTag(rom) >= 0;
 }
 
 /**
- * Reads the table back. A line missing from it was never translated, and its
- * own bytes are still the English -- so nothing is lost by it being absent.
+ * True when that build's text is already Arabic.
+ *
+ * The scanner reads a line by the game's character set, and once a line is
+ * Arabic the English scan no longer finds it — so a translated build re-opened
+ * as if it were the English one would come back short, and every translation
+ * belonging to a line that vanished would be dropped with it. The English
+ * build is the one to open; this is how the page knows the difference.
  */
-export function readEmeraldSourceReference(rom: Uint8Array): EmeraldSourceReference | null {
-  const at = findReference(rom);
-  if (at < 0) return null;
-  const view = new DataView(rom.buffer, rom.byteOffset, rom.byteLength);
-  const count = view.getUint32(at + 16, true);
-  const english = new Map<number, string>();
-  let p = at + 20;
-  for (let i = 0; i < count && p + 8 <= rom.length; i++) {
-    const offset = view.getUint32(p, true);
-    const length = view.getUint32(p + 4, true);
-    p += 8;
-    if (p + length > rom.length) break;
-    english.set(offset, decodeEmeraldSourceBytes(rom.subarray(p, p + length)));
-    p += length;
-  }
-  return { region: { start: at, length: p - at }, english };
+export function isTranslatedSourceRom(rom: Uint8Array): boolean {
+  const at = findTag(rom);
+  if (at < 0) return false;
+  return rom[at + BUILD_TAG.length] === 0x41 && rom[at + BUILD_TAG.length + 1] === 0x52; // "AR"
+}
+
+/**
+ * Stamp the ROM the tool just built as translated.
+ *
+ * Without this the built file still says EN and could be re-opened as if its
+ * lines were English, which is the one mistake that silently costs the
+ * translator their work.
+ */
+export function markTranslatedSourceRom(rom: Uint8Array): void {
+  const at = findTag(rom);
+  if (at < 0) return;
+  rom[at + BUILD_TAG.length] = 0x41; // 'A'
+  rom[at + BUILD_TAG.length + 1] = 0x52; // 'R'
 }

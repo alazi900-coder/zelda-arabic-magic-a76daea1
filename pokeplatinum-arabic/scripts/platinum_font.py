@@ -11,10 +11,14 @@ The glyphs are the same hand-drawn pixel art the other games use, and the two
 fonts happen to share a palette exactly -- index 1 is the ink, 2 the shadow --
 so a cell can be pasted across without touching a pixel.
 """
-import json, re, sys
+import json, os, re, sys
 from PIL import Image
 
-sys.path.insert(0, ".")
+# The glyphs, and the code that reads them, are shared with the Emerald work:
+# the same hand-drawn pixel art, and the two games' fonts happen to use the
+# same palette, so a cell crosses over untouched.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "pokeemerald-arabic", "scripts"))
 from import_pkm_font import CELL, load_glyphs, needed_codepoints, to_image
 
 PLAT = "/home/user/decomps/pokeplatinum/"

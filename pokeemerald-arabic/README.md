@@ -264,3 +264,26 @@ DISPLAY=:77 SDL_AUDIODRIVER=dummy mgba -C audioSync=0 -3 pokeemerald.gba
 ## ما لم يُنجز بعد
 
 - دمج ملف الترجمات (1,028 اسماً + ~13,145 نص حوار وواجهة).
+
+## منفذ أندرويد
+
+التعريب يُركَّب على `gradenGnostic/pokeemerald-multiplatform` ويخرج تطبيقاً
+أصلياً (`app-debug.apk`)، لا محاكياً ولا روماً. بُني وتُحقّق من أن الخط العربي
+داخل `libmain.so`؛ **لم يُشغَّل على جهاز أندرويد.**
+
+يحتاج البنا: Android SDK 36، وNDK `26.3.11579264`، وCMake 3.22.1، و**JDK 17**
+(Gradle 8.1.1 يرفض 17+)، وأدوات ٣٢-بت لتوليد الرسوم، ثم:
+
+```sh
+git submodule update --init --recursive
+make -f Makefile_pc generated                 # رؤوس الخرائط
+make -f Makefile_pc NATIVE_LINUX=1 -k         # تحويل الرسوم (يفشل عند الربط، لا يضرّ)
+android/SDL2/android-project/gradlew -p android :app:assembleDebug
+```
+
+`arabic.patch` يُركَّب بـ`git apply --binary` ويترك خمس قِطَع مرفوضة، كلّها
+انزياح سياق: الفرع يسمّي الكود `EXT_CTRL_CODE_SKIP` لا `SKIP_TO`، وجداول عروض
+الخط عنده `INCBIN` لا `INCGFX`، وتعليقاته `/* */` لا `@`. النصوص لا تُرقَّع
+أصلاً — `merge_by_content.py` يحملها بالمحتوى: يقرن كل رسالة عربية بالإنجليزية
+التي حلّت محلّها من شجرتينا موضعاً بموضع، ثم يكتبها في أي ملف يحمل تلك
+الإنجليزية الآن، فلا يهمّه أين انزاحت الأسطر.

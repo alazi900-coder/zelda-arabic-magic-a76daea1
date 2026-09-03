@@ -56,7 +56,10 @@ def to_tool_text(lit):
             elif by[0] == 0xFD:
                 out.append("{FD:%02x}" % by[1])
             elif by[0] == 0xFC:
-                args = [by[1]] + [int(x, 0) for x in parts[1:]]
+                # A formatting code's argument is written either as a number or
+                # as one of the charmap's own names -- {COLOR LIGHT_RED}.
+                args = [by[1]] + [CONST[x][0] if x in CONST else int(x, 0)
+                                  for x in parts[1:]]
                 out.append("{FC:" + ":".join("%02x" % a for a in args) + "}")
             else:
                 out.append("{" + ":".join("%02x" % b for b in by) + "}")
@@ -135,4 +138,5 @@ def main():
     json.dump(pairs, open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False)
 
 
-main()
+if __name__ == "__main__":
+    main()

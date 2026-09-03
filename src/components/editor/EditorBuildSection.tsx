@@ -14,6 +14,7 @@ import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
+import { ensureEmeraldSourceSlots } from "@/lib/gba/emerald-source-slots";
 import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
 import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
 import { injectKHBbsArchivesIntoIso } from "@/lib/khbbs-iso";
@@ -280,7 +281,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       // The game the translator chose when the ROM was opened, not a guess at
       // its header: the two games write the same letter into different codes.
       const game = await idbGet<PkmGame>(PKM_GAME_KEY);
-      const result = buildPkmRom(new Uint8Array(buf), editor.state?.translations || {}, {
+      const rom = new Uint8Array(buf);
+      // Same table the scan used, so a line is written into the room the
+      // sources say it has. See emerald-source-slots.ts.
+      if (game === "emerald-source") await ensureEmeraldSourceSlots(rom);
+      const result = buildPkmRom(rom, editor.state?.translations || {}, {
         relocate: true,
         game,
         rtl: pkmRtl === "off" ? undefined : pkmRtl,

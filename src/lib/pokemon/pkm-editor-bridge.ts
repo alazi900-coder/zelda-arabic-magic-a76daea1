@@ -19,6 +19,7 @@ import { applyEmeraldArabicKeyboard } from "@/lib/gba/emerald-keyboard";
 import { applyEmeraldShapePatch } from "@/lib/gba/emerald-shape";
 import { applyEmeraldNameFieldPatch } from "@/lib/gba/emerald-name-field";
 import { markTranslatedSourceRom } from "@/lib/gba/emerald-source-arabic";
+import { emeraldSourceSlots } from "@/lib/gba/emerald-source-slots";
 import { indexPkmPointers } from "./pkm-pointers";
 import { pkmEntryFile } from "./pkm-categories";
 
@@ -83,7 +84,17 @@ export function extractPkmEntries(rom: Uint8Array, game?: PkmGame): PkmExtractRe
   // a two-letter line like «On» believable.
   const codec = game ? pkmCodecByGame(game) : pkmCodecFor(rom);
   const pointers = indexPkmPointers(rom);
-  const strings = scanPkmStrings(rom, { pointers, codec });
+  let strings = scanPkmStrings(rom, { pointers, codec });
+  // The build made from source knows which of those runs are really text and
+  // how much room each one has; see emerald-source-slots.ts. Without the table
+  // (a different build, or the file did not load) the bytes are all there is,
+  // which is how every other game is read.
+  const slots = codec.game === "emerald-source" ? emeraldSourceSlots() : null;
+  if (slots) {
+    strings = strings
+      .filter((s) => slots.has(s.offset))
+      .map((s) => ({ ...s, capacity: slots.get(s.offset)! + 1 }));
+  }
   // A list whose entries are reached by pointer can have its entries moved one
   // by one; one the game counts through by index cannot.
   markPointedTables(strings, pointers);

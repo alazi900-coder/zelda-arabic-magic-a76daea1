@@ -13,6 +13,7 @@ import {
   PKM_SOURCE_GAME,
 } from "@/lib/pokemon/pkm-editor-bridge";
 import { PKM_CODECS, pkmCodecByGame, type PkmGame } from "@/lib/pokemon/pkm-codec";
+import { ensureEmeraldSourceSlots } from "@/lib/gba/emerald-source-slots";
 import { APP_VERSION } from "@/lib/version";
 
 /**
@@ -59,6 +60,9 @@ export default function PokemonText() {
             "هذا روم مبني (يحمل خطّاً عربياً) — افتح الروم الأصلي. الأسطر المكتوبة بالعربية لا يقرأها المستخرِج، وفتحه هنا كان يمسح ترجماتها."
           );
         }
+        // The source build's own table of its text -- fetched here because
+        // the scan below is synchronous. See emerald-source-slots.ts.
+        if (game === "emerald-source") await ensureEmeraldSourceSlots(rom);
         const { entries, textBytes } = extractPkmEntries(rom, game);
         if (entries.length === 0) {
           throw new Error("لم يُعثر على نصوص في هذا الروم");

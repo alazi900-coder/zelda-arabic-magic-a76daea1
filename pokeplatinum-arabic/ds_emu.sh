@@ -26,6 +26,7 @@ up() {
     for _ in $(seq 25); do [ -n "$(win)" ] && break; sleep 1; done
     sleep 6
   }
+  [ -z "$(win)" ] && { echo "لم تُفتح نافذة"; return 1; }
   W=$(win); [ -z "$W" ] && { echo "لا نافذة"; return 1; }
   xdotool windowfocus "$W" 2>/dev/null
   echo "$W"
@@ -53,7 +54,12 @@ press() {
 
 case "$1" in
   up)      up ;;
-  restart) pkill -x desmume-cli; sleep 1; up ;;
+  restart)
+    # Wait for it to actually be gone: `up` skips launching when it still sees
+    # a process, and the screenshot then lands on nothing at all.
+    pkill -x desmume-cli
+    for _ in $(seq 15); do pgrep -x desmume-cli >/dev/null || break; sleep 1; done
+    up ;;
   shot)    shot "$2" ;;
   press)   press "$2" "$3" ;;
   down)    pkill -x desmume-cli ;;

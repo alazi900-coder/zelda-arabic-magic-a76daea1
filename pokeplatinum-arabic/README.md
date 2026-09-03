@@ -20,7 +20,20 @@
 | الخط | ١٢٩ شكلاً في `font_system` و`font_message` و`font_subscreen` |
 | الترميز | أسطر في `tools/msgenc/charmap.txt`، والمزاح من الكانا يُعلَّق لا يُترك يظلّل |
 | عكس الرسم | `Window_CopyGlyph` في `src/bg_window.c` |
-| التشكيل | لم يبدأ بعد |
+| التشكيل | `ShapeArabicChar` في `src/render_text.c`، وحالته في البايتات الفارغة من `substruct[7]` |
+
+## كيف تُركَّب
+
+```sh
+git clone https://github.com/pret/pokeplatinum
+cd pokeplatinum
+git apply --binary .../platinum-arabic.patch
+python3 .../scripts/gen_shaping.py     # يولّد include/arabic_shaping.h
+make rom                                # يتخطّى فحص البصمة، وهو المطلوب بعد التعديل
+```
+
+`arabic_shaping.h` مولَّد فلا يدخل الرقعة، و`platinum_font.py` يُشغَّل مرةً
+واحدة لحقن الرسمات (وهي داخل الرقعة أصلاً كصور).
 
 ## درسان دفعنا ثمنهما
 

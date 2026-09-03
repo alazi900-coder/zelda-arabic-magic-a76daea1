@@ -1,3 +1,18 @@
+diff --git a/include/render_text.h b/include/render_text.h
+index baf38494..d63cd3d0 100644
+--- a/include/render_text.h
++++ b/include/render_text.h
+@@ -52,6 +52,10 @@ typedef struct TextPrinterSubstruct {
+     u8 scrollArrowYPosIdx : 2;
+     u8 fontIDSet : 1;
+     u8 autoScrollDelay : 8;
++    // The base letter of the character just drawn, plus one, so that zero
++    // keeps meaning "nothing joins into the next one". Three of the seven
++    // bytes this struct is given were unused.
++    u8 arabicPrev;
+ } TextPrinterSubstruct;
+ 
+ typedef struct TextPrinter {
 diff --git a/res/fonts/font_message.json b/res/fonts/font_message.json
 index 16526700..5b93c9dc 100644
 --- a/res/fonts/font_message.json
@@ -2736,6 +2751,118 @@ index bd3dd8ff..91d82522 100644
      glyphSizeParam = 0;
      if (srcRight > 8) {
          glyphSizeParam |= 1;
+diff --git a/src/render_text.c b/src/render_text.c
+index 8a98037d..1363de4e 100644
+--- a/src/render_text.c
++++ b/src/render_text.c
+@@ -1,5 +1,7 @@
+ #include "render_text.h"
+ 
++#include "arabic_shaping.h"
++
+ #include <nitro.h>
+ #include <string.h>
+ 
+@@ -39,6 +41,82 @@ enum RenderState {
+     RENDER_STATE_PAUSE,
+ };
+ 
++/**
++ * Give an Arabic letter the shape its neighbours call for, as it is drawn.
++ *
++ * Arabic letters change form depending on what they join to, and a game builds
++ * half its sentences while it runs -- a name the player typed, a species
++ * dropped into a line of dialogue. Those seams only exist at print time, so
++ * that is where the joining has to be decided; text shaped when it was stored
++ * would come apart at exactly the places players look at most.
++ *
++ * Each character is read back to its base letter first, so a line that already
++ * carries the right forms passes through unchanged and one that does not gets
++ * fixed.
++ */
++static charcode_t ShapeArabicChar(TextPrinter *printer, TextPrinterSubstruct *substruct, charcode_t currChar)
++{
++    const charcode_t *next;
++    u8 base, nextBase, form;
++    u32 i;
++
++    if (currChar >= ARABIC_CODE_MAX) {
++        substruct->arabicPrev = 0;
++        return currChar;
++    }
++
++    base = sArabicBaseOf[currChar];
++
++    if (base == ARABIC_NO_BASE) {
++        substruct->arabicPrev = 0;
++        return currChar;
++    }
++
++    // What comes next. Every control code in this game is 0x0200 or above, so
++    // the same test that finds a letter also refuses to join across one.
++    next = printer->template.toPrint.raw;
++    nextBase = (*next < ARABIC_CODE_MAX) ? sArabicBaseOf[*next] : ARABIC_NO_BASE;
++
++    // A lam-alef glyph is already both letters: it only chooses between its own
++    // two forms, and nothing joins out of it.
++    if (base == ARABIC_BASE_LIGATURE) {
++        currChar = sArabicLamAlef[sArabicLigatureOf[currChar]][substruct->arabicPrev ? 2 : 1];
++        substruct->arabicPrev = 0;
++        return currChar;
++    }
++
++    if (base == ARABIC_BASE_LAM && nextBase != ARABIC_NO_BASE) {
++        for (i = 0; i < NELEMS(sArabicLamAlef); i++) {
++            if (sArabicLamAlef[i][0] == nextBase) {
++                printer->template.toPrint.raw = next + 1;   // the alef is drawn with the lam
++                currChar = sArabicLamAlef[i][substruct->arabicPrev ? 2 : 1];
++                substruct->arabicPrev = 0;                  // an alef never joins forward
++                return currChar;
++            }
++        }
++    }
++
++    form = 0;
++
++    if (substruct->arabicPrev) {
++        form |= ARABIC_FORM_FINAL;
++    }
++
++    // A letter joins forward only if it has an initial form at all.
++    if (nextBase != ARABIC_NO_BASE && sArabicForms[base][ARABIC_FORM_INITIAL]) {
++        form |= ARABIC_FORM_INITIAL;
++    }
++
++    if (sArabicForms[base][form]) {
++        currChar = sArabicForms[base][form];
++    } else if (sArabicForms[base][form & ARABIC_FORM_FINAL]) {
++        currChar = sArabicForms[base][form & ARABIC_FORM_FINAL];
++    }
++
++    substruct->arabicPrev = (form & ARABIC_FORM_INITIAL) ? base + 1 : 0;
++    return currChar;
++}
++
+ enum RenderResult RenderText(TextPrinter *printer)
+ {
+     TextPrinterSubstruct *substruct = (TextPrinterSubstruct *)printer->substruct;
+@@ -77,6 +155,7 @@ enum RenderResult RenderText(TextPrinter *printer)
+             return RENDER_FINISH;
+ 
+         case CHAR_CR:
++            substruct->arabicPrev = 0;
+             printer->template.currX = printer->template.x;
+             printer->template.currY += Font_GetAttribute(printer->template.fontID, 1) + printer->template.lineSpacing;
+             return RENDER_REPEAT;
+@@ -194,6 +273,8 @@ enum RenderResult RenderText(TextPrinter *printer)
+             return RENDER_UPDATE;
+         }
+ 
++        currChar = ShapeArabicChar(printer, substruct, currChar);
++
+         const TextGlyph *glyph = Font_TryLoadGlyph(substruct->fontID, currChar);
+         Window_CopyGlyph(printer->template.window,
+             glyph->gfx,
 diff --git a/tools/msgenc/charmap.txt b/tools/msgenc/charmap.txt
 index 2c6b0584..6018e400 100644
 --- a/tools/msgenc/charmap.txt

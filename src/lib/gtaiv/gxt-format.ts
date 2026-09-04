@@ -223,11 +223,64 @@ function gtaIvSourceExtendedUnitBudget(sourceText: string): Map<number, number> 
  * own font. It is safe to call while editing: it never validates or mutates
  * text.
  */
-export function analyzeGtaIvUnsupportedCharacters(translation: string, sourceText = ""): GtaIvUnsupportedCharacterAnalysis {
+/**
+ * A `~…~` token that occupies space on screen — a button prompt, a value the
+ * game substitutes in. It sits between words and has to move with them when
+ * the line is laid out right-to-left.
+ *
+ * Style tokens are single letters (`~r~` red, `~s~` standard, `~n~` newline,
+ * and the rest), and they are deliberately *not* in this set: a colour applies
+ * from where it appears to the end of the line, so moving one would repaint a
+ * different span than the translator asked for. Leaving them where they are
+ * keeps colours behaving exactly as they did.
+ */
+const gtaIvContentTokenPattern = /^~(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]+)~$/;
+
+/**
+ * Lays out one translated line for GTA IV's left-to-right renderer.
+ *
+ * Each run of Arabic is shaped and reversed into visual order, which was
+ * already happening. What was missing is that the *runs themselves* have to be
+ * reversed around anything visible between them: "اضغط ~INPUT_PICKUP~ لتغيير
+ * الملابس" was written with "اضغط" still first, so on screen it landed on the
+ * left of the button and the sentence read back to front.
+ *
+ * `~n~` is a hard boundary — it ends a line, and lines keep their order.
+ * Style tokens are boundaries too, for the reason given above; that also means
+ * a line carrying one is laid out in the spans between them, which is the same
+ * treatment it received before this function existed.
+ */
+function layOutGtaIvArabicLine(translation: string): string {
   const pieces = translation.split(/(~[^~]+~)/g);
-  const processedText = pieces.map((piece, index) => (
-    index % 2 === 1 ? piece : processGtaIvArabicPiece(piece)
-  )).join("");
+  const out: string[] = [];
+  let span: string[] = [];
+
+  const flush = () => {
+    // Reversed, because the first thing said belongs on the right.
+    for (let i = span.length - 1; i >= 0; i -= 1) out.push(span[i]);
+    span = [];
+  };
+
+  pieces.forEach((piece, index) => {
+    const isToken = index % 2 === 1;
+    if (!isToken) {
+      if (piece !== "") span.push(processGtaIvArabicPiece(piece));
+      return;
+    }
+    if (gtaIvContentTokenPattern.test(piece)) {
+      span.push(piece);
+      return;
+    }
+    flush();
+    out.push(piece);
+  });
+  flush();
+
+  return out.join("");
+}
+
+export function analyzeGtaIvUnsupportedCharacters(translation: string, sourceText = ""): GtaIvUnsupportedCharacterAnalysis {
+  const processedText = layOutGtaIvArabicLine(translation);
   const unsupported = new Map<string, GtaIvUnsupportedCharacter>();
   const sourceExtendedUnits = gtaIvSourceExtendedUnitBudget(sourceText);
 

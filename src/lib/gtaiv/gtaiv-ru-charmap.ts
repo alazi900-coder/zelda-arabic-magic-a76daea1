@@ -11,41 +11,41 @@
  * `fonts_r_streamed_1.wtd`'s texture (RSC5 → zlib → DXT5) into a bitmap and
  * reading it directly. Units below 91 stay ordinary ASCII, unaffected.
  *
- * This table's 124 entries were built three independent ways and
- * cross-checked against each other:
+ * The table is not inferred any more: it is read off the mod's own
+ * `fonts_r.dat`, which is what the game itself consults. Its `[MAP]` block
+ * lists 208 glyph cells in atlas order — 84 ASCII, then 124 Arabic — and that
+ * order is Unicode's own presentation-form order (U+061F, then U+FE80…U+FEFC
+ * minus the two lam-alef-with-madda ligatures this font does not draw). Zipping
+ * the two gives every entry below with nothing left to judge by eye.
  *
- *   1. Reading each glyph cell by eye off the decoded texture.
- *   2. A structural model: standard Arabic alphabetical order, with a
- *      non-connecting letter (ا د ذ ر ز و, plus the hamza carriers and ة)
- *      getting 2 forms and a connecting letter getting 4 — which lands on
- *      exactly 124 units and Unicode's own per-letter form order.
- *   3. Automated shape matching against a different Arabic font already
- *      bundled in this project (public/tmpfonts/arabic.ttf).
+ * That reading agreed with 120 of the 124 entries the table had been built with
+ * by other means (cell-by-cell inspection of the decoded texture, a structural
+ * model of Arabic form counts, and automated shape matching against
+ * public/tmpfonts/arabic.ttf). The four it corrected were the whole yeh family,
+ * and they had been rotated by two positions:
  *
- * All three agreed on the base letter for nearly every cell — dot count and
- * position, the deciding signal, does not change with font style. The
- * decisive test was end-to-end: decoding real translated lines straight out
- * of the mod's own GXT, through this table, produced grammatical, coherent
- * Arabic sentences — a wrong base letter would have shown up as nonsense
- * words spread across unrelated lines, and none did.
+ *     unit 180  was YEH INITIAL   → is YEH ISOLATED
+ *     unit 185  was YEH MEDIAL    → is YEH FINAL
+ *     unit 186  was YEH ISOLATED  → is YEH INITIAL
+ *     unit 471  was YEH FINAL     → is YEH MEDIAL
  *
- * Confidence is not uniform, and one region was measured wrong at first: the
- * yeh family and the lam-alef ligature tail scored weakly on the automated
- * match (this font's style differs from the reference) and the source art is
- * small there, so the initial table read units 186/471 as the rare
- * lam-alef-with-madda ligature. A real-corpus frequency audit (1,991,679
- * text units scanned across the mod's own `russian.gxt`) caught this: those
- * two units were the 4th and 7th most frequent glyphs in the entire file —
- * impossible for a rare ligature, and exactly what plain yeh (one of
- * Arabic's most common letters) should look like. They are yeh's isolated
- * and final forms; alef maksura (units 191, 171) turned out to have its own
- * dedicated glyphs after all, matching what the automated pixel-shape
- * matcher had independently guessed for them. See the alias block below for
- * how the now-unclaimed madda ligature is handled. The remaining ligature
- * pairs (253/170 = hamza-above, 176/168 = hamza-below, 387/255 = plain) kept
- * their frequency-plausible order but their internal iso/final pairing is
- * still the least certain part of this table — a translation rendering the
- * wrong ligature variant is a cosmetic glitch, not a different word.
+ * In game this split every word containing a yeh: a medial yeh was written with
+ * the glyph for a final one, which does not join to what follows, so «خيارات»
+ * came out as «خي ارات». And because the two forms actually emitted (isolated
+ * and final) look nearly alike, it read as though the font had only one yeh.
+ *
+ * The reasoning that produced the error is worth keeping, because it was
+ * plausible: a frequency audit over the mod's own `russian.gxt` (1,991,679 text
+ * units) found units 186 and 471 to be the 4th and 7th most frequent glyphs in
+ * the file, which correctly ruled out the rare ligature the table had guessed —
+ * but they were then assigned yeh's *isolated and final* forms. Ranks 4 and 7 in
+ * Arabic prose belong to the *medial and initial* forms, which are the common
+ * ones; isolated yeh is rare. Frequency identified the letter and could not
+ * identify the form, and that distinction was not made.
+ *
+ * The lam-alef ligature pairs (253/170 = hamza-above, 176/168 = hamza-below,
+ * 387/255 = plain) now also come from `[MAP]` rather than from frequency, and
+ * agree with what was there.
  */
 
 /** unit → Arabic presentation-form code point (U+FE70..U+FEFF range, plus U+061F).
@@ -68,10 +68,10 @@ const UNIT_TO_CODEPOINT_PAIRS: readonly [number, number][] = [
   [170, 0xfef8],
   [171, 0xfef0],
   [176, 0xfef9],
-  [180, 0xfef3],
+  [180, 0xfef1],
   [182, 0xfe87],
-  [185, 0xfef4],
-  [186, 0xfef1],
+  [185, 0xfef2],
+  [186, 0xfef3],
   [188, 0xfe88],
   [189, 0xfe89],
   [190, 0xfe8a],
@@ -167,7 +167,7 @@ const UNIT_TO_CODEPOINT_PAIRS: readonly [number, number][] = [
   [439, 0xfee6],
   [440, 0xfee7],
   [443, 0xfee8],
-  [471, 0xfef2],
+  [471, 0xfef4],
   [490, 0xfebe],
   [492, 0xfebf],
   [494, 0xfec0],

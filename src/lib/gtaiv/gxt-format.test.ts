@@ -265,6 +265,50 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(encoded.processedText).toContain("~z~");
   });
 
+  it("writes each yeh in the form the mod's fonts_r.dat says that unit draws", () => {
+    // The four yeh units had been rotated by two positions, so a medial yeh was
+    // written with the glyph for a final one — which does not join forwards, and
+    // split every word carrying it: «خيارات» read «خي ارات» on screen.
+    // Units come out in visual order, so each word reads right to left here.
+    expect(ruUnitsFor("ي")).toEqual([180]); // isolated
+    expect(ruUnitsFor("بي")).toEqual([185, 198]); // final, after an initial beh
+    expect(ruUnitsFor("يب")).toEqual([197, 186]); // initial, before a final beh
+    expect(ruUnitsFor("بيب")).toEqual([197, 471, 198]); // medial, joined both sides
+  });
+
+  it("puts a run of Arabic on the right of the button prompt that follows it", () => {
+    // GTA IV draws left to right, so the first thing said belongs on the right.
+    // Each run was already reversed on its own; the runs themselves were not,
+    // so «اضغط ~INPUT_PICKUP~ للخروج» came out with «اضغط» on the wrong side.
+    const units = Array.from(encodeGtaIvArabicText(
+      "Press ~INPUT_PICKUP~ to leave",
+      "اضغط ~INPUT_PICKUP~ للخروج",
+    ).textUnits);
+    const tagStart = units.indexOf(0x7e); // the first '~'
+    const press = ruUnitsFor("اضغط");
+    const leave = ruUnitsFor("للخروج");
+    // "اضغط" is said first, so its glyphs must come after the tag in the file,
+    // which puts them to the right of the button on screen; "للخروج" precedes it.
+    expect(units.indexOf(press[0])).toBeGreaterThan(tagStart);
+    expect(units.indexOf(leave[0])).toBeLessThan(tagStart);
+  });
+
+  it("does not reorder across a line break", () => {
+    const units = Array.from(encodeGtaIvArabicText("A~n~B", "الأول~n~الثاني").textUnits);
+    const brk = units.indexOf(0x7e);
+    // Each line is laid out on its own, and the lines keep their order.
+    expect(units.slice(0, brk)).toEqual(ruUnitsFor("الأول"));
+    expect(units.slice(brk + 3)).toEqual(ruUnitsFor("الثاني"));
+  });
+
+  it("leaves a colour token where the translator put it", () => {
+    // A colour applies from where it appears to the end of the line, so moving
+    // it would repaint a different span than was asked for.
+    const encoded = encodeGtaIvArabicText("~r~ Hello ~s~ world", "~r~ مرحبا ~s~ بالعالم");
+    expect(encoded.processedText.indexOf("~r~")).toBeLessThan(encoded.processedText.indexOf("~s~"));
+    expect(encoded.processedText.indexOf("~r~")).toBe(0);
+  });
+
   it("keeps a protected dollar amount readable as $100 while encoding Arabic prose", () => {
     const encoded = encodeGtaIvArabicText("Pay $100", "ادفع $100");
     expect(encoded.processedText).toContain("$100");

@@ -1,8 +1,8 @@
 diff --git a/include/render_text.h b/include/render_text.h
-index baf38494..d63cd3d0 100644
+index baf38494..f8a8fc46 100644
 --- a/include/render_text.h
 +++ b/include/render_text.h
-@@ -52,6 +52,10 @@ typedef struct TextPrinterSubstruct {
+@@ -52,6 +52,20 @@ typedef struct TextPrinterSubstruct {
      u8 scrollArrowYPosIdx : 2;
      u8 fontIDSet : 1;
      u8 autoScrollDelay : 8;
@@ -10,6 +10,16 @@ index baf38494..d63cd3d0 100644
 +    // keeps meaning "nothing joins into the next one". Three of the seven
 +    // bytes this struct is given were unused.
 +    u8 arabicPrev;
++    // A run of digits or Latin letters inside right-to-left text still reads
++    // left to right, so it has to survive the mirroring the window applies to
++    // every glyph. These describe the run currently being drawn: how many of
++    // its glyphs are left, where it began, and how wide the whole run is --
++    // enough to place each glyph at its mirror image *within the run*, which
++    // the window's own mirroring then turns the right way round again. Zero
++    // ltrLeft means no run is in progress.
++    u8 ltrLeft;
++    u8 ltrStartX;
++    u8 ltrWidth;
  } TextPrinterSubstruct;
  
  typedef struct TextPrinter {
@@ -2776,7 +2786,7 @@ index bd3dd8ff..91d82522 100644
      if (srcRight > 8) {
          glyphSizeParam |= 1;
 diff --git a/src/render_text.c b/src/render_text.c
-index 8a98037d..1363de4e 100644
+index 8a98037d..7bfdab8a 100644
 --- a/src/render_text.c
 +++ b/src/render_text.c
 @@ -1,5 +1,7 @@
@@ -2787,7 +2797,7 @@ index 8a98037d..1363de4e 100644
  #include <nitro.h>
  #include <string.h>
  
-@@ -39,6 +41,82 @@ enum RenderState {
+@@ -39,6 +41,159 @@ enum RenderState {
      RENDER_STATE_PAUSE,
  };
  
@@ -2867,26 +2877,126 @@ index 8a98037d..1363de4e 100644
 +    return currChar;
 +}
 +
++// Digits and Latin letters occupy one unbroken stretch of the character set,
++// so a left-to-right character is a single range test.
++#define IS_LTR_CHAR(c) ((c) >= CHAR_0 && (c) <= CHAR_z)
++
++/**
++ * Whether a character has no direction of its own -- punctuation, symbols, the
++ * space -- as opposed to a letter or digit, which does.
++ *
++ * The apostrophe in "It's", the comma in "1,000" and the space in "TM 42"
++ * belong to the text beside them; the same space between two Arabic words
++ * belongs to the Arabic. Which it is depends on the neighbours, so ScanLtrRun
++ * holds these back until a further left-to-right character proves they are
++ * inside the run. Enumerating them was a mistake -- the list was always going
++ * to miss one, and it missed the apostrophe -- so the test is what they are
++ * not: not a control code, not Latin, not Arabic.
++ */
++static BOOL IsLtrNeutralChar(charcode_t c)
++{
++    if (c >= CHAR_CONTROL_SCREEN_INDICATOR || IS_LTR_CHAR(c)) {
++        return FALSE;
++    }
++
++    return c >= ARABIC_CODE_MAX || sArabicBaseOf[c] == ARABIC_NO_BASE;
++}
++
++/**
++ * Measure the left-to-right run starting at `str` and remember it on the printer.
++ *
++ * The window mirrors every glyph it is handed, which is what puts Arabic on the
++ * right way round -- but it does the same to a level number or a Pokémon's name
++ * in Latin, and those still read left to right. "25" came out "52".
++ *
++ * Rather than fight the mirroring, this feeds it what it needs: each glyph of
++ * the run is placed at its mirror image within the run's own span, so that the
++ * window's mirroring cancels out and the run reads forwards again, while the
++ * run as a whole still sits where right-to-left order puts it.
++ *
++ * Measuring costs one pass over the run, once, when its first character is
++ * reached. Font_TryLoadGlyph overwrites the font's shared glyph buffer, so this
++ * has to run before the caller loads the glyph it is about to draw.
++ */
++static void ScanLtrRun(TextPrinter *printer, TextPrinterSubstruct *substruct, const charcode_t *str)
++{
++    u32 count = 0, width = 0, heldCount = 0, heldWidth = 0;
++
++    while (TRUE) {
++        charcode_t c = *str;
++        u32 advance;
++
++        if (IS_LTR_CHAR(c)) {
++            advance = Font_TryLoadGlyph(substruct->fontID, c)->width + printer->template.letterSpacing;
++            count += heldCount + 1;
++            width += heldWidth + advance;
++            heldCount = 0;
++            heldWidth = 0;
++        } else if (count != 0 && IsLtrNeutralChar(c)) {
++            advance = Font_TryLoadGlyph(substruct->fontID, c)->width + printer->template.letterSpacing;
++            heldCount++;
++            heldWidth += advance;
++        } else {
++            break;
++        }
++
++        str++;
++    }
++
++    // A run wider than a screen cannot happen, but the fields are bytes, so a
++    // run that would not fit in them is left to render as it did before.
++    if (count == 0 || count > 0xFF || width > 0xFF) {
++        return;
++    }
++
++    substruct->ltrLeft = count;
++    substruct->ltrStartX = printer->template.currX;
++    substruct->ltrWidth = width;
++}
++
  enum RenderResult RenderText(TextPrinter *printer)
  {
      TextPrinterSubstruct *substruct = (TextPrinterSubstruct *)printer->substruct;
-@@ -77,6 +155,7 @@ enum RenderResult RenderText(TextPrinter *printer)
+@@ -77,6 +232,8 @@ enum RenderResult RenderText(TextPrinter *printer)
              return RENDER_FINISH;
  
          case CHAR_CR:
 +            substruct->arabicPrev = 0;
++            substruct->ltrLeft = 0;
              printer->template.currX = printer->template.x;
              printer->template.currY += Font_GetAttribute(printer->template.fontID, 1) + printer->template.lineSpacing;
              return RENDER_REPEAT;
-@@ -194,6 +273,8 @@ enum RenderResult RenderText(TextPrinter *printer)
+@@ -194,12 +351,29 @@ enum RenderResult RenderText(TextPrinter *printer)
              return RENDER_UPDATE;
          }
  
 +        currChar = ShapeArabicChar(printer, substruct, currChar);
 +
++        if (substruct->ltrLeft == 0 && IS_LTR_CHAR(currChar)) {
++            ScanLtrRun(printer, substruct, printer->template.toPrint.raw - 1);
++        }
++
          const TextGlyph *glyph = Font_TryLoadGlyph(substruct->fontID, currChar);
++        u16 destX = printer->template.currX;
++
++        if (substruct->ltrLeft != 0) {
++            // The mirror image of this glyph's slot within the run, so that the
++            // window's own mirroring puts it back in reading order.
++            destX = substruct->ltrStartX + substruct->ltrWidth
++                - (printer->template.currX - substruct->ltrStartX)
++                - (glyph->width + printer->template.letterSpacing);
++            substruct->ltrLeft--;
++        }
++
          Window_CopyGlyph(printer->template.window,
              glyph->gfx,
+             glyph->width,
+             glyph->height,
+-            printer->template.currX,
++            destX,
+             printer->template.currY,
+             printer->template.glyphTable);
+ 
 diff --git a/tools/msgenc/charmap.txt b/tools/msgenc/charmap.txt
 index 2c6b0584..6018e400 100644
 --- a/tools/msgenc/charmap.txt

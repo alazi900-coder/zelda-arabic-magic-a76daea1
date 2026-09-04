@@ -3,9 +3,14 @@
 Platinum is kinder than Emerald here. Its font manager reads a glyph as
 `narcBuf + c * glyphSize` -- the glyph index *is* the character code -- and the
 sheet holds 509 of them while the English game prints only 197. So the 129
-Arabic forms move into slots nothing draws, and not one letter, arrow or
-special glyph is taken from the game. (In Emerald there were 95 free slots for
-129 forms, and the shortfall is what cost us the four direction arrows.)
+Arabic forms move into slots nothing draws in dialogue. (In Emerald there were
+95 free slots for 129 forms, and the shortfall is what cost us the four
+direction arrows.)
+
+One glyph the English game draws is not dialogue, though: the list-cursor
+arrow, built straight from a C constant rather than any JSON string (see
+`ARROW_MENU_CODE` below). Scanning res/**/*.json cannot see a code that never
+appears in a string, so that one is reserved by hand instead.
 
 The glyphs are the same hand-drawn pixel art the other games use, and the two
 fonts happen to share a palette exactly -- index 1 is the ink, 2 the shadow --
@@ -108,7 +113,16 @@ def main(apply_changes):
     # forms -- which this build spells but never prints, and that is where the
     # room is. The line each Arabic letter displaces is commented out rather
     # than left to shadow it, so one code keeps one meaning.
-    taken = used | set(cmds.values())
+    # 0x11F (CHAR_ARROW_MENU) is the one code this scan cannot see: it is never
+    # written into any JSON string, only handed straight to the text printer in
+    # C -- src/colored_arrow.c builds a one-character string from the constant
+    # and prints it, and that is the cursor every scrollable list and Yes/No
+    # prompt draws. The scan missed it once already; a translated ROM showed
+    # the Arabic letter that landed there (ghain) in place of the selection
+    # arrow, in every menu that used one. Reserved by hand because nothing
+    # short of reading every .c file can find codes like this reliably.
+    ARROW_MENU_CODE = 0x11F
+    taken = used | set(cmds.values()) | {ARROW_MENU_CODE}
     free = [c for c in range(1, SLOTS) if c not in taken]
 
     glyphs = load_glyphs()

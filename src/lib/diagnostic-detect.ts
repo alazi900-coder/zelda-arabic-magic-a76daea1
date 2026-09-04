@@ -68,6 +68,20 @@ const RE_ARABIC_STANDARD = /[\u0600-\u06FF]/;
 const RE_NULL_CHAR = /\x00/;
 const RE_INVISIBLE = /[\u200B\u200C\u200D\u200E\u200F\u202A-\u202E\u2060\u2061\u2062\u2063\u2064\uFEFF\u00AD\u034F\u061C\u180E]/g;
 const RE_ORIG_DOLLAR_VARS = /\$\d+/g;
+/**
+ * A whole money amount, thousands separators included.
+ *
+ * `$\d+` sees only `$1` of `$1,000`, so everything after the comma sits
+ * outside the check and a translation that rewrites `$1,000` as `$1000` — or
+ * with Arabic-Indic digits — passes silently. Platinum prints 26 lines with an
+ * amount and 7 of them are grouped (`$6,400`, `$10,000`, `$100,000`).
+ *
+ * Kept separate from the pattern above rather than replacing it: the wider
+ * shape is right everywhere, but turning it on for every game at once would
+ * raise fresh warnings across projects that are already translated, and that
+ * is a decision for whoever owns those projects.
+ */
+const RE_ORIG_MONEY_AMOUNTS = /\$\d+(?:,\d{3})*/g;
 const RE_CORRUPTED_DOLLAR = /دولار\s*\$?\d+|\d+\s*\.\s*\$|\$\s*\.\s*\d+|\d+\s+دولار|\$\d+\.(?!\d)/g;
 const RE_RUBY_OPEN = /\[\s*System\s*:\s*Ruby[^\]]*\]/gi;
 const RE_RUBY_CLOSE = /\[\s*\/\s*System\s*:\s*Ruby[^\]]*\]/gi;
@@ -341,14 +355,15 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   }
 
   // 17. Corrupted / Missing $N variables
-  const origDollarVars = getMatches(entry.original, RE_ORIG_DOLLAR_VARS);
+  const dollarPattern = PLAT_FILE_RE.test(entry.msbtFile) ? RE_ORIG_MONEY_AMOUNTS : RE_ORIG_DOLLAR_VARS;
+  const origDollarVars = getMatches(entry.original, dollarPattern);
   if (!isGtaIv && origDollarVars.length > 0) {
     const corruptedMatches = getMatches(trimmed, RE_CORRUPTED_DOLLAR);
     if (corruptedMatches.length > 0) {
       issues.push({ ...base, severity: "critical", category: "corrupted_vars",
         message: `${corruptedMatches.length} متغير تالف: ${corruptedMatches.slice(0, 3).join("، ")} — يجب أن تكون ${origDollarVars.join("، ")}` });
     }
-    const transDollarVars = getMatches(trimmed, RE_ORIG_DOLLAR_VARS);
+    const transDollarVars = getMatches(trimmed, dollarPattern);
     if (corruptedMatches.length === 0) {
       const allMissing = origDollarVars.filter(v => !transDollarVars.includes(v));
       if (allMissing.length > 0) {

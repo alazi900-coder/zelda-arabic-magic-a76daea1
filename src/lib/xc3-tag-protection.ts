@@ -51,6 +51,10 @@ const TAG_PATTERNS: RegExp[] = [
   /\{[\w]+\}/g,                           // {variable} placeholders
   /[\uFFF9-\uFFFC]/g,                      // Unicode special markers
   /<[\w\/][^>]*>/g,                        // HTML-like tags
+  // A whole money amount, thousands separators included — $1,000 not just
+  // $1. Left unprotected, a translation model is free to rewrite the digits
+  // after the comma or drop the grouping, and nothing here would catch it.
+  /\$\d+(?:,\d{3})*/g,
   ABBREV_PATTERN,                            // Game abbreviations (EXP, CP, SP, etc.)
 ];
 

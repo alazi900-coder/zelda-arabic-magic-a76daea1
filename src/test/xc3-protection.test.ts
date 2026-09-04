@@ -230,4 +230,17 @@ describe("XC3 Tag Protection", () => {
     expect(tags.some(tag => tag.original === "[Lock-On]")).toBe(true);
     expect(restoreTags(cleanText, tags)).toBe(text);
   });
+
+  it("protects a whole money amount, thousands separators included", () => {
+    // $1 alone used to be all that was shielded, so a model handling $1,000
+    // was free to rewrite the ",000" tail — the amount itself was never seen
+    // as one token.
+    const text = "It costs $1,000 today, up from $200 last week.";
+    const { cleanText, tags } = protectTags(text);
+    expect(cleanText).not.toContain("$1,000");
+    expect(cleanText).not.toContain("$200");
+    expect(tags.some(tag => tag.original === "$1,000")).toBe(true);
+    expect(tags.some(tag => tag.original === "$200")).toBe(true);
+    expect(restoreTags(cleanText, tags)).toBe(text);
+  });
 });

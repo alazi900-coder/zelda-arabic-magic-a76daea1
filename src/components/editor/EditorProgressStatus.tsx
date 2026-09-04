@@ -67,6 +67,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const isPokemon = !isRisen && !isMother3 && !isMetroidPrime && !!entries?.some((e) => PKM_FILE_RE.test(e.msbtFile));
   const isLumenTale = !!entries?.some((e) => e.msbtFile.startsWith("lumentale/"));
   const isGtaIv = !!entries?.some((e) => e.msbtFile.startsWith("gtaiv/"));
+  const isPlatinum = !!entries?.some((e) => e.msbtFile.startsWith("platinum/"));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
   const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
   const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);

@@ -16,6 +16,7 @@ import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
 import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { buildLumenTaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
+import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -67,6 +68,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const isPokemon = !isRisen && !isMother3 && !isMetroidPrime && !!entries?.some((e) => PKM_FILE_RE.test(e.msbtFile));
   const isLumenTale = !!entries?.some((e) => e.msbtFile.startsWith("lumentale/"));
   const isGtaIv = !!entries?.some((e) => e.msbtFile.startsWith("gtaiv/"));
+  const isPlatinum = !!entries?.some((e) => e.msbtFile.startsWith("platinum/"));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
   const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
   const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);
@@ -104,6 +106,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         lumentaleCategories={lumentaleCategories}
         isGtaIv={isGtaIv}
         gtaIvCategories={GTAIV_CATEGORIES}
+        isPlatinum={isPlatinum}
+        platinumCategories={PLATINUM_CATEGORIES}
       />
 
       {isRisen && (

@@ -55,8 +55,9 @@ python3 .../scripts/gen_shaping.py     # يولّد include/arabic_shaping.h
 make rom                                # يتخطّى فحص البصمة، وهو المطلوب بعد التعديل
 ```
 
-`arabic_shaping.h` مولَّد فلا يدخل الرقعة، و`platinum_font.py` يُشغَّل مرةً
-واحدة لحقن الرسمات (وهي داخل الرقعة أصلاً كصور).
+`arabic_shaping.h` مولَّد فلا يدخل الرقعة. رسمات الخط نفسها **داخل**
+`platinum-arabic.patch` كصور جاهزة — لا حاجة لتشغيل `render_ttf_glyphs.py`
+إلا إن أردت تغيير الخط أو حجمه.
 
 ## درسان دفعنا ثمنهما
 

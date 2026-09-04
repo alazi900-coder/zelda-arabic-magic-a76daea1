@@ -27,10 +27,12 @@ FONTS = ["font_system", "font_message", "font_subscreen"]
 CELL = 16
 SIZE = 11    # measured: the widest of the 129 forms is exactly 16px at this size
 
-# background(no ink)=0; darker ink -> lower index, matching how this font's own
-# Latin glyphs already shade an edge from full ink (1) down through lighter
-# tones (2, 3) -- see the 'A' glyph in font_message.png for the same ramp.
-THRESHOLDS = [(85, 1), (170, 2), (250, 3)]
+# The four pixel values are roles, not shades. Text_GenerateFontHalfRowLookupTable
+# (src/text.c) maps them: 0=transparent, 1=fgColor, 2=shadowColor, 3=bgColor.
+# So 3 is not "a light tone" -- it is the window's own background painted solid,
+# and an antialiasing ramp spread across 1/2/3 punches opaque holes through the
+# letter. This font has no greys: ink or nothing, plus a deliberate shadow.
+INK_CUTOFF = 128    # >=50% coverage is ink; the rest is left transparent
 
 
 def rasterize(ttf_path, codepoints):
@@ -52,13 +54,15 @@ def rasterize(ttf_path, codepoints):
         px_in, px_out = canvas.load(), idx.load()
         for y in range(CELL):
             for x in range(CELL):
-                v = px_in[x, y]
-                out = 0
-                for cutoff, index in THRESHOLDS:
-                    if v < cutoff:
-                        out = index
-                        break
-                px_out[x, y] = out
+                px_out[x, y] = 1 if px_in[x, y] < INK_CUTOFF else 0
+        # a shadow one pixel down and to the right of the ink, the same offset
+        # this font's own Latin glyphs use. Walking backwards keeps the shadow
+        # from seeding more shadow, and the cell edge simply clips it -- the
+        # only four forms that reach column 15 lose a shadow column, nothing more.
+        for y in range(CELL - 1, 0, -1):
+            for x in range(CELL - 1, 0, -1):
+                if px_out[x, y] == 0 and px_out[x - 1, y - 1] == 1:
+                    px_out[x, y] = 2
         glyphs[cp] = (idx, w)
     return glyphs
 
@@ -89,11 +93,18 @@ def main(ttf_path):
         sheet = Image.open(png_path).convert("P")
         meta = json.load(open(json_path, encoding="utf-8"))
         for cp in wanted:
-            code = code_of[cp]
+            # FontManager_TryLoadGlyph does `c--` before fetching, and every
+            # width lookup passes `*str - 1`: the tile index is the character
+            # code minus one, not the code itself. Writing at `code` puts each
+            # form one cell too far, so the game draws the previous letter's
+            # bitmap for every letter. (A slot is safe here for the same reason
+            # the free-code scan already found it: tile c-1 is unused exactly
+            # when code c is.)
+            slot = code_of[cp] - 1
             tile, w = glyphs[cp]
-            col, row = code % 16, code // 16
+            col, row = slot % 16, slot // 16
             sheet.paste(tile, (col * CELL, row * CELL))
-            meta["glyphWidths"][code] = w
+            meta["glyphWidths"][slot] = w
         sheet.save(png_path)
         json.dump(meta, open(json_path, "w", encoding="utf-8"), indent=1)
     print(f"كُتب {len(wanted)} رسمة في {len(FONTS)} خطوط، بحجم {SIZE}px")

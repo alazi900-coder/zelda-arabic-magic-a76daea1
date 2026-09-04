@@ -127,7 +127,9 @@ def main(apply_changes):
         png, meta_path = f"{PLAT}res/fonts/{name}.png", f"{PLAT}res/fonts/{name}.json"
         sheet = Image.open(png)
         for cp, code in plan:
-            col, row = code % 16, code // 16
+            # tile index is code - 1: FontManager_TryLoadGlyph decrements before
+            # fetching, and the width table is read with `*str - 1` to match.
+            col, row = (code - 1) % 16, (code - 1) // 16
             sheet.paste(to_image(glyphs[cp]),
                         (col * CELL, row * CELL, col * CELL + CELL, row * CELL + CELL))
         sheet.save(png)
@@ -135,7 +137,7 @@ def main(apply_changes):
         px = Image.open(png).load()
         meta = json.load(open(meta_path, encoding="utf-8"))
         for _, code in plan:
-            meta["glyphWidths"][code] = ink_width(px, code)
+            meta["glyphWidths"][code - 1] = ink_width(px, code - 1)
         json.dump(meta, open(meta_path, "w", encoding="utf-8"), indent=1)
     print(f"الرسمات كُتبت في {len(FONTS)} خطوط")
 

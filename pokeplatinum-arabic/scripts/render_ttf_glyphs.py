@@ -27,28 +27,45 @@ FONTS = ["font_system", "font_message", "font_subscreen"]
 CELL = 16
 SIZE = 11    # measured: the widest of the 129 forms is exactly 16px at this size
 
+# Rendered SS times larger than the final cell, then box-filtered back down, so
+# each final pixel's value is the outline's real coverage of that pixel rather
+# than a single high-resolution sample. Drawing straight at 11px this thin --
+# a joining stroke between two letters can be a single pixel wide -- means the
+# rasterizer's one sample there often lands on background, and the connection
+# between letters vanishes. Supersampling is what a proper text renderer does
+# for antialiasing; borrowing the same idea here is what makes the coverage
+# number for a thin stroke trustworthy enough to threshold.
+SUPERSAMPLE = 4
+
 # The four pixel values are roles, not shades. Text_GenerateFontHalfRowLookupTable
 # (src/text.c) maps them: 0=transparent, 1=fgColor, 2=shadowColor, 3=bgColor.
 # So 3 is not "a light tone" -- it is the window's own background painted solid,
 # and an antialiasing ramp spread across 1/2/3 punches opaque holes through the
 # letter. This font has no greys: ink or nothing, plus a deliberate shadow.
-INK_CUTOFF = 128    # >=50% coverage is ink; the rest is left transparent
+#
+# 190 rather than the halfway 128: even with supersampling, a joining stroke
+# is often only ever partly covered (it is one true pixel wide at this size,
+# not more), so demanding 50% coverage still drops it. Measured against all
+# 129 forms, nothing overflows the 16px cell until well past this value -- the
+# widest is still 15px at 200 -- so raising it costs no glyph its width.
+INK_CUTOFF = 190
 
 
 def rasterize(ttf_path, codepoints):
-    font = ImageFont.truetype(ttf_path, SIZE, layout_engine=ImageFont.Layout.BASIC)
+    font = ImageFont.truetype(ttf_path, SIZE * SUPERSAMPLE, layout_engine=ImageFont.Layout.BASIC)
     ascent, _ = font.getmetrics()
     glyphs = {}
     for cp in codepoints:
         ch = chr(cp)
         bbox = font.getbbox(ch)
-        w = max(1, bbox[2] - bbox[0]) if bbox else 1
-        canvas = Image.new("L", (CELL, CELL), 255)
-        d = ImageDraw.Draw(canvas)
+        w = max(1, (bbox[2] - bbox[0]) // SUPERSAMPLE) if bbox else 1
+        big = Image.new("L", (CELL * SUPERSAMPLE, CELL * SUPERSAMPLE), 255)
+        d = ImageDraw.Draw(big)
         # every glyph drawn against the same ascent line, so letters that sit
         # low (a dot-only tail) and letters that sit tall (a full vertical
         # stroke) still share one baseline when placed side by side.
         d.text((-bbox[0] if bbox else 0, ascent - font.getmetrics()[0] + 0), ch, font=font, fill=0)
+        canvas = big.resize((CELL, CELL), Image.BOX)
         idx = Image.new("P", (CELL, CELL), 0)
         idx.putpalette([144, 200, 255, 56, 56, 56, 216, 216, 216, 255, 255, 255])
         px_in, px_out = canvas.load(), idx.load()

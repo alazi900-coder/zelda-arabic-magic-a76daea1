@@ -105,6 +105,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         lumentaleCategories={lumentaleCategories}
         isGtaIv={isGtaIv}
         gtaIvCategories={GTAIV_CATEGORIES}
+        isPlatinum={isPlatinum}
+        platinumCategories={PLATINUM_CATEGORIES}
       />
 
       {isRisen && (

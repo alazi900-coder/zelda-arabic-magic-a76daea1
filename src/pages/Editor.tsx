@@ -152,6 +152,7 @@ const Editor = () => {
   const isLumenTaleEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
   const isGtaIvEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("gtaiv/") ?? false;
   const isFe12Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("fe12/") ?? false;
+  const isPlatinumEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
 
   // LumenTale can contain an intentionally empty table. It has no editor rows,
   // so it is represented only by the immutable bundle metadata and must still
@@ -730,6 +731,7 @@ const Editor = () => {
             isMetroidPrime={isMetroidPrimeEntries}
             isWolfenstein={isWolfensteinEntries}
             isPokemon={isPokemonEntries}
+            isPlatinum={isPlatinumEntries}
             isPokemonXp={isPokemonXpEntries}
             isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}

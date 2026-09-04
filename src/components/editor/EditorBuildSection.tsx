@@ -14,6 +14,8 @@ import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
+import { buildPlatRom, PLAT_BUFFER_KEY } from "@/lib/nds/plat-editor-bridge";
+import { ensurePlatTables } from "@/lib/nds/plat-charmap";
 import { ensureEmeraldSourceSlots } from "@/lib/gba/emerald-source-slots";
 import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
 import { buildKHBbsDatOutput, hasKHBbsBbsWorkspace } from "@/lib/khbbs-bbs-workspace";
@@ -46,6 +48,8 @@ interface EditorBuildSectionProps {
   isMetroidPrime?: boolean;
   isWolfenstein?: boolean;
   isPokemon?: boolean;
+  /** Pokémon Platinum (NDS): rebuilds the message archive inside the .nds. */
+  isPlatinum?: boolean;
   /** Pokémon Essentials/RPG Maker XP: editing/exporting translations only until a safe Marshal writer exists. */
   isPokemonXp?: boolean;
   isGameMaker?: boolean;
@@ -87,6 +91,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isMetroidPrime = false,
   isWolfenstein = false,
   isPokemon = false,
+  isPlatinum = false,
   isPokemonXp = false,
   isGameMaker = false,
   isDragonSword = false,
@@ -113,6 +118,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [mpBuilding, setMpBuilding] = useState(false);
   const [wolfBuilding, setWolfBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
+  const [platBuilding, setPlatBuilding] = useState(false);
   const [gmBuilding, setGmBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
   const [khbbsBuilding, setKHBbsBuilding] = useState(false);
@@ -332,6 +338,42 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setPkmBuilding(false);
+    }
+  };
+
+  const handlePlatinumBuild = async () => {
+    setPlatBuilding(true);
+    try {
+      await ensurePlatTables();
+      const buf = await idbGet<ArrayBuffer>(PLAT_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة نصوص Platinum");
+      const result = buildPlatRom(new Uint8Array(buf), editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "PokemonPlatinum_ar.nds";
+      a.click();
+      URL.revokeObjectURL(url);
+      // A refused line is named rather than written half-right: a missing
+      // {STRVAR} is a blank in the sentence, and an over-long line is a
+      // message the game asserts on instead of drawing.
+      const refused = result.brokenTags.length + result.tooLong.length;
+      toast({
+        title: refused > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : "✅ تم بناء روم معرّب",
+        description:
+          `${result.translatedLines} سطر مترجم` +
+          (result.tooLong.length > 0 ? ` | ${result.tooLong.length} سطراً أطول ممّا يسعه أرشيفه — اختصرها` : "") +
+          (result.brokenTags.length > 0 ? ` | ${result.brokenTags.length} سطراً سقط منه وسم تضعه اللعبة ({STRVAR…}) — أعِده` : "") +
+          (result.unmapped.length > 0 ? ` | حروف بلا خانة في الخط: ${result.unmapped.join(" ")}` : ""),
+        variant: refused > 0 ? "destructive" : undefined,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setPlatBuilding(false);
     }
   };
 
@@ -1007,6 +1049,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isPokemon ? (
           <Button size="lg" onClick={handlePokemonBuild} disabled={pkmBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {pkmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم معرّب وتنزيله
+          </Button>
+        ) : isPlatinum ? (
+          <Button size="lg" onClick={handlePlatinumBuild} disabled={platBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يعيد بناء أرشيف رسائل اللعبة داخل الروم ثم ينزّله">
+            {platBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم ‎.nds‎ معرّب وتنزيله
           </Button>
         ) : isWolfenstein ? (
           <Button size="lg" onClick={handleWolfensteinBuild} disabled={wolfBuilding} className="flex-1 min-w-[200px] font-display font-bold">

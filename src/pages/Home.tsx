@@ -164,6 +164,18 @@ const games = [
     arrowClass: "text-[hsl(210,70%,55%)]",
   },
   {
+    title: "Pokémon Platinum",
+    subtitle: "عرّب نصوص لعبة النينتندو DS",
+    desc: "يفكّ أرشيف رسائل اللعبة المعمّى داخل الروم — ٤٤٬٨٦٠ سطراً في ٧٢٤ أرشيفاً — ويفتحها في المحرر، ثم يعيد بناء الأرشيف داخل ‎.nds‎ معرّباً. الخطّ وعكس الاتجاه ووصل الحروف في الروم أصلاً",
+    link: "/platinum/text",
+    image: pokemonBg,
+    formats: [".nds", "NDS ROM"],
+    cardClass: "border-[hsl(265,60%,50%)]/30 hover:border-[hsl(265,60%,50%)]/60",
+    formatClass: "bg-[hsl(265,60%,50%)]/20 text-[hsl(265,70%,65%)] border-[hsl(265,60%,50%)]/30",
+    subtitleClass: "text-[hsl(265,70%,65%)]",
+    arrowClass: "text-[hsl(265,70%,65%)]",
+  },
+  {
     title: "GameMaker Studio",
     subtitle: "عرّب ألعاب GameMaker",
     desc: "استخراج النصوص من ملفات GameMaker (IFF GEN8) مثل game.droid وألعاب المحرك الأخرى، تحريرها في المحرر، وإعادة بناء الملف معرّب بالعربية",

@@ -17,6 +17,7 @@ import { encodeArabicForPkm } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { reshapeArabic, reverseBidi } from "@/lib/arabic-processing";
 import { ARABIC_GLYPH_RASTERS } from "@/lib/fireemblem12/fe12-arabic-charmap";
+import { measurePlatChars, PLAT_FILE_RE } from "@/lib/nds/plat-editor-bridge";
 
 /**
  * Bytes Fire Emblem 12 will actually spend on `text`: 1 for each ASCII
@@ -53,6 +54,11 @@ export function measureEntryBytes(msbtFile: string | undefined, text: string): n
   }
   if (msbtFile && msbtFile.startsWith("fe12/")) {
     return measureFe12Bytes(text);
+  }
+  // Platinum's buffers are sized in charcodes, not bytes, and a {TAG} costs
+  // several of them rather than its own length in letters.
+  if (msbtFile && PLAT_FILE_RE.test(msbtFile)) {
+    return measurePlatChars(text);
   }
   return new TextEncoder().encode(text).length;
 }

@@ -40,10 +40,15 @@ export function categorizePlatEntry(entry: ExtractedEntry): string {
   if (/^(?:contest|poffin|ribbon_names|ball_seal|flavor_names|link_contest)/.test(archive)) return "plat-contest";
   if (/^(?:gts|wifi|wfc_|union|global_terminal|country|communication_club|group_connection|spin_trade|trade|plaza_|mystery_gift|easy_chat|greetings|trainer_words|people_words|lifestyle_words|feelings|tough_words|union_words|.*_sentences$)/.test(archive)) return "plat-online";
   if (/^(?:item_|bag|berry_|mail|furniture_names|visible_items|scratch_off|vs_seeker)/.test(archive)) return "plat-items";
-  if (/^(?:species|pokedex|pokemon_type_names|ability_|nature_names|status_condition_names|egg_hatch|follower_partners|pokemon_storage_system|box_messages)/.test(archive)) return "plat-species";
+  if (/^(?:species|pokedex|pokemon_type_names|pokemon_stat_names|ability_|nature_names|status_condition_names|egg_hatch|follower_partners|pokemon_storage_system|box_messages)/.test(archive)) return "plat-species";
   if (/^(?:npc_trainer|frontier_trainer|trainer_class|trainer_card|counterpart|gym_names|npc_trade_names)/.test(archive)) return "plat-trainers";
   if (/^(?:battle|move|field_moves|safari_game)/.test(archive)) return "plat-battle";
   if (/^(?:menu_|main_menu|start_menu|options_menu|party_menu|naming_screen|journal_entries|town_map|location_names|special_met_location_names|month_names|times_of_day|generic_names|common_strings|save_info_window|rankings_machine|bg_events|mailbox|pokemon_summary_screen|trainer_card|party_menu|start_menu)/.test(archive)) return "plat-menus";
   if (PLACE.test(archive)) return "plat-dialogue";
+  // Unused/renamed map archives are still map dialogue: `unused_jubilife_city_house_1`,
+  // `pokemon_mansion`, `maniac_tunnel`. Only unk_/dummy_ placeholders stay in misc.
+  if (/^unused_/.test(archive) && PLACE.test(archive.slice("unused_".length))) return "plat-dialogue";
+  if (/^(?:unused_|pokemon_mansion|flower_shop|pokemon_day_care|maniac_tunnel|ruin_maniac_cave|iron_ruins|battle_park|rowan_intro$)/.test(archive)) return "plat-dialogue";
   return "plat-misc";
+
 }

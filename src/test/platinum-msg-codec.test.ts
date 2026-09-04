@@ -9,6 +9,8 @@ import {
   PlatEncodeError,
 } from "@/lib/nds/plat-charmap";
 import { measurePlatChars } from "@/lib/nds/plat-editor-bridge";
+import { PLAT_TAG_RE, maskPlatTags, unmaskPlatTags, diffPlatTags, repairPlatTags } from "@/lib/nds/plat-tag-mask";
+import { editorTagPattern } from "@/lib/editor-tag-pattern";
 
 /**
  * The message archives are encrypted, and a translated ROM is only as good as
@@ -85,5 +87,44 @@ describe("Platinum text codec", () => {
     for (const text of ["Hello!", "{STRVAR_1 3, 0, 0}!", "a\nb", "{COLOR 2}x"]) {
       expect(measurePlatChars(text)).toBe(encodePlatMessage(text).length);
     }
+  });
+});
+
+describe("Platinum technical tags", () => {
+  it("recognises the game's own tag shape, arguments and all", () => {
+    const line = "Hi {STRVAR_1 3, 0, 0}!{COLOR 2} Ready?{YESNO}";
+    expect(line.match(PLAT_TAG_RE)).toEqual(["{STRVAR_1 3, 0, 0}", "{COLOR 2}", "{YESNO}"]);
+  });
+
+  it("hides tags from a translation model and puts them back", () => {
+    const { text, tags } = maskPlatTags("Hi {STRVAR_1 3, 0, 0}, welcome");
+    expect(text).not.toContain("STRVAR");
+    expect(unmaskPlatTags(text, tags)).toBe("Hi {STRVAR_1 3, 0, 0}, welcome");
+    // Models add spaces inside the placeholder; the number is what identifies it.
+    expect(unmaskPlatTags("مرحبا 〖 0 〗", tags)).toBe("مرحبا {STRVAR_1 3, 0, 0}");
+  });
+
+  it("reports a dropped tag, an invented one, and a swapped pair", () => {
+    expect(diffPlatTags("{COLOR 2} hi", "مرحبا").missing).toEqual(["{COLOR 2}"]);
+    expect(diffPlatTags("hi", "مرحبا {COLOR 2}").extra).toEqual(["{COLOR 2}"]);
+    const swapped = diffPlatTags("{STRVAR_1 3, 0, 0} و {STRVAR_1 4, 0, 0}", "{STRVAR_1 4, 0, 0} و {STRVAR_1 3, 0, 0}");
+    expect(swapped.missing).toEqual([]);
+    expect(swapped.reordered).toBe(true);
+  });
+
+  it("puts swapped tags back in order without touching the words", () => {
+    const original = "{STRVAR_1 3, 0, 0} beat {STRVAR_1 4, 0, 0}";
+    const fixed = repairPlatTags(original, "{STRVAR_1 4, 0, 0} هزم {STRVAR_1 3, 0, 0}");
+    expect(fixed.repaired).toBe(true);
+    expect(fixed.text).toBe("{STRVAR_1 3, 0, 0} هزم {STRVAR_1 4, 0, 0}");
+    // A line that lost a tag is not guessed at.
+    expect(repairPlatTags(original, "هزم {STRVAR_1 3, 0, 0}").repaired).toBe(false);
+  });
+
+  it("highlights Platinum tags but not a numbered list", () => {
+    // «#1: Don't loiter about» is prose here; #0–#5 are Xenoblade colour codes.
+    const found = "{CURSOR_X 80} #1: no".match(editorTagPattern("platinum/jubilife_city"));
+    expect(found).toEqual(["{CURSOR_X 80}"]);
+    expect("#1".match(editorTagPattern("xeno/menu"))).toEqual(["#1"]);
   });
 });

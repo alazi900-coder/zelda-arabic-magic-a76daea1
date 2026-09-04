@@ -17,6 +17,8 @@ import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
+import { diffPlatTags } from "@/lib/nds/plat-tag-mask";
+import { PLAT_FILE_RE } from "@/lib/nds/plat-editor-bridge";
 import { pkmOverlongLines, PKM_DIALOGUE_LINE_PIXELS } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { countMissingTagNewlines } from "@/lib/tag-newline-anchor";
@@ -362,6 +364,29 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   // it would call it "a technical token" and leave the translator to work out
   // what that costs. It costs a character their name in every line that
   // greeted them by it, so it is worth naming.
+  // 19. Platinum's runtime tags
+  //
+  // `{STRVAR_1 3, 0, 0}` is where the game drops a name, a number, an item;
+  // `{COLOR 2}` and `{CURSOR_X 80}` are formatting it acts on. The generic
+  // technical check would report a missing one as "a technical token" without
+  // saying what it costs — and what it costs is a blank in the middle of a
+  // sentence that nothing on screen explains. Order matters as much as
+  // presence: two values that swap places read as fine until the game fills
+  // them in and hands you the wrong name.
+  if (PLAT_FILE_RE.test(entry.msbtFile)) {
+    const platDiff = diffPlatTags(entry.original, trimmed);
+    if (platDiff.missing.length > 0 || platDiff.extra.length > 0) {
+      const parts: string[] = [];
+      if (platDiff.missing.length > 0) parts.push(`مفقود: ${platDiff.missing.join("، ")}`);
+      if (platDiff.extra.length > 0) parts.push(`زائد أو مختلف: ${platDiff.extra.join("، ")}`);
+      issues.push({ ...base, severity: "critical", category: "plat_tag_mismatch",
+        message: `${parts.join(" — ")} — وسم تضع اللعبة مكانه قيمةً وقت التشغيل، وحذفه يترك فراغاً في الجملة` });
+    } else if (platDiff.reordered) {
+      issues.push({ ...base, severity: "critical", category: "plat_tag_mismatch",
+        message: "ترتيب وسوم اللعبة مختلف عن الأصل — ستظهر كل قيمة في موضع الأخرى" });
+    }
+  }
+
   if (PKM_FILE_RE.test(entry.msbtFile)) {
     const pkmDiff = diffPkmTags(entry.original, trimmed);
     if (pkmDiff.missing.length > 0 || pkmDiff.extra.length > 0) {

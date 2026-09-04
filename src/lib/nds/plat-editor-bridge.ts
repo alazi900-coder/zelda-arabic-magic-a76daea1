@@ -39,6 +39,25 @@ export const PLAT_FILE_PREFIX = "platinum/";
 export const PLAT_NARC_PATH = "msgdata/pl_msg.narc";
 export const PLAT_FILE_RE = /^platinum\//;
 
+/**
+ * Archives that hold something other than text the player reads.
+ *
+ * `seq_names` is a list of sound-sequence identifiers — `PV001`, `PV-END`,
+ * `DUMMY` — that no screen ever shows. The `_jp` archives are Japanese
+ * resources this US build still ships and never prints; they are the same ones
+ * that broke the font work when their kana were mistaken for free glyph slots.
+ * Both would arrive in the editor as thousands of rows to translate that
+ * cannot appear in the game, and a machine translation pass would happily
+ * rewrite them.
+ */
+const PLAT_NON_TEXT_ARCHIVES = new Set([
+  "seq_names",
+  "species_pokedex_entry_jp",
+  "species_category_jp",
+  "species_name_with_natdex_number_jp",
+  "greetings_jp",
+]);
+
 export function looksLikePlatRom(rom: Uint8Array): boolean {
   return findNdsFile(rom, PLAT_NARC_PATH) !== null;
 }
@@ -103,7 +122,9 @@ export function extractPlatEntries(rom: Uint8Array): PlatExtractResult {
       (n, codes, i) => (texts[i] === null ? n : Math.max(n, codes.length)),
       0
     );
-    const file = PLAT_FILE_PREFIX + platArchiveName(index);
+    const name = platArchiveName(index);
+    if (PLAT_NON_TEXT_ARCHIVES.has(name)) return;
+    const file = PLAT_FILE_PREFIX + name;
     texts.forEach((text, i) => {
       if (text === null) {
         packed++;

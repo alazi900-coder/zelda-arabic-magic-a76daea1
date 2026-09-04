@@ -9,6 +9,7 @@ import { checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeGtaIvEntry } from "@/lib/gtaiv/gtaiv-categories";
+import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 
 export interface QualityStats {
   tooLong: number;
@@ -240,7 +241,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           const isLumenTale = entry.msbtFile.startsWith('lumentale/');
           const isGtaIv = entry.msbtFile.startsWith('gtaiv/');
           const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
-          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
+          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isPlatEntry(entry) ? categorizePlatEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
 
           const cached = cache.get(key);
           let result: EntryCacheResult;

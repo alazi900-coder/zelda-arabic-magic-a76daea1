@@ -64,6 +64,25 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
   if (/^%[\d.$-]*[sdif]$/.test(tag)) {
     return { label: tag, color: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/25', title: 'معامل صيغة — لا تحذفه ولا تغيّر مكانه، يُستبدل برقم أو نص من اللعبة' };
   }
+  // Platinum runtime tags. A STRVAR is a hole the game fills with a name or a
+  // number at run time and is the one that must survive intact; the rest are
+  // formatting the engine acts on. They get different colours because losing
+  // the first leaves a blank in a sentence and losing the second only looks
+  // untidy — the translator should be able to tell them apart at a glance.
+  const platMatch = /^\{([A-Z][A-Z0-9_]*)((?:\s+\d+(?:\s*,\s*\d+)*)?)\}$/.exec(tag);
+  if (platMatch) {
+    const [, name, args] = platMatch;
+    const isValue = name.startsWith("STRVAR");
+    return {
+      label: `${isValue ? "◈" : "⚙"} ${name}${args}`,
+      color: isValue
+        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
+        : 'bg-sky-500/15 text-sky-400 border-sky-500/25',
+      title: isValue
+        ? `قيمة تضعها اللعبة وقت التشغيل: ${tag} — انقله كما هو، وحذفه يترك فراغاً في الجملة`
+        : `أمر تنسيق للمحرّك: ${tag} — انقله كما هو`,
+    };
+  }
   // Brace tags {key} or {key:value}
   if (/^\{/.test(tag)) {
     const inner = tag.slice(1, -1);
@@ -114,8 +133,8 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
 }
 
 /** Renders text with technical tags highlighted visually */
-function HighlightedOriginal({ text }: { text: string }) {
-  const tagPattern = editorTagPattern();
+function HighlightedOriginal({ text, msbtFile }: { text: string; msbtFile?: string }) {
+  const tagPattern = editorTagPattern(msbtFile);
 
   const lines = text.split('\n');
 
@@ -356,7 +375,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
             }
             return <p className="text-xs text-muted-foreground mb-1 truncate">{entry.msbtFile} • {entry.label}</p>;
           })()}
-          <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'isolate' }}><HighlightedOriginal text={editorOriginal} /></p>
+          <p className="font-body text-sm mb-2 break-words" dir="auto" style={{ unicodeBidi: 'isolate' }}><HighlightedOriginal text={editorOriginal} msbtFile={entry.msbtFile} /></p>
           {hasTechnicalTags(entry.original, entry.msbtFile) && (
             <p className="text-[10px] text-muted-foreground mb-2 leading-relaxed">
               💡 الرموز الملونة أكواد خاصة بمحرك اللعبة — <span className="font-semibold text-accent">لا تحذفها من الترجمة</span>

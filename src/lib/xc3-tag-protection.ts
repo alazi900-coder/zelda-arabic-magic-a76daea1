@@ -43,6 +43,11 @@ const TAG_PATTERNS: RegExp[] = [
   /\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]/g, // \[Passive\], \[Arts Seal\], [Lock-On], [XENO]
   /\[\s*\w+\s*=\s*\w[^\]]*\]/g,      // [TAG=Value] patterns (e.g. [Color=Red])
   /\{\s*\w+\s*:\s*\w[^}]*\}/g,        // {TAG:Value} patterns (e.g. {player:name})
+  // Platinum keeps its arguments inside the braces — {STRVAR_1 3, 0, 0},
+  // {COLOR 2} — which the {variable} rule below stops at the first space. A
+  // model handed one of these rewrites its digits or drops it, and a dropped
+  // STRVAR is a name simply missing from the sentence in game.
+  /\{[A-Z][A-Z0-9_]*(?:\s+\d+(?:\s*,\s*\d+)*)?\}/g,
   /\{[\w]+\}/g,                           // {variable} placeholders
   /[\uFFF9-\uFFFC]/g,                      // Unicode special markers
   /<[\w\/][^>]*>/g,                        // HTML-like tags

@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
+import { repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
 import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
 import { fixTagNewlines } from "@/lib/tag-newline-anchor";
@@ -99,6 +100,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "pkm_var_mismatch", label: "قيم بوكيمون المفقودة", icon: "🚫", severity: "critical", description: "رمز مثل {FD:01} حُذف أو تغيّر أو انتقل — تفقد الشخصية اسمها في كل سطر يناديها به" },
+  { id: "plat_tag_mismatch", label: "وسوم Platinum المفقودة", icon: "◈", severity: "critical", description: "وسم مثل {STRVAR_1 3, 0, 0} حُذف أو تغيّر أو انتقل — يترك فراغاً في الجملة، أو يضع كل قيمة في موضع الأخرى" },
   { id: "pkm_line_too_wide", label: "سطر أعرض من صندوق الحوار (بوكيمون)", icon: "📐", severity: "critical", description: "المحرّك لا يلفّ السطر: ما يتجاوز ١٩٨ بكسل يُرسم خارج الصندوق ولا يُمسح، فيبقى فوق الرسائل التالية — الإصلاح يضع فاصل سطر" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
@@ -150,6 +152,11 @@ const TAG_FIXABLE_CATEGORIES = new Set(["tag_mismatch", "placeholder_mismatch", 
 // This path only restores complete matching slots; it never restores English.
 const GTAIV_TOKEN_FIXABLE_CATEGORIES = new Set(["gtaiv_runtime_token_mismatch", "gtaiv_dollar_amount_mismatch"]);
 const GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES = new Set(["gtaiv_line_break_display"]);
+// Platinum's `{STRVAR_1 …}` / `{COLOR …}`. Only a line whose tags are all still
+// present but out of order can be repaired: the tags are moved back into the
+// original's order and the translated words are left exactly as written. A line
+// that lost a tag outright is not guessed at.
+const PLAT_TAG_FIXABLE_CATEGORIES = new Set(["plat_tag_mismatch"]);
 const repairGtaIvProtectedSequence = (category: string, original: string, candidate: string) => (
   category === "gtaiv_dollar_amount_mismatch"
     ? repairGtaIvDollarAmountSequence(original, candidate)
@@ -181,7 +188,7 @@ const RISEN_TAG_FIXABLE_CATEGORIES = new Set(["risen_tag_mismatch"]);
  */
 const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -367,6 +374,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       };
     }
 
+    if (PLAT_TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+      const repaired = repairPlatTags(entry.original, trans);
+      return {
+        fixResult: repaired.text,
+        reason: repaired.repaired
+          ? '◈ ستعود وسوم اللعبة إلى ترتيب الأصل، وتبقى الترجمة العربية كما هي'
+          : '⚠️ الوسوم ناقصة أو زائدة لا مبعثرة — لا يُخمَّن الناقص، أعِده يدوياً',
+      };
+    }
+
     if (GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES.has(issue.category)) {
       const fixed = gtaIvRuntimeTextToEditorText(trans);
       return {
@@ -510,6 +527,17 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             ? 'لا توجد قيمة GTA IV مكتملة مختلفة قابلة للإصلاح'
             : `لم يُطبّق أي تخمين على القيمة الناقصة/الزائدة أو التالفة: ${repaired.reason ?? 'راجع النص يدوياً'}`,
         });
+      }
+      return;
+    }
+
+    if (PLAT_TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+      const repaired = repairPlatTags(entry.original, issue.translation);
+      if (repaired.repaired && onApplyFix) {
+        onApplyFix(issue.key, repaired.text);
+        toast({ title: '◈ رُتّبت وسوم اللعبة', description: 'أُعيدت الوسوم إلى ترتيب الأصل؛ بقيت الترجمة العربية كما هي' });
+      } else {
+        toast({ title: '⚠️ مراجعة يدوية مطلوبة', description: 'الوسوم ناقصة أو زائدة لا مبعثرة — لا يُخمَّن الوسم الناقص' });
       }
       return;
     }
@@ -1378,12 +1406,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                                            DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح المتغيرات" :
                                            RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إلحاق وسم Risen" :
                                            GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category) ? "إصلاح حماية GTA IV الآمن" :
+                                           PLAT_TAG_FIXABLE_CATEGORIES.has(issue.category) ? "إعادة ترتيب وسوم اللعبة" :
                                            RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "استعادة الأصل" :
                                            issue.category === "invisible_chars" ? "تنظيف" : "إصلاح"}>
                                     {TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🔧" :
                                      DOLLAR_VAR_FIXABLE_CATEGORIES.has(issue.category) ? "💲" :
                                      RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category) ? "🏷️" :
                                      GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category) ? "🛡️" :
+                                     PLAT_TAG_FIXABLE_CATEGORIES.has(issue.category) ? "◈" :
                                      RESTORE_ORIGINAL_CATEGORIES.has(issue.category) ? "↩️" :
                                      issue.category === "invisible_chars" ? "🧹" : "🔧"}
                                   </Button>

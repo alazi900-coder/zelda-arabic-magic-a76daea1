@@ -8,6 +8,7 @@ import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { protectTags, restoreTags } from "@/lib/xc3-tag-protection";
+import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 import { fixTagBracketsStrict } from "@/lib/tag-bracket-fix";
 import { splitEvenlyByLines } from "@/lib/balance-lines";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
@@ -502,6 +503,7 @@ export function useEditorTranslation({
     if (/^TEXT_/.test(e.msbtFile)) return categorizeMetroidPrimeEntry(e);
     if (e.msbtFile.startsWith("lumentale/")) return categorizeLumenTaleEntry(e);
     if (e.msbtFile.startsWith("pokemon-xp/")) return categorizePokemonXpEntry(e);
+    if (isPlatEntry(e)) return categorizePlatEntry(e);
     const isDr = e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
     if (isDr) return categorizeDanganronpaFile(e.msbtFile);
     return categorizeFile(e.msbtFile);

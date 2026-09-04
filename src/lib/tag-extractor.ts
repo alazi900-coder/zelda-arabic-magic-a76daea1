@@ -84,7 +84,11 @@ export const CATEGORY_INFO: Record<Category, { label: string; protectionReason: 
 const PATTERNS: Record<Category, RegExp> = {
   paired_tags: /\[\s*\w+\s*:[^\]]*\][^[]*?\[\/\s*\w+\s*:[^\]]*\]/g,
   bracket_tags: /\\?\[\s*\/?\s*[A-Za-z][\w\s:=.'\/-]*\s*\\?\]/g,
-  curly_vars: /\{\s*(?:\d+(?:\.[A-Za-z_][\w.-]*)?|[A-Za-z_][\w.-]*)(?::\s*[^{}]{0,60})?\s*\}/g,
+  // The second alternative is Platinum's shape, whose arguments live inside the
+  // braces — `{STRVAR_1 3, 0, 0}`, `{CURSOR_X 80}`. The first stops at the
+  // opening space, which is why a scan of all 44,860 Platinum lines reported
+  // zero curly variables while its own example contexts were full of them.
+  curly_vars: /\{\s*(?:\d+(?:\.[A-Za-z_][\w.-]*)?|[A-Za-z_][\w.-]*)(?::\s*[^{}]{0,60})?\s*\}|\{[A-Z][A-Z0-9_]*(?:\s+\d+(?:\s*,\s*\d+)*)?\}/g,
   html_like: /<\/?[A-Za-z][^>]{0,80}>/g,
   // 'n' is deliberately excluded from the hex-prefix class below: \xNN and
   // \uNNNN are real hex escapes, but \n is the single-char newline escape —
@@ -163,6 +167,7 @@ function recordMatch(
 function scanSingle(text: string, file: string, categories: Record<Category, Map<string, Occurrence>>) {
   const pairedSpans: [number, number][] = [];
   const isGtaIv = file.startsWith("gtaiv/");
+  const isPlatinum = file.startsWith("platinum/");
   const isBracketInsidePairedTag = (start: number, end: number) =>
     pairedSpans.some(([pairStart, pairEnd]) => start >= pairStart && end <= pairEnd);
 
@@ -172,6 +177,10 @@ function scanSingle(text: string, file: string, categories: Record<Category, Map
     // syntax, so reporting them as protected technical tags is misleading.
     // Preserve the existing extraction for other game formats that use them.
     if (isGtaIv && (cat === "dollar_vars" || cat === "hash_controls")) continue;
+    // Platinum draws its currency with `$` — «$200 each» is a visible price —
+    // and «#1: Don't loiter about» is a numbered list in ordinary prose. Its
+    // real runtime syntax is `{NAME args}`, which curly_vars now covers.
+    if (isPlatinum && (cat === "dollar_vars" || cat === "hash_controls")) continue;
     const re = PATTERNS[cat];
     re.lastIndex = 0;
     let m: RegExpExecArray | null;

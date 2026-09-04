@@ -24,6 +24,7 @@ import { KHBBS_FILE_RE } from "@/lib/khbbs-editor-bridge";
 import { lumentaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { LUMENTALE_META_KEY } from "@/lib/lumentale/lumentale-editor-bridge";
 import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
+import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import EditorAsyncBoundary from "@/components/editor/EditorAsyncBoundary";
@@ -224,9 +225,10 @@ const Editor = () => {
     if (isDragonSwordEntries) return dsCategories(entries);
     if (isLumenTaleEntries) return lumentaleCategories(entries);
     if (isGtaIvEntries) return GTAIV_CATEGORIES;
+    if (isPlatinumEntries) return PLATINUM_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonXpEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonXpEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isPlatinumEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {

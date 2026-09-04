@@ -16,6 +16,7 @@ import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
 import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { buildLumenTaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
+import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<

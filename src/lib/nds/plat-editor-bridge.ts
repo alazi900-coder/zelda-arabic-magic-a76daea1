@@ -118,10 +118,19 @@ export function extractPlatEntries(rom: Uint8Array): PlatExtractResult {
     const texts = archive.messages.map((codes) =>
       isPackedMessage(codes) ? null : decodePlatMessage(codes)
     );
+    // ×3 the longest sibling message actually in this archive, not a hard
+    // engine limit: MessageBank_GetNewString (message.c) allocates with
+    // Heap_AllocAtEnd sized to the message's own length, and whole-archive
+    // preload (MessageBank_Load → NARC_AllocAndReadWholeMemberByIndexPair)
+    // is likewise sized to the archive's actual byte count — neither reads
+    // into a fixed-size buffer. The real constraint that matters visually
+    // (does it fit the dialogue box) is the separate pixel-width/line-count
+    // checks; this margin only keeps the byte-count diagnostic from flagging
+    // ordinary Arabic length growth as if it were dangerous.
     const limit = archive.messages.reduce(
       (n, codes, i) => (texts[i] === null ? n : Math.max(n, codes.length)),
       0
-    );
+    ) * 3;
     const name = platArchiveName(index);
     if (PLAT_NON_TEXT_ARCHIVES.has(name)) return;
     const file = PLAT_FILE_PREFIX + name;

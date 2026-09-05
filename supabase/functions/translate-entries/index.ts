@@ -1490,6 +1490,107 @@ async function translateWithGoogle(
   return { translations: result, charsUsed, glossaryStats: stats };
 }
 
+/**
+ * Extract a {"K0": "...", "K1": "...", ...} object from an AI response,
+ * handling markdown fences and malformed/truncated output. Module-level so
+ * every provider path (Gemini/Lovable, DeepSeek/OpenAI-compat) shares one
+ * salvage strategy instead of one giving up where the other recovers.
+ *
+ * A huge batch (hundreds of entries) is exactly where this matters: one
+ * unescaped quote or arrow character anywhere in the response, or the
+ * response simply running out of output tokens mid-object, breaks a plain
+ * JSON.parse for the *entire* reply -- and previously that meant the whole
+ * batch silently came back with zero translations (still a 200 OK, so
+ * nothing on the client treated it as a failure worth retrying). The regex
+ * fallback below recovers every individual "KN": "value" pair whose own
+ * value is well-formed, even when the surrounding document is not.
+ */
+function extractJsonObject(raw: string): Record<string, string> {
+  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+  // Find the outermost JSON object by matching balanced braces,
+  // properly skipping content inside quoted strings
+  let depth = 0, start = -1, end = -1;
+  let inString = false, escapeNext = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escapeNext) { escapeNext = false; continue; }
+    if (ch === '\\' && inString) { escapeNext = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue; // Skip everything inside strings
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) { end = i; break; }
+    }
+  }
+
+  if (start !== -1 && end !== -1) {
+    let jsonStr = cleaned.substring(start, end + 1);
+    try {
+      return JSON.parse(jsonStr);
+    } catch {
+      // Fix common issues: trailing commas, control characters
+      jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/[\x00-\x1F\x7F]/g, ' ');
+      try { return JSON.parse(jsonStr); } catch (e2) {
+        console.error('JSON parse failed after cleanup:', (e2 as Error).message, 'Raw snippet:', jsonStr.substring(0, 200));
+      }
+    }
+  }
+
+  // Fallback: try as array (old format) and convert to keyed object
+  const arrMatch = cleaned.match(/\[[\s\S]*?\]/);
+  if (arrMatch) {
+    const sanitized = arrMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
+    try {
+      const arr: string[] = JSON.parse(sanitized);
+      const obj: Record<string, string> = {};
+      arr.forEach((val, i) => { obj[`K${i}`] = val; });
+      console.warn(`AI returned array instead of object, converted ${arr.length} entries`);
+      return obj;
+    } catch {}
+  }
+
+  // Fallback: regex extraction of individual K{n} keys
+  const regexResult: Record<string, string> = {};
+  const keyRegex = /"K(\d+)"\s*:\s*"/g;
+  let keyMatch;
+  while ((keyMatch = keyRegex.exec(cleaned)) !== null) {
+    const keyNum = keyMatch[1];
+    const valueStart = keyMatch.index + keyMatch[0].length;
+    // Find the end of the value string, handling escaped quotes
+    let i = valueStart;
+    let value = '';
+    while (i < cleaned.length) {
+      if (cleaned[i] === '\\' && i + 1 < cleaned.length) {
+        value += cleaned[i] + cleaned[i + 1];
+        i += 2;
+      } else if (cleaned[i] === '"') {
+        break;
+      } else {
+        value += cleaned[i];
+        i++;
+      }
+    }
+    if (value.trim()) {
+      // Unescape the value
+      try {
+        regexResult[`K${keyNum}`] = JSON.parse(`"${value}"`);
+      } catch {
+        regexResult[`K${keyNum}`] = value.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      }
+    }
+  }
+  if (Object.keys(regexResult).length > 0) {
+    console.warn(`Extracted ${Object.keys(regexResult).length} keys via regex fallback`);
+    return regexResult;
+  }
+
+  throw new Error('فشل في تحليل استجابة الذكاء الاصطناعي — لم يتم العثور على JSON صالح');
+}
+
 // --- OpenAI-compatible translation (DeepSeek / GMICLOUD / TokenRouter) ---
 async function translateWithOpenAICompat(
   entries: { key: string; original: string }[],
@@ -1620,16 +1721,13 @@ async function translateWithOpenAICompat(
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
 
-  // Extract JSON from response
-  let translationsObj: Record<string, string> = {};
-  const cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start !== -1 && end !== -1) {
-    try { translationsObj = JSON.parse(cleaned.substring(start, end + 1)); } catch {
-      try { translationsObj = JSON.parse(cleaned.substring(start, end + 1).replace(/,\s*}/g, '}')); } catch {}
-    }
-  }
+  // Extract JSON from response. A plain JSON.parse on the whole reply fails
+  // outright on one unescaped quote or a token-limit truncation anywhere in a
+  // large batch, previously leaving translationsObj empty with no error at
+  // all — extractJsonObject salvages per-key matches when the full parse
+  // fails, and throws (surfacing as a 500 the client already knows to retry
+  // by auto-splitting the batch) only when nothing could be recovered at all.
+  const translationsObj = extractJsonObject(content);
 
   // Reject any translation containing CJK / Cyrillic / Hebrew / Thai / Greek
   // characters — providers occasionally drift to those scripts even with a
@@ -1852,92 +1950,7 @@ async function translateWithAI(
     return /\.\.\.$/m.test(text.trim()) || /\[truncated\]/i.test(text) || /\[continued\]/i.test(text);
   }
 
-  /** Extract JSON object from AI response, handling markdown and malformed output */
-  function extractJsonObject(raw: string): Record<string, string> {
-    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    
-    // Find the outermost JSON object by matching balanced braces,
-    // properly skipping content inside quoted strings
-    let depth = 0, start = -1, end = -1;
-    let inString = false, escapeNext = false;
-    for (let i = 0; i < cleaned.length; i++) {
-      const ch = cleaned[i];
-      if (escapeNext) { escapeNext = false; continue; }
-      if (ch === '\\' && inString) { escapeNext = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue; // Skip everything inside strings
-      if (ch === '{') {
-        if (depth === 0) start = i;
-        depth++;
-      } else if (ch === '}') {
-        depth--;
-        if (depth === 0 && start !== -1) { end = i; break; }
-      }
-    }
-    
-    if (start !== -1 && end !== -1) {
-      let jsonStr = cleaned.substring(start, end + 1);
-      try {
-        return JSON.parse(jsonStr);
-      } catch {
-        // Fix common issues: trailing commas, control characters
-        jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/[\x00-\x1F\x7F]/g, ' ');
-        try { return JSON.parse(jsonStr); } catch (e2) {
-          console.error('JSON parse failed after cleanup:', (e2 as Error).message, 'Raw snippet:', jsonStr.substring(0, 200));
-        }
-      }
-    }
-    
-    // Fallback: try as array (old format) and convert to keyed object
-    const arrMatch = cleaned.match(/\[[\s\S]*?\]/);
-    if (arrMatch) {
-      const sanitized = arrMatch[0].replace(/[\x00-\x1F\x7F]/g, ' ');
-      try {
-        const arr: string[] = JSON.parse(sanitized);
-        const obj: Record<string, string> = {};
-        arr.forEach((val, i) => { obj[`K${i}`] = val; });
-        console.warn(`AI returned array instead of object, converted ${arr.length} entries`);
-        return obj;
-      } catch {}
-    }
-
-    // Fallback: regex extraction of individual K{n} keys
-    const regexResult: Record<string, string> = {};
-    const keyRegex = /"K(\d+)"\s*:\s*"/g;
-    let keyMatch;
-    while ((keyMatch = keyRegex.exec(cleaned)) !== null) {
-      const keyNum = keyMatch[1];
-      const valueStart = keyMatch.index + keyMatch[0].length;
-      // Find the end of the value string, handling escaped quotes
-      let i = valueStart;
-      let value = '';
-      while (i < cleaned.length) {
-        if (cleaned[i] === '\\' && i + 1 < cleaned.length) {
-          value += cleaned[i] + cleaned[i + 1];
-          i += 2;
-        } else if (cleaned[i] === '"') {
-          break;
-        } else {
-          value += cleaned[i];
-          i++;
-        }
-      }
-      if (value.trim()) {
-        // Unescape the value
-        try {
-          regexResult[`K${keyNum}`] = JSON.parse(`"${value}"`);
-        } catch {
-          regexResult[`K${keyNum}`] = value.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-        }
-      }
-    }
-    if (Object.keys(regexResult).length > 0) {
-      console.warn(`Extracted ${Object.keys(regexResult).length} keys via regex fallback`);
-      return regexResult;
-    }
-    
-    throw new Error('فشل في تحليل استجابة الذكاء الاصطناعي — لم يتم العثور على JSON صالح');
-  }
+  // extractJsonObject moved to module scope (used by translateWithOpenAICompat too) — see above translateWithAI.
 
   const parseAndUnlock = (translationsObj: Record<string, string>): Record<string, string> => {
     const result: Record<string, string> = {};

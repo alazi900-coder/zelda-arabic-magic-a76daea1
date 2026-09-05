@@ -225,6 +225,24 @@ Hard constraints, because of how this game stores its text:
 4. Names written in CAPITALS in the English text (towns, characters, Pokémon, items) are the game's own proper nouns. Leave them in Latin script unless Arabic has a settled, widely used equivalent, and then use that same equivalent everywhere.
 5. Numbers and digits stay as they are.`;
 
+/** Kept separate from POKEMON_SYSTEM_PROMPT: a different game (NDS, Sinnoh),
+ * not the GBA ROM hack that prompt describes. Its own tags ({COLOR 1},
+ * {STRVAR_1 3, 0, 0}, ...) are masked to TAG_N by protectTags before this
+ * prompt is ever built; named here only so the model doesn't invent one. */
+const PLATINUM_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Platinum (Nintendo DS) — the Sinnoh region, Professor Rowan, Gyms, badges, Poké Balls, Pokémon Centers, moves, types, held items and TMs. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, NOT Wolfenstein, and NOT the GBA "Pokémon Ruby Destiny" ROM hack — never import their terminology, characters, or lore. In particular, this is not a high-fantasy or military setting: words like "Mail" mean the in-game Mail item (a postcard/letter a Pokémon can hold and trade, e.g. "Bloom Mail", "Bead Mail" — flavor text and a decorative pattern, never armor), not chainmail or plate armor.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, TAG_2, ... (Platinum's own engine tags, e.g. {COLOR 1}, {STRVAR_1 3, 0, 0} — masked before you see them)
+   - NEWLINE_0, NEWLINE_1, ... (line breaks — these are NOT words, do NOT translate to "سطر جديد" or any text)
+   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
+   Treat these as opaque tokens. Never insert punctuation directly adjacent to a NEWLINE_N placeholder — keep a space before/after.
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end of the sentence. Do NOT cluster tags together. If the input is "TAG_0 some text TAG_1", the output must place TAG_0 BEFORE the translated text and TAG_1 AFTER it — never "ترجمة TAG_0 TAG_1" or "TAG_0 TAG_1 ترجمة". Tag position carries game meaning (icons, colors, cursor position, substituted names).
+5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
+6. Voice: everyday, warm and plain — the audience is young. Avoid literary or archaic Arabic. Pokémon, move, and item names in CAPITALS or Title Case are the game's own proper nouns — leave them in Latin script unless Arabic has a settled, widely used equivalent, and then use that same equivalent everywhere.`;
+
 /** Kept separate from POKEMON_SYSTEM_PROMPT: Essentials is not a GBA ROM. */
 const POKEMON_XP_SYSTEM_PROMPT = `You are a professional video-game text translator working on Pokémon Unbreakable Ties, a Pokémon Essentials game made with RPG Maker XP. This is NOT Pokémon Ruby Destiny, NOT a Game Boy Advance ROM, and NOT Xenoblade Chronicles, Risen, MOTHER 3, Metroid Prime, or Wolfenstein. Never import lore, terminology, storage limits, or message rules from those games.
 
@@ -608,11 +626,12 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' | 'gtaiv' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' = 'xenoblade';
 
 function getGameSystemPrompt(): string {
   if (_game === 'gtaiv') return GTAIV_SYSTEM_PROMPT;
   if (_game === 'pokemon-xp') return POKEMON_XP_SYSTEM_PROMPT;
+  if (_game === 'platinum') return PLATINUM_SYSTEM_PROMPT;
   if (_game === 'pokemon') return POKEMON_SYSTEM_PROMPT;
   if (_game === 'wolfenstein') return WOLFENSTEIN_SYSTEM_PROMPT;
   if (_game === 'metroidprime') return METROIDPRIME_SYSTEM_PROMPT;
@@ -2191,7 +2210,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

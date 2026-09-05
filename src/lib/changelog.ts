@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.9.7",
+    date: "2026-09-05",
+    changes: [
+      { kind: "fixed", text: "**Pokémon Platinum لم يكن له شخصية ذكاء اصطناعي خاصّة به عند الترجمة أو التحسين — كانت أسطره تُعامَل كأنها Xenoblade Chronicles 1.** `resolveGameParam` (يحدّد نوع اللعبة من اسم الملف) لم يكن يميّز ملفات `platinum/`، فتسقط في الحالة الافتراضية Xenoblade — ومن هنا مثلاً كانت أداة تحسين الترجمة ترفض \"بريد الزهرة\" (ترجمة Bloom Mail الصحيحة) وتقترح \"درع الإزهار\"، لأنها تفسّر Mail حسب عتاد لعبة خيالٍ ملحمي بدل بطاقة بريدية بوكيمون. أُضيفت شخصية Platinum الخاصة (عالم Sinnoh، أسماء وسومه {COLOR N}/{STRVAR_1...}) في translate-entries وenhance-translations، بدل الوقوع في شخصية لعبة أخرى." },
+    ],
+  },
+  {
     version: "2.9.6",
     date: "2026-09-05",
     changes: [

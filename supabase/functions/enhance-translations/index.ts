@@ -305,6 +305,7 @@ function buildRuleSections(
   isPokemon = false,
   isLumenTale = false,
   isGtaIv = false,
+  isPlatinum = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -338,7 +339,7 @@ function buildRuleSections(
     enabled.has(r.id) &&
     (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen) &&
     (!PKM_ONLY_RULE_IDS.has(r.id) || isPokemon) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv));
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -555,6 +556,7 @@ Deno.serve(async (req) => {
     const isMother3 = game === 'mother3';
     const isMetroidPrime = game === 'metroidprime';
     const isPokemon = game === 'pokemon';
+    const isPlatinum = game === 'platinum';
     const isPokemonXp = game === 'pokemon-xp';
     const isLumenTale = game === 'lumentale';
     const isGtaIv = game === 'gtaiv';
@@ -562,6 +564,8 @@ Deno.serve(async (req) => {
       ? 'LumenTale: Memories of Trey'
       : isGtaIv
       ? 'Grand Theft Auto IV (GTA IV)'
+      : isPlatinum
+      ? 'Pokémon Platinum (Nintendo DS)'
       : isPokemon
       ? 'Pokémon Ruby Destiny: Reign of Legends (تعديل على Pokémon Ruby)'
       : isPokemonXp
@@ -577,6 +581,8 @@ Deno.serve(async (req) => {
       ? '\nهذه مراجعة خاصة بـ LumenTale: Memories of Trey. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى.\n'
       : isGtaIv
       ? '\nهذه مراجعة خاصة بـ GTA IV. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى. استند فقط إلى النص والقاموس المعطى، ولا تغيّر رموز GTA IV المحاطة بعلامتي ~ ولا أي مبلغ دولار ظاهر مثل $100 أو $20m.\n'
+      : isPlatinum
+      ? '\nهذه مراجعة خاصة بـ Pokémon Platinum (Nintendo DS) — عالم Sinnoh، بروفيسور روان، الصالات، الأوسمة، مراكز بوكيمون، الحركات والأنواع والعناصر. لا تفترض سياق Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. هذه ليست لعبة خيال ملحمي: كلمة "Mail" هنا تعني عنصر البريد (بطاقة بريدية يحملها البوكيمون، مثل "Bloom Mail")، وليست درعاً معدنياً — لا تفترض معنى "درع" لها إطلاقاً.\n'
       : isPokemonXp
       ? '\nهذه مراجعة خاصة بـ Pokémon Unbreakable Ties المبنية على Pokémon Essentials / RPG Maker XP. لا تفترض سياق Pokémon GBA أو Ruby Destiny أو Xenoblade. استند حصراً إلى النص والقاموس المعطى، ولا تخترع أحداثاً أو أسماء أو أوامر.\n'
       : '';
@@ -642,12 +648,12 @@ Deno.serve(async (req) => {
       unmaskPokemonXpSuggestion(key, unmaskSuggestion(key, text));
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isPokemonXp || isLumenTale || isGtaIv
+    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -657,6 +663,12 @@ Deno.serve(async (req) => {
       ruleSections.protect = ruleSections.protect.replace(
         '[Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC',
         'من نوع {FD:xx} — وهي قيم تضعها اللعبة وقت التشغيل مثل اسم اللاعب. لا وسوم أخرى في هذه اللعبة، فلا تُضِف وسماً من لعبة أخرى'
+      );
+    }
+    if (isPlatinum) {
+      ruleSections.protect = ruleSections.protect.replace(
+        '[Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC',
+        'من الشكل {NAME} أو {NAME N} أو {NAME N, N, N} بأحرف كبيرة — وهي وسوم محرّك Platinum نفسه مثل {COLOR 1} و{STRVAR_1 3, 0, 0}، قيمٌ يضعها الأصل حرفياً. انقلها كما هي حرفاً بحرف بنفس عددها وترتيبها. لا وسوم أخرى في هذه اللعبة، فلا تُضِف وسماً من لعبة أخرى'
       );
     }
     if (isPokemonXp) {
@@ -674,6 +686,8 @@ Deno.serve(async (req) => {
       ? 'قاعدة أمان غير قابلة للتجاوز في LumenTale: يجب أن يحتوي الاقتراح على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
       : isGtaIv
       ? 'قاعدة أمان غير قابلة للتجاوز في GTA IV: يجب أن يحتوي الاقتراح على كل رمز بين ~...~ وكل مبلغ دولار ظاهر من الأصل (مثل $100 و$20m) بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تنقل أيّاً منها، ولا تترك علامة ~ منفردة.'
+      : isPlatinum
+      ? 'قاعدة أمان غير قابلة للتجاوز في Pokémon Platinum: إذا كان الأصل يحتوي وسوماً من الشكل {NAME} أو {NAME N} أو {NAME N, N, N} مثل {COLOR 1} أو {STRVAR_1 3, 0, 0}، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالقيمة والعدد والترتيب نفسه حرفاً بحرف. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.'
       : 'قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
     const strictTokenSafetyBullet = isPokemonXp
       ? '- في Pokémon Essentials يجب أن يحتوي suggested وكل بديل على كل __PXPTOKEN_n__ من الأصل بالقيمة والترتيب نفسيهما، ومن دون علامات BiDi خفية أو تشكيل أو Presentation Forms.'
@@ -681,6 +695,8 @@ Deno.serve(async (req) => {
       ? '- في LumenTale يجب أن يحتوي suggested وكل بديل على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف.'
       : isGtaIv
       ? '- في GTA IV يجب أن يحتوي suggested وكل بديل على كل رمز بين ~...~ وكل مبلغ دولار ظاهر بالقيمة والترتيب نفسيهما حرفاً بحرف، ومن دون علامة ~ منفردة.'
+      : isPlatinum
+      ? '- في Pokémon Platinum يجب أن يحتوي suggested وكل بديل على كل وسم من الشكل {NAME} أو {NAME N, ...} مثل {COLOR 1} من الأصل بالقيمة والعدد والترتيب نفسه حرفاً بحرف.'
       : '- إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
     if (ruleSections.detectCount === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {
@@ -1278,7 +1294,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         passes || 1,
         () => callOnceParse(
           [
-	            { role: 'system', content: isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv
+	            { role: 'system', content: isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv || isPlatinum
               ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
               : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
             { role: 'user', content: enhancePrompt },

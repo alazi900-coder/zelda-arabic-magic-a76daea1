@@ -1,3 +1,15 @@
+diff --git a/include/bg_window.h b/include/bg_window.h
+index 9a3e4842..e4c9fd86 100644
+--- a/include/bg_window.h
++++ b/include/bg_window.h
+@@ -241,6 +241,7 @@ void Window_BlitBitmapRect(Window *window, void *src, u16 srcX, u16 srcY, u16 sr
+ void Window_BlitBitmapRectWithTransparency(Window *window, void *src, u16 srcX, u16 srcY, u16 srcWidth, u16 srcHeight, u16 destX, u16 destY, u16 destWidth, u16 destHeight, u16 transparent);
+ void Window_FillRectWithColor(Window *window, u8 color, u16 x, u16 y, u16 width, u16 height);
+ void Window_CopyGlyph(Window *window, const u8 *glyphPixels, u16 srcWidth, u16 srcHeight, u16 destX, u16 destY, u16 table);
++u16 Window_MirrorX(const Window *window, u16 x, u16 width);
+ void Window_Scroll(Window *window, u8 direction, u8 distance, u8 fillVal);
+ BgConfig *Window_GetBgConfig(Window *window);
+ u8 Window_GetBgLayer(Window *window);
 diff --git a/include/render_text.h b/include/render_text.h
 index baf38494..f8a8fc46 100644
 --- a/include/render_text.h
@@ -2752,10 +2764,43 @@ z^G3kN9f0~<0XCAQfW5Z?R3E-r3K+aiA2jX&q;CUg9c|nXkS6yAT-*r|BfD}BfH)M*
 xI|1G(ECal8Go5~az<t&E)Animw0+ui`(I3s{%*Z5Iu`%{002ovPDHLkV1h7%=CS|)
 
 diff --git a/src/bg_window.c b/src/bg_window.c
-index bd3dd8ff..91d82522 100644
+index bd3dd8ff..381b360b 100644
 --- a/src/bg_window.c
 +++ b/src/bg_window.c
-@@ -2132,6 +2132,29 @@ void Window_CopyGlyph(Window *window, const u8 *glyphPixels, u16 srcWidth, u16 s
+@@ -2114,6 +2114,32 @@ void Window_FillRectWithColor(Window *window, u8 color, u16 x, u16 y, u16 width,
+         }                                                                                                         \
+     }
+ 
++/**
++ * Where a box of `width` pixels starting at `x` lands once the window's own
++ * right-to-left mirroring is applied -- the same transform `Window_CopyGlyph`
++ * uses for a glyph, exposed so anything that has to *erase* what a mirrored
++ * glyph drew can target the place it actually landed.
++ *
++ * `ColoredArrow_Print` (the list-cursor arrow) is ordinary text and gets
++ * mirrored like any other glyph, but the code that erases it before redrawing
++ * it one row down calls `Window_FillRectWithColor` directly -- a plain
++ * rectangle fill that knows nothing about glyph mirroring. Erasing at the
++ * unmirrored coordinate left the *actual*, mirrored arrow on screen and wiped
++ * empty space instead, so a cursor moved through a list left every position
++ * it had visited still lit up behind it.
++ */
++u16 Window_MirrorX(const Window *window, u16 x, u16 width)
++{
++    u16 destWidth = window->width * 8;
++    int mirroredX = (int)destWidth - (int)x - (int)width;
++
++    if (mirroredX < 0) {
++        mirroredX = 0;
++    }
++
++    return (u16)mirroredX;
++}
++
+ void Window_CopyGlyph(Window *window, const u8 *glyphPixels, u16 srcWidth, u16 srcHeight, u16 destX, u16 destY, u16 table)
+ {
+     u8 *windowPixels = window->pixels;
+@@ -2132,6 +2158,23 @@ void Window_CopyGlyph(Window *window, const u8 *glyphPixels, u16 srcWidth, u16 s
          srcBottom = srcHeight;
      }
  
@@ -2773,18 +2818,47 @@ index bd3dd8ff..91d82522 100644
 +    }
 +
 +    {
-+        int mirroredX = (int)destWidth - (int)destX - srcRight;
-+
-+        if (mirroredX < 0) {
-+            mirroredX = 0;
-+        }
-+
-+        destX = mirroredX;
++        destX = Window_MirrorX(window, destX, (u16)srcRight);
 +    }
 +
      glyphSizeParam = 0;
      if (srcRight > 8) {
          glyphSizeParam |= 1;
+diff --git a/src/list_menu.c b/src/list_menu.c
+index f601e209..2ec21e76 100644
+--- a/src/list_menu.c
++++ b/src/list_menu.c
+@@ -385,9 +385,13 @@ static void EraseCursor(ListMenu *menu, u16 atLine)
+     switch (menu->template.cursorType) {
+     case 0:
+         lineHeight = Font_GetAttribute(menu->template.fontID, FONTATTR_MAX_LETTER_HEIGHT) + menu->template.lineSpacing;
++        // PrintCursor draws through the ordinary text path, which mirrors
++        // where a glyph lands; this fill does not, so it has to be told the
++        // same mirrored X or it erases empty space while the arrow itself
++        // stays on screen at every row the cursor has ever visited.
+         Window_FillRectWithColor(menu->template.window,
+             menu->template.textColorBg,
+-            menu->template.cursorXOffset,
++            Window_MirrorX(menu->template.window, menu->template.cursorXOffset, 8),
+             atLine * lineHeight + menu->template.yOffset,
+             8,
+             16);
+diff --git a/src/menu.c b/src/menu.c
+index aca99610..a855c24d 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -214,7 +214,10 @@ static BOOL TryMovingCursorAndPlaySound(Menu *menu, u8 direction, u16 sound)
+ 
+     u8 x, y;
+     CalcCursorDrawCoords(menu, &x, &y, oldCursorPos);
+-    Window_FillRectWithColor(menu->template.window, bgColor, x, y, 8, menu->lineHeight);
++    // DrawCursor prints the arrow through the ordinary (mirrored) text path;
++    // this fill does not mirror on its own, so without this it erases empty
++    // space while the actual, mirrored arrow stays lit at the row just left.
++    Window_FillRectWithColor(menu->template.window, bgColor, Window_MirrorX(menu->template.window, x, 8), y, 8, menu->lineHeight);
+ 
+     DrawCursor(menu);
+     Sound_PlayEffect(sound);
 diff --git a/src/render_text.c b/src/render_text.c
 index 8a98037d..7bfdab8a 100644
 --- a/src/render_text.c

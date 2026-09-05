@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { RISEN_TAG_REGEX } from "../_shared/risen-tag-mask.ts";
+import { PLAT_TAG_RE } from "../_shared/plat-tag-mask.ts";
 import { GMICLOUD_OPENAI_BASE_URL, resolveGmiCloudTextModel } from "../_shared/gmicloud.ts";
 
 const corsHeaders = {
@@ -441,6 +442,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     /\[\s*\w+\s*=\s*\w[^\]]*\]/g,       // [TAG=Value] patterns (e.g. [Color=Red])
     /\{\s*\w+\s*:\s*\w[^}]*\}/g,         // {TAG:Value} patterns (e.g. {player:name})
     /\{[\w]+\}/g,                            // {variable} placeholders
+    PLAT_TAG_RE,                              // Platinum's own {COLOR 2}, {STRVAR_1 3, 0, 0}
     /[\uFFF9-\uFFFC]/g,                       // Unicode special markers
     /<[\w\/][^>]*>/g,                         // HTML-like tags
     ABBREV_PATTERN,                             // Game abbreviations

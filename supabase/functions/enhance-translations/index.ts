@@ -9,6 +9,7 @@ import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts"
 import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
 import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-persona-guard.ts';
 import { preservesLumenTaleTechnicalTokenSequence } from "../_shared/lumentale-token-guard.ts";
+import { PLAT_TAG_RE } from "../_shared/plat-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -158,7 +159,12 @@ function isCategoryEnabled(category: string | undefined, enabledSet: Set<string>
   const family = CATEGORY_RULE_FAMILY[category || 'wrong'] || CATEGORY_RULE_FAMILY.wrong;
   return family.some(id => enabledSet.has(id));
 }
-const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+// Platinum's own {COLOR 2}, {STRVAR_1 3, 0, 0} \u2014 folded in via PLAT_TAG_RE.source
+// so this stays the single source of truth (see _shared/plat-tag-mask.ts).
+const TECH_TAG_REGEX = new RegExp(
+  `[\\uFFF9-\\uFFFC]|[\\uE000-\\uE0FF]+|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{[\\w]+\\}|${PLAT_TAG_RE.source}`,
+  "g",
+);
 const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;
 const ARABIC_DIACRITICS_REGEX = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/;
 

@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.9.8",
+    date: "2026-09-05",
+    changes: [
+      { kind: "fixed", text: "**وسوم Platinum التقنية ({COLOR N}...) كانت لا تزال تُفقَد أحياناً بعد إصلاح v2.9.6 — تحديداً مع نموذج DeepSeek.** السبب: نسخة **ثالثة** منفصلة من نمط الوسوم (`TECH_TAG_REGEX` داخل translate-entries، تُستخدم في آلية \"ترميم الوسوم المفقودة\" `enforceTagIntegrity`) لم تُصلَح في الجولة السابقة — فحين يُسقط النموذج وسماً من ترجمته، آلية الترميم التي يُفترض أن تُعيده لا تتعرّف عليه أصلاً فلا تُرمّم شيئاً. أُضيف نمط Platinum لهذه النسخة الثالثة أيضاً." },
+    ],
+  },
+  {
     version: "2.9.7",
     date: "2026-09-05",
     changes: [

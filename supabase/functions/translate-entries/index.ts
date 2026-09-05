@@ -298,7 +298,7 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' | 'gtaiv';
+  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
@@ -1061,8 +1061,14 @@ function fixOrphansPreservingNewlines(text: string): string {
   return fixed.join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').trim();
 }
 
-/** Unified regex matching all supported technical tag formats */
-const TECH_TAG_REGEX = /[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\](?:\s*\([^)]{1,100}\))?|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}/g;
+/** Unified regex matching all supported technical tag formats. Platinum's own
+ * {COLOR 2}, {STRVAR_1 3, 0, 0} folded in via PLAT_TAG_RE.source \u2014 this is what
+ * enforceTagIntegrity() reads to know which tags the original had, so without
+ * it a tag the model drops here never gets re-appended by the repair step. */
+const TECH_TAG_REGEX = new RegExp(
+  `[\\uFFF9-\\uFFFC]|[\\uE000-\\uE0FF]+|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\](?:\\s*\\([^)]{1,100}\\))?|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{[\\w]+\\}|${PLAT_TAG_RE.source}`,
+  "g",
+);
 
 function extractTechTags(text: string): string[] {
   return [...text.matchAll(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags))].map(m => m[0]);
@@ -2198,7 +2204,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'pokemon-xp' | 'gtaiv';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';

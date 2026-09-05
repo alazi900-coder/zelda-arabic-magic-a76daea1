@@ -9,8 +9,18 @@
  * untouched (better visual imbalance than a broken cinematic).
  */
 import { hardBreaksEqual } from "./text-tokens";
+import { PLAT_TAG_RE } from "./nds/plat-tag-mask";
 
-const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}|[\uFFF9-\uFFFC]+/g;
+// Platinum's own {COLOR 2}, {STRVAR_1 74, 6, 0} folded in via PLAT_TAG_RE.source
+// \u2014 without it, a tag containing spaces/commas (unlike every other bracketed
+// tag this pattern already shields) reads as several separate "words" to the
+// DP line-balancer below, which is then free to scatter its fragments across
+// different lines independently, corrupting the tag instead of keeping it
+// atomic. See _shared/plat-tag-mask.ts (the server-side twin of this pattern).
+const TAG_SHIELD_PATTERN = new RegExp(
+  `[\\uE000-\\uE0FF]+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\s*\\\\?\\]|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{[\\w]+\\}|[\\uFFF9-\\uFFFC]+|${PLAT_TAG_RE.source}`,
+  "g",
+);
 
 /** Calculate visual length: each tag counts as 1 character (renders as single icon in-game) */
 export function visualLength(text: string): number {

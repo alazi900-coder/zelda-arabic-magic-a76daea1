@@ -41,6 +41,20 @@ describe('splitEvenlyByLines', () => {
     expect(lines).toHaveLength(2);
   });
 
+  it('preserves Platinum {STRVAR_1 N, N, N} and {COLOR N} tags as one atomic unit', () => {
+    const text = 'بيضة {STRVAR_1 74, 6, 0} غامضة تلقّتها من {COLOR 2}{STRVAR_1 4, 8, 0}{COLOR 0} اليوم';
+    const result = splitEvenlyByLines(text, 2);
+    expect(result).toContain('{STRVAR_1 74, 6, 0}');
+    expect(result).toContain('{STRVAR_1 4, 8, 0}');
+    expect(result).toContain('{COLOR 2}');
+    expect(result).toContain('{COLOR 0}');
+    const lines = result.split('\n');
+    expect(lines).toHaveLength(2);
+    // The tag's internal comma/space must never be split across a line boundary.
+    expect(result).not.toMatch(/\{STRVAR_1\s*$/m);
+    expect(result).not.toMatch(/^\s*74,/m);
+  });
+
   it('handles text with existing newlines by flattening first', () => {
     const text = 'السطر الأول\nالسطر الثاني\nالسطر الثالث';
     const result = splitEvenlyByLines(text, 2);

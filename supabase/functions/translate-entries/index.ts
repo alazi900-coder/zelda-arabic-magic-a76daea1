@@ -737,8 +737,15 @@ function restoreAndEnforce(original: string, translated: string, tags: Map<strin
   return balanceLines(enforced, maxLines);
 }
 
-/** Tag shielding: replace technical tags with short placeholders for balanced splitting */
-const TAG_SHIELD_PATTERN = /[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\s*\\?\]|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*[A-Za-z][A-Za-z0-9]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{[\w]+\}|[\uFFF9-\uFFFC]+/g;
+/** Tag shielding: replace technical tags with short placeholders for balanced
+ * splitting. Platinum's own {COLOR 2}, {STRVAR_1 74, 6, 0} folded in via
+ * PLAT_TAG_RE.source -- without it a tag containing spaces/commas reads as
+ * several separate "words" here, and the balancer scatters its fragments
+ * across lines independently instead of keeping the tag atomic. */
+const TAG_SHIELD_PATTERN = new RegExp(
+  `[\\uE000-\\uE0FF]+|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\s*\\\\?\\]|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{[\\w]+\\}|[\\uFFF9-\\uFFFC]+|${PLAT_TAG_RE.source}`,
+  "g",
+);
 
 interface ShieldResult {
   shielded: string;

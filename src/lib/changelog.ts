@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.9.9",
+    date: "2026-09-05",
+    changes: [
+      { kind: "fixed", text: "**أداة \"تحسين الترجمة بالذكاء الاصطناعي\" لم تكن تصلح وسوم Platinum المفقودة إطلاقاً.** القاعدة الوحيدة التي تخبر النموذج \"أصلح الوسم التقني الناقص\" (`detect_split_and_tags`) كُتبت لصيغة Xenoblade فقط (`[XENO:n]`)، واستُبعِدت بالكامل لـPlatinum في إصلاح سابق (v2.9.7) دون تعويضها بقاعدة بديلة — فلم يبقَ أي توجيه فعّال يطلب من النموذج البحث عن `{COLOR N}` الناقصة أصلاً. أُضيفت قاعدة `detect_plat_tags` مخصّصة (مفعّلة تلقائياً) تحلّ محلّها لـPlatinum تحديداً." },
+    ],
+  },
+  {
     version: "2.9.8",
     date: "2026-09-05",
     changes: [

@@ -77,6 +77,11 @@ const RULES: RuleDef[] = [
   { id: 'detect_pkm_overflow', kind: 'detect', prompt: '**split_and_tags** — [خاص ببوكيمون] السطر يُكتب في موضعه نفسه داخل الروم ولا يمكن تحريكه، فما زاد عن طول الأصل يرفضه البناء ولا يظهر في اللعبة أصلاً: لا تجعل اقتراحك أطول من الترجمة الحالية إلا إذا كان الأصل الإنجليزي أطول منها فعلاً. عند الضرورة اختصر الحشو والتكرار، لا المعنى.' },
   { id: 'detect_pkm_linebreaks', kind: 'detect', prompt: '**line_breaks** — [خاص ببوكيمون] صندوق الحوار **سطران فقط**، وعرض السطر **١٩٨ بكسل** — أي نحو ٢٦ إلى ٣٣ حرفاً عربياً، لأن كل حرف يأخذ من ٤ إلى ٨ بكسل والمسافة ٣ (كلّه مقيس في المحاكي). والمحرّك لا يلفّ النصّ: ما يتجاوز عرض السطر يُرسم خارج الصندوق ولا يُمسح، فيبقى ظاهراً فوق الرسائل التالية. مهمّتك: (١) حافظ على عدد فواصل `\\n` ومواضعها كما في الأصل الإنجليزي. (٢) إن كان سطر في الترجمة أطول من ذلك، اقسمه بفاصل `\\n` **عند حدّ معنويّ** — بعد جملة تامّة أو شبه جملة أو قبل حرف جرّ — لا عند أقرب مسافة، ولا تقطع مضافاً عن مضاف إليه ولا موصوفاً عن صفته. (٣) إن لم يكفِ النصَّ سطران، اختصر الحشو والتكرار حتى يكفيَه، ولا تحذف معنى. ولا تخترع رمزاً تقنياً: `{fa}` و`{fb}` و`{FD:xx}` تُنقل كما هي بعددها وترتيبها، وأي زيادة أو نقصان يرفضها البناء فيبقى السطر إنجليزياً في اللعبة.' },
   { id: 'detect_pkm_name_consistency', kind: 'detect', prompt: '**consistency** — [خاص ببوكيمون] أسماء البوكيمون والمهارات والأغراض تسكن خانات ثابتة الحجم: كل واحد اسم مفرد بلا نقطة ولا جملة وصفية، ويجب أن يُكتب بنفس الصورة في كل المواضع. اسم واحد بصورتين في اللعبة نفسها خطأ حتى لو كانت الصورتان صحيحتين لغوياً.' },
+  // Platinum-only rule: same mechanism as the Pokémon (Ruby Destiny) rules
+  // above — declared here but only reaches the prompt when the request's
+  // game is 'platinum' (see PLATINUM_ONLY_RULE_IDS). Replaces the withheld
+  // Xenoblade tag rules (XENOBLADE_TAG_RULE_IDS) with Platinum's own tag shape.
+  { id: 'detect_plat_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـPlatinum] الرموز من الشكل `{COLOR 1}` أو `{STRVAR_1 3, 0, 0}` (اسم بأحرف كبيرة، ثم اختيارياً رقم أو أرقام مفصولة بفواصل) وسوم محرّك اللعبة نفسها — تلوين أو مؤقّت أو قيمة تضعها اللعبة وقت التشغيل — وليست نصّاً. أصلح أي وسم من هذا الشكل تالفاً أو مفقوداً في الترجمة: استرجعه من الأصل بنفس القيمة والعدد والترتيب حرفاً بحرف. لا تخترع وسماً غير موجود في الأصل، ولا تحذف وسماً موجوداً فيه.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -96,6 +101,8 @@ const DEFAULT_RULE_IDS = new Set(RULES.map(r => r.id));
 const RISEN_ONLY_RULE_IDS = new Set(['detect_risen_gendered_pickup', 'detect_risen_line_structure']);
 /** Rules whose prompt text only makes sense for Pokémon — never injected elsewhere. */
 const PKM_ONLY_RULE_IDS = new Set(['detect_pkm_var', 'detect_pkm_overflow', 'detect_pkm_linebreaks', 'detect_pkm_name_consistency']);
+/** Rules whose prompt text only makes sense for Platinum — never injected elsewhere. */
+const PLATINUM_ONLY_RULE_IDS = new Set(['detect_plat_tags']);
 /**
  * Rules that teach the model Xenoblade's tag syntax, withheld from Pokémon.
  *
@@ -140,11 +147,20 @@ const PKM_TYPE_TO_RULE_ID: Record<string, string> = {
   consistency: 'detect_pkm_name_consistency',
 };
 
+/** Same mechanism as PKM_TYPE_TO_RULE_ID above, for Platinum's own tag rule —
+ * a lost {COLOR N} is a split_and_tags problem, same type Xenoblade's withheld
+ * rule would have answered with, so that type must stay allowed when only the
+ * Platinum-specific rule for it is on. */
+const PLATINUM_TYPE_TO_RULE_ID: Record<string, string> = {
+  split_and_tags: 'detect_plat_tags',
+};
+
 function isTypeEnabled(type: string | undefined, enabledSet: Set<string>): boolean {
   const ruleId = TYPE_TO_RULE_ID[type || ''];
   const pkmRuleId = PKM_TYPE_TO_RULE_ID[type || ''];
-  if (!ruleId && !pkmRuleId) return true; // نوع غير معروف/مخصّص — لا نحظره احتياطاً.
-  return (!!ruleId && enabledSet.has(ruleId)) || (!!pkmRuleId && enabledSet.has(pkmRuleId));
+  const platRuleId = PLATINUM_TYPE_TO_RULE_ID[type || ''];
+  if (!ruleId && !pkmRuleId && !platRuleId) return true; // نوع غير معروف/مخصّص — لا نحظره احتياطاً.
+  return (!!ruleId && enabledSet.has(ruleId)) || (!!pkmRuleId && enabledSet.has(pkmRuleId)) || (!!platRuleId && enabledSet.has(platRuleId));
 }
 
 // وضع "القواعد" (grammar) يُرجع فئة خشنة فقط (wrong/reorder/weak) لا نوعاً دقيقاً،
@@ -339,6 +355,7 @@ function buildRuleSections(
     enabled.has(r.id) &&
     (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen) &&
     (!PKM_ONLY_RULE_IDS.has(r.id) || isPokemon) &&
+    (!PLATINUM_ONLY_RULE_IDS.has(r.id) || isPlatinum) &&
     (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);

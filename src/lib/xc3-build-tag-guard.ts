@@ -1,6 +1,15 @@
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
+import { PLAT_TAG_RE } from "@/lib/nds/plat-tag-mask";
 
-const BUILD_TECH_TAG_REGEX = /#[0-5]|%(?:\d+\$)?[\d.$-]*[sdif]|%|[\uFFF9-\uFFFC]|[\uE000-\uE0FF]+|\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\d+\s*\\?\[[A-Z]{2,10}\\?\]|\\?\[[A-Z]{2,10}\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9_]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\[\s*\w+\s*=\s*\w[^\]]*\]|\{\s*\w+\s*:\s*\w[^}]*\}|\{(?:\d+(?:\.[A-Za-z_][\w.-]*)?|[A-Za-z_][\w.-]*)\}|<\/?[A-Za-z][^>]*>|<\/\>|\\[nrt]|\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\]]+)?|[A-Za-z][\w.-]*=[^\]]+)\]/g;
+// Platinum's own {COLOR 2}, {STRVAR_1 74, 6, 0} folded in via PLAT_TAG_RE.source
+// \u2014 the existing {...} alternative only matches a bare word or a dotted path,
+// never a name followed by space-and-comma-separated numbers, so without this
+// a Platinum tag reads as plain text here and the "restore missing tags"
+// build guard below never notices it went missing.
+const BUILD_TECH_TAG_REGEX = new RegExp(
+  `#[0-5]|%(?:\\d+\\$)?[\\d.$-]*[sdif]|%|[\\uFFF9-\\uFFFC]|[\\uE000-\\uE0FF]+|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9_]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{(?:\\d+(?:\\.[A-Za-z_][\\w.-]*)?|[A-Za-z_][\\w.-]*)\\}|<\\/?[A-Za-z][^>]*>|<\\/\\>|\\\\[nrt]|\\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\\]]+)?|[A-Za-z][\\w.-]*=[^\\]]+)\\]|${PLAT_TAG_RE.source}`,
+  "g",
+);
 
 /**
  * Patterns for corrupted $N variable placeholders.
@@ -253,7 +262,14 @@ function normalizeWhitespaceAfterReorder(text: string, original: string): string
 const RLM = '\u200F';
 const LRI = '\u2066';
 const PDI = '\u2069';
-const TAG_FOR_RLM_REGEX = /\d+\s*\\?\[\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*\w+\s*:[^\]]*?\\?\]\s*\d+|\\?\[\s*\/?\s*\w+\s*:[^\]]*?\\?\]|\\?\[\s*[A-Za-z][A-Za-z0-9_]*(?:[ '\/-]+[A-Za-z0-9]+)*\s*\\?\]|\{\s*\w+\s*:[^}]*\}|\{(?:\d+(?:\.[A-Za-z_][\w.-]*)?|[A-Za-z_][\w.-]*)\}|<\/?[A-Za-z][^>]*>|<\/\>|\\[nrt]|\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\]]+)?|[A-Za-z][\w.-]*=[^\]]+)\]|%(?:\d+\$)?[\d.$-]*[sdif]|\$\d+/g;
+// Platinum's own {COLOR 2}, {STRVAR_1 74, 6, 0} folded in via PLAT_TAG_RE.source
+// — without it a Platinum tag inside Arabic text never gets the LRI/PDI
+// isolation this applies to every other tag shape, so it stays exposed to
+// exactly the word-reordering this function exists to prevent.
+const TAG_FOR_RLM_REGEX = new RegExp(
+  `\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9_]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\{\\s*\\w+\\s*:[^}]*\\}|\\{(?:\\d+(?:\\.[A-Za-z_][\\w.-]*)?|[A-Za-z_][\\w.-]*)\\}|<\\/?[A-Za-z][^>]*>|<\\/\\>|\\\\[nrt]|\\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\\]]+)?|[A-Za-z][\\w.-]*=[^\\]]+)\\]|%(?:\\d+\\$)?[\\d.$-]*[sdif]|\\$\\d+|${PLAT_TAG_RE.source}`,
+  "g",
+);
 const ARABIC_LETTER_RANGE = /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
 function stripLegacyRlmAroundTags(text: string): string {

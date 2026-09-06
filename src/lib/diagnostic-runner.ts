@@ -12,7 +12,7 @@
  *   • runDetectBatch    — `detectIssues` for the deep diagnostic scan.
  */
 
-import { balanceLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { rebalanceTranslationLines } from "@/lib/balance-lines";
 import {
   detectIssues,
   type DetectableEntry,
@@ -143,9 +143,7 @@ function runRebalanceMainThread(
       for (; i < end; i++) {
         const item = batch[i];
         try {
-          const fixed = item.englishLineCount > 1
-            ? splitEvenlyByLines(item.translation, item.englishLineCount)
-            : balanceLines(item.translation);
+          const fixed = rebalanceTranslationLines(item.original, item.translation, item.englishLineCount);
           if (fixed !== item.translation) {
             results.push({ key: item.key, fixed });
           }

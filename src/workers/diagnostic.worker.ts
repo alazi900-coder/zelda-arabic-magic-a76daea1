@@ -21,7 +21,7 @@
  *   out → { type: 'detect:done',     id, buffer: ArrayBuffer }  (packIssueBatch)
  */
 
-import { balanceLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { rebalanceTranslationLines } from "@/lib/balance-lines";
 import { detectIssues } from "@/lib/diagnostic-detect";
 import {
   unpackRebalanceBatch,
@@ -69,9 +69,7 @@ self.onmessage = (ev: MessageEvent<WorkerMsg>) => {
       for (let j = i; j < end; j++) {
         const item = batch[j];
         try {
-          const fixed = item.englishLineCount > 1
-            ? splitEvenlyByLines(item.translation, item.englishLineCount)
-            : balanceLines(item.translation);
+          const fixed = rebalanceTranslationLines(item.original, item.translation, item.englishLineCount);
           if (fixed !== item.translation) {
             results.push({ key: item.key, fixed });
           }

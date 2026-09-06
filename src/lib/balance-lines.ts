@@ -640,6 +640,35 @@ export function mapTranslationToLineSkeleton(original: string, translation: stri
 }
 
 /**
+ * The deep-diagnostic "fix line breaks" action's single entry point — used by
+ * both its own apply paths and the Web Worker so all three ways of running
+ * this fix (single, batched, worker) agree on the same behavior.
+ *
+ * Tries the structure-preserving skeleton map first when the original has no
+ * engine hard-break tags and more than one line: it never guesses, it either
+ * reproduces the original's exact line skeleton (a deliberate blank line
+ * between paragraphs included) or declines outright. Word-based rebalancing
+ * is the fallback for everything the skeleton map can't map 1:1 — a
+ * translation squished onto fewer lines than it has content slots for, most
+ * commonly — because *some* reasonable line break beats reporting failure.
+ *
+ * Before this, every rebalance path went straight to the word-based split,
+ * which cannot represent an intentionally empty line (its DP splitter always
+ * gives every line at least one word) — so a message like Platinum's network
+ * error text ("...has occurred.<blank line>You will be returned...") lost
+ * its blank line the moment its translation needed rebalancing at all.
+ */
+export function rebalanceTranslationLines(original: string, translation: string, englishLineCount: number): string {
+  if (!hasEngineLineBreakTags(original) && englishLineCount > 1) {
+    const mapped = mapTranslationToLineSkeleton(original, translation);
+    if (mapped.ok && mapped.text !== undefined) return mapped.text;
+  }
+  return hasEngineLineBreakTags(original) || englishLineCount <= 1
+    ? balanceLines(translation)
+    : splitEvenlyByLines(translation, englishLineCount);
+}
+
+/**
  * Silently normalize `text`'s line-break style to match `source`'s (\r\n vs \n).
  * No-op if `text` has no line breaks or already matches.
  */

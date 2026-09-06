@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, Scale, CheckCircle2, X, Sparkles, Check, XCircle, Filter, Pencil, Wand2 } from "lucide-react";
 import { EditorState, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile } from "@/components/editor/types";
-import { hasOrphanLines, splitEvenlyByLines } from "@/lib/balance-lines";
+import { hasOrphanLines, rebalanceTranslationLines } from "@/lib/balance-lines";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { runRebalanceBatch, type RebalanceItem } from "@/lib/diagnostic-runner";
 import { toast } from "sonner";
@@ -150,7 +150,7 @@ export default function LineBalancePanel({ state, onApplyFix, onApplyAll }: Line
         if (hasOrphanLines(translation)) {
           const englishLineCount = countEffectiveLines(entry.original);
           const balanced = englishLineCount > 1
-            ? splitEvenlyByLines(translation, englishLineCount)
+            ? rebalanceTranslationLines(entry.original, translation, englishLineCount)
             : translation;
           if (balanced !== translation) {
             const isBdat = /^.+?\[\d+\]\./.test(entry.label);

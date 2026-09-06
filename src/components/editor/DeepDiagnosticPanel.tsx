@@ -12,7 +12,7 @@ import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
-import { splitEvenlyByLines, balanceLines } from "@/lib/balance-lines";
+import { balanceLines, rebalanceTranslationLines } from "@/lib/balance-lines";
 import { fixTagNewlines } from "@/lib/tag-newline-anchor";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { splitPkmLines } from "@/lib/pokemon/pkm-line-split";
@@ -470,14 +470,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
     if (LINE_REBALANCE_CATEGORIES.has(issue.category)) {
       const englishLineCount = countEffectiveLines(entry.original);
-      const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;
-      const rebalanced = origHardBreaks > 0 || englishLineCount <= 1
-        ? balanceLines(trans)
-        : splitEvenlyByLines(trans, englishLineCount);
+      const rebalanced = rebalanceTranslationLines(entry.original, trans, englishLineCount);
       return {
         fixResult: rebalanced,
         reason: rebalanced !== trans
-          ? '⚖️ سيتم إعادة موازنة الأسطر مع احترام [XENO:n ] و [System:PageBreak] كحدود إلزامية'
+          ? '⚖️ سيتم إعادة موازنة الأسطر مع احترام [XENO:n ]، [System:PageBreak]، والأسطر الفارغة المتعمَّدة في الأصل'
           : '⚠️ النص متوازن بالفعل بحسب الخوارزمية الجديدة',
       };
     }
@@ -621,10 +618,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
     if (LINE_REBALANCE_CATEGORIES.has(issue.category) && onApplyFix) {
       const englishLineCount = countEffectiveLines(entry.original);
-      const origHardBreaks = (entry.original.match(/\[\s*XENO\s*:\s*n\s*\]|\[\s*System\s*:\s*PageBreak\s*\]/g) || []).length;
-      const rebalanced = origHardBreaks > 0 || englishLineCount <= 1
-        ? balanceLines(issue.translation)
-        : splitEvenlyByLines(issue.translation, englishLineCount);
+      const rebalanced = rebalanceTranslationLines(entry.original, issue.translation, englishLineCount);
       if (rebalanced !== issue.translation) {
         onApplyFix(issue.key, rebalanced);
         toast({ title: '⚖️ إعادة موازنة', description: 'أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]' });
@@ -1042,13 +1036,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           const trans = state.translations[issue.key];
           if (entry && trans) {
             const englishLineCount = countEffectiveLines(entry.original);
-            const rebalanced = englishLineCount > 1
-              ? splitEvenlyByLines(trans, englishLineCount)
-              : balanceLines(trans);
+            const rebalanced = rebalanceTranslationLines(entry.original, trans, englishLineCount);
             if (rebalanced !== trans) {
               updates[issue.key] = rebalanced;
               counters.xenoN++;
-              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '⚖️ أُعيد توزيع الأسطر مع احترام [XENO:n ] و [System:PageBreak]', before: trans, after: rebalanced });
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '⚖️ أُعيد توزيع الأسطر مع احترام [XENO:n ]، [System:PageBreak]، والأسطر الفارغة المتعمَّدة', before: trans, after: rebalanced });
             } else {
               reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ النص متوازن بالفعل', before: trans, after: trans });
             }

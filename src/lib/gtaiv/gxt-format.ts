@@ -246,37 +246,66 @@ const gtaIvContentTokenPattern = /^~(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]+)~$/;
  * left of the button and the sentence read back to front.
  *
  * `~n~` is a hard boundary — it ends a line, and lines keep their order.
- * Style tokens are boundaries too, for the reason given above; that also means
- * a line carrying one is laid out in the spans between them, which is the same
- * treatment it received before this function existed.
+ *
+ * Style tokens (`~y~`, `~s~`, …) sit between spans too, but a colour applies
+ * from where it appears to the end of the line, so a span has to keep
+ * carrying the tag that coloured it when the spans themselves get reversed —
+ * moving a span without its tag would repaint different words than the
+ * translator asked for. A line with three spans and two colour changes,
+ * "اصطحب ديميتري إلى ~y~متجر الجنس~s~ في شارع", used to keep the spans in
+ * typed order (only reversing each one internally), so the sentence read back
+ * to front across the colour changes even though each span read correctly on
+ * its own. The first span in a line has no tag of its own — it inherits
+ * whatever colour was already active — so once reversing moves it away from
+ * the front, that inherited colour has to be named explicitly (`~s~`,
+ * standard) or it would pick up its new neighbour's tag instead.
  */
 function layOutGtaIvArabicLine(translation: string): string {
   const pieces = translation.split(/(~[^~]+~)/g);
-  const out: string[] = [];
-  let span: string[] = [];
 
-  const flush = () => {
-    // Reversed, because the first thing said belongs on the right.
-    for (let i = span.length - 1; i >= 0; i -= 1) out.push(span[i]);
-    span = [];
+  const outLines: string[] = [];
+  let lineTags: string[] = [];
+  let lineSpans: string[][] = [[]];
+
+  const flushLine = () => {
+    const parts: string[] = [];
+    for (let i = lineSpans.length - 1; i >= 0; i -= 1) {
+      const reversedSpan = [...lineSpans[i]].reverse().join("");
+      // Span 0 has no tag of its own; only give it one once it is genuinely
+      // moving something (there is a colour token to unseat it from the
+      // front, and content of its own to protect from picking up whatever
+      // tag now sits ahead of it instead).
+      const needsResetTag = i === 0 && lineSpans.length > 1 && lineSpans[0].length > 0;
+      const tag = i === 0 ? (needsResetTag ? "~s~" : "") : lineTags[i - 1];
+      if (tag) parts.push(tag);
+      parts.push(reversedSpan);
+    }
+    outLines.push(parts.join(""));
+    lineTags = [];
+    lineSpans = [[]];
   };
 
   pieces.forEach((piece, index) => {
     const isToken = index % 2 === 1;
     if (!isToken) {
-      if (piece !== "") span.push(processGtaIvArabicPiece(piece));
+      if (piece !== "") lineSpans[lineSpans.length - 1].push(processGtaIvArabicPiece(piece));
       return;
     }
     if (gtaIvContentTokenPattern.test(piece)) {
-      span.push(piece);
+      lineSpans[lineSpans.length - 1].push(piece);
       return;
     }
-    flush();
-    out.push(piece);
+    if (piece === "~n~") {
+      flushLine();
+      outLines.push("~n~");
+      return;
+    }
+    lineTags.push(piece);
+    lineSpans.push([]);
   });
-  flush();
+  flushLine();
 
-  return out.join("");
+  return outLines.join("");
 }
 
 export function analyzeGtaIvUnsupportedCharacters(translation: string, sourceText = ""): GtaIvUnsupportedCharacterAnalysis {

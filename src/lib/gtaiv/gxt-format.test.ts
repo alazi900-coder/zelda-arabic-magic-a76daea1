@@ -301,12 +301,52 @@ describe("GTA IV GXT/OXT structural reader", () => {
     expect(units.slice(brk + 3)).toEqual(ruUnitsFor("الثاني"));
   });
 
-  it("leaves a colour token where the translator put it", () => {
-    // A colour applies from where it appears to the end of the line, so moving
-    // it would repaint a different span than was asked for.
-    const encoded = encodeGtaIvArabicText("~r~ Hello ~s~ world", "~r~ مرحبا ~s~ بالعالم");
-    expect(encoded.processedText.indexOf("~r~")).toBeLessThan(encoded.processedText.indexOf("~s~"));
-    expect(encoded.processedText.indexOf("~r~")).toBe(0);
+  it("keeps a colour token attached to the words it colours once spans reorder", () => {
+    // A colour applies from where it appears to the end of the line, so a
+    // colour token has to travel with the span it was written for when spans
+    // reorder for correct right-to-left reading -- otherwise it would end up
+    // painting whichever span moved into its old spot instead. "Hello" is
+    // said first, so it belongs on the right (drawn last, after "world"),
+    // but it must still carry ~r~ rather than leaving red behind on "world".
+    const encoded = encodeGtaIvArabicText("~r~ Hello ~s~ world", "~r~ مرحبا ~s~ بالعالم").processedText;
+    const hello = encodeGtaIvArabicText("", "مرحبا").processedText;
+    const world = encodeGtaIvArabicText("", "بالعالم").processedText;
+    const redAt = encoded.indexOf("~r~");
+    const stdAt = encoded.indexOf("~s~");
+    expect(redAt).toBeGreaterThanOrEqual(0);
+    expect(stdAt).toBeGreaterThanOrEqual(0);
+    expect(encoded.slice(redAt)).toContain(hello);
+    expect(encoded.slice(stdAt, redAt)).toContain(world);
+    // "world" is said last, so it belongs on the left -- drawn first, ahead of "Hello".
+    expect(stdAt).toBeLessThan(redAt);
+  });
+
+  it("reorders three spans across two colour changes without disturbing the following line", () => {
+    // The real report this covers: a sentence with two colour changes read
+    // back to front on screen even though each of its three spans read
+    // correctly on its own, because only the spans' own contents were
+    // reversed and not their order relative to each other.
+    const encoded = encodeGtaIvArabicText(
+      "Take Demetri to the ~y~sex shop~s~ on ~n~Delaware Street",
+      "اصطحب ديميتري إلى ~y~متجر الجنس~s~ في شارع~n~ديلاوير",
+    ).processedText;
+    const [firstLine, secondLine] = encoded.split("~n~");
+    const take = encodeGtaIvArabicText("", "اصطحب ديميتري إلى").processedText;
+    const shop = encodeGtaIvArabicText("", "متجر الجنس").processedText;
+    const street = encodeGtaIvArabicText("", "في شارع").processedText;
+    const delaware = encodeGtaIvArabicText("", "ديلاوير").processedText;
+    const yellowAt = firstLine.indexOf("~y~");
+    const stdAt = firstLine.indexOf("~s~");
+    // "Take Demetri to the" is said first (rightmost), so it is drawn last,
+    // after both "sex shop" (yellow) and "on Street" (standard) -- but it had
+    // no colour token of its own, so moving it away from the front needs an
+    // explicit reset or it would inherit "sex shop"'s yellow instead.
+    expect(stdAt).toBe(0);
+    expect(firstLine.slice(0, yellowAt)).toContain(street);
+    expect(firstLine.slice(yellowAt, firstLine.lastIndexOf("~s~"))).toContain(shop);
+    expect(firstLine.slice(firstLine.lastIndexOf("~s~"))).toContain(take);
+    // The line break itself is untouched: the second line still follows the first.
+    expect(secondLine).toBe(delaware);
   });
 
   it("keeps a protected dollar amount readable as $100 while encoding Arabic prose", () => {

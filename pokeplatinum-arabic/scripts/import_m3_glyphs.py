@@ -66,7 +66,15 @@ def to_glyph(font_data, code):
     for row in range(16):
         word = raw[row * 2] | (raw[row * 2 + 1] << 8)
         for x in range(16):
-            px[x, row] = 1 if (word >> (15 - x)) & 1 else 0
+            # Mother 3's rows are 8px wide and land in the low byte of this
+            # 16-bit word; the high byte this format reserves for a wider
+            # cell is unused. Read shifted so the ink starts at column 0 --
+            # where Window_CopyGlyph, given only this glyph's own narrow
+            # declared width rather than the full 16px cell, actually looks
+            # for it. Unshifted, every Mother 3 letter landed at column 8+,
+            # entirely past its own declared width, and drew nothing.
+            bit = x + 8
+            px[x, row] = 1 if bit <= 15 and (word >> (15 - bit)) & 1 else 0
     for y in range(CELL - 1, 0, -1):
         for x in range(CELL - 1, 0, -1):
             if px[x, y] == 0 and px[x - 1, y - 1] == 1:

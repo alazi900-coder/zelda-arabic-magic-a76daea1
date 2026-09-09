@@ -769,6 +769,31 @@ const Editor = () => {
               editor.setIsSearchPinned(false);
               editor.setFilterStatus("gtaiv-unsupported");
             }}
+            platUnsupportedCount={editor.platUnsupportedCount}
+            platUnsupportedCharacters={editor.platUnsupportedCharacters}
+            platUnsupportedFilterActive={editor.filterStatus === "plat-unsupported"}
+            onFilterPlatUnsupported={() => {
+              if (editor.filterStatus === "plat-unsupported") {
+                editor.setFilterStatus("all");
+                return;
+              }
+              // Same reason the GTA IV button clears these: this is a direct
+              // "show me the affected rows" action, and a category or search
+              // still in place leaves the list empty while the report shows a
+              // count.
+              editor.setSearch("");
+              editor.setFilterFile("all");
+              editor.setFilterCategory([]);
+              editor.setFilterTechnical("all");
+              editor.setFilterTable("all");
+              editor.setFilterColumn("all");
+              editor.setFilterRisenOwner("");
+              editor.setFilterRisenItemPrefix("");
+              editor.setFilterRisenSection(null);
+              editor.setPinnedKeys(null);
+              editor.setIsSearchPinned(false);
+              editor.setFilterStatus("plat-unsupported");
+            }}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}
             setShowBuildSection={setShowBuildSection}

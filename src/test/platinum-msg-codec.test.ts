@@ -7,6 +7,7 @@ import {
   decodePlatMessage,
   encodePlatMessage,
   PlatEncodeError,
+  analyzePlatUnsupportedCharacters,
 } from "@/lib/nds/plat-charmap";
 import { measurePlatChars } from "@/lib/nds/plat-editor-bridge";
 import { PLAT_TAG_RE, maskPlatTags, unmaskPlatTags, diffPlatTags, repairPlatTags } from "@/lib/nds/plat-tag-mask";
@@ -126,5 +127,43 @@ describe("Platinum technical tags", () => {
     const found = "{CURSOR_X 80} #1: no".match(editorTagPattern("platinum/jubilife_city"));
     expect(found).toEqual(["{CURSOR_X 80}"]);
     expect("#1".match(editorTagPattern("xeno/menu"))).toEqual(["#1"]);
+  });
+});
+
+/**
+ * The build refuses a line at the first character the font cannot draw. These
+ * cover the editor's version of that check, whose whole point is to name every
+ * one of them at once so a translator fixes the line in a single pass.
+ */
+describe("Platinum unsupported characters", () => {
+  it("says nothing about a line the font can draw", () => {
+    expect(analyzePlatUnsupportedCharacters("Hello!")).toEqual([]);
+  });
+
+  it("names a character the font has no slot for, and counts it", () => {
+    const found = analyzePlatUnsupportedCharacters("aّbّ");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ character: "ّ", unicode: "U+0651", count: 2 });
+  });
+
+  it("reports every distinct one, where the encoder stops at the first", () => {
+    const text = "aّbَ";
+    expect(() => encodePlatMessage(text)).toThrow(PlatEncodeError);
+    expect(analyzePlatUnsupportedCharacters(text).map((c) => c.unicode)).toEqual(["U+064E", "U+0651"]);
+  });
+
+  it("skips tags, which are values the game substitutes rather than letters", () => {
+    expect(analyzePlatUnsupportedCharacters("{STRVAR_1 3, 0, 0} x")).toEqual([]);
+  });
+
+  it("leaves an unclosed tag to the build, which refuses the line for it", () => {
+    expect(analyzePlatUnsupportedCharacters("x {STRVAR_1 3")).toEqual([]);
+  });
+
+  it("agrees with the encoder on every line it accepts", () => {
+    for (const text of ["Hello!", "{STRVAR_1 3, 0, 0}!", "a\nb", "{COLOR 2}x"]) {
+      expect(analyzePlatUnsupportedCharacters(text)).toEqual([]);
+      expect(() => encodePlatMessage(text)).not.toThrow();
+    }
   });
 });

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
 import { idbSet, idbGet, checkAndMigrateSchema } from "@/lib/idb-storage";
 import { APP_VERSION } from "@/lib/version";
-import { hasArabicPresentationForms } from "@/lib/arabic-processing";
+import { hasArabicPresentationForms, reshapeArabic } from "@/lib/arabic-processing";
 import {
   defaultEditorWorkspace,
   editorWorkspaceStorageKey,
@@ -47,6 +47,7 @@ import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePlatEntry } from "@/lib/nds/plat-categories";
+import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
@@ -981,6 +982,60 @@ export function useEditorState() {
   const gtaIvUnsupportedKeys = gtaIvUnsupportedReport.keys;
   const gtaIvUnsupportedCount = gtaIvUnsupportedKeys.size;
 
+  // Platinum: characters the game's font has no slot for. The build already
+  // refuses such a line and names the character afterwards; naming it here
+  // instead lets it be fixed before the build rather than after, and the
+  // filter puts the affected lines on screen by themselves.
+  //
+  // Shaped first, exactly as the build shapes it (plat-editor-bridge.ts): the
+  // font is keyed by presentation forms, so the bare letters a translator
+  // types are not what gets looked up, and analysing the unshaped text would
+  // report every Arabic letter in the line as missing.
+  // The charmap arrives over the network, and the analysis reads nothing until
+  // it does. Without this the panel would sit at zero for a Platinum session
+  // that never pressed Build, which reads exactly like "no problems".
+  const [platTablesReady, setPlatTablesReady] = useState(false);
+  const hasPlatEntries = state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
+  useEffect(() => {
+    if (!hasPlatEntries || platTablesReady) return;
+    let cancelled = false;
+    void ensurePlatTables().then(() => {
+      if (!cancelled) setPlatTablesReady(true);
+    }).catch(() => {
+      // Leave it unready: the build reports the same characters itself, so a
+      // failed fetch costs the preview, not the safety net.
+    });
+    return () => { cancelled = true; };
+  }, [hasPlatEntries, platTablesReady]);
+
+  const platUnsupportedReport = useMemo(() => {
+    const keys = new Set<string>();
+    const characters = new Map<string, PlatUnsupportedCharacter>();
+    if (!state) return { keys, characters: [] as PlatUnsupportedCharacter[] };
+
+    for (const entry of state.entries) {
+      if (!entry.msbtFile.startsWith("platinum/")) continue;
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key] || "";
+      if (!translation.trim()) continue;
+      const unsupported = analyzePlatUnsupportedCharacters(reshapeArabic(translation));
+      if (unsupported.length === 0) continue;
+      keys.add(key);
+      for (const item of unsupported) {
+        const previous = characters.get(item.unicode);
+        characters.set(item.unicode, previous
+          ? { ...previous, count: previous.count + item.count }
+          : { ...item });
+      }
+    }
+    return {
+      keys,
+      characters: [...characters.values()].sort((a, b) => b.count - a.count || a.unicode.localeCompare(b.unicode)),
+    };
+  }, [state?.entries, state?.translations, platTablesReady]);
+  const platUnsupportedKeys = platUnsupportedReport.keys;
+  const platUnsupportedCount = platUnsupportedKeys.size;
+
   // GTA IV: lines the community mod itself never translated (its container
   // row has zero of the mod's Arabic glyph units) — flagged at extraction
   // time in gtaiv-editor-bridge.ts once both GTA IV files are loaded.
@@ -1122,6 +1177,7 @@ export function useEditorState() {
         (filterStatus === "byte-overflow" && e.maxBytes > 0 && isTranslated && measureEntryBytes(e.msbtFile, translation) > e.maxBytes) ||
         (filterStatus === "khbbs-unsupported" && khbbsUnsupportedKeys.has(key)) ||
         (filterStatus === "gtaiv-unsupported" && gtaIvUnsupportedKeys.has(key)) ||
+        (filterStatus === "plat-unsupported" && platUnsupportedKeys.has(key)) ||
         (filterStatus === "gtaiv-needs-mod" && gtaIvNeedsModKeys.has(key)) ||
         (filterStatus === "has-newlines" && e.original.includes('\n')) ||
         // ترجمات تحوي حرف \n (literal newline). يفحص الترجمة فقط،
@@ -1143,7 +1199,7 @@ export function useEditorState() {
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
       return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenSection;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys, platUnsupportedKeys]);
 
   useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection]);
 
@@ -1604,6 +1660,7 @@ export function useEditorState() {
     'needs-improve': 'تحتاج تحسين', 'too-short': 'قصيرة', 'too-long': 'طويلة',
     'stuck-chars': 'أحرف ملتصقة', 'mixed-lang': 'مختلط', 'has-tags': 'أوسمة', 'no-tags': 'بدون أوسمة',
     'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز', 'khbbs-unsupported': 'رموز CTD غير مدعومة',
+    'plat-unsupported': 'حروف بلا خانة في الخط',
     'has-newlines': 'أسطر متعددة',
   };
   const filterLabel = filterCategory.length > 0 ? filterCategory.join('+')
@@ -2069,7 +2126,8 @@ export function useEditorState() {
     advancedAnalysisTab, literalResults, styleResults, consistencyCheckResult, alternativeResults, fullAnalysisResults, advancedAnalyzing,
     glossaryComplianceResults, checkingGlossaryCompliance,
     isSearchPinned, pinnedKeys, setPinnedKeys, setIsSearchPinned,
-    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, gtaIvUnsupportedCount, gtaIvUnsupportedCharacters: gtaIvUnsupportedReport.characters, gtaIvNeedsModCount, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
+    categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, gtaIvUnsupportedCount, gtaIvUnsupportedCharacters: gtaIvUnsupportedReport.characters, gtaIvNeedsModCount,
+    platUnsupportedCount, platUnsupportedCharacters: platUnsupportedReport.characters, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     deepDiagnosticCounts,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
     ...glossary,

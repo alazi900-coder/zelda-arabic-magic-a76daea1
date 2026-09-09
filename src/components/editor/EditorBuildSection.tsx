@@ -30,6 +30,7 @@ import { idbGet } from "@/lib/idb-storage";
 import type { useEditorState } from "@/hooks/useEditorState";
 import type { KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 import type { GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
+import type { PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -66,6 +67,10 @@ interface EditorBuildSectionProps {
   gtaIvUnsupportedCharacters?: GtaIvUnsupportedCharacter[];
   gtaIvUnsupportedFilterActive?: boolean;
   onFilterGtaIvUnsupported?: () => void;
+  platUnsupportedCount?: number;
+  platUnsupportedCharacters?: PlatUnsupportedCharacter[];
+  platUnsupportedFilterActive?: boolean;
+  onFilterPlatUnsupported?: () => void;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -77,6 +82,41 @@ interface EditorBuildSectionProps {
 function formatGtaIvUnsupportedCharacter(item: GtaIvUnsupportedCharacter): string {
   if (item.unicode === "U+00A0") return "مسافة غير قابلة للكسر (NBSP) · U+00A0";
   if (item.unicode === "U+00A9") return "© رمز حقوق النشر · U+00A9";
+  const codePoint = item.character.codePointAt(0) ?? 0;
+  if ((codePoint >= 0 && codePoint <= 0x1f) || (codePoint >= 0x7f && codePoint <= 0x9f)) {
+    return `محرف تحكم غير مرئي · ${item.unicode}`;
+  }
+  return `«${item.character}» ${item.unicode}`;
+}
+
+/**
+ * Platinum's missing characters are mostly marks that draw nothing by
+ * themselves — a tashkeel sits on the letter before it, and a direction mark
+ * has no shape at all — so printing the character bare would show the
+ * translator an empty box and leave them nothing to search for.
+ */
+const PLAT_INVISIBLE_NAMES: Record<string, string> = {
+  "U+064B": "تنوين فتح ً",
+  "U+064C": "تنوين ضم ٌ",
+  "U+064D": "تنوين كسر ٍ",
+  "U+064E": "فتحة َ",
+  "U+064F": "ضمة ُ",
+  "U+0650": "كسرة ِ",
+  "U+0651": "شدّة ّ",
+  "U+0652": "سكون ْ",
+  "U+0670": "ألف خنجرية ٰ",
+  "U+0640": "تطويل ـ",
+  "U+00A0": "مسافة غير قابلة للكسر (NBSP)",
+  "U+200E": "علامة اتجاه يسارية غير مرئية (LRM)",
+  "U+200F": "علامة اتجاه يمينية غير مرئية (RLM)",
+  "U+200C": "فاصل بلا عرض (ZWNJ)",
+  "U+200D": "واصل بلا عرض (ZWJ)",
+  "U+FEFF": "مسافة صفرية غير مرئية (BOM)",
+};
+
+function formatPlatUnsupportedCharacter(item: PlatUnsupportedCharacter): string {
+  const named = PLAT_INVISIBLE_NAMES[item.unicode];
+  if (named) return `${named} · ${item.unicode}`;
   const codePoint = item.character.codePointAt(0) ?? 0;
   if ((codePoint >= 0 && codePoint <= 0x1f) || (codePoint >= 0x7f && codePoint <= 0x9f)) {
     return `محرف تحكم غير مرئي · ${item.unicode}`;
@@ -107,6 +147,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   gtaIvUnsupportedCharacters = [],
   gtaIvUnsupportedFilterActive = false,
   onFilterGtaIvUnsupported,
+  platUnsupportedCount = 0,
+  platUnsupportedCharacters = [],
+  platUnsupportedFilterActive = false,
+  onFilterPlatUnsupported,
   unprocessedArabicCount,
   showBuildSection,
   setShowBuildSection,
@@ -784,6 +828,38 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                     {gtaIvUnsupportedCharacters.map((item) => (
                       <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="rtl">
                         {formatGtaIvUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {isPlatinum && (
+              <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={platUnsupportedFilterActive ? "secondary" : "outline"}
+                  onClick={onFilterPlatUnsupported}
+                  disabled={!platUnsupportedFilterActive && platUnsupportedCount === 0}
+                  className="font-body gap-1 shrink-0"
+                  title={platUnsupportedFilterActive
+                    ? "يلغي الفلتر ويعيد عرض كل النصوص في المحرر"
+                    : platUnsupportedCount > 0
+                      ? "يعرض النصوص التي فيها حرف لا خانة له في خط اللعبة — البناء يرفض كل واحد منها"
+                      : "لا توجد حروف بلا خانة في الترجمات الحالية"}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  {platUnsupportedFilterActive
+                    ? "إظهار كل النصوص"
+                    : `عرض الحروف بلا خانة (${platUnsupportedCount})`}
+                </Button>
+                {platUnsupportedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
+                    <span>الحروف:</span>
+                    {platUnsupportedCharacters.map((item) => (
+                      <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="rtl">
+                        {formatPlatUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
                       </span>
                     ))}
                   </div>

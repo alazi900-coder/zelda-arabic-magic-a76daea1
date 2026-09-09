@@ -178,3 +178,65 @@ export function encodePlatMessage(text: string): number[] {
   }
   return out;
 }
+
+/** One character the font has no slot for, and how often the line asks for it. */
+export interface PlatUnsupportedCharacter {
+  character: string;
+  /** `U+0651` — what to say about a character that has nothing to show. */
+  unicode: string;
+  count: number;
+}
+
+/**
+ * Every character in a line that `encodePlatMessage` would refuse, not just the
+ * first one.
+ *
+ * The encoder stops at the first, because writing a line half-encoded would put
+ * a truncated sentence in the ROM. That is right for building and useless for
+ * fixing: a translator who is told about one tashkeel mark fixes it, rebuilds,
+ * and is told about the next. So the same walk runs here without throwing, and
+ * collects them all.
+ *
+ * Tags are skipped exactly the way the encoder skips them — `{STRVAR_1 0}` is
+ * a value the game substitutes, not eight characters to look up — and a
+ * malformed tag is left to the build to report, since it is not a font problem.
+ *
+ * Returns nothing at all when the tables have not been fetched yet: this runs
+ * on every keystroke in the editor, and a font table that is still loading is
+ * not the same as a line with no problems, but it is the same on screen.
+ */
+export function analyzePlatUnsupportedCharacters(text: string): PlatUnsupportedCharacter[] {
+  let cm: PlatCharmap;
+  try {
+    cm = platCharmap();
+  } catch {
+    return [];
+  }
+
+  const found = new Map<string, PlatUnsupportedCharacter>();
+  for (let j = 0; j < text.length; j++) {
+    if (text[j] === "{") {
+      const close = text.indexOf("}", j);
+      if (close < 0) break; // an unclosed tag is the build's to report, not ours
+      j = close;
+      continue;
+    }
+
+    let matched = false;
+    for (let len = Math.min(cm.maxCharLen, text.length - j); len >= 1; len--) {
+      if (cm.toCode.has(text.substr(j, len))) {
+        j += len - 1;
+        matched = true;
+        break;
+      }
+    }
+    if (matched) continue;
+
+    const char = text[j];
+    const unicode = `U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`;
+    const previous = found.get(unicode);
+    found.set(unicode, previous ? { ...previous, count: previous.count + 1 } : { character: char, unicode, count: 1 });
+  }
+
+  return [...found.values()].sort((a, b) => b.count - a.count || a.unicode.localeCompare(b.unicode));
+}

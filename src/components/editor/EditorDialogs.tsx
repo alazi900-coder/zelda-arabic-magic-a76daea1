@@ -216,6 +216,7 @@ const EditorDialogs: React.FC<EditorDialogsProps> = ({
           userDeepSeekKey={editor.userDeepSeekKey}
           userTokenRouterKey={editor.userTokenRouterKey}
           userGmiCloudKey={editor.userGmiCloudKey}
+          userCodeCraftKey={editor.userCodeCraftKey}
           myMemoryEmail={editor.myMemoryEmail}
           aiModel={editor.aiModel}
           risenVariant={editor.risenVariant}

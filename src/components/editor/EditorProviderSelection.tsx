@@ -17,6 +17,7 @@ type EditorSubset = Pick<
   | "userDeepSeekKey" | "setUserDeepSeekKey"
   | "userTokenRouterKey" | "setUserTokenRouterKey"
   | "userGmiCloudKey" | "setUserGmiCloudKey"
+  | "userCodeCraftKey" | "setUserCodeCraftKey"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
   | "myMemoryCharsUsed"
@@ -96,7 +97,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <Key className="w-4 h-4 text-primary" />
-            <span className="text-sm font-display font-bold">🔧 I have approved the plan</span>
+            <span className="text-sm font-display font-bold">🔧 مزوّد الترجمة</span>
           </div>
           <div className="flex gap-2 flex-wrap">
             {[
@@ -115,6 +116,9 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                 onClick={() => {
                   editor.setTranslationProvider(id);
                   if (id === 'gmicloud') editor.setAiModel('MiniMaxAI/MiniMax-M2.7');
+                  // Otherwise a model name belonging to the previous provider
+                  // would be sent to CodeCraft and come back 404.
+                  if (id === 'codecraft') editor.setAiModel('claude-opus-5');
                 }}
                 className="text-xs font-display gap-1"
               >

@@ -21,6 +21,7 @@ interface CompareEnginesDialogProps {
   userDeepSeekKey?: string;
   userTokenRouterKey?: string;
   userGmiCloudKey?: string;
+  userCodeCraftKey?: string;
   myMemoryEmail: string;
   aiModel?: string;
   risenVariant: 'risen1' | 'risen2';
@@ -33,7 +34,7 @@ interface EngineConfig {
   provider: string;
   model?: string;
   description: string;
-  requiresKey?: 'gemini' | 'deepseek' | 'tokenrouter' | 'gmicloud';
+  requiresKey?: 'gemini' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft';
 }
 
 function buildEngines(): EngineConfig[] {
@@ -174,7 +175,7 @@ function renderTranslationWithProtectedTags(text: string, singleLine = false) {
 }
 
 const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
-  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, myMemoryEmail, risenVariant,
+  open, onOpenChange, entry, onSelect, glossary, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, myMemoryEmail, risenVariant,
 }) => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, string | null>>({});
@@ -188,6 +189,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
     if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;
     if (engine.requiresKey === 'tokenrouter') return userTokenRouterKey || undefined;
     if (engine.requiresKey === 'gmicloud') return userGmiCloudKey || undefined;
+    if (engine.requiresKey === 'codecraft') return userCodeCraftKey || undefined;
     return undefined;
   };
 

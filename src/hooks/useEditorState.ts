@@ -65,7 +65,7 @@ export function useEditorState() {
   // === Extracted hooks ===
   const settings = useEditorSettings();
   const {
-    arabicNumerals, mirrorPunctuation, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, aiModel, translationProvider,
+    arabicNumerals, mirrorPunctuation, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, aiModel, translationProvider,
     myMemoryEmail, myMemoryCharsUsed, addMyMemoryChars, aiRequestsToday, aiRequestsMonth,
     addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, setNpcSplitCharLimit,
     newlineSplitCharLimit, setNewlineSplitCharLimit, autoSmartReview, setAutoSmartReview,
@@ -1393,13 +1393,13 @@ export function useEditorState() {
 
   const translation = useEditorTranslation({
     state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
+    filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
   });
   const { translating, translatingSingle, glossarySessionStats, failedEntries, handleTranslateSingle, handleAutoTranslate, handleTranslatePage, handleTranslateAllPages, handleTranslateFromGlossaryOnly, handleStopTranslate, handleRetranslatePage: _handleRetranslatePageRaw, handleRetryFailed, handleFixDamagedTags, pendingPageTranslations, oldPageTranslations, pageTranslationOriginals, showPageCompare, applyPendingTranslations: _applyPendingRaw, discardPendingTranslations, glossaryPreviewEntries, showGlossaryPreview, applyGlossaryPreview, discardGlossaryPreview, lastBatchQuality, cumulativeQuality, resetBatchQuality } = translation;
 
   const autoPilot = useAutoPilot({
     state, setState, activeGlossary, parseGlossaryMap,
-    translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey,
+    translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
     addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
     customPromptInstructions, aiRoutingMode, risenVariant,
@@ -1763,7 +1763,7 @@ export function useEditorState() {
   // === Review (extracted to useEditorReview) ===
   const review = useEditorReview({
     state, setState, setTranslateProgress, setLastSaved, setPreviousTranslations,
-    filteredEntries, activeGlossary, aiModel, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, aiRoutingMode, risenVariant,
+    filteredEntries, activeGlossary, aiModel, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userCodeCraftKey, aiRoutingMode, risenVariant,
     setReviewing, setReviewResults, setSuggestingShort, setShortSuggestions,
     setImprovingTranslations, setImproveResults, setFixingMixed,
     setCheckingConsistency, setConsistencyResults,

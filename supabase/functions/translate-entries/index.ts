@@ -2361,7 +2361,7 @@ Deno.serve(async (req) => {
       // changes, and a name frozen in this file would start returning 404 the
       // day they retire it. The default only covers a first run before the
       // list has been fetched.
-      const ccModel = aiModel?.trim() || 'claude-opus-4.8';
+      const ccModel = aiModel?.trim() || 'claude-opus-5';
       const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
       const result = await translateWithOpenAICompat(
         entries, protectedEntries, glossaryMap, ccKey,

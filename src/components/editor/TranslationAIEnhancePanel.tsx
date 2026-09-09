@@ -140,10 +140,17 @@ function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | "gm
   return null;
 }
 
+const CODECRAFT_DEFAULT_MODEL = "claude-opus-5";
+
 function resolveEnhanceModelForProvider(provider: string | null | undefined, currentModel: string | null | undefined): string {
   if (provider === "tokenrouter") return "tokenrouter-glm-5.2";
   if (provider === "deepseek") return currentModel?.startsWith("deepseek") ? currentModel : "deepseek-v4-flash";
   if (provider === "gmicloud") return currentModel?.startsWith("MiniMaxAI/MiniMax-") ? currentModel : "MiniMaxAI/MiniMax-M2.7";
+  // CodeCraft routes to many vendors, so the model is whatever the translator
+  // picked from their own account's list. The fallback only covers the case of
+  // switching provider without having picked one yet — sending another
+  // provider's model name here would come back 404.
+  if (provider === "codecraft") return currentModel || CODECRAFT_DEFAULT_MODEL;
   return currentModel || "gemini-2.5-flash";
 }
 
@@ -643,6 +650,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // مفتاح GMI Cloud مقصود أن يبقى في حالة المحرر الحالية فقط؛ لا نقرأه من
     // localStorage كي لا نستعيد مفتاحاً قديماً أو نحفظ بيانات حساسة بين الجلسات.
     const gmiCloudKey = userGmiCloudKeyProp?.trim() || "";
+    // CodeCraft is stored like DeepSeek and TokenRouter, so it is read the same
+    // way — the panel is reached without the editor passing keys down.
+    const codeCraftKey = readLocalStorage('userCodeCraftKey');
     // مفتاح Gemini الشخصي + وضع التوجيه (مجاني/مدفوع/تلقائي) — نفس المفاتيح المستخدمة
     // في translate-entries حتى تعمل أداة التحسين مع الوضع المجاني عبر Gemini المباشر.
     const userGeminiKey = userGeminiKeyProp || readLocalStorage('userGeminiKey');
@@ -653,6 +663,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const providerApiKey = effectiveProvider === 'deepseek' ? (deepseekKey || undefined)
       : effectiveProvider === 'tokenrouter' ? (tokenRouterKey || undefined)
       : effectiveProvider === 'gmicloud' ? (gmiCloudKey || undefined)
+      : effectiveProvider === 'codecraft' ? (codeCraftKey || undefined)
       : undefined;
 
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب

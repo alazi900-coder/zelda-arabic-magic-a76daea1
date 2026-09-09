@@ -62,6 +62,7 @@ interface UseEditorReviewParams {
   userGeminiKey?: string;
   userDeepSeekKey?: string;
   userTokenRouterKey?: string;
+  userCodeCraftKey?: string;
   aiRoutingMode?: 'free' | 'paid' | 'auto';
   /** Which Risen game the loaded entries belong to (manually chosen on /risen/process) — picks the right game's AI prompt lore. No effect for non-Risen sessions. */
   risenVariant?: 'risen1' | 'risen2';
@@ -114,7 +115,7 @@ interface UseEditorReviewParams {
 export function useEditorReview(params: UseEditorReviewParams) {
   const {
     state, setState, setTranslateProgress, setLastSaved, setPreviousTranslations,
-    filteredEntries, activeGlossary, aiModel, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, aiRoutingMode, risenVariant,
+    filteredEntries, activeGlossary, aiModel, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userCodeCraftKey, aiRoutingMode, risenVariant,
     setReviewing, setReviewResults, setSuggestingShort, setShortSuggestions,
     setImprovingTranslations, setImproveResults, setFixingMixed,
     setCheckingConsistency, setConsistencyResults,
@@ -153,6 +154,8 @@ export function useEditorReview(params: UseEditorReviewParams) {
         ? (userDeepSeekKey || undefined)
         : provider === 'tokenrouter'
         ? (userTokenRouterKey || undefined)
+        : provider === 'codecraft'
+        ? (userCodeCraftKey || undefined)
         : undefined,
       userGeminiKey: userGeminiKey || undefined,
       routingMode: aiRoutingMode || 'auto',

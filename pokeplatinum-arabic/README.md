@@ -23,6 +23,7 @@
 | عكس الرسم | `Window_CopyGlyph` في `src/bg_window.c` |
 | التشكيل | `ShapeArabicChar` في `src/render_text.c`، وحالته في البايتات الفارغة من `substruct[7]` |
 | ثنائي الاتجاه | `ScanLtrRun` في `src/render_text.c`: المقاطع اللاتينية والأرقام تبقى تُقرأ يساراً |
+| شاشة العنوان | اسم اللعبة عربياً في `res/graphics/title_screen/logo.png` |
 
 ## ثنائي الاتجاه: لماذا كان `25` يظهر `52`
 

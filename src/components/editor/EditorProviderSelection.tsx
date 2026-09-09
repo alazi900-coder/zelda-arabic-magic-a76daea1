@@ -48,6 +48,34 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
   handleTestConnection,
   activeCategory,
 }) => {
+  // CodeCraft's catalogue, read from the account when asked for. The key goes
+  // straight from the browser to CodeCraft and nowhere else; nothing is stored.
+  const [codeCraftModels, setCodeCraftModels] = React.useState<string[]>([]);
+  const [codeCraftModelsLoading, setCodeCraftModelsLoading] = React.useState(false);
+  const [codeCraftModelsError, setCodeCraftModelsError] = React.useState("");
+  const loadCodeCraftModels = React.useCallback(async () => {
+    setCodeCraftModelsLoading(true);
+    setCodeCraftModelsError("");
+    try {
+      const res = await fetch("https://codecraftapi.com/v1/models", {
+        headers: { Authorization: `Bearer ${editor.userCodeCraftKey}` },
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(body?.error?.message || `تعذّر جلب النماذج (${res.status})`);
+      }
+      const ids = (body?.data || [])
+        .map((m: { id?: string }) => m?.id)
+        .filter((id: unknown): id is string => typeof id === "string" && id.length > 0);
+      if (ids.length === 0) throw new Error("لم يُرجع الحساب أي نموذج متاح");
+      setCodeCraftModels(ids);
+    } catch (e) {
+      setCodeCraftModelsError((e as Error).message);
+    } finally {
+      setCodeCraftModelsLoading(false);
+    }
+  }, [editor.userCodeCraftKey]);
+
   const promptValue = activeCategory
     ? resolveCategoryPrompt(activeCategory.id, editor.categoryPromptTemplates)
     : editor.customPromptInstructions;
@@ -78,6 +106,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
               { id: 'tokenrouter' as const, label: '🔀 TokenRouter', badge: editor.userTokenRouterKey ? '✅' : '⚠️' },
               { id: 'gmicloud' as const, label: '☁️ GMICLOUD', badge: editor.userGmiCloudKey ? '✅' : '⚠️' },
+              { id: 'codecraft' as const, label: '🛠️ CodeCraft', badge: editor.userCodeCraftKey ? '✅' : '⚠️' },
             ].map(({ id, label, badge }) => (
               <Button
                 key={id}
@@ -276,6 +305,93 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                 <a href="https://www.tokenrouter.com" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline hover:text-primary/80 shrink-0">
                   احصل على مفتاح ↗
                 </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {editor.translationProvider === 'codecraft' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2 flex-1">
+              <input
+                type="password"
+                name="codecraft-api-key"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                placeholder="الصق مفتاح CodeCraft API هنا... (يبدأ بـ cc_)"
+                value={editor.userCodeCraftKey}
+                onChange={(e) => editor.setUserCodeCraftKey(e.target.value)}
+                className="flex-1 px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                dir="ltr"
+              />
+              {editor.userCodeCraftKey && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => handleTestConnection('codecraft')}
+                  disabled={testConnStatus['codecraft'] === 'testing'}
+                  className="text-xs shrink-0 gap-1"
+                >
+                  {testConnStatus['codecraft'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                   testConnStatus['codecraft'] === 'ok' ? <CheckCircle2 className="w-3 h-3 text-green-500" /> :
+                   testConnStatus['codecraft'] === 'error' ? <XCircle className="w-3 h-3 text-red-500" /> :
+                   <Wifi className="w-3 h-3" />}
+                  تجربة
+                </Button>
+              )}
+              {editor.userCodeCraftKey && (
+                <Button variant="ghost" size="sm" onClick={() => editor.setUserCodeCraftKey('')} className="text-xs text-destructive shrink-0">
+                  مسح
+                </Button>
+              )}
+            </div>
+            {testConnMsg['codecraft'] && (
+              <p className={`text-xs font-body ${testConnStatus['codecraft'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                {testConnStatus['codecraft'] === 'ok' ? '✅' : '❌'} {testConnMsg['codecraft']}
+              </p>
+            )}
+
+            {/* The catalogue is read from the account rather than listed here.
+                CodeCraft is a router: its models come and go, and a name frozen
+                into this file starts answering 404 the day one is retired. */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-display text-muted-foreground">🛠️ نماذج CodeCraft:</span>
+                <Button
+                  variant="outline" size="sm"
+                  onClick={loadCodeCraftModels}
+                  disabled={!editor.userCodeCraftKey || codeCraftModelsLoading}
+                  className="text-xs h-6 gap-1"
+                >
+                  {codeCraftModelsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
+                  جلب النماذج
+                </Button>
+              </div>
+              {codeCraftModelsError && (
+                <p className="text-xs font-body text-red-500">❌ {codeCraftModelsError}</p>
+              )}
+              {codeCraftModels.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
+                  {codeCraftModels.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => editor.setAiModel(id)}
+                      className={`px-2 py-1 rounded border text-xs font-body text-left ${
+                        editor.aiModel === id ? 'border-primary bg-primary/10' : 'border-border'
+                      }`}
+                      dir="ltr"
+                    >
+                      {id}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {codeCraftModels.length === 0 && !codeCraftModelsError && (
+                <p className="text-xs font-body text-muted-foreground">
+                  اضغط «جلب النماذج» لعرض ما هو متاح في حسابك. النموذج الحالي:{" "}
+                  <span dir="ltr">{editor.aiModel || 'claude-opus-4.8'}</span>
+                </p>
               )}
             </div>
           </div>

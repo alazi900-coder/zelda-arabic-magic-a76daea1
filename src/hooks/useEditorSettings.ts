@@ -67,8 +67,8 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud';
-  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter', 'gmicloud'];
+  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft';
+  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter', 'gmicloud', 'codecraft'];
   const [translationProvider, _setTranslationProvider] = useState<TranslationProvider>(() => {
     try {
       const saved = localStorage.getItem('translationProvider') as TranslationProvider | null;
@@ -95,6 +95,18 @@ export function useEditorSettings() {
   const setUserTokenRouterKey = useCallback((key: string) => {
     _setUserTokenRouterKey(key);
     try { if (key) localStorage.setItem('userTokenRouterKey', key); else localStorage.removeItem('userTokenRouterKey'); } catch { /* localStorage unavailable - ignore */ }
+  }, []);
+
+  // Kept the same way DeepSeek and TokenRouter are: a paid subscription key the
+  // translator re-uses across sessions, so making it session-only would mean
+  // pasting it again after every refresh. It never leaves the browser except as
+  // providerApiKey on the request to the edge function.
+  const [userCodeCraftKey, _setUserCodeCraftKey] = useState(() => {
+    try { return localStorage.getItem('userCodeCraftKey') || ''; } catch { return ''; }
+  });
+  const setUserCodeCraftKey = useCallback((key: string) => {
+    _setUserCodeCraftKey(key);
+    try { if (key) localStorage.setItem('userCodeCraftKey', key); else localStorage.removeItem('userCodeCraftKey'); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
   // GMICLOUD is deliberately session-only: never read from or write to localStorage.
@@ -350,6 +362,7 @@ export function useEditorSettings() {
     userDeepSeekKey, setUserDeepSeekKey,
     userTokenRouterKey, setUserTokenRouterKey,
     userGmiCloudKey, setUserGmiCloudKey,
+    userCodeCraftKey, setUserCodeCraftKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,
     myMemoryEmail, setMyMemoryEmail,

@@ -46,7 +46,8 @@ interface UseEditorTranslationProps {
   userTokenRouterKey: string;
   /** Session-only key; it is never persisted by useEditorSettings. */
   userGmiCloudKey: string;
-  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud';
+  userCodeCraftKey: string;
+  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft';
   myMemoryEmail: string;
   addMyMemoryChars: (chars: number) => void;
   addAiRequest: (count?: number) => void;
@@ -79,6 +80,7 @@ const PROVIDER_BATCH_DELAY_MS = {
   deepseek:   { free: 0,    paid: 0 },    // generous; no proactive throttle
   tokenrouter:{ free: 0,    paid: 0 },    // generous; no proactive throttle
   gmicloud:   { free: 0,    paid: 250 },  // modest spacing; no undocumented quota claim
+  codecraft:  { free: 0,    paid: 0 },    // billed per token from the translator's own balance
   mymemory:   { free: 0,    paid: 0 },    // not AI; own char-budget logic
   google:     { free: 0,    paid: 0 },    // not AI
 } as const;
@@ -98,7 +100,7 @@ const LUMENTALE_TOKEN_RULE =
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
 }: UseEditorTranslationProps) {
 
   // Keep all outbound translation paths on the same key policy. In particular,
@@ -110,6 +112,8 @@ export function useEditorTranslation({
       ? userTokenRouterKey
       : provider === 'gmicloud'
       ? userGmiCloudKey
+      : provider === 'codecraft'
+      ? userCodeCraftKey
       : undefined;
     return key || undefined;
   };
@@ -355,7 +359,7 @@ export function useEditorTranslation({
     // إعادة الإنشاء عند تغيّر إعدادات المزوّد/الموديل/القاموس حتى تُلتقط القيم الحديثة في buildPayload.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey,
+    activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey,
     myMemoryEmail, rebalanceNewlines, npcMaxLines,
     npcMode, aiModel, customPromptInstructions, categoryPromptTemplates, filterCategory, aiRoutingMode, aiBatchSize, translationCacheEnabled, isRisenSource,
   ]);
@@ -736,7 +740,8 @@ export function useEditorTranslation({
       (translationProvider === 'gemini'     && !!userGeminiKey)     ||
       (translationProvider === 'deepseek'   && !!userDeepSeekKey)   ||
       (translationProvider === 'tokenrouter' && !!userTokenRouterKey) ||
-      (translationProvider === 'gmicloud' && !!userGmiCloudKey);
+      (translationProvider === 'gmicloud' && !!userGmiCloudKey) ||
+      (translationProvider === 'codecraft' && !!userCodeCraftKey);
     const batchDelayMs = !aiThrottleEnabled
       ? 0
       : aiRoutingMode === 'paid'

@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.11.0",
+    date: "2026-09-09",
+    changes: [
+      { kind: "added", text: "**مزوّد ترجمة جديد: CodeCraft API** — واجهته متوافقة مع OpenAI، فمرّت على الدالة العامة التي تخدم DeepSeek وTokenRouter وGMICloud بدل كود جديد. النماذج **لا تُكتب في الأداة**: زر «جلب النماذج» يقرأ `/v1/models` بمفتاحك ويعرض ما هو متاح في حسابك فعلاً — لأن CodeCraft موجّه (router) وقائمته تتغيّر، وأي اسم مجمَّد في الكود يبدأ بإرجاع 404 يوم يُسحب النموذج. المفتاح يُحفظ في متصفّحك وحده (مثل DeepSeek وTokenRouter) ولا يُرسل إلا كـ`providerApiKey` مع الطلب. يعمل حالياً في الترجمة الأساسية وزر «تجربة» الاتصال؛ لوحتا التحسين والمراجعة ستطلبان المفتاح ولم تُوصَّلا بعد (وGMICloud مثلها في المراجعة)." },
+    ],
+  },
+  {
     version: "2.10.1",
     date: "2026-09-09",
     changes: [

@@ -2346,6 +2346,28 @@ Deno.serve(async (req) => {
         'https://api.tokenrouter.com/v1', 'z-ai/glm-5.2-free',
       );
       return buildSuccessResponse(entries, result);
+    } else if (provider === 'codecraft') {
+      // No server-side fallback secret: this is the translator's own
+      // subscription key, held in their browser and sent for this request
+      // alone — the same rule GMICLOUD follows below.
+      const ccKey = providerApiKey;
+      if (!ccKey) {
+        return new Response(JSON.stringify({ error: 'يحتاج CodeCraft مفتاح API — الصقه في حقل CodeCraft داخل المحرر' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      // The model is whatever the translator picked from their own account's
+      // list, so it is not hardcoded here: CodeCraft is a router, its catalogue
+      // changes, and a name frozen in this file would start returning 404 the
+      // day they retire it. The default only covers a first run before the
+      // list has been fetched.
+      const ccModel = aiModel?.trim() || 'claude-opus-4.8';
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const result = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, ccKey,
+        'https://codecraftapi.com/v1', ccModel, 'CodeCraft',
+      );
+      return buildSuccessResponse(entries, result);
     } else if (provider === 'gmicloud') {
       // Do not fall back to a server-side secret: GMICLOUD is intentionally a
       // user-supplied session key, passed only for this request.

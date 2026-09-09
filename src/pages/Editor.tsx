@@ -103,7 +103,8 @@ const Editor = () => {
       const providerApiKey =
         provider === 'deepseek' ? editor.userDeepSeekKey :
         provider === 'tokenrouter' ? editor.userTokenRouterKey :
-        provider === 'gmicloud' ? editor.userGmiCloudKey : undefined;
+        provider === 'gmicloud' ? editor.userGmiCloudKey :
+        provider === 'codecraft' ? editor.userCodeCraftKey : undefined;
       const response = provider === 'gmicloud'
         ? await requestGmiCloudDirect({
             apiKey: editor.userGmiCloudKey,
@@ -134,7 +135,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.userCodeCraftKey, editor.aiModel]);
 
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";
   const isGameMaker = sourceGame === "gamemaker";

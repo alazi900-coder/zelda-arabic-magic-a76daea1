@@ -10,6 +10,7 @@ import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeGtaIvEntry } from "@/lib/gtaiv/gtaiv-categories";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
+import { editorTagPattern } from "@/lib/editor-tag-pattern";
 
 export interface QualityStats {
   tooLong: number;
@@ -64,6 +65,26 @@ const MIXED_LANG_WHITELIST = new Set([
 ]);
 const RE_TAG = /\[[^\]]*\]/g;
 const RE_PLACEHOLDER = /\uFFFC/g;
+
+/**
+ * The tags to discount before asking whether a translation still has English
+ * left in it.
+ *
+ * `RE_TAG` above only knows `[...]`, which is Xenoblade's shape. A game whose
+ * tags are written any other way kept its tag text in the string, and the
+ * letters inside it were then counted as untranslated English: Platinum's
+ * `{STRVAR_1 1, 0, 0}` scored as the word "STRVAR", so every one of its 6,513
+ * lines carried a mixed-language warning. `{FD:01}` (Gen 3), `<Exit>` (Risen)
+ * and `~y~` (GTA IV) fail the same way.
+ *
+ * This is the pattern that draws a tag as a chip on the card, so what the
+ * check discounts is exactly what the translator sees marked as untouchable.
+ * Every rule in it requires a delimiter, so it cannot swallow ordinary prose
+ * and hide a real mixed-language line.
+ *
+ * A fresh regex per call \u2014 the shared one carries `lastIndex` between calls.
+ */
+const tagsToDiscount = () => editorTagPattern();
 const RE_CONTROL_CHARS = /[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
 const RE_ARABIC = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
 const RE_ENGLISH_WORDS = /[a-zA-Z]{2,}/g;
@@ -136,9 +157,8 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
 
     // Mixed language check - only if has Arabic chars (fast pre-check)
     if (RE_ARABIC.test(trimmed)) {
-      RE_TAG.lastIndex = 0;
       RE_PLACEHOLDER.lastIndex = 0;
-      const stripped = trimmed.replace(RE_TAG, '').replace(RE_PLACEHOLDER, '').trim();
+      const stripped = trimmed.replace(tagsToDiscount(), '').replace(RE_PLACEHOLDER, '').trim();
       if (stripped) {
         RE_ENGLISH_WORDS.lastIndex = 0;
         const englishWords = stripped.match(RE_ENGLISH_WORDS);
@@ -179,7 +199,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
 
   const isMixedLanguage = useCallback((translation: string): boolean => {
     if (!translation?.trim()) return false;
-    const stripped = translation.replace(RE_TAG, '').replace(RE_PLACEHOLDER, '').trim();
+    const stripped = translation.replace(tagsToDiscount(), '').replace(RE_PLACEHOLDER, '').trim();
     if (!stripped) return false;
     const hasArabic = RE_ARABIC.test(stripped);
     RE_ENGLISH_WORDS.lastIndex = 0;

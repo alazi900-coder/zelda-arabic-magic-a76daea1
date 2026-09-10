@@ -750,12 +750,19 @@ export function isTechnicalText(text: string, msbtFile?: string): boolean {
   if (isGtaIvRuntimeOnlyText(t, msbtFile)) return true;
   // GTA IV mission/script event labels (e.g. "FCJ_ACT_DARTS_LEAVE_LOST") — internal identifiers, not dialogue.
   if (isGtaIvScriptLabelText(t, msbtFile)) return true;
-  // Pure hex/numeric/path-like identifiers (e.g. "a1b2c3", "path/to/file")
-  if (/^[0-9A-Fa-f\-\._:\/]+$/.test(t)) return true;
+  // Pure hex/numeric/path-like identifiers (e.g. "a1b2c3", "path/to/file").
+  // A digit is required when letters are present: a-f spell ordinary words, and
+  // without this the rule swallowed "Bed", "Feb.", "Dec." and "Face" — every
+  // identifier it was written for carries one.
+  if (/^[0-9A-Fa-f\-\._:\/]+$/.test(t) && (!/[a-zA-Z]/.test(t) || /\d/.test(t))) return true;
   // camelCase or snake_case identifiers (e.g. "getItemName", "item_name")
   if (/^[a-z]+([A-Z][a-z]*)+$|^[a-z]+(_[a-z]+)+$/.test(t)) return true;
-  // Short alphanumeric codes (e.g. zY1, yY1, xA3) — not real sentences
-  if (!usesUppercaseNames(msbtFile) && /^[a-zA-Z0-9]{1,6}$/.test(t) && !/^[A-Z][a-z]{2,}$/.test(t)) return true;
+  // Short alphanumeric codes (e.g. zY1, yY1, xA3) — not real sentences. Same
+  // reason for the digit: without it this hid ordinary interface words that
+  // happen to be short — YES, NO, ON, OFF, EXIT, USE, CANCEL, MAIL — and every
+  // example the rule names has one.
+  if (!usesUppercaseNames(msbtFile) && /^[a-zA-Z0-9]{1,6}$/.test(t)
+      && !/^[A-Z][a-z]{2,}$/.test(t) && (!/[a-zA-Z]/.test(t) || /\d/.test(t))) return true;
   // File paths (e.g. \path\to\file or /path/to/file)
   if (/[\\/][\w\-]+[\\/]/i.test(t) && !/\s/.test(t)) return true;
   // Text that is ONLY tags with no real translatable content

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Filter, Eye, Replace, Columns, RotateCcw, Wand2 } from "lucide-react";
 import DebouncedInput from "@/components/editor/DebouncedInput";
 import TableFilterTree from "@/components/editor/TableFilterTree";
-import { type FilterStatus, type FilterTechnical } from "@/components/editor/types";
+import { type FilterStatus, type FilterTechnical, isTechnicalText } from "@/components/editor/types";
 import RisenLineSplitTool from "@/components/editor/RisenLineSplitTool";
 import GtaIvLineSplitTool from "@/components/editor/GtaIvLineSplitTool";
 import type { useEditorState } from "@/hooks/useEditorState";
@@ -49,6 +49,7 @@ type EditorSubset = Pick<
   | "showFindReplace"
   | "setShowFindReplace"
   | "filteredEntries"
+  | "toggleTechnicalBypass"
   | "updateTranslationsBatch"
   | "legacyCommaSplitEnabled"
   | "setPinnedKeys"
@@ -74,6 +75,16 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
   isGtaIv = false,
   setShowDiffView,
 }) => {
+  /** How many rows the current filter shows that the AI would still skip as
+   *  technical. Zero hides the bulk button, so it never appears on a plain
+   *  list where there is nothing to override. */
+  const technicalShown = React.useMemo(() => {
+    if (!editor.state) return 0;
+    return editor.filteredEntries.filter(e =>
+      isTechnicalText(e.original, e.msbtFile)
+      && !editor.state?.technicalBypass?.has(`${e.msbtFile}:${e.index}`)).length;
+  }, [editor.filteredEntries, editor.state]);
+
   /** حذف ترجمات كل المدخلات التي تنتمي لقائمة جداول معيّنة. */
   const handleDeleteScope = React.useCallback(async (tables: string[], label: string) => {
     if (!editor.state) return;
@@ -285,6 +296,30 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
         )}
         <Button variant="outline" size="sm" onClick={() => void editor.resetWorkspace()} className="font-body text-xs w-full">
           <RotateCcw className="w-3 h-3" /> إعادة ضبط مساحة العمل
+        </Button>
+      </div>
+    )}
+
+    {/* Rows the AI silently skips. Shown at the top level rather than under one
+        filter, because the translator meets them while browsing normally — and
+        pressing the per-row override a few hundred times is not a workflow. */}
+    {technicalShown > 0 && (
+      <div className="flex items-center gap-2 flex-wrap mt-2">
+        <span className="text-[10px] text-muted-foreground font-body">
+          {technicalShown} نصاً في العرض الحالي يتخطّاه الذكاء الاصطناعي كنصّ تقني
+        </span>
+        <Button
+          variant="outline" size="sm" className="font-body text-xs h-7"
+          onClick={() => {
+            for (const e of editor.filteredEntries) {
+              const key = `${e.msbtFile}:${e.index}`;
+              if (isTechnicalText(e.original, e.msbtFile) && !editor.state?.technicalBypass?.has(key)) {
+                editor.toggleTechnicalBypass(key);
+              }
+            }
+          }}
+        >
+          أدرجها كلها في الترجمة
         </Button>
       </div>
     )}

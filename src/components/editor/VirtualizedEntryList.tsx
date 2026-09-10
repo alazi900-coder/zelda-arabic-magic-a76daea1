@@ -8,6 +8,7 @@ interface VirtualizedEntryListProps {
   state: {
     translations: Record<string, string>;
     protectedEntries?: Set<string>;
+    technicalBypass?: Set<string>;
     fuzzyScores?: Record<string, number>;
     risenTagReviewKeys?: Set<string>;
   };
@@ -34,6 +35,8 @@ interface VirtualizedEntryListProps {
   onRejectFuzzy: (key: string) => void;
   onCompare: (entry: ExtractedEntry) => void;
   onSplitNewline: (key: string) => void;
+  /** Overrides the "technical text" verdict for one row so the AI stops skipping it. */
+  toggleTechnicalBypass?: (key: string) => void;
   onShowRelated?: (entry: ExtractedEntry) => void;
   height?: number;
   legacyCommaSplitEnabled?: boolean;
@@ -57,6 +60,7 @@ const VirtualizedEntryList = React.memo(({
   hasStuckChars,
   isMixedLanguage,
   updateTranslation,
+  toggleTechnicalBypass,
   handleTranslateSingle,
   handleImproveSingleTranslation,
   handleUndoTranslation,
@@ -103,6 +107,8 @@ const VirtualizedEntryList = React.memo(({
             translation={state.translations[key] || ''}
             glossary={activeGlossary}
             isProtected={state.protectedEntries?.has(key) || false}
+            isTechnicalBypassed={state.technicalBypass?.has(key) || false}
+            onToggleTechnicalBypass={toggleTechnicalBypass}
             hasProblem={qualityStats.problemKeys.has(key)}
             isDamagedTag={qualityStats.damagedTagKeys.has(key)}
             isRisenTagReviewNeeded={state.risenTagReviewKeys?.has(key) || false}
@@ -133,7 +139,7 @@ const VirtualizedEntryList = React.memo(({
         </RowMeasurer>
       </div>
     );
-  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, setRowHeight, legacyCommaSplitEnabled, risenVariant]);
+  }, [entries, state, qualityStats, activeGlossary, isMobile, translatingSingle, improvingTranslations, previousTranslations, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, updateTranslation, toggleTechnicalBypass, handleTranslateSingle, handleImproveSingleTranslation, handleUndoTranslation, handleFixReversed, handleLocalFixDamagedTag, onAcceptFuzzy, onRejectFuzzy, onCompare, onSplitNewline, onShowRelated, setRowHeight, legacyCommaSplitEnabled, risenVariant]);
 
   return (
     <VList

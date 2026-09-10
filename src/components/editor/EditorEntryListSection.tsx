@@ -9,6 +9,7 @@ import type { useEditorState } from "@/hooks/useEditorState";
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
   | "state"
+  | "toggleTechnicalBypass"
   | "filteredEntries"
   | "paginatedEntries"
   | "currentPage"
@@ -93,6 +94,7 @@ const EditorEntryListSection: React.FC<EditorEntryListSectionProps> = ({
         hasStuckChars={editor.hasStuckChars}
         isMixedLanguage={editor.isMixedLanguage}
         updateTranslation={editor.updateTranslation}
+        toggleTechnicalBypass={editor.toggleTechnicalBypass}
         handleTranslateSingle={editor.handleTranslateSingle}
         handleImproveSingleTranslation={editor.handleImproveSingleTranslation}
         handleUndoTranslation={editor.handleUndoTranslation}

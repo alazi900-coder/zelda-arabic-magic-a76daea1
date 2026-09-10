@@ -6,7 +6,7 @@ import { AlertTriangle, RotateCcw, Sparkles, Loader2, Tag, BookOpen, Wrench, Cop
 import { supabase } from "@/integrations/supabase/client";
 import { measureEntryBytes } from "@/lib/entry-bytes";
 import DebouncedInput from "./DebouncedInput";
-import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore } from "./types";
+import { ExtractedEntry, displayOriginal, hasArabicChars, isTechnicalText, hasTechnicalTags, previewTagRestore, entryKey } from "./types";
 import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
@@ -189,6 +189,10 @@ interface EntryCardProps {
   entry: ExtractedEntry;
   translation: string;
   isProtected: boolean;
+  /** The translator overrode the "technical text" verdict for this row, so the
+   *  AI passes stop skipping it. Undefined wherever the card is read-only. */
+  isTechnicalBypassed?: boolean;
+  onToggleTechnicalBypass?: (key: string) => void;
   hasProblem: boolean;
   isDamagedTag?: boolean;
   /** Risen 1: translation had a missing tag auto-appended — needs a human look
@@ -244,7 +248,7 @@ function findGlossaryMatches(original: string, glossary?: string): { term: strin
 }
 
 const EntryCard: React.FC<EntryCardProps> = ({
-  entry, translation, isProtected, hasProblem, isDamagedTag, isRisenTagReviewNeeded, fuzzyScore, isMobile,
+  entry, translation, isProtected, isTechnicalBypassed, onToggleTechnicalBypass, hasProblem, isDamagedTag, isRisenTagReviewNeeded, fuzzyScore, isMobile,
   translatingSingle, improvingTranslations, previousTranslations, glossary,
   isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage,
   updateTranslation, handleTranslateSingle, handleImproveSingleTranslation,
@@ -381,7 +385,24 @@ const EntryCard: React.FC<EntryCardProps> = ({
               💡 الرموز الملونة أكواد خاصة بمحرك اللعبة — <span className="font-semibold text-accent">لا تحذفها من الترجمة</span>
             </p>
           )}
-          {isTech && <p className="text-xs text-accent mb-2">⚠️ نص تقني - تحتاج حذر في الترجمة</p>}
+          {isTech && (
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <p className="text-xs text-accent">
+                {isTechnicalBypassed
+                  ? "⚠️ نص تقني — أدرجتَه في الترجمة"
+                  : "⚠️ نص تقني - تحتاج حذر في الترجمة"}
+              </p>
+              {onToggleTechnicalBypass && (
+                <button
+                  type="button"
+                  onClick={() => onToggleTechnicalBypass(entryKey(entry))}
+                  className="text-[10px] px-1.5 py-0.5 rounded border border-accent/50 text-accent hover:bg-accent/10"
+                >
+                  {isTechnicalBypassed ? "استبعده مجدداً" : "ترجمها رغم ذلك"}
+                </button>
+              )}
+            </div>
+          )}
           {looksLikeData && (
             <p className="text-xs text-amber-500 mb-2">
               ⚠️ قد تكون بيانات لا نصاً (رسوم أو شيفرة قرأها الماسح كحروف) — ترجمتها قد تُفسد ما تحتها

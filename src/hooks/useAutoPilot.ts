@@ -54,6 +54,7 @@ interface UseAutoPilotProps {
   userDeepSeekKey: string;
   userTokenRouterKey?: string;
   userGmiCloudKey?: string;
+  userCodeCraftKey?: string;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
@@ -81,7 +82,7 @@ function pickFreeProvider(): { provider: string; model?: string; label: string }
 
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
-  translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey,
+  translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
   customPromptInstructions, aiRoutingMode = 'paid', risenVariant,
@@ -123,6 +124,8 @@ export function useAutoPilot({
       ? userTokenRouterKey
       : prov === 'gmicloud'
       ? userGmiCloudKey
+      : prov === 'codecraft'
+      ? userCodeCraftKey
       : undefined;
     return JSON.stringify({
       entries,
@@ -139,7 +142,7 @@ export function useAutoPilot({
       routingMode: aiRoutingMode,
       game: resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant),
     });
-  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey,
+  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey,
       myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode, state]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {

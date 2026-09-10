@@ -45,7 +45,7 @@ type EditorSubset = Pick<
   | "showIntegrityDialog" | "setShowIntegrityDialog" | "integrityResult" | "checkingIntegrity" | "handleCheckIntegrity"
   | "showBuildConfirm" | "setShowBuildConfirm" | "buildPreview" | "handleBuild" | "building" | "handlePreBuild"
   | "updateTranslation" | "activeGlossary"
-  | "userGeminiKey" | "userDeepSeekKey" | "userTokenRouterKey" | "userGmiCloudKey" | "myMemoryEmail" | "aiModel"
+  | "userGeminiKey" | "userDeepSeekKey" | "userTokenRouterKey" | "userGmiCloudKey" | "userCodeCraftKey" | "myMemoryEmail" | "aiModel"
   | "handleExportEnglishOnlyJson" | "handleExportEnglishOnly"
   | "importConflicts" | "handleConflictConfirm" | "handleConflictCancel"
   | "translatedCount" | "handleClearTranslations"

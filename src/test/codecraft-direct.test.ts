@@ -113,6 +113,21 @@ describe('CodeCraft direct transport', () => {
     expect(dialog).toContain('buildEngines(aiModel)');
   });
 
+  it('picks the model in the enhance panel from the account catalogue, not a frozen list', () => {
+    const panel = src('components/editor/TranslationAIEnhancePanel.tsx');
+    // starts on the model chosen in the provider panel...
+    expect(panel).toContain('if (provider === "codecraft") return currentModel || CODECRAFT_DEFAULT_MODEL;');
+    // ...and can be pointed at any other model the key can reach
+    expect(panel).toContain('fetchCodeCraftModels');
+    expect(panel).toContain('CodeCraft — نماذج حسابك');
+  });
+
+  it('sends the key with an autopilot run', () => {
+    const autopilot = src('hooks/useAutoPilot.ts');
+    expect(autopilot).toContain("prov === 'codecraft'");
+    expect(autopilot).toMatch(/\?\s*userCodeCraftKey/);
+  });
+
   it('resolves the key on every direct surface, so none of them calls out empty', () => {
     expect(src('pages/Editor.tsx')).toContain('editor.userCodeCraftKey');
     expect(src('components/editor/TranslationAIEnhancePanel.tsx')).toContain('codeCraftKey');

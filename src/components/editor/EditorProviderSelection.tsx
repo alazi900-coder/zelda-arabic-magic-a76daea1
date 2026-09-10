@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GTAIV_PROMPT_PRESETS, PROMPT_PRESETS, RISEN_PROMPT_PRESETS } from "@/components/editor/promptPresets";
 import { CATEGORY_PROMPT_DEFAULTS, resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import AIRoutingToggle from "@/components/editor/AIRoutingToggle";
+import { fetchCodeCraftModels } from "@/lib/codecraft-direct";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -58,18 +59,8 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
     setCodeCraftModelsLoading(true);
     setCodeCraftModelsError("");
     try {
-      const res = await fetch("https://codecraftapi.com/v1/models", {
-        headers: { Authorization: `Bearer ${editor.userCodeCraftKey}` },
-      });
-      const body = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(body?.error?.message || `تعذّر جلب النماذج (${res.status})`);
-      }
-      const ids = (body?.data || [])
-        .map((m: { id?: string }) => m?.id)
-        .filter((id: unknown): id is string => typeof id === "string" && id.length > 0);
-      if (ids.length === 0) throw new Error("لم يُرجع الحساب أي نموذج متاح");
-      setCodeCraftModels(ids);
+      // shared with the enhance panel, so the two lists cannot drift apart
+      setCodeCraftModels(await fetchCodeCraftModels(editor.userCodeCraftKey));
     } catch (e) {
       setCodeCraftModelsError((e as Error).message);
     } finally {

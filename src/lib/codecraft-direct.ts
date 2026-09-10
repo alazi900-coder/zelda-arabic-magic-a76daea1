@@ -156,6 +156,25 @@ async function requestCompletion(request: CodeCraftDirectRequest & { system: str
   return content;
 }
 
+/**
+ * The account's live catalogue. CodeCraft is a router, so the list is per-key
+ * and changes; every panel that lets the translator pick a model reads it from
+ * here rather than carrying names that go 404 the day one is retired.
+ */
+export async function fetchCodeCraftModels(apiKey: string | undefined, signal?: AbortSignal): Promise<string[]> {
+  const res = await fetch('https://codecraftapi.com/v1/models', {
+    headers: { Authorization: `Bearer ${apiKey || ''}` },
+    signal,
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(errorMessage(body, res.status));
+  const ids = ((body as { data?: Array<{ id?: string }> } | null)?.data || [])
+    .map((m) => m?.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  if (ids.length === 0) throw new Error('لم يُرجع الحساب أي نموذج متاح');
+  return ids;
+}
+
 export interface CodeCraftJsonRequest {
   apiKey?: string;
   model?: string;

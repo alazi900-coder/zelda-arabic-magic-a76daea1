@@ -12,12 +12,12 @@ import {
 } from "@/components/ui/select";
 import { resolveGameParam } from "@/lib/game-param";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
-import { requestCodeCraftJson } from "@/lib/codecraft-direct";
+import { requestCodeCraftJson, fetchCodeCraftModels } from "@/lib/codecraft-direct";
 import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
   Pencil, Undo2, ChevronDown, ChevronUp, FileText, Trash2, Upload,
-  FolderOpen, Shield,
+  FolderOpen, Shield, Wifi,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
@@ -319,6 +319,27 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   useEffect(() => {
     try { localStorage.setItem('enhanceAiModel', model); } catch { /* ignore */ }
   }, [model]);
+
+  // CodeCraft's catalogue is per-account and cannot be listed in MODEL_OPTIONS
+  // the way the fixed providers are. The panel starts on whatever model was
+  // picked in the provider panel (the effect above keeps that in step), and
+  // this reads the live list so the model used here can differ from the one
+  // used for translating without any name being written into the code.
+  const isCodeCraft = (translationProvider || readLocalStorage('translationProvider')) === 'codecraft';
+  const [codeCraftModels, setCodeCraftModels] = useState<string[]>([]);
+  const [codeCraftModelsLoading, setCodeCraftModelsLoading] = useState(false);
+  const [codeCraftModelsError, setCodeCraftModelsError] = useState("");
+  const loadCodeCraftModels = useCallback(async () => {
+    setCodeCraftModelsLoading(true);
+    setCodeCraftModelsError("");
+    try {
+      setCodeCraftModels(await fetchCodeCraftModels(readLocalStorage('userCodeCraftKey')));
+    } catch (e) {
+      setCodeCraftModelsError((e as Error).message);
+    } finally {
+      setCodeCraftModelsLoading(false);
+    }
+  }, []);
   const [showDiff, setShowDiff] = useState(true);
   const [diffMode, setDiffMode] = useState<"word" | "sentence">("word");
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -1589,8 +1610,34 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                       <SelectLabel className="text-[10px]">GMI Cloud — MiniMax</SelectLabel>
                       {MODEL_OPTIONS.filter(m => m.group === "gmicloud").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
                     </SelectGroup>
+                    {isCodeCraft && (
+                      <SelectGroup>
+                        <SelectLabel className="text-[10px]">CodeCraft — نماذج حسابك</SelectLabel>
+                        {Array.from(new Set([model, ...codeCraftModels])).filter(Boolean).map(id => (
+                          <SelectItem key={id} value={id} className="text-xs" dir="ltr">{id}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )}
                   </SelectContent>
                 </Select>
+                {isCodeCraft && (
+                  <div className="mt-1 flex flex-col gap-1">
+                    <Button
+                      variant="outline" size="sm"
+                      onClick={loadCodeCraftModels}
+                      disabled={codeCraftModelsLoading}
+                      className="text-[10px] h-6 gap-1 w-fit"
+                    >
+                      {codeCraftModelsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
+                      جلب نماذج CodeCraft
+                    </Button>
+                    {codeCraftModelsError
+                      ? <span className="text-[10px] text-red-500">❌ {codeCraftModelsError}</span>
+                      : <span className="text-[10px] text-muted-foreground">
+                          يبدأ بالنموذج المختار في لوحة المزوّد؛ اجلب القائمة لتغييره هنا وحده.
+                        </span>}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-[10px] text-muted-foreground mb-1 block">نطاق الفحص</label>

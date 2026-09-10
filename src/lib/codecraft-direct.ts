@@ -133,7 +133,18 @@ async function requestCompletion(request: CodeCraftDirectRequest & { system: str
       if (request.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       if (!(error instanceof TypeError)) throw error;
       if (attempt === 2) {
-        throw new CodeCraftDirectError('تعذر الاتصال بـ CodeCraft بعد محاولات محدودة. أعد المحاولة لاحقاً.', 502);
+        // A TypeError here is the browser refusing a response it could not
+        // read, not necessarily an unreachable host. The case seen in
+        // practice: CodeCraft answers the completion with a gateway error
+        // page, which — unlike its own JSON errors — carries no CORS header,
+        // so the browser discards it and the real status never arrives. Since
+        // the model list is a different route and keeps working, a plain
+        // "connection failed" points the translator at their network when the
+        // problem is on the provider's side, so say what it usually means.
+        throw new CodeCraftDirectError(
+          'لم يصل ردٌّ مقروء من CodeCraft بعد ثلاث محاولات. الغالب أنه ردّ بصفحة خطأ من بوّابته (502) لا تحمل ترويسة CORS فرفضها المتصفّح، لا أن الاتصال منقطع — فزرّ «جلب النماذج» يستعمل مساراً آخر وقد ينجح رغم ذلك. تحقّق من رصيد حسابك وحالة الخدمة في لوحة CodeCraft، أو استعمل مزوّداً آخر مؤقتاً.',
+          502,
+        );
       }
       await waitForRetry(700 * (attempt + 1), request.signal);
       continue;

@@ -80,6 +80,25 @@ describe('CodeCraft direct transport', () => {
     expect(JSON.stringify(body)).not.toContain('Gemini');
   });
 
+  it('explains a swallowed gateway error instead of blaming the connection', async () => {
+    // what the browser actually does when CodeCraft answers with a gateway
+    // error page: the response carries no CORS header, so fetch rejects with a
+    // TypeError and the 502 never reaches us
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await requestCodeCraftDirect({
+      apiKey: 'k', entries: [{ key: 'a', original: 'A' }],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3); // retried before giving up
+    const { error } = await response.json();
+    expect(error).toContain('502');
+    expect(error).toContain('CORS');
+    expect(error).toContain('رصيد');
+    expect(error).not.toMatch(/^تعذر الاتصال بـ CodeCraft بعد محاولات محدودة/);
+  }, 15000);
+
   it('never routes a codecraft translation through the edge function', () => {
     const hook = src('hooks/useEditorTranslation.ts');
     const fn = hook.slice(hook.indexOf('const requestTranslation'), hook.indexOf('getEdgeFunctionUrl("translate-entries")'));

@@ -46,6 +46,38 @@ describe("tag-only rows are not sent to translation", () => {
   });
 });
 
+/**
+ * "HP" and "ON" are both two capital letters, so no rule can separate them —
+ * the abbreviations are named one by one instead. The list must stay tiny and
+ * exact, which is what the second half of this block guards: the words the
+ * translator asked to keep translatable, and the longer strings that merely
+ * contain an abbreviation.
+ */
+describe("abbreviations that stay in Latin letters", () => {
+  const plat = "platinum/bag";
+
+  it.each(["HP", "PP", "Lv", "Lv."])("keeps %s out of translation", (t) => {
+    expect(isTechnicalText(t, plat)).toBe(true);
+  });
+
+  it("only matches the whole row, never a word inside a sentence", () => {
+    expect(isTechnicalText("Restored 20 HP!", plat)).toBe(false);
+    expect(isTechnicalText("Lv. 100", plat)).toBe(false);
+    expect(isTechnicalText("Set Lv.1", plat)).toBe(false);
+  });
+
+  it("leaves the spelled-out word translatable", () => {
+    expect(isTechnicalText("Level", plat)).toBe(false);
+    expect(isTechnicalText("LEVEL", plat)).toBe(false);
+  });
+
+  it("does not spread to the two-letter words that must be translated", () => {
+    for (const w of ["ON", "OFF", "NO", "YES", "OK", "No", "BP", "DEF", "ID"]) {
+      expect(isTechnicalText(w, plat), w).toBe(false);
+    }
+  });
+});
+
 describe("uppercase filter", () => {
   const src = (...p: string[]) => readFileSync(resolve(__dirname, "..", ...p), "utf8");
 

@@ -743,9 +743,21 @@ function usesUppercaseNames(msbtFile?: string): boolean {
   return !!msbtFile && /^pkm_/.test(msbtFile);
 }
 
+/**
+ * Abbreviations that stay in Latin letters on screen. They cannot be told apart
+ * from ordinary words by shape — "HP" and "ON" are both two capitals — so
+ * naming them is the only honest way, and the list stays short and visible
+ * rather than growing into a heuristic nobody can audit.
+ *
+ * Matched against the whole trimmed row, so "Restored 20 HP!" and "Lv. 100" are
+ * untouched, and the spelled-out "Level" stays translatable.
+ */
+const UNTRANSLATED_ABBREVIATIONS = new Set(["HP", "PP", "Lv", "Lv."]);
+
 export function isTechnicalText(text: string, msbtFile?: string): boolean {
   const t = text.trim();
   if (!t) return true;
+  if (UNTRANSLATED_ABBREVIATIONS.has(t)) return true;
   // GTA IV control rows such as ~MOUSE_WHEEL~ have no human-readable text.
   // Keep them in the GXT source, but never send them to an AI translator.
   if (isGtaIvRuntimeOnlyText(t, msbtFile)) return true;

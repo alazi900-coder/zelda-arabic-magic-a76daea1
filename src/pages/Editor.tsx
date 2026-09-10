@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Loader2, Sparkles, Tag, LogIn, BookOpen, AlertTriangle, Eye, EyeOff, RotateCcw, CheckCircle2, Package } from "lucide-react";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { requestGmiCloudDirect } from "@/lib/gmicloud-direct";
+import { requestCodeCraftDirect } from "@/lib/codecraft-direct";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -105,9 +106,19 @@ const Editor = () => {
         provider === 'tokenrouter' ? editor.userTokenRouterKey :
         provider === 'gmicloud' ? editor.userGmiCloudKey :
         provider === 'codecraft' ? editor.userCodeCraftKey : undefined;
+      // Both direct providers skip the Edge Function entirely: their key lives
+      // in the browser, and routing through a deployed function means a
+      // provider it does not know falls into its Gemini branch and fails
+      // naming a model nobody chose.
       const response = provider === 'gmicloud'
         ? await requestGmiCloudDirect({
             apiKey: editor.userGmiCloudKey,
+            model: editor.aiModel,
+            entries: [{ key: 'test:0', original: 'Hello' }],
+          })
+        : provider === 'codecraft'
+        ? await requestCodeCraftDirect({
+            apiKey: editor.userCodeCraftKey,
             model: editor.aiModel,
             entries: [{ key: 'test:0', original: 'Hello' }],
           })

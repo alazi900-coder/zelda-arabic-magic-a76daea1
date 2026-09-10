@@ -81,9 +81,46 @@ describe('CodeCraft direct transport', () => {
   });
 
   it('never routes a codecraft translation through the edge function', () => {
-    const hook = readFileSync(resolve(__dirname, '../hooks/useEditorTranslation.ts'), 'utf8');
+    const hook = src('hooks/useEditorTranslation.ts');
     const fn = hook.slice(hook.indexOf('const requestTranslation'), hook.indexOf('getEdgeFunctionUrl("translate-entries")'));
     expect(fn).toContain("payload.provider === 'codecraft'");
     expect(fn).toContain('requestCodeCraftDirect');
   });
+
+  /**
+   * Translation was only one of the panels. `enhance-translations`,
+   * `review-translations` and `context-suggest` carry no CodeCraft branch at
+   * all, so any of them still reaching an Edge Function answers as some other
+   * provider — which is how a CodeCraft choice produced a Gemini 404 from the
+   * test-connection button long after the translation path was fixed.
+   */
+  it.each([
+    ['test-connection button', 'pages/Editor.tsx', 'requestCodeCraftDirect'],
+    ['enhance panel', 'components/editor/TranslationAIEnhancePanel.tsx', 'requestCodeCraftJson'],
+    ['context suggestions', 'components/editor/ContextSuggestPanel.tsx', 'requestCodeCraftJson'],
+    ['engine comparison', 'components/editor/CompareEnginesDialog.tsx', 'requestCodeCraftDirect'],
+  ])('sends %s straight to CodeCraft', (_label, file, transport) => {
+    const text = src(file);
+    expect(text, file).toContain(transport);
+    expect(text, file).toMatch(/=== ['"]codecraft['"]/);
+  });
+
+  it('offers CodeCraft as an engine to compare, running the picked model', () => {
+    const dialog = src('components/editor/CompareEnginesDialog.tsx');
+    expect(dialog).toMatch(/id: 'codecraft'[^}]*provider: 'codecraft'/);
+    // the model is the translator's pick, not a name frozen in the list
+    expect(dialog).toMatch(/id: 'codecraft'[^}]*model: codeCraftModel/);
+    expect(dialog).toContain('buildEngines(aiModel)');
+  });
+
+  it('resolves the key on every direct surface, so none of them calls out empty', () => {
+    expect(src('pages/Editor.tsx')).toContain('editor.userCodeCraftKey');
+    expect(src('components/editor/TranslationAIEnhancePanel.tsx')).toContain('codeCraftKey');
+    expect(src('components/editor/ContextSuggestPanel.tsx')).toContain('userCodeCraftKey');
+    expect(src('components/editor/CompareEnginesDialog.tsx')).toContain('userCodeCraftKey');
+  });
 });
+
+function src(...parts: string[]): string {
+  return readFileSync(resolve(__dirname, '..', ...parts), 'utf8');
+}

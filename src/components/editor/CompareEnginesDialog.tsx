@@ -10,6 +10,7 @@ import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { resolveGameParam } from "@/lib/game-param";
 import { requestGmiCloudDirect } from "@/lib/gmicloud-direct";
+import { requestCodeCraftDirect } from "@/lib/codecraft-direct";
 
 interface CompareEnginesDialogProps {
   open: boolean;
@@ -37,7 +38,10 @@ interface EngineConfig {
   requiresKey?: 'gemini' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft';
 }
 
-function buildEngines(): EngineConfig[] {
+// CodeCraft is a router with a per-account catalogue, so it cannot be listed
+// as fixed models the way the others are: it enters as one engine running
+// whichever model the translator picked in the provider panel.
+function buildEngines(codeCraftModel?: string): EngineConfig[] {
   return [
     { id: 'gemini-flash', label: 'Gemini 2.5 Flash', emoji: '⚡', provider: 'gemini', model: 'gemini-2.5-flash', description: 'سريع ومتوازن' },
     { id: 'gemini-pro', label: 'Gemini 2.5 Pro', emoji: '🎯', provider: 'gemini', model: 'gemini-2.5-pro', description: 'الأدق للمصطلحات' },
@@ -48,6 +52,7 @@ function buildEngines(): EngineConfig[] {
     { id: 'tokenrouter-glm-5.2', label: 'TokenRouter GLM-5.2', emoji: '🔀', provider: 'tokenrouter', description: 'مجاني', requiresKey: 'tokenrouter' },
     { id: 'minimax-m2.7', label: 'MiniMax M2.7', emoji: '☁️', provider: 'gmicloud', model: 'MiniMaxAI/MiniMax-M2.7', description: 'GMI Cloud — متوازن', requiresKey: 'gmicloud' },
     { id: 'minimax-m3', label: 'MiniMax M3', emoji: '☁️', provider: 'gmicloud', model: 'MiniMaxAI/MiniMax-M3', description: 'GMI Cloud — الأقوى', requiresKey: 'gmicloud' },
+    { id: 'codecraft', label: 'CodeCraft', emoji: '🛠️', provider: 'codecraft', model: codeCraftModel, description: `نموذج حسابك: ${codeCraftModel || 'اختر واحداً'}`, requiresKey: 'codecraft' },
     { id: 'mymemory', label: 'MyMemory', emoji: '🆓', provider: 'mymemory', description: 'ذاكرة ترجمة مجانية' },
     { id: 'google', label: 'Google Translate', emoji: '🌐', provider: 'google', description: 'ترجمة Google المباشرة' },
   ];
@@ -183,7 +188,7 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
   const [loadingEngines, setLoadingEngines] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   // Recompute engines whenever the dialog opens.
-  const ALL_ENGINES = React.useMemo(() => buildEngines(), [open]);
+  const ALL_ENGINES = React.useMemo(() => buildEngines(aiModel), [open, aiModel]);
 
   const getProviderKey = (engine: EngineConfig): string | undefined => {
     if (engine.requiresKey === 'deepseek') return userDeepSeekKey || undefined;
@@ -208,8 +213,13 @@ const CompareEnginesDialog: React.FC<CompareEnginesDialogProps> = ({
 
     try {
       let rawTranslation: string | null = null;
-      if (engine.provider === 'gmicloud') {
-        const response = await requestGmiCloudDirect({
+      // Direct providers bypass the Edge Function, so comparing them does not
+      // wait on a deploy — and a provider the deployed function does not know
+      // would otherwise answer from its Gemini branch, which is not a
+      // comparison of anything.
+      if (engine.provider === 'gmicloud' || engine.provider === 'codecraft') {
+        const askDirect = engine.provider === 'codecraft' ? requestCodeCraftDirect : requestGmiCloudDirect;
+        const response = await askDirect({
             apiKey: providerKey,
             model: engine.model,
             entries: [{ key, original: entry.original }],

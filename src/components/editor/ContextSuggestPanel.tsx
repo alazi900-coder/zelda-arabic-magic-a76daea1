@@ -12,6 +12,7 @@ import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/catego
 import type { ExtractedEntry } from "./types";
 import { resolveGameParam } from "@/lib/game-param";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
+import { requestCodeCraftJson } from "@/lib/codecraft-direct";
 import {
   compareLumenTaleTechnicalTokens,
   describeLumenTaleTokenDifference,
@@ -160,13 +161,18 @@ const ContextSuggestPanel: React.FC<ContextSuggestPanelProps> = ({
           providerApiKey = localStorage.getItem("userTokenRouterKey") || "";
         } else if (provider === "gmicloud") {
           providerApiKey = userGmiCloudKey || "";
+        } else if (provider === "codecraft") {
+          providerApiKey = localStorage.getItem("userCodeCraftKey") || "";
         }
     } catch {
       if (provider === "gmicloud") providerApiKey = userGmiCloudKey || "";
     }
 
-      if (provider === "gmicloud") {
-        const data = await requestGmiCloudJson<{ suggestions?: Suggestion[]; contextNote?: string }>({
+      // Direct providers only: `context-suggest` has no CodeCraft branch, so
+      // sending it there would answer as some other provider entirely.
+      if (provider === "gmicloud" || provider === "codecraft") {
+        const askJson = provider === "codecraft" ? requestCodeCraftJson : requestGmiCloudJson;
+        const data = await askJson<{ suggestions?: Suggestion[]; contextNote?: string }>({
           apiKey: providerApiKey,
           model: aiModel,
           system: `You are an Arabic video-game localization editor. Return ONLY one JSON object with keys suggestions and contextNote. suggestions must be an array of up to three objects with translation, style (formal, natural, or creative), styleLabel in Arabic, reason in Arabic, and confidence from 0 to 1. Preserve every technical token, variable, control code, number, punctuation-bearing game code, and line-break marker exactly. Do not use Markdown.${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,

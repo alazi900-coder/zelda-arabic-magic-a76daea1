@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { resolveGameParam } from "@/lib/game-param";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
+import { requestCodeCraftJson } from "@/lib/codecraft-direct";
 import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
@@ -766,14 +767,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     });
 
     const invokeEnhance = async (textsToAnalyze: { key: string; original: string; translation: string; category?: string }[]) => {
-      if (effectiveProvider === 'gmicloud') {
+      // Both direct providers keep this panel off the Edge Function: their keys
+      // live in the browser, and `enhance-translations` has no CodeCraft branch
+      // at all, so routing there would silently land on another provider.
+      if (effectiveProvider === 'gmicloud' || effectiveProvider === 'codecraft') {
         const responseShape = mode === 'enhance'
           ? '{"suggestions":[{"key":"","original":"","current":"","suggested":"","reason":"","type":"style"}]}'
           : mode === 'grammar'
             ? '{"issues":[{"key":"","original":"","translation":"","issue":"","suggestion":"","severity":"medium","category":"wrong"}]}'
             : '{"results":[{"key":"","original":"","current":"","suggested":"","category":"style","reason":"","type":"style"}]}'
-        const data = await requestGmiCloudJson<Record<string, unknown>>({
-          apiKey: gmiCloudKey,
+        const askJson = effectiveProvider === 'codecraft' ? requestCodeCraftJson : requestGmiCloudJson;
+        const data = await askJson<Record<string, unknown>>({
+          apiKey: effectiveProvider === 'codecraft' ? codeCraftKey : gmiCloudKey,
           model: requestModel,
           signal: abortSignal,
           system: `You are an Arabic video-game localization QA editor. Analyze only the supplied translations. Preserve every technical token, variable, control code, placeholder, rich-text tag, number, and line-break marker exactly. Return ONLY valid JSON with this exact top-level shape: ${responseShape}. Include an item only when a genuine improvement is needed. Reasons must be concise Arabic.${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,

@@ -156,6 +156,29 @@ async function requestCompletion(request: CodeCraftDirectRequest & { system: str
   return content;
 }
 
+export interface CodeCraftJsonRequest {
+  apiKey?: string;
+  model?: string;
+  system: string;
+  user: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Direct JSON transport for the editor tools that want a shaped object rather
+ * than a translations map — enhance, context suggestions, engine comparison.
+ * Like the translation path it never reaches an Edge Function, so none of them
+ * depend on a deploy.
+ */
+export async function requestCodeCraftJson<T extends Record<string, unknown>>(request: CodeCraftJsonRequest): Promise<T> {
+  const content = await requestCompletion({ ...request, entries: [] });
+  const parsed = safeJson(content);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new CodeCraftDirectError('استجابة CodeCraft ليست كائن JSON صالحاً.', 502);
+  }
+  return parsed as T;
+}
+
 /** Returns a Response so the caller can treat it exactly like the Edge Function's. */
 export async function requestCodeCraftDirect(request: CodeCraftDirectRequest): Promise<Response> {
   try {

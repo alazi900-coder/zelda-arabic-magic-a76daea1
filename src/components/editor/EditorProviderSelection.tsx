@@ -77,6 +77,40 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
     }
   }, [editor.userCodeCraftKey]);
 
+  // Google's catalogue moves the same way CodeCraft's does: gemini-2.0-flash was
+  // retired mid-project and every request naming it came back 404. The buttons
+  // above stay as shortcuts to the models we know, but this reads what the key
+  // can actually reach today, so a retirement is one click to work around
+  // instead of a code change. Only generateContent models are offered — the
+  // list also carries embedding and vision-only models that cannot translate.
+  const [geminiModels, setGeminiModels] = React.useState<string[]>([]);
+  const [geminiModelsLoading, setGeminiModelsLoading] = React.useState(false);
+  const [geminiModelsError, setGeminiModelsError] = React.useState("");
+  const loadGeminiModels = React.useCallback(async () => {
+    setGeminiModelsLoading(true);
+    setGeminiModelsError("");
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(editor.userGeminiKey)}`,
+      );
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(body?.error?.message || `تعذّر جلب النماذج (${res.status})`);
+      }
+      const ids = (body?.models || [])
+        .filter((m: { supportedGenerationMethods?: string[] }) =>
+          (m?.supportedGenerationMethods || []).includes("generateContent"))
+        .map((m: { name?: string }) => (m?.name || "").replace(/^models\//, ""))
+        .filter((id: string) => id.startsWith("gemini-"));
+      if (ids.length === 0) throw new Error("لم يُرجع المفتاح أي نموذج صالح للترجمة");
+      setGeminiModels(ids);
+    } catch (e) {
+      setGeminiModelsError((e as Error).message);
+    } finally {
+      setGeminiModelsLoading(false);
+    }
+  }, [editor.userGeminiKey]);
+
   const promptValue = activeCategory
     ? resolveCategoryPrompt(activeCategory.id, editor.categoryPromptTemplates)
     : editor.customPromptInstructions;
@@ -497,7 +531,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               <span className="text-xs font-display text-muted-foreground">🧠 نموذج الذكاء الاصطناعي:</span>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', desc: 'الأعلى حصة (1500/يوم)', badge: '🚀' },
+                  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', desc: 'الأعلى حصة', badge: '🚀' },
                   { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'سريع ومتوازن', badge: '⚡' },
                   { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'الأدق للمصطلحات', badge: '🎯' },
                   { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', desc: 'أحدث نموذج Google', badge: '🆕' },
@@ -523,6 +557,46 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               {(editor.aiModel === 'gemini-3.1-pro-preview' || editor.aiModel === 'gpt-5') && !editor.userGeminiKey && (
                 <p className="text-[10px] text-muted-foreground font-body">يعمل عبر Lovable AI فقط (لا يدعم المفتاح الشخصي)</p>
               )}
+
+              {/* The buttons above are shortcuts, not the whole catalogue. Google
+                  retires models — 2.0 Flash began answering 404 — so the live
+                  list is one click away and the pick is sent to the API as-is. */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-display text-muted-foreground">🛰️ نماذج مفتاحك الحيّة:</span>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={loadGeminiModels}
+                    disabled={!editor.userGeminiKey || geminiModelsLoading}
+                    className="text-xs h-6 gap-1"
+                  >
+                    {geminiModelsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
+                    جلب النماذج
+                  </Button>
+                </div>
+                {!editor.userGeminiKey && (
+                  <p className="text-[10px] text-muted-foreground font-body">يحتاج مفتاح Gemini شخصياً بالأسفل.</p>
+                )}
+                {geminiModelsError && (
+                  <p className="text-xs font-body text-red-500">❌ {geminiModelsError}</p>
+                )}
+                {geminiModels.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                    {geminiModels.map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => editor.setAiModel(id)}
+                        className={`px-2 py-1 rounded border text-xs font-body text-left ${
+                          editor.aiModel === id ? 'border-primary bg-primary/10' : 'border-border'
+                        }`}
+                        dir="ltr"
+                      >
+                        {id}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* AI Routing Mode */}

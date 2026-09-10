@@ -112,7 +112,7 @@ interface ModelOption { value: string; label: string; group: "google" | "openai"
 
 const MODEL_OPTIONS: ModelOption[] = [
   { value: "google-translate-check", label: "Google Translate — فحص دقة (مجاني)", group: "free" },
-  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash (مفتاح مجاني)", group: "google" },
+  { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash (مفتاح مجاني)", group: "google" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview (سريع — مُوصى)", group: "google" },
   { value: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview (دقة عالية)", group: "google" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (متوازن)", group: "google" },

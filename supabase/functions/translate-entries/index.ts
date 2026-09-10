@@ -8,6 +8,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** Fallback for the direct Gemini API when no usable model name arrives.
+ *  Named by Google itself in the 404 that retired gemini-2.0-flash. */
+const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash';
+
 // ============================================================================
 // POST-PROCESSING & QUALITY METRICS
 // ============================================================================
@@ -2008,12 +2012,18 @@ async function translateWithAI(
   };
 
   if (effectiveKey) {
-    // Map model names for direct Gemini API; only gemini models work with personal key
-    const requestedModel = (aiModel === 'gemini-2.5-pro') ? 'gemini-2.5-pro' : (aiModel === 'gemini-2.5-flash') ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
+    // Only gemini models work with a personal key, and Google's catalogue moves:
+    // 2.0 Flash was retired mid-project and started answering 404. The old code
+    // mapped anything it did not recognise onto that one model, so picking a
+    // newer model silently sent the dead one and the 404 blamed a model the user
+    // had not chosen. The name now travels as picked — the picker reads Google's
+    // live list — and only its shape is checked, since it goes into a URL.
+    const isGeminiModelId = (m?: string) => typeof m === 'string' && /^gemini-[a-z0-9.-]+$/.test(m);
+    const requestedModel = isGeminiModelId(aiModel) ? aiModel as string : DEFAULT_GEMINI_MODEL;
     // On free tier each model has its own daily quota (200/250/100 req/day).
     // When the chosen one is exhausted (429), auto-rotate through the others
     // before bubbling up so the user gets ~550 req/day combined.
-    const ROTATION = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+    const ROTATION = [DEFAULT_GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.5-pro'] as const;
     const modelSequence = [requestedModel, ...ROTATION.filter(m => m !== requestedModel)];
 
     const callGemini = async (modelName: string) => {
@@ -2061,7 +2071,7 @@ async function translateWithAI(
           throw new Error('🆓 وضع "مجاني فقط": تجاوزت الحد اليومي لـ Gemini Free — انتظر ساعات قليلة أو بدّل الوضع إلى "تلقائي" أو "مدفوع"');
         }
         if (userApiKey?.trim()) {
-          throw new Error('تجاوزت الحد المجاني لـ Gemini اليومي على كل الموديلات (2.0 Flash + 2.5 Flash + 2.5 Pro) — انتظر ساعات قليلة أو استخدم موفّراً آخر (DeepSeek أو Google Translate)');
+          throw new Error(`تجاوزت الحد المجاني لـ Gemini اليومي على كل الموديلات (${modelSequence.join(' + ')}) — انتظر ساعات قليلة أو استخدم موفّراً آخر (DeepSeek أو Google Translate)`);
         }
         console.log(`Gemini ${lastStatus} (server key), falling back to Lovable AI...`);
       } else {

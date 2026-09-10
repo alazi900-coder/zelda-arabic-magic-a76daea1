@@ -147,7 +147,7 @@ async function callLovable(prompt: string, model: string): Promise<string> {
 }
 
 async function callGeminiDirect(prompt: string, apiKey: string): Promise<string> {
-  const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"];
+  const models = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-2.5-pro"];
   let lastErr = "";
   for (const m of models) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;

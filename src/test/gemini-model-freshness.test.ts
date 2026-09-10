@@ -22,7 +22,13 @@ describe("Gemini model freshness", () => {
     const files = await glob("{src,supabase}/**/*.{ts,tsx}", {
       cwd: resolve(__dirname, "../.."),
       absolute: true,
-      ignore: ["**/node_modules/**", "**/gemini-model-freshness.test.ts"],
+      // the changelog's job is to record that this model was retired, so it
+      // names it on purpose — scanning it would forbid describing the fix
+      ignore: [
+        "**/node_modules/**",
+        "**/gemini-model-freshness.test.ts",
+        "src/lib/changelog.ts",
+      ],
     });
     // the quoted form only: the comments explaining this bug name the model on
     // purpose, and a test that forbids describing it would push the reason out

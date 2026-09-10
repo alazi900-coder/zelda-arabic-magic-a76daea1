@@ -19,6 +19,7 @@ import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { resolveGameParam } from "@/lib/game-param";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 import { requestGmiCloudDirect, type GmiCloudEntry } from "@/lib/gmicloud-direct";
+import { requestCodeCraftDirect, type CodeCraftEntry } from "@/lib/codecraft-direct";
 import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
 import { cacheLookupMany, cacheStoreMany } from "@/lib/translation-cache";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
@@ -126,6 +127,21 @@ export function useEditorTranslation({
         apiKey: userGmiCloudKey,
         model: typeof payload.aiModel === 'string' ? payload.aiModel : undefined,
         entries: (payload.entries || []) as GmiCloudEntry[],
+        glossary: typeof payload.glossary === 'string' ? payload.glossary : undefined,
+        extraInstructions: typeof payload.extraInstructions === 'string' ? payload.extraInstructions : undefined,
+        game: typeof payload.game === 'string' ? payload.game : undefined,
+        signal,
+      });
+    }
+    if (payload.provider === 'codecraft') {
+      // Straight from the browser, like GMICLOUD above: the Edge Function's
+      // CodeCraft branch only exists in whatever version is deployed, and until
+      // it is, every CodeCraft request falls through that function's final else
+      // onto Gemini and fails naming a model the translator never chose.
+      return requestCodeCraftDirect({
+        apiKey: userCodeCraftKey,
+        model: typeof payload.aiModel === 'string' ? payload.aiModel : undefined,
+        entries: (payload.entries || []) as CodeCraftEntry[],
         glossary: typeof payload.glossary === 'string' ? payload.glossary : undefined,
         extraInstructions: typeof payload.extraInstructions === 'string' ? payload.extraInstructions : undefined,
         game: typeof payload.game === 'string' ? payload.game : undefined,

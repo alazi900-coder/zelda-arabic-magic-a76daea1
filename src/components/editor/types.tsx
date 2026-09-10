@@ -1,8 +1,9 @@
 import React from "react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { hasRisenTags } from "@/lib/risen-tag-guard";
+import { editorTagPattern } from "@/lib/editor-tag-pattern";
 
-export type FilterStatus = "all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "no-tags" | "damaged-tags" | "missing-tags" | "fuzzy" | "byte-overflow" | "has-newlines" | "translation-has-newline" | "xeno-n-missing" | "excessive-lines" | "byte-budget" | "newline-diff" | "identical-original" | "long-texts" | "khbbs-unsupported" | "gtaiv-unsupported" | "gtaiv-needs-mod" | "plat-unsupported";
+export type FilterStatus = "all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "no-tags" | "damaged-tags" | "missing-tags" | "fuzzy" | "byte-overflow" | "has-newlines" | "translation-has-newline" | "xeno-n-missing" | "excessive-lines" | "byte-budget" | "newline-diff" | "identical-original" | "long-texts" | "khbbs-unsupported" | "gtaiv-unsupported" | "gtaiv-needs-mod" | "plat-unsupported" | "uppercase";
 
 export type FilterTechnical = "all" | "only" | "exclude";
 
@@ -765,13 +766,17 @@ export function isTechnicalText(text: string, msbtFile?: string): boolean {
       && !/^[A-Z][a-z]{2,}$/.test(t) && (!/[a-zA-Z]/.test(t) || /\d/.test(t))) return true;
   // File paths (e.g. \path\to\file or /path/to/file)
   if (/[\\/][\w\-]+[\\/]/i.test(t) && !/\s/.test(t)) return true;
-  // Text that is ONLY tags with no real translatable content
+  // Text that is ONLY tags with no real translatable content. The tags are
+  // matched with the same pattern that draws them as coloured chips in the
+  // editor, so "nothing but tags" means exactly what the translator sees marked
+  // as untouchable. The hand-written list this replaced only knew {WORD}, so
+  // Platinum's {STRVAR_1 8, 0, 0} — spaces and commas — slipped through, and
+  // 413 rows of pure tags were being sent to the translator as if they were
+  // sentences. Gen 3's {FD:01} and Risen's <Exit> had the same gap.
   const strippedTags = t
-    .replace(/\[\s*\/?\s*\w+\s*:[^\]]*\]/g, '')   // [Tag:Value]
-    .replace(/\[\s*\w+\s*=\s*\w[^\]]*\]/g, '')     // [Tag=Value]
-    .replace(/<[^>]+>/g, '')                         // <html-like>
-    .replace(/\{[\w:]+\}/g, '')                      // {variable}
+    .replace(editorTagPattern(msbtFile), '')
     .replace(/[\uE000-\uE0FF\uFFF9-\uFFFC]/g, '')  // PUA/control chars
+    .replace(/[\u200E\u200F\u202A-\u202E]/g, '')     // direction marks
     .trim();
   if (strippedTags.length === 0) return true;
   // Very short text that is ONLY special characters (no letters)

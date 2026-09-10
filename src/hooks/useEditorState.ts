@@ -1178,6 +1178,12 @@ export function useEditorState() {
         (filterStatus === "khbbs-unsupported" && khbbsUnsupportedKeys.has(key)) ||
         (filterStatus === "gtaiv-unsupported" && gtaIvUnsupportedKeys.has(key)) ||
         (filterStatus === "plat-unsupported" && platUnsupportedKeys.has(key)) ||
+        // Rows written entirely in capitals — move and ability names, menu
+        // labels. Latin letters must be present and none may be lowercase; a
+        // technical row is excluded because "{STRVAR_1 8, 0, 0}" has no
+        // lowercase either and would otherwise fill the list with tags.
+        (filterStatus === "uppercase" && /[A-Z]/.test(e.original)
+          && !/[a-z]/.test(e.original) && !isTechnical) ||
         (filterStatus === "gtaiv-needs-mod" && gtaIvNeedsModKeys.has(key)) ||
         (filterStatus === "has-newlines" && e.original.includes('\n')) ||
         // ترجمات تحوي حرف \n (literal newline). يفحص الترجمة فقط،
@@ -1661,6 +1667,7 @@ export function useEditorState() {
     'stuck-chars': 'أحرف ملتصقة', 'mixed-lang': 'مختلط', 'has-tags': 'أوسمة', 'no-tags': 'بدون أوسمة',
     'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز', 'khbbs-unsupported': 'رموز CTD غير مدعومة',
     'plat-unsupported': 'حروف بلا خانة في الخط',
+    'uppercase': 'أحرف إنجليزية كبيرة',
     'has-newlines': 'أسطر متعددة',
   };
   const filterLabel = filterCategory.length > 0 ? filterCategory.join('+')

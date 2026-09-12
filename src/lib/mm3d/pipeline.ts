@@ -43,6 +43,11 @@ const LOGO_BOUNDS = { minX: -9.3, maxX: 11.72, minY: -3.97, maxY: 4.51, z: 2.26 
  * extracted file in a CMB viewer, screenshots showing its real
  * transparent background). */
 const TITLE_SUB_TEXTURE_INDEX = 8;
+/** Material 4 (title_00, bound to the surviving/reshaped shape) and
+ * materials 6+7 (title_sub_00's two shapes, now blanked) all need alpha
+ * testing switched on, or their now-transparent pixels still render
+ * opaque with their raw (black) color instead of being discarded. */
+const ALPHA_TEST_MATERIAL_INDICES = [4, 6, 7];
 
 export function patchTitleLogoArchive(archiveLzsBytes: Uint8Array, logoRgba: Uint8ClampedArray | Uint8Array): Uint8Array {
   const decompressed = decompressGrezzoLzs(archiveLzsBytes);
@@ -59,6 +64,7 @@ export function patchTitleLogoArchive(archiveLzsBytes: Uint8Array, logoRgba: Uin
     logoRgba,
     textureIndex: TITLE_00_TEXTURE_INDEX,
     blankTextureIndices: [TITLE_SUB_TEXTURE_INDEX],
+    alphaTestMaterialIndices: ALPHA_TEST_MATERIAL_INDICES,
   });
 
   const newFiles = files.map((f) => (f === cmbFile ? { ...f, data: patchedCmb } : f));

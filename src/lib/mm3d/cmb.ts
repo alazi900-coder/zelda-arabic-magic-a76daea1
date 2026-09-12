@@ -719,6 +719,19 @@ export interface InPlaceLogoPatchOptions {
    * of the texture's format (alpha lives in the low bits of every format
    * this file uses), so this is safe without knowing the exact format. */
   blankTextureIndices?: number[];
+  /** material indices whose alpha test should be switched on (GL_GREATER,
+   * reference 0 -> discard only fully-transparent pixels). Every material
+   * in this file ships with alpha testing *disabled* — confirmed byte for
+   * byte — because the original design relied on real 3D geometry gaps for
+   * "letters visible, background see-through", never texture alpha. With
+   * alpha testing off, the GPU draws every pixel's raw RGB regardless of
+   * its alpha, so a transparent texture background still renders as a
+   * solid (here: black) rectangle instead of a hole — confirmed both by a
+   * from-scratch WebGL re-render of this exact data and by a real 3DS
+   * photo showing a mask-icon mesh that should peek through fully hidden
+   * behind an opaque rectangle. Pass every material index this patch's
+   * texture changes rely on showing real transparency for. */
+  alphaTestMaterialIndices?: number[];
 }
 
 export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions): Uint8Array {
@@ -728,6 +741,7 @@ export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions
   if (magic4(out, 0) !== "cmb ") throw new Error('ليس ملف CMB (لا يبدأ بـ "cmb ")');
   const version = view.getUint32(8, true);
   if (version !== 10) throw new Error(`إصدار CMB غير مدعوم هنا: ${version} (المدعوم: 10 = Majora's Mask 3D فقط)`);
+  const matsOffset = view.getUint32(44, true);
   const texOffset = view.getUint32(48, true);
   const sklmOffset = view.getUint32(52, true);
   const vatrOffset = view.getUint32(60, true);
@@ -764,12 +778,16 @@ export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions
     return vatrOffset + offs;
   }
 
-  function vertexDataAbsOffsets(shapeIdx: number): { posAbs: number; uv0Abs: number } {
+  function vertexDataAbsOffsets(shapeIdx: number): { posAbs: number; uv0Abs: number; uv0ScaleAbs: number } {
     const sepdAbs = sepdAbsOf(shapeIdx);
     const vattrStart = sepdAbs + 36;
     const posLocalStart = view.getUint32(vattrStart + 0 * VATTR_SIZE, true);
     const uv0LocalStart = view.getUint32(vattrStart + 4 * VATTR_SIZE, true);
-    return { posAbs: vatrAttribBase(0) + posLocalStart, uv0Abs: vatrAttribBase(4) + uv0LocalStart };
+    return {
+      posAbs: vatrAttribBase(0) + posLocalStart,
+      uv0Abs: vatrAttribBase(4) + uv0LocalStart,
+      uv0ScaleAbs: vattrStart + 4 * VATTR_SIZE + 4, // VertexAttrib.scale is 4 bytes into its 28-byte struct
+    };
   }
 
   // ---- 1) blank out the removed shapes: every index -> 0 (degenerate triangles) ----
@@ -792,7 +810,7 @@ export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions
     else view.setUint16(absOffset + i * 2, v, true);
   }
 
-  const { posAbs, uv0Abs } = vertexDataAbsOffsets(opts.survivingShapeIndex);
+  const { posAbs, uv0Abs, uv0ScaleAbs } = vertexDataAbsOffsets(opts.survivingShapeIndex);
   const { minX, maxX, minY, maxY, z } = opts.bounds;
   const corners: [number, number, number][] = [
     [maxX, minY, z],
@@ -812,6 +830,13 @@ export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions
     [0, 1],
   ];
   const SHORT_MAX = 32767;
+  // The GPU decodes a Short UV as raw*scale, NOT raw/32767 -- the surviving
+  // shape's own inherited scale (calibrated for its original letter's UV
+  // range) can be any value, so it must be overwritten to match the raw
+  // values written below, or the texture samples from the wrong sub-range
+  // (caught by cross-checking against a from-scratch renderer this session:
+  // the inherited scale was ~0.0000269, capping u/v at ~0.88 instead of 1.0).
+  view.setFloat32(uv0ScaleAbs, 1 / SHORT_MAX, true);
   cornersUv.forEach(([u, v], i) => {
     view.setInt16(uv0Abs + i * 4 + 0, Math.round(u * SHORT_MAX), true);
     view.setInt16(uv0Abs + i * 4 + 2, Math.round(v * SHORT_MAX), true);
@@ -840,6 +865,16 @@ export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions
     const size = view.getUint32(entryOff + 0, true);
     const dataOff = view.getUint32(entryOff + 16, true);
     out.fill(0, textureDataOffset + dataOff, textureDataOffset + dataOff + size);
+  }
+
+  // ---- 5) enable real alpha-test cutout for the materials that need it ----
+  const MATERIAL_BLOCK_SIZE = 364; // confirmed for MM3D (version > Ocarina): 0x15C + 0x10
+  const ALPHA_TEST_GREATER = 0x0204; // GL_GREATER
+  for (const matIdx of opts.alphaTestMaterialIndices ?? []) {
+    const matAbs = matsOffset + 12 + matIdx * MATERIAL_BLOCK_SIZE;
+    view.setUint8(matAbs + 0x130, 1); // alphaTestEnabled
+    view.setUint8(matAbs + 0x131, 0); // alphaTestReference (already 0 in every material; kept explicit)
+    view.setUint16(matAbs + 0x132, ALPHA_TEST_GREATER, true); // alphaTestFunction
   }
 
   return out;

@@ -211,6 +211,18 @@ const games = [
     subtitleClass: "text-[hsl(150,80%,55%)]",
     arrowClass: "text-[hsl(150,80%,55%)]",
   },
+  {
+    title: "شعار عنوان Phantom Hourglass",
+    subtitle: "ركّب شعاراً عربياً على شاشة العنوان",
+    desc: "ارفع صورة الشعار الذي صممته (أي مقاس) ونسخة الروم — يُحوَّل تلقائياً لصيغة نسيج اللعبة (256×128، NARC مضغوط بLZ10) ويُركَّب في روم جديد. لا رسم هنا، فقط تحويل الصيغة.",
+    link: "/ph-logo",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='p' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%230d1b2e'/%3E%3Cstop offset='.55' stop-color='%23163457'/%3E%3Cstop offset='1' stop-color='%236b1f24'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23p)'/%3E%3Cpath d='M660 260h280l-140 190z' fill='%23f2d7b1' opacity='.18'/%3E%3Cpath d='M660 640h280l-140-190z' fill='%23f2d7b1' opacity='.18'/%3E%3C/svg%3E",
+    formats: [".NDS", "NARC", "LZ10"],
+    cardClass: "border-[hsl(205,60%,45%)]/30 hover:border-[hsl(45,80%,55%)]/60",
+    formatClass: "bg-[hsl(205,60%,45%)]/20 text-[hsl(45,90%,68%)] border-[hsl(205,60%,45%)]/30",
+    subtitleClass: "text-[hsl(45,90%,68%)]",
+    arrowClass: "text-[hsl(45,90%,68%)]",
+  },
 ];
 
 const Home = () => {

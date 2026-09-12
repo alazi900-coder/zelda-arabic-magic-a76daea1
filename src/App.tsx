@@ -65,6 +65,7 @@ const KingdomHeartsFont = lazyWithIgnoredRef(() => import("./pages/KingdomHearts
 const LumenTale = lazyWithIgnoredRef(() => import("./pages/LumenTale"));
 const GtaIV = lazyWithIgnoredRef(() => import("./pages/GtaIV"));
 const FireEmblem12 = lazyWithIgnoredRef(() => import("./pages/FireEmblem12"));
+const MajorasMaskLogo = lazyWithIgnoredRef(() => import("./pages/MajorasMaskLogo"));
 
 const PageLoader = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <div ref={ref} className="min-h-screen flex items-center justify-center bg-background" {...props}>
@@ -129,6 +130,7 @@ const App = () => (
                 <Route path="/lumentale" element={<ErrorBoundary fallbackTitle="خطأ في أداة LumenTale"><LumenTale /></ErrorBoundary>} />
                 <Route path="/gta-iv" element={<ErrorBoundary fallbackTitle="خطأ في فاحص GTA IV"><GtaIV /></ErrorBoundary>} />
                 <Route path="/fire-emblem-12" element={<ErrorBoundary fallbackTitle="خطأ في فاحص Fire Emblem 12"><FireEmblem12 /></ErrorBoundary>} />
+                <Route path="/majoras-mask-logo" element={<ErrorBoundary fallbackTitle="خطأ في أداة شعار Majora's Mask 3D"><MajorasMaskLogo /></ErrorBoundary>} />
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

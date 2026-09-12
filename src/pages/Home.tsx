@@ -223,6 +223,18 @@ const games = [
     subtitleClass: "text-[hsl(45,90%,68%)]",
     arrowClass: "text-[hsl(45,90%,68%)]",
   },
+  {
+    title: "شعار عنوان Majora's Mask 3D",
+    subtitle: "استبدل حروف الشعار المجسّمة بلوحة عربية",
+    desc: "شعار \"ZELDA\" هنا مجسّم ثلاثي الأبعاد فعلي لا نسيج مسطّح — تحذف الأداة حروفه الخمسة وتضيف لوحة مسطّحة جديدة بشعارك، داخل أرشيف .gar.lzs المستخرج من اللعبة.",
+    link: "/majoras-mask-logo",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='q' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%23241033'/%3E%3Cstop offset='.5' stop-color='%234a1e5c'/%3E%3Cstop offset='1' stop-color='%237c2d12'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23q)'/%3E%3Ccircle cx='800' cy='430' r='180' fill='%23e8c15a' opacity='.15'/%3E%3Cpath d='M700 430l100-90 100 90-100 90z' fill='%23e8c15a' opacity='.2'/%3E%3C/svg%3E",
+    formats: [".gar.lzs", "CMB", "GrezzoLZS"],
+    cardClass: "border-[hsl(280,55%,45%)]/30 hover:border-[hsl(35,80%,55%)]/60",
+    formatClass: "bg-[hsl(280,55%,45%)]/20 text-[hsl(35,85%,65%)] border-[hsl(280,55%,45%)]/30",
+    subtitleClass: "text-[hsl(35,85%,65%)]",
+    arrowClass: "text-[hsl(35,85%,65%)]",
+  },
 ];
 
 const Home = () => {

@@ -37,6 +37,7 @@ const Risen = lazyWithIgnoredRef(() => import("./pages/Risen"));
 const RisenProcess = lazyWithIgnoredRef(() => import("./pages/RisenProcess"));
 const RisenImages = lazyWithIgnoredRef(() => import("./pages/RisenImages"));
 const Mother3 = lazyWithIgnoredRef(() => import("./pages/Mother3"));
+const PhLogo = lazyWithIgnoredRef(() => import("./pages/PhLogo"));
 const DragonSword = lazyWithIgnoredRef(() => import("./pages/DragonSword"));
 const RisenFileManager = lazyWithIgnoredRef(() => import("./pages/RisenFileManager"));
 const RisenFonts = lazyWithIgnoredRef(() => import("./pages/RisenFonts"));
@@ -118,6 +119,7 @@ const App = () => (
                 <Route path="/platinum/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Platinum"><PlatinumText /></ErrorBoundary>} />
                 <Route path="/pokemon-unbreakable-ties" element={<ErrorBoundary fallbackTitle="خطأ في نصوص Pokémon Unbreakable Ties"><PokemonUnbreakableTies /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
+                <Route path="/ph-logo" element={<ErrorBoundary fallbackTitle="خطأ في أداة شعار Phantom Hourglass"><PhLogo /></ErrorBoundary>} />
                 <Route path="/dragonsword" element={<ErrorBoundary fallbackTitle="خطأ في أداة DragonSword Awakening"><DragonSword /></ErrorBoundary>} />
                 <Route path="/gamemaker" element={<ErrorBoundary fallbackTitle="خطأ في صفحة GameMaker"><GameMaker /></ErrorBoundary>} />
                 <Route path="/kingdom-hearts-bbs" element={<ErrorBoundary fallbackTitle="خطأ في أداة Kingdom Hearts"><KingdomHeartsBBS /></ErrorBoundary>} />

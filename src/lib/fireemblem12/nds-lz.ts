@@ -142,3 +142,53 @@ export function compressLz11(data: Uint8Array): Uint8Array {
   }
   return Uint8Array.from(out);
 }
+
+const LZ10_MAX_MATCH = 18; // (b0>>4)+3 with b0's nibble maxed at 0xf — no extended tiers
+
+function findMatchLz10(data: Uint8Array, pos: number): { length: number; disp: number } | null {
+  const start = Math.max(0, pos - MAX_DISP);
+  let bestLen = 0;
+  let bestDisp = 0;
+  const maxLen = Math.min(LZ10_MAX_MATCH, data.length - pos);
+  if (maxLen < MIN_MATCH) return null;
+  for (let cand = pos - 1; cand >= start; cand--) {
+    if (data[cand] !== data[pos]) continue;
+    let len = 0;
+    while (len < maxLen && data[cand + len] === data[pos + len]) len++;
+    if (len > bestLen) {
+      bestLen = len;
+      bestDisp = pos - cand;
+      if (len >= maxLen) break;
+    }
+  }
+  return bestLen >= MIN_MATCH ? { length: bestLen, disp: bestDisp } : null;
+}
+
+/** LZ10 compressor — same token shape `compressLz11` falls back to for short
+ * matches, just without its two longer-length tiers (LZ10 has no extended
+ * token, so a match is capped at 18 bytes here instead of continuing). */
+export function compressLz10(data: Uint8Array): Uint8Array {
+  const out: number[] = [0x10, data.length & 0xff, (data.length >> 8) & 0xff, (data.length >> 16) & 0xff];
+  let pos = 0;
+  while (pos < data.length) {
+    const flagIndex = out.length;
+    out.push(0);
+    let flags = 0;
+    for (let bit = 7; bit >= 0 && pos < data.length; bit--) {
+      const match = findMatchLz10(data, pos);
+      if (!match) {
+        out.push(data[pos]);
+        pos += 1;
+        continue;
+      }
+      flags |= 1 << bit;
+      const { length, disp } = match;
+      const d = disp - 1;
+      const l = length - 3;
+      out.push((l << 4) | ((d >> 8) & 0x0f), d & 0xff);
+      pos += length;
+    }
+    out[flagIndex] = flags;
+  }
+  return Uint8Array.from(out);
+}

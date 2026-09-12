@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compressLz11, decompressLz10, decompressLz11 } from "./nds-lz";
+import { compressLz10, compressLz11, decompressLz10, decompressLz11 } from "./nds-lz";
 
 describe("nds-lz", () => {
   it("round-trips LZ11 compress -> decompress for repetitive data", () => {
@@ -40,5 +40,26 @@ describe("nds-lz", () => {
 
   it("rejects a buffer with the wrong LZ11 header byte", () => {
     expect(() => decompressLz11(new Uint8Array([0x10, 1, 0, 0]))).toThrow();
+  });
+
+  it("round-trips LZ10 compress -> decompress for repetitive data", () => {
+    const original = new Uint8Array(2000);
+    for (let i = 0; i < original.length; i++) original[i] = (i % 37) + (i % 5);
+    const compressed = compressLz10(original);
+    expect(compressed[0]).toBe(0x10);
+    const decoded = decompressLz10(compressed);
+    expect(Array.from(decoded)).toEqual(Array.from(original));
+  });
+
+  it("round-trips LZ10 compress -> decompress for random-ish data (worst case for compression)", () => {
+    const original = new Uint8Array(500);
+    let seed = 98765;
+    for (let i = 0; i < original.length; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      original[i] = seed & 0xff;
+    }
+    const compressed = compressLz10(original);
+    const decoded = decompressLz10(compressed);
+    expect(Array.from(decoded)).toEqual(Array.from(original));
   });
 });

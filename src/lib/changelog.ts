@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.20.0",
+    date: "2026-09-12",
+    changes: [
+      {
+        kind: "added",
+        text: "**أداة شعار عنوان Phantom Hourglass (`/ph-logo`).** الشعار على شاشة العنوان نسيج ثلاثي الأبعاد مسطّح (لا نموذج) بصيغة NARC مضغوطة بـLZ10 — لوحة ألوان NTFP وبكسلات NTFT بـ8bpp Palette256. الأداة تأخذ صورة PNG (أي مقاس) صمّمها المستخدم، تُلائمها داخل 256×128 مع حفظ نسبتها، تقتطع ألوانها لحد ٢٥٥ لوناً (فرز-وسيط median-cut)، وتُركّبها في نسخة جديدة من روم اللعبة. لا يُرسَم فن هنا — فقط يُزال العائق التقني. أضاف `compressLz10` (ضاغط LZ10 حقيقي، أخو `compressLz11` الموجود) إلى `src/lib/fireemblem12/nds-lz.ts`، واستُعمل `src/lib/nds/narc.ts` و`src/lib/nds/nds-rom.ts` الموجودان دون تعديل.",
+      },
+    ],
+  },
+  {
     version: "2.19.1",
     date: "2026-09-10",
     changes: [

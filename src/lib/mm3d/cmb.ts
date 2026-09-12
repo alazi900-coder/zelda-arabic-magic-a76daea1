@@ -703,6 +703,12 @@ export interface InPlaceLogoPatchOptions {
   /** index into the tex chunk of the existing RGB565 texture to overwrite
    * in place (must exactly match logoRgba's dimensions) */
   textureIndex: number;
+  /** other texture indices to blank out entirely (every pixel byte -> 0),
+   * e.g. a separate subtitle texture that would otherwise show redundant
+   * or now-stale text. Zero bytes means fully-transparent-black regardless
+   * of the texture's format (alpha lives in the low bits of every format
+   * this file uses), so this is safe without knowing the exact format. */
+  blankTextureIndices?: number[];
 }
 
 export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions): Uint8Array {
@@ -816,6 +822,14 @@ export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions
     throw new Error(`حجم النسيج بعد الترميز (${encoded.length}) لا يطابق حجم النسيج الأصلي (${texSize}) — الأبعاد يجب أن تطابق ${texWidth}×${texHeight} تماماً`);
   }
   out.set(encoded, textureDataOffset + texDataOff);
+
+  // ---- 4) blank out any other requested textures (e.g. a redundant subtitle) ----
+  for (const blankIdx of opts.blankTextureIndices ?? []) {
+    const entryOff = texOffset + 12 + blankIdx * 36;
+    const size = view.getUint32(entryOff + 0, true);
+    const dataOff = view.getUint32(entryOff + 16, true);
+    out.fill(0, textureDataOffset + dataOff, textureDataOffset + dataOff + size);
+  }
 
   return out;
 }

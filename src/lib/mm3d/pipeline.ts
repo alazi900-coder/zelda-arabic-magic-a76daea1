@@ -32,6 +32,14 @@ const TITLE_00_TEXTURE_INDEX = 6;
 const SURVIVING_LETTER_SHAPE_INDEX = 4; // fewest triangles (32) of the 5 letters, 96 indices (divisible by 6)
 const REMOVED_SHAPE_INDICES = [1, 2, 3, 5, 9]; // the other 4 letters + the shine-effect quad
 const LOGO_BOUNDS = { minX: -9.3, maxX: 11.72, minY: -3.97, maxY: 4.51, z: 2.26 };
+/** "THE LEGEND OF / MAJORA'S MASK™ 3D" — a separate subtitle texture (two
+ * small flat shapes, 10 and 11 via materials 7 and 6 — not the letter
+ * geometry, so just blanking its pixels is enough), redundant once
+ * title_00 carries the full Arabic title. Blanked rather than translated
+ * per the user's own confirmation (relayed from a friend inspecting the
+ * extracted file in a CMB viewer, screenshots showing its real
+ * transparent background). */
+const TITLE_SUB_TEXTURE_INDEX = 8;
 
 /** RGB565 has no alpha — composite onto opaque black first so transparent
  * source pixels don't leak whatever raw RGB happens to sit under them. */
@@ -61,6 +69,7 @@ export function patchTitleLogoArchive(archiveLzsBytes: Uint8Array, logoRgba: Uin
     bounds: LOGO_BOUNDS,
     logoRgba: compositeOntoBlack(logoRgba),
     textureIndex: TITLE_00_TEXTURE_INDEX,
+    blankTextureIndices: [TITLE_SUB_TEXTURE_INDEX],
   });
 
   const newFiles = files.map((f) => (f === cmbFile ? { ...f, data: patchedCmb } : f));

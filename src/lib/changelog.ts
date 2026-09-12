@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.21.2",
+    date: "2026-09-12",
+    changes: [
+      {
+        kind: "added",
+        text: "**أداة شعار Majora's Mask 3D تُفرِّغ الآن نسيج العنوان الفرعي المكرَّر أيضاً.** بجانب `title_00` (شعار \"ZELDA\")، الملف يحوي نسيجاً منفصلاً `title_sub_00` (\"THE LEGEND OF / MAJORA'S MASK™ 3D\" بالإنجليزية، تستخدمه لوحتان مسطّحتان صغيرتان لا علاقة لهما بحروف الشعار المجسّمة) — يصبح مكرَّراً بلا فائدة بعد أن يحمل `title_00` العنوان العربي الكامل، فتُفرَّغ بكسلاته بالكامل (شفافية كاملة) بنفس أسلوب التعديل الآمن داخل المساحة الموجودة أصلاً. أُضيف خيار `blankTextureIndices` إلى `patchLogoInPlace` (`src/lib/mm3d/cmb.ts`) لهذا الغرض.",
+      },
+    ],
+  },
+  {
     version: "2.21.1",
     date: "2026-09-12",
     changes: [

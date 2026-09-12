@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.20.1",
+    date: "2026-09-12",
+    changes: [
+      { kind: "fixed", text: "أداة شعار Phantom Hourglass لم يكن لها رابط في أي مكان بالموقع، فتعذّر الوصول إليها. أُضيفت بطاقتها في الصفحة الرئيسية." },
+    ],
+  },
+  {
     version: "2.20.0",
     date: "2026-09-12",
     changes: [

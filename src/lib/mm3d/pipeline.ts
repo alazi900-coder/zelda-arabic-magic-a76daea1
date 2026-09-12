@@ -10,12 +10,15 @@
  * a real 3DS console (data abort / translation-section fault, confirmed
  * via the console's own exception screen). `patchLogoInPlace` instead only
  * overwrites bytes inside the file's own existing, already-valid
- * allocations — no chunk grows, no offset is recomputed — trading away
- * per-pixel transparency on the new logo (its target texture, `title_00`,
- * is RGB565 with no alpha channel) for eliminating the entire class of
- * offset/count bugs that caused the crash.
+ * allocations — no chunk grows, no offset is recomputed.
  *
- * All indices below (materials, shapes, the target texture) are specific
+ * `title_00` is converted from RGB565 to RGBA4444 in place (same 2 bytes
+ * per pixel, so nothing resizes) rather than staying RGB565: an opaque
+ * quad occluded a separate 3D mask-icon mesh that used to show through
+ * the gaps between the original carved letters, confirmed against a real
+ * device photo — RGBA4444's real (if coarse) alpha channel fixes that.
+ *
+ * All indices below (materials, shapes, the target textures) are specific
  * to this one file — confirmed this session by decoding real triangle
  * counts and face-index ranges out of the extracted asset, not guessed.
  */
@@ -41,20 +44,6 @@ const LOGO_BOUNDS = { minX: -9.3, maxX: 11.72, minY: -3.97, maxY: 4.51, z: 2.26 
  * transparent background). */
 const TITLE_SUB_TEXTURE_INDEX = 8;
 
-/** RGB565 has no alpha — composite onto opaque black first so transparent
- * source pixels don't leak whatever raw RGB happens to sit under them. */
-function compositeOntoBlack(rgba: Uint8ClampedArray | Uint8Array): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(rgba.length);
-  for (let i = 0; i < rgba.length; i += 4) {
-    const a = rgba[i + 3] / 255;
-    out[i + 0] = rgba[i + 0] * a;
-    out[i + 1] = rgba[i + 1] * a;
-    out[i + 2] = rgba[i + 2] * a;
-    out[i + 3] = 255;
-  }
-  return out;
-}
-
 export function patchTitleLogoArchive(archiveLzsBytes: Uint8Array, logoRgba: Uint8ClampedArray | Uint8Array): Uint8Array {
   const decompressed = decompressGrezzoLzs(archiveLzsBytes);
   const files = parseGar(decompressed);
@@ -67,7 +56,7 @@ export function patchTitleLogoArchive(archiveLzsBytes: Uint8Array, logoRgba: Uin
     survivingShapeIndex: SURVIVING_LETTER_SHAPE_INDEX,
     removedShapeIndices: REMOVED_SHAPE_INDICES,
     bounds: LOGO_BOUNDS,
-    logoRgba: compositeOntoBlack(logoRgba),
+    logoRgba,
     textureIndex: TITLE_00_TEXTURE_INDEX,
     blankTextureIndices: [TITLE_SUB_TEXTURE_INDEX],
   });

@@ -16,7 +16,7 @@
  * template — same vertex-attribute layout, same 6-index (0,1,2,2,1,3)
  * face winding, just new position/UV data and a new texture/material.
  */
-import { encodeRgba8Tiled, encodeRgb565Tiled, GL_FORMAT_RGBA8, GL_FORMAT_RGB565 } from "./pica-texture";
+import { encodeRgba8Tiled, encodeRgba4444Tiled, GL_FORMAT_RGBA8, GL_FORMAT_RGB565, GL_FORMAT_RGBA4444 } from "./pica-texture";
 
 function cstr(b: Uint8Array, at: number): string {
   let end = at;
@@ -679,15 +679,25 @@ function buildCmb(
  *    repeat the flat-quad pattern (0,1,2,2,1,3), and only its first 4
  *    (already-allocated) vertices get new position/UV values — the rest of
  *    its original vertex budget is simply left unreferenced;
- *  - one existing texture (by default `title_00`, RGB565): its pixel bytes
- *    are overwritten in place with the new logo, re-encoded to the exact
- *    same format/size so nothing grows.
+ *  - one existing texture (by default `title_00`): its pixel bytes are
+ *    overwritten in place with the new logo, re-encoded to RGBA4444 —
+ *    same 2-bytes-per-pixel width as the original RGB565, so its declared
+ *    size doesn't change either; only the 4-byte glFormat field in its
+ *    (fixed-size) tex-chunk entry is patched, still no chunk resize.
+ *    RGBA4444 was picked over keeping RGB565 specifically to get a real
+ *    (if coarse, 4-bit) alpha channel: an earlier RGB565 version of this
+ *    patch rendered as an opaque rectangle, occluding a separate 3D mask
+ *    icon mesh that used to show through the gaps between the original
+ *    carved letters. Confirmed against a real texture already in this
+ *    same file (`title_sub_00`, which the game's own pipeline stores as
+ *    RGBA4444) that this format is valid for this file/GPU.
  *
- * RGB565 has no alpha channel, so the new quad renders as an opaque
- * rectangle (no per-pixel transparency) — a real visual trade-off versus
- * the crashing approach, accepted deliberately to eliminate every
- * offset/count computation this function would otherwise need to get
- * right on a device that has zero tolerance for a wrong one.
+ * Every count/offset in the file stays byte-identical to the input except
+ * the specific bytes this function targets — eliminating the whole class
+ * of offset/count bugs a full reserialization would need to get exactly
+ * right on a device that has zero tolerance for a wrong one (this is why
+ * this function exists: an earlier version of this patch that added a new
+ * texture/material/mesh/shape crashed a real 3DS with a data abort).
  */
 export interface InPlaceLogoPatchOptions {
   /** shape index to keep and reshape into the new flat quad (must have an
@@ -696,12 +706,12 @@ export interface InPlaceLogoPatchOptions {
   /** shape indices to blank out entirely (the other letters + effect) */
   removedShapeIndices: number[];
   bounds: QuadBounds;
-  /** composited onto opaque black before RGB565 encoding — this format has
-   * no alpha, so any transparency in the source image would otherwise leak
-   * through as whatever raw RGB happens to be there */
+  /** straight top-to-bottom RGBA (e.g. straight out of a canvas), alpha
+   * preserved end to end into the RGBA4444 texture this produces */
   logoRgba: Uint8ClampedArray | Uint8Array;
-  /** index into the tex chunk of the existing RGB565 texture to overwrite
-   * in place (must exactly match logoRgba's dimensions) */
+  /** index into the tex chunk of the existing 2-bytes-per-pixel (RGB565 or
+   * RGBA4444) texture to overwrite in place, converting it to RGBA4444
+   * (must exactly match logoRgba's dimensions) */
   textureIndex: number;
   /** other texture indices to blank out entirely (every pixel byte -> 0),
    * e.g. a separate subtitle texture that would otherwise show redundant
@@ -807,20 +817,21 @@ export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions
     view.setInt16(uv0Abs + i * 4 + 2, Math.round(v * SHORT_MAX), true);
   });
 
-  // ---- 3) overwrite the existing texture's pixels in place ----
+  // ---- 3) overwrite the existing texture's pixels in place, converting to RGBA4444 ----
   const texEntryOff = texOffset + 12 + opts.textureIndex * 36;
   const texSize = view.getUint32(texEntryOff + 0, true);
   const texWidth = view.getUint16(texEntryOff + 8, true);
   const texHeight = view.getUint16(texEntryOff + 10, true);
   const texGlFormat = view.getUint32(texEntryOff + 12, true);
   const texDataOff = view.getUint32(texEntryOff + 16, true);
-  if (texGlFormat !== GL_FORMAT_RGB565) {
-    throw new Error(`النسيج رقم ${opts.textureIndex} ليس بصيغة RGB565 — هذه الدالة تدعم استبدال RGB565 فقط`);
+  if (texGlFormat !== GL_FORMAT_RGB565 && texGlFormat !== GL_FORMAT_RGBA4444) {
+    throw new Error(`النسيج رقم ${opts.textureIndex} ليس بصيغة RGB565 أو RGBA4444 — هذه الدالة تحتاج صيغة أصلية بعرض بايتين لكل بكسل`);
   }
-  const encoded = encodeRgb565Tiled(texWidth, texHeight, opts.logoRgba);
+  const encoded = encodeRgba4444Tiled(texWidth, texHeight, opts.logoRgba);
   if (encoded.length !== texSize) {
     throw new Error(`حجم النسيج بعد الترميز (${encoded.length}) لا يطابق حجم النسيج الأصلي (${texSize}) — الأبعاد يجب أن تطابق ${texWidth}×${texHeight} تماماً`);
   }
+  view.setUint32(texEntryOff + 12, GL_FORMAT_RGBA4444, true);
   out.set(encoded, textureDataOffset + texDataOff);
 
   // ---- 4) blank out any other requested textures (e.g. a redundant subtitle) ----

@@ -13,6 +13,7 @@
 
 export const GL_FORMAT_RGBA8 = 0x14016752;
 export const GL_FORMAT_RGB565 = 0x83636754;
+export const GL_FORMAT_RGBA4444 = 0x80336752;
 
 /** 3-bit interleave used for the 8x8 tile's Z-order walk: 0b0a0b0c -> 0b000abc */
 function morton7(n: number): number {
@@ -68,6 +69,66 @@ export function encodeRgb565Tiled(width: number, height: number, rgba: Uint8Clam
         const b5 = Math.round((rgba[srcOffs + 2] / 255) * 31);
         view.setUint16(dstOffs, (r5 << 11) | (g6 << 5) | b5, true);
         dstOffs += 2;
+      }
+    }
+  }
+  return out;
+}
+
+/** RGBA4444 — 2 bytes/pixel like RGB565, but with a real (4-bit) alpha
+ * channel. Used to switch `title_00` from RGB565 to this format *in
+ * place*: same byte width per pixel means the texture's declared size
+ * doesn't change, so only the 4-byte glFormat field in its (fixed-size)
+ * tex-chunk entry needs patching — no chunk grows, no offset moves.
+ * Confirmed against a real texture in the same file (`title_sub_00`,
+ * which the game's own asset pipeline already stores as RGBA4444) and
+ * against noclip.website's decoder: R@bits12-15, G@bits8-11, B@bits4-7,
+ * A@bits0-3 of a little-endian u16. */
+export function encodeRgba4444Tiled(width: number, height: number, rgba: Uint8ClampedArray | Uint8Array): Uint8Array {
+  if (width % 8 !== 0 || height % 8 !== 0) {
+    throw new Error(`أبعاد النسيج يجب أن تكون من مضاعفات ٨ (وصل ${width}×${height})`);
+  }
+  const out = new Uint8Array(width * height * 2);
+  const view = new DataView(out.buffer);
+  let dstOffs = 0;
+  for (let yy = 0; yy < height; yy += 8) {
+    for (let xx = 0; xx < width; xx += 8) {
+      for (let i = 0; i < 0x40; i++) {
+        const x = morton7(i);
+        const y = morton7(i >>> 1);
+        const srcOffs = ((yy + y) * width + (xx + x)) * 4;
+        const r4 = Math.round((rgba[srcOffs + 0] / 255) * 15);
+        const g4 = Math.round((rgba[srcOffs + 1] / 255) * 15);
+        const b4 = Math.round((rgba[srcOffs + 2] / 255) * 15);
+        const a4 = Math.round((rgba[srcOffs + 3] / 255) * 15);
+        view.setUint16(dstOffs, (r4 << 12) | (g4 << 8) | (b4 << 4) | a4, true);
+        dstOffs += 2;
+      }
+    }
+  }
+  return out;
+}
+
+/** Inverse of `encodeRgba4444Tiled`, kept for tests and previewing. */
+export function decodeRgba4444Tiled(width: number, height: number, data: Uint8Array): Uint8ClampedArray {
+  function expand4to8(n: number): number {
+    return (n << 4) | n;
+  }
+  const out = new Uint8ClampedArray(width * height * 4);
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let srcOffs = 0;
+  for (let yy = 0; yy < height; yy += 8) {
+    for (let xx = 0; xx < width; xx += 8) {
+      for (let i = 0; i < 0x40; i++) {
+        const x = morton7(i);
+        const y = morton7(i >>> 1);
+        const dstOffs = ((yy + y) * width + (xx + x)) * 4;
+        const p = view.getUint16(srcOffs, true);
+        out[dstOffs + 0] = expand4to8((p >>> 12) & 0x0f);
+        out[dstOffs + 1] = expand4to8((p >>> 8) & 0x0f);
+        out[dstOffs + 2] = expand4to8((p >>> 4) & 0x0f);
+        out[dstOffs + 3] = expand4to8(p & 0x0f);
+        srcOffs += 2;
       }
     }
   }

@@ -12,6 +12,7 @@
  */
 
 export const GL_FORMAT_RGBA8 = 0x14016752;
+export const GL_FORMAT_RGB565 = 0x83636754;
 
 /** 3-bit interleave used for the 8x8 tile's Z-order walk: 0b0a0b0c -> 0b000abc */
 function morton7(n: number): number {
@@ -40,6 +41,33 @@ export function encodeRgba8Tiled(width: number, height: number, rgba: Uint8Clamp
         out[dstOffs + 2] = rgba[srcOffs + 1]; // G
         out[dstOffs + 3] = rgba[srcOffs + 0]; // R
         dstOffs += 4;
+      }
+    }
+  }
+  return out;
+}
+
+/** RGB565 has no alpha channel — used for overwriting an existing RGB565
+ * texture (e.g. `title_00`) in place, where growing the file to a
+ * higher-precision format isn't an option. `rgba`'s alpha is ignored. */
+export function encodeRgb565Tiled(width: number, height: number, rgba: Uint8ClampedArray | Uint8Array): Uint8Array {
+  if (width % 8 !== 0 || height % 8 !== 0) {
+    throw new Error(`أبعاد النسيج يجب أن تكون من مضاعفات ٨ (وصل ${width}×${height})`);
+  }
+  const out = new Uint8Array(width * height * 2);
+  const view = new DataView(out.buffer);
+  let dstOffs = 0;
+  for (let yy = 0; yy < height; yy += 8) {
+    for (let xx = 0; xx < width; xx += 8) {
+      for (let i = 0; i < 0x40; i++) {
+        const x = morton7(i);
+        const y = morton7(i >>> 1);
+        const srcOffs = ((yy + y) * width + (xx + x)) * 4;
+        const r5 = Math.round((rgba[srcOffs + 0] / 255) * 31);
+        const g6 = Math.round((rgba[srcOffs + 1] / 255) * 63);
+        const b5 = Math.round((rgba[srcOffs + 2] / 255) * 31);
+        view.setUint16(dstOffs, (r5 << 11) | (g6 << 5) | b5, true);
+        dstOffs += 2;
       }
     }
   }

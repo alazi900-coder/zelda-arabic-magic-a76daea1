@@ -1,29 +1,51 @@
 /**
  * Full pipeline for Majora's Mask 3D's title-logo archive
- * (`zelda2_mag.gar.lzs`): decompress -> unpack the GAR -> swap the
- * "ZELDA" wordmark mesh for a flat quad carrying the new Arabic logo
- * texture -> repack -> recompress.
+ * (`zelda2_mag.gar.lzs`): decompress -> unpack the GAR -> patch the
+ * "ZELDA" wordmark into a flat Arabic-logo quad -> repack -> recompress.
  *
- * The material index (4 = title_00, the 5 lettering shapes), the effect
- * material to drop alongside it (5 = title_eff_00, the shine sweep that
- * would otherwise animate across now-empty space), the template shape
- * (0 = the flat "© Nintendo" plane) and the quad's world-space bounds are
- * all specific to this one file — confirmed this session by decoding real
- * triangle counts and vertex positions out of the extracted asset, not
- * guessed. This module isn't a general CMB/GAR editor, just this patch.
+ * Uses `patchLogoInPlace` (cmb.ts), not `replaceLogoWithFlatQuad`: an
+ * earlier version of this pipeline used the latter, which added a new
+ * texture/material/mesh/shape with freshly recalculated chunk offsets —
+ * it round-tripped cleanly through this project's own parser, but crashed
+ * a real 3DS console (data abort / translation-section fault, confirmed
+ * via the console's own exception screen). `patchLogoInPlace` instead only
+ * overwrites bytes inside the file's own existing, already-valid
+ * allocations — no chunk grows, no offset is recomputed — trading away
+ * per-pixel transparency on the new logo (its target texture, `title_00`,
+ * is RGB565 with no alpha channel) for eliminating the entire class of
+ * offset/count bugs that caused the crash.
+ *
+ * All indices below (materials, shapes, the target texture) are specific
+ * to this one file — confirmed this session by decoding real triangle
+ * counts and face-index ranges out of the extracted asset, not guessed.
  */
 import { decompressGrezzoLzs, compressGrezzoLzs } from "./grezzo-lz";
 import { parseGar, buildGar } from "./gar";
-import { replaceLogoWithFlatQuad } from "./cmb";
+import { patchLogoInPlace } from "./cmb";
 
-/** Matches title_00's original texture size, confirmed against the real file. */
+/** Matches title_00's exact original size — patchLogoInPlace requires the
+ * new logo to encode to the identical byte length. */
 export const LOGO_WIDTH = 256;
 export const LOGO_HEIGHT = 128;
 
-const LETTERS_MATERIAL_INDEX = 4;
-const EFFECT_MATERIAL_INDEX = 5;
-const TEMPLATE_SHAPE_INDEX = 0;
+const TITLE_00_TEXTURE_INDEX = 6;
+const SURVIVING_LETTER_SHAPE_INDEX = 4; // fewest triangles (32) of the 5 letters, 96 indices (divisible by 6)
+const REMOVED_SHAPE_INDICES = [1, 2, 3, 5, 9]; // the other 4 letters + the shine-effect quad
 const LOGO_BOUNDS = { minX: -9.3, maxX: 11.72, minY: -3.97, maxY: 4.51, z: 2.26 };
+
+/** RGB565 has no alpha — composite onto opaque black first so transparent
+ * source pixels don't leak whatever raw RGB happens to sit under them. */
+function compositeOntoBlack(rgba: Uint8ClampedArray | Uint8Array): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(rgba.length);
+  for (let i = 0; i < rgba.length; i += 4) {
+    const a = rgba[i + 3] / 255;
+    out[i + 0] = rgba[i + 0] * a;
+    out[i + 1] = rgba[i + 1] * a;
+    out[i + 2] = rgba[i + 2] * a;
+    out[i + 3] = 255;
+  }
+  return out;
+}
 
 export function patchTitleLogoArchive(archiveLzsBytes: Uint8Array, logoRgba: Uint8ClampedArray | Uint8Array): Uint8Array {
   const decompressed = decompressGrezzoLzs(archiveLzsBytes);
@@ -33,15 +55,12 @@ export function patchTitleLogoArchive(archiveLzsBytes: Uint8Array, logoRgba: Uin
     throw new Error('لم يتم العثور على ملف "title_logo.cmb" داخل الأرشيف — تأكد من أنه ملف zelda2_mag.gar.lzs الصحيح');
   }
 
-  const patchedCmb = replaceLogoWithFlatQuad(cmbFile.data, {
-    lettersMaterialIndex: LETTERS_MATERIAL_INDEX,
-    effectMaterialIndex: EFFECT_MATERIAL_INDEX,
-    templateShapeIndex: TEMPLATE_SHAPE_INDEX,
+  const patchedCmb = patchLogoInPlace(cmbFile.data, {
+    survivingShapeIndex: SURVIVING_LETTER_SHAPE_INDEX,
+    removedShapeIndices: REMOVED_SHAPE_INDICES,
     bounds: LOGO_BOUNDS,
-    logoRgba,
-    logoWidth: LOGO_WIDTH,
-    logoHeight: LOGO_HEIGHT,
-    newTextureName: "title_ar",
+    logoRgba: compositeOntoBlack(logoRgba),
+    textureIndex: TITLE_00_TEXTURE_INDEX,
   });
 
   const newFiles = files.map((f) => (f === cmbFile ? { ...f, data: patchedCmb } : f));

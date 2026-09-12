@@ -16,7 +16,7 @@
  * template — same vertex-attribute layout, same 6-index (0,1,2,2,1,3)
  * face winding, just new position/UV data and a new texture/material.
  */
-import { encodeRgba8Tiled, GL_FORMAT_RGBA8 } from "./pica-texture";
+import { encodeRgba8Tiled, encodeRgb565Tiled, GL_FORMAT_RGBA8, GL_FORMAT_RGB565 } from "./pica-texture";
 
 function cstr(b: Uint8Array, at: number): string {
   let end = at;
@@ -211,7 +211,16 @@ export function parseCmb(data: Uint8Array): CmbModel {
   const version = view.getUint32(8, true);
   if (version !== 10) throw new Error(`إصدار CMB غير مدعوم هنا: ${version} (المدعوم: 10 = Majora's Mask 3D فقط)`);
   const name = cstr(data, 16);
-  const faceIndicesCount = view.getUint32(32, true);
+  // This header field is a COUNT IN 2-BYTE UNITS, not a byte length -- confirmed
+  // against noclip.website's own reader (`idxDataCount * 2` when slicing the
+  // index buffer), and against the real file: without the *2, the sliced
+  // faceIndices buffer comes up short by exactly half for this file (1468
+  // vs the real 2936 bytes), silently truncating away every shape whose
+  // face-index range starts past that point (majoramask_00 and beyond).
+  // This was the actual root cause of a real 3DS crashing on an earlier,
+  // full-reserialization version of this patch: the rebuilt file's
+  // faceIndices chunk was missing its back half entirely.
+  const faceIndicesCount = view.getUint32(32, true) * 2;
   const sklOffset = view.getUint32(36, true);
   const qtrsOffset = view.getUint32(40, true);
   const matsOffset = view.getUint32(44, true);
@@ -635,7 +644,7 @@ function buildCmb(
   ov.setUint32(8, cmb.version, true);
   ov.setUint32(12, 0, true);
   out.set(new TextEncoder().encode(cmb.name.slice(0, 16)), 16);
-  ov.setUint32(32, cmb.faceIndices.length, true);
+  ov.setUint32(32, cmb.faceIndices.length / 2, true); // this header field is a count in 2-byte units, not a byte length
   ov.setUint32(36, offsets[0], true); // skl
   ov.setUint32(40, offsets[1], true); // qtrs
   ov.setUint32(44, offsets[2], true); // mats
@@ -647,6 +656,166 @@ function buildCmb(
   ov.setUint32(68, offsets[8], true); // textureData
   ov.setUint32(72, 0, true); // unk0
   chunks.forEach((c, i) => out.set(c.bytes, offsets[i]));
+
+  return out;
+}
+
+/**
+ * A real 3DS console crashed on a file produced by `replaceLogoWithFlatQuad`
+ * (data abort / translation-section fault, i.e. a read from completely
+ * unmapped memory — the signature of a wrong offset/count somewhere in the
+ * newly-added texture/material/mesh/shape and their freshly recalculated
+ * chunk sizes). This function takes the opposite strategy: it never adds,
+ * removes, or resizes ANYTHING — every chunk offset, count, and byte length
+ * in the file stays byte-identical to the original. It only overwrites
+ * values that already live inside existing, already-valid allocations:
+ *
+ *  - the 4 unused letter shapes + the effect shape: every index in their
+ *    already-allocated slice of the shared face-index buffer is overwritten
+ *    with 0, making every one of their triangles degenerate (2+ vertices
+ *    coincide) so nothing renders — no vertex data touched at all;
+ *  - one surviving letter shape (chosen small: 32 triangles / 96 indices,
+ *    which divides evenly by 6): its own index slice is overwritten to
+ *    repeat the flat-quad pattern (0,1,2,2,1,3), and only its first 4
+ *    (already-allocated) vertices get new position/UV values — the rest of
+ *    its original vertex budget is simply left unreferenced;
+ *  - one existing texture (by default `title_00`, RGB565): its pixel bytes
+ *    are overwritten in place with the new logo, re-encoded to the exact
+ *    same format/size so nothing grows.
+ *
+ * RGB565 has no alpha channel, so the new quad renders as an opaque
+ * rectangle (no per-pixel transparency) — a real visual trade-off versus
+ * the crashing approach, accepted deliberately to eliminate every
+ * offset/count computation this function would otherwise need to get
+ * right on a device that has zero tolerance for a wrong one.
+ */
+export interface InPlaceLogoPatchOptions {
+  /** shape index to keep and reshape into the new flat quad (must have an
+   * index count divisible by 6, and must use `textureIndex`'s material) */
+  survivingShapeIndex: number;
+  /** shape indices to blank out entirely (the other letters + effect) */
+  removedShapeIndices: number[];
+  bounds: QuadBounds;
+  /** composited onto opaque black before RGB565 encoding — this format has
+   * no alpha, so any transparency in the source image would otherwise leak
+   * through as whatever raw RGB happens to be there */
+  logoRgba: Uint8ClampedArray | Uint8Array;
+  /** index into the tex chunk of the existing RGB565 texture to overwrite
+   * in place (must exactly match logoRgba's dimensions) */
+  textureIndex: number;
+}
+
+export function patchLogoInPlace(data: Uint8Array, opts: InPlaceLogoPatchOptions): Uint8Array {
+  const out = data.slice();
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+
+  if (magic4(out, 0) !== "cmb ") throw new Error('ليس ملف CMB (لا يبدأ بـ "cmb ")');
+  const version = view.getUint32(8, true);
+  if (version !== 10) throw new Error(`إصدار CMB غير مدعوم هنا: ${version} (المدعوم: 10 = Majora's Mask 3D فقط)`);
+  const texOffset = view.getUint32(48, true);
+  const sklmOffset = view.getUint32(52, true);
+  const vatrOffset = view.getUint32(60, true);
+  const faceIndicesOffset = view.getUint32(64, true);
+  const textureDataOffset = view.getUint32(68, true);
+
+  const shpOffsetRel = view.getUint32(sklmOffset + 12, true);
+  const shpAbs = sklmOffset + shpOffsetRel;
+
+  function sepdAbsOf(shapeIdx: number): number {
+    const rel = view.getUint16(shpAbs + 16 + shapeIdx * 2, true);
+    return shpAbs + rel;
+  }
+
+  function prmLocation(shapeIdx: number): { indexType: number; count: number; absOffset: number } {
+    const sepdAbs = sepdAbsOf(shapeIdx);
+    const vattrStart = sepdAbs + 36;
+    const afterVattr = vattrStart + VATTR_NAMES.length * VATTR_SIZE;
+    const primOffsetAbs = afterVattr + 4;
+    const primOff = view.getInt16(primOffsetAbs, true);
+    const prmsAbs = sepdAbs + primOff;
+    const boneTableCount = view.getUint16(prmsAbs + 14, true);
+    let prmAbs = prmsAbs + 24 + boneTableCount * 2;
+    prmAbs = (prmAbs + 3) & ~3;
+    const indexType = view.getInt16(prmAbs + 0x10, true);
+    const count = view.getUint16(prmAbs + 0x14, true);
+    const relOffset = view.getUint16(prmAbs + 0x16, true) * 2;
+    return { indexType, count, absOffset: faceIndicesOffset + relOffset };
+  }
+
+  function vatrAttribBase(attrIndex: number): number {
+    const entryOff = vatrOffset + 12 + attrIndex * 8;
+    const offs = view.getUint32(entryOff + 4, true);
+    return vatrOffset + offs;
+  }
+
+  function vertexDataAbsOffsets(shapeIdx: number): { posAbs: number; uv0Abs: number } {
+    const sepdAbs = sepdAbsOf(shapeIdx);
+    const vattrStart = sepdAbs + 36;
+    const posLocalStart = view.getUint32(vattrStart + 0 * VATTR_SIZE, true);
+    const uv0LocalStart = view.getUint32(vattrStart + 4 * VATTR_SIZE, true);
+    return { posAbs: vatrAttribBase(0) + posLocalStart, uv0Abs: vatrAttribBase(4) + uv0LocalStart };
+  }
+
+  // ---- 1) blank out the removed shapes: every index -> 0 (degenerate triangles) ----
+  for (const shapeIdx of opts.removedShapeIndices) {
+    const { indexType, count, absOffset } = prmLocation(shapeIdx);
+    const bytesPerIdx = indexType === 0x1401 ? 1 : 2;
+    out.fill(0, absOffset, absOffset + count * bytesPerIdx);
+  }
+
+  // ---- 2) reshape the surviving shape into a flat quad ----
+  const { indexType, count, absOffset } = prmLocation(opts.survivingShapeIndex);
+  if (count % 6 !== 0) {
+    throw new Error(`عدد فهارس الشكل رقم ${opts.survivingShapeIndex} (${count}) ليس من مضاعفات ٦`);
+  }
+  const bytesPerIdx = indexType === 0x1401 ? 1 : 2;
+  const pattern = [0, 1, 2, 2, 1, 3];
+  for (let i = 0; i < count; i++) {
+    const v = pattern[i % 6];
+    if (bytesPerIdx === 1) out[absOffset + i] = v;
+    else view.setUint16(absOffset + i * 2, v, true);
+  }
+
+  const { posAbs, uv0Abs } = vertexDataAbsOffsets(opts.survivingShapeIndex);
+  const { minX, maxX, minY, maxY, z } = opts.bounds;
+  const corners: [number, number, number][] = [
+    [maxX, minY, z],
+    [maxX, maxY, z],
+    [minX, minY, z],
+    [minX, maxY, z],
+  ];
+  corners.forEach(([x, y, zz], i) => {
+    view.setFloat32(posAbs + i * 12 + 0, x, true);
+    view.setFloat32(posAbs + i * 12 + 4, y, true);
+    view.setFloat32(posAbs + i * 12 + 8, zz, true);
+  });
+  const cornersUv: [number, number][] = [
+    [1, 0],
+    [1, 1],
+    [0, 0],
+    [0, 1],
+  ];
+  const SHORT_MAX = 32767;
+  cornersUv.forEach(([u, v], i) => {
+    view.setInt16(uv0Abs + i * 4 + 0, Math.round(u * SHORT_MAX), true);
+    view.setInt16(uv0Abs + i * 4 + 2, Math.round(v * SHORT_MAX), true);
+  });
+
+  // ---- 3) overwrite the existing texture's pixels in place ----
+  const texEntryOff = texOffset + 12 + opts.textureIndex * 36;
+  const texSize = view.getUint32(texEntryOff + 0, true);
+  const texWidth = view.getUint16(texEntryOff + 8, true);
+  const texHeight = view.getUint16(texEntryOff + 10, true);
+  const texGlFormat = view.getUint32(texEntryOff + 12, true);
+  const texDataOff = view.getUint32(texEntryOff + 16, true);
+  if (texGlFormat !== GL_FORMAT_RGB565) {
+    throw new Error(`النسيج رقم ${opts.textureIndex} ليس بصيغة RGB565 — هذه الدالة تدعم استبدال RGB565 فقط`);
+  }
+  const encoded = encodeRgb565Tiled(texWidth, texHeight, opts.logoRgba);
+  if (encoded.length !== texSize) {
+    throw new Error(`حجم النسيج بعد الترميز (${encoded.length}) لا يطابق حجم النسيج الأصلي (${texSize}) — الأبعاد يجب أن تطابق ${texWidth}×${texHeight} تماماً`);
+  }
+  out.set(encoded, textureDataOffset + texDataOff);
 
   return out;
 }

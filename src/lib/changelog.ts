@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.23.1",
+    date: "2026-09-13",
+    changes: [
+      {
+        kind: "fixed",
+        text: "بطاقة تعريب حوارات Phantom Hourglass بالصفحة الرئيسية كانت تستخدم صورة غلاف مختلفة عن بطاقة شعار Phantom Hourglass رغم أنهما لنفس اللعبة — وُحِّدت الصورة بين البطاقتين.",
+      },
+    ],
+  },
+  {
     version: "2.23.0",
     date: "2026-09-13",
     changes: [

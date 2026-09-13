@@ -13,7 +13,7 @@ import {
   PH_SOURCE_NAME_KEY,
   type PhEditorImport,
 } from "@/lib/ph/ph-editor-bridge";
-import { idbSet } from "@/lib/idb-storage";
+import { idbGet, idbSet } from "@/lib/idb-storage";
 
 export default function PhTranslate() {
   const [summary, setSummary] = useState<PhEditorImport | null>(null);
@@ -29,7 +29,28 @@ export default function PhTranslate() {
       const imported = extractPhEntries(buffer);
       if (imported.entries.length === 0) throw new Error("لم يُعثر على أي نصٍّ قابلٍ للترجمة داخل هذا الروم.");
 
-      const editorState = { entries: imported.entries, translations: {}, freshExtraction: true };
+      // Re-uploading (the same ROM, or a differently-patched copy with the same
+      // dialogue files) must not silently wipe translations already saved from
+      // an earlier visit — merge any existing PH translations into the fresh
+      // extraction instead of starting empty.
+      let translations: Record<string, string> = {};
+      let restoredCount = 0;
+      try {
+        const previous = await idbGet<{ translations?: Record<string, string> }>("editorState:ph");
+        if (previous?.translations) {
+          const knownKeys = new Set(imported.entries.map((e) => `${e.msbtFile}:${e.index}`));
+          for (const [key, value] of Object.entries(previous.translations)) {
+            if (value?.trim() && knownKeys.has(key)) {
+              translations[key] = value;
+              restoredCount++;
+            }
+          }
+        }
+      } catch {
+        // No previous snapshot, or it failed to read — proceed with an empty start.
+      }
+
+      const editorState = { entries: imported.entries, translations, freshExtraction: true };
       const originals = Object.fromEntries(imported.entries.map((entry) => [`${entry.msbtFile}:${entry.index}`, entry.original]));
       await idbSet("editorState", editorState);
       await idbSet("editorState:ph", editorState);
@@ -40,7 +61,8 @@ export default function PhTranslate() {
 
       setSummary(imported);
       setSourceName(file.name);
-      toast.success(`قُرئ الروم: ${imported.translatableMessageCount.toLocaleString("ar")} سطراً قابلاً للترجمة عبر ${imported.fileCount.toLocaleString("ar")} ملفّ.`);
+      const restoredNote = restoredCount > 0 ? ` — استُعيدت ${restoredCount.toLocaleString("ar")} ترجمة محفوظة مسبقاً.` : "";
+      toast.success(`قُرئ الروم: ${imported.translatableMessageCount.toLocaleString("ar")} سطراً قابلاً للترجمة عبر ${imported.fileCount.toLocaleString("ar")} ملفّ.${restoredNote}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذّرت قراءة ملف الروم.");
     } finally {

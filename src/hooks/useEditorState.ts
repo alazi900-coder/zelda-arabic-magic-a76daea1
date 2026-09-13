@@ -47,6 +47,7 @@ import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePlatEntry } from "@/lib/nds/plat-categories";
+import { categorizePhEntry } from "@/lib/ph/ph-categories";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
@@ -1150,9 +1151,10 @@ export function useEditorState() {
       const isLumenTale = e.msbtFile.startsWith('lumentale/');
       const isGtaIv = e.msbtFile.startsWith('gtaiv/');
       const isPlat = e.msbtFile.startsWith('platinum/');
+      const isPh = e.msbtFile.startsWith('ph/');
       const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isPlat ? categorizePlatEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||

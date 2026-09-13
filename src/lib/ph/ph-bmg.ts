@@ -58,6 +58,12 @@ export interface BmgFile {
    * seen this session reserve a leading empty string there); preserved
    * verbatim as the new DAT1's own prefix */
   dat1Prefix: Uint8Array;
+  /** DAT1's full original body, byte-for-byte — kept so untranslated
+   * messages can be re-emitted from their real bytes instead of from
+   * `text`, which `readCstr16` can truncate early (see `hasControlCode`
+   * messages: some embed a literal null code unit as an escape parameter,
+   * not a terminator). */
+  dat1Body: Uint8Array;
   flw1: Uint8Array;
   fli1: Uint8Array;
 }
@@ -112,6 +118,7 @@ export function parseBmg(data: Uint8Array): BmgFile {
     encodingByte,
     messages,
     dat1Prefix: data.slice(dat1Body, dat1Body + Math.max(0, minOffset)),
+    dat1Body: data.slice(dat1Body, dat1.offset + dat1.size),
     flw1: flw1 ? data.slice(flw1.offset, flw1.offset + flw1.size) : new Uint8Array(0),
     fli1: fli1 ? data.slice(fli1.offset, fli1.offset + fli1.size) : new Uint8Array(0),
   };
@@ -134,18 +141,28 @@ export function buildBmg(bmg: BmgFile, replacements: Map<number, string>): Uint8
   // Rebuild DAT1: prefix verbatim, then one entry per UNIQUE original offset
   // (so messages that shared a string still share it after rebuilding,
   // matching the source file's own convention rather than duplicating it).
-  const uniqueOffsets = [...new Set(bmg.messages.map((m) => m.offset))];
+  // Sorted so each untranslated message's *original* byte range (offset up
+  // to the next message's offset) can be sliced straight out of the real
+  // DAT1 body — not re-encoded from `text`, which `readCstr16` can cut short
+  // for messages that embed a null code unit as an escape parameter rather
+  // than a terminator (e.g. this game's Yes/No choice prompts). Re-encoding
+  // that truncated text would silently corrupt the message on disk, even
+  // though it was never touched for translation.
+  const uniqueOffsets = [...new Set(bmg.messages.map((m) => m.offset))].sort((a, b) => a - b);
   const newOffsetOf = new Map<number, number>();
   const dat1Chunks: Uint8Array[] = [bmg.dat1Prefix];
   let cursor = bmg.dat1Prefix.length;
-  for (const offset of uniqueOffsets) {
+  uniqueOffsets.forEach((offset, i) => {
     const firstIdx = bmg.messages.findIndex((m) => m.offset === offset);
-    const text = replacements.get(firstIdx) ?? bmg.messages[firstIdx].text;
-    const bytes = encoder(text);
+    const translation = replacements.get(firstIdx);
+    const bytes =
+      translation !== undefined
+        ? encoder(translation)
+        : bmg.dat1Body.slice(offset, uniqueOffsets[i + 1] ?? bmg.dat1Body.length);
     newOffsetOf.set(offset, cursor);
     dat1Chunks.push(bytes);
     cursor += bytes.length;
-  }
+  });
   const dat1Body = new Uint8Array(cursor);
   { let o = 0; for (const c of dat1Chunks) { dat1Body.set(c, o); o += c.length; } }
   const dat1BodyPadded = pad4(dat1Body);

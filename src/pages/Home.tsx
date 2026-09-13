@@ -224,6 +224,18 @@ const games = [
     arrowClass: "text-[hsl(45,90%,68%)]",
   },
   {
+    title: "تعريب حوارات Phantom Hourglass",
+    subtitle: "ترجمة روم Phantom Hourglass (NDS)",
+    desc: "يفتح ملف الروم (.nds) محلياً، يستخرج كل نصّ حوارٍ قابلٍ للترجمة من ملفات BMG (٣٢ ملفاً)، ويبني نسخةً معرَّبة منه. عرض الاتجاه الصحيح على الشاشة يعتمد على رقعة منفصلة بمعالج اللعبة لا تزال قيد التحقق.",
+    link: "/ph-translate",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='ph2' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%230d1b2e'/%3E%3Cstop offset='.55' stop-color='%23163457'/%3E%3Cstop offset='1' stop-color='%23245b6b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23ph2)'/%3E%3Cpath d='M300 620q500-140 1000 0v60q-500-140-1000 0z' fill='%23f2d7b1' opacity='.14'/%3E%3Ccircle cx='800' cy='320' r='70' fill='%23f2d7b1' opacity='.16'/%3E%3C/svg%3E",
+    formats: [".NDS", "BMG", "DS"],
+    cardClass: "border-[hsl(195,55%,42%)]/30 hover:border-[hsl(45,80%,55%)]/60",
+    formatClass: "bg-[hsl(195,55%,42%)]/20 text-[hsl(45,85%,68%)] border-[hsl(195,55%,42%)]/30",
+    subtitleClass: "text-[hsl(45,85%,68%)]",
+    arrowClass: "text-[hsl(45,85%,68%)]",
+  },
+  {
     title: "شعار عنوان Majora's Mask 3D",
     subtitle: "استبدل حروف الشعار المجسّمة بلوحة عربية",
     desc: "شعار \"ZELDA\" هنا مجسّم ثلاثي الأبعاد فعلي لا نسيج مسطّح — تحذف الأداة حروفه الخمسة وتضيف لوحة مسطّحة جديدة بشعارك، داخل أرشيف .gar.lzs المستخرج من اللعبة.",

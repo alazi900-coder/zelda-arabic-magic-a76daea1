@@ -24,6 +24,7 @@ import { buildLumenTaleBundle, LUMENTALE_BUFFER_KEY, LUMENTALE_META_KEY, type Lu
 import { createLumenTalePreBuildReport, type LumenTalePreBuildReport } from "@/lib/lumentale/lumentale-prebuild-report";
 import { buildGtaIvRuOutput, GTAIV_BUFFER_KEY, GTAIV_CONTAINER_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
 import { buildFireEmblem12Rom, FE12_BUFFER_KEY, type Fe12UnsupportedCharacter } from "@/lib/fireemblem12/fe12-editor-bridge";
+import { buildPhRom, PH_BUFFER_KEY } from "@/lib/ph/ph-editor-bridge";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -59,6 +60,8 @@ interface EditorBuildSectionProps {
   isLumenTale?: boolean;
   isGtaIv?: boolean;
   isFe12?: boolean;
+  /** Phantom Hourglass (NDS): rebuilds the BMG dialogue files inside the .nds. */
+  isPh?: boolean;
   khbbsUnsupportedCount?: number;
   khbbsUnsupportedCharacters?: KHBBSUnsupportedCharacter[];
   khbbsUnsupportedFilterActive?: boolean;
@@ -139,6 +142,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isLumenTale = false,
   isGtaIv = false,
   isFe12 = false,
+  isPh = false,
   khbbsUnsupportedCount = 0,
   khbbsUnsupportedCharacters = [],
   khbbsUnsupportedFilterActive = false,
@@ -171,6 +175,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [gtaIvBuilding, setGtaIvBuilding] = useState(false);
   const [fe12Building, setFe12Building] = useState(false);
   const [fe12UnsupportedCharacters, setFe12UnsupportedCharacters] = useState<Fe12UnsupportedCharacter[]>([]);
+  const [phBuilding, setPhBuilding] = useState(false);
   const khbbsIsoInputRef = useRef<HTMLInputElement>(null);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
@@ -683,6 +688,33 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
+  const handlePhBuild = async () => {
+    setPhBuilding(true);
+    try {
+      const romBuffer = await idbGet<ArrayBuffer>(PH_BUFFER_KEY);
+      if (!romBuffer) throw new Error("لم يُعثر على ملف الروم. أعد فتحه من صفحة Phantom Hourglass أولاً.");
+      if (!editor.state) throw new Error("لا توجد جلسة ترجمة مفتوحة لبناء الروم.");
+      const result = buildPhRom(romBuffer, editor.state.entries, editor.state.translations || {});
+      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({
+        title: "تم بناء روم Phantom Hourglass",
+        description: `${result.translatedLines} سطر مترجم. النص مُشكَّل عربياً؛ عرضه الصحيح على الشاشة يعتمد على رقعة الاتجاه بالمعالج (لا تزال قيد التحقق).`,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في بناء روم Phantom Hourglass", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setPhBuilding(false);
+    }
+  };
+
   return (
   <Collapsible open={showBuildSection} onOpenChange={setShowBuildSection}>
     <div className="flex items-center justify-between mb-3">
@@ -1023,7 +1055,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. Risen
           and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && !isFe12 && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && !isFe12 && !isPh && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -1053,13 +1085,13 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12 || isPh}
           className="flex-1 min-w-[200px] font-display font-bold"
-          title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isFe12 ? "Fire Emblem 12 يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
+          title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isFe12 ? "Fire Emblem 12 يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isPh ? "Phantom Hourglass يشكّل العربية تلقائياً عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
           {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
         </Button>
-        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv || isFe12 || isPokemonXp} className="font-body gap-1 shrink-0" title={isPokemonXp ? "Pokémon XP لا يطبق المعالجة العامة على حالة المحرر." : isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : isFe12 ? "Fire Emblem 12 لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
+        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv || isFe12 || isPh || isPokemonXp} className="font-body gap-1 shrink-0" title={isPokemonXp ? "Pokémon XP لا يطبق المعالجة العامة على حالة المحرر." : isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : isFe12 ? "Fire Emblem 12 لا يطبق المعالجة العامة على حالة المحرر." : isPh ? "Phantom Hourglass لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
           <RotateCcw className="w-4 h-4" />
           <span className="hidden sm:inline">تراجع</span>
         </Button>
@@ -1113,6 +1145,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isFe12 ? (
           <Button size="lg" onClick={handleFe12Build} disabled={fe12Building} className="flex-1 min-w-[200px] font-display font-bold" title="يرسم الأبجدية العربية داخل الخط ويشكّل النصوص عند البناء ثم ينزّل الروم">
             {fe12Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم معرّب وتنزيله
+          </Button>
+        ) : isPh ? (
+          <Button size="lg" onClick={handlePhBuild} disabled={phBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يشكّل العربية ويعيد بناء ملفات BMG داخل الروم ثم ينزّله">
+            {phBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم Phantom Hourglass معرّب وتنزيله
           </Button>
         ) : isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">

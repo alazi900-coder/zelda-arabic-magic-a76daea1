@@ -166,6 +166,7 @@ const Editor = () => {
   const isGtaIvEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("gtaiv/") ?? false;
   const isFe12Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("fe12/") ?? false;
   const isPlatinumEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
+  const isPhEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("ph/") ?? false;
 
   // LumenTale can contain an intentionally empty table. It has no editor rows,
   // so it is represented only by the immutable bundle metadata and must still
@@ -736,6 +737,7 @@ const Editor = () => {
             setShowArabicProcessConfirm={setShowArabicProcessConfirm}
             isGtaIv={isGtaIvEntries}
             isFe12={isFe12Entries}
+            isPh={isPhEntries}
           />
 
           <EditorBuildSection
@@ -753,6 +755,7 @@ const Editor = () => {
             isLumenTale={isLumenTaleEntries}
             isGtaIv={isGtaIvEntries}
             isFe12={isFe12Entries}
+            isPh={isPhEntries}
             khbbsUnsupportedCount={editor.khbbsUnsupportedCount}
             khbbsUnsupportedCharacters={editor.khbbsUnsupportedCharacters}
             khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}

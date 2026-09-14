@@ -5,14 +5,21 @@
  * message archive is rebuilt from scratch and put back into the ROM's trailing
  * padding, so a translation is free to be longer than the English it replaces.
  *
- * What does bound it is the buffer the game copies a message into.
- * String_CopyNumChars asserts when a message is longer than its destination,
- * and those destinations are fixed sizes scattered across the code. Rather
- * than guess at them, each archive's limit is taken to be the longest original
- * message *in that archive* -- one archive is read by one code path into one
- * buffer, and that buffer demonstrably holds its own longest line. It is an
- * observed bound rather than an assumed one, and it is why a list of species
- * names allows ten characters while a dialogue archive allows hundreds.
+ * Nor is a message bounded by a buffer it is copied into. That was the earlier
+ * belief here, and it was wrong: `MessageBank_GetNewString` (message.c) sizes
+ * both the scratch copy and the `String` from `entry.length`, the message's
+ * own length, so a longer line allocates more rather than overrunning
+ * anything. Of the fifteen `String_CopyNumChars` call sites, the ones that do
+ * pass a constant -- Wonder Card titles, the GBA migrator, easy chat -- read
+ * save or event data, never a message archive.
+ *
+ * What does bound a line is whether it fits the box on screen, and that is the
+ * separate line-count and pixel-width check. The byte limit here exists only
+ * to catch a line so far beyond its siblings that something has gone wrong, so
+ * it is the longest original in the same archive times a margin -- wide enough
+ * that ordinary Arabic growth passes, which is why the same number has to be
+ * used when reading entries and when building, or the editor promises room the
+ * build then refuses.
  *
  * The editor holds normal logical Arabic. Shaping into the presentation forms
  * the font actually carries happens here, at build time, as in the other games
@@ -102,6 +109,28 @@ export interface PlatExtractResult {
   archives: number;
 }
 
+/**
+ * How long a message in this archive may be, in charcodes.
+ *
+ * The longest original message in the same archive, times a margin. Arabic
+ * runs longer than the English it replaces -- an archive of one-word item
+ * names has little headroom of its own, and a translation of it would sit
+ * just over its siblings without anything being wrong -- so the bare longest
+ * original would refuse ordinary translations. Three times it passes those
+ * while still catching a line that has run away.
+ *
+ * Both reading and building call this. They each had their own copy once, the
+ * build's without the margin, so the editor showed a line as fitting and the
+ * build then dropped it with no way to tell which line had gone.
+ */
+export function archiveLimit(messages: number[][], texts: (string | null)[]): number {
+  const longest = messages.reduce(
+    (n, codes, i) => (texts[i] === null ? n : Math.max(n, codes.length)),
+    0
+  );
+  return longest * 3;
+}
+
 function readArchives(rom: Uint8Array): { file: NdsFile; archives: ReturnType<typeof decodePlatArchive>[] } {
   const file = findNdsFile(rom, PLAT_NARC_PATH);
   if (!file) throw new Error("لم يُعثر على أرشيف النصوص داخل الروم — هل هذا روم Pokémon Platinum؟");
@@ -118,19 +147,7 @@ export function extractPlatEntries(rom: Uint8Array): PlatExtractResult {
     const texts = archive.messages.map((codes) =>
       isPackedMessage(codes) ? null : decodePlatMessage(codes)
     );
-    // ×3 the longest sibling message actually in this archive, not a hard
-    // engine limit: MessageBank_GetNewString (message.c) allocates with
-    // Heap_AllocAtEnd sized to the message's own length, and whole-archive
-    // preload (MessageBank_Load → NARC_AllocAndReadWholeMemberByIndexPair)
-    // is likewise sized to the archive's actual byte count — neither reads
-    // into a fixed-size buffer. The real constraint that matters visually
-    // (does it fit the dialogue box) is the separate pixel-width/line-count
-    // checks; this margin only keeps the byte-count diagnostic from flagging
-    // ordinary Arabic length growth as if it were dangerous.
-    const limit = archive.messages.reduce(
-      (n, codes, i) => (texts[i] === null ? n : Math.max(n, codes.length)),
-      0
-    ) * 3;
+    const limit = archiveLimit(archive.messages, texts);
     const name = platArchiveName(index);
     if (PLAT_NON_TEXT_ARCHIVES.has(name)) return;
     const file = PLAT_FILE_PREFIX + name;
@@ -209,10 +226,7 @@ export function buildPlatRom(
     const originals = archive.messages.map((codes) =>
       isPackedMessage(codes) ? null : decodePlatMessage(codes)
     );
-    const limit = archive.messages.reduce(
-      (n, codes, i) => (originals[i] === null ? n : Math.max(n, codes.length)),
-      0
-    );
+    const limit = archiveLimit(archive.messages, originals);
 
     archive.messages.forEach((codes, i) => {
       const original = originals[i];

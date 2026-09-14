@@ -172,11 +172,22 @@ describe("fe12-editor-bridge", () => {
     const { rom } = buildFixtureRom();
     const imported = extractFireEmblem12Entries(rom);
     const mercenaryEntry = imported.entries.find((e) => e.label.includes("MJID_MERCENARY"))!;
-    // U+0640 (Arabic tatweel) is not in the 124-form charmap.
-    const translations: Record<string, string> = { [`${mercenaryEntry.msbtFile}:${mercenaryEntry.index}`]: "ـ" };
+    // Cyrillic Ж has no slot in the 124-form charmap.
+    const translations: Record<string, string> = { [`${mercenaryEntry.msbtFile}:${mercenaryEntry.index}`]: "مرحباЖ" };
     const result = buildFireEmblem12Rom(rom, imported.entries, translations);
     expect(result.unsupportedCharacters.length).toBeGreaterThan(0);
-    expect(result.unsupportedCharacters[0].character).toBe("ـ");
+    expect(result.unsupportedCharacters[0].character).toBe("Ж");
+  });
+
+  it("removes tatweel rather than reporting it, since no charmap carries one", () => {
+    const { rom } = buildFixtureRom();
+    const imported = extractFireEmblem12Entries(rom);
+    const mercenaryEntry = imported.entries.find((e) => e.label.includes("MJID_MERCENARY"))!;
+    const key = `${mercenaryEntry.msbtFile}:${mercenaryEntry.index}`;
+    const stretched = buildFireEmblem12Rom(rom, imported.entries, { [key]: "مرحـــبا" });
+    const plain = buildFireEmblem12Rom(rom, imported.entries, { [key]: "مرحبا" });
+    expect(stretched.unsupportedCharacters).toEqual([]);
+    expect(Array.from(stretched.buffer)).toEqual(Array.from(plain.buffer));
   });
 
   it("ignores blank/whitespace-only translations (leaves the record untranslated)", () => {

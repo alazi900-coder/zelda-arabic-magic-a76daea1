@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>محرّر خط بوكيمون بلاتينيوم</title>
+<style>:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1d222b; --line:#2a303c;
+  --ink:#e8ecf3; --dim:#94a0b4; --accent:#f5c451; --accent2:#4ea8de;
+  --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink); direction:rtl;
+  font:15px/1.7 "Segoe UI","Noto Naskh Arabic",Tahoma,sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);
+  background:var(--panel2);border-radius:10px;padding:7px 13px;transition:.15s}
+button:hover:not(:disabled){background:#252b36;border-color:#3a4354}
+button:disabled{opacity:.35;cursor:default}
+button.on{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:600}
+button.primary{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.08);background:var(--accent)}
+input,select{font:inherit;color:inherit;background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;padding:7px 11px}
+input:focus,select:focus{outline:2px solid var(--accent2);outline-offset:-1px}
+
+/* ===== الشريط العلوي ===== */
+header{display:flex;align-items:center;gap:12px;padding:12px 18px;
+  background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.2px}
+header h1 span{color:var(--accent)}
+.grow{flex:1}
+.badge{font-size:12.5px;color:var(--dim);background:var(--panel2);
+  border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+
+/* ===== التبويبات ===== */
+nav{display:flex;gap:6px;padding:10px 18px 0;background:var(--panel)}
+nav button{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;
+  padding:8px 18px;background:transparent;color:var(--dim)}
+nav button.on{background:var(--bg);color:var(--accent);border-color:var(--line);
+  position:relative;top:1px;font-weight:600}
+
+main{flex:1;overflow:auto;padding:18px;min-height:0}
+.page{display:none}
+.page.on{display:block}
+
+/* ===== شاشة البداية ===== */
+.drop{max-width:720px;margin:6vh auto;text-align:center;padding:52px 32px;
+  border:2px dashed var(--line);border-radius:22px;background:var(--panel)}
+.drop.hover{border-color:var(--accent);background:#1c2029}
+.drop h2{margin:0 0 10px;font-size:22px}
+.drop p{color:var(--dim);margin:6px 0 22px}
+.hint{max-width:720px;margin:0 auto;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:16px 20px;color:var(--dim);font-size:14px}
+.hint b{color:var(--ink)}
+
+/* ===== جدول الملفات ===== */
+table{width:100%;border-collapse:collapse;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+th,td{padding:11px 14px;text-align:right;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--panel2);font-weight:600;font-size:13.5px;color:var(--dim);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.clickable{cursor:pointer}
+tr.clickable:hover{background:#1c2029}
+td.name{font-weight:600;white-space:nowrap}
+td.tip{color:var(--dim);font-size:13.5px;line-height:1.65;max-width:520px}
+.pill{display:inline-block;font-size:12px;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.edit{background:rgba(74,222,128,.13);color:var(--ok);border:1px solid rgba(74,222,128,.3)}
+.pill.keep{background:rgba(148,160,180,.12);color:var(--dim);border:1px solid var(--line)}
+
+/* ===== المحرّر ===== */
+.editor{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+.editor > div:last-child{position:sticky;top:0;max-height:calc(100vh - 190px);overflow-y:auto;padding-left:4px}
+#gridWrap{max-height:calc(100vh - 210px);overflow-y:auto;padding-left:4px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.card h3{margin:0 0 12px;font-size:14.5px;color:var(--dim);font-weight:600}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.sep{width:1px;height:26px;background:var(--line);margin:0 2px}
+
+#grid{display:grid;grid-template-columns:repeat(16,1fr);gap:3px}
+.cell{aspect-ratio:1;background:#0b0d11;border:1px solid transparent;border-radius:5px;
+  cursor:pointer;position:relative;image-rendering:pixelated}
+.cell:hover{border-color:var(--accent2)}
+.cell.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,196,81,.25)}
+.cell canvas{width:100%;height:100%;display:block;image-rendering:pixelated;border-radius:4px}
+.cell.empty{opacity:.22}
+
+#paint{image-rendering:pixelated;border-radius:10px;cursor:crosshair;
+  background:#0b0d11;touch-action:none;display:block;width:100%;max-width:352px;margin:0 auto}
+.swatches{display:flex;gap:8px;justify-content:center;margin:12px 0 4px}
+.sw{width:42px;height:42px;border-radius:9px;border:2px solid var(--line);cursor:pointer;position:relative}
+.sw.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,196,81,.3)}
+.sw span{position:absolute;inset:auto 0 -20px;font-size:11px;color:var(--dim);text-align:center}
+.swrow{margin-bottom:26px}
+
+.field{display:flex;align-items:center;gap:10px;margin:10px 0}
+.field label{color:var(--dim);font-size:13.5px;min-width:78px}
+.field input[type=range]{flex:1;accent-color:var(--accent)}
+.val{font-variant-numeric:tabular-nums;min-width:30px;text-align:center;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:13px}
+
+#preview{width:100%;image-rendering:pixelated;border-radius:10px;background:#fff;display:block}
+.note{color:var(--dim);font-size:12.5px;margin-top:8px;line-height:1.6}
+.note.warn{color:var(--warn)}
+
+#audit div{padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+#audit div:last-child{border-bottom:none}
+#audit .g{color:var(--ok)}
+#audit .b{color:var(--bad);cursor:pointer}
+#audit .b:hover{text-decoration:underline}
+
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+  background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+  padding:11px 22px;opacity:0;pointer-events:none;transition:.25s;z-index:50;
+  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+#toast.on{opacity:1}
+#toast.ok{border-color:rgba(74,222,128,.5)}
+#toast.bad{border-color:rgba(248,113,113,.5)}
+
+@media (max-width:1100px){.editor{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>محرّر خط <span>بوكيمون بلاتينيوم</span></h1>
+  <span class="badge" id="fileBadge">لم يُفتح ملف</span>
+  <div class="grow"></div>
+  <button id="btnOpen">📂 فتح ملف</button>
+  <button id="btnVerify" disabled>🔍 تحقّق</button>
+  <button id="btnSave" class="primary" disabled>💾 حفظ pl_font.narc</button>
+  <input type="file" id="file" accept=".narc" hidden>
+</header>
+
+<nav>
+  <button id="tabFiles" class="on">الملفات بداخله</button>
+  <button id="tabEdit">تحرير الحروف</button>
+</nav>
+
+<main>
+  <!-- ===== البداية ===== -->
+  <section class="page on" id="pageStart">
+    <div class="drop" id="drop">
+      <h2>افتح ملف <code>pl_font.narc</code></h2>
+      <p>اسحب الملف إلى هنا، أو اضغط الزر</p>
+      <button class="primary" id="btnPick">اختيار ملف</button>
+    </div>
+    <div class="hint">
+      <b>أين أجد الملف؟</b> داخل الروم في المسار <code>/graphic/pl_font.narc</code> —
+      استخرجه بأي أداة تتصفّح ملفات رومات DS، عدّله هنا، ثم أعده مكانه.
+      <br><br>
+      <b>هل يُفسد الملف؟</b> لا. الأداة تُعيد بناءه بايتاً ببايت، وزرّ «تحقّق»
+      يُثبت لك ذلك قبل الحفظ.
+    </div>
+  </section>
+
+  <!-- ===== الملفات ===== -->
+  <section class="page" id="pageFiles">
+    <table>
+      <thead><tr>
+        <th style="width:42px">#</th><th>الملف</th><th>الحجم</th>
+        <th>الحروف</th><th>الخليّة</th><th>الحالة</th><th>ما هو ونصيحته</th>
+      </tr></thead>
+      <tbody id="filesBody"></tbody>
+    </table>
+    <p class="note">اضغط أي صفّ قابل للتحرير لتفتحه مباشرةً.</p>
+  </section>
+
+  <!-- ===== التحرير ===== -->
+  <section class="page" id="pageEdit">
+    <div class="toolbar">
+      <select id="fontSel"></select>
+      <div class="sep"></div>
+      <input id="search" placeholder="ابحث: ي نهائي" style="width:190px">
+      <span class="badge" id="searchHits"></span>
+      <div class="grow"></div>
+      <span class="badge" id="slotInfo">—</span>
+    </div>
+
+    <div class="editor">
+      <div class="card">
+        <h3>كل الحروف (اضغط حرفاً لتحريره)</h3>
+        <div id="gridWrap"><div id="grid"></div></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <h3 id="editTitle">الحرف المختار</h3>
+          <canvas id="paint" width="352" height="352"></canvas>
+          <div class="swatches swrow" id="swatches"></div>
+          <div class="toolbar" style="justify-content:center;margin:0">
+            <button id="tPen" class="on">✏️ قلم</button>
+            <button id="tFill">🪣 تعبئة</button>
+            <button id="tPick">💧 قطّارة</button>
+            <div class="sep"></div>
+            <button id="undo" disabled>↶</button>
+            <button id="redo" disabled>↷</button>
+          </div>
+          <div class="field">
+            <label>العرض</label>
+            <input type="range" id="width" min="0" max="16" value="0">
+            <span class="val" id="widthVal">0</span>
+          </div>
+          <p class="note">الخطّ الأحمر على الرسم هو حدّ العرض: ما بعده لا يُرسم في اللعبة،
+            والحرف التالي يبدأ منه. اجعل حبر الوصل يلامسه تماماً.</p>
+          <div class="toolbar" style="margin:10px 0 0">
+            <button id="shiftR">→</button><button id="shiftL">←</button>
+            <button id="shiftU">↑</button><button id="shiftD">↓</button>
+            <div class="sep"></div>
+            <button id="clear">مسح</button>
+            <button id="copyFrom">نسخ من حرف…</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>معاينة حيّة</h3>
+          <input id="prevText" value="اسمي روان. في بيتي" style="width:100%;margin-bottom:10px">
+          <canvas id="preview" height="40"></canvas>
+          <p class="note">تُرسم بمنطق اللعبة نفسه: اختيار الشكل حسب الجيران، ثم العكس يميناً-يساراً.</p>
+        </div>
+
+        <div class="card">
+          <h3>فحص الوصلات</h3>
+          <div id="audit"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+// نواة قراءة وكتابة pl_font.narc — تُدمج لاحقاً داخل الأداة.
+
+const PAD = 0xff; // الحشو بين أعضاء NARC — ليس صفراً
+
+function u16(b, o) { return b[o] | (b[o + 1] << 8); }
+function u32(b, o) { return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0; }
+function wr16(b, o, v) { b[o] = v & 0xff; b[o + 1] = (v >> 8) & 0xff; }
+function wr32(b, o, v) { b[o] = v & 0xff; b[o + 1] = (v >> 8) & 0xff; b[o + 2] = (v >> 16) & 0xff; b[o + 3] = (v >>> 24) & 0xff; }
+
+/** يفصل أعضاء NARC، ويحتفظ بجدول الأسماء كما هو ليعود مطابقاً. */
+function parseNarc(buf) {
+  if (String.fromCharCode(...buf.slice(0, 4)) !== "NARC") throw new Error("هذا ليس ملف NARC");
+  let pos = 16, offsets = null, btnf = null, dataStart = null;
+  while (pos < buf.length - 8) {
+    const magic = String.fromCharCode(...buf.slice(pos, pos + 4));
+    const size = u32(buf, pos + 4);
+    if (magic === "BTAF") {
+      const n = u32(buf, pos + 8);
+      offsets = [];
+      for (let i = 0; i < n; i++) offsets.push([u32(buf, pos + 12 + i * 8), u32(buf, pos + 16 + i * 8)]);
+    } else if (magic === "BTNF") {
+      btnf = buf.slice(pos + 8, pos + size);
+    } else if (magic === "GMIF") {
+      dataStart = pos + 8;
+    }
+    if (size === 0) break;
+    pos += size;
+  }
+  if (!offsets || !btnf || dataStart === null) throw new Error("ملف NARC ناقص الأقسام");
+  return { files: offsets.map(([s, e]) => buf.slice(dataStart + s, dataStart + e)), btnf };
+}
+
+function buildNarc(files, btnf) {
+  const parts = [];
+  let len = 0;
+  const offs = [];
+  for (const f of files) {
+    while (len % 4) { parts.push(new Uint8Array([PAD])); len++; }
+    offs.push([len, len + f.length]);
+    parts.push(f); len += f.length;
+  }
+  const data = new Uint8Array(len);
+  let p = 0;
+  for (const part of parts) { data.set(part, p); p += part.length; }
+
+  const btafSize = 12 + files.length * 8;
+  const btaf = new Uint8Array(btafSize);
+  btaf.set([0x42, 0x54, 0x41, 0x46]);            // "BTAF"
+  wr32(btaf, 4, btafSize); wr16(btaf, 8, files.length); wr16(btaf, 10, 0);
+  offs.forEach(([s, e], i) => { wr32(btaf, 12 + i * 8, s); wr32(btaf, 16 + i * 8, e); });
+
+  const btnfSec = new Uint8Array(8 + btnf.length);
+  btnfSec.set([0x42, 0x54, 0x4e, 0x46]); wr32(btnfSec, 4, 8 + btnf.length); btnfSec.set(btnf, 8);
+
+  const gmif = new Uint8Array(8 + data.length);
+  gmif.set([0x47, 0x4d, 0x49, 0x46]); wr32(gmif, 4, 8 + data.length); gmif.set(data, 8);
+
+  const total = 16 + btaf.length + btnfSec.length + gmif.length;
+  const out = new Uint8Array(total);
+  out.set([0x4e, 0x41, 0x52, 0x43]);             // "NARC"
+  out[4] = 0xfe; out[5] = 0xff;                  // BOM
+  wr16(out, 6, 0x0100); wr32(out, 8, total); wr16(out, 12, 16); wr16(out, 14, 3);
+  let o = 16;
+  for (const sec of [btaf, btnfSec, gmif]) { out.set(sec, o); o += sec.length; }
+  return out;
+}
+
+/**
+ * يفكّ عضو خط NFGR إلى صورة ٢ بت للبكسل بعرض ٢٥٦.
+ *
+ * كل صفّ بلاطة ثمانية بكسلات = بايتان، مخزّنان **معكوسَي الترتيب** — وهذا ما
+ * تفعله ConvertFromNitroFont في nitrogfx، ولا يظهر أثره إلا بمقارنة بايتية.
+ */
+function decodeFont(m) {
+  const size = u32(m, 0), widthTableOffset = u32(m, 4), numGlyphs = u32(m, 8);
+  const maxWidth = m[12], maxHeight = m[13], glyphWidth = m[14], glyphHeight = m[15];
+  const rows = Math.ceil(numGlyphs / 16);
+  const img = new Uint8Array(64 * rows * 16);    // ٦٤ بايتاً للصفّ (٢٥٦ بكسلاً بـ٢ بت)
+  let so = size, g = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < 16 && g < numGlyphs; col++, g++) {
+      for (let tile = 0; tile < 4; tile++) {
+        const px = col * 16 + (tile & 1) * 8;
+        for (let i = 0; i < 8; i++) {
+          const py = row * 16 + (tile >> 1) * 8 + i;
+          const dо = py * 64 + (px >> 2);
+          img[dо] = m[so + 1]; img[dо + 1] = m[so]; so += 2;
+        }
+      }
+    }
+  }
+  return {
+    size, widthTableOffset, numGlyphs, maxWidth, maxHeight, glyphWidth, glyphHeight, img,
+    widths: Array.from(m.slice(widthTableOffset, widthTableOffset + numGlyphs)),
+    tail: m.slice(widthTableOffset + numGlyphs),
+  };
+}
+
+function encodeFont(f) {
+  const rows = Math.ceil(f.numGlyphs / 16);
+  const out = new Uint8Array(f.widthTableOffset + f.numGlyphs + f.tail.length);
+  wr32(out, 0, f.size); wr32(out, 4, f.widthTableOffset); wr32(out, 8, f.numGlyphs);
+  out[12] = f.maxWidth; out[13] = f.maxHeight; out[14] = f.glyphWidth; out[15] = f.glyphHeight;
+  let dо = f.size, g = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < 16 && g < f.numGlyphs; col++, g++) {
+      for (let tile = 0; tile < 4; tile++) {
+        const px = col * 16 + (tile & 1) * 8;
+        for (let i = 0; i < 8; i++) {
+          const py = row * 16 + (tile >> 1) * 8 + i;
+          const so = py * 64 + (px >> 2);
+          out[dо] = f.img[so + 1]; out[dо + 1] = f.img[so]; dо += 2;
+        }
+      }
+    }
+  }
+  out.set(f.widths, f.widthTableOffset);
+  out.set(f.tail, f.widthTableOffset + f.numGlyphs);
+  return out;
+}
+
+/** لون البكسل (٠..٣) داخل خليّة رسمة. البتّان الأعلى أولاً داخل البايت. */
+function getPixel(img, gx, gy, x, y) {
+  const px = gx * 16 + x, py = gy * 16 + y;
+  return (img[py * 64 + (px >> 2)] >> ((3 - (px & 3)) * 2)) & 3;
+}
+function setPixel(img, gx, gy, x, y, v) {
+  const px = gx * 16 + x, py = gy * 16 + y;
+  const o = py * 64 + (px >> 2), sh = (3 - (px & 3)) * 2;
+  img[o] = (img[o] & ~(3 << sh)) | ((v & 3) << sh);
+}
+
+
+// جداول التشكيل، مستخرجة من include/arabic_shaping.h في مشروع فكّ التجميع.
+const BASE_OF=[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 2, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 2, 255, 3, 3, 4, 4, 255, 5, 5, 255, 5, 255, 5, 255, 6, 6, 7, 255, 7, 7, 7, 8, 8, 255, 9, 9, 9, 9, 255, 10, 10, 10, 10, 11, 255, 11, 11, 11, 255, 12, 12, 255, 255, 12, 12, 13, 13, 255, 13, 13, 14, 255, 255, 255, 255, 14, 15, 15, 16, 16, 17, 17, 255, 255, 255, 255, 255, 255, 18, 18, 18, 18, 255, 19, 19, 19, 19, 20, 255, 20, 255, 20, 255, 20, 21, 21, 21, 255, 21, 22, 22, 22, 22, 23, 23, 23, 23, 24, 24, 24, 24, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 25, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 25, 255, 25, 26, 255, 26, 26, 255, 255, 26, 27, 27, 27, 27, 28, 28, 28, 28, 29, 29, 29, 29, 255, 30, 30, 30, 255, 30, 255, 31, 31, 255, 255, 255, 255, 31, 255, 31, 32, 255, 255, 255, 255, 255, 255, 255, 255, 255, 32, 255, 255, 255, 255, 32, 255, 32, 33, 255, 255, 255, 255, 33, 34, 34, 35, 255, 35, 35, 35, 36, 36, 36, 36, 255, 36, 36, 255, 255, 255, 255, 36, 36, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 25];
+const FORMS=[[10, 10, 0, 0], [86, 115, 0, 0], [160, 174, 0, 0], [176, 177, 0, 0], [178, 179, 0, 0], [181, 182, 184, 186], [188, 189, 0, 0], [190, 192, 193, 194], [195, 196, 0, 0], [198, 199, 200, 201], [203, 204, 205, 206], [207, 209, 210, 211], [213, 214, 217, 218], [219, 220, 222, 223], [224, 229, 0, 0], [230, 231, 0, 0], [232, 233, 0, 0], [234, 235, 0, 0], [242, 243, 244, 245], [247, 248, 249, 250], [251, 253, 255, 257], [258, 259, 260, 262], [263, 264, 265, 266], [267, 268, 269, 270], [271, 272, 273, 274], [483, 288, 351, 353], [354, 356, 357, 360], [361, 362, 363, 364], [365, 366, 367, 368], [369, 370, 371, 372], [374, 375, 376, 378], [380, 381, 386, 388], [389, 399, 404, 406], [407, 412, 0, 0], [413, 414, 0, 0], [415, 417, 418, 419]];
+const LETTERS=["ء", "آ", "أ", "ؤ", "إ", "ئ", "ا", "ب", "ة", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "ه", "و", "ى", "ي"];
+const LAM_ALEF=[[1, 420, 421], [2, 422, 423], [4, 425, 426], [6, 431, 432]];
+const LIG_OF=[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 1, 1, 255, 2, 2, 255, 255, 255, 255, 3, 3, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255];
+const FORM_NAMES=["معزول", "نهائي", "أولي", "وسطي"];
+
+"use strict";
+
+/**
+ * الأعضاء الثمانية داخل pl_font.narc، بالترتيب الذي يحفظه pl_font.order.
+ * الملف نفسه لا يحمل أسماءها — جدول أسمائه فارغ — فهي مكتوبة هنا مع ما
+ * يحتاج المستخدم معرفته عن كلٍّ منها قبل أن يمسّه.
+ */
+const MEMBERS = [
+  { name: "font_system.NFGR", font: true, pal: "normal", label: "خط القوائم",
+    tip: "نصوص القوائم والأزرار وشاشات النظام. الخطوط الثلاثة الأولى تتشارك ترقيم الحروف نفسه، فالحرف الذي ترسمه في واحد يجب رسمه في الثلاثة وإلا ظهر مشوّهاً حيث لم تُعدِّله." },
+  { name: "font_message.NFGR", font: true, pal: "normal", label: "خط الحوار",
+    tip: "أهمّ ملف — كلام الشخصيات في صناديق الحوار. ابدأ منه، وهو الذي تراه في لقطات اللعبة." },
+  { name: "font_subscreen.NFGR", font: true, pal: "sub", label: "خط الشاشة السفلية",
+    tip: "⚠️ ألوانه مقلوبة: اللون الأول أبيض لا حبراً داكناً، والرابع حدّ داكن. الأداة تبدّل اللوحة تلقائياً عند اختياره، فارسم بما تراه لا بما تتذكّره من الخطّين الآخرين." },
+  { name: "font_unown.NFGR", font: true, pal: "normal", label: "خط الأنون",
+    tip: "خطّ زخرفي لرموز الأنون، خليّته أضيق (١٢ بكسلاً). لا يُستخدم للنصوص العادية، وغالباً لا داعي للمسه." },
+  { name: "font_special_chars.NCGR.lz", font: false, label: "رموز خاصّة",
+    tip: "أيقونات ورموز مضغوطة بضغط LZ، بصيغة أخرى غير صيغة الخطوط. تمرّ كما هي بلا مساس — وهذا مقصود، فالمساس بها يحتاج فكّ ضغط ليس من عمل هذه الأداة." },
+  { name: "screen_indicators.NCGR", font: false, label: "مؤشّرات الشاشة",
+    tip: "أسهم ومؤشّرات صغيرة. ليست خطاً، تُنسخ كما هي." },
+  { name: "font.NCLR", font: false, label: "لوحة ألوان الخطوط",
+    tip: "ألوان الخطوط الأربعة. لا تُعدَّل هنا، وتغييرها يؤثّر على كل حرف في اللعبة دفعةً واحدة." },
+  { name: "screen_indicators.NCLR", font: false, label: "لوحة المؤشّرات",
+    tip: "ألوان المؤشّرات. تُنسخ كما هي." },
+];
+
+const PAL_NORMAL = [[0x90,0xc8,0xff],[0x38,0x38,0x38],[0xd8,0xd8,0xd8],[0xff,0xff,0xff]];
+const PAL_SUB    = [[0x90,0xc8,0xff],[0xff,0xff,0xff],[0xd8,0xd8,0xd8],[0x38,0x38,0x38]];
+const PAL_NAMES_NORMAL = ["خلفية","حبر","ظلّ","أبيض"];
+const PAL_NAMES_SUB    = ["خلفية","أبيض","ظلّ","حدّ داكن"];
+
+const $ = (id) => document.getElementById(id);
+let ORIG = null, NARC = null, FONTS = [], cur = 0, slot = 0, color = 1, tool = "pen";
+let undoStack = [], redoStack = [];
+
+function toast(msg, kind) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "on " + (kind || "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.className = ""; }, 2600);
+}
+
+const palOf = (i) => (MEMBERS[i].pal === "sub" ? PAL_SUB : PAL_NORMAL);
+const palNames = (i) => (MEMBERS[i].pal === "sub" ? PAL_NAMES_SUB : PAL_NAMES_NORMAL);
+
+/* ===================== فتح الملف ===================== */
+
+function loadFile(buf) {
+  try {
+    ORIG = new Uint8Array(buf);
+    NARC = parseNarc(ORIG);
+    FONTS = NARC.files.map((m, i) => (MEMBERS[i] && MEMBERS[i].font ? decodeFont(m) : null));
+  } catch (e) {
+    toast("تعذّر فتح الملف: " + e.message, "bad");
+    return;
+  }
+  $("fileBadge").textContent = `pl_font.narc · ${NARC.files.length} ملفات · ${(ORIG.length/1024).toFixed(0)} ك.ب`;
+  $("btnSave").disabled = false;
+  $("btnVerify").disabled = false;
+  renderFiles();
+  const sel = $("fontSel");
+  sel.innerHTML = "";
+  MEMBERS.forEach((m, i) => {
+    if (!m.font) return;
+    const o = document.createElement("option");
+    o.value = i; o.textContent = `${m.label} — ${m.name}`;
+    sel.appendChild(o);
+  });
+  cur = 1; sel.value = "1";          // خط الحوار افتراضاً
+  showPage("files");
+  toast("فُتح الملف بنجاح", "ok");
+}
+
+function showPage(which) {
+  const map = { start: "pageStart", files: "pageFiles", edit: "pageEdit" };
+  for (const k in map) $(map[k]).classList.toggle("on", k === which);
+  $("tabFiles").classList.toggle("on", which === "files");
+  $("tabEdit").classList.toggle("on", which === "edit");
+  if (which === "edit") openFont(cur);
+}
+
+/* ===================== جدول الملفات ===================== */
+
+function renderFiles() {
+  const body = $("filesBody");
+  body.innerHTML = "";
+  NARC.files.forEach((m, i) => {
+    const info = MEMBERS[i] || { name: `عضو ${i}`, tip: "غير معروف", font: false };
+    const f = FONTS[i];
+    const tr = document.createElement("tr");
+    if (info.font) { tr.className = "clickable"; tr.onclick = () => { cur = i; $("fontSel").value = String(i); showPage("edit"); }; }
+    tr.innerHTML =
+      `<td>${i}</td>` +
+      `<td class="name">${info.name}<br><span style="color:var(--dim);font-weight:400;font-size:13px">${info.label || ""}</span></td>` +
+      `<td><span dir="ltr">${(m.length/1024).toFixed(1)}</span> ك.ب</td>` +
+      `<td dir="ltr">${f ? f.numGlyphs : "—"}</td>` +
+      `<td dir="ltr">${f ? f.maxWidth + "×" + f.maxHeight : "—"}</td>` +
+      `<td><span class="pill ${info.font ? "edit" : "keep"}">${info.font ? "قابل للتحرير" : "يُنسخ كما هو"}</span></td>` +
+      `<td class="tip">${info.tip}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+/* ===================== الشبكة ===================== */
+
+function glyphCanvas(fi, g, size) {
+  const f = FONTS[fi], pal = palOf(fi);
+  const c = document.createElement("canvas");
+  c.width = c.height = 16;
+  const ctx = c.getContext("2d");
+  const im = ctx.createImageData(16, 16);
+  const gx = g % 16, gy = (g / 16) | 0;
+  let empty = true;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const v = getPixel(f.img, gx, gy, x, y);
+    if (v) empty = false;
+    const [r, gg, b] = pal[v];
+    const o = (y * 16 + x) * 4;
+    im.data[o] = r; im.data[o+1] = gg; im.data[o+2] = b; im.data[o+3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  if (size) { c.style.width = size + "px"; c.style.height = size + "px"; }
+  return { canvas: c, empty };
+}
+
+function renderGrid() {
+  const f = FONTS[cur], grid = $("grid");
+  grid.innerHTML = "";
+  for (let g = 0; g < f.numGlyphs; g++) {
+    const d = document.createElement("div");
+    d.className = "cell" + (g === slot ? " on" : "");
+    const { canvas, empty } = glyphCanvas(cur, g);
+    if (empty) d.classList.add("empty");
+    d.appendChild(canvas);
+    d.title = `الخانة ${g} — الرمز ${g + 1} — العرض ${f.widths[g]}`;
+    d.onclick = () => selectSlot(g);
+    grid.appendChild(d);
+  }
+}
+
+function refreshCell(g) {
+  const cell = $("grid").children[g];
+  if (!cell) return;
+  const { canvas, empty } = glyphCanvas(cur, g);
+  cell.innerHTML = ""; cell.appendChild(canvas);
+  cell.classList.toggle("empty", empty);
+}
+
+/* ===================== المحرّر ===================== */
+
+function openFont(i) {
+  cur = i;
+  slot = Math.min(slot, FONTS[i].numGlyphs - 1);
+  renderSwatches();
+  renderGrid();
+  selectSlot(slot);
+  runAudit();
+}
+
+function renderSwatches() {
+  const box = $("swatches"), pal = palOf(cur), names = palNames(cur);
+  box.innerHTML = "";
+  pal.forEach((c, v) => {
+    const d = document.createElement("div");
+    d.className = "sw" + (v === color ? " on" : "");
+    d.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+    d.innerHTML = `<span>${names[v]}</span>`;
+    d.onclick = () => { color = v; renderSwatches(); };
+    box.appendChild(d);
+  });
+}
+
+function selectSlot(g) {
+  slot = g;
+  undoStack = []; redoStack = []; updateUndo();
+  document.querySelectorAll("#grid .cell").forEach((c, i) => c.classList.toggle("on", i === g));
+  const f = FONTS[cur];
+  $("width").value = f.widths[g];
+  $("widthVal").textContent = f.widths[g];
+  $("slotInfo").innerHTML = `الخانة <span dir="ltr">${g}</span> · الرمز <span dir="ltr">${g + 1}</span>`;
+  $("editTitle").textContent = describeSlot(g);
+  drawPaint();
+  drawPreview();
+}
+
+/** اسم الحرف وشكله إن كان عربياً، وإلا وصف عام. */
+function describeSlot(g) {
+  const code = g + 1;
+  for (let b = 0; b < FORMS.length; b++) {
+    const k = FORMS[b].indexOf(code);
+    if (k >= 0) return `${LETTERS[b]} — ${FORM_NAMES[k]}`;
+  }
+  return `الخانة ${g}`;
+}
+
+function drawPaint() {
+  const cv = $("paint"), ctx = cv.getContext("2d"), f = FONTS[cur], pal = palOf(cur);
+  const S = cv.width / 16;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const gx = slot % 16, gy = (slot / 16) | 0;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const [r, g2, b] = pal[getPixel(f.img, gx, gy, x, y)];
+    ctx.fillStyle = `rgb(${r},${g2},${b})`;
+    ctx.fillRect(x * S, y * S, S, S);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.lineWidth = 1;
+  for (let i = 1; i < 16; i++) {
+    ctx.beginPath(); ctx.moveTo(i*S,0); ctx.lineTo(i*S,cv.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i*S); ctx.lineTo(cv.width,i*S); ctx.stroke();
+  }
+  const w = f.widths[slot];
+  ctx.strokeStyle = "#ff4d4d"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(w*S, 0); ctx.lineTo(w*S, cv.height); ctx.stroke();
+}
+
+function pushUndo() {
+  const f = FONTS[cur], gx = slot % 16, gy = (slot / 16) | 0, snap = [];
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) snap.push(getPixel(f.img, gx, gy, x, y));
+  undoStack.push(snap); redoStack = [];
+  if (undoStack.length > 60) undoStack.shift();
+  updateUndo();
+}
+function applySnap(snap) {
+  const f = FONTS[cur], gx = slot % 16, gy = (slot / 16) | 0;
+  let i = 0;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) setPixel(f.img, gx, gy, x, y, snap[i++]);
+}
+function grabSnap() {
+  const f = FONTS[cur], gx = slot % 16, gy = (slot / 16) | 0, s = [];
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) s.push(getPixel(f.img, gx, gy, x, y));
+  return s;
+}
+function updateUndo() { $("undo").disabled = !undoStack.length; $("redo").disabled = !redoStack.length; }
+
+function afterEdit() { drawPaint(); refreshCell(slot); drawPreview(); runAudit(); }
+
+function paintAt(ev) {
+  const cv = $("paint"), r = cv.getBoundingClientRect();
+  const x = Math.floor((ev.clientX - r.left) / (r.width / 16));
+  const y = Math.floor((ev.clientY - r.top) / (r.height / 16));
+  if (x < 0 || x > 15 || y < 0 || y > 15) return;
+  const f = FONTS[cur], gx = slot % 16, gy = (slot / 16) | 0;
+  if (tool === "pick") { color = getPixel(f.img, gx, gy, x, y); renderSwatches(); return; }
+  if (tool === "fill") { pushUndo(); floodFill(x, y); afterEdit(); return; }
+  if (getPixel(f.img, gx, gy, x, y) === color) return;
+  setPixel(f.img, gx, gy, x, y, color);
+  afterEdit();
+}
+
+function floodFill(sx, sy) {
+  const f = FONTS[cur], gx = slot % 16, gy = (slot / 16) | 0;
+  const target = getPixel(f.img, gx, gy, sx, sy);
+  if (target === color) return;
+  const q = [[sx, sy]];
+  while (q.length) {
+    const [x, y] = q.pop();
+    if (x < 0 || x > 15 || y < 0 || y > 15) continue;
+    if (getPixel(f.img, gx, gy, x, y) !== target) continue;
+    setPixel(f.img, gx, gy, x, y, color);
+    q.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+}
+
+function shift(dx, dy) {
+  pushUndo();
+  const f = FONTS[cur], gx = slot % 16, gy = (slot / 16) | 0;
+  const old = grabSnap();
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const sx = x - dx, sy = y - dy;
+    const v = (sx < 0 || sx > 15 || sy < 0 || sy > 15) ? 0 : old[sy * 16 + sx];
+    setPixel(f.img, gx, gy, x, y, v);
+  }
+  afterEdit();
+}
+
+/* ===================== التشكيل والمعاينة ===================== */
+
+/** يختار شكل كل حرف حسب جيرانه، كما تفعل ShapeArabicChar في اللعبة. */
+function shapeText(text) {
+  const uni = {};
+  LETTERS.forEach((ch, i) => { uni[ch] = i; });
+  const bases = [...text].map((ch) => (ch in uni ? uni[ch] : null));
+  const out = [];
+  let prev = false;
+  for (let i = 0; i < bases.length; i++) {
+    const b = bases[i];
+    if (b === null) { out.push({ raw: [...text][i] }); prev = false; continue; }
+    const next = i + 1 < bases.length ? bases[i + 1] : null;
+    let form = 0;
+    if (prev) form |= 1;
+    if (next !== null && FORMS[b][2]) form |= 2;
+    const code = FORMS[b][form] || FORMS[b][form & 1] || FORMS[b][0];
+    out.push({ code });
+    prev = !!(form & 2);
+  }
+  return out;
+}
+
+function drawPreview() {
+  const cv = $("preview"), f = FONTS[cur];
+  const W = cv.clientWidth || 380;
+  cv.width = W; cv.height = 40;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, 40);
+  const shaped = shapeText($("prevText").value);
+  const SC = 2, pal = palOf(cur);
+  let x = 0;
+  const draw = [];
+  for (const it of shaped) {
+    if (it.raw !== undefined) { x += it.raw === " " ? 5 : 6; continue; }
+    const g = it.code - 1;
+    if (g < 0 || g >= f.numGlyphs) continue;
+    draw.push({ g, x, w: f.widths[g] });
+    x += f.widths[g];
+  }
+  const total = x;
+  for (const d of draw) {
+    const gx = d.g % 16, gy = (d.g / 16) | 0;
+    const dest = total - d.x - d.w;                       // عكس الموضع كما في اللعبة
+    for (let y = 0; y < 16; y++) for (let px = 0; px < d.w; px++) {
+      const v = getPixel(f.img, gx, gy, px, y);
+      if (!v) continue;
+      const [r, g2, b] = pal[v];
+      ctx.fillStyle = `rgb(${r},${g2},${b})`;
+      ctx.fillRect((dest + px) * SC + 6, y * SC + 4, SC, SC);
+    }
+  }
+}
+
+/* ===================== فحص الوصلات ===================== */
+
+function runAudit() {
+  const f = FONTS[cur], box = $("audit");
+  const bad = [];
+  for (let b = 0; b < FORMS.length; b++) {
+    for (const k of [2, 3]) {                              // أولي ووسطي يجب أن يخرجا
+      const code = FORMS[b][k];
+      if (!code) continue;
+      const g = code - 1;
+      if (g >= f.numGlyphs) continue;
+      const gx = g % 16, gy = (g / 16) | 0;
+      let has = false;
+      for (let y = 0; y < 16; y++) if (getPixel(f.img, gx, gy, 0, y)) { has = true; break; }
+      if (!has) bad.push({ g, text: `${LETTERS[b]} ${FORM_NAMES[k]}` });
+    }
+  }
+  box.innerHTML = "";
+  if (!bad.length) {
+    box.innerHTML = '<div class="g">✅ كل الأشكال الواصلة لها حبر عند العمود ٠ — لا فجوات.</div>';
+    return;
+  }
+  const head = document.createElement("div");
+  head.innerHTML = `<b>${bad.length} شكلاً بلا وصلة</b> — لا حبر عند العمود ٠، فلن يلتقي بالحرف التالي:`;
+  box.appendChild(head);
+  for (const x of bad) {
+    const d = document.createElement("div");
+    d.className = "b"; d.textContent = "• " + x.text;
+    d.onclick = () => selectSlot(x.g);
+    box.appendChild(d);
+  }
+}
+
+/* ===================== البحث ===================== */
+
+function doSearch() {
+  const q = $("search").value.trim();
+  if (!q) { $("searchHits").textContent = ""; return; }
+  const parts = q.split(/\s+/);
+  const letter = parts[0];
+  const b = LETTERS.indexOf(letter);
+  if (b < 0) { $("searchHits").textContent = "لا حرف بهذا الاسم"; return; }
+  let k = parts[1] ? FORM_NAMES.indexOf(parts[1]) : 0;
+  if (k < 0) k = 0;
+  const code = FORMS[b][k];
+  if (!code) { $("searchHits").textContent = `${letter} ليس له شكل ${FORM_NAMES[k]}`; return; }
+  $("searchHits").innerHTML = `${letter} ${FORM_NAMES[k]} ← الخانة <span dir="ltr">${code - 1}</span>`;
+  selectSlot(code - 1);
+  scrollToSlot(code - 1);
+}
+
+/** يُمرّر داخل الشبكة وحدها، فلا تنزلق لوحة التحرير خارج الشاشة. */
+function scrollToSlot(g) {
+  const wrap = $("gridWrap"), cell = $("grid").children[g];
+  if (!wrap || !cell) return;
+  wrap.scrollTop = cell.offsetTop - wrap.clientHeight / 2 + cell.clientHeight / 2;
+}
+
+/* ===================== الحفظ والتحقّق ===================== */
+
+function rebuild() {
+  const files = NARC.files.map((m, i) => (FONTS[i] ? encodeFont(FONTS[i]) : m));
+  return buildNarc(files, NARC.btnf);
+}
+
+function verify() {
+  const before = NARC.files.map((m, i) => (FONTS[i] ? encodeFont(decodeFont(m)) : m));
+  const same = buildNarc(before, NARC.btnf);
+  let ok = same.length === ORIG.length;
+  if (ok) for (let i = 0; i < same.length; i++) if (same[i] !== ORIG[i]) { ok = false; break; }
+  toast(ok ? "✅ الدورة مطابقة بايتاً ببايت — الحفظ آمن"
+           : "❌ الدورة غير مطابقة — لا تحفظ، وأبلغ عن هذا", ok ? "ok" : "bad");
+}
+
+function save() {
+  const out = rebuild();
+  const blob = new Blob([out], { type: "application/octet-stream" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "pl_font.narc";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("حُفظ pl_font.narc", "ok");
+}
+
+/* ===================== الربط ===================== */
+
+$("btnOpen").onclick = $("btnPick").onclick = () => $("file").click();
+$("file").onchange = (e) => { const f = e.target.files[0]; if (f) f.arrayBuffer().then(loadFile); };
+$("btnSave").onclick = save;
+$("btnVerify").onclick = verify;
+$("tabFiles").onclick = () => NARC && showPage("files");
+$("tabEdit").onclick = () => NARC && showPage("edit");
+$("fontSel").onchange = (e) => openFont(+e.target.value);
+
+const drop = $("drop");
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("hover"); };
+drop.ondragleave = () => drop.classList.remove("hover");
+drop.ondrop = (e) => {
+  e.preventDefault(); drop.classList.remove("hover");
+  const f = e.dataTransfer.files[0];
+  if (f) f.arrayBuffer().then(loadFile);
+};
+
+let painting = false;
+const cv = $("paint");
+cv.onpointerdown = (e) => {
+  painting = true; cv.setPointerCapture(e.pointerId);
+  if (tool === "pen") pushUndo();
+  paintAt(e);
+};
+cv.onpointermove = (e) => { if (painting && tool === "pen") paintAt(e); };
+cv.onpointerup = () => { painting = false; };
+
+$("tPen").onclick = () => setTool("pen");
+$("tFill").onclick = () => setTool("fill");
+$("tPick").onclick = () => setTool("pick");
+function setTool(t) {
+  tool = t;
+  $("tPen").classList.toggle("on", t === "pen");
+  $("tFill").classList.toggle("on", t === "fill");
+  $("tPick").classList.toggle("on", t === "pick");
+}
+
+$("undo").onclick = () => {
+  if (!undoStack.length) return;
+  redoStack.push(grabSnap());
+  applySnap(undoStack.pop());
+  updateUndo(); afterEdit();
+};
+$("redo").onclick = () => {
+  if (!redoStack.length) return;
+  undoStack.push(grabSnap());
+  applySnap(redoStack.pop());
+  updateUndo(); afterEdit();
+};
+
+$("width").oninput = (e) => {
+  FONTS[cur].widths[slot] = +e.target.value;
+  $("widthVal").textContent = e.target.value;
+  drawPaint(); drawPreview();
+};
+$("shiftR").onclick = () => shift(1, 0);
+$("shiftL").onclick = () => shift(-1, 0);
+$("shiftU").onclick = () => shift(0, -1);
+$("shiftD").onclick = () => shift(0, 1);
+$("clear").onclick = () => {
+  pushUndo();
+  const f = FONTS[cur], gx = slot % 16, gy = (slot / 16) | 0;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) setPixel(f.img, gx, gy, x, y, 0);
+  afterEdit();
+};
+$("copyFrom").onclick = () => {
+  const s = prompt("انسخ من أي خانة؟ (رقم الخانة، أو مثل: ت وسطي)");
+  if (!s) return;
+  let src = -1;
+  if (/^\d+$/.test(s.trim())) src = +s.trim();
+  else {
+    const p = s.trim().split(/\s+/);
+    const b = LETTERS.indexOf(p[0]);
+    let k = p[1] ? FORM_NAMES.indexOf(p[1]) : 0;
+    if (k < 0) k = 0;
+    if (b >= 0 && FORMS[b][k]) src = FORMS[b][k] - 1;
+  }
+  const f = FONTS[cur];
+  if (src < 0 || src >= f.numGlyphs) { toast("لم أفهم الخانة المطلوبة", "bad"); return; }
+  pushUndo();
+  const sx = src % 16, sy = (src / 16) | 0, gx = slot % 16, gy = (slot / 16) | 0;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) setPixel(f.img, gx, gy, x, y, getPixel(f.img, sx, sy, x, y));
+  f.widths[slot] = f.widths[src];
+  $("width").value = f.widths[slot]; $("widthVal").textContent = f.widths[slot];
+  afterEdit();
+  toast(`نُسخ من الخانة ${src}`, "ok");
+};
+
+$("search").oninput = doSearch;
+$("prevText").oninput = drawPreview;
+window.addEventListener("resize", () => { if (NARC) drawPreview(); });
+
+</script>
+</body>
+</html>

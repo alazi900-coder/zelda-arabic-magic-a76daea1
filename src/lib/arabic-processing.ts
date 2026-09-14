@@ -134,8 +134,21 @@ function getNextArabicCode(chars: string[], index: number): number | null {
   return null;
 }
 
+/**
+ * Invisible formatting a game font has no slot for.
+ *
+ * Bidi controls steer a browser's layout algorithm; a game engine that draws
+ * right to left itself has nothing to do with them, and no charmap carries
+ * them. Tatweel is a stretch, not a letter, and no charmap carries that
+ * either. Left in, each one reaches the encoder as a character with no glyph:
+ * `PlatEncodeBridge` catches the error and skips the whole line, so a message
+ * the translator finished stays English in the ROM with nothing on screen to
+ * say why. Dropping them changes no letter — only what was never drawable.
+ */
+const UNMAPPABLE_FORMATTING = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u061C\u0640\uFEFF]/g;
+
 export function reshapeArabic(text: string): string {
-  const chars = [...text];
+  const chars = [...text.replace(UNMAPPABLE_FORMATTING, "")];
   const result: string[] = [];
   
   for (let i = 0; i < chars.length; i++) {

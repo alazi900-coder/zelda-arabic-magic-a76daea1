@@ -49,6 +49,7 @@ import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry } from "@/lib/ph/ph-categories";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
+import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { categorizeDsEntry, DS_FILE_RE } from "@/lib/dragonsword/ds-categories";
 import { measureEntryBytes } from "@/lib/entry-bytes";
@@ -1019,7 +1020,10 @@ export function useEditorState() {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key] || "";
       if (!translation.trim()) continue;
-      const unsupported = analyzePlatUnsupportedCharacters(reshapeArabic(translation));
+      // Through the same door the build uses: `▼` and `▽` stand for the pause
+      // codes, not for themselves, so looking them up as characters reports two
+      // that have no slot in the font while the build writes them perfectly.
+      const unsupported = analyzePlatUnsupportedCharacters(reshapeArabic(fromBreakTokens(translation)));
       if (unsupported.length === 0) continue;
       keys.add(key);
       for (const item of unsupported) {

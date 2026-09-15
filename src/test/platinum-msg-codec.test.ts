@@ -12,6 +12,8 @@ import {
 import { measurePlatChars } from "@/lib/nds/plat-editor-bridge";
 import { PLAT_TAG_RE, maskPlatTags, unmaskPlatTags, diffPlatTags, repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
+import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
+import { reshapeArabic } from "@/lib/arabic-processing";
 
 /**
  * The message archives are encrypted, and a translated ROM is only as good as
@@ -165,5 +167,36 @@ describe("Platinum unsupported characters", () => {
       expect(analyzePlatUnsupportedCharacters(text)).toEqual([]);
       expect(() => encodePlatMessage(text)).not.toThrow();
     }
+  });
+});
+
+/**
+ * The editor's "characters with no slot in the font" badge reads the same text
+ * the build does, and has to read it the same way.
+ *
+ * `▼` and `▽` stand for the pause codes 0x25BC and 0x25BD, not for themselves.
+ * Looked up as characters they have no slot, and the badge claimed hundreds of
+ * ruined letters while the build was writing them perfectly — so the check goes
+ * through `fromBreakTokens` first, exactly as `buildPlatRom` does.
+ */
+describe("pause markers are not characters without a slot", () => {
+  const scan = (text: string) =>
+    analyzePlatUnsupportedCharacters(reshapeArabic(fromBreakTokens(text)));
+
+  it("reports nothing for a message carrying both pause markers", () => {
+    expect(scan("مرحبا▼\nوداعا▽\nانتهى")).toEqual([]);
+  });
+
+  it("reports nothing for a pause that closes the message", () => {
+    expect(scan("وداعا▼")).toEqual([]);
+  });
+
+  it("would have reported them without the conversion", () => {
+    const naive = analyzePlatUnsupportedCharacters(reshapeArabic("مرحبا▼\nوداعا▽"));
+    expect(naive.map((c) => c.character).sort()).toEqual(["▼", "▽"]);
+  });
+
+  it("still reports a character that genuinely has no slot", () => {
+    expect(scan("مرحبا▼\nЖ").map((c) => c.character)).toEqual(["Ж"]);
   });
 });

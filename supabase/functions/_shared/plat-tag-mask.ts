@@ -8,3 +8,9 @@
 // and a comma-separated list of numbers. Confirmed against every distinct
 // tag instance in res/text/*.json (241 of them) — none fall outside it.
 export const PLAT_TAG_RE = /\{[A-Z][A-Z0-9_]*(?:\s+\d+(?:\s*,\s*\d+)*)?\}/g;
+
+// The two pause markers the editor holds in place of the control codes 0x25BC
+// and 0x25BD (see src/lib/nds/plat-break-tokens.ts). A model has no reason to
+// keep a symbol it cannot read, and 12,425 page breaks were lost from this ROM
+// that way \u2014 so they are protected exactly as a tag is.
+export const PLAT_BREAK_RE = /[\u25BC\u25BD]/g;

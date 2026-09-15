@@ -101,3 +101,41 @@ describe("the two rule catalogues agree", () => {
     expect(drifted.map((r) => r.id)).toEqual(KNOWN_TEXT_DRIFT);
   });
 });
+/**
+ * Platinum's tag rule carries the pause markers too.
+ *
+ * `▼` and `▽` stand for the codes that stop the game until the player presses
+ * the button. A suggestion that drops one leaves a message printing past the
+ * bottom of a two-line box, so the half after it never appears — which is the
+ * bug that cost this ROM 12,425 page breaks. The rule has to say so on both
+ * sides, and the refusal has to be enforced rather than requested.
+ */
+describe("Platinum's pause markers in the AI enhancement tool", () => {
+  const rule = BUILTIN_RULES.find((r) => r.id === "detect_plat_tags")!;
+
+  it("is offered as a toggle", () => {
+    expect(rule).toBeDefined();
+  });
+
+  it("declares the same prompt text on both sides", () => {
+    expect(EDGE_SOURCE).toContain(rule.prompt.replace(/\\/g, "\\\\"));
+  });
+
+  it("names both markers in the rule the model reads", () => {
+    expect(rule.prompt).toContain("▼");
+    expect(rule.prompt).toContain("▽");
+  });
+
+  it("is injected only for Platinum", () => {
+    const gate = /const PLATINUM_ONLY_RULE_IDS = new Set\(\[([^\]]+)\]\)/.exec(EDGE_SOURCE);
+    expect(gate).not.toBeNull();
+    expect(gate![1]).toContain("detect_plat_tags");
+  });
+
+  it("protects them by refusal, not only by asking", () => {
+    // Asking a model nicely is how they were lost in the first place; the
+    // technical-tag pattern is what actually rejects a suggestion.
+    expect(EDGE_SOURCE).toContain("PLAT_BREAK_RE");
+    expect(EDGE_SOURCE).toMatch(/TECH_TAG_REGEX[\s\S]{0,1200}PLAT_BREAK_RE\.source/);
+  });
+});

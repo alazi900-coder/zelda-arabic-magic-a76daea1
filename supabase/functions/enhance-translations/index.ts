@@ -9,7 +9,7 @@ import { RISEN_FORGET_OTHER_GAME_RULE } from "../_shared/risen-persona-guard.ts"
 import { MOTHER3_FORGET_OTHER_GAME_RULE } from "../_shared/mother3-persona-guard.ts";
 import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-persona-guard.ts';
 import { preservesLumenTaleTechnicalTokenSequence } from "../_shared/lumentale-token-guard.ts";
-import { PLAT_TAG_RE } from "../_shared/plat-tag-mask.ts";
+import { PLAT_TAG_RE, PLAT_BREAK_RE } from "../_shared/plat-tag-mask.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,7 +81,7 @@ const RULES: RuleDef[] = [
   // above — declared here but only reaches the prompt when the request's
   // game is 'platinum' (see PLATINUM_ONLY_RULE_IDS). Replaces the withheld
   // Xenoblade tag rules (XENOBLADE_TAG_RULE_IDS) with Platinum's own tag shape.
-  { id: 'detect_plat_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـPlatinum] الرموز من الشكل `{COLOR 1}` أو `{STRVAR_1 3, 0, 0}` (اسم بأحرف كبيرة، ثم اختيارياً رقم أو أرقام مفصولة بفواصل) وسوم محرّك اللعبة نفسها — تلوين أو مؤقّت أو قيمة تضعها اللعبة وقت التشغيل — وليست نصّاً. أصلح أي وسم من هذا الشكل تالفاً أو مفقوداً في الترجمة: استرجعه من الأصل بنفس القيمة والعدد والترتيب حرفاً بحرف. لا تخترع وسماً غير موجود في الأصل، ولا تحذف وسماً موجوداً فيه.' },
+  { id: 'detect_plat_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـPlatinum] الرموز من الشكل `{COLOR 1}` أو `{STRVAR_1 3, 0, 0}` (اسم بأحرف كبيرة، ثم اختيارياً رقم أو أرقام مفصولة بفواصل) وسوم محرّك اللعبة نفسها — تلوين أو مؤقّت أو قيمة تضعها اللعبة وقت التشغيل — وليست نصّاً. أصلح أي وسم من هذا الشكل تالفاً أو مفقوداً في الترجمة: استرجعه من الأصل بنفس القيمة والعدد والترتيب حرفاً بحرف. لا تخترع وسماً غير موجود في الأصل، ولا تحذف وسماً موجوداً فيه. ومعها رمزان لا ثالث لهما: `▼` و`▽` — فاصلا توقّف تنتظر عندهما اللعبة ضغطة زر من اللاعب (`▼` يمسح الصندوق ويبدأ صفحة جديدة، `▽` يمرّره لأعلى). ليسا حرفين ولا زينة: الرسالة التي يسقط منها أحدهما يستمرّ نصّها في الطباعة داخل صندوق سطرين لا يسعه، فلا يظهر ما بعده على الشاشة أبداً. أبقِهما بنفس العدد ونفس الترتيب ونفس موضعهما بين الكلمات، ولا تنقلهما ولا تحذفهما ولا تُضِف واحداً من عندك.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -177,8 +177,15 @@ function isCategoryEnabled(category: string | undefined, enabledSet: Set<string>
 }
 // Platinum's own {COLOR 2}, {STRVAR_1 3, 0, 0} \u2014 folded in via PLAT_TAG_RE.source
 // so this stays the single source of truth (see _shared/plat-tag-mask.ts).
+//
+// `\u25BC` and `\u25BD` join them: they are Platinum's pause markers, and a
+// suggestion that drops one is a message whose second half never reaches the
+// screen. The pattern is shared by every game rather than gated on Platinum,
+// because gating it would thread a game flag through three pure functions to
+// buy nothing \u2014 the worst a stray triangle can do elsewhere is get a
+// suggestion refused, never a line corrupted.
 const TECH_TAG_REGEX = new RegExp(
-  `[\\uFFF9-\\uFFFC]|[\\uE000-\\uE0FF]+|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{[\\w]+\\}|${PLAT_TAG_RE.source}`,
+  `[\\uFFF9-\\uFFFC]|[\\uE000-\\uE0FF]+|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{[\\w]+\\}|${PLAT_TAG_RE.source}|${PLAT_BREAK_RE.source}`,
   "g",
 );
 const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;

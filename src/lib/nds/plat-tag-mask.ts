@@ -18,6 +18,20 @@
 /** `{YESNO}`, `{COLOR 2}`, `{STRVAR_1 3, 0, 0}` — name, then optional numbers. */
 export const PLAT_TAG_RE = /\{[A-Z][A-Z0-9_]*(?:\s+\d+(?:\s*,\s*\d+)*)?\}/g;
 
+/**
+ * The tags, plus the two pause markers `▼` and `▽`.
+ *
+ * A pause is hidden from the model for the same reason a `{STRVAR_1 …}` is: it
+ * is not language, and a model asked to translate a sentence around it will
+ * reflow the sentence and drop it. That is not a hypothetical — it is how
+ * 12,425 page breaks were lost from this ROM. Behind a placeholder the model
+ * cannot lose one without `diffPlatTags` noticing.
+ *
+ * Kept separate from `PLAT_TAG_RE`, which the editor's shared chip pattern
+ * imports: every game sees that one, and `▼` is ordinary prose in some of them.
+ */
+const MASKABLE_RE = new RegExp(`${PLAT_TAG_RE.source}|[\u25BC\u25BD]`, "g");
+
 /** Placeholders no translation model rewrites, and no Arabic text contains. */
 const MASK_OPEN = "〖";
 const MASK_CLOSE = "〗";
@@ -29,7 +43,7 @@ export interface PlatMasked {
 
 export function maskPlatTags(text: string): PlatMasked {
   const tags: string[] = [];
-  const masked = text.replace(PLAT_TAG_RE, (tag) => {
+  const masked = text.replace(MASKABLE_RE, (tag) => {
     tags.push(tag);
     return `${MASK_OPEN}${tags.length - 1}${MASK_CLOSE}`;
   });
@@ -60,8 +74,8 @@ export interface PlatTagDiff {
  * and hands you the trainer's name where the town's should be.
  */
 export function diffPlatTags(original: string, translation: string): PlatTagDiff {
-  const left = original.match(PLAT_TAG_RE) ?? [];
-  const right = translation.match(PLAT_TAG_RE) ?? [];
+  const left = original.match(MASKABLE_RE) ?? [];
+  const right = translation.match(MASKABLE_RE) ?? [];
 
   const pool = new Map<string, number>();
   for (const tag of left) pool.set(tag, (pool.get(tag) ?? 0) + 1);
@@ -90,14 +104,14 @@ export function diffPlatTags(original: string, translation: string): PlatTagDiff
  * way; one that lost a tag outright is not, and says so.
  */
 export function repairPlatTags(original: string, translation: string): { text: string; repaired: boolean } {
-  const wanted = original.match(PLAT_TAG_RE) ?? [];
-  const got = translation.match(PLAT_TAG_RE) ?? [];
+  const wanted = original.match(MASKABLE_RE) ?? [];
+  const got = translation.match(MASKABLE_RE) ?? [];
   if (wanted.length === 0 || wanted.length !== got.length) return { text: translation, repaired: false };
 
   const sorted = [...wanted].sort();
   if (sorted.join(" ") !== [...got].sort().join(" ")) return { text: translation, repaired: false };
 
   let i = 0;
-  const text = translation.replace(PLAT_TAG_RE, () => wanted[i++]);
+  const text = translation.replace(MASKABLE_RE, () => wanted[i++]);
   return { text, repaired: text !== translation };
 }

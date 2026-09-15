@@ -22,6 +22,13 @@ import { PLAT_TAG_RE } from "@/lib/nds/plat-tag-mask";
 /** Xenoblade colour codes; ordinary prose in Platinum, so it is dropped there. */
 const HASH_COLOUR_RULE = "#[0-5]";
 
+/**
+ * Platinum's two pause markers, which the editor holds as triangles rather than
+ * as the control characters they encode to — see `plat-break-tokens.ts` for why.
+ * Added only for Platinum: `▼` is an ordinary arrow in another game's prose.
+ */
+const PLAT_BREAK_RULE = "[\\u25BC\\u25BD]";
+
 const RULES = [
   "\\[\\s*\\w+\\s*:[^\\]]*?\\](?:\\s*\\([^)]{1,100}\\))?",
   "\\[\\s*\\w+\\s*=\\s*[^\\]]*\\]",
@@ -62,7 +69,7 @@ export function editorTagPattern(msbtFile?: string): RegExp {
   // Filtered on the rule list, not on the joined string: several rules contain
   // a `|` of their own and splitting the join would shatter them.
   const rules = msbtFile?.startsWith("platinum/")
-    ? RULES.filter((rule) => rule !== HASH_COLOUR_RULE)
+    ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), PLAT_BREAK_RULE]
     : RULES;
   return new RegExp(`(${rules.join("|")})`, "g");
 }

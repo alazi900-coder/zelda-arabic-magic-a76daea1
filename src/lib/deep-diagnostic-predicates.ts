@@ -24,6 +24,16 @@ function countNewlines(s: string): number {
   return n;
 }
 
+/** Platinum's pause markers — see `nds/plat-break-tokens.ts`. */
+function countBreaks(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0x25bc || c === 0x25bd) n++;
+  }
+  return n;
+}
+
 export const deepDiagPredicates = {
   /** [XENO:n ] tag not followed by an actual \n linebreak */
   xenoNMissing(_original: string, translation: string): boolean {
@@ -49,6 +59,18 @@ export const deepDiagPredicates = {
     return Math.abs(t - o) >= 2;
   },
 
+  /**
+   * Translation asks for fewer pauses (▼ ▽) than the original.
+   *
+   * This is not the same complaint as `newlineDiff`: a line break only wraps
+   * text, while a pause stops the game until the player presses the button. A
+   * message that loses one keeps printing into a box that cannot hold it, so
+   * everything after the missing pause never reaches the screen at all.
+   */
+  breakMissing(original: string, translation: string): boolean {
+    return countBreaks(translation) < countBreaks(original);
+  },
+
   /** Translation is identical to original (untranslated, length > 6) */
   identicalOriginal(original: string, translation: string): boolean {
     const t = translation.trim();
@@ -62,6 +84,7 @@ export type DeepDiagFilterId =
   | "excessive-lines"
   | "byte-budget"
   | "newline-diff"
+  | "break-missing"
   | "identical-original";
 
 /** Test whether an entry matches a deep-diag filter id (handles isTranslated guard). */
@@ -77,6 +100,7 @@ export function matchesDeepDiagFilter(
     case "excessive-lines": return deepDiagPredicates.excessiveLines(original, translation);
     case "byte-budget": return deepDiagPredicates.byteBudget(original, translation);
     case "newline-diff": return deepDiagPredicates.newlineDiff(original, translation);
+    case "break-missing": return deepDiagPredicates.breakMissing(original, translation);
     case "identical-original": return deepDiagPredicates.identicalOriginal(original, translation);
   }
 }

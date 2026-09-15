@@ -415,8 +415,9 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           `${result.translatedLines} سطر مترجم` +
           (result.tooLong.length > 0 ? ` | ${result.tooLong.length} سطراً أطول ممّا يسعه أرشيفه — اختصرها` : "") +
           (result.brokenTags.length > 0 ? ` | ${result.brokenTags.length} سطراً سقط منه وسم تضعه اللعبة ({STRVAR…}) — أعِده` : "") +
+          (result.lostBreaks.length > 0 ? ` | ${result.lostBreaks.length} سطراً ينقصه فاصل توقّف (▼ أو ▽) — ما بعده لن يظهر على الشاشة` : "") +
           (result.unmapped.length > 0 ? ` | حروف بلا خانة في الخط: ${result.unmapped.join(" ")}` : ""),
-        variant: refused > 0 ? "destructive" : undefined,
+        variant: refused > 0 || result.lostBreaks.length > 0 ? "destructive" : undefined,
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");

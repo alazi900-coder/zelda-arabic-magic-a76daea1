@@ -32,6 +32,7 @@ import { reshapeArabic } from "@/lib/arabic-processing";
 import { findNdsFile, writeNdsFile, type NdsFile } from "./nds-rom";
 import { parseNarc, buildNarc } from "./narc";
 import { decodePlatArchive, encodePlatArchive } from "./plat-msg";
+import { toBreakTokens, fromBreakTokens, countBreakTokens } from "./plat-break-tokens";
 import {
   decodePlatMessage,
   encodePlatMessage,
@@ -82,6 +83,8 @@ function preview(text: string): string {
  * variable spends its first number on the command rather than as an argument.
  */
 export function measurePlatChars(text: string): number {
+  // `▼` and the newline that trails it are one charcode between them, not two.
+  text = fromBreakTokens(text);
   let n = 0;
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== "{") {
@@ -145,7 +148,7 @@ export function extractPlatEntries(rom: Uint8Array): PlatExtractResult {
 
   archives.forEach((archive, index) => {
     const texts = archive.messages.map((codes) =>
-      isPackedMessage(codes) ? null : decodePlatMessage(codes)
+      isPackedMessage(codes) ? null : toBreakTokens(decodePlatMessage(codes))
     );
     const limit = archiveLimit(archive.messages, texts);
     const name = platArchiveName(index);
@@ -198,6 +201,14 @@ export interface PlatBuildResult {
   tooLong: string[];
   /** Characters with no slot in the font, named once each. */
   unmapped: string[];
+  /**
+   * Lines written with fewer pauses than the English asks for.
+   *
+   * Not refused, because keeping English in their place helps nobody: the
+   * translation is still the better text, it just runs past the bottom of the
+   * box. They are named so the editor can point at them.
+   */
+  lostBreaks: string[];
 }
 
 const TAG_RE = /\{[^}]*\}/g;
@@ -218,13 +229,14 @@ export function buildPlatRom(
   const brokenTags: string[] = [];
   const tooLong: string[] = [];
   const unmapped = new Set<string>();
+  const lostBreaks: string[] = [];
   let translatedLines = 0;
 
   archives.forEach((archive, index) => {
     const name = platArchiveName(index);
     const prefix = PLAT_FILE_PREFIX + name;
     const originals = archive.messages.map((codes) =>
-      isPackedMessage(codes) ? null : decodePlatMessage(codes)
+      isPackedMessage(codes) ? null : toBreakTokens(decodePlatMessage(codes))
     );
     const limit = archiveLimit(archive.messages, originals);
 
@@ -246,7 +258,7 @@ export function buildPlatRom(
 
       let encoded: number[];
       try {
-        encoded = encodePlatMessage(reshapeArabic(translation));
+        encoded = encodePlatMessage(reshapeArabic(fromBreakTokens(translation)));
       } catch (err) {
         if (err instanceof PlatEncodeError) {
           const ch = /«(.+)»/.exec(err.message)?.[1];
@@ -262,6 +274,13 @@ export function buildPlatRom(
         return;
       }
 
+      // A pause the translation dropped is invisible in the text and fatal on
+      // screen: everything after it keeps printing into a box that cannot hold
+      // it. Counted here, where the English original is in hand.
+      if (countBreakTokens(translation) < countBreakTokens(original)) {
+        lostBreaks.push(`${name}:${i}`);
+      }
+
       archive.messages[i] = encoded;
       translatedLines++;
     });
@@ -273,6 +292,7 @@ export function buildPlatRom(
     translatedLines,
     brokenTags,
     tooLong,
+    lostBreaks,
     unmapped: [...unmapped],
   };
 }

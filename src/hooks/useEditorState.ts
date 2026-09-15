@@ -1053,7 +1053,7 @@ export function useEditorState() {
   // === Deep diagnostic counts — uses shared predicates so the dropdown
   // badge count is GUARANTEED to match the filteredEntries length. ===
   const deepDiagnosticCounts = useMemo(() => {
-    const counts = { xenoNMissing: 0, excessiveLines: 0, byteBudget: 0, newlineDiff: 0, identicalOriginal: 0 };
+    const counts = { xenoNMissing: 0, excessiveLines: 0, byteBudget: 0, newlineDiff: 0, breakMissing: 0, identicalOriginal: 0 };
     if (!state) return counts;
     for (const e of state.entries) {
       const key = `${e.msbtFile}:${e.index}`;
@@ -1063,6 +1063,7 @@ export function useEditorState() {
       if (deepDiagPredicates.excessiveLines(e.original, translation)) counts.excessiveLines++;
       if (deepDiagPredicates.byteBudget(e.original, translation)) counts.byteBudget++;
       if (deepDiagPredicates.newlineDiff(e.original, translation)) counts.newlineDiff++;
+      if (deepDiagPredicates.breakMissing(e.original, translation)) counts.breakMissing++;
       if (deepDiagPredicates.identicalOriginal(e.original, translation)) counts.identicalOriginal++;
     }
     return counts;
@@ -1195,6 +1196,7 @@ export function useEditorState() {
         (filterStatus === "excessive-lines" && matchesDeepDiagFilter("excessive-lines", e.original, translation)) ||
         (filterStatus === "byte-budget" && matchesDeepDiagFilter("byte-budget", e.original, translation)) ||
         (filterStatus === "newline-diff" && matchesDeepDiagFilter("newline-diff", e.original, translation)) ||
+        (filterStatus === "break-missing" && matchesDeepDiagFilter("break-missing", e.original, translation)) ||
         (filterStatus === "identical-original" && matchesDeepDiagFilter("identical-original", e.original, translation)) ||
         (filterStatus === "long-texts" && isTranslated && getLongestLineLength(translation) >= LONG_TEXT_LINE_THRESHOLD);
       const matchTechnical = 

@@ -35,6 +35,7 @@ ${e.currentAr}`;
 قواعد لا يجوز كسرها:
 - لا تغيّر أيّ كلمة عربية: نفس الحروف، نفس الكلمات، نفس الترتيب.
 - لا تحذف أو تُضِف رموزاً تقنية في النطاق U+E000..U+E0FF أو U+FFF9..U+FFFC.
+- الرمزان ▼ و▽ فاصلا توقّف تنتظر عندهما اللعبة ضغطة زر: أبقِهما بنفس العدد وبنفس الترتيب وبنفس مواضعهما بين الكلمات، ولا تنقلهما ولا تحذفهما. كلّ واحد منهما ينهي سطره دائماً.
 - لا تبدأ سطراً جديداً بحرف عطف/جر مفرد (و، ف، ل، ب، في، من، إلى، على، عن، مع).
 - اجعل عدد أسطر الترجمة مساوياً لعدد أسطر الأصل قدر الإمكان.
 - إذا كان الأصل سطراً واحداً اجعل الترجمة سطراً واحداً.
@@ -233,6 +234,19 @@ async function callTokenRouter(entries: ReqEntry[], apiKey: string): Promise<Rec
   return out;
 }
 
+/**
+ * يجعل كلّ فاصل توقّف (▼ ▽) ينهي سطره.
+ *
+ * `safeguard` يسمح باختلاف المسافات وحدها، فمزوّد أعاد التوزيع قد يترك الفاصل
+ * في وسط سطر: الحرف باقٍ والفحص يمرّ، لكن الشكل في المحرّر يصير مضلّلاً. هذا
+ * يعيده إلى مكانه قبل الفحص — وهو تحريك مسافة فقط، لا يمسّ كلمة.
+ */
+function snapBreaks(text: string): string {
+  return text.replace(/([\u25BC\u25BD])[ \t]*\n?/g, (_m, tok: string, at: number) =>
+    at === text.length - 1 ? tok : `${tok}\n`
+  );
+}
+
 /** ضمان عدم تغيير الرموز التقنية والكلمات. لو فشل الفحص، أعد الترجمة الأصلية. */
 function safeguard(orig: string, candidate: string): string {
   if (!candidate) return orig;
@@ -327,7 +341,7 @@ Deno.serve(async (req) => {
       if (cand) {
         const tags = risenTagsByKey.get(e.key);
         if (tags) cand = unmaskRisenTags(cand, tags);
-        results[e.key] = safeguard(e.currentAr, cand);
+        results[e.key] = safeguard(e.currentAr, snapBreaks(cand));
       }
     }
     return new Response(JSON.stringify({ results }), {

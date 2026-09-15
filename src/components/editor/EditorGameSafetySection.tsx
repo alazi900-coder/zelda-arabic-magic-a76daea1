@@ -4,6 +4,8 @@ import DeepDiagnosticPanel from "@/components/editor/DeepDiagnosticPanel";
 import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
 import CleanupToolsPanel from "@/components/editor/CleanupToolsPanel";
 import LineBalancePanel from "@/components/editor/LineBalancePanel";
+import PlatBreakRestorePanel from "@/components/editor/PlatBreakRestorePanel";
+import { PLAT_FILE_PREFIX } from "@/lib/nds/plat-editor-bridge";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -32,6 +34,7 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
   if (!editor.state) return null;
   const state = editor.state;
   const isPokemonXpSession = state.entries.some((entry) => entry.msbtFile.startsWith("pokemon-xp/"));
+  const isPlatinumSession = state.entries.some((entry) => entry.msbtFile.startsWith(PLAT_FILE_PREFIX));
 
   // Honor the editor's active filters/search when scanning so users can scope
   // the deep diagnostic to the current view (cards/search/file/category/table/column/pinned).
@@ -143,6 +146,14 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
         }}
         onFilterByKeys={(keys) => focusDeepDiagnosticKeys(keys)}
       />
+
+      {isPlatinumSession && (
+        <PlatBreakRestorePanel
+          state={state}
+          onApplyAll={(fixes) => editor.updateTranslationsBatch(fixes)}
+          onFilterByKeys={(keys) => focusDeepDiagnosticKeys(new Set(keys))}
+        />
+      )}
 
       {/* Line Balance Tool — مخفيّة خلف legacyCommaSplitEnabled (أداة موازنة الأسطر القديمة) */}
       {editor.legacyCommaSplitEnabled && (

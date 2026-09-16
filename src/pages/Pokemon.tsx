@@ -7,13 +7,12 @@ const ACCENT = "hsl(0,72%,50%)";
 const SECONDARY = "hsl(210,70%,55%)";
 
 /**
- * Pokémon Ruby Destiny hub page — mirrors Wolfenstein.tsx: one home card, one
- * hub, a section per tool.
+ * Pokémon Ruby Destiny hub page — one home card, one hub, a section per tool.
  *
- * Unlike Wolfenstein, the two tools here are independent. Arabic lives in the
- * kana codes the English build never prints, so the Latin letters keep their
- * glyphs and a half-finished translation still reads: untranslated lines stay
- * in English instead of turning into gibberish.
+ * The two tools here are independent. Arabic lives in the kana codes the
+ * English build never prints, so the Latin letters keep their glyphs and a
+ * half-finished translation still reads: untranslated lines stay in English
+ * instead of turning into gibberish.
  */
 const Pokemon = forwardRef<HTMLDivElement>((_, ref) => {
   return (

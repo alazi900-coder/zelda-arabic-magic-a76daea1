@@ -17,7 +17,6 @@ import { FILE_CATEGORIES, BDAT_CATEGORIES } from "@/components/editor/types";
 import { buildRisenCategories } from "@/lib/risen/categories";
 import { buildMother3Categories } from "@/lib/mother3/categories";
 import { buildMetroidPrimeCategories } from "@/lib/metroid-prime/mp-categories";
-import { buildWolfCategories } from "@/lib/wolfrpg/wolf-categories";
 import { DS_FILE_RE, dsCategories } from "@/lib/dragonsword/ds-categories";
 import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { buildPokemonXpCategories } from "@/lib/pokemon-xp/categories";
@@ -150,17 +149,14 @@ const Editor = () => {
   }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.userCodeCraftKey, editor.aiModel]);
 
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";
-  const isGameMaker = sourceGame === "gamemaker";
   // Derived from the actually-loaded entries (not the "editor-source-game" idb
   // flag above, which is never reset and can go stale across projects) — used
   // wherever entries already exist, so it can't disagree with what's loaded.
   const isRisenEntries = /\.(tab|gar3)$/i.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isMother3Entries = /^(bank_\d+|names_\w+|menu_\w+)$/.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isMetroidPrimeEntries = /^TEXT_/.test(editor.state?.entries?.[0]?.msbtFile || "");
-  const isWolfensteinEntries = /^wolf_b\d+_s\d+$/.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isPokemonEntries = PKM_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isPokemonXpEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("pokemon-xp/") ?? false;
-  const isGameMakerEntries = editor.state?.entries?.[0]?.msbtFile === "STRG";
   const isDragonSwordEntries = DS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isKingdomHeartsEntries = KHBBS_FILE_RE.test(editor.state?.entries?.[0]?.msbtFile || "");
   const isLumenTaleEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
@@ -203,14 +199,10 @@ const Editor = () => {
     ? "/mother3"
     : isMetroidPrimeEntries
     ? "/metroid-prime/text"
-    : isWolfensteinEntries
-    ? "/wolfenstein/text"
     : isPokemonXpEntries
     ? "/pokemon-unbreakable-ties"
     : isPokemonEntries
     ? "/pokemon/text"
-    : isGameMakerEntries
-    ? "/gamemaker"
     : isDragonSwordEntries
     ? "/dragonsword"
     : isKingdomHeartsEntries
@@ -232,10 +224,8 @@ const Editor = () => {
     if (isRisenEntries) return buildRisenCategories(entries);
     if (isMother3Entries) return buildMother3Categories(entries);
     if (isMetroidPrimeEntries) return buildMetroidPrimeCategories(entries);
-    if (isWolfensteinEntries) return buildWolfCategories(entries);
     if (isPokemonXpEntries) return buildPokemonXpCategories(entries);
     if (isPokemonEntries) return buildPkmCategories(entries);
-    if (isGameMakerEntries) return FILE_CATEGORIES;
     if (isDragonSwordEntries) return dsCategories(entries);
     if (isLumenTaleEntries) return lumentaleCategories(entries);
     if (isGtaIvEntries) return GTAIV_CATEGORIES;
@@ -243,7 +233,7 @@ const Editor = () => {
     if (isPhEntries) return PH_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isWolfensteinEntries, isPokemonXpEntries, isPokemonEntries, isGameMakerEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isPlatinumEntries, isPhEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isPlatinumEntries, isPhEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -747,11 +737,9 @@ const Editor = () => {
             isRisen={isRisenEntries}
             isMother3={isMother3Entries}
             isMetroidPrime={isMetroidPrimeEntries}
-            isWolfenstein={isWolfensteinEntries}
             isPokemon={isPokemonEntries}
             isPlatinum={isPlatinumEntries}
             isPokemonXp={isPokemonXpEntries}
-            isGameMaker={isGameMakerEntries}
             isDragonSword={isDragonSwordEntries}
             isKingdomHearts={isKingdomHeartsEntries}
             isLumenTale={isLumenTaleEntries}

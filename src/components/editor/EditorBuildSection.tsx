@@ -8,11 +8,9 @@ import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, Sh
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildRisen3OutputFromState, RISEN3_MSBT_SUFFIX } from "@/lib/risen3-extractor";
-import { buildGameMakerFromState, GM_BUFFER_KEY } from "@/lib/gamemaker/gm-editor-bridge";
 import { buildMother3Rom, MOTHER3_BUFFER_KEY, type M3SkippedItem } from "@/lib/mother3/m3-editor-bridge";
 import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
-import { buildWolfIpa, WOLF_BUFFER_KEY, WOLF_FONTS_KEY } from "@/lib/wolfrpg/wolf-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
 import { buildPlatRom, PLAT_BUFFER_KEY } from "@/lib/nds/plat-editor-bridge";
 import { ensurePlatTables } from "@/lib/nds/plat-charmap";
@@ -48,13 +46,11 @@ interface EditorBuildSectionProps {
   isRisen?: boolean;
   isMother3?: boolean;
   isMetroidPrime?: boolean;
-  isWolfenstein?: boolean;
   isPokemon?: boolean;
   /** Pokémon Platinum (NDS): rebuilds the message archive inside the .nds. */
   isPlatinum?: boolean;
   /** Pokémon Essentials/RPG Maker XP: editing/exporting translations only until a safe Marshal writer exists. */
   isPokemonXp?: boolean;
-  isGameMaker?: boolean;
   isDragonSword?: boolean;
   isKingdomHearts?: boolean;
   isLumenTale?: boolean;
@@ -132,11 +128,9 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isRisen = false,
   isMother3 = false,
   isMetroidPrime = false,
-  isWolfenstein = false,
   isPokemon = false,
   isPlatinum = false,
   isPokemonXp = false,
-  isGameMaker = false,
   isDragonSword = false,
   isKingdomHearts = false,
   isLumenTale = false,
@@ -164,10 +158,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [risenBuilding, setRisenBuilding] = useState(false);
   const [m3Building, setM3Building] = useState(false);
   const [mpBuilding, setMpBuilding] = useState(false);
-  const [wolfBuilding, setWolfBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [platBuilding, setPlatBuilding] = useState(false);
-  const [gmBuilding, setGmBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
   const [khbbsBuilding, setKHBbsBuilding] = useState(false);
   const [khbbsIsoBuilding, setKHBbsIsoBuilding] = useState(false);
@@ -285,48 +277,6 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
-  const handleWolfensteinBuild = async () => {
-    setWolfBuilding(true);
-    try {
-      const buf = await idbGet<ArrayBuffer>(WOLF_BUFFER_KEY);
-      if (!buf) throw new Error("لم يُعثر على ملف .ipa — أعد فتحه من صفحة نصوص Wolfenstein RPG");
-      // The Arabic font is what makes the bytes readable; without it the game
-      // draws the translation with its original Latin glyphs, so a build with
-      // no font is worth saying out loud rather than silently shipping.
-      const storedFonts = await idbGet<Record<string, ArrayBuffer>>(WOLF_FONTS_KEY);
-      const fonts = storedFonts
-        ? Object.fromEntries(Object.entries(storedFonts).map(([n, b]) => [n, new Uint8Array(b)]))
-        : undefined;
-      const result = await buildWolfIpa(new Uint8Array(buf), editor.state?.translations || {}, fonts);
-      const { toast } = await import("@/hooks/use-toast");
-      if ("error" in result) {
-        toast({ title: "خطأ في البناء", description: result.error, variant: "destructive" });
-        return;
-      }
-      const blob = new Blob([result.ipa as unknown as ArrayBuffer], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "WolfensteinRPG_ar.ipa";
-      a.click();
-      URL.revokeObjectURL(url);
-      const usage = result.bankUsage
-        .map((b) => `الملف ${b.bank}: ${b.bytes} من ${b.limit} بايت`)
-        .join(" | ");
-      toast({
-        title: "✅ تم بناء ملف .ipa معرّب",
-        description:
-          `${result.translatedLines} نص مترجم | ${usage}` +
-          (result.fontsIncluded > 0 ? ` | ${result.fontsIncluded} خطوط عربية` : " | ⚠️ بلا خط عربي — ابنه من أداة الخط") +
-          (result.unmapped.length > 0 ? ` | حروف بلا خانة: ${result.unmapped.join(" ")}` : ""),
-      });
-    } catch (err) {
-      const { toast } = await import("@/hooks/use-toast");
-      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
-    } finally {
-      setWolfBuilding(false);
-    }
-  };
 
   const handlePokemonBuild = async () => {
     setPkmBuilding(true);
@@ -536,33 +486,6 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
-  const handleGameMakerBuild = async () => {
-    setGmBuilding(true);
-    try {
-      const buf = await idbGet<ArrayBuffer>(GM_BUFFER_KEY);
-      if (!buf) throw new Error("لم يُعثر على ملف GameMaker — أعد فتحه من صفحة GameMaker");
-      const result = await buildGameMakerFromState(editor.state?.translations || {}, editor.state?.entries);
-      const blob = new Blob([result.buffer], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = result.filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      const { toast } = await import("@/hooks/use-toast");
-      const delta = result.buffer.byteLength - result.originalSize;
-      const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
-      toast({
-        title: "✅ تم بناء ملف GameMaker معرّب",
-        description: `${result.translatedCount} ترجمة | حجم ${result.buffer.byteLength.toLocaleString()} بايت (${deltaStr})`,
-      });
-    } catch (err) {
-      const { toast } = await import("@/hooks/use-toast");
-      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
-    } finally {
-      setGmBuilding(false);
-    }
-  };
 
   const handleRisenBuild = async () => {
     setRisenBuilding(true);
@@ -1052,11 +975,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           runs only at build time), so the warning itself would be wrong, not
           just its "معالجة الآن" button (which is the same Xenoblade-only
           processing already disabled above). */}
-      {/* Wolfenstein shapes and reverses at build time (wolf-charmap), so
+      {/* The same holds for every game that shapes and reverses at build time:
           running the editor's Arabic processing first reverses every line
-          twice — measured: "متابعة" came out byte-for-byte backwards. Risen
-          and Mother 3 shape at build for the same reason. */}
-      {!isRisen && !isMother3 && !isWolfenstein && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && !isFe12 && !isPh && unprocessedArabicCount > 0 && (
+          twice — measured: "متابعة" came out byte-for-byte backwards. */}
+      {!isRisen && !isMother3 && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && !isFe12 && !isPh && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -1086,7 +1008,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isWolfenstein || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12 || isPh}
+          disabled={editor.applyingArabic || isRisen || isMother3 || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12 || isPh}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isFe12 ? "Fire Emblem 12 يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isPh ? "Phantom Hourglass يشكّل العربية تلقائياً عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -1167,10 +1089,6 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <Button size="lg" onClick={handlePlatinumBuild} disabled={platBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يعيد بناء أرشيف رسائل اللعبة داخل الروم ثم ينزّله">
             {platBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم ‎.nds‎ معرّب وتنزيله
           </Button>
-        ) : isWolfenstein ? (
-          <Button size="lg" onClick={handleWolfensteinBuild} disabled={wolfBuilding} className="flex-1 min-w-[200px] font-display font-bold">
-            {wolfBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف .ipa معرّب وتنزيله
-          </Button>
         ) : isRisen ? (
           <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">
             {risenBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف Risen وتنزيله
@@ -1189,10 +1107,6 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               {khbbsIsoBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ISO معرّب مباشرة
             </Button>
           </>
-        ) : isGameMaker ? (
-          <Button size="lg" onClick={handleGameMakerBuild} disabled={gmBuilding} className="flex-1 min-w-[200px] font-display font-bold">
-            {gmBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ملف GameMaker معرّب وتنزيله
-          </Button>
         ) : isLumenTale ? (
           <Button size="lg" onClick={() => void handleOpenLumenTalePreBuild()} disabled={lumenTaleBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يفتح مراجعة الحماية قبل بناء نسخة Bundle محلية من الحزمة المفتوحة">
             {lumenTaleBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء Bundle LumenTale معرّب وتنزيله

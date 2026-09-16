@@ -42,21 +42,15 @@ const DragonSword = lazyWithIgnoredRef(() => import("./pages/DragonSword"));
 const RisenFileManager = lazyWithIgnoredRef(() => import("./pages/RisenFileManager"));
 const RisenFonts = lazyWithIgnoredRef(() => import("./pages/RisenFonts"));
 const Risen3Fonts = lazyWithIgnoredRef(() => import("./pages/Risen3Fonts"));
-const GbaFontFinder = lazyWithIgnoredRef(() => import("./pages/GbaFontFinder"));
-const EmeraldArabic = lazyWithIgnoredRef(() => import("./pages/EmeraldArabic"));
 const MetroidPrime = lazyWithIgnoredRef(() => import("./pages/MetroidPrime"));
 const MetroidPrimeFont = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeFont"));
 const MetroidPrimeText = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeText"));
 const MetroidPrimeImages = lazyWithIgnoredRef(() => import("./pages/MetroidPrimeImages"));
-const Wolfenstein = lazyWithIgnoredRef(() => import("./pages/Wolfenstein"));
-const WolfensteinFont = lazyWithIgnoredRef(() => import("./pages/WolfensteinFont"));
-const WolfensteinText = lazyWithIgnoredRef(() => import("./pages/WolfensteinText"));
 const Pokemon = lazyWithIgnoredRef(() => import("./pages/Pokemon"));
 const PokemonFont = lazyWithIgnoredRef(() => import("./pages/PokemonFont"));
 const PokemonText = lazyWithIgnoredRef(() => import("./pages/PokemonText"));
 const PlatinumText = lazyWithIgnoredRef(() => import("./pages/PlatinumText"));
 const PokemonUnbreakableTies = lazyWithIgnoredRef(() => import("./pages/PokemonUnbreakableTies"));
-const GameMaker = lazyWithIgnoredRef(() => import("./pages/GameMakerProcess"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
 const KingdomHeartsBBS = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsBBS"));
 const KingdomHeartsImages = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsImages"));
@@ -105,16 +99,11 @@ const App = () => (
                 <Route path="/risen/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Risen"><RisenImages /></ErrorBoundary>} />
                 <Route path="/risen/files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Risen"><RisenFileManager /></ErrorBoundary>} />
                 <Route path="/risen2/fonts" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطوط Risen 2"><RisenFonts /></ErrorBoundary>} />
-                <Route path="/gba/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة إيجاد خطوط GBA"><GbaFontFinder /></ErrorBoundary>} />
-                <Route path="/emerald/arabic" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطّ Emerald"><EmeraldArabic /></ErrorBoundary>} />
                 <Route path="/risen3/fonts" element={<ErrorBoundary fallbackTitle="خطأ في أداة خطوط Risen 3"><Risen3Fonts /></ErrorBoundary>} />
                 <Route path="/metroid-prime" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Metroid Prime"><MetroidPrime /></ErrorBoundary>} />
                 <Route path="/metroid-prime/font" element={<ErrorBoundary fallbackTitle="خطأ في عارض خطوط Metroid Prime"><MetroidPrimeFont /></ErrorBoundary>} />
                 <Route path="/metroid-prime/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Metroid Prime"><MetroidPrimeText /></ErrorBoundary>} />
                 <Route path="/metroid-prime/images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Metroid Prime"><MetroidPrimeImages /></ErrorBoundary>} />
-                <Route path="/wolfenstein" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Wolfenstein RPG"><Wolfenstein /></ErrorBoundary>} />
-                <Route path="/wolfenstein/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Wolfenstein RPG"><WolfensteinFont /></ErrorBoundary>} />
-                <Route path="/wolfenstein/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Wolfenstein RPG"><WolfensteinText /></ErrorBoundary>} />
                 <Route path="/pokemon" element={<ErrorBoundary fallbackTitle="خطأ في صفحة Pokémon Ruby Destiny"><Pokemon /></ErrorBoundary>} />
                 <Route path="/pokemon/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Pokémon Ruby Destiny"><PokemonFont /></ErrorBoundary>} />
                 <Route path="/pokemon/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Ruby Destiny"><PokemonText /></ErrorBoundary>} />
@@ -123,7 +112,6 @@ const App = () => (
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
                 <Route path="/ph-logo" element={<ErrorBoundary fallbackTitle="خطأ في أداة شعار Phantom Hourglass"><PhLogo /></ErrorBoundary>} />
                 <Route path="/dragonsword" element={<ErrorBoundary fallbackTitle="خطأ في أداة DragonSword Awakening"><DragonSword /></ErrorBoundary>} />
-                <Route path="/gamemaker" element={<ErrorBoundary fallbackTitle="خطأ في صفحة GameMaker"><GameMaker /></ErrorBoundary>} />
                 <Route path="/kingdom-hearts-bbs" element={<ErrorBoundary fallbackTitle="خطأ في أداة Kingdom Hearts"><KingdomHeartsBBS /></ErrorBoundary>} />
                 <Route path="/kingdom-hearts-images" element={<ErrorBoundary fallbackTitle="خطأ في أداة صور Kingdom Hearts"><KingdomHeartsImages /></ErrorBoundary>} />
                 <Route path="/kingdom-hearts-files" element={<ErrorBoundary fallbackTitle="خطأ في مدير ملفات Kingdom Hearts"><KingdomHeartsFiles /></ErrorBoundary>} />

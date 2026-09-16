@@ -11,11 +11,7 @@ import risenBg from "@/assets/covers/risen-cover.jpg";
 import metroidPrimeBg from "@/assets/covers/metroid-cover.jpg";
 import mother3Bg from "@/assets/covers/mother3-cover.jpg";
 import dragonSwordBg from "@/assets/dragonsword-hero-bg.jpg";
-import wolfensteinBg from "@/assets/covers/wolfenstein-cover.jpg";
 import pokemonBg from "@/assets/covers/pokemon-cover.jpg";
-import gameMakerBg from "@/assets/gamemaker-hero-bg.jpg";
-import gbaFontBg from "@/assets/gba-font-finder-bg.jpg";
-import emeraldFontBg from "@/assets/covers/pokemon-cover.jpg";
 
 const games = [
   {
@@ -140,18 +136,6 @@ const games = [
     arrowClass: "text-[hsl(270,70%,70%)]",
   },
   {
-    title: "Wolfenstein RPG",
-    subtitle: "عرّب ولفنشتاين RPG",
-    desc: "استخراج نصوص اللعبة من strings.idx وبنوكها، ورسم الحروف العربية داخل خطوطها النقطية الخمسة، ثم بناء ملف .ipa معرّب",
-    link: "/wolfenstein",
-    image: wolfensteinBg,
-    formats: [".ipa", "BMP/strings"],
-    cardClass: "border-[hsl(0,60%,45%)]/30 hover:border-[hsl(0,60%,45%)]/60",
-    formatClass: "bg-[hsl(0,60%,45%)]/20 text-[hsl(20,70%,55%)] border-[hsl(0,60%,45%)]/30",
-    subtitleClass: "text-[hsl(20,70%,55%)]",
-    arrowClass: "text-[hsl(20,70%,55%)]",
-  },
-  {
     title: "Pokémon — الجيل الثالث",
     subtitle: "عرّب Ruby Destiny أو Emerald",
     desc: "يتعرّف على اللعبة من ترويسة الروم، ثمّ على كل سطر نصّ داخلها ويفتحه في المحرر، ويكتب الأشكال العربية في خانات لا تطبعها النسخة الإنجليزية، ثم يبني روم ‎.gba‎ معرّباً",
@@ -174,42 +158,6 @@ const games = [
     formatClass: "bg-[hsl(265,60%,50%)]/20 text-[hsl(265,70%,65%)] border-[hsl(265,60%,50%)]/30",
     subtitleClass: "text-[hsl(265,70%,65%)]",
     arrowClass: "text-[hsl(265,70%,65%)]",
-  },
-  {
-    title: "GameMaker Studio",
-    subtitle: "عرّب ألعاب GameMaker",
-    desc: "استخراج النصوص من ملفات GameMaker (IFF GEN8) مثل game.droid وألعاب المحرك الأخرى، تحريرها في المحرر، وإعادة بناء الملف معرّب بالعربية",
-    link: "/gamemaker",
-    image: gameMakerBg,
-    formats: [".droid", "IFF GEN8"],
-    cardClass: "border-[hsl(45,90%,50%)]/30 hover:border-[hsl(45,90%,50%)]/60",
-    formatClass: "bg-[hsl(45,90%,50%)]/20 text-[hsl(45,100%,60%)] border-[hsl(45,90%,50%)]/30",
-    subtitleClass: "text-[hsl(45,100%,60%)]",
-    arrowClass: "text-[hsl(45,100%,60%)]",
-  },
-  {
-    title: "أين خطّ هذه اللعبة؟",
-    subtitle: "ابحث عن خطّ أي روم GBA",
-    desc: "يمسح الروم كلّه بحثاً عن مواضع تشبه خطّاً — بلا افتراضٍ لمقاس الحرف ولا لألوانه، وبفكّ الرسوم المضغوطة — ثمّ يرسم لك كل مرشّح لتحكم بعينك",
-    link: "/gba/font",
-    image: gbaFontBg,
-    formats: [".gba", "GBA ROM"],
-    cardClass: "border-[hsl(160,70%,45%)]/30 hover:border-[hsl(160,70%,45%)]/60",
-    formatClass: "bg-[hsl(160,70%,45%)]/20 text-[hsl(160,70%,55%)] border-[hsl(160,70%,45%)]/30",
-    subtitleClass: "text-[hsl(160,70%,55%)]",
-    arrowClass: "text-[hsl(160,70%,55%)]",
-  },
-  {
-    title: "خطّ Pokémon Emerald وحده",
-    subtitle: "احقن الخطّ بلا ترجمة",
-    desc: "يجد خطّ اللعبة ببنيته لا بعنوانٍ محفوظ، ويرسم العربية في ١٢٨ خانةً لا يطبعها البناء الإنجليزي — فتبقى الحروف اللاتينية وLv وPK وMN والأقواس والأسهم كما هي",
-    link: "/emerald/arabic",
-    image: emeraldFontBg,
-    formats: [".gba", "GBA ROM"],
-    cardClass: "border-[hsl(150,80%,40%)]/30 hover:border-[hsl(150,80%,40%)]/60",
-    formatClass: "bg-[hsl(150,80%,40%)]/20 text-[hsl(150,80%,55%)] border-[hsl(150,80%,40%)]/30",
-    subtitleClass: "text-[hsl(150,80%,55%)]",
-    arrowClass: "text-[hsl(150,80%,55%)]",
   },
   {
     title: "شعار عنوان Phantom Hourglass",

@@ -192,32 +192,12 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
  * first-person action-adventure. Terse HUD strings, technical Scan Visor logs, and
  * exploration prose. Absolutely NOT Xenoblade/Risen/MOTHER — no swapping cast or
  * lore between franchises. */
-const WOLFENSTEIN_SYSTEM_PROMPT = `You are a professional video game text translator working on Wolfenstein RPG (id Software / EA Mobile, 2009) — a turn-based role-playing game set in the Wolfenstein universe of the Second World War, where B.J. Blazkowicz fights Nazi soldiers, occult experiments and the undead. The tone is pulpy and knowingly funny, not solemn war drama. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3 and NOT Metroid Prime — never import their terminology, characters, or lore.
-
-GAME-SPECIFIC RULES:
-- | is the engine's line break. Keep every one of them, in place. Never add or remove one.
-- %01, %02… are values the game substitutes at run time. Copy them exactly.
-- English source words arrive pre-hyphenated for the narrow screen ("Cat-a-combs", "To-wer"). Those hyphens are line-breaking hints, not part of the word: translate the word, and do not carry the hyphens into Arabic.
-- Keep person names in their English form; translate ranks and titles into their normal Arabic equivalents.
-- Place and level names must stay consistent everywhere they appear — the same map is named in several sections.
-
-STRICT OUTPUT RULES (highest priority — violations are hard failures):
-1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
-2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. If unsure of a name, transliterate it phonetically into Arabic letters — never leave English.
-3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
-   - TAG_0, TAG_1, TAG_2, ... (technical MSBT control tags)
-   - NEWLINE_0, NEWLINE_1, ... (line breaks — NOT words, do NOT translate to "سطر جديد")
-   - ⟪T0⟫, ⟪T1⟫, ... (locked glossary terms)
-   Treat these as opaque tokens.
-4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input. Do NOT move all tags to the end. Do NOT cluster tags together. Tag position carries game meaning (icons, colors, line markers).
-5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
-6. Metroid proper nouns (Samus Aran → ساموس آران, Chozo → تشوزو, Space Pirates → قراصنة الفضاء, Metroids → ميترويدات, Phazon → فيزون, Tallon IV → تالون 4, Galactic Federation → الاتحاد المجرّي, Varia Suit → بدلة فاريا, Morph Ball → كرة التحول, Scan Visor → ماسح الرؤية, Ice/Wave/Plasma/Power Beam → شعاع جليدي/موجي/بلازما/الطاقة, Missile → صاروخ, Grapple Beam → شعاع الخطاف). NEVER substitute names from other games (Monado/Ether/PSI have NO meaning here). Tone is terse and technical — HUD/pickup names stay very short; Scan Visor entries mimic a research/military log; do NOT add literary flourish absent from the English source.`;
 
 // Pokémon's substituted values need no masking of their own: protectTags
 // already shields `{TAG:Value}` and `{variable}`, and `{FD:01}` and `{7f}`
 // match both, so the model never sees them. The prompt still names them
 // because a model that infers one from context could otherwise invent one.
-const POKEMON_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Ruby Destiny: Reign of Legends — a fan-made ROM hack of Pokémon Ruby (Game Boy Advance). It keeps Pokémon's world and vocabulary: trainers, Gyms, badges, Poké Balls, Pokémon Centers, moves, types and items, in a story about the legendary Pokémon and the orbs that control them. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime and NOT Wolfenstein — never import their terminology, characters, or lore.
+const POKEMON_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Ruby Destiny: Reign of Legends — a fan-made ROM hack of Pokémon Ruby (Game Boy Advance). It keeps Pokémon's world and vocabulary: trainers, Gyms, badges, Poké Balls, Pokémon Centers, moves, types and items, in a story about the legendary Pokémon and the orbs that control them. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3 and NOT Metroid Prime — never import their terminology, characters, or lore.
 
 Voice: everyday, warm and plain. The audience is young. Sentences are short. Avoid literary or archaic Arabic; write the way a friendly person actually speaks.
 
@@ -233,7 +213,7 @@ Hard constraints, because of how this game stores its text:
  * not the GBA ROM hack that prompt describes. Its own tags ({COLOR 1},
  * {STRVAR_1 3, 0, 0}, ...) are masked to TAG_N by protectTags before this
  * prompt is ever built; named here only so the model doesn't invent one. */
-const PLATINUM_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Platinum (Nintendo DS) — the Sinnoh region, Professor Rowan, Gyms, badges, Poké Balls, Pokémon Centers, moves, types, held items and TMs. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, NOT Wolfenstein, and NOT the GBA "Pokémon Ruby Destiny" ROM hack — never import their terminology, characters, or lore. In particular, this is not a high-fantasy or military setting: words like "Mail" mean the in-game Mail item (a postcard/letter a Pokémon can hold and trade, e.g. "Bloom Mail", "Bead Mail" — flavor text and a decorative pattern, never armor), not chainmail or plate armor.
+const PLATINUM_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Platinum (Nintendo DS) — the Sinnoh region, Professor Rowan, Gyms, badges, Poké Balls, Pokémon Centers, moves, types, held items and TMs. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, and NOT the GBA "Pokémon Ruby Destiny" ROM hack — never import their terminology, characters, or lore. In particular, this is not a high-fantasy or military setting: words like "Mail" mean the in-game Mail item (a postcard/letter a Pokémon can hold and trade, e.g. "Bloom Mail", "Bead Mail" — flavor text and a decorative pattern, never armor), not chainmail or plate armor.
 
 STRICT OUTPUT RULES (highest priority — violations are hard failures):
 1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
@@ -248,7 +228,7 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 6. Voice: everyday, warm and plain — the audience is young. Avoid literary or archaic Arabic. Pokémon, move, and item names in CAPITALS or Title Case are the game's own proper nouns — leave them in Latin script unless Arabic has a settled, widely used equivalent, and then use that same equivalent everywhere.`;
 
 /** Kept separate from POKEMON_SYSTEM_PROMPT: Essentials is not a GBA ROM. */
-const POKEMON_XP_SYSTEM_PROMPT = `You are a professional video-game text translator working on Pokémon Unbreakable Ties, a Pokémon Essentials game made with RPG Maker XP. This is NOT Pokémon Ruby Destiny, NOT a Game Boy Advance ROM, and NOT Xenoblade Chronicles, Risen, MOTHER 3, Metroid Prime, or Wolfenstein. Never import lore, terminology, storage limits, or message rules from those games.
+const POKEMON_XP_SYSTEM_PROMPT = `You are a professional video-game text translator working on Pokémon Unbreakable Ties, a Pokémon Essentials game made with RPG Maker XP. This is NOT Pokémon Ruby Destiny, NOT a Game Boy Advance ROM, and NOT Xenoblade Chronicles, Risen, MOTHER 3, or Metroid Prime. Never import lore, terminology, storage limits, or message rules from those games.
 
 STRICT OUTPUT RULES (highest priority — violations are hard failures):
 1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة"}. No prose or markdown fences.
@@ -271,7 +251,7 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
 6. Metroid proper nouns (Samus Aran → ساموس آران, Chozo → تشوزو, Space Pirates → قراصنة الفضاء, Metroids → ميترويدات, Phazon → فيزون, Tallon IV → تالون 4, Galactic Federation → الاتحاد المجرّي, Varia Suit → بدلة فاريا, Morph Ball → كرة التحول, Scan Visor → ماسح الرؤية, Ice/Wave/Plasma/Power Beam → شعاع جليدي/موجي/بلازما/الطاقة, Missile → صاروخ, Grapple Beam → شعاع الخطاف). NEVER substitute names from other games (Monado/Ether/PSI have NO meaning here). Tone is terse and technical — HUD/pickup names stay very short; Scan Visor entries mimic a research/military log; do NOT add literary flourish absent from the English source.`;
 
-const GTAIV_SYSTEM_PROMPT = `You are a professional video game text translator working on Grand Theft Auto IV (Rockstar North) — a gritty, satirical open-world crime game set in Liberty City, a parody of New York. The protagonist Niko Bellic is an Eastern-European war veteran and ex-smuggler pulled into the city's organized crime scene by his cousin Roman. The writing is dark comedy: profane, cynical, mocking American consumerism, media and politics — never epic fantasy, never JRPG, never solemn. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, NOT Wolfenstein, and NOT any Pokémon game — never import their terminology, characters, or lore.
+const GTAIV_SYSTEM_PROMPT = `You are a professional video game text translator working on Grand Theft Auto IV (Rockstar North) — a gritty, satirical open-world crime game set in Liberty City, a parody of New York. The protagonist Niko Bellic is an Eastern-European war veteran and ex-smuggler pulled into the city's organized crime scene by his cousin Roman. The writing is dark comedy: profane, cynical, mocking American consumerism, media and politics — never epic fantasy, never JRPG, never solemn. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, and NOT any Pokémon game — never import their terminology, characters, or lore.
 
 VOICE: Modern spoken Arabic (لهجة عربية حديثة قريبة من العامية المفهومة، لا فصحى رسمية جافة) that fits a crime-satire adult game — blunt, streetwise, sarcastic where the English is sarcastic. Radio ads and in-game websites are absurdist parody (advertising, cable news, talk radio) — keep that mocking tone, don't flatten it into a neutral announcement. Mission dialogue is often crude, angry, or darkly funny between criminals; menu/HUD/subtitle text is short and functional. Mild profanity in the English source may be translated with an equivalent Arabic register appropriate to the context — do not sanitize it into overly polite phrasing, and do not invent profanity that is not implied by the source.
 
@@ -302,7 +282,7 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
+  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
@@ -318,7 +298,7 @@ function buildXC1UserPrompt(opts: {
 • Setting: Liberty City, a satirical parody of New York City. Protagonist Niko Bellic, an Eastern-European immigrant war veteran, is drawn into organized crime by his cousin Roman Bellic (who runs a struggling taxi company and gets into gambling debt).
 • Recurring characters (transliterate consistently): Niko Bellic (نيكو بيليتش), Roman Bellic (رومان بيليتش), Packie McReary (باكي مكريري), Brucie Kibbutz (بروسي كيبوتز), Little Jacob (ليتل جايكوب), Dwayne Forge (دوين فورج), Playboy X (بلاي بوي إكس).
 • The game constantly parodies real American media, brands, TV and radio — invented in-universe names (radio stations, websites, products) are satire, not real brands; keep the mocking, exaggerated tone when translating them rather than making them sound like genuine advertising.
-• This is a DIFFERENT game from Xenoblade Chronicles, Risen, MOTHER 3, Metroid Prime, Wolfenstein, and Pokémon — do NOT use their terminology, characters, or lore under any circumstance.`
+• This is a DIFFERENT game from Xenoblade Chronicles, Risen, MOTHER 3, Metroid Prime, and Pokémon — do NOT use their terminology, characters, or lore under any circumstance.`
     : isPokemonXp
     ? `POKÉMON UNBREAKABLE TIES / POKÉMON ESSENTIALS — KEY KNOWLEDGE:
 • This is an RPG Maker XP game using Pokémon Essentials message commands. It is not a GBA ROM hack. Never apply GBA byte limits, {FD:xx} variables, or a forced two-line message-box rule.
@@ -630,14 +610,13 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' = 'xenoblade';
 
 function getGameSystemPrompt(): string {
   if (_game === 'gtaiv') return GTAIV_SYSTEM_PROMPT;
   if (_game === 'pokemon-xp') return POKEMON_XP_SYSTEM_PROMPT;
   if (_game === 'platinum') return PLATINUM_SYSTEM_PROMPT;
   if (_game === 'pokemon') return POKEMON_SYSTEM_PROMPT;
-  if (_game === 'wolfenstein') return WOLFENSTEIN_SYSTEM_PROMPT;
   if (_game === 'metroidprime') return METROIDPRIME_SYSTEM_PROMPT;
   if (_game === 'mother3') return MOTHER3_SYSTEM_PROMPT;
   if (_game === 'risen2') return RISEN2_SYSTEM_PROMPT;
@@ -2234,7 +2213,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'wolfenstein' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -2246,7 +2225,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'wolfenstein' ? 'wolfenstein' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

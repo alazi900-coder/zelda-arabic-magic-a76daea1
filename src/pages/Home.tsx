@@ -15,6 +15,18 @@ import pokemonBg from "@/assets/covers/pokemon-cover.jpg";
 
 const games = [
   {
+    title: "Steins;Gate PSP",
+    subtitle: "تعريب القوائم والحوارات",
+    desc: "يفتح ISO الإنجليزي محلياً، يستخرج نصوص AFS/BIN إلى المحرر، يحمي وسوم المحرك ويحقن خطاً عربياً متصلاً، ثم يبني ISO معرّباً.",
+    link: "/steins-gate-psp",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'%3E%3Cdefs%3E%3CradialGradient id='g' cx='72%25' cy='30%25'%3E%3Cstop stop-color='%234a5275'/%3E%3Cstop offset='.5' stop-color='%23151b32'/%3E%3Cstop offset='1' stop-color='%2305060b'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23g)'/%3E%3Cg fill='none' stroke='%23e0d7be' opacity='.25'%3E%3Ccircle cx='390' cy='420' r='230' stroke-width='8'/%3E%3Ccircle cx='390' cy='420' r='150'/%3E%3Cpath d='M110 420h560M390 140v560M230 260l320 320M550 260L230 580'/%3E%3C/g%3E%3Cpath d='M1090 120l110 210-105 55-120-205z' fill='%23d9d2ba' opacity='.55'/%3E%3C/svg%3E",
+    formats: ["ISO", "AFS / BIN", "PSP"],
+    cardClass: "border-[hsl(230,45%,55%)]/35 hover:border-[hsl(42,70%,72%)]/70",
+    formatClass: "bg-[hsl(230,45%,55%)]/20 text-[hsl(42,70%,80%)] border-[hsl(230,45%,55%)]/35",
+    subtitleClass: "text-[hsl(42,70%,80%)]",
+    arrowClass: "text-[hsl(42,70%,80%)]",
+  },
+  {
     title: "Pokémon Unbreakable Ties",
     subtitle: "نصوص RPG Maker XP",
     desc: "يفتح جدول اللغة الإنجليزي english.dat محلياً، ويعرض الرسائل المنظمة في المحرر مع حماية أوامر Pokémon Essentials. بناء ملف اللعبة مقفل حتى التحقق المستقل من إعادة كتابة Marshal.",

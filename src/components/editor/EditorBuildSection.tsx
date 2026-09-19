@@ -23,6 +23,7 @@ import { createLumenTalePreBuildReport, type LumenTalePreBuildReport } from "@/l
 import { buildGtaIvRuOutput, GTAIV_BUFFER_KEY, GTAIV_CONTAINER_BUFFER_KEY } from "@/lib/gtaiv/gtaiv-editor-bridge";
 import { buildFireEmblem12Rom, FE12_BUFFER_KEY, type Fe12UnsupportedCharacter } from "@/lib/fireemblem12/fe12-editor-bridge";
 import { buildPhRom, PH_BUFFER_KEY } from "@/lib/ph/ph-editor-bridge";
+import { buildSteinsGateIso, STEINSGATE_WORKSPACE_KEY, type SteinsGateWorkspace } from "@/lib/steinsgate/steinsgate-format";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet } from "@/lib/idb-storage";
@@ -55,6 +56,7 @@ interface EditorBuildSectionProps {
   isKingdomHearts?: boolean;
   isLumenTale?: boolean;
   isGtaIv?: boolean;
+  isSteinsGate?: boolean;
   isFe12?: boolean;
   /** Phantom Hourglass (NDS): rebuilds the BMG dialogue files inside the .nds. */
   isPh?: boolean;
@@ -135,6 +137,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isKingdomHearts = false,
   isLumenTale = false,
   isGtaIv = false,
+  isSteinsGate = false,
   isFe12 = false,
   isPh = false,
   khbbsUnsupportedCount = 0,
@@ -165,6 +168,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [khbbsIsoBuilding, setKHBbsIsoBuilding] = useState(false);
   const [lumenTaleBuilding, setLumenTaleBuilding] = useState(false);
   const [gtaIvBuilding, setGtaIvBuilding] = useState(false);
+  const [steinsGateBuilding, setSteinsGateBuilding] = useState(false);
+  const steinsGateIsoInputRef = useRef<HTMLInputElement>(null);
   const [fe12Building, setFe12Building] = useState(false);
   const [fe12UnsupportedCharacters, setFe12UnsupportedCharacters] = useState<Fe12UnsupportedCharacter[]>([]);
   const [phBuilding, setPhBuilding] = useState(false);
@@ -578,6 +583,33 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في بناء russian.gxt", description: (err as Error).message, variant: "destructive" });
     } finally {
       setGtaIvBuilding(false);
+    }
+  };
+
+  const handleSteinsGateBuild = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const sourceIso = event.target.files?.[0];
+    event.target.value = "";
+    if (!sourceIso) return;
+    setSteinsGateBuilding(true);
+    try {
+      await editor.forceSave();
+      const workspace = await idbGet<SteinsGateWorkspace>(STEINSGATE_WORKSPACE_KEY);
+      if (!workspace) throw new Error("لم تُحفظ بيانات Steins;Gate. أعد استيراد نسخة اللعبة أولاً.");
+      if (!editor.state) throw new Error("لا توجد جلسة ترجمة مفتوحة.");
+      const result = await buildSteinsGateIso(sourceIso, workspace, editor.state.entries, editor.state.translations || {});
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "تم بناء Steins;Gate العربية", description: `${result.translatedLines} سطر مترجم؛ أُعيد بناء السكربت والخط داخل ISO محلياً.` });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "تعذر بناء ISO", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSteinsGateBuilding(false);
     }
   };
 
@@ -1061,6 +1093,13 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <div className="flex-1 min-w-[200px] rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
             تصدير <code>english.dat</code> معطّل مؤقتاً: حرّر النصوص وصدّر الترجمات للمراجعة، ولن ينشئ المحرر ملف Marshal غير متحقق منه.
           </div>
+        ) : isSteinsGate ? (
+          <>
+            <input ref={steinsGateIsoInputRef} type="file" accept=".iso,application/x-iso9660-image" className="hidden" onChange={(event) => void handleSteinsGateBuild(event)} />
+            <Button size="lg" onClick={() => steinsGateIsoInputRef.current?.click()} disabled={steinsGateBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="اختر نفس ISO المصدر؛ تتم عملية البناء محلياً في المتصفح">
+              {steinsGateBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ISO Steins;Gate معرّب
+            </Button>
+          </>
         ) : isGtaIv ? (
           <Button size="lg" onClick={handleGtaIvBuild} disabled={gtaIvBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يشكّل العربية عند البناء ثم يتحقق من بنية GXT والرموز التقنية قبل التنزيل">
             {gtaIvBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء russian.gxt معرّب وتنزيله

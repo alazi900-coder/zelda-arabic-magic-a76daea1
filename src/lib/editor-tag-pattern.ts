@@ -18,6 +18,7 @@
 
 import { RISEN_TAG_REGEX } from "@/lib/risen-tag-guard";
 import { PLAT_TAG_RE } from "@/lib/nds/plat-tag-mask";
+import { STEINSGATE_TAG_RE } from "@/lib/steinsgate/steinsgate-tags";
 
 /** Xenoblade colour codes; ordinary prose in Platinum, so it is dropped there. */
 const HASH_COLOUR_RULE = "#[0-5]";
@@ -70,6 +71,8 @@ export function editorTagPattern(msbtFile?: string): RegExp {
   // a `|` of their own and splitting the join would shatter them.
   const rules = msbtFile?.startsWith("platinum/")
     ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), PLAT_BREAK_RULE]
-    : RULES;
+    : msbtFile?.startsWith("steinsgate/")
+      ? [...RULES, STEINSGATE_TAG_RE.source]
+      : RULES;
   return new RegExp(`(${rules.join("|")})`, "g");
 }

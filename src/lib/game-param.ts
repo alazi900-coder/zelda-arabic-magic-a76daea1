@@ -14,6 +14,7 @@
  *   - `pokemon-xp/section-*`     → Pokémon Unbreakable Ties RPG Maker XP tables
  *   - `lumentale/<table>`        → LumenTale: Memories of Trey Unity tables
  *   - `gtaiv/<table>`             → GTA IV GXT tables
+ *   - `steinsgate/<file>.BIN`      → Steins;Gate PSP CriWare scripts
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -29,7 +30,8 @@ export type GameParam =
   | "platinum"
   | "pokemon-xp"
   | "lumentale"
-  | "gtaiv";
+  | "gtaiv"
+  | "steinsgate";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -45,5 +47,6 @@ export function resolveGameParam(
   if (PKM_FILE_RE.test(f)) return "pokemon";
   if (f.startsWith("lumentale/")) return "lumentale";
   if (f.startsWith("gtaiv/")) return "gtaiv";
+  if (f.startsWith("steinsgate/")) return "steinsgate";
   return "xenoblade";
 }

@@ -448,6 +448,7 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     /[\uFFF9-\uFFFC]/g,                       // Unicode special markers
     /<[\w\/][^>]*>/g,                         // HTML-like tags
     ABBREV_PATTERN,                             // Game abbreviations
+    /%(?:K|P|N|CE|CF[0-9A-Fa-f]{6}|L\d+|W\d+|[A-Z][A-Z0-9_]*)/g, // Steins;Gate PSP engine commands
     /%[\d.$-]*[sdif]/g,                       // Printf-style specifiers: %s, %d, %1$s, %.2f
   ];
 
@@ -610,9 +611,12 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' = 'xenoblade';
+
+const STEINSGATE_SYSTEM_PROMPT = `أنت مترجم محترف للعبة Steins;Gate على PSP. استخدم فصحى طبيعية حديثة تحافظ على التوتر العلمي والكوميديا وشخصيات العمل: أوكابي مسرحي، كوريسو ذكية ولاذعة، مايوري لطيفة، ودارو ساخر تقني. ثبّت أسماء الشخصيات ومصطلحات خط العالم وD-Mail وPhoneWave وReading Steiner. القوائم قصيرة ومباشرة. كل رمز يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك: انسخه حرفياً وبالعدد والترتيب والموضع نفسه ولا تترجمه.`;
 
 function getGameSystemPrompt(): string {
+  if (_game === 'steinsgate') return STEINSGATE_SYSTEM_PROMPT;
   if (_game === 'gtaiv') return GTAIV_SYSTEM_PROMPT;
   if (_game === 'pokemon-xp') return POKEMON_XP_SYSTEM_PROMPT;
   if (_game === 'platinum') return PLATINUM_SYSTEM_PROMPT;
@@ -2225,7 +2229,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

@@ -509,8 +509,11 @@ Deno.serve(async (req) => {
     const isPokemonXp = game === 'pokemon-xp';
     const isLumenTale = game === 'lumentale';
     const isGtaIv = game === 'gtaiv';
+    const isSteinsGate = game === 'steinsgate';
     const gameLabel = isLumenTale
       ? 'LumenTale: Memories of Trey'
+      : isSteinsGate
+      ? 'Steins;Gate (PSP)'
       : isGtaIv
       ? 'Grand Theft Auto IV (GTA IV)'
       : isPlatinum
@@ -530,6 +533,8 @@ Deno.serve(async (req) => {
       ? '\nهذه مراجعة خاصة بـ LumenTale: Memories of Trey. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى.\n'
       : isGtaIv
       ? '\nهذه مراجعة خاصة بـ GTA IV. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى. استند فقط إلى النص والقاموس المعطى، ولا تغيّر رموز GTA IV المحاطة بعلامتي ~ ولا أي مبلغ دولار ظاهر مثل $100 أو $20m.\n'
+      : isSteinsGate
+      ? '\nهذه مراجعة خاصة بـ Steins;Gate PSP. حافظ على نبرة الخيال العلمي والشخصيات والمصطلحات الموحّدة. كل وسم يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك؛ يجب نسخه حرفياً وبالعدد والترتيب والموضع نفسه.\n'
       : isPlatinum
       ? '\nهذه مراجعة خاصة بـ Pokémon Platinum (Nintendo DS) — عالم Sinnoh، بروفيسور روان، الصالات، الأوسمة، مراكز بوكيمون، الحركات والأنواع والعناصر. لا تفترض سياق Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. هذه ليست لعبة خيال ملحمي: كلمة "Mail" هنا تعني عنصر البريد (بطاقة بريدية يحملها البوكيمون، مثل "Bloom Mail")، وليست درعاً معدنياً — لا تفترض معنى "درع" لها إطلاقاً.\n'
       : isPokemonXp

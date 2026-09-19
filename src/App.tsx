@@ -58,6 +58,7 @@ const KingdomHeartsFiles = lazyWithIgnoredRef(() => import("./pages/KingdomHeart
 const KingdomHeartsFont = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsFont"));
 const LumenTale = lazyWithIgnoredRef(() => import("./pages/LumenTale"));
 const GtaIV = lazyWithIgnoredRef(() => import("./pages/GtaIV"));
+const SteinsGatePSP = lazyWithIgnoredRef(() => import("./pages/SteinsGatePSP"));
 const FireEmblem12 = lazyWithIgnoredRef(() => import("./pages/FireEmblem12"));
 const PhTranslate = lazyWithIgnoredRef(() => import("./pages/PhTranslate"));
 const MajorasMaskLogo = lazyWithIgnoredRef(() => import("./pages/MajorasMaskLogo"));
@@ -118,6 +119,7 @@ const App = () => (
                 <Route path="/kingdom-hearts-font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Kingdom Hearts"><KingdomHeartsFont /></ErrorBoundary>} />
                 <Route path="/lumentale" element={<ErrorBoundary fallbackTitle="خطأ في أداة LumenTale"><LumenTale /></ErrorBoundary>} />
                 <Route path="/gta-iv" element={<ErrorBoundary fallbackTitle="خطأ في فاحص GTA IV"><GtaIV /></ErrorBoundary>} />
+                <Route path="/steins-gate-psp" element={<ErrorBoundary fallbackTitle="خطأ في أداة Steins;Gate PSP"><SteinsGatePSP /></ErrorBoundary>} />
                 <Route path="/fire-emblem-12" element={<ErrorBoundary fallbackTitle="خطأ في فاحص Fire Emblem 12"><FireEmblem12 /></ErrorBoundary>} />
                 <Route path="/ph-translate" element={<ErrorBoundary fallbackTitle="خطأ في مسار ترجمة Phantom Hourglass"><PhTranslate /></ErrorBoundary>} />
                 <Route path="/majoras-mask-logo" element={<ErrorBoundary fallbackTitle="خطأ في أداة شعار Majora's Mask 3D"><MajorasMaskLogo /></ErrorBoundary>} />

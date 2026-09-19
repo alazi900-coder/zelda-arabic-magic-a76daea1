@@ -48,6 +48,7 @@ import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry } from "@/lib/ph/ph-categories";
+import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categories";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -1155,11 +1156,12 @@ export function useEditorState() {
       const isDs = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && DS_FILE_RE.test(e.msbtFile);
       const isLumenTale = e.msbtFile.startsWith('lumentale/');
       const isGtaIv = e.msbtFile.startsWith('gtaiv/');
+      const isSteinsGate = e.msbtFile.startsWith('steinsgate/');
       const isPlat = e.msbtFile.startsWith('platinum/');
       const isPh = e.msbtFile.startsWith('ph/');
-      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||

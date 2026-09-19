@@ -18,6 +18,7 @@ import { buildLumenTaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
 import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
 import { PH_CATEGORIES } from "@/lib/ph/ph-categories";
+import { STEINSGATE_CATEGORIES } from "@/lib/steinsgate/steinsgate-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -69,6 +70,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const isPokemon = !isRisen && !isMother3 && !isMetroidPrime && !!entries?.some((e) => PKM_FILE_RE.test(e.msbtFile));
   const isLumenTale = !!entries?.some((e) => e.msbtFile.startsWith("lumentale/"));
   const isGtaIv = !!entries?.some((e) => e.msbtFile.startsWith("gtaiv/"));
+  const isSteinsGate = !!entries?.some((e) => e.msbtFile.startsWith("steinsgate/"));
   const isPlatinum = !!entries?.some((e) => e.msbtFile.startsWith("platinum/"));
   const isPh = !!entries?.some((e) => e.msbtFile.startsWith("ph/"));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
@@ -108,6 +110,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         lumentaleCategories={lumentaleCategories}
         isGtaIv={isGtaIv}
         gtaIvCategories={GTAIV_CATEGORIES}
+        isSteinsGate={isSteinsGate}
+        steinsGateCategories={STEINSGATE_CATEGORIES}
         isPlatinum={isPlatinum}
         platinumCategories={PLATINUM_CATEGORIES}
         isPh={isPh}

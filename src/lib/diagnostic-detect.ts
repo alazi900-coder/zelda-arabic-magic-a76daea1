@@ -20,7 +20,6 @@ import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
 import { diffPlatTags } from "@/lib/nds/plat-tag-mask";
 import { PLAT_FILE_RE } from "@/lib/nds/plat-editor-bridge";
-import { countBreakTokens } from "@/lib/nds/plat-break-tokens";
 import { pkmOverlongLines, PKM_DIALOGUE_LINE_PIXELS } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { countMissingTagNewlines } from "@/lib/tag-newline-anchor";
@@ -395,12 +394,6 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   // presence: two values that swap places read as fine until the game fills
   // them in and hands you the wrong name.
   if (PLAT_FILE_RE.test(entry.msbtFile)) {
-    const originalBreaks = countBreakTokens(entry.original);
-    const translatedBreaks = countBreakTokens(trimmed);
-    if (originalBreaks > translatedBreaks) {
-      issues.push({ ...base, severity: "critical", category: "plat_break_mismatch",
-        message: `فواصل التوقف المفقودة: الأصل يحتوي ${originalBreaks} (${originalBreaks ? "▼/▽" : ""}) والترجمة تحتوي ${translatedBreaks}. سيؤدي ذلك إلى تخطي نص عند اللعب` });
-    }
     const platDiff = diffPlatTags(entry.original, trimmed);
     if (platDiff.missing.length > 0 || platDiff.extra.length > 0) {
       const parts: string[] = [];

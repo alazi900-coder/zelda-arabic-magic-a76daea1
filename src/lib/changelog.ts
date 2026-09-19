@@ -13,13 +13,6 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2.25.2",
-    date: "2026-09-19",
-    changes: [
-      { kind: "fixed", text: "إضافة فحص عميق لفواصل توقف Pokémon Platinum (▼/▽) المفقودة، مع استعادة ذكية وآمنة لمواضعها عند البناء دون استبدال الترجمة العربية." },
-    ],
-  },
-  {
     version: "2.25.1",
     date: "2026-09-19",
     changes: [

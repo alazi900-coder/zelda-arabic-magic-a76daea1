@@ -10,7 +10,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { repairSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
-import { restoreBreaks } from "@/lib/nds/plat-restore-breaks";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
@@ -103,7 +102,6 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "pkm_var_mismatch", label: "قيم بوكيمون المفقودة", icon: "🚫", severity: "critical", description: "رمز مثل {FD:01} حُذف أو تغيّر أو انتقل — تفقد الشخصية اسمها في كل سطر يناديها به" },
   { id: "plat_tag_mismatch", label: "وسوم Platinum المفقودة", icon: "◈", severity: "critical", description: "وسم مثل {STRVAR_1 3, 0, 0} حُذف أو تغيّر أو انتقل — يترك فراغاً في الجملة، أو يضع كل قيمة في موضع الأخرى" },
-  { id: "plat_break_mismatch", label: "فواصل توقف Platinum المفقودة", icon: "▼", severity: "critical", description: "رمز ▼/▽ يمثل انتظار ضغط الزر أو انتقال الصفحة. حذفه يجعل اللعبة تتخطى النص؛ يعاد فقط عندما تتطابق الجمل بأمان" },
   { id: "pkm_line_too_wide", label: "سطر أعرض من صندوق الحوار (بوكيمون)", icon: "📐", severity: "critical", description: "المحرّك لا يلفّ السطر: ما يتجاوز ١٩٨ بكسل يُرسم خارج الصندوق ولا يُمسح، فيبقى فوق الرسائل التالية — الإصلاح يضع فاصل سطر" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
   { id: "xeno_n_no_newline", label: "[XENO:n] بدون سطر جديد", icon: "↩️", severity: "warning", description: "وسم [XENO:n ] غير متبوع بـ \\n — يمنع كسر السطر في صندوق الحوار" },
@@ -160,7 +158,6 @@ const GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES = new Set(["gtaiv_line_break_d
 // original's order and the translated words are left exactly as written. A line
 // that lost a tag outright is not guessed at.
 const PLAT_TAG_FIXABLE_CATEGORIES = new Set(["plat_tag_mismatch"]);
-const PLAT_BREAK_FIXABLE_CATEGORIES = new Set(["plat_break_mismatch"]);
 const repairGtaIvProtectedSequence = (category: string, original: string, candidate: string) => (
   category === "gtaiv_dollar_amount_mismatch"
     ? repairGtaIvDollarAmountSequence(original, candidate)
@@ -192,7 +189,7 @@ const RISEN_TAG_FIXABLE_CATEGORIES = new Set(["risen_tag_mismatch"]);
  */
 const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...PLAT_BREAK_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -392,11 +389,6 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       };
     }
 
-    if (PLAT_BREAK_FIXABLE_CATEGORIES.has(issue.category)) {
-      const repaired = restoreBreaks(entry.original, trans);
-      return { fixResult: repaired ?? trans, reason: repaired ? '▼ أُعيدت فواصل التوقف من الأصل مع إبقاء الترجمة العربية' : '⚠️ لا يمكن تحديد مواضع الفواصل بأمان؛ راجع النص يدوياً' };
-    }
-
     if (GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES.has(issue.category)) {
       const fixed = gtaIvRuntimeTextToEditorText(trans);
       return {
@@ -549,13 +541,6 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       } else {
         toast({ title: '⚠️ مراجعة يدوية مطلوبة', description: 'الوسوم ناقصة أو زائدة لا مبعثرة — لا يُخمَّن الوسم الناقص' });
       }
-      return;
-    }
-
-    if (PLAT_BREAK_FIXABLE_CATEGORIES.has(issue.category)) {
-      const repaired = restoreBreaks(entry.original, issue.translation);
-      if (repaired && onApplyFix) { onApplyFix(issue.key, repaired); toast({ title: '▼ أُعيدت فواصل Platinum', description: 'أُعيدت علامات انتظار الزر إلى مواضعها مع الحفاظ على الترجمة' }); }
-      else toast({ title: '⚠️ مراجعة يدوية مطلوبة', description: 'لم تتطابق الجمل بما يكفي لتحديد موضع الفاصل بأمان' });
       return;
     }
 
@@ -954,20 +939,6 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
         if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
           tagFixKeys.push(issue.key);
-          processedKeys.add(issue.key);
-          continue;
-        }
-
-        if (PLAT_BREAK_FIXABLE_CATEGORIES.has(issue.category)) {
-          const entry = entryMap.get(issue.key);
-          const trans = state.translations[issue.key];
-          const repaired = entry && trans ? restoreBreaks(entry.original, trans) : null;
-          if (repaired && repaired !== trans) {
-            updates[issue.key] = repaired;
-            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '▼ أُعيدت فواصل التوقف بأمان مع إبقاء الترجمة', before: trans, after: repaired });
-          } else {
-            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'unchanged', reason: '⚠️ تعذر تحديد مواضع الفواصل بأمان', before: trans, after: trans });
-          }
           processedKeys.add(issue.key);
           continue;
         }

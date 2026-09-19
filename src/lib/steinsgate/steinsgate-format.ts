@@ -548,6 +548,10 @@ async function injectArabicFont(fontArchiveBuffer: ArrayBuffer, glyphMap: Record
     const fni = archive.subarray(fniEntry.offset, fniEntry.offset + fniEntry.size);
     const view = new DataView(fnt.buffer, fnt.byteOffset, fnt.byteLength);
     const mapOffset = readU32(view, 16);
+    // FNT stores the bitmap-cell count in its header. Updating the data size
+    // without this field leaves the new map entries pointing past the font as
+    // far as the PSP renderer is concerned, which causes a black screen.
+    view.setUint32(28, Math.max(view.getUint32(28, true), maxGlyphId + 1), true);
     const canvas = document.createElement("canvas");
     canvas.width = cell; canvas.height = cell;
     const context = canvas.getContext("2d", { willReadFrequently: true });

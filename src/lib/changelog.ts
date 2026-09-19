@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.10", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "تحديث عداد خلايا FNT بعد توسيع خط Steins;Gate؛ يمنع توقف PSP عند الرجوع من شاشة الاعتمادات أو فتح القوائم." },
+  ] },
   { version: "2.25.9", date: "2026-09-19", changes: [
     { kind: "fixed", text: "إصلاح تجمّد Steins;Gate الناتج عن إحالة خريطة الخط إلى خلايا رسومية غير موجودة؛ يوسّع البناء خطي FNT بأمان ويحدّث أرشيف الخط." },
   ] },

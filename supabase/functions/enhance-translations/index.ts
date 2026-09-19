@@ -555,12 +555,38 @@ Deno.serve(async (req) => {
     // index/key/metadata lookups; `promptEntries` (masked) is used ONLY to
     // build prompt text.
     const risenTagsByKey = new Map<string, string[]>();
+    const steinsGateTagsByKey = new Map<string, string[]>();
+    const STEINSGATE_TOKEN_RE = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n|\r?\n/g;
+    const maskSteinsGateText = (text: string, key: string, collect = false): string => {
+      let index = 0;
+      return (text || '').replace(STEINSGATE_TOKEN_RE, (token) => {
+        if (collect) {
+          const list = steinsGateTagsByKey.get(key) ?? [];
+          list.push(token);
+          steinsGateTagsByKey.set(key, list);
+        }
+        return `__SGTAG_${index++}__`;
+      });
+    };
+    const unmaskSteinsGateText = (key: string, text: string): string => {
+      const tags = steinsGateTagsByKey.get(key);
+      if (!tags) return text;
+      let malformed = false;
+      const restored = (text || '').replace(/__SGTAG_(\d+)__/g, (_whole, rawIndex) => {
+        const tag = tags[Number(rawIndex)];
+        if (tag === undefined) { malformed = true; return _whole; }
+        return tag;
+      });
+      return malformed ? '' : restored;
+    };
     const promptEntries: EnhanceEntry[] = isRisen
       ? entries.map((e) => {
           const { maskedA, maskedB, tags } = maskRisenTagPair(e.original, e.translation);
           risenTagsByKey.set(e.key, tags);
           return { ...e, original: maskedA, translation: maskedB };
         })
+      : isSteinsGate
+      ? entries.map((e) => ({ ...e, original: maskSteinsGateText(e.original, e.key, true), translation: maskSteinsGateText(e.translation, e.key) }))
       : entries;
     const unmaskSuggestion = (key: string, text: string): string => {
       const tags = risenTagsByKey.get(key);
@@ -599,7 +625,7 @@ Deno.serve(async (req) => {
       return malformed ? '' : restored;
     };
     const restoreSuggestion = (key: string, text: string): string => {
-      const restored = unmaskPokemonXpSuggestion(key, unmaskSuggestion(key, text));
+      const restored = unmaskSteinsGateText(key, unmaskPokemonXpSuggestion(key, unmaskSuggestion(key, text)));
       if (isSteinsGate) {
         const original = entries.find(e => e.key === key)?.original ?? '';
         const pattern = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n|\r?\n/g;

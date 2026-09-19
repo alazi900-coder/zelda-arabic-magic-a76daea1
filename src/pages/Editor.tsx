@@ -613,6 +613,7 @@ const Editor = () => {
             setShowDiffView={setShowDiffView}
             isRisen={isRisenEntries}
             isGtaIv={isGtaIvEntries}
+            isSteinsGate={isSteinsGateEntries}
           />
 
           {/* Needs Improvement Badges */}
@@ -804,6 +805,39 @@ const Editor = () => {
               editor.setPinnedKeys(null);
               editor.setIsSearchPinned(false);
               editor.setFilterStatus("plat-unsupported");
+            }}
+            steinsGateUnsupportedCount={editor.steinsGateUnsupportedCount}
+            steinsGateUnsupportedCharacters={editor.steinsGateUnsupportedCharacters}
+            steinsGateUnsupportedFilterActive={editor.filterStatus === "steinsgate-unsupported"}
+            onFilterSteinsGateUnsupported={() => {
+              if (editor.filterStatus === "steinsgate-unsupported") {
+                editor.setUnsupportedCharFilter(null);
+                editor.setFilterStatus("all");
+                return;
+              }
+              // Same reason the Platinum button clears these: a category or
+              // search still in place leaves the list empty while the report
+              // shows a count.
+              editor.setSearch("");
+              editor.setFilterFile("all");
+              editor.setFilterCategory([]);
+              editor.setFilterTechnical("all");
+              editor.setFilterTable("all");
+              editor.setFilterColumn("all");
+              editor.setFilterRisenOwner("");
+              editor.setFilterRisenItemPrefix("");
+              editor.setFilterRisenSection(null);
+              editor.setPinnedKeys(null);
+              editor.setIsSearchPinned(false);
+              editor.setUnsupportedCharFilter(null);
+              editor.setFilterStatus("steinsgate-unsupported");
+            }}
+            unsupportedCharFilter={editor.unsupportedCharFilter}
+            onPickUnsupportedChar={(unicode) => {
+              // Pressing the chip that is already on widens back to every
+              // unsupported row rather than emptying the list.
+              editor.setUnsupportedCharFilter(editor.unsupportedCharFilter === unicode ? null : unicode);
+              editor.setFilterStatus("steinsgate-unsupported");
             }}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}

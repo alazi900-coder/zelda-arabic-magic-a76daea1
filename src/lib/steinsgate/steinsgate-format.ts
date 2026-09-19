@@ -268,9 +268,16 @@ export async function importSteinsGateIso(file: File): Promise<SteinsGateImportR
   };
 }
 
-function encodeTranslatedText(original: string, translation: string, glyphMap: Record<string, number[]>): Uint8Array {
-  const validation = validateSteinsGateTags(original, fromSteinsGateEditorText(translation));
-  if (!validation.valid) throw new Error(validation.reason ?? "وسوم Steins;Gate غير محفوظة.");
+/**
+ * The exact text the PSP font is asked to draw.
+ *
+ * Shaping happens here, not in the editor: the font carries Arabic
+ * *presentation forms* (U+FE70-U+FEFC), never the base letters, so a check that
+ * reads the translation as typed would call every Arabic letter unsupported.
+ * Tags are put back untouched around each shaped piece, the way the engine
+ * reads them.
+ */
+function toVisualText(translation: string): string {
   const editorTranslation = fromSteinsGateEditorText(translation);
   const pieces = editorTranslation.split(STEINSGATE_TAG_RE);
   const tags = editorTranslation.match(STEINSGATE_TAG_RE) ?? [];
@@ -279,19 +286,69 @@ function encodeTranslatedText(original: string, translation: string, glyphMap: R
     visual += processArabicText(pieces[index], { mirrorPunct: true });
     if (tags[index]) visual += tags[index];
   }
+  return visual;
+}
+
+/**
+ * The bytes one drawn character costs, or null when the font has no glyph for
+ * it.
+ *
+ * Both the build and the report go through here, so what the editor lists as
+ * unsupported is exactly what the build refuses -- a report written separately
+ * drifts from the encoder and starts naming characters that build fine.
+ */
+function encodeVisualChar(char: string, glyphMap: Record<string, number[]>): number[] | null {
+  const mapped = glyphMap[char];
+  if (mapped) return mapped;
+  const code = char.codePointAt(0) ?? 0;
+  if (code >= 0x20 && code <= 0x7e) return [code];
+  if (char === "【") return [0x81, 0x79];
+  if (char === "】") return [0x81, 0x7a];
+  if (char === "…") return [0x81, 0x63];
+  if (char === "—" || char === "–") return [0x81, 0x5c];
+  if (char === "’" || char === "‘") return [0x27];
+  if (char === "“" || char === "”") return [0x22];
+  return null;
+}
+
+export interface SteinsGateUnsupportedCharacter {
+  /** The character as the font would have been asked to draw it. */
+  character: string;
+  /** `U+0651`, for a character whose shape says nothing on its own. */
+  unicode: string;
+  /** How many times it occurs across every translation checked. */
+  count: number;
+}
+
+/**
+ * The characters in `translation` that the font cannot draw, all of them.
+ *
+ * The build stops at the first one, which tells a translator nothing about how
+ * much is wrong; this walks the whole line so the editor can name every
+ * character and point at every row that uses it.
+ */
+export function analyzeSteinsGateUnsupportedCharacters(
+  translation: string,
+  glyphMap: Record<string, number[]>,
+): SteinsGateUnsupportedCharacter[] {
+  const found = new Map<string, SteinsGateUnsupportedCharacter>();
+  for (const char of toVisualText(translation)) {
+    if (encodeVisualChar(char, glyphMap)) continue;
+    const unicode = `U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`;
+    const previous = found.get(unicode);
+    found.set(unicode, previous ? { ...previous, count: previous.count + 1 } : { character: char, unicode, count: 1 });
+  }
+  return [...found.values()];
+}
+
+function encodeTranslatedText(original: string, translation: string, glyphMap: Record<string, number[]>): Uint8Array {
+  const validation = validateSteinsGateTags(original, fromSteinsGateEditorText(translation));
+  if (!validation.valid) throw new Error(validation.reason ?? "وسوم Steins;Gate غير محفوظة.");
   const out: number[] = [];
-  for (const char of visual) {
-    const mapped = glyphMap[char];
-    if (mapped) { out.push(...mapped); continue; }
-    const code = char.codePointAt(0) ?? 0;
-    if (code >= 0x20 && code <= 0x7e) { out.push(code); continue; }
-    if (char === "【") { out.push(0x81, 0x79); continue; }
-    if (char === "】") { out.push(0x81, 0x7a); continue; }
-    if (char === "…") { out.push(0x81, 0x63); continue; }
-    if (char === "—" || char === "–") { out.push(0x81, 0x5c); continue; }
-    if (char === "’" || char === "‘") { out.push(0x27); continue; }
-    if (char === "“" || char === "”") { out.push(0x22); continue; }
-    throw new Error(`الحرف «${char}» غير مدعوم في خط Steins;Gate PSP.`);
+  for (const char of toVisualText(translation)) {
+    const encoded = encodeVisualChar(char, glyphMap);
+    if (!encoded) throw new Error(`الحرف «${char}» غير مدعوم في خط Steins;Gate PSP.`);
+    out.push(...encoded);
   }
   return Uint8Array.from(out);
 }

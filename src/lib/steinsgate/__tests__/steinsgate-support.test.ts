@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { categorizeSteinsGateEntry } from "../steinsgate-categories";
 import { extractSteinsGateTags, repairSteinsGateTags, validateSteinsGateTags, isSteinsGateTranslatable } from "../steinsgate-tags";
+import { analyzeSteinsGateUnsupportedCharacters } from "../steinsgate-format";
+import { processArabicText } from "@/lib/arabic-processing";
 import { detectIssues } from "@/lib/diagnostic-detect";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import type { EditorState } from "@/components/editor/types";
@@ -61,5 +63,73 @@ describe("Steins;Gate PSP support", () => {
     expect(mergeGuardedTranslations(state, { [k]: 'مرحبا' }).translations[k]).toBe('مرحبا%K%P');
     state.entries[0].original = 'Hello%Nworld%K%P';
     expect(mergeGuardedTranslations(state, { [k]: 'مرحبا' }).translations[k]).toBe('قديم%K%P');
+  });
+});
+
+describe("Steins;Gate unsupported characters", () => {
+  // The real map holds Arabic presentation forms, never base letters, so the
+  // fixture is built the way buildGlyphMap builds it: whatever shaping emits.
+  const glyphMapFor = (...samples: string[]): Record<string, number[]> => {
+    const map: Record<string, number[]> = {};
+    let slot = 0x40;
+    for (const sample of samples) {
+      for (const char of processArabicText(sample, { mirrorPunct: true })) {
+        if (!map[char]) map[char] = [0x81, slot++];
+      }
+    }
+    return map;
+  };
+
+  it("reports nothing when every shaped letter has a glyph", () => {
+    const map = glyphMapFor("مرحبا");
+    expect(analyzeSteinsGateUnsupportedCharacters("مرحبا", map)).toEqual([]);
+  });
+
+  it("does not call a base Arabic letter unsupported just because it is unshaped", () => {
+    // Checking the text as typed would flag every letter: the map is keyed by
+    // presentation forms. This is the mistake the shared pipeline prevents.
+    const map = glyphMapFor("مرحبا");
+    expect(Object.keys(map).some((char) => char === "م")).toBe(false);
+    expect(analyzeSteinsGateUnsupportedCharacters("مرحبا", map)).toEqual([]);
+  });
+
+  it("names a character with no glyph, once, with its count", () => {
+    // Persian peh is an Arabic letter the shaper leaves alone: it has no form
+    // in U+FE70-U+FEFC, so it is the real shape of this failure.
+    const map = glyphMapFor("مرحبا");
+    const found = analyzeSteinsGateUnsupportedCharacters("پمرحباپ", map);
+    expect(found).toHaveLength(1);
+    expect(found[0].unicode).toBe("U+067E");
+    expect(found[0].count).toBe(2);
+  });
+
+  it("lists every offending character, not just the first", () => {
+    // The build stops at the first one; the point of the report is the rest.
+    const map = glyphMapFor("مرحبا");
+    const found = analyzeSteinsGateUnsupportedCharacters("پمرحبا٠", map);
+    expect(found.map((item) => item.unicode).sort()).toEqual(["U+0660", "U+067E"]);
+  });
+
+  it("says nothing about tashkeel, which shaping removes before the font sees it", () => {
+    const map = glyphMapFor("مرحبا");
+    expect(analyzeSteinsGateUnsupportedCharacters("مَرحّبا", map)).toEqual([]);
+  });
+
+  it("passes ASCII and the punctuation the encoder special-cases", () => {
+    expect(analyzeSteinsGateUnsupportedCharacters("Okabe 2010 […] —", {})).toEqual([]);
+  });
+
+  it("leaves engine commands alone — they are not drawn text", () => {
+    const map = glyphMapFor("مرحبا");
+    expect(analyzeSteinsGateUnsupportedCharacters("%K%Pمرحبا", map)).toEqual([]);
+  });
+
+  it("reports the protected arrow, because the build refuses it too", () => {
+    // `▼` is written back as a lone CR, and STEINSGATE_TAG_RE only matches a CR
+    // that carries a newline (`\r?\n`), so the encoder hands the bare CR to the
+    // font and throws. The report says so rather than hiding a build failure.
+    const map = glyphMapFor("مرحبا");
+    const found = analyzeSteinsGateUnsupportedCharacters("مرحبا▼", map);
+    expect(found.map((item) => item.unicode)).toEqual(["U+000D"]);
   });
 });

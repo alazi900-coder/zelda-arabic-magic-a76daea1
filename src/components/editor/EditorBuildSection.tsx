@@ -31,6 +31,7 @@ import type { useEditorState } from "@/hooks/useEditorState";
 import type { KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 import type { GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
 import type { PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
+import type { SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -72,6 +73,13 @@ interface EditorBuildSectionProps {
   platUnsupportedCharacters?: PlatUnsupportedCharacter[];
   platUnsupportedFilterActive?: boolean;
   onFilterPlatUnsupported?: () => void;
+  steinsGateUnsupportedCount?: number;
+  steinsGateUnsupportedCharacters?: SteinsGateUnsupportedCharacter[];
+  steinsGateUnsupportedFilterActive?: boolean;
+  onFilterSteinsGateUnsupported?: () => void;
+  /** `U+XXXX` the list is narrowed to, or null for every unsupported row. */
+  unsupportedCharFilter?: string | null;
+  onPickUnsupportedChar?: (unicode: string) => void;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -115,7 +123,7 @@ const PLAT_INVISIBLE_NAMES: Record<string, string> = {
   "U+FEFF": "مسافة صفرية غير مرئية (BOM)",
 };
 
-function formatPlatUnsupportedCharacter(item: PlatUnsupportedCharacter): string {
+function formatUnsupportedCharacter(item: PlatUnsupportedCharacter): string {
   const named = PLAT_INVISIBLE_NAMES[item.unicode];
   if (named) return `${named} · ${item.unicode}`;
   const codePoint = item.character.codePointAt(0) ?? 0;
@@ -150,6 +158,12 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   onFilterGtaIvUnsupported,
   platUnsupportedCount = 0,
   platUnsupportedCharacters = [],
+  steinsGateUnsupportedCount = 0,
+  steinsGateUnsupportedCharacters = [],
+  steinsGateUnsupportedFilterActive = false,
+  onFilterSteinsGateUnsupported,
+  unsupportedCharFilter = null,
+  onPickUnsupportedChar,
   platUnsupportedFilterActive = false,
   onFilterPlatUnsupported,
   unprocessedArabicCount,
@@ -847,8 +861,57 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                     <span>الحروف:</span>
                     {platUnsupportedCharacters.map((item) => (
                       <span key={item.unicode} className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-foreground" dir="rtl">
-                        {formatPlatUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
+                        {formatUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
                       </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {isSteinsGate && (
+              <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={steinsGateUnsupportedFilterActive ? "secondary" : "outline"}
+                  onClick={onFilterSteinsGateUnsupported}
+                  disabled={!steinsGateUnsupportedFilterActive && steinsGateUnsupportedCount === 0}
+                  className="font-body gap-1 shrink-0"
+                  title={steinsGateUnsupportedFilterActive
+                    ? "يلغي الفلتر ويعيد عرض كل النصوص في المحرر"
+                    : steinsGateUnsupportedCount > 0
+                      ? "يعرض النصوص التي فيها حرف لا خانة له في خط اللعبة — البناء يفشل عند أول واحد منها"
+                      : "لا توجد حروف بلا خانة في الترجمات الحالية"}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  {steinsGateUnsupportedFilterActive
+                    ? "إظهار كل النصوص"
+                    : `عرض الحروف بلا خانة (${steinsGateUnsupportedCount})`}
+                </Button>
+                {steinsGateUnsupportedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
+                    <span>الحروف:</span>
+                    {/* Each chip is a button: one character is usually one
+                        mistake repeated, and seeing only its rows is what makes
+                        it fixable. Pressing the active chip widens back out. */}
+                    {steinsGateUnsupportedCharacters.map((item) => (
+                      <button
+                        key={item.unicode}
+                        type="button"
+                        onClick={() => onPickUnsupportedChar?.(item.unicode)}
+                        aria-pressed={unsupportedCharFilter === item.unicode}
+                        title={unsupportedCharFilter === item.unicode
+                          ? "يعود إلى عرض كل الحروف بلا خانة"
+                          : "يعرض النصوص التي فيها هذا الحرف وحده"}
+                        className={`rounded border px-1.5 py-0.5 font-mono text-foreground transition-colors ${
+                          unsupportedCharFilter === item.unicode
+                            ? "border-amber-500 bg-amber-500/25"
+                            : "border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/20"
+                        }`}
+                        dir="rtl"
+                      >
+                        {formatUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
+                      </button>
                     ))}
                   </div>
                 )}

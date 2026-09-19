@@ -19,7 +19,7 @@ const filterStatuses = new Set<FilterStatus>([
   "stuck-chars", "mixed-lang", "has-tags", "no-tags", "damaged-tags", "missing-tags", "fuzzy",
   "byte-overflow", "has-newlines", "translation-has-newline", "xeno-n-missing", "excessive-lines",
   "byte-budget", "newline-diff", "identical-original", "long-texts", "khbbs-unsupported", "gtaiv-unsupported",
-  "plat-unsupported", "break-missing",
+  "plat-unsupported", "steinsgate-unsupported", "break-missing",
 ]);
 
 const filterTechnicalValues = new Set<FilterTechnical>(["all", "only", "exclude"]);

@@ -49,6 +49,7 @@ import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry } from "@/lib/ph/ph-categories";
 import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categories";
+import { analyzeSteinsGateUnsupportedCharacters, STEINSGATE_WORKSPACE_KEY, type SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
 import { isSteinsGateTranslatable, repairSteinsGateTags, validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
@@ -1043,6 +1044,75 @@ export function useEditorState() {
   const platUnsupportedKeys = platUnsupportedReport.keys;
   const platUnsupportedCount = platUnsupportedKeys.size;
 
+  // Steins;Gate: the glyph map is built when the ISO is imported and lives in
+  // the workspace, so the report waits for it the way the Platinum one waits
+  // for its charmap. Without it the panel would read "no problems" for a
+  // session that has not pressed Build.
+  const [steinsGateGlyphMap, setSteinsGateGlyphMap] = useState<Record<string, number[]> | null>(null);
+  const hasSteinsGateEntries = state?.entries?.[0]?.msbtFile.startsWith("steinsgate/") ?? false;
+  useEffect(() => {
+    if (!hasSteinsGateEntries || steinsGateGlyphMap) return;
+    let cancelled = false;
+    void idbGet<{ glyphMap?: Record<string, number[]> }>(STEINSGATE_WORKSPACE_KEY).then((workspace) => {
+      if (!cancelled && workspace?.glyphMap) setSteinsGateGlyphMap(workspace.glyphMap);
+    }).catch(() => {
+      // Leave it unset: the build names the character itself, so a failed read
+      // costs the preview, not the safety net.
+    });
+    return () => { cancelled = true; };
+  }, [hasSteinsGateEntries, steinsGateGlyphMap]);
+
+  const steinsGateUnsupportedReport = useMemo(() => {
+    const keys = new Set<string>();
+    const keysByCharacter = new Map<string, Set<string>>();
+    const characters = new Map<string, SteinsGateUnsupportedCharacter>();
+    if (!state || !steinsGateGlyphMap) {
+      return { keys, keysByCharacter, characters: [] as SteinsGateUnsupportedCharacter[] };
+    }
+
+    for (const entry of state.entries) {
+      if (!entry.msbtFile.startsWith("steinsgate/")) continue;
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key] || "";
+      if (!translation.trim()) continue;
+      // Through the same door the build uses: the font holds Arabic
+      // presentation forms, so the text is shaped before it is looked up.
+      const unsupported = analyzeSteinsGateUnsupportedCharacters(translation, steinsGateGlyphMap);
+      if (unsupported.length === 0) continue;
+      keys.add(key);
+      for (const item of unsupported) {
+        const previous = characters.get(item.unicode);
+        characters.set(item.unicode, previous
+          ? { ...previous, count: previous.count + item.count }
+          : { ...item });
+        const rows = keysByCharacter.get(item.unicode);
+        if (rows) rows.add(key);
+        else keysByCharacter.set(item.unicode, new Set([key]));
+      }
+    }
+    return {
+      keys,
+      keysByCharacter,
+      characters: [...characters.values()].sort((a, b) => b.count - a.count || a.unicode.localeCompare(b.unicode)),
+    };
+  }, [state?.entries, state?.translations, steinsGateGlyphMap]);
+  const steinsGateUnsupportedKeys = steinsGateUnsupportedReport.keys;
+  const steinsGateUnsupportedCount = steinsGateUnsupportedKeys.size;
+
+  // Which single unsupported character the list is narrowed to, by `U+XXXX`.
+  // Null means the filter shows every row that has any of them.
+  const [unsupportedCharFilter, setUnsupportedCharFilter] = useState<string | null>(null);
+  const steinsGateUnsupportedFilterKeys = unsupportedCharFilter
+    ? steinsGateUnsupportedReport.keysByCharacter.get(unsupportedCharFilter) ?? new Set<string>()
+    : steinsGateUnsupportedKeys;
+
+  // Leaving the filter drops the single-character narrowing with it, so coming
+  // back through the dropdown shows every affected row rather than the one
+  // character that happened to be picked last time.
+  useEffect(() => {
+    if (filterStatus !== "steinsgate-unsupported" && unsupportedCharFilter) setUnsupportedCharFilter(null);
+  }, [filterStatus, unsupportedCharFilter]);
+
   // GTA IV: lines the community mod itself never translated (its container
   // row has zero of the mod's Arabic glyph units) — flagged at extraction
   // time in gtaiv-editor-bridge.ts once both GTA IV files are loaded.
@@ -1189,6 +1259,7 @@ export function useEditorState() {
         (filterStatus === "khbbs-unsupported" && khbbsUnsupportedKeys.has(key)) ||
         (filterStatus === "gtaiv-unsupported" && gtaIvUnsupportedKeys.has(key)) ||
         (filterStatus === "plat-unsupported" && platUnsupportedKeys.has(key)) ||
+        (filterStatus === "steinsgate-unsupported" && steinsGateUnsupportedFilterKeys.has(key)) ||
         // Rows written entirely in capitals — move and ability names, menu
         // labels. Latin letters must be present and none may be lowercase; a
         // technical row is excluded because "{STRVAR_1 8, 0, 0}" has no
@@ -1687,6 +1758,7 @@ export function useEditorState() {
     'stuck-chars': 'أحرف ملتصقة', 'mixed-lang': 'مختلط', 'has-tags': 'أوسمة', 'no-tags': 'بدون أوسمة',
     'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز', 'khbbs-unsupported': 'رموز CTD غير مدعومة',
     'plat-unsupported': 'حروف بلا خانة في الخط',
+    'steinsgate-unsupported': 'حروف بلا خانة في الخط',
     'uppercase': 'أحرف إنجليزية كبيرة',
     'has-newlines': 'أسطر متعددة',
   };
@@ -2154,7 +2226,9 @@ export function useEditorState() {
     glossaryComplianceResults, checkingGlossaryCompliance,
     isSearchPinned, pinnedKeys, setPinnedKeys, setIsSearchPinned,
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, gtaIvUnsupportedCount, gtaIvUnsupportedCharacters: gtaIvUnsupportedReport.characters, gtaIvNeedsModCount,
-    platUnsupportedCount, platUnsupportedCharacters: platUnsupportedReport.characters, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
+    platUnsupportedCount, platUnsupportedCharacters: platUnsupportedReport.characters,
+    steinsGateUnsupportedCount, steinsGateUnsupportedCharacters: steinsGateUnsupportedReport.characters,
+    unsupportedCharFilter, setUnsupportedCharFilter, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     deepDiagnosticCounts,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,
     ...glossary,

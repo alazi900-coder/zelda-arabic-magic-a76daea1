@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.5", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "منع حقن العربية في خانات الحروف اللاتينية أو الرسومات المشتركة في خطي Steins;Gate، وإعادة حساب خانات الخط للجلسات القديمة عند البناء." },
+  ] },
   { version: "2.25.4", date: "2026-09-19", changes: [
     { kind: "fixed", text: "تحديث مؤشرات Steins;Gate من السكربت تلقائياً عند البناء للجلسات القديمة، مع الاحتفاظ بمفاتيح الترجمات، لمعالجة خطأ DATA.BIN: مؤشر غير صالح." },
   ] },

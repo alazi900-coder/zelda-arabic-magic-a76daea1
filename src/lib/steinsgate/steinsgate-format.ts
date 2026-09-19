@@ -183,13 +183,26 @@ function sjisToJisIndex(lead: number, trail: number): number | null {
   return (row - 0x21) * 94 + cell - 0x21;
 }
 
-function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array): Record<string, number[]> {
+export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array): Record<string, number[]> {
   const parsedFonts = parseAfs(fontArchive);
   const mainFont = parsedFonts.entries.find((entry) => entry.name === "DFKKG5W16.FNT");
   if (!mainFont) throw new Error("لم يُعثر على خط الحوارات داخل FONTS.AFS.");
   const font = fontArchive.subarray(mainFont.offset, mainFont.offset + mainFont.size);
   const fontView = new DataView(font.buffer, font.byteOffset, font.byteLength);
   const mapOffset = readU32(fontView, 16);
+  const fontTables = ["DFKKG5W16.FNT", "DFKKG3W12.FNT"].map(name => {
+    const entry = parsedFonts.entries.find(e => e.name === name);
+    if (!entry) throw new Error(`خط مطلوب غير موجود: ${name}`);
+    const bytes = fontArchive.subarray(entry.offset, entry.offset + entry.size);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const start = readU32(view, 16), count = readU32(view, 20);
+    const aliases = new Map<number, number>();
+    for (let i = 0; i < count; i++) {
+      const id = readU16(view, start + i * 2);
+      aliases.set(id, (aliases.get(id) ?? 0) + 1);
+    }
+    return { view, start, count, aliases };
+  });
   const usedPairs = new Set<string>();
   for (const script of scriptBytes) for (let i = 0; i + 1 < script.length; i += 1) usedPairs.add(`${script[i]}:${script[i + 1]}`);
   const forms: string[] = [];
@@ -202,6 +215,12 @@ function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array): Reco
       if (trail === 0x7f || usedPairs.has(`${lead}:${trail}`)) continue;
       const jisIndex = sjisToJisIndex(lead, trail);
       if (jisIndex == null || mapOffset + jisIndex * 2 + 2 > font.length) continue;
+      // Never replace Latin, punctuation, or a glyph shared by other codepoints.
+      if (!/^[\u4e00-\u9fff]$/.test(SHIFT_JIS_DECODER.decode(new Uint8Array([lead, trail])))) continue;
+      if (fontTables.some(table => jisIndex >= table.count || (() => {
+        const id = readU16(table.view, table.start + jisIndex * 2);
+        return id === 0xffff || table.aliases.get(id) !== 1;
+      })())) continue;
       const glyphId = readU16(fontView, mapOffset + jisIndex * 2);
       if (glyphId === 0xffff || glyphIds.has(glyphId)) continue;
       glyphIds.add(glyphId); slots.push([lead, trail]);
@@ -556,6 +575,8 @@ export async function buildSteinsGateIso(
   if (data0.offset !== workspace.data0Offset || data0.size !== workspace.data0Size) throw new Error("بنية ISO لا تطابق جلسة الترجمة الحالية.");
   const sceneSource = new Uint8Array(workspace.sceneArchive);
   const parsedScene = parseAfs(sceneSource);
+  // Older sessions cached unsafe glyph slots; do not reuse those allocations.
+  const glyphMap = buildGlyphMap(parsedScene.entries.map(e => sceneSource.slice(e.offset, e.offset + e.size)), new Uint8Array(workspace.fontArchive));
   const recordsByFile = new Map<string, SteinsGateStringRecord[]>();
   for (const record of workspace.records) recordsByFile.set(record.file, [...(recordsByFile.get(record.file) ?? []), record]);
   const replacements = new Map<string, Uint8Array>();
@@ -563,10 +584,10 @@ export async function buildSteinsGateIso(
     const records = recordsByFile.get(afsEntry.name);
     if (!records) continue;
     const original = sceneSource.slice(afsEntry.offset, afsEntry.offset + afsEntry.size);
-    replacements.set(afsEntry.name, rebuildScript(original, records, translations, workspace.glyphMap));
+    replacements.set(afsEntry.name, rebuildScript(original, records, translations, glyphMap));
   }
   const rebuiltScene = rebuildAfs(sceneSource, replacements);
-  const rebuiltFonts = await injectArabicFont(workspace.fontArchive, workspace.glyphMap);
+  const rebuiltFonts = await injectArabicFont(workspace.fontArchive, glyphMap);
   const patches = [
     { offset: workspace.data0Offset + workspace.fontOffset, bytes: rebuiltFonts },
   ];

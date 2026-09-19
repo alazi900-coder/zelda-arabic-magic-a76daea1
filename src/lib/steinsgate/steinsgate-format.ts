@@ -201,7 +201,9 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
       const id = readU16(view, start + i * 2);
       aliases.set(id, (aliases.get(id) ?? 0) + 1);
     }
-    return { view, start, count, aliases };
+    const used = new Set<number>();
+    for (let i = 0; i < count; i++) { const id = readU16(view, start + i * 2); if (id !== 0xffff) used.add(id); }
+    return { view, start, count, aliases, used };
   });
   const usedPairs = new Set<string>();
   for (const script of scriptBytes) for (let i = 0; i + 1 < script.length; i += 1) usedPairs.add(`${script[i]}:${script[i + 1]}`);
@@ -209,21 +211,21 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
   for (let cp = 0xfe70; cp <= 0xfefc; cp += 1) if (/\p{Letter}/u.test(String.fromCodePoint(cp))) forms.push(String.fromCodePoint(cp));
   forms.push("،", "؛", "؟");
   const slots: number[][] = [];
-  const glyphIds = new Set<number>();
+  let nextGlyph = 0;
   outer: for (const lead of [...Array.from({ length: 0x1f }, (_, i) => 0x81 + i), ...Array.from({ length: 0x10 }, (_, i) => 0xe0 + i)]) {
     for (let trail = 0x40; trail <= 0xfc; trail += 1) {
       if (trail === 0x7f || usedPairs.has(`${lead}:${trail}`)) continue;
       const jisIndex = sjisToJisIndex(lead, trail);
       if (jisIndex == null || mapOffset + jisIndex * 2 + 2 > font.length) continue;
+      if (readU16(fontView, mapOffset + jisIndex * 2) !== 0xffff) continue;
       // Never replace Latin, punctuation, or a glyph shared by other codepoints.
       if (!/^[\u4e00-\u9fff]$/.test(SHIFT_JIS_DECODER.decode(new Uint8Array([lead, trail])))) continue;
-      if (fontTables.some(table => jisIndex >= table.count || (() => {
-        const id = readU16(table.view, table.start + jisIndex * 2);
-        return id === 0xffff || table.aliases.get(id) !== 1;
-      })())) continue;
-      const glyphId = readU16(fontView, mapOffset + jisIndex * 2);
-      if (glyphId === 0xffff || glyphIds.has(glyphId)) continue;
-      glyphIds.add(glyphId); slots.push([lead, trail]);
+      if (fontTables.some(table => jisIndex >= table.count || readU16(table.view, table.start + jisIndex * 2) !== 0xffff)) continue;
+      while (fontTables.some(table => table.used.has(nextGlyph))) nextGlyph++;
+      if (fontTables.some(table => nextGlyph >= table.count)) continue;
+      slots.push([lead, trail, nextGlyph]);
+      fontTables.forEach(table => table.used.add(nextGlyph));
+      nextGlyph++;
       if (slots.length === forms.length) break outer;
     }
   }
@@ -546,8 +548,9 @@ async function injectArabicFont(fontArchiveBuffer: ArrayBuffer, glyphMap: Record
     for (const [char, pair] of Object.entries(glyphMap)) {
       const jisIndex = sjisToJisIndex(pair[0], pair[1]);
       if (jisIndex == null) continue;
-      const glyphId = readU16(view, mapOffset + jisIndex * 2);
+      const glyphId = pair[2] ?? readU16(view, mapOffset + jisIndex * 2);
       if (glyphId === 0xffff) continue;
+      view.setUint16(mapOffset + jisIndex * 2, glyphId, true);
       context.clearRect(0, 0, cell, cell);
       context.fillText(char, 0, cell - 3);
       const pixels = context.getImageData(0, 0, cell, cell).data;

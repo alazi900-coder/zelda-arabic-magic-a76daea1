@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.8", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "إصلاح جدول ربط خط Steins;Gate: تُحجز خانات CJK غير المستخدمة وتُربط بالعربية فعلياً، فلا تتشوه الحروف الإنجليزية أو تتجمد القوائم." },
+  ] },
   { version: "2.25.7", date: "2026-09-19", changes: [
     { kind: "fixed", text: "إصلاح تجمّد Steins;Gate عند بناء ISO موسّع: يعاد إنشاء DATA0.AFS داخل المساحة المحجوزة مع تثبيت مواضع بقية ملفات ISO." },
   ] },

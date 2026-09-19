@@ -832,6 +832,9 @@ const Editor = () => {
               editor.setUnsupportedCharFilter(null);
               editor.setFilterStatus("steinsgate-unsupported");
             }}
+            steinsGateNormalizeReplacements={editor.steinsGateNormalizeReplacements}
+            steinsGateNormalizeRows={editor.steinsGateNormalizeRows}
+            onNormalizeSteinsGate={editor.applySteinsGateNormalize}
             unsupportedCharFilter={editor.unsupportedCharFilter}
             onPickUnsupportedChar={(unicode) => {
               // Pressing the chip that is already on widens back to every

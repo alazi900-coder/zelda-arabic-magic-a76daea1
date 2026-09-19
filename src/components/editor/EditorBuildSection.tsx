@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download, ListChecks } from "lucide-react";
+import { Eye, EyeOff, AlertTriangle, Loader2, Sparkles, RotateCcw, BarChart3, ShieldCheck, FileDown, Download, ListChecks, Wand2 } from "lucide-react";
 import { processArabicText, hasArabicChars, hasArabicPresentationForms } from "@/lib/arabic-processing";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildRisen3OutputFromState, RISEN3_MSBT_SUFFIX } from "@/lib/risen3-extractor";
@@ -32,6 +32,7 @@ import type { KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 import type { GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
 import type { PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import type { SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
+import type { SteinsGateReplacement } from "@/lib/steinsgate/steinsgate-normalize";
 
 type EditorSubset = Pick<
   ReturnType<typeof useEditorState>,
@@ -80,6 +81,9 @@ interface EditorBuildSectionProps {
   /** `U+XXXX` the list is narrowed to, or null for every unsupported row. */
   unsupportedCharFilter?: string | null;
   onPickUnsupportedChar?: (unicode: string) => void;
+  steinsGateNormalizeReplacements?: SteinsGateReplacement[];
+  steinsGateNormalizeRows?: number;
+  onNormalizeSteinsGate?: () => number;
   unprocessedArabicCount: number;
   showBuildSection: boolean;
   setShowBuildSection: (v: boolean) => void;
@@ -164,6 +168,9 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   onFilterSteinsGateUnsupported,
   unsupportedCharFilter = null,
   onPickUnsupportedChar,
+  steinsGateNormalizeReplacements = [],
+  steinsGateNormalizeRows = 0,
+  onNormalizeSteinsGate,
   platUnsupportedFilterActive = false,
   onFilterPlatUnsupported,
   unprocessedArabicCount,
@@ -202,6 +209,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
   const [showSkippedDialog, setShowSkippedDialog] = useState(false);
+  const [showNormalizeConfirm, setShowNormalizeConfirm] = useState(false);
   const [showLumenTalePreBuild, setShowLumenTalePreBuild] = useState(false);
   const [lumenTaleReport, setLumenTaleReport] = useState<LumenTalePreBuildReport | null>(null);
   const [lumenTaleReportError, setLumenTaleReportError] = useState<string | null>(null);
@@ -915,11 +923,60 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                     ))}
                   </div>
                 )}
+                {steinsGateNormalizeRows > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowNormalizeConfirm(true)}
+                    className="font-body gap-1 shrink-0 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
+                    title="يستبدل الحروف التي لها بديل مدعوم فقط — لا يلمس حرفاً يقبله البناء"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    تحويل الحروف غير المدعومة ({steinsGateNormalizeRows})
+                  </Button>
+                )}
               </div>
             )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Names every swap before it happens: the translator sees which
+          character becomes which, and in how many lines, before a word moves. */}
+      <Dialog open={showNormalizeConfirm} onOpenChange={setShowNormalizeConfirm}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="font-display">تحويل الحروف غير المدعومة</DialogTitle>
+            <DialogDescription className="font-body">
+              سيُستبدل كل حرف أدناه ببديله المدعوم في {steinsGateNormalizeRows} نصّاً.
+              الحروف التي يقبلها البناء أصلاً — مثل «،» و«؛» و«؟» و«—» — لا تُمسّ،
+              والحروف التي لا بديل آمن لها تبقى كما هي وتظل في القائمة.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 overflow-y-auto flex flex-wrap gap-1.5 text-sm">
+            {steinsGateNormalizeReplacements.map((item) => (
+              <span key={item.from} className="rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 font-mono" dir="ltr">
+                {item.from} → {item.to === "" ? "(يُحذف)" : item.to}
+                <span className="text-muted-foreground"> ×{item.count}</span>
+              </span>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowNormalizeConfirm(false)} className="font-body">إلغاء</Button>
+            <Button
+              onClick={() => {
+                const changed = onNormalizeSteinsGate?.() ?? 0;
+                setShowNormalizeConfirm(false);
+                toast({ title: `✅ حُوّل ${changed} نصّاً`, description: "اضغط تراجع إن أردت استرجاعها." });
+              }}
+              className="font-body gap-1"
+            >
+              <Wand2 className="w-4 h-4" /> تحويل
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Force-build summary dialog — lists every line/entry whose translation
           was kept as ORIGINAL, with its file, index and reason. */}

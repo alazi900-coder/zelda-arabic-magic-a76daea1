@@ -299,7 +299,52 @@ function toVisualText(translation: string): string {
  * unsupported is exactly what the build refuses -- a report written separately
  * drifts from the encoder and starts naming characters that build fine.
  */
-function encodeVisualChar(char: string, glyphMap: Record<string, number[]>): number[] | null {
+/**
+ * Every character the game's own encoding can write, and the bytes it writes.
+ *
+ * The encoder used to carry eight hand-written punctuation cases, so a line
+ * that borrowed a symbol from the English script -- a music note, an arrow, a
+ * degree sign -- was refused the moment it was translated, even though the game
+ * draws that symbol itself. The table is the decoder run backwards, so what can
+ * be read can be written.
+ */
+let shiftJisReverse: Map<string, number[]> | null = null;
+function shiftJisTable(): Map<string, number[]> {
+  if (shiftJisReverse) return shiftJisReverse;
+  const table = new Map<string, number[]>();
+  const add = (bytes: number[]) => {
+    const decoded = SHIFT_JIS_DECODER.decode(Uint8Array.from(bytes));
+    // One byte pair, one character: a replacement char means the pair is not
+    // a character at all, and a longer result means it is not round-trippable.
+    if (!decoded || decoded === "\ufffd" || [...decoded].length !== 1) return;
+    if (!table.has(decoded)) table.set(decoded, bytes);
+  };
+  for (let byte = 0x20; byte <= 0xff; byte += 1) add([byte]);
+  for (let lead = 0x81; lead <= 0xef; lead += 1) {
+    if (lead >= 0xa0 && lead <= 0xdf) continue; // half-width katakana, single byte
+    for (let trail = 0x40; trail <= 0xfc; trail += 1) {
+      if (trail === 0x7f) continue;
+      add([lead, trail]);
+    }
+  }
+  shiftJisReverse = table;
+  return table;
+}
+
+/** The byte pairs buildGlyphMap took over for Arabic, as `lead:trail`. */
+function stolenSlots(glyphMap: Record<string, number[]>): Set<string> {
+  return new Set(Object.values(glyphMap).map((pair) => pair.join(":")));
+}
+
+/**
+ * The bytes one drawn character costs, or null when the font has no glyph for
+ * it.
+ *
+ * Both the build and the report go through here, so what the editor lists as
+ * unsupported is exactly what the build refuses -- a report written separately
+ * drifts from the encoder and starts naming characters that build fine.
+ */
+function encodeVisualChar(char: string, glyphMap: Record<string, number[]>, stolen?: Set<string>): number[] | null {
   const mapped = glyphMap[char];
   if (mapped) return mapped;
   const code = char.codePointAt(0) ?? 0;
@@ -307,13 +352,38 @@ function encodeVisualChar(char: string, glyphMap: Record<string, number[]>): num
   // commands, not glyphs: they go back as the bytes they came in as.
   if (code === 0x0d || code === 0x0a) return [code];
   if (code >= 0x20 && code <= 0x7e) return [code];
-  if (char === "【") return [0x81, 0x79];
-  if (char === "】") return [0x81, 0x7a];
-  if (char === "…") return [0x81, 0x63];
-  if (char === "—" || char === "–") return [0x81, 0x5c];
-  if (char === "’" || char === "‘") return [0x27];
-  if (char === "“" || char === "”") return [0x22];
-  return null;
+  // Curly quotes have no slot of their own worth spending: the straight ASCII
+  // pair reads the same and is one byte instead of two.
+  if (char === "\u2019" || char === "\u2018") return [0x27];
+  if (char === "\u201c" || char === "\u201d") return [0x22];
+  // 0x815C reads back as U+2015, so the em and en dashes are not in the table
+  // even though the game draws them at that slot. Named here, or translations
+  // that already use them would start failing.
+  if (char === "\u2014" || char === "\u2013") return [0x81, 0x5c];
+  const bytes = shiftJisTable().get(char);
+  if (!bytes) return null;
+  // A slot handed to an Arabic form no longer draws what Shift-JIS says it
+  // does, so writing this character there would print an Arabic letter.
+  if (bytes.length === 2 && (stolen ?? stolenSlots(glyphMap)).has(bytes.join(":"))) return null;
+  return bytes;
+}
+
+/**
+ * Whether the font can draw `char` once shaping has had its say.
+ *
+ * Shaping is the point: alef maqsura has no slot under its own codepoint, only
+ * under the forms it becomes, so a check on the bare character would call a
+ * perfectly ordinary Arabic letter unsupported and invite a replacement it does
+ * not need.
+ */
+export function isSteinsGateCharSupported(char: string, glyphMap: Record<string, number[]>): boolean {
+  const shaped = processArabicText(char, { mirrorPunct: true });
+  if (!shaped) return true; // shaping dropped it (tashkeel): nothing reaches the font
+  const stolen = stolenSlots(glyphMap);
+  for (const piece of shaped) {
+    if (!encodeVisualChar(piece, glyphMap, stolen)) return false;
+  }
+  return true;
 }
 
 export interface SteinsGateUnsupportedCharacter {
@@ -337,8 +407,9 @@ export function analyzeSteinsGateUnsupportedCharacters(
   glyphMap: Record<string, number[]>,
 ): SteinsGateUnsupportedCharacter[] {
   const found = new Map<string, SteinsGateUnsupportedCharacter>();
+  const stolen = stolenSlots(glyphMap);
   for (const char of toVisualText(translation)) {
-    if (encodeVisualChar(char, glyphMap)) continue;
+    if (encodeVisualChar(char, glyphMap, stolen)) continue;
     const unicode = `U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`;
     const previous = found.get(unicode);
     found.set(unicode, previous ? { ...previous, count: previous.count + 1 } : { character: char, unicode, count: 1 });
@@ -350,8 +421,9 @@ function encodeTranslatedText(original: string, translation: string, glyphMap: R
   const validation = validateSteinsGateTags(original, fromSteinsGateEditorText(translation));
   if (!validation.valid) throw new Error(validation.reason ?? "وسوم Steins;Gate غير محفوظة.");
   const out: number[] = [];
+  const stolen = stolenSlots(glyphMap);
   for (const char of toVisualText(translation)) {
-    const encoded = encodeVisualChar(char, glyphMap);
+    const encoded = encodeVisualChar(char, glyphMap, stolen);
     if (!encoded) throw new Error(`الحرف «${char}» غير مدعوم في خط Steins;Gate PSP.`);
     out.push(...encoded);
   }

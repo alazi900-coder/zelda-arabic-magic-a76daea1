@@ -50,6 +50,8 @@ import { categorizePlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry } from "@/lib/ph/ph-categories";
 import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categories";
 import { analyzeSteinsGateUnsupportedCharacters, STEINSGATE_WORKSPACE_KEY, type SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
+import { isSteinsGateCharSupported } from "@/lib/steinsgate/steinsgate-format";
+import { normalizeSteinsGateText, type SteinsGateReplacement } from "@/lib/steinsgate/steinsgate-normalize";
 import { isSteinsGateTranslatable, repairSteinsGateTags, validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
@@ -1113,6 +1115,35 @@ export function useEditorState() {
     if (filterStatus !== "steinsgate-unsupported" && unsupportedCharFilter) setUnsupportedCharFilter(null);
   }, [filterStatus, unsupportedCharFilter]);
 
+  // What pressing "convert" would do, worked out before it is pressed: which
+  // character becomes which, how often, and how many rows move. Nothing is
+  // written here.
+  const steinsGateNormalizePreview = useMemo(() => {
+    const empty = { replacements: [] as SteinsGateReplacement[], rows: 0, updates: {} as Record<string, string> };
+    if (!state || !steinsGateGlyphMap) return empty;
+    const supported = (char: string) => isSteinsGateCharSupported(char, steinsGateGlyphMap);
+    const totals = new Map<string, SteinsGateReplacement>();
+    const updates: Record<string, string> = {};
+    for (const entry of state.entries) {
+      if (!entry.msbtFile.startsWith("steinsgate/")) continue;
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key] || "";
+      if (!translation.trim()) continue;
+      const result = normalizeSteinsGateText(translation, supported);
+      if (result.replacements.length === 0) continue;
+      updates[key] = result.text;
+      for (const item of result.replacements) {
+        const previous = totals.get(item.from);
+        totals.set(item.from, previous ? { ...previous, count: previous.count + item.count } : { ...item });
+      }
+    }
+    return {
+      replacements: [...totals.values()].sort((a, b) => b.count - a.count || a.from.localeCompare(b.from)),
+      rows: Object.keys(updates).length,
+      updates,
+    };
+  }, [state?.entries, state?.translations, steinsGateGlyphMap]);
+
   // GTA IV: lines the community mod itself never translated (its container
   // row has zero of the mod's Arabic glyph units) — flagged at extraction
   // time in gtaiv-editor-bridge.ts once both GTA IV files are loaded.
@@ -1480,6 +1511,13 @@ export function useEditorState() {
 
     return changedCount;
   }, [state, setState, setPreviousTranslations]);
+
+  /** Applies the preview above in one batch, so one undo puts it all back. */
+  const applySteinsGateNormalize = useCallback(() => {
+    const { updates } = steinsGateNormalizePreview;
+    if (Object.keys(updates).length === 0) return 0;
+    return updateTranslationsBatch(updates);
+  }, [steinsGateNormalizePreview, updateTranslationsBatch]);
 
   const handleUndoTranslation = (key: string) => {
     if (previousTranslations[key] !== undefined) {
@@ -2228,6 +2266,8 @@ export function useEditorState() {
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, gtaIvUnsupportedCount, gtaIvUnsupportedCharacters: gtaIvUnsupportedReport.characters, gtaIvNeedsModCount,
     platUnsupportedCount, platUnsupportedCharacters: platUnsupportedReport.characters,
     steinsGateUnsupportedCount, steinsGateUnsupportedCharacters: steinsGateUnsupportedReport.characters,
+    steinsGateNormalizeReplacements: steinsGateNormalizePreview.replacements,
+    steinsGateNormalizeRows: steinsGateNormalizePreview.rows, applySteinsGateNormalize,
     unsupportedCharFilter, setUnsupportedCharFilter, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,
     deepDiagnosticCounts,
     bdatTableNames, bdatColumnNames, bdatTableCounts, bdatColumnCounts,

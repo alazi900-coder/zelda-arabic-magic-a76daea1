@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { categorizeSteinsGateEntry } from "../steinsgate-categories";
 import { extractSteinsGateTags, repairSteinsGateTags, validateSteinsGateTags, isSteinsGateTranslatable } from "../steinsgate-tags";
-import { analyzeSteinsGateUnsupportedCharacters } from "../steinsgate-format";
+import { analyzeSteinsGateUnsupportedCharacters, isSteinsGateCharSupported } from "../steinsgate-format";
+import { normalizeSteinsGateText } from "../steinsgate-normalize";
 import { processArabicText } from "@/lib/arabic-processing";
 import { detectIssues } from "@/lib/diagnostic-detect";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
@@ -135,5 +136,87 @@ describe("Steins;Gate unsupported characters", () => {
     // into the middle of the line, moving the page break with it.
     const tags = extractSteinsGateTags("مرحبا\rسلام");
     expect(tags).toEqual(["\r"]);
+  });
+});
+
+describe("Steins;Gate character coverage", () => {
+  const map: Record<string, number[]> = {};
+
+  it("accepts the symbols the game's own encoding carries", () => {
+    // These live in the English script and the game draws them; refusing them
+    // the moment a line was translated was the bug.
+    for (const char of ["♪", "→", "←", "※", "±", "×", "÷", "℃", "…", "【", "】"]) {
+      expect(analyzeSteinsGateUnsupportedCharacters(char, map)).toEqual([]);
+    }
+  });
+
+  it("still accepts the dashes that are not in the byte table", () => {
+    // 0x815C reads back as U+2015, so these two need naming or they regress.
+    expect(analyzeSteinsGateUnsupportedCharacters("—–", map)).toEqual([]);
+  });
+
+  it("refuses a byte pair that was handed to an Arabic form", () => {
+    // ♪ is 0x81F4; once that slot draws an Arabic letter, writing ♪ there would
+    // print the Arabic letter instead.
+    const stolen = { "\ufe8e": [0x81, 0xf4] };
+    expect(analyzeSteinsGateUnsupportedCharacters("♪", stolen).map((i) => i.unicode)).toEqual(["U+266A"]);
+  });
+});
+
+describe("Steins;Gate character replacement", () => {
+  const glyphMapFor2 = (...samples: string[]): Record<string, number[]> => {
+    const map: Record<string, number[]> = {};
+    let slot = 0x40;
+    for (const sample of samples) {
+      for (const char of processArabicText(sample, { mirrorPunct: true })) {
+        if (!map[char]) map[char] = [0x81, slot++];
+      }
+    }
+    return map;
+  };
+  const map = {
+    ...glyphMapFor2("مرحبا", "ف", "ك", "ج", "م ر ح ب ا"),
+    "،": [0x81, 0xf0], "؟": [0x81, 0xf1],
+  };
+  const supported = (char: string) => isSteinsGateCharSupported(char, map);
+
+  it("swaps the letters that only look Arabic", () => {
+    expect(normalizeSteinsGateText("ڤ گ", supported).text).toBe("ف ك");
+  });
+
+  it("swaps Arabic-Indic digits for ASCII ones", () => {
+    expect(normalizeSteinsGateText("٢٠١٠", supported).text).toBe("2010");
+  });
+
+  it("leaves the tatweel alone — shaping removes it before the font sees it", () => {
+    const { text, replacements } = normalizeSteinsGateText("مرحـبا", supported);
+    expect(text).toBe("مرحـبا");
+    expect(replacements).toEqual([]);
+    expect(analyzeSteinsGateUnsupportedCharacters(text, map)).toEqual([]);
+  });
+
+  it("leaves punctuation the font already draws", () => {
+    // The Arabic comma and question mark have slots: turning them into ASCII
+    // would be a change nobody asked for.
+    expect(normalizeSteinsGateText("مرحبا، كيف؟", supported).text).toBe("مرحبا، كيف؟");
+  });
+
+  it("leaves a letter with no honest equivalent alone", () => {
+    const { text, replacements } = normalizeSteinsGateText("♥", supported);
+    expect(text).toBe("♥");
+    expect(replacements).toEqual([]);
+  });
+
+  it("reports what it changed, and how often", () => {
+    const { replacements } = normalizeSteinsGateText("ڤڤگ", supported);
+    expect(replacements).toEqual([
+      { from: "ڤ", to: "ف", count: 2 },
+      { from: "گ", to: "ك", count: 1 },
+    ]);
+  });
+
+  it("produces text the build accepts", () => {
+    const { text } = normalizeSteinsGateText("ڤ٢گ", supported);
+    expect(analyzeSteinsGateUnsupportedCharacters(text, map)).toEqual([]);
   });
 });

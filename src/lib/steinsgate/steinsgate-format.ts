@@ -594,38 +594,35 @@ export async function buildSteinsGateIso(
   }
   const rebuiltScene = rebuildAfs(sceneSource, replacements);
   const rebuiltFonts = await injectArabicFont(workspace.fontArchive, glyphMap);
-  const patches = [
-    { offset: workspace.data0Offset + workspace.fontOffset, bytes: rebuiltFonts },
-  ];
-  const appendScene = rebuiltScene.length > workspace.sceneSize;
-  const appendedOffset = align(source.size);
-  if (appendScene) {
-    const extentSize = appendedOffset + rebuiltScene.length - data0.offset;
-    if (extentSize > 0xffffffff) throw new Error("تجاوز حجم أرشيف اللعبة نطاق 32 بت.");
-    const afsEntry = new Uint8Array(8);
-    const afsView = new DataView(afsEntry.buffer);
-    afsView.setUint32(0, appendedOffset - data0.offset, true);
-    afsView.setUint32(4, rebuiltScene.length, true);
-    patches.push({ offset: data0.offset + 8 + SCENE_ARCHIVE_INDEX * 8, bytes: afsEntry });
-    const bothEndian = (value: number) => {
-      const bytes = new Uint8Array(8);
-      const view = new DataView(bytes.buffer);
-      view.setUint32(0, value, true); view.setUint32(4, value, false);
-      return bytes;
-    };
-    patches.push({ offset: data0.recordOffset + 10, bytes: bothEndian(extentSize) });
-    patches.push({ offset: 16 * SECTOR + 80, bytes: bothEndian(Math.ceil((appendedOffset + rebuiltScene.length) / SECTOR)) });
-  } else patches.push({ offset: data0.offset + workspace.sceneOffset, bytes: rebuiltScene });
-  patches.sort((a, b) => a.offset - b.offset);
-  const parts: BlobPart[] = [];
-  let cursor = 0;
-  for (const patch of patches) {
-    parts.push(source.slice(cursor, patch.offset));
-    parts.push(patch.bytes as unknown as BlobPart);
-    cursor = patch.offset + patch.bytes.length;
+  // Rebuild DATA0 in place. Extending it at the end of the ISO makes its
+  // filesystem record overlap DATA1 and all following files; PSP then hangs
+  // while opening the first scene. DATA1's extent provides reserved space.
+  const data1 = await findIsoFile(source, "/PSP_GAME/USRDIR/DATA1.AFS");
+  const data0Capacity = data1.offset - data0.offset;
+  const data0Source = new Uint8Array(await source.slice(data0.offset, data0.offset + data0.size).arrayBuffer());
+  const data0Rebuilt = rebuildAfs(data0Source, new Map([
+    ["FONTS.AFS", rebuiltFonts],
+    ["SCENE00.AFS", rebuiltScene],
+  ]));
+  if (data0Rebuilt.length > data0Capacity) {
+    throw new Error(`لا توجد مساحة كافية داخل DATA0.AFS؛ يحتاج البناء ${data0Rebuilt.length.toLocaleString("ar")} من ${data0Capacity.toLocaleString("ar")} بايت.`);
   }
-  parts.push(source.slice(cursor));
-  if (appendScene) parts.push(new Uint8Array(appendedOffset - source.size), rebuiltScene as unknown as BlobPart);
+  const directorySize = new Uint8Array(8);
+  const directoryView = new DataView(directorySize.buffer);
+  directoryView.setUint32(0, data0Rebuilt.length, true);
+  directoryView.setUint32(4, data0Rebuilt.length, false);
+  const parts: BlobPart[] = [
+    source.slice(0, data0.offset),
+    data0Rebuilt,
+    new Uint8Array(data0Capacity - data0Rebuilt.length),
+    source.slice(data0.offset + data0Capacity),
+  ];
+  // ISO directory records store the DATA0 file length in both byte orders.
+  // Directory patch is applied by rebuilding the prefix below, keeping all
+  // subsequent file extents unchanged.
+  const prefix = new Uint8Array(await source.slice(0, data0.offset).arrayBuffer());
+  prefix.set(directorySize, data0.recordOffset + 10);
+  parts[0] = prefix;
   const translatedLines = entries.filter((entry) => {
     const value = translations[`${entry.msbtFile}:${entry.index}`];
     return Boolean(value?.trim() && value !== entry.original);

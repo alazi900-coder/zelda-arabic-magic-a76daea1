@@ -433,7 +433,10 @@ function encodeTranslatedText(original: string, translation: string, glyphMap: R
 export function rebuildScript(original: Uint8Array, records: SteinsGateStringRecord[], translations: Readonly<Record<string, string>>, glyphMap: Record<string, number[]>): Uint8Array {
   const split = findSplitAddress(original);
   if (split < 0 || records.length === 0) return original.slice();
-  const recordByOffset = new Map(records.map((record) => [record.offset, record]));
+  // Saved sessions may contain the old 16-bit pointer scan. Re-read full
+  // pointer fields from the script; string indexes (translation keys) stay stable.
+  const currentRecords = parseSteinsGateScript(records[0].file, original);
+  const recordByOffset = new Map(currentRecords.map((record) => [record.offset, record]));
   const allStrings: { oldOffset: number; raw: Uint8Array; record?: SteinsGateStringRecord }[] = [];
   let cursor = split;
   while (cursor < original.length) {

@@ -10,6 +10,13 @@ it('relocates a low address beyond 64 KiB using the complete pointer field', () 
   source.set(new TextEncoder().encode('Hello\0Bye\0'), 16);
   const records = parseSteinsGateScript('SG00_01.BIN', source);
   expect(records.map(r => r.pointerBits)).toEqual([32, 32]);
+  // An old session also matched the low half of this unrelated instruction.
+  const legacyRecords = records.map(r => ({ ...r, pointerBits: 16 as const,
+    pointerOffsets: [...r.pointerOffsets, 8] }));
+  view.setUint32(8, 0x12340010, true);
+  const legacyResult = rebuildScript(source, legacyRecords, { 'steinsgate/SG00_01.BIN:0': 'Translated' }, {});
+  expect(new DataView(legacyResult.buffer).getUint32(8, true)).toBe(0x12340010);
+  expect(new TextDecoder().decode(legacyResult.slice(16, 26))).toBe('Translated');
   const result = rebuildScript(source, records, { 'steinsgate/SG00_01.BIN:0': 'A'.repeat(66000) }, {});
   const relocated = new DataView(result.buffer).getUint32(4, true);
   expect(relocated).toBe(66017);

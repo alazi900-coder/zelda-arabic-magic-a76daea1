@@ -34,6 +34,12 @@ function formatTagCounts(tags: string[]): string {
 
 /** Classify a tag token for color-coding */
 function getTagDisplayInfo(tag: string): { label: string; color: string; title: string } {
+  if (/^(?:\\n|%[Nn])$/.test(tag)) {
+    return { label: '↵', color: 'text-emerald-600 bg-emerald-500/10', title: `فاصل سطر محمي: ${tag}` };
+  }
+  if (/^%[A-Zt]/.test(tag)) {
+    return { label: tag, color: 'bg-cyan-500/15 text-cyan-500 border-cyan-500/25', title: 'وسم Steins;Gate — حافظ على قيمته وترتيبه' };
+  }
   if (/^~n~$/i.test(tag)) {
     return { label: "↵ ~n~", color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/25', title: 'فاصل سطر GTA IV — يُحفظ ~n~ في الملف ويُعرض كسطر حقيقي هنا' };
   }
@@ -133,7 +139,7 @@ function getTagDisplayInfo(tag: string): { label: string; color: string; title: 
 }
 
 /** Renders text with technical tags highlighted visually */
-function HighlightedOriginal({ text, msbtFile }: { text: string; msbtFile?: string }) {
+export function HighlightedOriginal({ text, msbtFile }: { text: string; msbtFile?: string }) {
   const tagPattern = editorTagPattern(msbtFile);
 
   const lines = text.split('\n');
@@ -146,6 +152,7 @@ function HighlightedOriginal({ text, msbtFile }: { text: string; msbtFile?: stri
     return (
       <span key={lineIdx}>
         {parts.map((part, i) => {
+          tagPattern.lastIndex = 0;
           if (tagPattern.test(part)) {
             const info = getTagDisplayInfo(part);
             return (
@@ -174,7 +181,7 @@ function HighlightedOriginal({ text, msbtFile }: { text: string; msbtFile?: stri
       {lines.map((line, i) => (
         <React.Fragment key={i}>
           {i > 0 && (
-            <span className="inline-flex items-center mx-0.5 text-[10px] text-primary/50 select-none" title="فاصل سطر \n">↵{'\n'}</span>
+            <span className="inline-flex items-center mx-0.5 text-[10px] text-emerald-600 select-none" title="فاصل سطر \n">↵{'\n'}</span>
           )}
           {renderLine(line, i)}
         </React.Fragment>

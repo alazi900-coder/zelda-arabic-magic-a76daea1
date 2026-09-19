@@ -598,8 +598,17 @@ Deno.serve(async (req) => {
       });
       return malformed ? '' : restored;
     };
-    const restoreSuggestion = (key: string, text: string): string =>
-      unmaskPokemonXpSuggestion(key, unmaskSuggestion(key, text));
+    const restoreSuggestion = (key: string, text: string): string => {
+      const restored = unmaskPokemonXpSuggestion(key, unmaskSuggestion(key, text));
+      if (isSteinsGate) {
+        const original = entries.find(e => e.key === key)?.original ?? '';
+        const pattern = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n|\r?\n/g;
+        const expected = original.match(pattern) ?? [];
+        const actual = restored.match(pattern) ?? [];
+        if (expected.length !== actual.length || expected.some((tag, i) => tag !== actual[i])) return '';
+      }
+      return restored;
+    };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
     const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum);
@@ -607,7 +616,7 @@ Deno.serve(async (req) => {
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv
+    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);

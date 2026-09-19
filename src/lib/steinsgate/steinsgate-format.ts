@@ -1,6 +1,6 @@
 import type { ExtractedEntry } from "@/components/editor/types";
 import { processArabicText } from "@/lib/arabic-processing";
-import { validateSteinsGateTags, STEINSGATE_TAG_RE } from "./steinsgate-tags";
+import { validateSteinsGateTags, STEINSGATE_TAG_RE, isSteinsGateTranslatable } from "./steinsgate-tags";
 
 const SECTOR = 2048;
 const DATA0_PATH = "/PSP_GAME/USRDIR/DATA0.AFS";
@@ -236,7 +236,7 @@ export async function importSteinsGateIso(file: File): Promise<SteinsGateImportR
     records.push(...parseSteinsGateScript(entry.name, bytes));
   }
   const glyphMap = buildGlyphMap(scriptBytes, fontArchive);
-  const entries: ExtractedEntry[] = records.map((record) => {
+  const entries: ExtractedEntry[] = records.filter(record => isSteinsGateTranslatable(record.file, decodeSource(record.raw))).map((record) => {
     const original = decodeSource(record.raw);
     return {
       msbtFile: `${SCRIPT_PREFIX}${record.file}`,
@@ -311,7 +311,9 @@ function rebuildScript(original: Uint8Array, records: SteinsGateStringRecord[], 
     if (!record) return raw;
     const key = `${SCRIPT_PREFIX}${record.file}:${record.index}`;
     const translation = translations[key]?.trim();
-    return translation ? encodeTranslatedText(decodeSource(record.raw), translation, glyphMap) : raw;
+    const sourceText = decodeSource(record.raw);
+    return translation && translation !== sourceText && isSteinsGateTranslatable(record.file, sourceText)
+      ? encodeTranslatedText(sourceText, translation, glyphMap) : raw;
   });
   const size = split + encoded.reduce((sum, value) => sum + value.length + 1, 0);
   const output = new Uint8Array(size);

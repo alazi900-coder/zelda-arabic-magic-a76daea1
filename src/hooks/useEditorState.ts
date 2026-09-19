@@ -49,6 +49,7 @@ import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry } from "@/lib/ph/ph-categories";
 import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categories";
+import { isSteinsGateTranslatable, repairSteinsGateTags, validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -1131,9 +1132,10 @@ export function useEditorState() {
     if (!state) return [];
     // If search is pinned, show only pinned keys (bypass all filters)
     if (pinnedKeys) {
-      return state.entries.filter(e => pinnedKeys.has(`${e.msbtFile}:${e.index}`));
+      return state.entries.filter(e => pinnedKeys.has(`${e.msbtFile}:${e.index}`) && (!e.msbtFile.startsWith("steinsgate/") || isSteinsGateTranslatable(e.msbtFile, e.original)));
     }
     return state.entries.filter(e => {
+      if (e.msbtFile.startsWith("steinsgate/") && !isSteinsGateTranslatable(e.msbtFile, e.original)) return false;
       const key = `${e.msbtFile}:${e.index}`;
       const translation = state.translations[key] || '';
       // Rows excluded from translation entirely (e.g. GTA IV script-event
@@ -1248,6 +1250,14 @@ export function useEditorState() {
     // Auto-validate: check for missing/foreign technical tags
     let finalValue = value;
     const entry = state.entries.find(e => `${e.msbtFile}:${e.index}` === key);
+    if (entry?.msbtFile.startsWith("steinsgate/") && value.trim()) {
+      if (!isSteinsGateTranslatable(entry.msbtFile, entry.original)) return;
+      finalValue = repairSteinsGateTags(entry.original, value).text;
+      if (!validateSteinsGateTags(entry.original, finalValue).valid) {
+        toast({ title: "لم تُحفظ الترجمة: وسوم Steins;Gate مختلفة", description: "أعد الوسوم وفواصل الأسطر إلى قيمها وترتيبها الأصلي. لا يمكن تخمين مواضع الوسوم الداخلية.", variant: "destructive" });
+        return;
+      }
+    }
     const isRisenEntry = !!entry && /\.tab$/i.test(entry.msbtFile);
     let risenNeedsReview = false;
     if (isRisenEntry && entry && hasRisenTags(entry.original) && value.trim()) {
@@ -1266,7 +1276,7 @@ export function useEditorState() {
         }
       }
     }
-    if (entry && hasTechnicalTags(entry.original) && value.trim()) {
+    if (entry && !entry.msbtFile.startsWith("steinsgate/") && hasTechnicalTags(entry.original) && value.trim()) {
       // Check for missing closing tags BEFORE auto-fix (to show user what was wrong)
       const missingClosing = findMissingClosingTags(entry.original, value);
 

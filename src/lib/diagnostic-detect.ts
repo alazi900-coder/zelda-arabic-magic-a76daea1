@@ -14,6 +14,7 @@
  */
 
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
+import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
@@ -174,6 +175,10 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   const issues: DiagnosticIssue[] = [];
   const base = { key, label: entry.label, original: entry.original, translation };
   const isGtaIv = entry.msbtFile.startsWith("gtaiv/");
+  if (entry.msbtFile.startsWith("steinsgate/") && trimmed) {
+    const check = validateSteinsGateTags(entry.original, translation);
+    if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `وسوم Steins;Gate أو فواصل الأسطر مختلفة: ${check.reason}` });
+  }
 
   // GTA IV has its own runtime/control syntax: `~...~`. It is not an XC3 tag
   // and must retain both spelling and order. Run the same authoritative guard

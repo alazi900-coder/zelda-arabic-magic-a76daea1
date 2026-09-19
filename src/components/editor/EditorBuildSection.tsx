@@ -1040,7 +1040,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isRisen || isMother3 || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12 || isPh}
+          disabled={editor.applyingArabic || isSteinsGate || isRisen || isMother3 || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12 || isPh}
           className="flex-1 min-w-[200px] font-display font-bold"
           title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isFe12 ? "Fire Emblem 12 يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isPh ? "Phantom Hourglass يشكّل العربية تلقائياً عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
@@ -1074,7 +1074,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               toast({ title: "✅ تم التصدير", description: `${Object.keys(processed).length} ترجمة بعد المعالجة العربية` })
             );
           }}
-          disabled={editor.applyingArabic || isGtaIv || isPokemonXp}
+          disabled={editor.applyingArabic || isSteinsGate || isGtaIv || isPokemonXp}
           className="font-body gap-1 shrink-0"
           title="تصدير الترجمات بعد تطبيق المعالجة العربية"
         >

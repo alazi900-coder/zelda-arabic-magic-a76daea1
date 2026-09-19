@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
+import { repairSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
@@ -333,6 +334,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
   /** Run the same build guard used during export; if result is still unsafe, restore English */
   const getSafeTagRepair = useCallback((entry: ExtractedEntry, text: string) => {
+    if (entry.msbtFile.startsWith("steinsgate/")) {
+      const repaired = repairSteinsGateTags(entry.original, text);
+      return { finalText: repaired.text, repairedText: repaired.text, changed: repaired.changed, restoredOriginal: false, repairedIssues: detectIssues(entry, repaired.text) };
+    }
     const repaired = repairTranslationTagsForBuild(entry.original, text);
     const repairedIssues = detectIssues(entry, repaired.text);
     const stillCritical = repairedIssues.some((issue) => issue.severity === "critical");

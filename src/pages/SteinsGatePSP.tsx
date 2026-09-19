@@ -56,7 +56,8 @@ export default function SteinsGatePSP() {
 
         <div className="mb-6 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="flex gap-2 font-semibold"><ShieldCheck className="h-5 w-5 shrink-0 text-emerald-500" /> الاستخراج والبناء محليان داخل المتصفح؛ ملف اللعبة لا يُرفع إلى خادم.</p>
-          <p className="mt-2 text-muted-foreground">يدعم ISO الإنجليزي v1.0.1. يحمي وسوم المحرك مثل <code>%K</code> و<code>%P</code> و<code>%CF…</code>، ويحقن الخط العربي المتصل أثناء البناء. ملفات CHD يجب فك ضغطها إلى ISO أولاً.</p>
+          <p className="mt-2 text-muted-foreground">يدعم ISO الإنجليزي v1.0.1. يعرض النصوص القابلة للترجمة ويحمي وسوم المحرك وفواصل الأسطر. ملفات CHD يجب فك ضغطها إلى ISO أولاً.</p>
+          <p className="mt-2 text-muted-foreground">عبارة Press START Button وأزرار القائمة الرئيسية صور داخل OBJ_TT.P2T؛ لا تظهر في محرر النصوص ولا يترجمها بناء النصوص تلقائياً.</p>
         </div>
 
         <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-primary/35 bg-card p-7 text-center transition hover:border-primary">

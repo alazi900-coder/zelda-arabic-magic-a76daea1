@@ -5,6 +5,7 @@
 // like <Exit> lost by an AI response or bulk cleanup tool would silently slip
 // through every path except manual typing.
 import type { EditorState } from "@/components/editor/types";
+import { isSteinsGateTranslatable, repairSteinsGateTags, validateSteinsGateTags } from "./steinsgate/steinsgate-tags";
 import { hasRisenTags, restoreRisenTags } from "./risen-tag-guard";
 import { normalizeBreakStyleToSource } from "./balance-lines";
 import { validateLumenTaleTranslation } from "./lumentale/lumentale-token-guard";
@@ -28,6 +29,11 @@ export function mergeGuardedTranslations(
   for (const [key, rawValue] of Object.entries(updates)) {
     const entry = byKey.get(key);
     let value = entry ? normalizeBreakStyleToSource(entry.original, rawValue) : rawValue;
+    if (entry?.msbtFile.startsWith("steinsgate/") && value.trim()) {
+      if (!isSteinsGateTranslatable(entry.msbtFile, entry.original)) continue;
+      value = repairSteinsGateTags(entry.original, value).text;
+      if (!validateSteinsGateTags(entry.original, value).valid) continue;
+    }
 
     const isRisenEntry = !!entry && /\.tab$/i.test(entry.msbtFile);
     if (isRisenEntry && entry && hasRisenTags(entry.original) && value.trim()) {

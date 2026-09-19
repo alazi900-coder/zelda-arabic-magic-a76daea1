@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.25.1",
+    date: "2026-09-19",
+    changes: [
+      { kind: "fixed", text: "تصحيح حدود وسوم Steins;Gate مثل %CF8FF8 و%B1S لمنع ابتلاع الكلمات التالية، وحماية الأوامر وفواصل الأسطر عند الحفظ اليدوي والجماعي والفحص العميق، مع إصلاح آمن لأوامر نهاية النص فقط." },
+      { kind: "fixed", text: "عرض فواصل الأسطر بسهم أخضر، واستبعاد الأسطر التقنية وأرقام الهاتف وأسماء الملفات وبيانات التصحيح من ترجمة Steins;Gate مع الاحتفاظ ببايتاتها الأصلية. توضيح أن Press START Button صورة داخل OBJ_TT.P2T." },
+    ],
+  },
+  {
     version: "2.25.0",
     date: "2026-09-19",
     changes: [

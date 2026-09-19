@@ -448,7 +448,6 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
     /[\uFFF9-\uFFFC]/g,                       // Unicode special markers
     /<[\w\/][^>]*>/g,                         // HTML-like tags
     ABBREV_PATTERN,                             // Game abbreviations
-    /%(?:K|P|N|CE|CF[0-9A-Fa-f]{6}|L\d+|W\d+|[A-Z][A-Z0-9_]*)/g, // Steins;Gate PSP engine commands
     /%[\d.$-]*[sdif]/g,                       // Printf-style specifiers: %s, %d, %1$s, %.2f
   ];
 
@@ -456,6 +455,12 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   // the generic Xenoblade patterns below (e.g. <Exit> would otherwise also
   // match the generic HTML-like-tag pattern and get a TAG_N instead of ⟦N⟧).
   const matches: { start: number; end: number; original: string; risen?: boolean; pokemonXp?: boolean; gtaiv?: boolean }[] = [];
+  if (_game === 'steinsgate') {
+    const commands = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n/g;
+    for (const match of shielded.matchAll(commands)) {
+      matches.push({ start: match.index!, end: match.index! + match[0].length, original: match[0] });
+    }
+  }
   if (_game === 'risen' || _game === 'risen2') {
     const risenRegex = new RegExp(RISEN_TAG_REGEX.source, RISEN_TAG_REGEX.flags);
     let rMatch: RegExpExecArray | null;

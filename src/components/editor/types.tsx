@@ -1,9 +1,10 @@
 import React from "react";
+import { isSteinsGateTranslatable } from "@/lib/steinsgate/steinsgate-tags";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { hasRisenTags } from "@/lib/risen-tag-guard";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
 
-export type FilterStatus = "all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "no-tags" | "damaged-tags" | "missing-tags" | "fuzzy" | "byte-overflow" | "has-newlines" | "translation-has-newline" | "xeno-n-missing" | "excessive-lines" | "byte-budget" | "newline-diff" | "identical-original" | "long-texts" | "khbbs-unsupported" | "gtaiv-unsupported" | "gtaiv-needs-mod" | "plat-unsupported" | "uppercase";
+export type FilterStatus = "break-missing" | "all" | "translated" | "untranslated" | "problems" | "needs-improve" | "too-short" | "too-long" | "stuck-chars" | "mixed-lang" | "has-tags" | "no-tags" | "damaged-tags" | "missing-tags" | "fuzzy" | "byte-overflow" | "has-newlines" | "translation-has-newline" | "xeno-n-missing" | "excessive-lines" | "byte-budget" | "newline-diff" | "identical-original" | "long-texts" | "khbbs-unsupported" | "gtaiv-unsupported" | "gtaiv-needs-mod" | "plat-unsupported" | "uppercase";
 
 export type FilterTechnical = "all" | "only" | "exclude";
 
@@ -598,6 +599,7 @@ export function isGtaIvScriptLabelText(text: string, msbtFile?: string): boolean
 
 /** Rows that must remain in the source but must never be sent to translation exchange or AI. */
 export function isTranslationExcludedText(text: string, msbtFile?: string): boolean {
+  if (msbtFile?.startsWith("steinsgate/")) return !isSteinsGateTranslatable(msbtFile, text);
   return isGtaIvRuntimeOnlyText(text, msbtFile) || isGtaIvScriptLabelText(text, msbtFile);
 }
 
@@ -755,6 +757,7 @@ function usesUppercaseNames(msbtFile?: string): boolean {
 const UNTRANSLATED_ABBREVIATIONS = new Set(["HP", "PP", "Lv", "Lv."]);
 
 export function isTechnicalText(text: string, msbtFile?: string): boolean {
+  if (msbtFile?.startsWith("steinsgate/")) return !isSteinsGateTranslatable(msbtFile, text);
   const t = text.trim();
   if (!t) return true;
   if (UNTRANSLATED_ABBREVIATIONS.has(t)) return true;

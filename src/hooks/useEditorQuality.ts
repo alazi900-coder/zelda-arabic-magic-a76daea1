@@ -10,6 +10,7 @@ import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeGtaIvEntry } from "@/lib/gtaiv/gtaiv-categories";
 import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categories";
+import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry, isPhEntry } from "@/lib/ph/ph-categories";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
@@ -86,7 +87,7 @@ const RE_PLACEHOLDER = /\uFFFC/g;
  *
  * A fresh regex per call \u2014 the shared one carries `lastIndex` between calls.
  */
-const tagsToDiscount = () => editorTagPattern();
+const tagsToDiscount = (file?: string) => editorTagPattern(file);
 const RE_CONTROL_CHARS = /[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
 const RE_ARABIC = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
 const RE_ENGLISH_WORDS = /[a-zA-Z]{2,}/g;
@@ -160,7 +161,7 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
     // Mixed language check - only if has Arabic chars (fast pre-check)
     if (RE_ARABIC.test(trimmed)) {
       RE_PLACEHOLDER.lastIndex = 0;
-      const stripped = trimmed.replace(tagsToDiscount(), '').replace(RE_PLACEHOLDER, '').trim();
+      const stripped = trimmed.replace(tagsToDiscount(entry.msbtFile), '').replace(RE_PLACEHOLDER, '').trim();
       if (stripped) {
         RE_ENGLISH_WORDS.lastIndex = 0;
         const englishWords = stripped.match(RE_ENGLISH_WORDS);
@@ -172,6 +173,12 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
     }
   }
 
+  if (hasContent && entry.msbtFile.startsWith("steinsgate/")) {
+    const check = validateSteinsGateTags(entry.original, translation);
+    damagedTags = !check.valid;
+    qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
+    tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;
+  }
   return { translation, cat, isTranslated, qTooLong, qNearLimit, qMissingTags, qPlaceholderMismatch, damagedTags, tagOrderMismatch, niTooShort, niTooLong, niStuck, niMixed };
 }
 

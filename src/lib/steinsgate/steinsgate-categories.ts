@@ -1,4 +1,6 @@
 import type { ExtractedEntry, FileCategory } from "@/components/editor/types";
+import { isSteinsGateTranslatable } from "./steinsgate-tags";
+export type SteinsGateCategory = FileCategory;
 
 export const STEINSGATE_CATEGORIES: FileCategory[] = [
   { id: "sg-main-menu", label: "القوائم الرئيسية", emoji: "▤", icon: "Monitor", color: "text-sky-400" },
@@ -15,6 +17,7 @@ export const isSteinsGateEntry = (entry: Pick<ExtractedEntry, "msbtFile">) => en
 export function categorizeSteinsGateEntry(entry: ExtractedEntry): string {
   const file = entry.msbtFile.slice("steinsgate/".length).toUpperCase();
   const text = entry.original.trim();
+  if (!isSteinsGateTranslatable(entry.msbtFile, text)) return "sg-internal";
   if (/^(?:DMENU|MAIN|DBG|CLRFLG)/.test(file)) {
     if (/CLRFLG/.test(file)) return "sg-endings";
     return "sg-main-menu";
@@ -23,6 +26,5 @@ export function categorizeSteinsGateEntry(entry: ExtractedEntry): string {
   if (/DICT/.test(file)) return "sg-tips";
   if (/^(?:MAIL|PHONE|TIPS)/.test(file)) return "sg-phone";
   if (/^SG\d{2}_/.test(file)) return "sg-dialogue";
-  if (/^(?:%L\d+|[A-Z0-9_.-]+)$/.test(text) && !/\s/.test(text)) return "sg-internal";
   return "sg-system";
 }

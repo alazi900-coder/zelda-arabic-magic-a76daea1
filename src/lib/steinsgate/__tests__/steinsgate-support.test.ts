@@ -124,12 +124,16 @@ describe("Steins;Gate unsupported characters", () => {
     expect(analyzeSteinsGateUnsupportedCharacters("%K%Pمرحبا", map)).toEqual([]);
   });
 
-  it("reports the protected arrow, because the build refuses it too", () => {
-    // `▼` is written back as a lone CR, and STEINSGATE_TAG_RE only matches a CR
-    // that carries a newline (`\r?\n`), so the encoder hands the bare CR to the
-    // font and throws. The report says so rather than hiding a build failure.
+  it("accepts the protected arrow — a bare page-advance is a command, not a glyph", () => {
     const map = glyphMapFor("مرحبا");
-    const found = analyzeSteinsGateUnsupportedCharacters("مرحبا▼", map);
-    expect(found.map((item) => item.unicode)).toEqual(["U+000D"]);
+    expect(analyzeSteinsGateUnsupportedCharacters("مرحبا▼", map)).toEqual([]);
+    expect(analyzeSteinsGateUnsupportedCharacters("مرحبا▼\n", map)).toEqual([]);
+  });
+
+  it("keeps a bare page-advance where the translator put it", () => {
+    // Unprotected, the bidi pass carried the CR from the end of the first word
+    // into the middle of the line, moving the page break with it.
+    const tags = extractSteinsGateTags("مرحبا\rسلام");
+    expect(tags).toEqual(["\r"]);
   });
 });

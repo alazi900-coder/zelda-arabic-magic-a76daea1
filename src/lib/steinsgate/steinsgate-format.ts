@@ -301,6 +301,9 @@ function encodeVisualChar(char: string, glyphMap: Record<string, number[]>): num
   const mapped = glyphMap[char];
   if (mapped) return mapped;
   const code = char.codePointAt(0) ?? 0;
+  // The page-advance and line-break the script stores as raw 0x0D/0x0A are
+  // commands, not glyphs: they go back as the bytes they came in as.
+  if (code === 0x0d || code === 0x0a) return [code];
   if (code >= 0x20 && code <= 0x7e) return [code];
   if (char === "【") return [0x81, 0x79];
   if (char === "】") return [0x81, 0x7a];

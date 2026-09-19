@@ -1,6 +1,10 @@
 // Fixed command lengths matter: %B1SOrganization contains a tag followed by
 // prose, and %CF8FF8 is %CF plus FOUR hexadecimal digits, not six.
-export const STEINSGATE_TAG_RE = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n|\r?\n|[▼]/g;
+// A carriage return counts on its own, not only when a newline follows it.
+// The script advances a page with a bare 0x0D, and leaving that unprotected
+// let the bidi pass carry it into the middle of a word -- and then the
+// encoder looked it up in the font and refused to build the line at all.
+export const STEINSGATE_TAG_RE = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n|\r\n?|\n|[▼]/g;
 
 /** Steins;Gate editor form for the raw CR advance marker. */
 export function toSteinsGateEditorText(text: string): string { return text.replace(/\r/g, "▼"); }

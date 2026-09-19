@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.3", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "تصحيح قراءة وكتابة مؤشرات Steins;Gate PSP إلى 32 بت، ودعم توسعة أرشيف الحوارات مع تحديث بيانات ISO واستيراد الأرشيف من موقعه الجديد." },
+  ] },
   {
     version: "2.25.1",
     date: "2026-09-19",

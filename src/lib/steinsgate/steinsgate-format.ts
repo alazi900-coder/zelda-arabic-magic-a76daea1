@@ -77,7 +77,7 @@ function readIsoDirectoryRecord(bytes: Uint8Array, offset: number) {
   };
 }
 
-async function findIsoFile(file: File, wantedPath: string): Promise<{ offset: number; size: number }> {
+async function findIsoFile(file: File, wantedPath: string): Promise<{ offset: number; size: number; recordOffset: number }> {
   const descriptor = new Uint8Array(await file.slice(16 * SECTOR, 17 * SECTOR).arrayBuffer());
   if (new TextDecoder("ascii").decode(descriptor.subarray(1, 6)) !== "CD001") {
     const magic = new TextDecoder("ascii").decode(new Uint8Array(await file.slice(0, 8).arrayBuffer()));
@@ -87,6 +87,7 @@ async function findIsoFile(file: File, wantedPath: string): Promise<{ offset: nu
   const root = readIsoDirectoryRecord(descriptor, 156);
   if (!root) throw new Error("تعذر قراءة مجلد ISO الجذري.");
   let current = { extent: root.extent, size: root.size };
+  let recordOffset = 0;
   for (const part of wantedPath.split("/").filter(Boolean)) {
     const dir = new Uint8Array(await file.slice(current.extent * SECTOR, current.extent * SECTOR + current.size).arrayBuffer());
     let cursor = 0;
@@ -96,13 +97,13 @@ async function findIsoFile(file: File, wantedPath: string): Promise<{ offset: nu
       if (length === 0) { cursor = align(cursor + 1); continue; }
       const record = readIsoDirectoryRecord(dir, cursor);
       if (!record) break;
-      if (record.name.toUpperCase() === part.toUpperCase()) { found = record; break; }
+      if (record.name.toUpperCase() === part.toUpperCase()) { found = record; recordOffset = current.extent * SECTOR + cursor; break; }
       cursor += record.length;
     }
     if (!found) throw new Error(`لم يُعثر على ${wantedPath} داخل ISO. تأكد أن النسخة Steins;Gate PSP (ULJM05887).`);
     current = { extent: found.extent, size: found.size };
   }
-  return { offset: current.extent * SECTOR, size: current.size };
+  return { offset: current.extent * SECTOR, size: current.size, recordOffset };
 }
 
 export function parseAfs(buffer: ArrayBuffer | Uint8Array): ParsedAfs {
@@ -158,7 +159,8 @@ export function parseSteinsGateScript(file: string, buffer: Uint8Array): SteinsG
     const nul = buffer.indexOf(0, offset);
     if (nul < 0) break;
     const raw = buffer.slice(offset, nul);
-    const pointerBits: 16 | 32 = offset < 0x10000 ? 16 : 32;
+    // Addresses below 64 KiB still occupy a four-byte field in PSP scripts.
+    const pointerBits = 32;
     const pointerOffsets = findPointers(buffer, split, offset, pointerBits);
     if (pointerOffsets.length > 0) records.push({ file, index, offset, pointerOffsets, pointerBits, raw: Array.from(raw) });
     offset = nul + 1;
@@ -224,8 +226,8 @@ export async function importSteinsGateIso(file: File): Promise<SteinsGateImportR
   if (!sceneEntry || !fontEntry) {
     throw new Error("بنية DATA0.AFS لا تطابق Steins;Gate PSP الإنجليزية المدعومة.");
   }
-  const sceneArchive = rootBytes.slice(sceneEntry.offset, sceneEntry.offset + sceneEntry.size);
-  const fontArchive = rootBytes.slice(fontEntry.offset, fontEntry.offset + fontEntry.size);
+  const sceneArchive = new Uint8Array(await file.slice(data0.offset + sceneEntry.offset, data0.offset + sceneEntry.offset + sceneEntry.size).arrayBuffer());
+  const fontArchive = new Uint8Array(await file.slice(data0.offset + fontEntry.offset, data0.offset + fontEntry.offset + fontEntry.size).arrayBuffer());
   const scene = parseAfs(sceneArchive);
   const records: SteinsGateStringRecord[] = [];
   const scriptBytes: Uint8Array[] = [];
@@ -356,7 +358,7 @@ function encodeTranslatedText(original: string, translation: string, glyphMap: R
   return Uint8Array.from(out);
 }
 
-function rebuildScript(original: Uint8Array, records: SteinsGateStringRecord[], translations: Readonly<Record<string, string>>, glyphMap: Record<string, number[]>): Uint8Array {
+export function rebuildScript(original: Uint8Array, records: SteinsGateStringRecord[], translations: Readonly<Record<string, string>>, glyphMap: Record<string, number[]>): Uint8Array {
   const split = findSplitAddress(original);
   if (split < 0 || records.length === 0) return original.slice();
   const recordByOffset = new Map(records.map((record) => [record.offset, record]));
@@ -386,10 +388,11 @@ function rebuildScript(original: Uint8Array, records: SteinsGateStringRecord[], 
     const item = allStrings[index];
     if (item.record) {
       for (const pointerOffset of item.record.pointerOffsets) {
-        if (item.record.pointerBits === 16) {
-          if (cursor >= 0x10000) throw new Error(`${item.record.file}: تجاوز النص حد مؤشرات 16-bit؛ اختصر بعض الترجمات.`);
-          outputView.setUint16(pointerOffset, cursor, true);
-        } else outputView.setUint32(pointerOffset, cursor, true);
+        const sourceView = new DataView(original.buffer, original.byteOffset, original.byteLength);
+        if (pointerOffset + 4 > split || sourceView.getUint32(pointerOffset, true) !== item.oldOffset) {
+          throw new Error(`${item.record.file}: مؤشر غير صالح؛ أعد استيراد ISO لتحديث جلسة الترجمة.`);
+        }
+        outputView.setUint32(pointerOffset, cursor, true);
       }
     }
     output.set(encoded[index], cursor);
@@ -409,8 +412,7 @@ export function rebuildAfs(original: ArrayBuffer | Uint8Array, replacements: Rea
   const nameTableOffset = align(cursor);
   const nameBytes = source.slice(parsed.nameTableOffset, parsed.nameTableOffset + parsed.nameTableSize);
   const required = nameTableOffset + nameBytes.length;
-  if (required > source.length) throw new Error(`أرشيف AFS يحتاج ${(required - source.length).toLocaleString("ar")} بايت إضافي؛ اختصر الترجمات.`);
-  const output = new Uint8Array(source.length);
+  const output = new Uint8Array(Math.max(source.length, align(required)));
   output.set(source.subarray(0, Math.min(firstDataOffset, source.length)));
   const view = new DataView(output.buffer);
   for (let index = 0; index < files.length; index += 1) {
@@ -421,6 +423,9 @@ export function rebuildAfs(original: ArrayBuffer | Uint8Array, replacements: Rea
   writeU32(view, 8 + files.length * 8, nameTableOffset);
   writeU32(view, 12 + files.length * 8, nameBytes.length);
   output.set(nameBytes, nameTableOffset);
+  for (let index = 0; index < files.length; index += 1) {
+    if ((index + 1) * 48 <= nameBytes.length) writeU32(view, nameTableOffset + index * 48 + 44, files[index].length);
+  }
   return output;
 }
 
@@ -489,8 +494,27 @@ export async function buildSteinsGateIso(
   const rebuiltFonts = await injectArabicFont(workspace.fontArchive, workspace.glyphMap);
   const patches = [
     { offset: workspace.data0Offset + workspace.fontOffset, bytes: rebuiltFonts },
-    { offset: workspace.data0Offset + workspace.sceneOffset, bytes: rebuiltScene },
-  ].sort((a, b) => a.offset - b.offset);
+  ];
+  const appendScene = rebuiltScene.length > workspace.sceneSize;
+  const appendedOffset = align(source.size);
+  if (appendScene) {
+    const extentSize = appendedOffset + rebuiltScene.length - data0.offset;
+    if (extentSize > 0xffffffff) throw new Error("تجاوز حجم أرشيف اللعبة نطاق 32 بت.");
+    const afsEntry = new Uint8Array(8);
+    const afsView = new DataView(afsEntry.buffer);
+    afsView.setUint32(0, appendedOffset - data0.offset, true);
+    afsView.setUint32(4, rebuiltScene.length, true);
+    patches.push({ offset: data0.offset + 8 + SCENE_ARCHIVE_INDEX * 8, bytes: afsEntry });
+    const bothEndian = (value: number) => {
+      const bytes = new Uint8Array(8);
+      const view = new DataView(bytes.buffer);
+      view.setUint32(0, value, true); view.setUint32(4, value, false);
+      return bytes;
+    };
+    patches.push({ offset: data0.recordOffset + 10, bytes: bothEndian(extentSize) });
+    patches.push({ offset: 16 * SECTOR + 80, bytes: bothEndian(Math.ceil((appendedOffset + rebuiltScene.length) / SECTOR)) });
+  } else patches.push({ offset: data0.offset + workspace.sceneOffset, bytes: rebuiltScene });
+  patches.sort((a, b) => a.offset - b.offset);
   const parts: BlobPart[] = [];
   let cursor = 0;
   for (const patch of patches) {
@@ -499,6 +523,7 @@ export async function buildSteinsGateIso(
     cursor = patch.offset + patch.bytes.length;
   }
   parts.push(source.slice(cursor));
+  if (appendScene) parts.push(new Uint8Array(appendedOffset - source.size), rebuiltScene as unknown as BlobPart);
   const translatedLines = entries.filter((entry) => {
     const value = translations[`${entry.msbtFile}:${entry.index}`];
     return Boolean(value?.trim() && value !== entry.original);

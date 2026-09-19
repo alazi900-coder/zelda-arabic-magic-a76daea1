@@ -583,6 +583,12 @@ export async function buildSteinsGateIso(
   for (const afsEntry of parsedScene.entries) {
     const records = recordsByFile.get(afsEntry.name);
     if (!records) continue;
+    const hasTranslation = records.some(record => {
+      const key = `${SCRIPT_PREFIX}${record.file}:${record.index}`;
+      const value = translations[key]?.trim();
+      return Boolean(value && value !== toSteinsGateEditorText(decodeSource(record.raw)));
+    });
+    if (!hasTranslation) continue;
     const original = sceneSource.slice(afsEntry.offset, afsEntry.offset + afsEntry.size);
     replacements.set(afsEntry.name, rebuildScript(original, records, translations, glyphMap));
   }

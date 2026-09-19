@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.6", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "ترك ملفات سكربت Steins;Gate التي لا تحتوي ترجمات دون أي تعديل أثناء البناء، لتجنب تغيير DATA.BIN وملفات بدء اللعبة بلا داعٍ." },
+  ] },
   { version: "2.25.5", date: "2026-09-19", changes: [
     { kind: "fixed", text: "منع حقن العربية في خانات الحروف اللاتينية أو الرسومات المشتركة في خطي Steins;Gate، وإعادة حساب خانات الخط للجلسات القديمة عند البناء." },
   ] },

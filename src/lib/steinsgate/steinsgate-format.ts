@@ -196,6 +196,8 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
     const bytes = fontArchive.subarray(entry.offset, entry.offset + entry.size);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const start = readU32(view, 16), count = readU32(view, 20);
+    const dataOffset = readU32(view, 24), cell = readU16(view, 32);
+    const glyphBytes = Math.floor((bytes.length - dataOffset) / (cell * cell / 2));
     const aliases = new Map<number, number>();
     for (let i = 0; i < count; i++) {
       const id = readU16(view, start + i * 2);
@@ -203,7 +205,7 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
     }
     const used = new Set<number>();
     for (let i = 0; i < count; i++) { const id = readU16(view, start + i * 2); if (id !== 0xffff) used.add(id); }
-    return { view, start, count, aliases, used };
+    return { view, start, count, aliases, used, glyphBytes };
   });
   const usedPairs = new Set<string>();
   for (const script of scriptBytes) for (let i = 0; i + 1 < script.length; i += 1) usedPairs.add(`${script[i]}:${script[i + 1]}`);
@@ -211,7 +213,9 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
   for (let cp = 0xfe70; cp <= 0xfefc; cp += 1) if (/\p{Letter}/u.test(String.fromCodePoint(cp))) forms.push(String.fromCodePoint(cp));
   forms.push("،", "؛", "؟");
   const slots: number[][] = [];
-  let nextGlyph = 0;
+  // The map has more codepoint slots than the shipped bitmap data. Every
+  // existing bitmap cell is referenced, so append new cells safely.
+  let nextGlyph = Math.max(...fontTables.map(table => table.glyphBytes));
   outer: for (const lead of [...Array.from({ length: 0x1f }, (_, i) => 0x81 + i), ...Array.from({ length: 0x10 }, (_, i) => 0xe0 + i)]) {
     for (let trail = 0x40; trail <= 0xfc; trail += 1) {
       if (trail === 0x7f || usedPairs.has(`${lead}:${trail}`)) continue;
@@ -222,7 +226,6 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
       if (!/^[\u4e00-\u9fff]$/.test(SHIFT_JIS_DECODER.decode(new Uint8Array([lead, trail])))) continue;
       if (fontTables.some(table => jisIndex >= table.count || readU16(table.view, table.start + jisIndex * 2) !== 0xffff)) continue;
       while (fontTables.some(table => table.used.has(nextGlyph))) nextGlyph++;
-      if (fontTables.some(table => nextGlyph >= table.count)) continue;
       slots.push([lead, trail, nextGlyph]);
       fontTables.forEach(table => table.used.add(nextGlyph));
       nextGlyph++;
@@ -528,16 +531,23 @@ export function rebuildAfs(original: ArrayBuffer | Uint8Array, replacements: Rea
 async function injectArabicFont(fontArchiveBuffer: ArrayBuffer, glyphMap: Record<string, number[]>): Promise<Uint8Array> {
   const archive = new Uint8Array(fontArchiveBuffer.slice(0));
   const parsed = parseAfs(archive);
+  const replacements = new Map<string, Uint8Array>();
+  const maxGlyphId = Math.max(...Object.values(glyphMap).map(pair => pair[2] ?? 0));
   for (const fontName of ["DFKKG5W16.FNT", "DFKKG3W12.FNT"]) {
     const fntEntry = parsed.entries.find((entry) => entry.name === fontName);
     const fniEntry = parsed.entries.find((entry) => entry.name === fontName.replace(".FNT", ".FNI"));
     if (!fntEntry || !fniEntry) continue;
-    const fnt = archive.subarray(fntEntry.offset, fntEntry.offset + fntEntry.size);
+    const originalFnt = archive.subarray(fntEntry.offset, fntEntry.offset + fntEntry.size);
+    const originalView = new DataView(originalFnt.buffer, originalFnt.byteOffset, originalFnt.byteLength);
+    const dataOffset = readU32(originalView, 24);
+    const cell = readU16(originalView, 32);
+    const bytesPerGlyph = cell * cell / 2;
+    const requiredSize = dataOffset + (maxGlyphId + 1) * bytesPerGlyph;
+    const fnt = requiredSize > originalFnt.length ? new Uint8Array(requiredSize) : new Uint8Array(originalFnt);
+    fnt.set(originalFnt);
     const fni = archive.subarray(fniEntry.offset, fniEntry.offset + fniEntry.size);
     const view = new DataView(fnt.buffer, fnt.byteOffset, fnt.byteLength);
     const mapOffset = readU32(view, 16);
-    const dataOffset = readU32(view, 24);
-    const cell = readU16(view, 32);
     const canvas = document.createElement("canvas");
     canvas.width = cell; canvas.height = cell;
     const context = canvas.getContext("2d", { willReadFrequently: true });
@@ -563,8 +573,9 @@ async function injectArabicFont(fontArchiveBuffer: ArrayBuffer, glyphMap: Record
       const width = Math.max(1, Math.min(cell, Math.ceil(context.measureText(char).width)));
       fni[jisIndex * 4] = 0; fni[jisIndex * 4 + 1] = width; fni[jisIndex * 4 + 2] = 0; fni[jisIndex * 4 + 3] = 0;
     }
+    replacements.set(fontName, fnt);
   }
-  return archive;
+  return replacements.size ? rebuildAfs(archive, replacements) : archive;
 }
 
 export async function buildSteinsGateIso(

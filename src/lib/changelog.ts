@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.9", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "إصلاح تجمّد Steins;Gate الناتج عن إحالة خريطة الخط إلى خلايا رسومية غير موجودة؛ يوسّع البناء خطي FNT بأمان ويحدّث أرشيف الخط." },
+  ] },
   { version: "2.25.8", date: "2026-09-19", changes: [
     { kind: "fixed", text: "إصلاح جدول ربط خط Steins;Gate: تُحجز خانات CJK غير المستخدمة وتُربط بالعربية فعلياً، فلا تتشوه الحروف الإنجليزية أو تتجمد القوائم." },
   ] },

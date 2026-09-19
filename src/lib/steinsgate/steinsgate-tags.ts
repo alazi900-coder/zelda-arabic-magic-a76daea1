@@ -1,6 +1,11 @@
 // Fixed command lengths matter: %B1SOrganization contains a tag followed by
 // prose, and %CF8FF8 is %CF plus FOUR hexadecimal digits, not six.
-export const STEINSGATE_TAG_RE = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n|\r?\n/g;
+export const STEINSGATE_TAG_RE = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n|\r?\n|[▼]/g;
+
+/** Steins;Gate editor form for the raw CR advance marker. */
+export function toSteinsGateEditorText(text: string): string { return text.replace(/\r/g, "▼"); }
+/** Restore the protected editor arrow before writing PSP script bytes. */
+export function fromSteinsGateEditorText(text: string): string { return text.replace(/▼/g, "\r"); }
 
 export function extractSteinsGateTags(text: string): string[] {
   return text.match(STEINSGATE_TAG_RE) ?? [];
@@ -14,8 +19,8 @@ export interface SteinsGateTagValidation {
 }
 
 export function validateSteinsGateTags(original: string, translation: string): SteinsGateTagValidation {
-  const expected = extractSteinsGateTags(original);
-  const actual = extractSteinsGateTags(translation);
+  const expected = extractSteinsGateTags(toSteinsGateEditorText(original));
+  const actual = extractSteinsGateTags(toSteinsGateEditorText(translation));
   const valid = expected.length === actual.length && expected.every((tag, index) => tag === actual[index]);
   return {
     valid,

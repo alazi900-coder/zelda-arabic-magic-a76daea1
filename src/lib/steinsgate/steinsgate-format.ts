@@ -1,6 +1,6 @@
 import type { ExtractedEntry } from "@/components/editor/types";
 import { processArabicText } from "@/lib/arabic-processing";
-import { validateSteinsGateTags, STEINSGATE_TAG_RE, isSteinsGateTranslatable } from "./steinsgate-tags";
+import { validateSteinsGateTags, STEINSGATE_TAG_RE, isSteinsGateTranslatable, toSteinsGateEditorText, fromSteinsGateEditorText } from "./steinsgate-tags";
 
 const SECTOR = 2048;
 const DATA0_PATH = "/PSP_GAME/USRDIR/DATA0.AFS";
@@ -237,7 +237,7 @@ export async function importSteinsGateIso(file: File): Promise<SteinsGateImportR
   }
   const glyphMap = buildGlyphMap(scriptBytes, fontArchive);
   const entries: ExtractedEntry[] = records.filter(record => isSteinsGateTranslatable(record.file, decodeSource(record.raw))).map((record) => {
-    const original = decodeSource(record.raw);
+    const original = toSteinsGateEditorText(decodeSource(record.raw));
     return {
       msbtFile: `${SCRIPT_PREFIX}${record.file}`,
       index: record.index,
@@ -269,10 +269,11 @@ export async function importSteinsGateIso(file: File): Promise<SteinsGateImportR
 }
 
 function encodeTranslatedText(original: string, translation: string, glyphMap: Record<string, number[]>): Uint8Array {
-  const validation = validateSteinsGateTags(original, translation);
+  const validation = validateSteinsGateTags(original, fromSteinsGateEditorText(translation));
   if (!validation.valid) throw new Error(validation.reason ?? "وسوم Steins;Gate غير محفوظة.");
-  const pieces = translation.split(STEINSGATE_TAG_RE);
-  const tags = translation.match(STEINSGATE_TAG_RE) ?? [];
+  const editorTranslation = fromSteinsGateEditorText(translation);
+  const pieces = editorTranslation.split(STEINSGATE_TAG_RE);
+  const tags = editorTranslation.match(STEINSGATE_TAG_RE) ?? [];
   let visual = "";
   for (let index = 0; index < pieces.length; index += 1) {
     visual += processArabicText(pieces[index], { mirrorPunct: true });
@@ -312,7 +313,8 @@ function rebuildScript(original: Uint8Array, records: SteinsGateStringRecord[], 
     const key = `${SCRIPT_PREFIX}${record.file}:${record.index}`;
     const translation = translations[key]?.trim();
     const sourceText = decodeSource(record.raw);
-    return translation && translation !== sourceText && isSteinsGateTranslatable(record.file, sourceText)
+    const editorSourceText = toSteinsGateEditorText(sourceText);
+    return translation && translation !== editorSourceText && isSteinsGateTranslatable(record.file, sourceText)
       ? encodeTranslatedText(sourceText, translation, glyphMap) : raw;
   });
   const size = split + encoded.reduce((sum, value) => sum + value.length + 1, 0);

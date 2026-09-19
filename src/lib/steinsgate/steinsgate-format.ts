@@ -196,8 +196,6 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
     const bytes = fontArchive.subarray(entry.offset, entry.offset + entry.size);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const start = readU32(view, 16), count = readU32(view, 20);
-    const dataOffset = readU32(view, 24), cell = readU16(view, 32);
-    const glyphBytes = Math.floor((bytes.length - dataOffset) / (cell * cell / 2));
     const aliases = new Map<number, number>();
     for (let i = 0; i < count; i++) {
       const id = readU16(view, start + i * 2);
@@ -205,7 +203,7 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
     }
     const used = new Set<number>();
     for (let i = 0; i < count; i++) { const id = readU16(view, start + i * 2); if (id !== 0xffff) used.add(id); }
-    return { view, start, count, aliases, used, glyphBytes };
+    return { view, start, count, aliases, used };
   });
   const usedPairs = new Set<string>();
   for (const script of scriptBytes) for (let i = 0; i + 1 < script.length; i += 1) usedPairs.add(`${script[i]}:${script[i + 1]}`);
@@ -213,22 +211,20 @@ export function buildGlyphMap(scriptBytes: Uint8Array[], fontArchive: Uint8Array
   for (let cp = 0xfe70; cp <= 0xfefc; cp += 1) if (/\p{Letter}/u.test(String.fromCodePoint(cp))) forms.push(String.fromCodePoint(cp));
   forms.push("،", "؛", "؟");
   const slots: number[][] = [];
-  // The map has more codepoint slots than the shipped bitmap data. Every
-  // existing bitmap cell is referenced, so append new cells safely.
-  let nextGlyph = Math.max(...fontTables.map(table => table.glyphBytes));
   outer: for (const lead of [...Array.from({ length: 0x1f }, (_, i) => 0x81 + i), ...Array.from({ length: 0x10 }, (_, i) => 0xe0 + i)]) {
     for (let trail = 0x40; trail <= 0xfc; trail += 1) {
       if (trail === 0x7f || usedPairs.has(`${lead}:${trail}`)) continue;
       const jisIndex = sjisToJisIndex(lead, trail);
       if (jisIndex == null || mapOffset + jisIndex * 2 + 2 > font.length) continue;
-      if (readU16(fontView, mapOffset + jisIndex * 2) !== 0xffff) continue;
-      // Never replace Latin, punctuation, or a glyph shared by other codepoints.
+      // Reuse an existing, unique CJK cell that no script references. Growing
+      // either FNT changes the archive layout and the PSP build stops loading.
       if (!/^[\u4e00-\u9fff]$/.test(SHIFT_JIS_DECODER.decode(new Uint8Array([lead, trail])))) continue;
-      if (fontTables.some(table => jisIndex >= table.count || readU16(table.view, table.start + jisIndex * 2) !== 0xffff)) continue;
-      while (fontTables.some(table => table.used.has(nextGlyph))) nextGlyph++;
-      slots.push([lead, trail, nextGlyph]);
-      fontTables.forEach(table => table.used.add(nextGlyph));
-      nextGlyph++;
+      if (fontTables.some(table => {
+        if (jisIndex >= table.count) return true;
+        const glyphId = readU16(table.view, table.start + jisIndex * 2);
+        return glyphId === 0xffff || table.aliases.get(glyphId) !== 1;
+      })) continue;
+      slots.push([lead, trail]);
       if (slots.length === forms.length) break outer;
     }
   }
@@ -269,7 +265,7 @@ export async function importSteinsGateIso(file: File): Promise<SteinsGateImportR
       index: record.index,
       label: `${record.file} · 0x${record.offset.toString(16).padStart(6, "0")}`,
       original,
-      maxBytes: 0,
+      maxBytes: record.raw.length,
     };
   });
   return {
@@ -460,42 +456,19 @@ export function rebuildScript(original: Uint8Array, records: SteinsGateStringRec
   // Saved sessions may contain the old 16-bit pointer scan. Re-read full
   // pointer fields from the script; string indexes (translation keys) stay stable.
   const currentRecords = parseSteinsGateScript(records[0].file, original);
-  const recordByOffset = new Map(currentRecords.map((record) => [record.offset, record]));
-  const allStrings: { oldOffset: number; raw: Uint8Array; record?: SteinsGateStringRecord }[] = [];
-  let cursor = split;
-  while (cursor < original.length) {
-    const nul = original.indexOf(0, cursor);
-    if (nul < 0) break;
-    allStrings.push({ oldOffset: cursor, raw: original.slice(cursor, nul), record: recordByOffset.get(cursor) });
-    cursor = nul + 1;
-  }
-  const encoded = allStrings.map(({ raw, record }) => {
-    if (!record) return raw;
+  const output = original.slice();
+  for (const record of currentRecords) {
     const key = `${SCRIPT_PREFIX}${record.file}:${record.index}`;
     const translation = translations[key]?.trim();
     const sourceText = decodeSource(record.raw);
     const editorSourceText = toSteinsGateEditorText(sourceText);
-    return translation && translation !== editorSourceText && isSteinsGateTranslatable(record.file, sourceText)
-      ? encodeTranslatedText(sourceText, translation, glyphMap) : raw;
-  });
-  const size = split + encoded.reduce((sum, value) => sum + value.length + 1, 0);
-  const output = new Uint8Array(size);
-  output.set(original.subarray(0, split));
-  const outputView = new DataView(output.buffer);
-  cursor = split;
-  for (let index = 0; index < allStrings.length; index += 1) {
-    const item = allStrings[index];
-    if (item.record) {
-      for (const pointerOffset of item.record.pointerOffsets) {
-        const sourceView = new DataView(original.buffer, original.byteOffset, original.byteLength);
-        if (pointerOffset + 4 > split || sourceView.getUint32(pointerOffset, true) !== item.oldOffset) {
-          throw new Error(`${item.record.file}: مؤشر غير صالح؛ أعد استيراد ISO لتحديث جلسة الترجمة.`);
-        }
-        outputView.setUint32(pointerOffset, cursor, true);
-      }
+    if (!translation || translation === editorSourceText || !isSteinsGateTranslatable(record.file, sourceText)) continue;
+    const encoded = encodeTranslatedText(sourceText, translation, glyphMap);
+    if (encoded.length > record.raw.length) {
+      throw new Error(`${record.file} · النص ${record.index}: الترجمة ${encoded.length} بايت وتتجاوز المساحة الأصلية ${record.raw.length} بايت.`);
     }
-    output.set(encoded[index], cursor);
-    cursor += encoded[index].length + 1;
+    output.set(encoded, record.offset);
+    output.fill(0, record.offset + encoded.length, record.offset + record.raw.length);
   }
   return output;
 }
@@ -531,27 +504,17 @@ export function rebuildAfs(original: ArrayBuffer | Uint8Array, replacements: Rea
 async function injectArabicFont(fontArchiveBuffer: ArrayBuffer, glyphMap: Record<string, number[]>): Promise<Uint8Array> {
   const archive = new Uint8Array(fontArchiveBuffer.slice(0));
   const parsed = parseAfs(archive);
-  const replacements = new Map<string, Uint8Array>();
-  const maxGlyphId = Math.max(...Object.values(glyphMap).map(pair => pair[2] ?? 0));
   for (const fontName of ["DFKKG5W16.FNT", "DFKKG3W12.FNT"]) {
     const fntEntry = parsed.entries.find((entry) => entry.name === fontName);
     const fniEntry = parsed.entries.find((entry) => entry.name === fontName.replace(".FNT", ".FNI"));
     if (!fntEntry || !fniEntry) continue;
-    const originalFnt = archive.subarray(fntEntry.offset, fntEntry.offset + fntEntry.size);
-    const originalView = new DataView(originalFnt.buffer, originalFnt.byteOffset, originalFnt.byteLength);
-    const dataOffset = readU32(originalView, 24);
-    const cell = readU16(originalView, 32);
-    const bytesPerGlyph = cell * cell / 2;
-    const requiredSize = dataOffset + (maxGlyphId + 1) * bytesPerGlyph;
-    const fnt = requiredSize > originalFnt.length ? new Uint8Array(requiredSize) : new Uint8Array(originalFnt);
-    fnt.set(originalFnt);
+    const fnt = archive.subarray(fntEntry.offset, fntEntry.offset + fntEntry.size);
     const fni = archive.subarray(fniEntry.offset, fniEntry.offset + fniEntry.size);
     const view = new DataView(fnt.buffer, fnt.byteOffset, fnt.byteLength);
     const mapOffset = readU32(view, 16);
-    // FNT stores the bitmap-cell count in its header. Updating the data size
-    // without this field leaves the new map entries pointing past the font as
-    // far as the PSP renderer is concerned, which causes a black screen.
-    view.setUint32(28, Math.max(view.getUint32(28, true), maxGlyphId + 1), true);
+    const dataOffset = readU32(view, 24);
+    const glyphCount = readU32(view, 28);
+    const cell = readU16(view, 32);
     const canvas = document.createElement("canvas");
     canvas.width = cell; canvas.height = cell;
     const context = canvas.getContext("2d", { willReadFrequently: true });
@@ -562,9 +525,8 @@ async function injectArabicFont(fontArchiveBuffer: ArrayBuffer, glyphMap: Record
     for (const [char, pair] of Object.entries(glyphMap)) {
       const jisIndex = sjisToJisIndex(pair[0], pair[1]);
       if (jisIndex == null) continue;
-      const glyphId = pair[2] ?? readU16(view, mapOffset + jisIndex * 2);
-      if (glyphId === 0xffff) continue;
-      view.setUint16(mapOffset + jisIndex * 2, glyphId, true);
+      const glyphId = readU16(view, mapOffset + jisIndex * 2);
+      if (glyphId === 0xffff || glyphId >= glyphCount) throw new Error(`خانة الخط غير صالحة للحرف ${char}.`);
       context.clearRect(0, 0, cell, cell);
       context.fillText(char, 0, cell - 3);
       const pixels = context.getImageData(0, 0, cell, cell).data;
@@ -577,9 +539,8 @@ async function injectArabicFont(fontArchiveBuffer: ArrayBuffer, glyphMap: Record
       const width = Math.max(1, Math.min(cell, Math.ceil(context.measureText(char).width)));
       fni[jisIndex * 4] = 0; fni[jisIndex * 4 + 1] = width; fni[jisIndex * 4 + 2] = 0; fni[jisIndex * 4 + 3] = 0;
     }
-    replacements.set(fontName, fnt);
   }
-  return replacements.size ? rebuildAfs(archive, replacements) : archive;
+  return archive;
 }
 
 export async function buildSteinsGateIso(

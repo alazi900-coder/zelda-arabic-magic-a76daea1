@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { parseSteinsGateScript, rebuildScript, rebuildAfs, parseAfs } from '../steinsgate-format';
 
-it('relocates a low address beyond 64 KiB using the complete pointer field', () => {
+it('writes translated text in place without moving script pointers', () => {
   const source = new Uint8Array(26);
   const view = new DataView(source.buffer);
   view.setUint32(0, 16, true);
@@ -14,13 +14,13 @@ it('relocates a low address beyond 64 KiB using the complete pointer field', () 
   const legacyRecords = records.map(r => ({ ...r, pointerBits: 16 as const,
     pointerOffsets: [...r.pointerOffsets, 8] }));
   view.setUint32(8, 0x12340010, true);
-  const legacyResult = rebuildScript(source, legacyRecords, { 'steinsgate/SG00_01.BIN:0': 'Translated' }, {});
+  const legacyResult = rebuildScript(source, legacyRecords, { 'steinsgate/SG00_01.BIN:0': 'Hey' }, {});
   expect(new DataView(legacyResult.buffer).getUint32(8, true)).toBe(0x12340010);
-  expect(new TextDecoder().decode(legacyResult.slice(16, 26))).toBe('Translated');
-  const result = rebuildScript(source, records, { 'steinsgate/SG00_01.BIN:0': 'A'.repeat(66000) }, {});
-  const relocated = new DataView(result.buffer).getUint32(4, true);
-  expect(relocated).toBe(66017);
-  expect(new TextDecoder().decode(result.slice(relocated))).toBe('Bye\0');
+  expect(legacyResult.length).toBe(source.length);
+  expect(new DataView(legacyResult.buffer).getUint32(4, true)).toBe(22);
+  expect(new TextDecoder().decode(legacyResult.slice(16, 22))).toBe('Hey\0\0\0');
+  expect(() => rebuildScript(source, records, { 'steinsgate/SG00_01.BIN:0': 'Too long' }, {}))
+    .toThrow(/تتجاوز المساحة الأصلية/);
 });
 
 it('grows an AFS and updates both copies of its entry size', () => {

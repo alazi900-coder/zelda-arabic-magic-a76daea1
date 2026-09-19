@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.11", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "إعادة بناء Steins;Gate بطريقة ثابتة المواضع: حقن العربية داخل خلايا CJK موجودة دون توسيع الخط، وفرض حد البايت وكتابة النص داخل مساحته الأصلية دون تحريك السكربتات." },
+  ] },
   { version: "2.25.10", date: "2026-09-19", changes: [
     { kind: "fixed", text: "تحديث عداد خلايا FNT بعد توسيع خط Steins;Gate؛ يمنع توقف PSP عند الرجوع من شاشة الاعتمادات أو فتح القوائم." },
   ] },

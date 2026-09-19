@@ -12,6 +12,9 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: "2.25.7", date: "2026-09-19", changes: [
+    { kind: "fixed", text: "إصلاح تجمّد Steins;Gate عند بناء ISO موسّع: يعاد إنشاء DATA0.AFS داخل المساحة المحجوزة مع تثبيت مواضع بقية ملفات ISO." },
+  ] },
   { version: "2.25.6", date: "2026-09-19", changes: [
     { kind: "fixed", text: "ترك ملفات سكربت Steins;Gate التي لا تحتوي ترجمات دون أي تعديل أثناء البناء، لتجنب تغيير DATA.BIN وملفات بدء اللعبة بلا داعٍ." },
   ] },

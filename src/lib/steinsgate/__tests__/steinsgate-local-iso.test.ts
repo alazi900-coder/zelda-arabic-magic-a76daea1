@@ -25,18 +25,15 @@ describe.skipIf(!path)('local English PSP ISO', () => {
       for (const entry of parseAfs(fonts).entries.filter(e => ['DFKKG5W16.FNT','DFKKG3W12.FNT'].includes(e.name))) {
         const view = new DataView(fonts.buffer, fonts.byteOffset + entry.offset, entry.size);
         const start = view.getUint32(16,true), count = view.getUint32(20,true);
-        const frequencies = new Map<number,number>();
-        for (let i=0;i<count;i++) {
-          const id=view.getUint16(start+i*2,true);
-          frequencies.set(id,(frequencies.get(id)??0)+1);
-        }
+        const allocated = new Set<number>();
         for (const pair of Object.values(result.workspace.glyphMap)) {
-          expect(new TextDecoder('shift-jis').decode(new Uint8Array(pair))).toMatch(/^[\u4e00-\u9fff]$/);
-          const [lead,trail]=pair;
-          let row=(lead<0xa0?lead-0x81:lead-0xc1)*2+0x21;
-          const cell=trail>=0x9f?(row++,trail-0x7e):trail-(trail>0x7f?0x20:0x1f);
-          const id=view.getUint16(start+((row-0x21)*94+cell-0x21)*2,true);
-          expect(frequencies.get(id)).toBe(1);
+          expect(pair).toHaveLength(3);
+          expect(new TextDecoder('shift-jis').decode(new Uint8Array(pair.slice(0, 2)))).toMatch(/^[\u4e00-\u9fff]$/);
+          const id = pair[2];
+          expect(id).toBeGreaterThanOrEqual(0);
+          expect(id).toBeLessThan(count);
+          expect(allocated.has(id)).toBe(false);
+          allocated.add(id);
         }
       }
       expect(result.entries.length).toBeGreaterThan(30000);

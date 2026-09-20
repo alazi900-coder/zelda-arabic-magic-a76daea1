@@ -66,6 +66,7 @@ interface EditorFiltersBarProps {
   isRisen?: boolean;
   isGtaIv?: boolean;
   isSteinsGate?: boolean;
+  isCrashlands?: boolean;
 }
 
 const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({

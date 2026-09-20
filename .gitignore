@@ -26,3 +26,6 @@ dist-ssr
 # Python
 __pycache__/
 *.pyc
+
+# Supabase CLI local cache (created by `supabase`/`npx supabase` commands, e.g. --version)
+supabase/.temp/

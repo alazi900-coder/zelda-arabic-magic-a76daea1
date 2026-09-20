@@ -135,6 +135,16 @@ export function findNdsFile(rom: Uint8Array, path: string): NdsFile | null {
  * is never shrunk: a DS ROM's declared capacity is a power of two the header
  * also carries, and a file smaller than its capacity is a different kind of
  * file than the one the hardware expects.
+ *
+ * The header's used-size field is not trusted on its own for where the free
+ * padding actually starts: measured on an Inazuma Eleven (Europe) cartridge,
+ * it understates the true end of FAT-referenced data by 222,447 bytes --
+ * several files, including a 2.9&nbsp;MB player-sprite archive, sit past what
+ * the header claims is the end of real data. Relocating a grown file to right
+ * after the declared used size landed it inside that sprite archive and wrote
+ * over live data, corrupting every character on screen. The true floor is
+ * whichever is further: the declared used size, or the actual end of the
+ * furthest FAT entry.
  */
 export function writeNdsFile(rom: Uint8Array, file: NdsFile, data: Uint8Array): Uint8Array {
   const fatEntry = u32(rom, FAT_OFFSET) + file.id * 8;
@@ -151,7 +161,8 @@ export function writeNdsFile(rom: Uint8Array, file: NdsFile, data: Uint8Array): 
     return out;
   }
 
-  const start = Math.ceil(u32(rom, USED_SIZE) / ALIGN) * ALIGN;
+  const trueEnd = ndsFiles(rom).reduce((max, f) => Math.max(max, f.end), 0);
+  const start = Math.ceil(Math.max(u32(rom, USED_SIZE), trueEnd) / ALIGN) * ALIGN;
   const end = start + data.length;
   const out = end <= rom.length ? rom.slice() : (() => {
     const grown = new Uint8Array(Math.ceil(end / ALIGN) * ALIGN).fill(0xff);

@@ -592,7 +592,7 @@ export async function buildSteinsGateIso(
   directoryView.setUint32(4, data0Rebuilt.length, false);
   const parts: BlobPart[] = [
     source.slice(0, data0.offset),
-    data0Rebuilt,
+    new Uint8Array(data0Rebuilt),
     new Uint8Array(data0Capacity - data0Rebuilt.length),
     source.slice(data0.offset + data0Capacity),
   ];

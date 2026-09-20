@@ -42,6 +42,7 @@ type EditorSubset = Pick<
   | "fuzzyCount"
   | "byteOverflowCount"
   | "gtaIvNeedsModCount"
+  | "steinsGateUnsupportedCount"
   | "deepDiagnosticCounts"
   | "quickReviewMode"
   | "setQuickReviewMode"
@@ -66,6 +67,7 @@ interface EditorFiltersBarProps {
   isRisen?: boolean;
   isGtaIv?: boolean;
   isSteinsGate?: boolean;
+  isCrashlands?: boolean;
 }
 
 const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({

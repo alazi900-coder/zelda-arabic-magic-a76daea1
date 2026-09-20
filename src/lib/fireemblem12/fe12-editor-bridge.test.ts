@@ -187,7 +187,7 @@ describe("fe12-editor-bridge", () => {
     const stretched = buildFireEmblem12Rom(rom, imported.entries, { [key]: "مرحـــبا" });
     const plain = buildFireEmblem12Rom(rom, imported.entries, { [key]: "مرحبا" });
     expect(stretched.unsupportedCharacters).toEqual([]);
-    expect(Array.from(stretched.buffer)).toEqual(Array.from(plain.buffer));
+    expect(Array.from(new Uint8Array(stretched.buffer))).toEqual(Array.from(new Uint8Array(plain.buffer)));
   });
 
   it("ignores blank/whitespace-only translations (leaves the record untranslated)", () => {

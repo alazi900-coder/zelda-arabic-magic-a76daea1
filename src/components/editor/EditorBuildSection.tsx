@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 /** STYLE: تبقى أدوات البناء مقتصرة على اللعبة المختارة؛ تعرض مراجعة LumenTale حقائق الجلسة ولا تعد بنتيجة قبل تحقق UnityFS الفعلي. */
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -971,7 +972,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               onClick={() => {
                 const changed = onNormalizeSteinsGate?.() ?? 0;
                 setShowNormalizeConfirm(false);
-                toast({ title: `✅ حُوّل ${changed} نصّاً`, description: "اضغط تراجع إن أردت استرجاعها." });
+                toast.success(`✅ حُوّل ${changed} نصّاً`, { description: "اضغط تراجع إن أردت استرجاعها." });
               }}
               className="font-body gap-1"
             >

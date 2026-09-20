@@ -61,6 +61,9 @@ interface CategoryProgressProps {
   gtaIvCategories?: GtaIvCategory[];
   isSteinsGate?: boolean;
   steinsGateCategories?: SteinsGateCategory[];
+  isCrashlands?: boolean;
+  /** Fixed list keyed off the export's own section names (crashlands-categories.ts). */
+  crashlandsCategories?: FileCategory[];
   isPlatinum?: boolean;
   /** Fixed list from the decompilation's archive names (see src/lib/nds/plat-categories.ts). */
   platinumCategories?: FileCategory[];
@@ -69,8 +72,8 @@ interface CategoryProgressProps {
   phCategories?: FileCategory[];
 }
 
-const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [], isLumenTale = false, lumentaleCategories = [], isGtaIv = false, gtaIvCategories = [], isSteinsGate = false, steinsGateCategories = [], isPlatinum = false, platinumCategories = [], isPh = false, phCategories = [] }) => {
-  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isLumenTale ? lumentaleCategories : isGtaIv ? gtaIvCategories : isSteinsGate ? steinsGateCategories : isPlatinum ? platinumCategories : isPh ? phCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
+const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [], isLumenTale = false, lumentaleCategories = [], isGtaIv = false, gtaIvCategories = [], isSteinsGate = false, steinsGateCategories = [], isCrashlands = false, crashlandsCategories = [], isPlatinum = false, platinumCategories = [], isPh = false, phCategories = [] }) => {
+  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isLumenTale ? lumentaleCategories : isGtaIv ? gtaIvCategories : isSteinsGate ? steinsGateCategories : isCrashlands ? crashlandsCategories : isPlatinum ? platinumCategories : isPh ? phCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
   const activeCats = categories.filter(cat => categoryProgress[cat.id]);
   if (activeCats.length === 0 && (isLumenTale || !categoryProgress['other'])) return null;
 

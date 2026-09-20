@@ -83,6 +83,12 @@ const RULES: RuleDef[] = [
   // game is 'platinum' (see PLATINUM_ONLY_RULE_IDS). Replaces the withheld
   // Xenoblade tag rules (XENOBLADE_TAG_RULE_IDS) with Platinum's own tag shape.
   { id: 'detect_plat_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـPlatinum] الرموز من الشكل `{COLOR 1}` أو `{STRVAR_1 3, 0, 0}` (اسم بأحرف كبيرة، ثم اختيارياً رقم أو أرقام مفصولة بفواصل) وسوم محرّك اللعبة نفسها — تلوين أو مؤقّت أو قيمة تضعها اللعبة وقت التشغيل — وليست نصّاً. أصلح أي وسم من هذا الشكل تالفاً أو مفقوداً في الترجمة: استرجعه من الأصل بنفس القيمة والعدد والترتيب حرفاً بحرف. لا تخترع وسماً غير موجود في الأصل، ولا تحذف وسماً موجوداً فيه. ومعها رمزان لا ثالث لهما: `▼` و`▽` — فاصلا توقّف تنتظر عندهما اللعبة ضغطة زر من اللاعب (`▼` يمسح الصندوق ويبدأ صفحة جديدة، `▽` يمرّره لأعلى). ليسا حرفين ولا زينة: الرسالة التي يسقط منها أحدهما يستمرّ نصّها في الطباعة داخل صندوق سطرين لا يسعه، فلا يظهر ما بعده على الشاشة أبداً. أبقِهما بنفس العدد ونفس الترتيب ونفس موضعهما بين الكلمات، ولا تنقلهما ولا تحذفهما ولا تُضِف واحداً من عندك.' },
+  // Crashlands-only rules: declared here, injected only when the request's
+  // game is 'crashlands' (see CRASHLANDS_ONLY_RULE_IDS). The first names the
+  // only two tokens the 9,132-entry export actually contains; the second
+  // stops the model 'correcting' the game's invented names into real words.
+  { id: 'detect_crashlands_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـCrashlands] في نصّ هذه اللعبة رمزان لا ثالث لهما: `%r` قيمة يضعها المحرّك وقت التشغيل («deals %r% bonus damage») وليس نصّاً، و`#` فاصل سطر ضياعه يدمج سطرين على الشاشة. أبقِهما بنفس العدد ونفس الترتيب ونفس الموضع بين الكلمات، ولا تخترع واحداً من عندك. وما عداهما نصّ عادي: علامة `%` وحدها في مثل `-25% physical resistance` نسبة مئوية من الجملة لا رمز، فلا تحذفها ولا تحمِها. ولا توجد في هذه اللعبة وسوم من الشكل `{…}` أو `<…>` أو `[…]`، فلا تضفها.' },
+  { id: 'detect_crashlands_invented_names', kind: 'detect', prompt: '**accuracy** — [خاص بـCrashlands] نبرة اللعبة ساخرة هازلة، ومعظم أسمائها مخترعة لها وحدها (Lognest، Flux Dabes، Juicebox، Bawg، Tendrilis). لا تعامل اسماً منها على أنّه خطأ إملائي لكلمة إنجليزية معروفة، ولا تستبدله بما تظنّه المقصود: انقله صوتياً كما هو. ولا تفترض مصطلحات أو شخصيات من Xenoblade أو أي لعبة أخرى.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -104,6 +110,8 @@ const RISEN_ONLY_RULE_IDS = new Set(['detect_risen_gendered_pickup', 'detect_ris
 const PKM_ONLY_RULE_IDS = new Set(['detect_pkm_var', 'detect_pkm_overflow', 'detect_pkm_linebreaks', 'detect_pkm_name_consistency']);
 /** Rules whose prompt text only makes sense for Platinum — never injected elsewhere. */
 const PLATINUM_ONLY_RULE_IDS = new Set(['detect_plat_tags']);
+/** Rules whose prompt text only makes sense for Crashlands — never injected elsewhere. */
+const CRASHLANDS_ONLY_RULE_IDS = new Set(['detect_crashlands_tags', 'detect_crashlands_invented_names']);
 /**
  * Rules that teach the model Xenoblade's tag syntax, withheld from Pokémon.
  *
@@ -330,6 +338,7 @@ function buildRuleSections(
   isLumenTale = false,
   isGtaIv = false,
   isPlatinum = false,
+  isCrashlands = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -364,7 +373,8 @@ function buildRuleSections(
     (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen) &&
     (!PKM_ONLY_RULE_IDS.has(r.id) || isPokemon) &&
     (!PLATINUM_ONLY_RULE_IDS.has(r.id) || isPlatinum) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum));
+    (!CRASHLANDS_ONLY_RULE_IDS.has(r.id) || isCrashlands) &&
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -510,8 +520,11 @@ Deno.serve(async (req) => {
     const isLumenTale = game === 'lumentale';
     const isGtaIv = game === 'gtaiv';
     const isSteinsGate = game === 'steinsgate';
+    const isCrashlands = game === 'crashlands';
     const gameLabel = isLumenTale
       ? 'LumenTale: Memories of Trey'
+      : isCrashlands
+      ? 'Crashlands'
       : isSteinsGate
       ? 'Steins;Gate (PSP)'
       : isGtaIv
@@ -533,6 +546,8 @@ Deno.serve(async (req) => {
       ? '\nهذه مراجعة خاصة بـ LumenTale: Memories of Trey. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى.\n'
       : isGtaIv
       ? '\nهذه مراجعة خاصة بـ GTA IV. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى. استند فقط إلى النص والقاموس المعطى، ولا تغيّر رموز GTA IV المحاطة بعلامتي ~ ولا أي مبلغ دولار ظاهر مثل $100 أو $20m.\n'
+      : isCrashlands
+      ? '\nهذه مراجعة خاصة بـ Crashlands — لعبة بقاء وصناعة على كوكب غريب، نبرتها ساخرة هازلة ومليئة بالتلاعب اللفظي وأسماء مخترعة (Lognest، Flux Dabes، Juicebox، Bawg، Tendrilis). هذه الأسماء اختُرعت للعبة ولا يعرفها أحد: انقلها صوتياً ولا تترجمها ولا «تصحّحها» إلى شيء مألوف. لا تفترض مصطلحات أو شخصيات من Xenoblade أو أي لعبة أخرى إطلاقاً.\n\nرمزان تقنيّان لا ثالث لهما:\n• %r — قيمة رقمية يضعها المحرّك وقت التشغيل («deals %r% bonus damage»). انسخه حرفياً وبالعدد والترتيب نفسه. وعلامة % التي بعده أحياناً هي علامة مئوية عادية من النصّ.\n• # — فاصل سطر. ضياعه يدمج سطرين على الشاشة. حافظ على عدده وموضعه.\nوالنسب المئوية العادية مثل -25% نصّ لا رمز، فلا تمسّها.\n'
       : isSteinsGate
       ? '\nهذه مراجعة خاصة بـ Steins;Gate PSP. حافظ على نبرة الخيال العلمي والشخصيات والمصطلحات الموحّدة. كل وسم يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك؛ يجب نسخه حرفياً وبالعدد والترتيب والموضع نفسه.\n'
       : isPlatinum
@@ -637,12 +652,12 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate
+    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);

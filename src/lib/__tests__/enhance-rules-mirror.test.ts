@@ -59,7 +59,7 @@ describe("Pokémon rules in the AI enhancement tool", () => {
     expect(gate).not.toBeNull();
     expect(gate![1]).toContain("detect_line_breaks");
     expect(gate![1]).toContain("detect_split_and_tags");
-    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum))");
+    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands))");
   });
 
   it("names the game it is reviewing", () => {
@@ -137,5 +137,36 @@ describe("Platinum's pause markers in the AI enhancement tool", () => {
     // technical-tag pattern is what actually rejects a suggestion.
     expect(EDGE_SOURCE).toContain("PLAT_BREAK_RE");
     expect(EDGE_SOURCE).toMatch(/TECH_TAG_REGEX[\s\S]{0,1200}PLAT_BREAK_RE\.source/);
+  });
+});
+
+/**
+ * Crashlands has two tokens and neither is Xenoblade's.
+ *
+ * Reviews of this game fell through to the Xenoblade prompt, which listed
+ * Shulk and Monado as its proper nouns and taught the model to write
+ * `[XENO:n]` — so the tool rewrote translations instead of improving them.
+ */
+describe("Crashlands rules in the AI enhancement tool", () => {
+  const IDS = ["detect_crashlands_tags", "detect_crashlands_invented_names"];
+
+  it("declares the same prompt text on both sides", () => {
+    for (const id of IDS) {
+      const rule = BUILTIN_RULES.find((r) => r.id === id)!;
+      expect(rule).toBeDefined();
+      expect(EDGE_SOURCE).toContain(rule.prompt.replace(/\\/g, "\\\\"));
+    }
+  });
+
+  it("is injected only for Crashlands", () => {
+    const gate = /const CRASHLANDS_ONLY_RULE_IDS = new Set\(\[([^\]]+)\]\)/.exec(EDGE_SOURCE);
+    expect(gate).not.toBeNull();
+    for (const id of IDS) expect(gate![1]).toContain(id);
+    expect(EDGE_SOURCE).toContain("isPlatinum, isCrashlands)");
+  });
+
+  it("names the game it is reviewing", () => {
+    expect(EDGE_SOURCE).toContain("const isCrashlands = game === 'crashlands'");
+    expect(EDGE_SOURCE).toMatch(/isSteinsGate \|\| isCrashlands/);
   });
 });

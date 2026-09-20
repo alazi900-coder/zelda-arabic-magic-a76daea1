@@ -53,7 +53,7 @@ import { analyzeSteinsGateUnsupportedCharacters, STEINSGATE_WORKSPACE_KEY, type 
 import { isSteinsGateCharSupported } from "@/lib/steinsgate/steinsgate-format";
 import { normalizeSteinsGateText, type SteinsGateReplacement } from "@/lib/steinsgate/steinsgate-normalize";
 import { isSteinsGateTranslatable, repairSteinsGateTags, validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
-import { repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
+import { isChineseSource, repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
@@ -1103,6 +1103,21 @@ export function useEditorState() {
   const steinsGateUnsupportedKeys = steinsGateUnsupportedReport.keys;
   const steinsGateUnsupportedCount = steinsGateUnsupportedKeys.size;
 
+  // Crashlands: 5,711 rows come out of `campaign_story_zh-cn.json`, a file
+  // whose name says Chinese but whose contents are mostly untranslated
+  // English. The few hundred that really are Chinese have no English to work
+  // from, so a translator needs to be able to pull them out on their own.
+  const crashlandsChineseKeys = useMemo(() => {
+    const keys = new Set<string>();
+    if (!state) return keys;
+    for (const entry of state.entries) {
+      if (!entry.msbtFile.startsWith("crashlands/")) continue;
+      if (isChineseSource(entry.original)) keys.add(`${entry.msbtFile}:${entry.index}`);
+    }
+    return keys;
+  }, [state?.entries]);
+  const crashlandsChineseCount = crashlandsChineseKeys.size;
+
   // Which single unsupported character the list is narrowed to, by `U+XXXX`.
   // Null means the filter shows every row that has any of them.
   const [unsupportedCharFilter, setUnsupportedCharFilter] = useState<string | null>(null);
@@ -1294,6 +1309,7 @@ export function useEditorState() {
         (filterStatus === "gtaiv-unsupported" && gtaIvUnsupportedKeys.has(key)) ||
         (filterStatus === "plat-unsupported" && platUnsupportedKeys.has(key)) ||
         (filterStatus === "steinsgate-unsupported" && steinsGateUnsupportedFilterKeys.has(key)) ||
+        (filterStatus === "crashlands-chinese" && crashlandsChineseKeys.has(key)) ||
         // Rows written entirely in capitals — move and ability names, menu
         // labels. Latin letters must be present and none may be lowercase; a
         // technical row is excluded because "{STRVAR_1 8, 0, 0}" has no
@@ -1806,6 +1822,7 @@ export function useEditorState() {
     'damaged-tags': 'أوسمة تالفة', 'fuzzy': 'غامض', 'byte-overflow': 'تجاوز', 'khbbs-unsupported': 'رموز CTD غير مدعومة',
     'plat-unsupported': 'حروف بلا خانة في الخط',
     'steinsgate-unsupported': 'حروف بلا خانة في الخط',
+    'crashlands-chinese': 'نصوص صينية',
     'uppercase': 'أحرف إنجليزية كبيرة',
     'has-newlines': 'أسطر متعددة',
   };
@@ -2275,6 +2292,7 @@ export function useEditorState() {
     categoryProgress, qualityStats, needsImproveCount, translatedCount, tagsCount, fuzzyCount, byteOverflowCount, khbbsUnsupportedCount, khbbsUnsupportedCharacters: khbbsUnsupportedReport.characters, gtaIvUnsupportedCount, gtaIvUnsupportedCharacters: gtaIvUnsupportedReport.characters, gtaIvNeedsModCount,
     platUnsupportedCount, platUnsupportedCharacters: platUnsupportedReport.characters,
     steinsGateUnsupportedCount, steinsGateUnsupportedCharacters: steinsGateUnsupportedReport.characters,
+    crashlandsChineseCount,
     steinsGateNormalizeReplacements: steinsGateNormalizePreview.replacements,
     steinsGateNormalizeRows: steinsGateNormalizePreview.rows, applySteinsGateNormalize,
     unsupportedCharFilter, setUnsupportedCharFilter, multiLineCount, newlinesCount, npcAffectedCount, lineSyncAffectedCount,

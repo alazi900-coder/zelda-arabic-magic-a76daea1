@@ -19,6 +19,7 @@
 import { RISEN_TAG_REGEX } from "@/lib/risen-tag-guard";
 import { PLAT_TAG_RE } from "@/lib/nds/plat-tag-mask";
 import { STEINSGATE_TAG_RE } from "@/lib/steinsgate/steinsgate-tags";
+import { CRASHLANDS_TAG_RE } from "@/lib/crashlands/crashlands-tags";
 
 /** Xenoblade colour codes; ordinary prose in Platinum, so it is dropped there. */
 const HASH_COLOUR_RULE = "#[0-5]";
@@ -69,10 +70,15 @@ const RULES = [
 export function editorTagPattern(msbtFile?: string): RegExp {
   // Filtered on the rule list, not on the joined string: several rules contain
   // a `|` of their own and splitting the join would shatter them.
+  // Crashlands writes a line break as `#`, so the Xenoblade colour rule (`#0`-
+  // `#5`) would swallow it and leave the break itself unmarked -- the one token
+  // whose loss silently runs two lines together.
   const rules = msbtFile?.startsWith("platinum/")
     ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), PLAT_BREAK_RULE]
     : msbtFile?.startsWith("steinsgate/")
       ? [...RULES, STEINSGATE_TAG_RE.source]
-      : RULES;
+      : msbtFile?.startsWith("crashlands/")
+        ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), CRASHLANDS_TAG_RE.source]
+        : RULES;
   return new RegExp(`(${rules.join("|")})`, "g");
 }

@@ -77,6 +77,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
   isRisen = false,
   isGtaIv = false,
   isSteinsGate = false,
+  isCrashlands = false,
   setShowDiffView,
 }) => {
   /** How many rows the current filter shows that the AI would still skip as
@@ -198,6 +199,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             {isRisen && <option value="long-texts">📏 نصوص طويلة (35+)</option>}
             {isGtaIv && editor.gtaIvNeedsModCount > 0 && <option value="gtaiv-needs-mod">🎭 لم تُترجم في المود ({editor.gtaIvNeedsModCount})</option>}
             {isSteinsGate && editor.steinsGateUnsupportedCount > 0 && <option value="steinsgate-unsupported">🔤 حروف بلا خانة في الخط ({editor.steinsGateUnsupportedCount})</option>}
+            {isCrashlands && editor.crashlandsChineseCount > 0 && <option value="crashlands-chinese">🇨🇳 نصوص صينية ({editor.crashlandsChineseCount})</option>}
           </select>
           <select value={editor.filterFile} onChange={e => editor.setFilterFile(e.target.value)} className="px-3 py-2 rounded bg-background border border-border font-body text-sm max-w-[200px]">
             <option value="all">كل الملفات</option>

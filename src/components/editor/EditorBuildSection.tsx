@@ -972,7 +972,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               onClick={() => {
                 const changed = onNormalizeSteinsGate?.() ?? 0;
                 setShowNormalizeConfirm(false);
-                toast({ title: `✅ حُوّل ${changed} نصّاً`, description: "اضغط تراجع إن أردت استرجاعها." });
+                toast.success(`✅ حُوّل ${changed} نصّاً`, { description: "اضغط تراجع إن أردت استرجاعها." });
               }}
               className="font-body gap-1"
             >

@@ -108,7 +108,7 @@ export interface PhRomBuild {
 }
 
 export function buildPhRom(romBuffer: ArrayBuffer, entries: ExtractedEntry[], translations: Record<string, string>): PhRomBuild {
-  let rom = new Uint8Array(romBuffer);
+  let rom: Uint8Array = new Uint8Array(romBuffer);
 
   const entriesByFile = new Map<string, ExtractedEntry[]>();
   for (const entry of entries) {

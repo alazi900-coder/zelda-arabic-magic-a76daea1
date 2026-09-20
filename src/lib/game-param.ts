@@ -31,7 +31,8 @@ export type GameParam =
   | "pokemon-xp"
   | "lumentale"
   | "gtaiv"
-  | "steinsgate";
+  | "steinsgate"
+  | "crashlands";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -48,5 +49,6 @@ export function resolveGameParam(
   if (f.startsWith("lumentale/")) return "lumentale";
   if (f.startsWith("gtaiv/")) return "gtaiv";
   if (f.startsWith("steinsgate/")) return "steinsgate";
+  if (f.startsWith("crashlands/")) return "crashlands";
   return "xenoblade";
 }

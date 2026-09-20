@@ -11,6 +11,8 @@ import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeGtaIvEntry } from "@/lib/gtaiv/gtaiv-categories";
 import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categories";
 import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
+import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
+import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry, isPhEntry } from "@/lib/ph/ph-categories";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
@@ -179,6 +181,12 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
     qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
     tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;
   }
+  if (hasContent && entry.msbtFile.startsWith("crashlands/")) {
+    const check = validateCrashlandsTags(entry.original, translation);
+    damagedTags = !check.valid;
+    qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
+    tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;
+  }
   return { translation, cat, isTranslated, qTooLong, qNearLimit, qMissingTags, qPlaceholderMismatch, damagedTags, tagOrderMismatch, niTooShort, niTooLong, niStuck, niMixed };
 }
 
@@ -270,8 +278,9 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           const isLumenTale = entry.msbtFile.startsWith('lumentale/');
           const isGtaIv = entry.msbtFile.startsWith('gtaiv/');
           const isSteinsGate = entry.msbtFile.startsWith('steinsgate/');
-          const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
-          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isSteinsGate ? categorizeSteinsGateEntry(entry) : isPlatEntry(entry) ? categorizePlatEntry(entry) : isPhEntry(entry) ? categorizePhEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
+          const isCrashlands = entry.msbtFile.startsWith('crashlands/');
+          const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
+          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isSteinsGate ? categorizeSteinsGateEntry(entry) : isCrashlands ? categorizeCrashlandsEntry(entry) : isPlatEntry(entry) ? categorizePlatEntry(entry) : isPhEntry(entry) ? categorizePhEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
 
           const cached = cache.get(key);
           let result: EntryCacheResult;

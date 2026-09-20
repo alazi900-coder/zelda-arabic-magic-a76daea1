@@ -27,6 +27,7 @@ import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
 import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
 import { PH_CATEGORIES } from "@/lib/ph/ph-categories";
 import { STEINSGATE_CATEGORIES } from "@/lib/steinsgate/steinsgate-categories";
+import { CRASHLANDS_CATEGORIES } from "@/lib/crashlands/crashlands-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import EditorAsyncBoundary from "@/components/editor/EditorAsyncBoundary";
@@ -163,6 +164,7 @@ const Editor = () => {
   const isLumenTaleEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("lumentale/") ?? false;
   const isGtaIvEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("gtaiv/") ?? false;
   const isSteinsGateEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("steinsgate/") ?? false;
+  const isCrashlandsEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("crashlands/") ?? false;
   const isFe12Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("fe12/") ?? false;
   const isPlatinumEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
   const isPhEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("ph/") ?? false;
@@ -215,6 +217,8 @@ const Editor = () => {
     ? "/gta-iv"
     : isSteinsGateEntries
     ? "/steins-gate-psp"
+    : isCrashlandsEntries
+    ? "/crashlands"
     : isRisen
     ? "/risen/process"
     : "/process";
@@ -234,11 +238,12 @@ const Editor = () => {
     if (isLumenTaleEntries) return lumentaleCategories(entries);
     if (isGtaIvEntries) return GTAIV_CATEGORIES;
     if (isSteinsGateEntries) return STEINSGATE_CATEGORIES;
+    if (isCrashlandsEntries) return CRASHLANDS_CATEGORIES;
     if (isPlatinumEntries) return PLATINUM_CATEGORIES;
     if (isPhEntries) return PH_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isPlatinumEntries, isPhEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isPlatinumEntries, isPhEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -614,6 +619,7 @@ const Editor = () => {
             isRisen={isRisenEntries}
             isGtaIv={isGtaIvEntries}
             isSteinsGate={isSteinsGateEntries}
+            isCrashlands={isCrashlandsEntries}
           />
 
           {/* Needs Improvement Badges */}
@@ -751,6 +757,7 @@ const Editor = () => {
             isLumenTale={isLumenTaleEntries}
             isGtaIv={isGtaIvEntries}
             isSteinsGate={isSteinsGateEntries}
+            isCrashlands={isCrashlandsEntries}
             isFe12={isFe12Entries}
             isPh={isPhEntries}
             khbbsUnsupportedCount={editor.khbbsUnsupportedCount}

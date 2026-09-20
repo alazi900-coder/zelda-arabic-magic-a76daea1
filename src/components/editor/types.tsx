@@ -24,6 +24,10 @@ export interface ExtractedEntry {
    * the mod's Arabic glyph units — i.e. the community mod itself never
    * translated this line. Undefined until both GTA IV files are loaded. */
   gtaivNeedsModTranslation?: boolean;
+  /** Crashlands JSON identity. Kept outside the visible source so a rebuilt
+   * JSON always targets the exact game key it came from. */
+  crashlandsId?: string;
+  crashlandsSection?: string;
 }
 
 

@@ -36,7 +36,7 @@ function rgbaToDataUrl(img: RgbaImage): string {
   canvas.width = img.width;
   canvas.height = img.height;
   const ctx = canvas.getContext("2d")!;
-  const imageData = new ImageData(img.data, img.width, img.height);
+  const imageData = new ImageData(new Uint8ClampedArray(img.data), img.width, img.height);
   ctx.putImageData(imageData, 0, 0);
   return canvas.toDataURL("image/png");
 }

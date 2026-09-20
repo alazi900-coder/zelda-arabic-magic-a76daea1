@@ -29,7 +29,7 @@ function rgbaToDataUrl(data: Uint8ClampedArray, width: number, height: number): 
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
-  ctx.putImageData(new ImageData(data, width, height), 0, 0);
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(data), width, height), 0, 0);
   return canvas.toDataURL("image/png");
 }
 

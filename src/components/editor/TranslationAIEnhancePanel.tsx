@@ -41,6 +41,7 @@ import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/catego
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
 import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
+import { repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -268,12 +269,20 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const isLumenTale = gameParam === "lumentale";
   const isGtaIv = gameParam === "gtaiv";
   const isPokemonXp = gameParam === "pokemon-xp";
+  const isCrashlands = gameParam === "crashlands";
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
     }
     if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
     if (isPokemonXp) return validatePokemonXpTechnicalTokens(original, suggestion).reason;
+    // `%r` and `#` are the whole technical vocabulary of this game, and the
+    // save path already refuses a translation that loses one. Without the
+    // same check here, "تطبيق الكل" counted such a suggestion as applied
+    // while the save silently dropped it — a success toast for work that
+    // never happened. Repair first, exactly as the save does, or this
+    // would refuse a suggestion the editor would have fixed by itself.
+    if (isCrashlands) return validateCrashlandsTags(original, repairCrashlandsTags(original, suggestion).text).reason ?? null;
     if (isGtaIv) {
       const dollarRepair = repairGtaIvDollarAmountSequence(original, suggestion);
       if (!dollarRepair.safe) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";

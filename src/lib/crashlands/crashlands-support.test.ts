@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { exportCrashlandsJson, importCrashlandsJson } from "./crashlands-editor-bridge";
 import type { ExtractedEntry } from "@/components/editor/types";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
 import { resolveGameParam } from "@/lib/game-param";
 import { BUILTIN_RULES } from "@/lib/enhance-rules";
 import { CRASHLANDS_CATEGORIES, categorizeCrashlandsEntry } from "./crashlands-categories";
-import { extractCrashlandsTags, isChineseSource, repairCrashlandsTags, validateCrashlandsTags } from "./crashlands-tags";
+import { CRASHLANDS_TAG_RE, extractCrashlandsTags, isChineseSource, repairCrashlandsTags, validateCrashlandsTags } from "./crashlands-tags";
 
 describe("Crashlands technical token guard", () => {
   it("preserves ordered placeholders and hash breaks", () => {
@@ -87,5 +89,65 @@ describe("Crashlands game routing", () => {
     const tags = BUILTIN_RULES.find((r) => r.id === "detect_crashlands_tags")!;
     expect(tags.prompt).toContain("%r");
     expect(tags.prompt).toContain("-25%");
+  });
+});
+
+describe("Crashlands suggestions that cannot be saved", () => {
+  /**
+   * The save path repairs a terminal token, then refuses anything still
+   * invalid (useEditorState.ts). "تطبيق الكل" filters on its own check and
+   * then reports how many it applied, so if the two disagree the toast counts
+   * suggestions the save dropped on the floor. This is that shared condition.
+   */
+  const wouldSave = (original: string, suggestion: string) =>
+    validateCrashlandsTags(original, repairCrashlandsTags(original, suggestion).text).valid;
+
+  it("refuses a suggestion that drops the line break", () => {
+    expect(wouldSave("Grab the Bawg#Then run.", "خذ الباوغ ثم اهرب.")).toBe(false);
+  });
+  it("refuses a suggestion that drops the runtime value", () => {
+    expect(wouldSave("Deals %r% bonus damage", "يسبب ضررا إضافيا")).toBe(false);
+  });
+  it("accepts a suggestion that keeps both in order", () => {
+    expect(wouldSave("Deals %r% bonus damage#Nice.", "يسبب %r% ضررا إضافيا#جميل.")).toBe(true);
+  });
+  it("accepts a suggestion the editor repairs by itself", () => {
+    // A trailing token the model moved is put back on save, so the panel must
+    // not refuse it — that would hide a suggestion the editor can take.
+    expect(wouldSave("Press %r", "اضغط")).toBe(true);
+  });
+  it("leaves a percentage-only line alone", () => {
+    expect(wouldSave("-25% physical resistance", "‎-25% مقاومة جسدية")).toBe(true);
+  });
+});
+
+describe("the suggestion gate runs on both sides", () => {
+  const EDGE_SOURCE = readFileSync(
+    resolve(__dirname, "../../../supabase/functions/enhance-translations/index.ts"),
+    "utf8"
+  );
+
+  it("rejects the suggestion in the edge function before it is returned", () => {
+    expect(EDGE_SOURCE).toContain("preservesCrashlandsTokenSequence");
+    expect(EDGE_SOURCE).toContain("(!isCrashlands || preservesCrashlandsTokenSequence(original, suggested))");
+    // Every caller has to pass the flag, or the gate is dead code.
+    expect(EDGE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
+      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands\)/g)?.length ?? 0) + 1
+    );
+  });
+
+  it("uses the same two tokens as the editor", () => {
+    const edge = /const CRASHLANDS_TOKEN_REGEX = (\/.+?\/g);/.exec(EDGE_SOURCE);
+    expect(edge).not.toBeNull();
+    expect(edge![1]).toBe(CRASHLANDS_TAG_RE.source.replace(/^/, "/") + "/g");
+  });
+
+  it("checks the panel before counting a suggestion as applied", () => {
+    const PANEL = readFileSync(
+      resolve(__dirname, "../../components/editor/TranslationAIEnhancePanel.tsx"),
+      "utf8"
+    );
+    expect(PANEL).toContain('const isCrashlands = gameParam === "crashlands"');
+    expect(PANEL).toContain("if (isCrashlands) return validateCrashlandsTags(original, repairCrashlandsTags(original, suggestion).text).reason ?? null;");
   });
 });

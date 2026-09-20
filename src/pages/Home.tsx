@@ -15,6 +15,18 @@ import pokemonBg from "@/assets/covers/pokemon-cover.jpg";
 
 const games = [
   {
+    title: "Crashlands",
+    subtitle: "محرر نصوص Crashlands",
+    desc: "يرفع ملف JSON القابل للتحرير، ويعرض الأصل الإنجليزي والترجمة العربية في المحرر مع فلاتر (قوائم، حوارات، مهام، عناصر، مخلوقات)، ثم يصدّر ملفاً آمناً جاهزاً للحقن داخل اللعبة.",
+    link: "/crashlands",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='c' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%231c1206'/%3E%3Cstop offset='.55' stop-color='%233a2410'/%3E%3Cstop offset='1' stop-color='%23593a12'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23c)'/%3E%3Ccircle cx='1250' cy='220' r='150' fill='%23f2a33c' opacity='.28'/%3E%3Cpath d='M0 700l380-140 240 80 360-200 620 180v280H0z' fill='%230d0803' opacity='.75'/%3E%3Cpath d='M240 240l90-90 90 90-90 90z' fill='%23ffd98a' opacity='.55'/%3E%3C/svg%3E",
+    formats: ["JSON", "Android", "APK"],
+    cardClass: "border-[hsl(35,85%,50%)]/35 hover:border-[hsl(40,95%,65%)]/70",
+    formatClass: "bg-[hsl(35,85%,50%)]/20 text-[hsl(40,95%,76%)] border-[hsl(35,85%,50%)]/35",
+    subtitleClass: "text-[hsl(40,95%,76%)]",
+    arrowClass: "text-[hsl(40,95%,76%)]",
+  },
+  {
     title: "Steins;Gate PSP",
     subtitle: "تعريب القوائم والحوارات",
     desc: "يفتح ISO الإنجليزي محلياً، يستخرج نصوص AFS/BIN إلى المحرر، يحمي وسوم المحرك ويحقن خطاً عربياً متصلاً، ثم يبني ISO معرّباً.",

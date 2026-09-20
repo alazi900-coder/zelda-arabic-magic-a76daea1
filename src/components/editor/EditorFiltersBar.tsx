@@ -42,6 +42,7 @@ type EditorSubset = Pick<
   | "fuzzyCount"
   | "byteOverflowCount"
   | "gtaIvNeedsModCount"
+  | "steinsGateUnsupportedCount"
   | "deepDiagnosticCounts"
   | "quickReviewMode"
   | "setQuickReviewMode"

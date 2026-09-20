@@ -11,6 +11,7 @@ import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-buil
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { repairSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { repairCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
+import { repairNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
@@ -337,6 +338,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const getSafeTagRepair = useCallback((entry: ExtractedEntry, text: string) => {
     if (entry.msbtFile.startsWith("crashlands/")) {
       const repaired = repairCrashlandsTags(entry.original, text);
+      return { finalText: repaired.text, repairedText: repaired.text, changed: repaired.changed, restoredOriginal: false, repairedIssues: detectIssues(entry, repaired.text) };
+    }
+    if (entry.msbtFile.startsWith("ninthdawn/")) {
+      const repaired = repairNinthDawnTags(entry.original, text);
       return { finalText: repaired.text, repairedText: repaired.text, changed: repaired.changed, restoredOriginal: false, repairedIssues: detectIssues(entry, repaired.text) };
     }
     if (entry.msbtFile.startsWith("steinsgate/")) {

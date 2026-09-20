@@ -27,6 +27,18 @@ const games = [
     arrowClass: "text-[hsl(40,95%,76%)]",
   },
   {
+    title: "9th Dawn Remake",
+    subtitle: "محرر نصوص 9th Dawn Remake",
+    desc: "يرفع ملف JSON القابل للتحرير، ويعرض الأصل الإنجليزي وأي ترجمة عربية موجودة مسبقاً في حقل الترجمة، مع فلاتر (حوار، مهام، عناصر وصناعة، مهارات وقتال، شخصيات وأماكن، لعبة الورق، قوائم ونظام)، ثم يصدّر ملفاً آمناً جاهزاً للحقن داخل اللعبة.",
+    link: "/ninth-dawn-remake",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='n' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%230b1420'/%3E%3Cstop offset='.55' stop-color='%2314273a'/%3E%3Cstop offset='1' stop-color='%231f3a52'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23n)'/%3E%3Ccircle cx='1300' cy='180' r='120' fill='%23eaddb0' opacity='.35'/%3E%3Cpath d='M0 640l340-160 300 90 420-220 540 200v350H0z' fill='%23081018' opacity='.75'/%3E%3Cpath d='M220 300l70-140 70 140-70 60z' fill='%237fb8c9' opacity='.5'/%3E%3C/svg%3E",
+    formats: ["JSON", "RPG"],
+    cardClass: "border-[hsl(200,45%,45%)]/35 hover:border-[hsl(195,65%,65%)]/70",
+    formatClass: "bg-[hsl(200,45%,45%)]/20 text-[hsl(195,65%,78%)] border-[hsl(200,45%,45%)]/35",
+    subtitleClass: "text-[hsl(195,65%,78%)]",
+    arrowClass: "text-[hsl(195,65%,78%)]",
+  },
+  {
     title: "Steins;Gate PSP",
     subtitle: "تعريب القوائم والحوارات",
     desc: "يفتح ISO الإنجليزي محلياً، يستخرج نصوص AFS/BIN إلى المحرر، يحمي وسوم المحرك ويحقن خطاً عربياً متصلاً، ثم يبني ISO معرّباً.",

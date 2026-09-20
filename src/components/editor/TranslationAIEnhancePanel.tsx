@@ -42,6 +42,7 @@ import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-gu
 import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 import { repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
+import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -270,6 +271,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const isGtaIv = gameParam === "gtaiv";
   const isPokemonXp = gameParam === "pokemon-xp";
   const isCrashlands = gameParam === "crashlands";
+  const isNinthDawn = gameParam === "ninthdawn";
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
@@ -283,6 +285,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // never happened. Repair first, exactly as the save does, or this
     // would refuse a suggestion the editor would have fixed by itself.
     if (isCrashlands) return validateCrashlandsTags(original, repairCrashlandsTags(original, suggestion).text).reason ?? null;
+    // Same reasoning as Crashlands above: repair a clean trailing drop first,
+    // exactly as the save path does, before deciding the suggestion is unsafe.
+    if (isNinthDawn) return validateNinthDawnTags(original, repairNinthDawnTags(original, suggestion).text).reason ?? null;
     if (isGtaIv) {
       const dollarRepair = repairGtaIvDollarAmountSequence(original, suggestion);
       if (!dollarRepair.safe) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";

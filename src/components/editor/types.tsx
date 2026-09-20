@@ -28,6 +28,10 @@ export interface ExtractedEntry {
    * JSON always targets the exact game key it came from. */
   crashlandsId?: string;
   crashlandsSection?: string;
+  /** 9th Dawn Remake JSON identity ("sheet_id:index", e.g. "1:0") and section
+   * name, kept outside the visible source for the same reason as Crashlands'. */
+  ninthDawnId?: string;
+  ninthDawnSection?: string;
 }
 
 

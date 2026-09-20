@@ -59,7 +59,7 @@ describe("Pokémon rules in the AI enhancement tool", () => {
     expect(gate).not.toBeNull();
     expect(gate![1]).toContain("detect_line_breaks");
     expect(gate![1]).toContain("detect_split_and_tags");
-    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands))");
+    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn))");
   });
 
   it("names the game it is reviewing", () => {
@@ -162,11 +162,26 @@ describe("Crashlands rules in the AI enhancement tool", () => {
     const gate = /const CRASHLANDS_ONLY_RULE_IDS = new Set\(\[([^\]]+)\]\)/.exec(EDGE_SOURCE);
     expect(gate).not.toBeNull();
     for (const id of IDS) expect(gate![1]).toContain(id);
-    expect(EDGE_SOURCE).toContain("isPlatinum, isCrashlands)");
+    expect(EDGE_SOURCE).toContain("isPlatinum, isCrashlands, isNinthDawn)");
   });
 
   it("names the game it is reviewing", () => {
     expect(EDGE_SOURCE).toContain("const isCrashlands = game === 'crashlands'");
     expect(EDGE_SOURCE).toMatch(/isSteinsGate \|\| isCrashlands/);
+  });
+});
+
+/**
+ * 9th Dawn Remake has four token shapes and none of them are Xenoblade's.
+ */
+describe("9th Dawn Remake rules in the AI enhancement tool", () => {
+  const rule = BUILTIN_RULES.find((r) => r.id === "detect_ninthdawn_tags")!;
+
+  it("is offered as a toggle", () => {
+    expect(rule).toBeDefined();
+  });
+
+  it("declares the same prompt text on both sides", () => {
+    expect(EDGE_SOURCE).toContain(rule.prompt.replace(/\\/g, "\\\\"));
   });
 });

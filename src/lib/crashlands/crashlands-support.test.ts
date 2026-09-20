@@ -130,9 +130,11 @@ describe("the suggestion gate runs on both sides", () => {
   it("rejects the suggestion in the edge function before it is returned", () => {
     expect(EDGE_SOURCE).toContain("preservesCrashlandsTokenSequence");
     expect(EDGE_SOURCE).toContain("(!isCrashlands || preservesCrashlandsTokenSequence(original, suggested))");
-    // Every caller has to pass the flag, or the gate is dead code.
+    // Every caller has to pass the flag, or the gate is dead code. 9th Dawn
+    // Remake's own flag rides on the same call sites, appended after
+    // isCrashlands, so the trailing shape now ends there instead.
     expect(EDGE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
-      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands\)/g)?.length ?? 0) + 1
+      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn\)/g)?.length ?? 0) + 1
     );
   });
 

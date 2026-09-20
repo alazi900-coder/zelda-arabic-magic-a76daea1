@@ -15,6 +15,8 @@
  *   - `lumentale/<table>`        → LumenTale: Memories of Trey Unity tables
  *   - `gtaiv/<table>`             → GTA IV GXT tables
  *   - `steinsgate/<file>.BIN`      → Steins;Gate PSP CriWare scripts
+ *   - `crashlands/<section>/<n>`  → Crashlands
+ *   - `ninthdawn/<section>/<n>`    → 9th Dawn Remake
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -32,7 +34,8 @@ export type GameParam =
   | "lumentale"
   | "gtaiv"
   | "steinsgate"
-  | "crashlands";
+  | "crashlands"
+  | "ninthdawn";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -50,5 +53,6 @@ export function resolveGameParam(
   if (f.startsWith("gtaiv/")) return "gtaiv";
   if (f.startsWith("steinsgate/")) return "steinsgate";
   if (f.startsWith("crashlands/")) return "crashlands";
+  if (f.startsWith("ninthdawn/")) return "ninthdawn";
   return "xenoblade";
 }

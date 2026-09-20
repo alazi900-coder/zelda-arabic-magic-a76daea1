@@ -20,6 +20,7 @@ import { RISEN_TAG_REGEX } from "@/lib/risen-tag-guard";
 import { PLAT_TAG_RE } from "@/lib/nds/plat-tag-mask";
 import { STEINSGATE_TAG_RE } from "@/lib/steinsgate/steinsgate-tags";
 import { CRASHLANDS_TAG_RE } from "@/lib/crashlands/crashlands-tags";
+import { NINTHDAWN_TAG_RE } from "@/lib/ninthdawn/ninthdawn-tags";
 
 /** Xenoblade colour codes; ordinary prose in Platinum, so it is dropped there. */
 const HASH_COLOUR_RULE = "#[0-5]";
@@ -79,6 +80,8 @@ export function editorTagPattern(msbtFile?: string): RegExp {
       ? [...RULES, STEINSGATE_TAG_RE.source]
       : msbtFile?.startsWith("crashlands/")
         ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), CRASHLANDS_TAG_RE.source]
-        : RULES;
+        : msbtFile?.startsWith("ninthdawn/")
+          ? [...RULES, NINTHDAWN_TAG_RE.source]
+          : RULES;
   return new RegExp(`(${rules.join("|")})`, "g");
 }

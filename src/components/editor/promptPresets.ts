@@ -125,3 +125,14 @@ export const CRASHLANDS_PROMPT_PRESETS: PromptPreset[] = [
   { id: "quests", label: "✓ المهام والأهداف", text: "اكتب أهداف Crashlands قصيرة وعملية: اذهب، اجمع، اصنع، اهزم، تحدث. لا تغيّر أسماء العناصر أو الأرقام أو %r أو # أو الرموز التقنية." },
   { id: "menu", label: "▤ الواجهة والقوائم", text: "القوائم والأزرار قصيرة جداً ومباشرة. استخدم كلمة أو كلمتين متى أمكن. أبق # وفواصل الأسطر والرموز التقنية كما هي." },
 ];
+
+/** 9th Dawn Remake presets — classic fantasy RPG tone, and every preset
+ * repeats the token-preservation rule since the enhance/review layers rely
+ * only on the field's own text, not on which preset produced it. */
+export const NINTHDAWN_PROMPT_PRESETS: PromptPreset[] = [
+  { id: "default", label: "⚔️ أسلوب 9th Dawn Remake", text: "ترجم 9th Dawn Remake بعربية فصحى حديثة تناسب لعبة تقمّص أدوار كلاسيكية (استكشاف وبقاء وقتال). حافظ على أسماء الشخصيات والمخلوقات والأماكن والعناصر ثابتة. لا تغيّر [0] أو [1] أو [playername] أو [cardgamename] أو [c=N] أو [p=N] أو [i=N] أو <b> أو </b> أو <i> أو </i> أو <br>؛ يجب أن يبقى العدد والترتيب والموضع نفسها." },
+  { id: "dialogue", label: "💬 حوارات ووصف عالم اللعبة", text: "حوارات 9th Dawn Remake ووصف عالمها بأسلوب سردي بسيط وواضح، دون حشو أو إطالة. حافظ على صوت كل متحدث حسب السياق المتاح. الرموز [0] و[1] و[playername] و[cardgamename] و[c=N] و[p=N] و[i=N] و<b> و</i> و<br> ليست نصاً وتبقى حرفياً بالعدد والترتيب نفسيهما." },
+  { id: "quests", label: "✓ المهام والأهداف", text: "اكتب أهداف 9th Dawn Remake قصيرة وعملية: اذهب، اجمع، اصنع، اهزم، تحدث. لا تغيّر أسماء العناصر أو المخلوقات أو الأرقام أو رموز [0]/[1]/[c=N]/[p=N]/[i=N] أو وسوم <b>/<i>/<br>." },
+  { id: "combat", label: "✦ المهارات والقتال", text: "أسماء المهارات والقدرات القتالية قصيرة وقوية (كلمة إلى ثلاث كلمات): ضربة، اختراق، دفاع، شفاء، سحق. لا تغيّر رموز [c=N]/[p=N]/[i=N] أو [0]/[1] التي تحمل قيماً يضعها المحرّك وقت التشغيل." },
+  { id: "menu", label: "▤ الواجهة والقوائم", text: "القوائم والأزرار قصيرة جداً ومباشرة. استخدم كلمة أو كلمتين متى أمكن. أبقِ رموز [0]/[1]/[playername]/[cardgamename]/[c=N]/[p=N]/[i=N] ووسوم <b>/<i>/<br> كما هي." },
+];

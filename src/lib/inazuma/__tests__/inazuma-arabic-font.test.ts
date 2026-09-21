@@ -5,14 +5,12 @@ import {
   inazumaArabicGlyphBytes,
   encodeInazumaArabicText,
 } from "../inazuma-arabic-font";
-import { INAZUMA_ARABIC_CODEPOINTS } from "../inazuma-arabic-glyphs";
-
-const HIRAGANA_BASE_GLYPH = 366;
+import { INAZUMA_ARABIC_CODEPOINTS, INAZUMA_SHIFT_JIS_CODES, INAZUMA_GLYPH_INDICES } from "../inazuma-arabic-glyphs";
 
 /**
  * A minimal FONT12-shaped NFTR: FNIF(16) + PLGC header(16) + N glyph tiles +
- * HDWC header(16) + N width triplets. `glyphCount` must reach past index
- * `366 + INAZUMA_ARABIC_CODEPOINTS.length` so every patched slot exists.
+ * HDWC header(16) + N width triplets. `glyphCount` must reach past the
+ * largest index in INAZUMA_GLYPH_INDICES so every patched slot exists.
  */
 function buildFont12Fixture(glyphCount: number): Uint8Array {
   const tileBytes = 17;
@@ -48,32 +46,37 @@ function buildFont12Fixture(glyphCount: number): Uint8Array {
   return out;
 }
 
+const MAX_GLYPH_INDEX = Math.max(...INAZUMA_GLYPH_INDICES);
+
 describe("Inazuma Arabic font patch", () => {
-  it("overwrites exactly the hiragana glyph slots and leaves everything else untouched", () => {
-    const count = INAZUMA_ARABIC_CODEPOINTS.length;
-    const fixture = buildFont12Fixture(HIRAGANA_BASE_GLYPH + count + 20);
+  it("overwrites exactly the reused glyph slots and leaves everything else untouched", () => {
+    const fixture = buildFont12Fixture(MAX_GLYPH_INDEX + 20);
     const patched = patchInazumaFont12(fixture);
 
     expect(patched.length).toBe(fixture.length); // no block resized
 
     const plgcAt = 0x10 + 16;
     const tileBytes = 17;
-    // Glyph just before the patched range: untouched marker byte.
-    expect(patched[plgcAt + (HIRAGANA_BASE_GLYPH - 1) * tileBytes]).toBe(0xaa);
-    // Glyph just after the patched range: untouched marker byte.
-    expect(patched[plgcAt + (HIRAGANA_BASE_GLYPH + count) * tileBytes]).toBe(0xaa);
-    // A patched glyph is no longer the 0xAA filler.
-    expect(patched[plgcAt + HIRAGANA_BASE_GLYPH * tileBytes]).not.toBe(0xaa);
+    const patchedIndices = new Set(INAZUMA_GLYPH_INDICES);
+    // Every glyph index NOT in the reused set keeps its 0xAA filler marker.
+    for (let gi = 0; gi < MAX_GLYPH_INDEX + 20; gi++) {
+      if (patchedIndices.has(gi)) continue;
+      expect(patched[plgcAt + gi * tileBytes]).toBe(0xaa);
+    }
+    // Every patched glyph is no longer the 0xAA filler.
+    for (const gi of INAZUMA_GLYPH_INDICES) {
+      expect(patched[plgcAt + gi * tileBytes]).not.toBe(0xaa);
+    }
   });
 
   it("gives every glyph a real width, not the 0x55 filler", () => {
-    const count = INAZUMA_ARABIC_CODEPOINTS.length;
-    const fixture = buildFont12Fixture(HIRAGANA_BASE_GLYPH + count + 1);
+    const glyphCount = MAX_GLYPH_INDEX + 1;
+    const fixture = buildFont12Fixture(glyphCount);
     const patched = patchInazumaFont12(fixture);
-    const plgcSize = 16 + (HIRAGANA_BASE_GLYPH + count + 1) * 17;
+    const plgcSize = 16 + glyphCount * 17;
     const hdwcDataAt = 0x10 + plgcSize + 16;
-    for (let i = 0; i < count; i++) {
-      const at = hdwcDataAt + (HIRAGANA_BASE_GLYPH + i) * 3;
+    for (let i = 0; i < INAZUMA_GLYPH_INDICES.length; i++) {
+      const at = hdwcDataAt + INAZUMA_GLYPH_INDICES[i] * 3;
       expect(patched[at]).toBe(0); // leftBearing
       expect(patched[at + 1]).toBeGreaterThan(0); // glyphWidth
       expect(patched[at + 1]).toBe(patched[at + 2]); // charWidth == glyphWidth, matching the font's own convention
@@ -87,13 +90,14 @@ describe("Inazuma Arabic font patch", () => {
 });
 
 describe("Inazuma Arabic text encoding", () => {
-  it("maps every covered presentation form to its Shift-JIS hiragana byte pair", () => {
+  it("maps every covered presentation form to its verified-safe Shift-JIS byte pair", () => {
     for (let i = 0; i < INAZUMA_ARABIC_CODEPOINTS.length; i++) {
       const cp = INAZUMA_ARABIC_CODEPOINTS[i];
       const bytes = inazumaArabicGlyphBytes(cp)!;
+      const expectedCode = INAZUMA_SHIFT_JIS_CODES[i];
       expect(bytes.length).toBe(2);
-      expect(bytes.charCodeAt(0)).toBe(0x82);
-      expect(bytes.charCodeAt(1)).toBe(0x9f + i);
+      expect(bytes.charCodeAt(0)).toBe((expectedCode >> 8) & 0xff);
+      expect(bytes.charCodeAt(1)).toBe(expectedCode & 0xff);
     }
   });
 
@@ -103,7 +107,7 @@ describe("Inazuma Arabic text encoding", () => {
 
   it("passes ASCII through untouched and reports missing glyphs instead of dropping them", () => {
     const covered = String.fromCodePoint(INAZUMA_ARABIC_CODEPOINTS[0]);
-    const uncovered = "ﹰ"; // not in the current 19-glyph set
+    const uncovered = "ﹰ"; // not in the current 83-glyph set
     const { text, missing } = encodeInazumaArabicText(`Go! ${covered}${uncovered}`);
     expect(text.startsWith("Go! ")).toBe(true);
     expect(missing).toEqual([uncovered]);

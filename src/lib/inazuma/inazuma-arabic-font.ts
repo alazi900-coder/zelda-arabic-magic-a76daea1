@@ -3,17 +3,19 @@
  * text into the byte codes those glyphs answer to.
  *
  * The dialogue text in this ROM is Shift-JIS: single ASCII bytes, or a
- * lead/trail byte pair for anything Japanese. Its fonts' character map
- * (PAMC) already routes the hiragana pair range `0x829F`-`0x82F1` (83 codes)
- * straight to glyph indices 366-448 -- and an English-only ROM never prints
- * hiragana. Those 83 glyphs are overwritten with Arabic in place: same
- * indices, same widths-table slot, same CMAP entry, so the font's block
- * sizes and every pointer between them stay byte-identical. No CMAP block is
- * added or resized, which is what makes this safe without having reverse
- * engineered the NFTR header's own internal offsets.
+ * lead/trail byte pair for anything Japanese. Each slot here reuses an
+ * *existing* PAMC (character map) entry that already resolves to a real
+ * glyph index -- confirmed absent from every text-bearing file found in the
+ * ROM (see inazuma-arabic-glyphs.ts) -- so only the glyph bitmap and width
+ * already stored at that index are overwritten. No CMAP block is added or
+ * resized, which is what makes this safe without having reverse engineered
+ * the NFTR header's own internal offsets.
  *
- * `INAZUMA_ARABIC_CODEPOINTS[i]` owns hiragana slot `i`: Shift-JIS code
- * `0x829F + i`, glyph index `366 + i`.
+ * Earlier this reused the hiragana range (0x829F-0x82F1, glyphs 366-448) on
+ * the assumption that an English-only ROM never draws hiragana. That was
+ * wrong -- this cartridge still ships thousands of untranslated Japanese
+ * lines that do -- so the codes and glyph indices here are an explicit,
+ * verified, non-contiguous list rather than a single base + offset.
  */
 import {
   INAZUMA_FONT12_GLYPHS_B64,
@@ -21,10 +23,9 @@ import {
   INAZUMA_FONT8_GLYPHS_B64,
   INAZUMA_FONT8_WIDTHS,
   INAZUMA_ARABIC_CODEPOINTS,
+  INAZUMA_SHIFT_JIS_CODES,
+  INAZUMA_GLYPH_INDICES,
 } from "./inazuma-arabic-glyphs";
-
-const HIRAGANA_BASE_CODE = 0x829f;
-const HIRAGANA_BASE_GLYPH = 366;
 
 interface GlyphSetSpec {
   tileBytes: number;
@@ -93,7 +94,7 @@ function patchGlyphSlots(nftr: Uint8Array, spec: GlyphSetSpec): Uint8Array {
     throw new Error(`بيانات رموز عربية غير مكتملة: ${glyphBytes.length} بايت لِـ ${count} حرفاً.`);
   }
   for (let i = 0; i < count; i++) {
-    const glyphIndex = HIRAGANA_BASE_GLYPH + i;
+    const glyphIndex = INAZUMA_GLYPH_INDICES[i];
     out.set(glyphBytes.subarray(i * spec.tileBytes, (i + 1) * spec.tileBytes), plgcDataOffset + glyphIndex * spec.tileBytes);
     const w = spec.widths[i];
     const hdwcAt = hdwcDataOffset + glyphIndex * 3;
@@ -110,7 +111,7 @@ const CODEPOINT_TO_SLOT = new Map<number, number>(INAZUMA_ARABIC_CODEPOINTS.map(
 export function inazumaArabicGlyphBytes(cp: number): string | null {
   const slot = CODEPOINT_TO_SLOT.get(cp);
   if (slot === undefined) return null;
-  const code = HIRAGANA_BASE_CODE + slot;
+  const code = INAZUMA_SHIFT_JIS_CODES[slot];
   return String.fromCharCode((code >> 8) & 0xff, code & 0xff);
 }
 

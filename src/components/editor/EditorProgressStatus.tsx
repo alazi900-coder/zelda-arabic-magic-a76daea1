@@ -20,6 +20,7 @@ import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
 import { PH_CATEGORIES } from "@/lib/ph/ph-categories";
 import { STEINSGATE_CATEGORIES } from "@/lib/steinsgate/steinsgate-categories";
 import { CRASHLANDS_CATEGORIES } from "@/lib/crashlands/crashlands-categories";
+import { INAZUMA_CATEGORIES } from "@/lib/inazuma/inazuma-categories";
 import { NINTHDAWN_CATEGORIES } from "@/lib/ninthdawn/ninthdawn-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -77,6 +78,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const isNinthDawn = !!entries?.some((e) => e.msbtFile.startsWith("ninthdawn/"));
   const isPlatinum = !!entries?.some((e) => e.msbtFile.startsWith("platinum/"));
   const isPh = !!entries?.some((e) => e.msbtFile.startsWith("ph/"));
+  const isInazuma = !!entries?.some((e) => e.msbtFile.startsWith("inazuma/"));
   // Built once per file load (entries reference is stable across keystrokes), not per keystroke.
   const risenCategories = useMemo(() => (isRisen && entries ? buildRisenCategories(entries) : []), [isRisen, entries]);
   const mother3Categories = useMemo(() => (isMother3 && entries ? buildMother3Categories(entries) : []), [isMother3, entries]);
@@ -124,6 +126,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         platinumCategories={PLATINUM_CATEGORIES}
         isPh={isPh}
         phCategories={PH_CATEGORIES}
+        isInazuma={isInazuma}
+        inazumaCategories={INAZUMA_CATEGORIES}
       />
 
       {isRisen && (

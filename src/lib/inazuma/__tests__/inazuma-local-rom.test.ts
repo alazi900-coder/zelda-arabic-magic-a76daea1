@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readInazumaText, writeInazumaText } from "../inazuma-rom";
 import { extractInazumaEntries, buildInazumaRom } from "../inazuma-editor-bridge";
+import { INAZUMA_CATEGORIES, categorizeInazumaEntry } from "../inazuma-categories";
 import { findNdsFile } from "@/lib/nds/nds-rom";
 
 const path = process.env.INAZUMA_TEST_ROM;
@@ -128,5 +129,23 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     expect(Array.from(result.rom.subarray(builtFont.start, builtFont.end))).not.toEqual(
       Array.from(original.subarray(stockFont.start, stockFont.end))
     );
+  });
+
+  // The editor's filter used to reach this cartridge through the Danganronpa
+  // branch, which every Inazuma key qualifies for because it carries a colon,
+  // and that branch answered with one bucket for all 33,956 lines.
+  it("splits every line across the three category cards", { timeout: 120_000 }, () => {
+    const { entries } = extractInazumaEntries(rom());
+    const counts = new Map<string, number>();
+    for (const e of entries) {
+      const id = categorizeInazumaEntry(e);
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    const known = new Set(INAZUMA_CATEGORIES.map((c) => c.id));
+    for (const id of counts.keys()) expect(known).toContain(id);
+    expect(counts.get("iz-dialogue")).toBeGreaterThan(20000);
+    expect(counts.get("iz-menu")).toBeGreaterThan(2000);
+    expect(counts.get("iz-players")).toBeGreaterThan(1000);
+    expect(counts.get("iz-other") ?? 0).toBe(0);
   });
 });

@@ -13,6 +13,7 @@ import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categorie
 import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
+import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
@@ -288,8 +289,9 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           const isSteinsGate = entry.msbtFile.startsWith('steinsgate/');
           const isCrashlands = entry.msbtFile.startsWith('crashlands/');
           const isNinthDawn = entry.msbtFile.startsWith('ninthdawn/');
-          const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
-          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isSteinsGate ? categorizeSteinsGateEntry(entry) : isCrashlands ? categorizeCrashlandsEntry(entry) : isNinthDawn ? categorizeNinthDawnEntry(entry) : isPlatEntry(entry) ? categorizePlatEntry(entry) : isPhEntry(entry) ? categorizePhEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
+          const isInazuma = entry.msbtFile.startsWith('inazuma/');
+          const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isInazuma && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
+          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isSteinsGate ? categorizeSteinsGateEntry(entry) : isCrashlands ? categorizeCrashlandsEntry(entry) : isNinthDawn ? categorizeNinthDawnEntry(entry) : isPlatEntry(entry) ? categorizePlatEntry(entry) : isPhEntry(entry) ? categorizePhEntry(entry) : isInazuma ? categorizeInazumaEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
 
           const cached = cache.get(key);
           let result: EntryCacheResult;

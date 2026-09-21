@@ -55,6 +55,7 @@ import { normalizeSteinsGateText, type SteinsGateReplacement } from "@/lib/stein
 import { isSteinsGateTranslatable, repairSteinsGateTags, validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { isChineseSource, repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
+import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
@@ -1283,9 +1284,10 @@ export function useEditorState() {
       const isNinthDawn = e.msbtFile.startsWith('ninthdawn/');
       const isPlat = e.msbtFile.startsWith('platinum/');
       const isPh = e.msbtFile.startsWith('ph/');
-      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isInazuma = e.msbtFile.startsWith('inazuma/');
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isInazuma && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isInazuma ? categorizeInazumaEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||

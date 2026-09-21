@@ -15,6 +15,7 @@ import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
 import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
+import { validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry, isPhEntry } from "@/lib/ph/ph-categories";
@@ -192,6 +193,12 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
   }
   if (hasContent && entry.msbtFile.startsWith("ninthdawn/")) {
     const check = validateNinthDawnTags(entry.original, translation);
+    damagedTags = !check.valid;
+    qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
+    tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;
+  }
+  if (hasContent && entry.msbtFile.startsWith("inazuma/")) {
+    const check = validateInazumaTags(entry.original, translation);
     damagedTags = !check.valid;
     qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
     tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;

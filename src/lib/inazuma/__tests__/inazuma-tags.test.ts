@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable } from "../inazuma-tags";
+import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairInazumaTags } from "../inazuma-tags";
 
 describe("Inazuma technical tokens", () => {
   it("finds the engine's own tokens and nothing else", () => {
@@ -33,6 +33,36 @@ describe("Inazuma technical tokens", () => {
     // %1F and %2F are different values, so swapping puts the wrong word in each
     const check = validateInazumaTags("%1F beat %2F", "%2F هزم %1F");
     expect(check.valid).toBe(false);
+  });
+});
+
+describe("Inazuma token repair", () => {
+  it("reattaches a clean trailing token the translation dropped", () => {
+    const result = repairInazumaTags("You got %s", "حصلت على");
+    expect(result.changed).toBe(true);
+    expect(result.text).toBe("حصلت على%s");
+    expect(validateInazumaTags("You got %s", result.text).valid).toBe(true);
+  });
+
+  it("does nothing when the translation already has every token", () => {
+    const result = repairInazumaTags("You got %s", "حصلت على %s");
+    expect(result.changed).toBe(false);
+    expect(result.text).toBe("حصلت على %s");
+  });
+
+  it("refuses to guess when the dropped token led the original sentence, not trailed it", () => {
+    // %s here is a name slot the sentence opens with -- reattaching it at
+    // the end would put it in the wrong place, so this is left for the
+    // translator rather than guessed at.
+    const result = repairInazumaTags("%s joined you!", "انضم إليك");
+    expect(result.changed).toBe(false);
+    expect(result.text).toBe("انضم إليك");
+  });
+
+  it("refuses to guess when a token is missing from the middle, not the end", () => {
+    const result = repairInazumaTags("Hi\\nthere %s", "أهلاً هناك");
+    expect(result.changed).toBe(false);
+    expect(result.text).toBe("أهلاً هناك");
   });
 });
 

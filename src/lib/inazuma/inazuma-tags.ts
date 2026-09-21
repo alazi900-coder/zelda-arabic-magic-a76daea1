@@ -52,6 +52,24 @@ export function validateInazumaTags(original: string, translation: string): Inaz
 }
 
 /**
+ * Repairs only an unambiguous trailing run of tokens the translation dropped
+ * entirely.
+ *
+ * Most of these tokens sit inline inside a sentence -- "%s joined you!" --
+ * where guessing a position would put the engine's substitution in the wrong
+ * place. Only a clean run at the very end the translation lost outright is
+ * safe to reattach; anything else (a token missing from the middle, or one
+ * swapped for another) is left for the translator to look at.
+ */
+export function repairInazumaTags(original: string, translation: string): { text: string; changed: boolean } {
+  if (validateInazumaTags(original, translation).valid) return { text: translation, changed: false };
+  const suffix = original.match(/((?:\\[nf]|%[1-4]F|%\d?d|%s)\s*)+$/)?.[0]?.trim();
+  if (!suffix || !translation.replace(INAZUMA_TAG_RE, "").trim()) return { text: translation, changed: false };
+  const candidate = `${translation.replace(INAZUMA_TAG_RE, "").trimEnd()}${suffix}`;
+  return validateInazumaTags(original, candidate).valid ? { text: candidate, changed: true } : { text: translation, changed: false };
+}
+
+/**
  * A scene id the script addresses a cutscene by -- `mr01b04`, `mr02i27`.
  * 173 of them sit in the dialogue archive as ordinary records. Narrow on
  * purpose: player names (Gouenji, Kabeyama) are single ASCII tokens too, and

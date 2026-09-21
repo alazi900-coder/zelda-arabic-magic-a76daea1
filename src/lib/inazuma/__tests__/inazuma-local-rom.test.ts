@@ -20,6 +20,11 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     expect(bySource.get("evet")).toBeGreaterThan(20000);
     expect(bySource.get("mcht")).toBeGreaterThan(2000);
     expect(bySource.get("unitbase")).toBe(2063);
+    expect(bySource.get("item")).toBeGreaterThan(500);
+    expect(bySource.get("command")).toBeGreaterThan(500);
+    // recognisable content, not noise: a real item description and a real move name
+    expect(rows.some((r) => r.source === "item" && r.text.startsWith("Cool, clear water"))).toBe(true);
+    expect(rows.some((r) => r.source === "command" && r.text === "Feint")).toBe(true);
     // The text is English and readable, not a mis-parsed blob. Note the two
     // files disagree about line breaks: unitbase.STR uses a real 0x0A, while a
     // pack stores the two characters `\` and `n`.
@@ -84,6 +89,50 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     expect(result.warnings.join(" ")).toMatch(/unitbase\.STR/);
   });
 
+  it("writes into item.STR and command.STR without moving any other entry", { timeout: 120_000 }, () => {
+    const original = rom();
+    const before = readInazumaText(original);
+    const feint = before.find((r) => r.source === "command" && r.text === "Feint")!;
+    const water = before.find((r) => r.source === "item" && r.text.startsWith("Cool, clear water"))!;
+    expect(feint).toBeDefined();
+    expect(water).toBeDefined();
+
+    const edited = before.map((r) => {
+      if (r === feint) return { ...r, text: "Fake" };
+      if (r === water) return { ...r, text: "short" };
+      return r;
+    });
+    const result = writeInazumaText(original, edited);
+    expect(result.changed).toBe(2);
+    expect(result.warnings).toEqual([]);
+
+    const after = readInazumaText(result.rom);
+    expect(after.length).toBe(before.length);
+    // every entry keeps its own offset (`entry`) -- nothing shifted
+    const otherCommand = before.filter((r) => r.source === "command" && r !== feint);
+    for (const row of otherCommand) {
+      const match = after.find((r) => r.source === "command" && r.entry === row.entry)!;
+      expect(match.text).toBe(row.text);
+    }
+    const changedRows = after.filter((row, i) => row.text !== before[i].text);
+    expect(changedRows.map((r) => r.text).sort()).toEqual(["Fake", "short"]);
+  });
+
+  it("refuses an item/command translation too long for its own gap to the next entry", { timeout: 120_000 }, () => {
+    const original = rom();
+    const before = readInazumaText(original);
+    const feint = before.find((r) => r.source === "command" && r.text === "Feint")!;
+    expect(feint.limit).toBeGreaterThan(0);
+
+    const edited = before.map((r) => (r === feint ? { ...r, text: "x".repeat(200) } : r));
+    const result = writeInazumaText(original, edited);
+    expect(result.changed).toBe(0);
+    expect(result.warnings.join(" ")).toMatch(/command:\d+/);
+
+    const after = readInazumaText(result.rom);
+    expect(after.find((r) => r.source === "command" && r.entry === feint.entry)!.text).toBe("Feint");
+  });
+
   it("opens only the English lines in the editor and keeps the Japanese out", { timeout: 120_000 }, () => {
     const { entries, japanese, total } = extractInazumaEntries(rom());
     expect(entries.length).toBeGreaterThan(30000);
@@ -134,7 +183,7 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
   // The editor's filter used to reach this cartridge through the Danganronpa
   // branch, which every Inazuma key qualifies for because it carries a colon,
   // and that branch answered with one bucket for all 33,956 lines.
-  it("splits every line across the three category cards", { timeout: 120_000 }, () => {
+  it("splits every line across the five category cards", { timeout: 120_000 }, () => {
     const { entries } = extractInazumaEntries(rom());
     const counts = new Map<string, number>();
     for (const e of entries) {
@@ -146,6 +195,8 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     expect(counts.get("iz-dialogue")).toBeGreaterThan(20000);
     expect(counts.get("iz-match")).toBeGreaterThan(2000);
     expect(counts.get("iz-players")).toBeGreaterThan(1000);
+    expect(counts.get("iz-items")).toBeGreaterThan(500);
+    expect(counts.get("iz-commands")).toBeGreaterThan(500);
     expect(counts.get("iz-other") ?? 0).toBe(0);
   });
 });

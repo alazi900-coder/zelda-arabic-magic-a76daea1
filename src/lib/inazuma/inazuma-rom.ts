@@ -4,22 +4,32 @@
  * The European ROM (`YEEP`) ships one language, so there is no other build to
  * keep in step: everything under `en/` is the text the player sees.
  *
- * Three sources are handled, and they are the ones whose layout is proven
+ * Five sources are handled, and they are the ones whose layout is proven
  * rather than inferred:
  *
  *   script/en/evet   PackNum archive, 1,737 entries -- the dialogue
- *   script/en/mcht   PackNum archive, 269 entries -- menus and system lines
+ *   script/en/mcht   PackNum archive, 269 entries -- match commentary
  *   logic/en/unitbase.STR   2,400 slots of exactly 128 bytes, 2,063 used,
  *                           every one NUL-terminated with nothing after it
+ *   logic/en/item.STR      item descriptions, 32-byte-aligned slots
+ *   logic/en/command.STR   special-move names, 32-byte-aligned slots
  *
- * Deliberately not handled yet: `item.STR`, `command.STR`, `games.STR` and the
- * `.dat` name tables. Those strings sit at offsets a companion `.dat` points
- * at, and that pointer layout is not reversed -- writing into them on a guess
- * would shuffle the item list rather than translate it.
+ * item.STR and command.STR looked pointer-addressed at first -- a same-named
+ * `.dat` sits beside each -- but no byte-offset field in either `.dat`
+ * matches a real string start, at any record size or stride tried. What
+ * both files actually hold, confirmed by scanning every non-NUL run: every
+ * string starts on a 32-byte boundary, and a description longer than one
+ * slot spills into the following empty slot(s) rather than being cut off,
+ * the same shape `unitbase.STR`'s fixed 128-byte slots take at a smaller
+ * grain. That is a plain sequential table, not a pointer table, so nothing
+ * about `.dat` needs to be reversed to read or write it correctly.
  *
- * A fixed slot is only ever written in place, never moved or resized. That
- * keeps the file valid whether the game addresses a description by slot number
- * or by byte offset, which is the question this module does not have to answer.
+ * A slot is only ever written in place, never moved or resized -- for
+ * unitbase.STR because its capacity (128 bytes) never changes, and for
+ * item.STR/command.STR because a translation is capped at the exact gap to
+ * the next real entry and refused rather than allowed to spill further.
+ * Nothing here ever needs to know what a byte offset means to the game's own
+ * code, only that it never moves.
  */
 import { findNdsFile, writeNdsFile, type NdsFile } from "@/lib/nds/nds-rom";
 import { INAZUMA_TEXT_KIND, readPack, writePack, type InazumaPack } from "./inazuma-pack";
@@ -30,6 +40,16 @@ const PACKS = [
 ] as const;
 
 const UNITBASE = { source: "unitbase", path: "data_iz/logic/en/unitbase.STR", slot: 128 } as const;
+
+/** A 32-byte-aligned sequential table: see the module doc for why this is safe without the companion `.dat`. */
+interface OverflowTable {
+  source: string;
+  path: string;
+  slot: number;
+}
+const ITEM: OverflowTable = { source: "item", path: "data_iz/logic/en/item.STR", slot: 32 };
+const COMMAND: OverflowTable = { source: "command", path: "data_iz/logic/en/command.STR", slot: 32 };
+const OVERFLOW_TABLES = [ITEM, COMMAND];
 
 export interface InazumaTextRow {
   /** Which file it came from: "evet", "mcht" or "unitbase". */
@@ -71,6 +91,87 @@ function readSlots(rom: Uint8Array, rows: InazumaTextRow[]): void {
   }
 }
 
+/**
+ * Every real entry in an overflow table, keyed by its own byte offset --
+ * which doubles as its stable row id, since an entry is never moved.
+ *
+ * A slot that starts with NUL is empty and skipped one slot at a time,
+ * matching how `unitbase.STR` treats an empty 128-byte slot; a slot that
+ * doesn't is read to its own NUL, however far past one slot width that
+ * reaches, and the entry after it starts at the next slot boundary at or
+ * past that NUL -- never inside the text just read.
+ */
+function overflowEntries(data: Uint8Array, slot: number): Map<number, string> {
+  const entries = new Map<number, string>();
+  let pos = 0;
+  while (pos < data.length) {
+    if (data[pos] === 0) {
+      pos += slot;
+      continue;
+    }
+    let stop = pos;
+    while (stop < data.length && data[stop] !== 0) stop++;
+    let text = "";
+    for (let i = pos; i < stop; i++) text += String.fromCharCode(data[i]);
+    entries.set(pos, text);
+    const next = Math.ceil(stop / slot) * slot;
+    pos = next > pos ? next : pos + slot;
+  }
+  return entries;
+}
+
+function readOverflowTable(rom: Uint8Array, table: OverflowTable, rows: InazumaTextRow[]): void {
+  const data = bytesOf(rom, requireFile(rom, table.path));
+  const capacities = overflowCapacities(data, table.slot);
+  for (const [offset, text] of overflowEntries(data, table.slot)) {
+    rows.push({ source: table.source, entry: offset, key: -1, text, limit: capacities.get(offset) });
+  }
+}
+
+/** Every entry's own capacity: the gap to the next real entry, or to the file's end for the last one. */
+function overflowCapacities(data: Uint8Array, slot: number): Map<number, number> {
+  const offsets = [...overflowEntries(data, slot).keys()].sort((a, b) => a - b);
+  const capacities = new Map<number, number>();
+  for (let i = 0; i < offsets.length; i++) {
+    const end = i + 1 < offsets.length ? offsets[i + 1] : data.length;
+    capacities.set(offsets[i], end - offsets[i]);
+  }
+  return capacities;
+}
+
+function writeOverflowTable(
+  rom: Uint8Array,
+  table: OverflowTable,
+  wanted: Map<string, string>,
+  seen: Set<string>,
+  warnings: string[],
+): { rom: Uint8Array; changed: number } {
+  const file = requireFile(rom, table.path);
+  const data = bytesOf(rom, file).slice();
+  const current = overflowEntries(data, table.slot);
+  const capacities = overflowCapacities(data, table.slot);
+  let changed = 0;
+  for (const [offset, capacity] of capacities) {
+    const id = rowId({ source: table.source, entry: offset, key: -1 });
+    const text = wanted.get(id);
+    if (text === undefined) continue;
+    seen.add(id);
+    if (text === current.get(offset)) continue;
+    if (text.length + 1 > capacity) {
+      warnings.push(`النصّ في ${table.source}:${offset} يتّسع لـ ${capacity - 1} بايت والترجمة ${text.length} — تُركت كما هي.`);
+      continue;
+    }
+    data.fill(0, offset, offset + capacity);
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code > 0xff) throw new Error(`الحرف "${text[i]}" خارج نطاق بايت واحد — النصّ العربي يحتاج جدول ترميز اللعبة.`);
+      data[offset + i] = code;
+    }
+    changed++;
+  }
+  return { rom: changed > 0 ? writeNdsFile(rom, file, data) : rom, changed };
+}
+
 /** Every translatable line in the ROM, in the order the files lay them out. */
 export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
   const rows: InazumaTextRow[] = [];
@@ -87,6 +188,7 @@ export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
     }
   }
   readSlots(rom, rows);
+  for (const table of OVERFLOW_TABLES) readOverflowTable(rom, table, rows);
   return rows;
 }
 
@@ -163,6 +265,12 @@ export function writeInazumaText(
     changed++;
   }
   if (slotsTouched) out = writeNdsFile(out, slotFile, slots);
+
+  for (const table of OVERFLOW_TABLES) {
+    const result = writeOverflowTable(out, table, wanted, seen, warnings);
+    out = result.rom;
+    changed += result.changed;
+  }
 
   for (const row of rows) {
     if (!seen.has(rowId(row))) warnings.push(`لا يوجد نصّ بهذا المعرّف في الروم: ${rowId(row)}`);

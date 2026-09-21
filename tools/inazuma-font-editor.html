@@ -1,0 +1,1644 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>محرّر خط إينازوما إيليفن</title>
+<style>:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1d222b; --line:#2a303c;
+  --ink:#e8ecf3; --dim:#94a0b4; --accent:#f5c451; --accent2:#4ea8de;
+  --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink); direction:rtl;
+  font:15px/1.7 "Segoe UI","Noto Naskh Arabic",Tahoma,sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);
+  background:var(--panel2);border-radius:10px;padding:7px 13px;transition:.15s}
+button:hover:not(:disabled){background:#252b36;border-color:#3a4354}
+button:disabled{opacity:.35;cursor:default}
+button.on{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:600}
+button.primary{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.08);background:var(--accent)}
+input,select{font:inherit;color:inherit;background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;padding:7px 11px}
+input:focus,select:focus{outline:2px solid var(--accent2);outline-offset:-1px}
+
+/* ===== الشريط العلوي ===== */
+header{display:flex;align-items:center;gap:12px;padding:12px 18px;
+  background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.2px}
+header h1 span{color:var(--accent)}
+.grow{flex:1}
+.badge{font-size:12.5px;color:var(--dim);background:var(--panel2);
+  border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+
+/* ===== التبويبات ===== */
+nav{display:flex;gap:6px;padding:10px 18px 0;background:var(--panel)}
+nav button{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;
+  padding:8px 18px;background:transparent;color:var(--dim)}
+nav button.on{background:var(--bg);color:var(--accent);border-color:var(--line);
+  position:relative;top:1px;font-weight:600}
+
+main{flex:1;overflow:auto;padding:18px;min-height:0}
+.page{display:none}
+.page.on{display:block}
+
+/* ===== شاشة البداية ===== */
+.drop{max-width:720px;margin:6vh auto;text-align:center;padding:52px 32px;
+  border:2px dashed var(--line);border-radius:22px;background:var(--panel)}
+.drop.hover{border-color:var(--accent);background:#1c2029}
+.drop h2{margin:0 0 10px;font-size:22px}
+.drop p{color:var(--dim);margin:6px 0 22px}
+.hint{max-width:720px;margin:0 auto;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:16px 20px;color:var(--dim);font-size:14px}
+.hint b{color:var(--ink)}
+
+/* ===== جدول الملفات ===== */
+table{width:100%;border-collapse:collapse;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+th,td{padding:11px 14px;text-align:right;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--panel2);font-weight:600;font-size:13.5px;color:var(--dim);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr.clickable{cursor:pointer}
+tr.clickable:hover{background:#1c2029}
+td.name{font-weight:600;white-space:nowrap}
+td.tip{color:var(--dim);font-size:13.5px;line-height:1.65;max-width:520px}
+.pill{display:inline-block;font-size:12px;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.edit{background:rgba(74,222,128,.13);color:var(--ok);border:1px solid rgba(74,222,128,.3)}
+.pill.keep{background:rgba(148,160,180,.12);color:var(--dim);border:1px solid var(--line)}
+
+/* ===== المحرّر ===== */
+.editor{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+.editor > div:last-child{position:sticky;top:0;max-height:calc(100vh - 190px);overflow-y:auto;padding-left:4px}
+#gridWrap{max-height:calc(100vh - 210px);overflow-y:auto;padding-left:4px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.card h3{margin:0 0 12px;font-size:14.5px;color:var(--dim);font-weight:600}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.sep{width:1px;height:26px;background:var(--line);margin:0 2px}
+
+#grid{display:grid;grid-template-columns:repeat(16,1fr);gap:3px}
+.cell{aspect-ratio:1;background:#0b0d11;border:1px solid transparent;border-radius:5px;
+  cursor:pointer;position:relative;image-rendering:pixelated}
+.cell:hover{border-color:var(--accent2)}
+.cell.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,196,81,.25)}
+.cell canvas{width:100%;height:100%;display:block;image-rendering:pixelated;border-radius:4px}
+.cell.empty{opacity:.22}
+
+#paint{image-rendering:pixelated;border-radius:10px;cursor:crosshair;
+  background:#0b0d11;touch-action:none;display:block;width:100%;max-width:352px;margin:0 auto}
+.swatches{display:flex;gap:8px;justify-content:center;margin:12px 0 4px}
+.sw{width:42px;height:42px;border-radius:9px;border:2px solid var(--line);cursor:pointer;position:relative}
+.sw.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,196,81,.3)}
+.sw span{position:absolute;inset:auto 0 -20px;font-size:11px;color:var(--dim);text-align:center}
+.swrow{margin-bottom:26px}
+
+.field{display:flex;align-items:center;gap:10px;margin:10px 0}
+.field label{color:var(--dim);font-size:13.5px;min-width:78px}
+.field input[type=range]{flex:1;accent-color:var(--accent)}
+.val{font-variant-numeric:tabular-nums;min-width:30px;text-align:center;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:13px}
+
+#preview{width:100%;image-rendering:pixelated;border-radius:10px;background:#fff;display:block}
+.note{color:var(--dim);font-size:12.5px;margin-top:8px;line-height:1.6}
+.note.warn{color:var(--warn)}
+
+#audit div{padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+#audit div:last-child{border-bottom:none}
+#audit .g{color:var(--ok)}
+#audit .b{color:var(--bad);cursor:pointer}
+#audit .b:hover{text-decoration:underline}
+
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+  background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+  padding:11px 22px;opacity:0;pointer-events:none;transition:.25s;z-index:50;
+  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+#toast.on{opacity:1}
+#toast.ok{border-color:rgba(74,222,128,.5)}
+#toast.bad{border-color:rgba(248,113,113,.5)}
+
+@media (max-width:1100px){.editor{grid-template-columns:1fr}}
+
+header h1 .ver{font-style:normal;font-size:12px;color:#1a1205;background:var(--accent);
+  border-radius:6px;padding:2px 7px;margin-inline-start:6px;font-weight:700;vertical-align:middle}
+
+.filters{display:inline-flex;gap:5px;flex-wrap:wrap}
+.filters button{padding:5px 11px;font-size:13px;border-radius:999px}
+
+#forms{display:flex;gap:6px;margin-bottom:12px;justify-content:center;flex-wrap:wrap}
+#forms .fm{border:1px solid var(--line);border-radius:9px;padding:4px 6px 2px;cursor:pointer;
+  background:var(--panel2);text-align:center;min-width:54px;transition:.15s}
+#forms .fm:hover{border-color:var(--accent2)}
+#forms .fm.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,196,81,.25)}
+#forms .fm.none{opacity:.3;cursor:default}
+#forms .fm canvas{width:40px;height:40px;image-rendering:pixelated;display:block;margin:0 auto;border-radius:4px}
+#forms .fm span{font-size:11px;color:var(--dim);display:block;margin-top:2px}
+
+#compare{display:flex;gap:14px;justify-content:center;margin-top:12px}
+#compare[hidden]{display:none}
+#compare canvas{image-rendering:pixelated;border:1px solid var(--line);border-radius:8px;background:#0b0d11;
+  width:128px;height:128px;display:block}
+#compare span{display:block;text-align:center;font-size:12px;color:var(--dim);margin-top:5px}
+
+.cell.mod::after{content:"";position:absolute;top:2px;inset-inline-end:2px;width:6px;height:6px;
+  border-radius:50%;background:var(--accent);box-shadow:0 0 0 1.5px #0b0d11}
+
+.genwrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1000px){.genwrap{grid-template-columns:1fr}}
+#genPrev{width:100%;background:#fff;border-radius:10px;image-rendering:pixelated;display:block}
+
+#testList{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+#testList .tw{border:1px solid var(--line);border-radius:10px;padding:8px 10px 6px;background:var(--panel2)}
+#testList .tw.bad{border-color:var(--bad);box-shadow:0 0 0 1px rgba(248,113,113,.25)}
+#testList .tw canvas{display:block;image-rendering:pixelated;background:#fff;border-radius:5px;cursor:pointer}
+#testList .tw b{display:block;font-size:12px;color:var(--dim);margin-top:5px;text-align:center;font-weight:600}
+#testList .tw.bad b{color:var(--bad)}
+
+#audit .sec{color:var(--ink);font-weight:600;padding-top:10px}
+#audit .w{color:var(--warn);cursor:pointer}
+#audit .w:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>محرّر خط <span>إينازوما إيليفن</span> <em class="ver">NFTR</em></h1>
+  <span class="badge" id="fileBadge">لم يُفتح ملف</span>
+  <div class="grow"></div>
+  <button id="btnOpen">📂 فتح ملفات الخطّ</button>
+  <button id="btnVerify" disabled>🔍 تحقّق</button>
+  <button id="btnExport" disabled>⬇️ تصدير لملف الأداة</button>
+  <button id="btnSave" class="primary" disabled>💾 حفظ الخطّ</button>
+  <input type="file" id="file" accept=".NFTR,.nftr" multiple hidden>
+</header>
+
+<nav>
+  <button id="tabFiles" class="on">ملفات الخطّ</button>
+  <button id="tabEdit">تحرير الحروف</button>
+  <button id="tabGen">توليد من خطّ</button>
+  <button id="tabTest">اختبار الكلمات</button>
+</nav>
+
+<main>
+  <!-- ===== البداية ===== -->
+  <section class="page on" id="pageStart">
+    <div class="drop" id="drop">
+      <h2>افتح ملفات <code dir="ltr">.NFTR</code></h2>
+      <p>اسحب <code dir="ltr">FONT12.NFTR</code> و<code dir="ltr">FONT12N.NFTR</code> و<code dir="ltr">FONT8.NFTR</code> إلى هنا معاً، أو اضغط الزر</p>
+      <button class="primary" id="btnPick">اختيار الملفات</button>
+    </div>
+    <div class="hint">
+      <b>أين أجدها؟</b> داخل الروم في المسار <code dir="ltr">/data_iz/font/</code> —
+      وقد أُرسلت لك مستخرَجةً جاهزةً.
+      <br><br>
+      <b>أيّها أعدّل؟</b> <code dir="ltr">FONT12.NFTR</code> هو خطّ الحوار، و<code dir="ltr">FONT12N.NFTR</code>
+      نسخته الثانية (ارسم فيهما الشيء نفسه)، و<code dir="ltr">FONT8.NFTR</code> الخطّ الصغير للقوائم الضيّقة.
+      <br><br>
+      <b>هل يُفسد الملف؟</b> لا. الأداة تُعيد بناءه بايتاً ببايت، وزرّ «تحقّق»
+      يُثبت لك ذلك قبل الحفظ. ولا تمسّ إلا خانات الحروف العربية الـ٨٣.
+    </div>
+  </section>
+
+  <!-- ===== الملفات ===== -->
+  <section class="page" id="pageFiles">
+    <table>
+      <thead><tr>
+        <th style="width:42px">#</th><th>الملف</th><th>الحجم</th>
+        <th>الحروف</th><th>الخليّة</th><th>الحالة</th><th>ما هو ونصيحته</th>
+      </tr></thead>
+      <tbody id="filesBody"></tbody>
+    </table>
+    <p class="note">اضغط أي صفّ لتفتحه مباشرةً.</p>
+  </section>
+
+  <!-- ===== التحرير ===== -->
+  <section class="page" id="pageEdit">
+    <div class="toolbar">
+      <select id="fontSel"></select>
+      <div class="sep"></div>
+      <input id="search" placeholder="ابحث: ي نهائي" style="width:190px">
+      <span class="badge" id="searchHits"></span>
+      <div class="sep"></div>
+      <span class="filters" id="filters"></span>
+      <div class="grow"></div>
+      <span class="badge" id="modCount">—</span>
+      <span class="badge" id="slotInfo">—</span>
+    </div>
+
+    <div class="editor">
+      <div class="card">
+        <h3>كل الحروف (اضغط حرفاً لتحريره)</h3>
+        <div id="gridWrap"><div id="grid"></div></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <h3 id="editTitle">الحرف المختار</h3>
+          <div id="forms"></div>
+          <canvas id="paint" width="352" height="352"></canvas>
+          <div id="compare" hidden>
+            <div><canvas id="cmpOrig" width="128" height="128"></canvas><span>الأصل</span></div>
+            <div><canvas id="cmpNow"  width="128" height="128"></canvas><span>المعدَّل</span></div>
+          </div>
+          <div class="swatches swrow" id="swatches"></div>
+          <div class="toolbar" style="justify-content:center;margin:0">
+            <button id="tPen" class="on">✏️ قلم</button>
+            <button id="tFill">🪣 تعبئة</button>
+            <button id="tPick">💧 قطّارة</button>
+            <div class="sep"></div>
+            <button id="undo" disabled>↶</button>
+            <button id="redo" disabled>↷</button>
+          </div>
+          <div class="field">
+            <label>العرض</label>
+            <input type="range" id="width" min="0" max="11" value="0">
+            <span class="val" id="widthVal">0</span>
+          </div>
+          <p class="note">الخطّ الأحمر على الرسم هو حدّ العرض: ما بعده لا يُرسم في اللعبة،
+            والحرف التالي يبدأ منه. اجعل حبر الوصل يلامسه تماماً.</p>
+          <div class="toolbar" style="margin:10px 0 0">
+            <button id="shiftR">→</button><button id="shiftL">←</button>
+            <button id="shiftU">↑</button><button id="shiftD">↓</button>
+            <div class="sep"></div>
+            <button id="clear">مسح</button>
+            <button id="copyFrom">نسخ من حرف…</button>
+            <button id="revertGlyph">إرجاع للأصل</button>
+            <div class="sep"></div>
+            <button id="btnCompare">مقارنة قبل/بعد</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>معاينة حيّة</h3>
+          <input id="prevText" value="مرحبا بكم في اينازوما" style="width:100%;margin-bottom:10px">
+          <canvas id="preview" height="40"></canvas>
+          <p class="note">تُرسم بمنطق اللعبة نفسه: اختيار الشكل حسب الجيران، ثم العكس يميناً-يساراً.</p>
+        </div>
+
+        <div class="card">
+          <h3>فحص الوصلات</h3>
+          <div id="audit"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== توليد من خطّ ===== -->
+  <section class="page" id="pageGen">
+    <div class="genwrap">
+      <div class="card">
+        <h3>١ — ارفع خطّاً عربياً</h3>
+        <p class="note">أي ملف <code dir="ltr">.ttf</code> أو <code dir="ltr">.otf</code> فيه حروف عربية.
+          المتصفّح يشكّلها بنفسه، فما يظهر هو ما يرسمه الخطّ فعلاً.</p>
+        <div class="toolbar">
+          <button id="btnGenPick" class="primary">اختيار ملف الخطّ</button>
+          <input type="file" id="genFile" accept=".ttf,.otf,.woff,.woff2" hidden>
+          <span class="badge" id="genBadge">لم يُختَر خطّ</span>
+        </div>
+
+        <h3 style="margin-top:18px">٢ — اضبط</h3>
+        <div class="field"><label>المقاس</label><input type="range" id="gSize" min="6" max="20" value="11"><span class="val" id="gSizeV">11</span></div>
+        <div class="field"><label>عتبة الحبر</label><input type="range" id="gThr" min="40" max="220" value="110"><span class="val" id="gThrV">110</span></div>
+        <div class="field"><label>خطّ الأساس</label><input type="range" id="gBase" min="4" max="15" value="9"><span class="val" id="gBaseV">9</span></div>
+        <div class="field"><label>الإسفين</label><input type="checkbox" id="gWedge" style="accent-color:var(--accent);width:18px;height:18px;flex:0"><span class="val" id="gWedgeV">لا</span></div>
+        <div class="field"><label>أقلّ عمود</label><input type="range" id="gWMin" min="3" max="8" value="4"><span class="val" id="gWMinV">4</span></div>
+        <p class="note">خطّ الأساس هو الصفّ الذي يقف عليه أدنى حبر الحرف. غيّره وستطفو حروفك
+          فوق الحروف اللاتينية والأرقام التي لم تولّدها.</p>
+      </div>
+
+      <div class="card">
+        <h3>٣ — انظر قبل أن تكتب</h3>
+        <canvas id="genPrev" height="150"></canvas>
+        <p class="note" id="genStat">ارفع خطّاً لترى المعاينة.</p>
+        <div class="toolbar">
+          <button id="btnGenApply" class="primary" disabled>اكتب الأشكال في الخطّ</button>
+          <button id="btnGenUndo" disabled>تراجع عن التوليد</button>
+        </div>
+        <p class="note warn">الكتابة تمسّ الخانات العربية الـ٨٣ وحدها؛ اللاتينية والأرقام واليابانية تبقى كما هي.
+          ويمكنك التراجع عن التوليد كلّه بضغطة، أو إرجاع حرف واحد من زرّ «إرجاع للأصل».</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== اختبار الكلمات ===== -->
+  <section class="page" id="pageTest">
+    <div class="card">
+      <h3>كلمات الاختبار</h3>
+      <p class="note">تُرسم بمنطق اللعبة: اختيار الشكل حسب الجيران، ثمّ العكس يميناً-يساراً بالعرض الحقيقي لكل خانة.
+        الكلمة التي فيها شكل معطوب تُعلَّم بالأحمر، واضغطها لتفتح الحرف.</p>
+      <div class="toolbar">
+        <input id="testAdd" placeholder="أضف كلمة…" style="width:220px">
+        <button id="btnTestAdd">إضافة</button>
+        <div class="grow"></div>
+        <span class="badge" id="testStat">—</span>
+      </div>
+      <div id="testList"></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ===================== نواة NFTR ===================== */
+
+/**
+ * خطّ إينازوما ليس NARC فيه أعضاء، بل ملفّ NFTR واحد بكتل متسلسلة.
+ * المهمّ منها اثنتان: PLGC فيه رسمة كل حرف، وHDWC فيه عرضه.
+ *
+ * الرسمة بتّ واحد للبكسل (١ = حبر) مرصوصة صفّاً بعد صفّ بلا تبليط،
+ * البتّ الأعلى أوّلاً داخل البايت — وهذا مقيسٌ على الحرف اللاتيني A
+ * (الخانة ٣٣) في هذا الملفّ نفسه قبل أن يُكتب شيء هنا.
+ */
+
+function u16(b, o) { return b[o] | (b[o + 1] << 8); }
+function u32(b, o) { return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0; }
+
+function decodeNftr(buf, name) {
+  if (String.fromCharCode(...buf.slice(0, 4)) !== "RTFN") throw new Error("هذا ليس ملف NFTR");
+  let p = u16(buf, 0x0c);
+  let plgcOff = -1, hdwcOff = -1, cw = 0, ch = 0, tb = 0, depth = 0, n = 0, baselinePos = 0;
+  while (p < buf.length - 8) {
+    const kind = String.fromCharCode(...buf.slice(p, p + 4));
+    const size = u32(buf, p + 4);
+    if (size === 0) break;
+    if (kind === "PLGC") {
+      cw = buf[p + 8]; ch = buf[p + 9]; tb = u16(buf, p + 10);
+      baselinePos = buf[p + 12]; depth = buf[p + 14];
+      plgcOff = p + 16; n = Math.floor((size - 16) / tb);
+    } else if (kind === "HDWC") {
+      hdwcOff = p + 16;
+    }
+    p += size;
+  }
+  if (plgcOff < 0 || hdwcOff < 0) throw new Error("الملفّ ناقص كتلة PLGC أو HDWC");
+  if (depth !== 1) throw new Error(`عمق ألوان غير مدعوم (${depth} بتّ)`);
+
+  const bits = cw * ch;
+  const pix = new Uint8Array(n * bits);
+  for (let g = 0; g < n; g++) {
+    const off = plgcOff + g * tb;
+    for (let i = 0; i < bits; i++) pix[g * bits + i] = (buf[off + (i >> 3)] >> (7 - (i & 7))) & 1;
+  }
+  const lb = new Array(n), gw = new Array(n), adv = new Array(n);
+  for (let g = 0; g < n; g++) {
+    lb[g] = buf[hdwcOff + g * 3];
+    gw[g] = buf[hdwcOff + g * 3 + 1];
+    adv[g] = buf[hdwcOff + g * 3 + 2];
+  }
+  return { name, raw: buf, cw, ch, tb, n, plgcOff, hdwcOff, baselinePos, pix, lb, gw, adv };
+}
+
+/** يُعيد بناء الملفّ كاملاً: منطقة الرسمات تُصفّر ثمّ تُكتب من جديد، فالتحقّق يعني شيئاً. */
+function encodeNftr(f) {
+  const out = f.raw.slice();
+  const bits = f.cw * f.ch;
+  out.fill(0, f.plgcOff, f.plgcOff + f.n * f.tb);
+  for (let g = 0; g < f.n; g++) {
+    const off = f.plgcOff + g * f.tb;
+    for (let i = 0; i < bits; i++) {
+      if (f.pix[g * bits + i]) out[off + (i >> 3)] |= 1 << (7 - (i & 7));
+    }
+    out[f.hdwcOff + g * 3] = f.lb[g];
+    out[f.hdwcOff + g * 3 + 1] = f.gw[g];
+    out[f.hdwcOff + g * 3 + 2] = f.adv[g];
+  }
+  return out;
+}
+
+function getPixel(f, g, x, y) { return f.pix[(g * f.ch + y) * f.cw + x]; }
+function setPixel(f, g, x, y, v) { f.pix[(g * f.ch + y) * f.cw + x] = v ? 1 : 0; }
+
+/* ===================== خانات العربية الـ٨٣ ===================== */
+
+/**
+ * هذه ليست خانات مخترَعة: كلّ واحدة منها رمزٌ موجودٌ أصلاً في جدول PAMC داخل
+ * الخطّ نفسه، ثبت غيابه عن كل نصّ في الروم (٨٨٬٦٦٣ نصّاً)، فالكتابة فيه لا
+ * تُفسد حرفاً تستعمله اللعبة. الترتيب هنا هو ترتيب
+ * src/lib/inazuma/inazuma-arabic-glyphs.ts حرفاً بحرف — فلا يجوز خلطه.
+ */
+const AR_CODEPOINTS = [0xFE8D,0xFE8E,0xFEDD,0xFEDE,0xFEDF,0xFEE0,0xFEF1,0xFEF2,0xFEF3,0xFEF4,0xFEE1,0xFEE2,0xFEE3,0xFEE4,0xFEED,0xFEEE,0xFEE5,0xFEE6,0xFEE7,0xFEE8,0xFEE9,0xFEEA,0xFEEB,0xFEEC,0xFE8F,0xFE90,0xFE91,0xFE92,0xFE95,0xFE96,0xFE97,0xFE98,0xFEAD,0xFEAE,0xFEC9,0xFECA,0xFECB,0xFECC,0xFEB1,0xFEB2,0xFEB3,0xFEB4,0xFED5,0xFED6,0xFED7,0xFED8,0xFED1,0xFED2,0xFED3,0xFED4,0xFEA9,0xFEAA,0xFED9,0xFEDA,0xFEDB,0xFEDC,0xFEF5,0xFEF6,0xFEF7,0xFEF8,0xFEF9,0xFEFA,0xFEFB,0xFEFC,0xFEA1,0xFE9D,0xFEB5,0xFEB9,0xFEC1,0xFEA5,0xFEAB,0xFEBD,0xFE99,0xFEAF,0xFECD,0xFEC5,0xFEA3,0xFE83,0xFE93,0xFEEF,0xFEA2,0xFE9E,0xFEB6];
+const AR_SJIS = [0x8141,0x8143,0x8144,0x8147,0x814A,0x814B,0x814C,0x814D,0x814E,0x814F,0x8150,0x8151,0x8152,0x8153,0x8154,0x8155,0x8156,0x8157,0x8158,0x8159,0x815A,0x815C,0x815D,0x815F,0x8161,0x8162,0x8164,0x8165,0x8166,0x8167,0x816B,0x816C,0x816D,0x816E,0x816F,0x8170,0x8171,0x8172,0x8173,0x8174,0x8177,0x8178,0x817B,0x817D,0x817E,0x8180,0x8184,0x8185,0x8186,0x8187,0x8188,0x8189,0x818A,0x818B,0x818C,0x818D,0x818E,0x818F,0x8190,0x8192,0x8193,0x8194,0x8196,0x8197,0x8198,0x819B,0x819D,0x819E,0x81A0,0x81A2,0x81A3,0x81A4,0x81A5,0x81A7,0x81A9,0x81AA,0x81AB,0x81AC,0x81B8,0x81B9,0x81BA,0x81BB,0x81BC];
+const AR_SLOTS = [158,160,161,164,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,185,186,188,190,191,193,194,195,196,200,201,202,203,204,205,206,207,208,209,212,213,216,218,219,220,224,225,226,227,228,229,230,231,232,233,234,235,236,238,239,240,242,243,244,247,249,250,252,254,255,256,257,259,261,262,263,264,265,266,267,268,269];
+
+/** [معزول، نهائي، أولي، وسطي] — null حيث لا وجود للشكل. */
+const AR_FORMS = {
+  0x0621:[0xFE80,0xFE80,null,null], 0x0622:[0xFE81,0xFE82,null,null],
+  0x0623:[0xFE83,0xFE84,null,null], 0x0624:[0xFE85,0xFE86,null,null],
+  0x0625:[0xFE87,0xFE88,null,null], 0x0626:[0xFE89,0xFE8A,0xFE8B,0xFE8C],
+  0x0627:[0xFE8D,0xFE8E,null,null], 0x0628:[0xFE8F,0xFE90,0xFE91,0xFE92],
+  0x0629:[0xFE93,0xFE94,null,null], 0x062A:[0xFE95,0xFE96,0xFE97,0xFE98],
+  0x062B:[0xFE99,0xFE9A,0xFE9B,0xFE9C], 0x062C:[0xFE9D,0xFE9E,0xFE9F,0xFEA0],
+  0x062D:[0xFEA1,0xFEA2,0xFEA3,0xFEA4], 0x062E:[0xFEA5,0xFEA6,0xFEA7,0xFEA8],
+  0x062F:[0xFEA9,0xFEAA,null,null], 0x0630:[0xFEAB,0xFEAC,null,null],
+  0x0631:[0xFEAD,0xFEAE,null,null], 0x0632:[0xFEAF,0xFEB0,null,null],
+  0x0633:[0xFEB1,0xFEB2,0xFEB3,0xFEB4], 0x0634:[0xFEB5,0xFEB6,0xFEB7,0xFEB8],
+  0x0635:[0xFEB9,0xFEBA,0xFEBB,0xFEBC], 0x0636:[0xFEBD,0xFEBE,0xFEBF,0xFEC0],
+  0x0637:[0xFEC1,0xFEC2,0xFEC3,0xFEC4], 0x0638:[0xFEC5,0xFEC6,0xFEC7,0xFEC8],
+  0x0639:[0xFEC9,0xFECA,0xFECB,0xFECC], 0x063A:[0xFECD,0xFECE,0xFECF,0xFED0],
+  0x0641:[0xFED1,0xFED2,0xFED3,0xFED4], 0x0642:[0xFED5,0xFED6,0xFED7,0xFED8],
+  0x0643:[0xFED9,0xFEDA,0xFEDB,0xFEDC], 0x0644:[0xFEDD,0xFEDE,0xFEDF,0xFEE0],
+  0x0645:[0xFEE1,0xFEE2,0xFEE3,0xFEE4], 0x0646:[0xFEE5,0xFEE6,0xFEE7,0xFEE8],
+  0x0647:[0xFEE9,0xFEEA,0xFEEB,0xFEEC], 0x0648:[0xFEED,0xFEEE,null,null],
+  0x0649:[0xFEEF,0xFEF0,null,null], 0x064A:[0xFEF1,0xFEF2,0xFEF3,0xFEF4],
+};
+
+/** «لا» تُرسم رمزاً واحداً: [معزولة، موصولة بما قبلها] لكل ألف. */
+const LAM_ALEF = {
+  0x0622:[0xFEF5,0xFEF6], 0x0623:[0xFEF7,0xFEF8],
+  0x0625:[0xFEF9,0xFEFA], 0x0627:[0xFEFB,0xFEFC],
+};
+
+const FORM_NAMES = ["معزول", "نهائي", "أولي", "وسطي"];
+
+/** رمز العرض ← الحرف الأساسي وشكله. يُبنى من الجدولين لا يُكتب باليد. */
+const PRES = (() => {
+  const m = new Map();
+  for (const base in AR_FORMS) {
+    const arr = AR_FORMS[base];
+    for (let k = 0; k < 4; k++) if (arr[k] !== null) {
+      if (!m.has(arr[k])) m.set(arr[k], { letter: String.fromCodePoint(+base), form: k });
+    }
+  }
+  for (const alef in LAM_ALEF) {
+    const [iso, fin] = LAM_ALEF[alef];
+    const text = "ل" + String.fromCodePoint(+alef);
+    m.set(iso, { letter: text, form: 0, lig: true, alef: +alef });
+    m.set(fin, { letter: text, form: 1, lig: true, alef: +alef });
+  }
+  return m;
+})();
+
+const CP_TO_SLOT = new Map(AR_CODEPOINTS.map((cp, i) => [cp, AR_SLOTS[i]]));
+const SLOT_SET = new Set(AR_SLOTS);
+
+/** كل الأشكال العربية التي يحملها هذا الخطّ، مع خانتها ونوعها. */
+function arabicTargets() {
+  return AR_CODEPOINTS.map((cp, i) => {
+    const info = PRES.get(cp) || { letter: "؟", form: 0 };
+    return { cp, slot: AR_SLOTS[i], letter: info.letter, form: info.form, lig: !!info.lig, alef: info.alef };
+  });
+}
+
+/* ===================== التشكيل ===================== */
+
+/** يختار شكل كل حرف حسب جيرانه، كما يفعل مُعالج النصّ في الأداة قبل البناء. */
+function shapeText(text) {
+  const chars = [...text];
+  const out = [];
+  let prevJoins = false;
+  for (let i = 0; i < chars.length; i++) {
+    const cp = chars[i].codePointAt(0);
+    const forms = AR_FORMS[cp];
+    if (!forms) { out.push({ raw: chars[i] }); prevJoins = false; continue; }
+
+    // لام يليها ألف: رمز واحد لا رمزان.
+    if (cp === 0x0644 && i + 1 < chars.length) {
+      const nx = chars[i + 1].codePointAt(0);
+      const lig = LAM_ALEF[nx];
+      if (lig) { out.push({ cp: prevJoins ? lig[1] : lig[0] }); prevJoins = false; i++; continue; }
+    }
+
+    const nextCp = i + 1 < chars.length ? chars[i + 1].codePointAt(0) : 0;
+    const nextIsLetter = !!AR_FORMS[nextCp];
+    let form = 0;
+    if (prevJoins) form |= 1;
+    if (nextIsLetter && forms[2] !== null) form |= 2;
+    const chosen = forms[form] !== null ? forms[form] : (forms[form & 1] !== null ? forms[form & 1] : forms[0]);
+    out.push({ cp: chosen });
+    prevJoins = !!(form & 2);
+  }
+  return out;
+}
+
+/* ===================== توليد الأشكال من خطّ متّجهي ===================== */
+
+/**
+ * الرسم اليدوي لثلاثة وثمانين شكلاً أسابيع، وأسوأ من بطئه أن كل شكل يخرج
+ * باجتهادٍ منفصل فيختلف أساسه عن جاره ويطفو فوقه على الشاشة. الخطّ المتّجهي
+ * نِسَبه وأساسه ووصلاته متّسقة بالبناء.
+ *
+ * والتشكيل هنا ليس جدولاً مكتوباً بيدنا: المتصفّح نفسه يشكّل العربية، ويُطلب
+ * منه الشكل المعيّن بـZWJ — واصلٌ عديم العرض يجبر الحرف على صورته الأولية أو
+ * الوسطية أو النهائية. فما يُرسم هو ما يرسمه الخطّ فعلاً، لا ما نظنّه.
+ */
+
+const ZWJ = "‍";
+const GEN_FAMILY = "IzGenSource";
+let genFontReady = false;
+
+function formContext(letter, form) {
+  if (form === 0) return letter;
+  if (form === 1) return ZWJ + letter;
+  if (form === 2) return letter + ZWJ;
+  return ZWJ + letter + ZWJ;
+}
+
+async function loadGenFont(buf) {
+  const face = new FontFace(GEN_FAMILY, buf);
+  await face.load();
+  document.fonts.add(face);
+  genFontReady = true;
+}
+
+function rasterizeForm(letter, form, opt) {
+  const W = 96, H = 96, BASE = 64, PEN = 16;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `${opt.size}px "${GEN_FAMILY}"`;
+  ctx.fillText(formContext(letter, form), PEN, BASE);
+
+  const d = ctx.getImageData(0, 0, W, H).data;
+  const on = [];
+  let minX = W, maxX = -1, minY = H, maxY = -1;
+  for (let y = 0; y < H; y++) {
+    const row = [];
+    for (let x = 0; x < W; x++) {
+      const v = d[(y * W + x) * 4] >= opt.threshold ? 1 : 0;
+      row.push(v);
+      if (v) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    on.push(row);
+  }
+  if (maxX < 0) return null;
+  return { on, minX, maxX, minY, maxY, base: BASE };
+}
+
+/** طرفٌ إسفيني عند قمّة كل عمود طويل، ولا يُضاف حيث يلصق الحرفَ بجاره. */
+function addWedge(cell, w, h, minRun) {
+  const out = cell.map((r) => r.slice());
+  for (let x = 0; x < w; x++) {
+    let y = 0;
+    while (y < h) {
+      if (!cell[y][x]) { y++; continue; }
+      const s = y;
+      while (y + 1 < h && cell[y + 1][x]) y++;
+      if (y - s + 1 >= minRun) {
+        for (const dx of [-1, 1]) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          if (cell[s][nx]) continue;
+          const nn = x + dx * 2;
+          if (nn >= 0 && nn < w && cell[s][nn]) continue;
+          out[s][nx] = 1;
+        }
+      }
+      y++;
+    }
+  }
+  return out;
+}
+
+/**
+ * يضع الحبر في الخليّة ويحسب عرضها.
+ *
+ * الوصلة هي ما يقرّر الموضع الأفقي لا الجمال: الشكل الذي يصل بما بعده يجب أن
+ * يلامس العمود ٠، والذي يصل بما قبله يجب أن يلامس العمود w−1 — فإن انزاح
+ * بكسلاً واحداً ظهرت فجوة بين الحرفين في اللعبة.
+ */
+function placeInCell(r, form, opt, cw, ch) {
+  const joinsLeft = form === 2 || form === 3;
+  const joinsRight = form === 1 || form === 3;
+  const inkW = r.maxX - r.minX + 1;
+
+  let lsb, width;
+  if (joinsLeft && joinsRight) { lsb = 0; width = Math.min(cw, inkW); }
+  else if (joinsLeft)          { lsb = 0; width = Math.min(cw, inkW + 1); }
+  else if (joinsRight)         { width = Math.min(cw, inkW + 1); lsb = width - inkW; }
+  else                         { lsb = 1; width = Math.min(cw, inkW + 2); }
+  if (lsb < 0) lsb = 0;
+
+  const cell = Array.from({ length: ch }, () => new Array(cw).fill(0));
+  const dy = opt.baseline - r.base + 1;
+  for (let y = 0; y < ch; y++) {
+    const sy = y - dy;
+    if (sy < 0 || sy >= r.on.length) continue;
+    for (let x = 0; x < cw; x++) {
+      const sx = x - lsb + r.minX;
+      if (sx < r.minX || sx > r.maxX) continue;
+      if (r.on[sy][sx]) cell[y][x] = 1;
+    }
+  }
+  return { cell, width };
+}
+
+function buildGlyph(letter, form, opt, cw, ch) {
+  const r = rasterizeForm(letter, form, opt);
+  if (!r) return null;
+  let { cell, width } = placeInCell(r, form, opt, cw, ch);
+  if (opt.wedge) cell = addWedge(cell, width, ch, opt.wedgeMin);
+  return { cell, width };
+}
+
+/* ===================== الفحص العربي ===================== */
+
+/**
+ * ما يكسر خطّاً عربياً في هذه اللعبة أربعة أشياء تُقاس.
+ *
+ * أوّلها الوصلة: النصّ يُعكس قبل كتابته في الروم ثمّ يرسمه المحرّك يساراً-يميناً،
+ * فينتهي العمود ٠ من الحرف ملاصقاً للعمود w−1 من جاره. فالشكل الأولي والوسطي
+ * يجب أن يبلغ حبرهما العمود ٠، والنهائي والوسطي العمود w−1 — وبكسلٌ واحد
+ * ناقص يعني فجوة مرئية بين حرفين موصولين.
+ *
+ * وثانيها خطّ الأساس: حرفٌ قاعه أعلى من قاع جيرانه يبدو معلَّقاً في الهواء.
+ * والنزول تحته مشروع في العربية، فلا يُحسب شذوذاً.
+ *
+ * وثالثها الحبر خلف خطّ العرض: ما بعده لا يُرسم، والحرف التالي يدهسه.
+ * ورابعها خانة عربية فارغة: تُقرأ الكلمة ناقصةً حرفاً.
+ */
+
+function cellInk(f, g) {
+  const rows = [];
+  for (let y = 0; y < f.ch; y++) {
+    const r = [];
+    for (let x = 0; x < f.cw; x++) r.push(getPixel(f, g, x, y));
+    rows.push(r);
+  }
+  return rows;
+}
+
+function colHasInk(rows, x, cw) {
+  if (x < 0 || x >= cw) return false;
+  for (let y = 0; y < rows.length; y++) if (rows[y][x]) return true;
+  return false;
+}
+
+function lowestInkRow(rows, w, cw) {
+  for (let y = rows.length - 1; y >= 0; y--)
+    for (let x = 0; x < Math.min(w, cw); x++) if (rows[y][x]) return y;
+  return -1;
+}
+
+/**
+ * صفّ الأساس المرجعي، محسوبٌ من حروف اللعبة اللاتينية نفسها لا من العربية.
+ *
+ * العربية هي ما نعدّله، فلو قِيست بنفسها لصار أيّ انحرافٍ جماعيٍّ فيها
+ * «الأصل». أمّا اللاتينية فلا تُمسّ، فهي المرجع الثابت الذي يجب أن تقف
+ * العربية عليه كي لا تطفو فوق الأرقام وأسماء اللاعبين في السطر نفسه.
+ */
+function dominantBaseline(f) {
+  const count = {};
+  for (let g = 0x21; g <= 0x5a && g < f.n; g++) {          // خانات اللاتينية الكبيرة والأرقام
+    if (SLOT_SET.has(g)) continue;
+    const b = lowestInkRow(cellInk(f, g), f.adv[g], f.cw);
+    if (b >= 0) count[b] = (count[b] || 0) + 1;
+  }
+  let best = f.ch - 3, n = -1;
+  for (const k in count) if (count[k] > n) { n = count[k]; best = +k; }
+  return best;
+}
+
+function auditArabic(f) {
+  const base = dominantBaseline(f);
+  const issues = { exit: [], entry: [], baseline: [], overflow: [], empty: [] };
+  for (const t of arabicTargets()) {
+    const g = t.slot;
+    if (g >= f.n) continue;
+    const w = f.adv[g];
+    const rows = cellInk(f, g);
+    const label = `${t.letter} ${FORM_NAMES[t.form]}`;
+    const any = rows.some((r) => r.some(Boolean));
+
+    if (!any) { issues.empty.push({ g, label }); continue; }
+    if ((t.form === 2 || t.form === 3) && !colHasInk(rows, 0, f.cw))     issues.exit.push({ g, label });
+    if ((t.form === 1 || t.form === 3) && !colHasInk(rows, w - 1, f.cw)) issues.entry.push({ g, label });
+
+    for (let x = w; x < f.cw; x++) if (colHasInk(rows, x, f.cw)) { issues.overflow.push({ g, label }); break; }
+
+    const low = lowestInkRow(rows, w, f.cw);
+    if (low >= 0 && low < base) issues.baseline.push({ g, label, low });
+  }
+  return { base, issues };
+}
+
+/* ===================== كلمات الاختبار ===================== */
+
+const TEST_WORDS = [
+  "باب", "بيت", "توت", "ثلج", "محمد", "العربية", "مباراة", "هدف",
+  "شمس", "سلسلة", "خزانة", "ورد", "زهرة", "جميل", "يذهب", "أين", "هذه",
+  "اللعبة", "صديقي", "طريق", "ظلام", "غرفة", "قوة", "كتاب", "نهاية",
+  "لا", "طلاب", "أهلا", "إلى", "الأولى", "كرة القدم", "فريق",
+];
+
+/* ===================== ملفات الخطّ ===================== */
+
+const FILE_TIPS = {
+  "FONT12.NFTR":  { label: "خطّ الحوار", tip: "أهمّ ملف — كلام الشخصيات وصناديق الحوار وأغلب القوائم. ابدأ منه، وهو الذي تراه في لقطات اللعبة." },
+  "FONT12N.NFTR": { label: "نسخة ثانية من خطّ الحوار", tip: "شقيق FONT12 بالحجم نفسه تماماً، وتستعمله اللعبة في شاشات أخرى. ارسم فيه الشيء نفسه وإلا ظهر الحرف سليماً في شاشة ومشوّهاً في أخرى." },
+  "FONT8.NFTR":   { label: "الخطّ الصغير", tip: "خليّته ٧×٨ لا ١١×١٢ — للقوائم الضيّقة وأسماء اللاعبين. رسمه أصعب لضيقه، ولا تنسخ إليه رسمات الخطّ الكبير كما هي." },
+  "FONT12T.NFTR": { label: "خطّ آخر", tip: "ليس من الخطوط الثلاثة التي تُحقن فيها العربية. يمكنك فتحه للاطّلاع، ولا داعي لتعديله." },
+  "RUBI8.NFTR":   { label: "خطّ الفوقي", tip: "صغير جداً ولا يحمل خانات عربية. لا تمسّه." },
+};
+
+/* ===================== الحالة ===================== */
+
+const PAL = [[0x12,0x14,0x1a],[0xff,0xff,0xff]];
+const PAL_NAMES = ["خلفية", "حبر"];
+
+const $ = (id) => document.getElementById(id);
+let FONTS = [], PRISTINE = [], cur = 0, slot = 0, color = 1, tool = "pen";
+let undoStack = [], redoStack = [];
+let filterMode = "arabic";
+let genSnapshot = null;
+let testWords = TEST_WORDS.slice();
+
+function toast(msg, kind) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "on " + (kind || "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.className = ""; }, 2600);
+}
+
+/* ===================== فتح الملفات ===================== */
+
+async function loadFiles(fileList) {
+  const added = [];
+  for (const file of fileList) {
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const f = decodeNftr(buf, file.name);
+      const i = FONTS.findIndex((x) => x.name === f.name);
+      if (i >= 0) { FONTS[i] = f; PRISTINE[i] = decodeNftr(buf, file.name); }
+      else { FONTS.push(f); PRISTINE.push(decodeNftr(buf, file.name)); }
+      added.push(file.name);
+    } catch (e) {
+      toast(`${file.name}: ${e.message}`, "bad");
+    }
+  }
+  if (!FONTS.length) return;
+
+  $("fileBadge").textContent = `${FONTS.length} ملف · ` + FONTS.map((f) => f.name).join(" · ");
+  $("btnSave").disabled = false;
+  $("btnVerify").disabled = false;
+  $("btnExport").disabled = false;
+
+  const sel = $("fontSel");
+  sel.innerHTML = "";
+  FONTS.forEach((f, i) => {
+    const o = document.createElement("option");
+    const info = FILE_TIPS[f.name] || { label: "خطّ" };
+    o.value = i; o.textContent = `${info.label} — ${f.name}`;
+    sel.appendChild(o);
+  });
+  cur = Math.max(0, FONTS.findIndex((f) => f.name.toUpperCase() === "FONT12.NFTR"));
+  sel.value = String(cur);
+  renderFiles();
+  showPage("files");
+  toast(`فُتح ${added.length} ملف`, "ok");
+}
+
+function showPage(which) {
+  const map = { start: "pageStart", files: "pageFiles", edit: "pageEdit", gen: "pageGen", test: "pageTest" };
+  for (const k in map) $(map[k]).classList.toggle("on", k === which);
+  $("tabFiles").classList.toggle("on", which === "files");
+  $("tabEdit").classList.toggle("on", which === "edit");
+  $("tabGen").classList.toggle("on", which === "gen");
+  $("tabTest").classList.toggle("on", which === "test");
+  if (which === "edit") openFont(cur);
+  if (which === "gen") drawGenPreview();
+  if (which === "test") renderTests();
+}
+
+function renderFiles() {
+  const body = $("filesBody");
+  body.innerHTML = "";
+  FONTS.forEach((f, i) => {
+    const info = FILE_TIPS[f.name] || { label: "خطّ", tip: "ملفّ NFTR." };
+    const arabic = f.name.toUpperCase().startsWith("FONT12") || f.name.toUpperCase() === "FONT8.NFTR";
+    const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.onclick = () => { cur = i; $("fontSel").value = String(i); showPage("edit"); };
+    tr.innerHTML =
+      `<td>${i}</td>` +
+      `<td class="name">${f.name}<br><span style="color:var(--dim);font-weight:400;font-size:13px">${info.label}</span></td>` +
+      `<td><span dir="ltr">${(f.raw.length / 1024).toFixed(1)}</span> ك.ب</td>` +
+      `<td dir="ltr">${f.n}</td>` +
+      `<td dir="ltr">${f.cw}×${f.ch}</td>` +
+      `<td><span class="pill ${arabic ? "edit" : "keep"}">${arabic ? "يحمل العربية" : "بلا عربية"}</span></td>` +
+      `<td class="tip">${info.tip}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+/* ===================== الشبكة ===================== */
+
+function glyphCanvas(fi, g) {
+  const f = FONTS[fi];
+  const c = document.createElement("canvas");
+  c.width = f.cw; c.height = f.ch;
+  const ctx = c.getContext("2d");
+  const im = ctx.createImageData(f.cw, f.ch);
+  let empty = true;
+  for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
+    const v = getPixel(f, g, x, y);
+    if (v) empty = false;
+    const [r, gg, b] = PAL[v];
+    const o = (y * f.cw + x) * 4;
+    im.data[o] = r; im.data[o + 1] = gg; im.data[o + 2] = b; im.data[o + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  return { canvas: c, empty };
+}
+
+function isModified(fi, g) {
+  const a = FONTS[fi], b = PRISTINE[fi];
+  if (!a || !b || g >= b.n) return false;
+  if (a.adv[g] !== b.adv[g] || a.gw[g] !== b.gw[g] || a.lb[g] !== b.lb[g]) return true;
+  for (let y = 0; y < a.ch; y++) for (let x = 0; x < a.cw; x++)
+    if (getPixel(a, g, x, y) !== getPixel(b, g, x, y)) return true;
+  return false;
+}
+
+function passesFilter(g, empty) {
+  if (filterMode === "all") return true;
+  if (filterMode === "empty") return empty;
+  if (filterMode === "used") return !empty;
+  if (filterMode === "arabic") return SLOT_SET.has(g);
+  if (filterMode === "mod") return isModified(cur, g);
+  return true;
+}
+
+const FILTERS = [
+  ["arabic", "العربية"], ["all", "الكل"], ["used", "المستعملة"],
+  ["empty", "الفارغة"], ["mod", "المعدَّلة"],
+];
+
+function renderFilters() {
+  const box = $("filters");
+  box.innerHTML = "";
+  for (const [id, label] of FILTERS) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.className = id === filterMode ? "on" : "";
+    b.onclick = () => { filterMode = id; renderFilters(); renderGrid(); };
+    box.appendChild(b);
+  }
+}
+
+function renderGrid() {
+  const f = FONTS[cur], grid = $("grid");
+  grid.innerHTML = "";
+  let shown = 0, mod = 0;
+  for (let g = 0; g < f.n; g++) {
+    const changed = isModified(cur, g);
+    if (changed) mod++;
+    const { canvas, empty } = glyphCanvas(cur, g);
+    if (!passesFilter(g, empty)) continue;
+    shown++;
+    const d = document.createElement("div");
+    d.className = "cell" + (g === slot ? " on" : "") + (empty ? " empty" : "") + (changed ? " mod" : "");
+    d.dataset.g = String(g);
+    d.appendChild(canvas);
+    d.title = `${describeSlot(g)} — الخانة ${g} — العرض ${f.adv[g]}` + (changed ? " — معدَّل" : "");
+    d.onclick = () => selectSlot(g);
+    grid.appendChild(d);
+  }
+  $("modCount").innerHTML = `المعدَّلة <span dir="ltr">${mod} / ${f.n}</span>` +
+    (filterMode === "all" ? "" : ` · معروض <span dir="ltr">${shown}</span>`);
+}
+
+function cellOf(g) { return $("grid").querySelector(`.cell[data-g="${g}"]`); }
+
+function refreshCell(g) {
+  const cell = cellOf(g);
+  if (!cell) return;
+  const { canvas, empty } = glyphCanvas(cur, g);
+  cell.innerHTML = ""; cell.appendChild(canvas);
+  cell.classList.toggle("empty", empty);
+  cell.classList.toggle("mod", isModified(cur, g));
+}
+
+/* ===================== المحرّر ===================== */
+
+function openFont(i) {
+  cur = i;
+  const f = FONTS[i];
+  slot = SLOT_SET.has(slot) && slot < f.n ? slot : AR_SLOTS[0];
+  $("width").max = String(f.cw);
+  $("gBase").min = String(Math.max(2, f.ch - 8));
+  $("gBase").max = String(f.ch - 1);
+  renderSwatches();
+  renderFilters();
+  renderGrid();
+  selectSlot(slot);
+  runAudit();
+}
+
+function renderSwatches() {
+  const box = $("swatches");
+  box.innerHTML = "";
+  PAL.forEach((c, v) => {
+    const d = document.createElement("div");
+    d.className = "sw" + (v === color ? " on" : "");
+    d.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+    d.innerHTML = `<span>${PAL_NAMES[v]}</span>`;
+    d.onclick = () => { color = v; renderSwatches(); };
+    box.appendChild(d);
+  });
+}
+
+function selectSlot(g) {
+  slot = g;
+  undoStack = []; redoStack = []; updateUndo();
+  document.querySelectorAll("#grid .cell").forEach((c) => c.classList.toggle("on", +c.dataset.g === g));
+  const f = FONTS[cur];
+  $("width").value = f.adv[g];
+  $("widthVal").textContent = f.adv[g];
+  const i = AR_SLOTS.indexOf(g);
+  $("slotInfo").innerHTML = `الخانة <span dir="ltr">${g}</span>` +
+    (i >= 0 ? ` · الرمز <span dir="ltr">0x${AR_SJIS[i].toString(16).toUpperCase()}</span>` : "");
+  $("editTitle").textContent = describeSlot(g);
+  renderForms(g);
+  drawPaint();
+  drawCompare();
+  drawPreview();
+}
+
+function describeSlot(g) {
+  const i = AR_SLOTS.indexOf(g);
+  if (i < 0) return `الخانة ${g}`;
+  const info = PRES.get(AR_CODEPOINTS[i]);
+  return info ? `${info.letter} — ${FORM_NAMES[info.form]}` : `الخانة ${g}`;
+}
+
+/**
+ * الأشكال الأربعة للحرف نفسه، جنباً إلى جنب.
+ *
+ * الحرف العربي لا يُحكم عليه منفرداً: «بـ» و«ـبـ» و«ـب» و«ب» أربع رسمات يجب
+ * أن تتّفق في الوزن والأساس وموضع النقطة، ورؤيتها متفرّقة عبر شبكةٍ واسعة هو
+ * ما يجعلها تختلف.
+ */
+function renderForms(g) {
+  const box = $("forms");
+  box.innerHTML = "";
+  const i = AR_SLOTS.indexOf(g);
+  if (i < 0) return;
+  const info = PRES.get(AR_CODEPOINTS[i]);
+  if (!info) return;
+
+  let quad;
+  if (info.lig) {
+    const l = LAM_ALEF[info.alef];
+    quad = [l[0], l[1], null, null];
+  } else {
+    const base = info.letter.codePointAt(0);
+    quad = AR_FORMS[base] || [null, null, null, null];
+  }
+
+  for (let k = 0; k < 4; k++) {
+    const cp = quad[k];
+    const target = cp !== null && cp !== undefined ? CP_TO_SLOT.get(cp) : undefined;
+    const d = document.createElement("div");
+    if (target === undefined) {
+      d.className = "fm none";
+      d.innerHTML = `<canvas width="8" height="8"></canvas><span>${FORM_NAMES[k]}</span>`;
+    } else {
+      d.className = "fm" + (target === g ? " on" : "");
+      d.appendChild(glyphCanvas(cur, target).canvas);
+      const sp = document.createElement("span");
+      sp.textContent = FORM_NAMES[k];
+      d.appendChild(sp);
+      d.onclick = () => { selectSlot(target); scrollToSlot(target); };
+    }
+    box.appendChild(d);
+  }
+}
+
+function drawCompare() {
+  if ($("compare").hidden) return;
+  const f0 = FONTS[cur];
+  for (const [id, f] of [["cmpOrig", PRISTINE[cur]], ["cmpNow", FONTS[cur]]]) {
+    const cv = $(id), ctx = cv.getContext("2d");
+    const S = cv.width / f0.cw;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (!f || slot >= f.n) continue;
+    for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
+      const [r, g2, bl] = PAL[getPixel(f, slot, x, y)];
+      ctx.fillStyle = `rgb(${r},${g2},${bl})`;
+      ctx.fillRect(x * S, y * S, S, S);
+    }
+    const w = f.adv[slot];
+    ctx.strokeStyle = "#ff4d4d"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(w * S, 0); ctx.lineTo(w * S, f.ch * S); ctx.stroke();
+  }
+}
+
+/** يرجع حرفاً واحداً إلى ما كان عليه عند الفتح، بلا مساس ببقية الخطّ. */
+function revertGlyph() {
+  const a = FONTS[cur], b = PRISTINE[cur];
+  if (!a || !b || slot >= b.n) return;
+  pushUndo();
+  for (let y = 0; y < a.ch; y++) for (let x = 0; x < a.cw; x++)
+    setPixel(a, slot, x, y, getPixel(b, slot, x, y));
+  a.lb[slot] = b.lb[slot]; a.gw[slot] = b.gw[slot]; a.adv[slot] = b.adv[slot];
+  $("width").value = a.adv[slot];
+  $("widthVal").textContent = a.adv[slot];
+  afterEdit();
+  toast("أُرجع الحرف إلى أصله", "ok");
+}
+
+function drawPaint() {
+  const cv = $("paint"), f = FONTS[cur];
+  const S = Math.floor(352 / Math.max(f.cw, f.ch));
+  cv.width = f.cw * S; cv.height = f.ch * S;
+  cv.style.maxWidth = (f.cw * S) + "px";
+  const ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
+    const [r, g2, b] = PAL[getPixel(f, slot, x, y)];
+    ctx.fillStyle = `rgb(${r},${g2},${b})`;
+    ctx.fillRect(x * S, y * S, S, S);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.lineWidth = 1;
+  for (let i = 1; i < f.cw; i++) { ctx.beginPath(); ctx.moveTo(i * S, 0); ctx.lineTo(i * S, cv.height); ctx.stroke(); }
+  for (let i = 1; i < f.ch; i++) { ctx.beginPath(); ctx.moveTo(0, i * S); ctx.lineTo(cv.width, i * S); ctx.stroke(); }
+
+  const base = dominantBaseline(f);
+  ctx.strokeStyle = "rgba(230,120,60,.55)"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, (base + 1) * S); ctx.lineTo(cv.width, (base + 1) * S); ctx.stroke();
+
+  const w = f.adv[slot];
+  ctx.strokeStyle = "#ff4d4d"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(w * S, 0); ctx.lineTo(w * S, cv.height); ctx.stroke();
+}
+
+function grabSnap() {
+  const f = FONTS[cur], s = [];
+  for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) s.push(getPixel(f, slot, x, y));
+  return s;
+}
+function applySnap(snap) {
+  const f = FONTS[cur];
+  let i = 0;
+  for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) setPixel(f, slot, x, y, snap[i++]);
+}
+function pushUndo() {
+  undoStack.push(grabSnap()); redoStack = [];
+  if (undoStack.length > 60) undoStack.shift();
+  updateUndo();
+}
+function updateUndo() { $("undo").disabled = !undoStack.length; $("redo").disabled = !redoStack.length; }
+
+function afterEdit() {
+  drawPaint(); refreshCell(slot); drawCompare(); renderForms(slot);
+  drawPreview(); runAudit(); refreshModCount();
+}
+
+function refreshModCount() {
+  const f = FONTS[cur];
+  let mod = 0;
+  for (let g = 0; g < f.n; g++) if (isModified(cur, g)) mod++;
+  $("modCount").innerHTML = `المعدَّلة <span dir="ltr">${mod} / ${f.n}</span>`;
+}
+
+function paintAt(ev) {
+  const cv = $("paint"), f = FONTS[cur], r = cv.getBoundingClientRect();
+  const x = Math.floor((ev.clientX - r.left) / (r.width / f.cw));
+  const y = Math.floor((ev.clientY - r.top) / (r.height / f.ch));
+  if (x < 0 || x >= f.cw || y < 0 || y >= f.ch) return;
+  if (tool === "pick") { color = getPixel(f, slot, x, y); renderSwatches(); return; }
+  if (tool === "fill") { pushUndo(); floodFill(x, y); afterEdit(); return; }
+  if (getPixel(f, slot, x, y) === color) return;
+  setPixel(f, slot, x, y, color);
+  afterEdit();
+}
+
+function floodFill(sx, sy) {
+  const f = FONTS[cur];
+  const target = getPixel(f, slot, sx, sy);
+  if (target === color) return;
+  const q = [[sx, sy]];
+  while (q.length) {
+    const [x, y] = q.pop();
+    if (x < 0 || x >= f.cw || y < 0 || y >= f.ch) continue;
+    if (getPixel(f, slot, x, y) !== target) continue;
+    setPixel(f, slot, x, y, color);
+    q.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+}
+
+function shift(dx, dy) {
+  pushUndo();
+  const f = FONTS[cur], old = grabSnap();
+  for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
+    const sx = x - dx, sy = y - dy;
+    const v = (sx < 0 || sx >= f.cw || sy < 0 || sy >= f.ch) ? 0 : old[sy * f.cw + sx];
+    setPixel(f, slot, x, y, v);
+  }
+  afterEdit();
+}
+
+/* ===================== المعاينة ===================== */
+
+/** يخطّط كلمةً: الشكل حسب الجيران، ثمّ العكس يميناً-يساراً كما يقع في اللعبة. */
+function layout(text, f) {
+  const shaped = shapeText(text);
+  const draw = [];
+  let x = 0;
+  for (const it of shaped) {
+    if (it.raw !== undefined) { x += it.raw === " " ? 4 : 5; continue; }
+    const g = CP_TO_SLOT.get(it.cp);
+    if (g === undefined || g >= f.n) continue;
+    draw.push({ g, x, w: f.adv[g] });
+    x += f.adv[g];
+  }
+  return { draw, total: x };
+}
+
+function drawPreview() {
+  const cv = $("preview"), f = FONTS[cur];
+  const W = cv.clientWidth || 380;
+  cv.width = W; cv.height = 40;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, 40);
+  const { draw, total } = layout($("prevText").value, f);
+  const SC = 2;
+  for (const d of draw) {
+    const dest = total - d.x - d.w;
+    for (let y = 0; y < f.ch; y++) for (let px = 0; px < d.w && px < f.cw; px++) {
+      if (!getPixel(f, d.g, px, y)) continue;
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect((dest + px) * SC + 6, y * SC + 6, SC, SC);
+    }
+  }
+}
+
+/* ===================== فحص الوصلات ===================== */
+
+function runAudit() {
+  const f = FONTS[cur], box = $("audit");
+  const { base, issues } = auditArabic(f);
+  box.innerHTML = "";
+  const total = Object.values(issues).reduce((n, a) => n + a.length, 0);
+
+  const head = document.createElement("div");
+  head.className = "sec";
+  head.innerHTML = total === 0
+    ? `<span class="g">✅ لا ملاحظة — خطّ الأساس الصفّ <span dir="ltr">${base}</span>.</span>`
+    : `<b>${total} ملاحظة</b> · خطّ الأساس الصفّ <span dir="ltr">${base}</span>`;
+  box.appendChild(head);
+
+  const SECTIONS = [
+    ["exit", "لا يصل بما بعده — لا حبر عند العمود ٠", "b"],
+    ["entry", "لا يصل بما قبله — لا حبر عند العمود الأخير", "b"],
+    ["baseline", "أساسه أعلى من أساس حروف اللعبة", "w"],
+    ["overflow", "حبر خلف خطّ العرض — يدهسه الحرف التالي", "w"],
+    ["empty", "خانة عربية فارغة", "w"],
+  ];
+  for (const [key, label, cls] of SECTIONS) {
+    const list = issues[key];
+    if (!list.length) continue;
+    const h = document.createElement("div");
+    h.className = "sec";
+    h.innerHTML = `${label} — <span dir="ltr">${list.length}</span>`;
+    box.appendChild(h);
+    for (const x of list) {
+      const d = document.createElement("div");
+      d.className = cls;
+      d.textContent = "• " + x.label + (x.low !== undefined ? ` (الصفّ ${x.low})` : "");
+      d.onclick = () => { selectSlot(x.g); scrollToSlot(x.g); };
+      box.appendChild(d);
+    }
+  }
+}
+
+function badSlots() {
+  const { issues } = auditArabic(FONTS[cur]);
+  const s = new Set();
+  for (const k of ["exit", "entry", "baseline", "overflow", "empty"])
+    for (const x of issues[k]) s.add(x.g);
+  return s;
+}
+
+/* ===================== اختبار الكلمات ===================== */
+
+function drawWord(word, f, scale) {
+  const { draw, total } = layout(word, f);
+  const cv = document.createElement("canvas");
+  cv.width = Math.max(8, total) * scale + 8;
+  cv.height = f.ch * scale + 6;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+  for (const d of draw) {
+    const dest = total - d.x - d.w;
+    for (let y = 0; y < f.ch; y++) for (let px = 0; px < d.w && px < f.cw; px++) {
+      if (!getPixel(f, d.g, px, y)) continue;
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(dest * scale + px * scale + 4, y * scale + 3, scale, scale);
+    }
+  }
+  return { canvas: cv, slots: draw.map((d) => d.g) };
+}
+
+function renderTests() {
+  if (!FONTS.length) return;
+  const f = FONTS[cur], box = $("testList"), bad = badSlots();
+  box.innerHTML = "";
+  let broken = 0;
+  for (const w of testWords) {
+    const { canvas, slots } = drawWord(w, f, 4);
+    const hit = slots.find((g) => bad.has(g));
+    if (hit !== undefined) broken++;
+    const d = document.createElement("div");
+    d.className = "tw" + (hit !== undefined ? " bad" : "");
+    canvas.onclick = () => {
+      if (hit === undefined) return;
+      showPage("edit"); selectSlot(hit); scrollToSlot(hit);
+    };
+    d.appendChild(canvas);
+    const b = document.createElement("b");
+    b.textContent = w;
+    d.appendChild(b);
+    box.appendChild(d);
+  }
+  $("testStat").innerHTML = broken
+    ? `<span dir="ltr">${broken}</span> كلمة فيها شكل معطوب من <span dir="ltr">${testWords.length}</span>`
+    : `كل الكلمات سليمة (<span dir="ltr">${testWords.length}</span>)`;
+}
+
+/* ===================== البحث ===================== */
+
+function doSearch() {
+  const q = $("search").value.trim();
+  if (!q) { $("searchHits").textContent = ""; return; }
+  const parts = q.split(/\s+/);
+  const letter = parts[0];
+  let k = parts[1] ? FORM_NAMES.indexOf(parts[1]) : 0;
+  if (k < 0) k = 0;
+
+  let cp = null;
+  const base = letter.codePointAt(0);
+  if (AR_FORMS[base]) cp = AR_FORMS[base][k];
+  else if (letter === "لا") cp = LAM_ALEF[0x0627][k === 1 ? 1 : 0];
+  if (cp === null || cp === undefined) { $("searchHits").textContent = `${letter} ليس له شكل ${FORM_NAMES[k]}`; return; }
+
+  const g = CP_TO_SLOT.get(cp);
+  if (g === undefined) { $("searchHits").textContent = `${letter} ${FORM_NAMES[k]} ليس له خانة في هذا الخطّ`; return; }
+  $("searchHits").innerHTML = `${letter} ${FORM_NAMES[k]} ← الخانة <span dir="ltr">${g}</span>`;
+  selectSlot(g);
+  scrollToSlot(g);
+}
+
+function scrollToSlot(g) {
+  const wrap = $("gridWrap"), cell = cellOf(g);
+  if (!wrap || !cell) return;
+  wrap.scrollTop = cell.offsetTop - wrap.clientHeight / 2 + cell.clientHeight / 2;
+}
+
+/* ===================== الحفظ والتحقّق والتصدير ===================== */
+
+function download(bytes, name) {
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/** يُثبت أنّ فكّ الترميز وإعادته يعيدان الملفّ بايتاً ببايت — قبل أيّ حفظ. */
+function verify() {
+  let ok = true, which = "";
+  for (let i = 0; i < FONTS.length; i++) {
+    const p = PRISTINE[i];
+    const back = encodeNftr(p);
+    if (back.length !== p.raw.length) { ok = false; which = p.name; break; }
+    for (let j = 0; j < back.length; j++) if (back[j] !== p.raw[j]) { ok = false; which = p.name; break; }
+    if (!ok) break;
+  }
+  toast(ok ? "✅ الدورة مطابقة بايتاً ببايت — الحفظ آمن"
+           : `❌ ${which}: الدورة غير مطابقة — لا تحفظ، وأبلغ عن هذا`, ok ? "ok" : "bad");
+}
+
+/** يحفظ الملفّات المعدَّلة وحدها — ما لم تمسّه لا داعي لتنزيله. */
+function save() {
+  let n = 0;
+  FONTS.forEach((f, i) => {
+    let changed = false;
+    for (let g = 0; g < f.n && !changed; g++) if (isModified(i, g)) changed = true;
+    if (!changed) return;
+    download(encodeNftr(f), f.name);
+    n++;
+  });
+  toast(n ? `حُفظ ${n} ملف` : "لا ملفّ معدَّل بعد", n ? "ok" : "bad");
+}
+
+function toB64(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+/** يعبّئ الخانات الـ٨٣ من خطٍّ مفتوح في بايتات خليّته. */
+function packSlots(f) {
+  const bits = f.cw * f.ch;
+  const out = new Uint8Array(AR_SLOTS.length * f.tb);
+  AR_SLOTS.forEach((g, i) => {
+    const off = i * f.tb;
+    for (let k = 0; k < bits; k++) if (f.pix[g * bits + k]) out[off + (k >> 3)] |= 1 << (7 - (k & 7));
+  });
+  return out;
+}
+
+const hex4 = (v) => "0x" + v.toString(16).toUpperCase().padStart(4, "0");
+
+/**
+ * يكتب ملفّ البيانات الذي تقرؤه الأداة عند بناء الروم.
+ *
+ * بلا هذا الزرّ يبقى رسمك حبيس ملفّ NFTR على قرصك: الأداة تحقن حروفها من
+ * ملفّ TypeScript لا من الخطّ، فلو حُفظ الـNFTR وحده لكُتب فوقه عند أوّل بناء.
+ */
+function exportTs() {
+  const big = FONTS.find((f) => f.cw === 11 && f.ch === 12);
+  const small = FONTS.find((f) => f.cw === 7 && f.ch === 8);
+  if (!big || !small) {
+    toast("افتح FONT12.NFTR و FONT8.NFTR معاً قبل التصدير", "bad");
+    return;
+  }
+  const lines = [
+    "/**",
+    " * Arabic glyphs for Inazuma Eleven's NFTR fonts.",
+    " *",
+    " * Generated by tools/inazuma-font-editor.html from hand-edited font files.",
+    ` * Source: ${big.name} (11x12) and ${small.name} (7x8).`,
+    " *",
+    " * The 83 slots are existing PAMC entries confirmed absent from this",
+    " * cartridge's own text, so only their bitmap and width are overwritten.",
+    " */",
+    `export const INAZUMA_ARABIC_CODEPOINTS: number[] = [${AR_CODEPOINTS.map(hex4).join(", ")}];`,
+    "",
+    "/** The exact 2-byte Shift-JIS code (as encodeInazumaArabicText emits it) for each slot, same order as INAZUMA_ARABIC_CODEPOINTS. */",
+    `export const INAZUMA_SHIFT_JIS_CODES: number[] = [${AR_SJIS.map(hex4).join(", ")}];`,
+    "",
+    "/** The PLGC glyph index each code already resolves to, same order. */",
+    `export const INAZUMA_GLYPH_INDICES: number[] = [${AR_SLOTS.join(", ")}];`,
+    "",
+    "/** 11x12, 1bpp, 17 bytes/glyph -- FONT12.NFTR and FONT12N.NFTR share this shape. */",
+    `export const INAZUMA_FONT12_GLYPHS_B64 = "${toB64(packSlots(big))}";`,
+    "",
+    `export const INAZUMA_FONT12_WIDTHS: number[] = [${AR_SLOTS.map((g) => big.adv[g]).join(", ")}];`,
+    "",
+    "/** 7x8, 1bpp, 7 bytes/glyph -- FONT8.NFTR. */",
+    `export const INAZUMA_FONT8_GLYPHS_B64 = "${toB64(packSlots(small))}";`,
+    "",
+    `export const INAZUMA_FONT8_WIDTHS: number[] = [${AR_SLOTS.map((g) => small.adv[g]).join(", ")}];`,
+    "",
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "inazuma-arabic-glyphs.ts";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("صُدِّر inazuma-arabic-glyphs.ts — ضعه في src/lib/inazuma/", "ok");
+}
+
+/* ===================== المولّد ===================== */
+
+function genOpts() {
+  return {
+    size: +$("gSize").value,
+    threshold: +$("gThr").value,
+    baseline: +$("gBase").value,
+    wedge: $("gWedge").checked,
+    wedgeMin: +$("gWMin").value,
+  };
+}
+
+function drawGenPreview() {
+  const cv = $("genPrev");
+  const W = cv.clientWidth || 460;
+  cv.width = W; cv.height = 150;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, 150);
+  if (!genFontReady || !FONTS.length) return;
+
+  const f = FONTS[cur], opt = genOpts();
+  const cache = new Map();
+  let made = 0, missing = 0;
+  for (const t of arabicTargets()) {
+    const gl = buildGlyph(t.letter, t.form, opt, f.cw, f.ch);
+    if (gl) { cache.set(t.slot, gl); made++; } else missing++;
+  }
+  $("genStat").innerHTML =
+    `تولّد <span dir="ltr">${made}</span> شكلاً` +
+    (missing ? ` · تعذّر <span dir="ltr">${missing}</span> (الخطّ لا يملكها)` : "") +
+    ` · من أصل <span dir="ltr">${AR_SLOTS.length}</span>`;
+  $("btnGenApply").disabled = made === 0;
+
+  const SC = 3;
+  let y = 6;
+  for (const line of ["مرحبا بكم", "هل انت جاهز للمباراة"]) {
+    const shaped = shapeText(line);
+    const draw = [];
+    let x = 0;
+    for (const it of shaped) {
+      if (it.raw !== undefined) { x += 4; continue; }
+      const g = CP_TO_SLOT.get(it.cp);
+      const gl = g === undefined ? null : cache.get(g);
+      if (!gl) continue;
+      draw.push({ gl, x });
+      x += gl.width;
+    }
+    for (const d of draw) {
+      const dest = x - d.x - d.gl.width;
+      for (let yy = 0; yy < f.ch; yy++) for (let xx = 0; xx < d.gl.width; xx++) {
+        if (!d.gl.cell[yy][xx]) continue;
+        ctx.fillStyle = "#222";
+        ctx.fillRect((dest + xx) * SC + 8, y + yy * SC, SC, SC);
+      }
+    }
+    y += f.ch * SC + 12;
+  }
+  ctx.strokeStyle = "rgba(230,120,60,.55)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, 6 + (opt.baseline + 1) * SC); ctx.lineTo(W, 6 + (opt.baseline + 1) * SC); ctx.stroke();
+}
+
+function applyGen() {
+  const f = FONTS[cur], opt = genOpts();
+  genSnapshot = { pix: f.pix.slice(), lb: f.lb.slice(), gw: f.gw.slice(), adv: f.adv.slice() };
+  let n = 0;
+  for (const t of arabicTargets()) {
+    if (t.slot >= f.n) continue;
+    const gl = buildGlyph(t.letter, t.form, opt, f.cw, f.ch);
+    if (!gl) continue;
+    for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++)
+      setPixel(f, t.slot, x, y, gl.cell[y][x]);
+    f.lb[t.slot] = 0;
+    f.gw[t.slot] = gl.width;
+    f.adv[t.slot] = gl.width;
+    n++;
+  }
+  $("btnGenUndo").disabled = false;
+  openFont(cur);
+  toast(`كُتب ${n} شكلاً عربياً في ${f.name}`, "ok");
+}
+
+function undoGen() {
+  if (!genSnapshot) return;
+  const f = FONTS[cur];
+  f.pix.set(genSnapshot.pix);
+  f.lb = genSnapshot.lb.slice();
+  f.gw = genSnapshot.gw.slice();
+  f.adv = genSnapshot.adv.slice();
+  genSnapshot = null;
+  $("btnGenUndo").disabled = true;
+  openFont(cur);
+  toast("أُلغي التوليد", "ok");
+}
+
+/* ===================== الربط ===================== */
+
+$("btnOpen").onclick = $("btnPick").onclick = () => $("file").click();
+$("file").onchange = (e) => { if (e.target.files.length) loadFiles([...e.target.files]); };
+$("btnSave").onclick = save;
+$("btnVerify").onclick = verify;
+$("btnExport").onclick = exportTs;
+$("tabFiles").onclick = () => FONTS.length && showPage("files");
+$("tabEdit").onclick = () => FONTS.length && showPage("edit");
+$("tabGen").onclick = () => FONTS.length && showPage("gen");
+$("tabTest").onclick = () => FONTS.length && showPage("test");
+$("fontSel").onchange = (e) => openFont(+e.target.value);
+
+const drop = $("drop");
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("hover"); };
+drop.ondragleave = () => drop.classList.remove("hover");
+drop.ondrop = (e) => {
+  e.preventDefault(); drop.classList.remove("hover");
+  if (e.dataTransfer.files.length) loadFiles([...e.dataTransfer.files]);
+};
+
+let painting = false;
+const cv = $("paint");
+cv.onpointerdown = (e) => {
+  painting = true; cv.setPointerCapture(e.pointerId);
+  if (tool === "pen") pushUndo();
+  paintAt(e);
+};
+cv.onpointermove = (e) => { if (painting && tool === "pen") paintAt(e); };
+cv.onpointerup = () => { painting = false; };
+
+$("tPen").onclick = () => setTool("pen");
+$("tFill").onclick = () => setTool("fill");
+$("tPick").onclick = () => setTool("pick");
+function setTool(t) {
+  tool = t;
+  $("tPen").classList.toggle("on", t === "pen");
+  $("tFill").classList.toggle("on", t === "fill");
+  $("tPick").classList.toggle("on", t === "pick");
+}
+
+$("undo").onclick = () => {
+  if (!undoStack.length) return;
+  redoStack.push(grabSnap());
+  applySnap(undoStack.pop());
+  updateUndo(); afterEdit();
+};
+$("redo").onclick = () => {
+  if (!redoStack.length) return;
+  undoStack.push(grabSnap());
+  applySnap(redoStack.pop());
+  updateUndo(); afterEdit();
+};
+
+$("width").oninput = (e) => {
+  const f = FONTS[cur];
+  f.adv[slot] = +e.target.value;
+  f.gw[slot] = +e.target.value;
+  $("widthVal").textContent = e.target.value;
+  drawPaint(); drawPreview(); refreshCell(slot);
+};
+$("shiftR").onclick = () => shift(1, 0);
+$("shiftL").onclick = () => shift(-1, 0);
+$("shiftU").onclick = () => shift(0, -1);
+$("shiftD").onclick = () => shift(0, 1);
+$("clear").onclick = () => {
+  pushUndo();
+  const f = FONTS[cur];
+  for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) setPixel(f, slot, x, y, 0);
+  afterEdit();
+};
+$("copyFrom").onclick = () => {
+  const s = prompt("انسخ من أي خانة؟ (رقم الخانة، أو مثل: ت وسطي)");
+  if (!s) return;
+  const f = FONTS[cur];
+  let src = -1;
+  if (/^\d+$/.test(s.trim())) src = +s.trim();
+  else {
+    const p = s.trim().split(/\s+/);
+    let k = p[1] ? FORM_NAMES.indexOf(p[1]) : 0;
+    if (k < 0) k = 0;
+    const base = p[0].codePointAt(0);
+    const cp = AR_FORMS[base] ? AR_FORMS[base][k] : null;
+    const g = cp === null || cp === undefined ? undefined : CP_TO_SLOT.get(cp);
+    if (g !== undefined) src = g;
+  }
+  if (src < 0 || src >= f.n) { toast("لم أفهم الخانة المطلوبة", "bad"); return; }
+  pushUndo();
+  for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) setPixel(f, slot, x, y, getPixel(f, src, x, y));
+  f.lb[slot] = f.lb[src]; f.gw[slot] = f.gw[src]; f.adv[slot] = f.adv[src];
+  $("width").value = f.adv[slot]; $("widthVal").textContent = f.adv[slot];
+  afterEdit();
+  toast(`نُسخ من ${describeSlot(src)}`, "ok");
+};
+
+$("search").oninput = doSearch;
+$("prevText").oninput = drawPreview;
+window.addEventListener("resize", () => { if (FONTS.length) drawPreview(); });
+
+$("btnCompare").onclick = () => {
+  const box = $("compare");
+  box.hidden = !box.hidden;
+  $("btnCompare").classList.toggle("on", !box.hidden);
+  drawCompare();
+};
+$("revertGlyph").onclick = revertGlyph;
+
+$("btnGenPick").onclick = () => $("genFile").click();
+$("genFile").onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    await loadGenFont(await file.arrayBuffer());
+    $("genBadge").textContent = file.name;
+    drawGenPreview();
+    toast("حُمّل الخطّ — اضبط ثمّ انظر", "ok");
+  } catch (err) {
+    toast("تعذّر قراءة الخطّ: " + err.message, "bad");
+  }
+};
+
+for (const [id, valId] of [["gSize", "gSizeV"], ["gThr", "gThrV"], ["gBase", "gBaseV"], ["gWMin", "gWMinV"]]) {
+  $(id).oninput = () => { $(valId).textContent = $(id).value; drawGenPreview(); };
+}
+$("gWedge").onchange = () => { $("gWedgeV").textContent = $("gWedge").checked ? "نعم" : "لا"; drawGenPreview(); };
+$("btnGenApply").onclick = applyGen;
+$("btnGenUndo").onclick = undoGen;
+
+$("btnTestAdd").onclick = () => {
+  const v = $("testAdd").value.trim();
+  if (!v) return;
+  testWords.push(v);
+  $("testAdd").value = "";
+  renderTests();
+};
+$("testAdd").onkeydown = (e) => { if (e.key === "Enter") $("btnTestAdd").click(); };
+
+</script>
+</body>
+</html>

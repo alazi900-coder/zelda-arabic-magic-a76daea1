@@ -116,6 +116,22 @@ export function inazumaArabicGlyphBytes(cp: number): string | null {
 }
 
 /**
+ * Arabic punctuation this font carries no glyph for, mapped to the Latin
+ * mark every English line already draws with -- no new font slot needed,
+ * since these pass straight through the `cp <= 0x7e` check below untouched.
+ * Reshaping and BiDi reversal don't touch punctuation, so this can run on
+ * either side of them; it runs here because this is the one place that
+ * already knows which codepoints this font can and can't draw.
+ */
+const PUNCTUATION_TO_LATIN: Record<string, string> = {
+  "؟": "?", // ؟
+  "،": ",", // ،
+  "؛": ";", // ؛
+  "٫": ".", // ٫ arabic decimal separator
+  "…": "...", // …
+};
+
+/**
  * `text` (already run through `reshapeArabic`) turned into the raw
  * Shift-JIS-shaped byte stream this ROM's strings are stored as. A
  * presentation form with no glyph yet is left as-is and reported, rather than
@@ -124,7 +140,8 @@ export function inazumaArabicGlyphBytes(cp: number): string | null {
 export function encodeInazumaArabicText(shapedText: string): { text: string; missing: string[] } {
   let out = "";
   const missing = new Set<string>();
-  for (const ch of shapedText) {
+  for (const raw of shapedText) {
+    const ch = PUNCTUATION_TO_LATIN[raw] ?? raw;
     const cp = ch.codePointAt(0)!;
     if (cp <= 0x7e) {
       out += ch;

@@ -107,11 +107,24 @@ describe("Inazuma Arabic text encoding", () => {
 
   it("passes ASCII through untouched and reports missing glyphs instead of dropping them", () => {
     const covered = String.fromCodePoint(INAZUMA_ARABIC_CODEPOINTS[0]);
-    const uncovered = "ﹰ"; // not in the current 83-glyph set
+    const uncovered = "ﹰ"; // not in the covered glyph set
     const { text, missing } = encodeInazumaArabicText(`Go! ${covered}${uncovered}`);
     expect(text.startsWith("Go! ")).toBe(true);
     expect(missing).toEqual([uncovered]);
     // the uncovered character is kept as-is, not silently dropped
     expect(text.includes(uncovered)).toBe(true);
+  });
+
+  it("latinizes Arabic punctuation the font has no glyph for, instead of refusing the line", () => {
+    const letter = String.fromCodePoint(INAZUMA_ARABIC_CODEPOINTS[0]);
+    const { text, missing } = encodeInazumaArabicText(`${letter}؟ ${letter}، ${letter}؛ ${letter}٫ ${letter}…`);
+    expect(missing).toEqual([]);
+    expect(text).toContain("?");
+    expect(text).toContain(",");
+    expect(text).toContain(";");
+    expect(text).toContain(".");
+    expect(text).toContain("...");
+    // none of the Arabic marks survive -- they were converted, not just tolerated
+    for (const mark of ["؟", "،", "؛", "٫", "…"]) expect(text.includes(mark)).toBe(false);
   });
 });

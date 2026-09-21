@@ -218,6 +218,7 @@ header h1 .ver{font-style:normal;font-size:12px;color:#1a1205;background:var(--a
   <section class="page" id="pageEdit">
     <div class="toolbar">
       <select id="fontSel"></select>
+      <button id="btnTwin" disabled>نسخ العربية إلى التوأم</button>
       <div class="sep"></div>
       <input id="search" placeholder="ابحث: ي نهائي" style="width:190px">
       <span class="badge" id="searchHits"></span>
@@ -934,9 +935,44 @@ function openFont(i) {
   $("gBase").max = String(f.ch - 1);
   renderSwatches();
   renderFilters();
+  refreshTwinButton();
   renderGrid();
   selectSlot(slot);
   runAudit();
+}
+
+/**
+ * الخطّ الآخر بالخليّة نفسها — FONT12N لـFONT12 والعكس.
+ *
+ * رسمهما واحد في ٥٢٤ حرفاً من ٥٣٥، والفرق بينهما العرض: FONT12N يجعل كل
+ * حرف ١١ بكسلاً ثابتاً. فالنسخ ينقل الرسم والعرض معاً — ولو نُقل الرسم وحده
+ * لتباعدت الحروف العربية على العرض الثابت وانقطع وصلها.
+ */
+function twinIndex(i) {
+  const f = FONTS[i];
+  return FONTS.findIndex((o, j) => j !== i && o.cw === f.cw && o.ch === f.ch);
+}
+
+function refreshTwinButton() {
+  const b = $("btnTwin"), j = twinIndex(cur);
+  b.disabled = j < 0;
+  b.textContent = j < 0 ? "لا خطّ توأم مفتوح" : `نسخ العربية إلى ${FONTS[j].name}`;
+}
+
+function copyArabicToTwin() {
+  const j = twinIndex(cur);
+  if (j < 0) return;
+  const src = FONTS[cur], dst = FONTS[j];
+  if (!confirm(`نسخ الحروف العربية الـ٨٣ — رسماً وعرضاً — من ${src.name} إلى ${dst.name}؟\n\nما في ${dst.name} من هذه الخانات الـ٨٣ يُستبدل، وبقية حروفه لا تُمسّ.`)) return;
+  let n = 0;
+  for (const g of AR_SLOTS) {
+    if (g >= src.n || g >= dst.n) continue;
+    for (let y = 0; y < src.ch; y++) for (let x = 0; x < src.cw; x++)
+      setPixel(dst, g, x, y, getPixel(src, g, x, y));
+    dst.lb[g] = src.lb[g]; dst.gw[g] = src.gw[g]; dst.adv[g] = src.adv[g];
+    n++;
+  }
+  toast(`نُسخ ${n} حرفاً إلى ${dst.name}`, "ok");
 }
 
 function renderSwatches() {
@@ -1514,6 +1550,7 @@ $("tabEdit").onclick = () => FONTS.length && showPage("edit");
 $("tabGen").onclick = () => FONTS.length && showPage("gen");
 $("tabTest").onclick = () => FONTS.length && showPage("test");
 $("fontSel").onchange = (e) => openFont(+e.target.value);
+$("btnTwin").onclick = copyArabicToTwin;
 
 const drop = $("drop");
 drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("hover"); };

@@ -144,7 +144,7 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     const known = new Set(INAZUMA_CATEGORIES.map((c) => c.id));
     for (const id of counts.keys()) expect(known).toContain(id);
     expect(counts.get("iz-dialogue")).toBeGreaterThan(20000);
-    expect(counts.get("iz-menu")).toBeGreaterThan(2000);
+    expect(counts.get("iz-match")).toBeGreaterThan(2000);
     expect(counts.get("iz-players")).toBeGreaterThan(1000);
     expect(counts.get("iz-other") ?? 0).toBe(0);
   });

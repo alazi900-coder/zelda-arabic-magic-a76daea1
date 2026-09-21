@@ -31,7 +31,7 @@ describe("Inazuma editor bridge", () => {
 describe("Inazuma categories", () => {
   it("files each source under its own category", () => {
     expect(categorizeInazumaEntry(entry("inazuma/evet"))).toBe("iz-dialogue");
-    expect(categorizeInazumaEntry(entry("inazuma/mcht"))).toBe("iz-menu");
+    expect(categorizeInazumaEntry(entry("inazuma/mcht"))).toBe("iz-match");
     expect(categorizeInazumaEntry(entry("inazuma/unitbase"))).toBe("iz-players");
   });
 

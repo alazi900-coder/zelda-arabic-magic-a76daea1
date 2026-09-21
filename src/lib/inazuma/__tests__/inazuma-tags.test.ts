@@ -49,4 +49,19 @@ describe("Inazuma translatable lines", () => {
   it("rejects an empty slot", () => {
     expect(isInazumaTranslatable("   ")).toBe(false);
   });
+
+  it("rejects a scene id the script addresses a cutscene by", () => {
+    expect(isInazumaTranslatable("mr01b04")).toBe(false);
+    expect(isInazumaTranslatable("mr02i27")).toBe(false);
+  });
+
+  it("rejects an engine switch", () => {
+    expect(isInazumaTranslatable("EncountON")).toBe(false);
+    expect(isInazumaTranslatable("HookTimerOFF")).toBe(false);
+  });
+
+  it("still keeps a player name, which is a single ASCII token too", () => {
+    expect(isInazumaTranslatable("Gouenji")).toBe(true);
+    expect(isInazumaTranslatable("Kabeyama")).toBe(true);
+  });
 });

@@ -52,21 +52,39 @@ export function validateInazumaTags(original: string, translation: string): Inaz
 }
 
 /**
+ * A scene id the script addresses a cutscene by -- `mr01b04`, `mr02i27`.
+ * 173 of them sit in the dialogue archive as ordinary records. Narrow on
+ * purpose: player names (Gouenji, Kabeyama) are single ASCII tokens too, and
+ * those a translator does want.
+ */
+const SCENE_ID_RE = /^[a-z]{1,3}\d{1,3}[a-z]\d{1,3}[a-z]?$/;
+
+/** Script switches, not text: only EncountON/OFF and HookTimerON/OFF exist. */
+const ENGINE_FLAG_RE = /^[A-Za-z]+(?:ON|OFF)$/;
+
+/**
  * Whether a line is one the player can actually read in this build.
  *
- * Roughly 40% of the cartridge's kind-1 records are untranslated Japanese
- * left in the European release -- half of them internal state dumps for the
- * scouting system ("PartyCount=%d", "[ScoutLv=91]"), the rest dialogue no
- * English script ever replaced. Neither is English to translate from, and
- * feeding either to a machine translator produces nonsense, so they are kept
- * out of the editor rather than shown as thousands of unreadable rows.
+ * Three kinds of record are kept out of the editor, all measured against the
+ * cartridge rather than guessed:
  *
- * The test is the raw Shift-JIS byte: this reader keeps one byte per
- * character, so any value at or above 0x80 is part of a Japanese pair.
+ *  • Untranslated Japanese -- roughly 40% of the kind-1 records in this
+ *    European release. Half are internal state dumps for the scouting system
+ *    ("PartyCount=%d", "[ScoutLv=91]"), the rest dialogue no English script
+ *    ever replaced. Neither is English to translate from, and a machine
+ *    translation pass over either produces nonsense. The test is the raw
+ *    Shift-JIS byte: this reader keeps one byte per character, so anything at
+ *    or above 0x80 is half of a Japanese pair.
+ *  • Scene ids (173) and engine switches (870), which the script reads and no
+ *    screen ever prints.
  */
 export function isInazumaTranslatable(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     if (text.charCodeAt(i) >= 0x80) return false;
   }
-  return text.trim().length > 0;
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return false;
+  if (SCENE_ID_RE.test(trimmed)) return false;
+  if (ENGINE_FLAG_RE.test(trimmed)) return false;
+  return true;
 }

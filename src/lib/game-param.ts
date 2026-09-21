@@ -16,6 +16,7 @@
  *   - `gtaiv/<table>`             → GTA IV GXT tables
  *   - `steinsgate/<file>.BIN`      → Steins;Gate PSP CriWare scripts
  *   - `crashlands/<section>/<n>`  → Crashlands
+ *   - `inazuma/<source>`          → Inazuma Eleven (NDS)
  *   - `ninthdawn/<section>/<n>`    → 9th Dawn Remake
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
@@ -35,7 +36,8 @@ export type GameParam =
   | "gtaiv"
   | "steinsgate"
   | "crashlands"
-  | "ninthdawn";
+  | "ninthdawn"
+  | "inazuma";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -53,6 +55,7 @@ export function resolveGameParam(
   if (f.startsWith("gtaiv/")) return "gtaiv";
   if (f.startsWith("steinsgate/")) return "steinsgate";
   if (f.startsWith("crashlands/")) return "crashlands";
+  if (f.startsWith("inazuma/")) return "inazuma";
   if (f.startsWith("ninthdawn/")) return "ninthdawn";
   return "xenoblade";
 }

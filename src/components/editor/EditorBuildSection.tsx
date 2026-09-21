@@ -14,6 +14,7 @@ import { buildDsPak, DS_BUFFER_KEY } from "@/lib/dragonsword/ds-editor-bridge";
 import { buildMetroidPrimePak, METROID_PRIME_BUFFER_KEY } from "@/lib/metroid-prime/mp-editor-bridge";
 import { buildPkmRom, PKM_BUFFER_KEY, PKM_GAME_KEY } from "@/lib/pokemon/pkm-editor-bridge";
 import { buildPlatRom, PLAT_BUFFER_KEY } from "@/lib/nds/plat-editor-bridge";
+import { buildInazumaRom, INAZUMA_BUFFER_KEY } from "@/lib/inazuma/inazuma-editor-bridge";
 import { ensurePlatTables } from "@/lib/nds/plat-charmap";
 import { ensureEmeraldSourceSlots } from "@/lib/gba/emerald-source-slots";
 import { buildKHBbsBbsReplacements, hasKHBbsBbsSources } from "@/lib/khbbs-editor-bridge";
@@ -55,6 +56,8 @@ interface EditorBuildSectionProps {
   isPokemon?: boolean;
   /** Pokémon Platinum (NDS): rebuilds the message archive inside the .nds. */
   isPlatinum?: boolean;
+  /** Inazuma Eleven (NDS): rewrites the script archives and patches the Arabic font. */
+  isInazuma?: boolean;
   /** Pokémon Essentials/RPG Maker XP: editing/exporting translations only until a safe Marshal writer exists. */
   isPokemonXp?: boolean;
   isDragonSword?: boolean;
@@ -149,6 +152,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isMetroidPrime = false,
   isPokemon = false,
   isPlatinum = false,
+  isInazuma = false,
   isPokemonXp = false,
   isDragonSword = false,
   isKingdomHearts = false,
@@ -191,6 +195,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [mpBuilding, setMpBuilding] = useState(false);
   const [pkmBuilding, setPkmBuilding] = useState(false);
   const [platBuilding, setPlatBuilding] = useState(false);
+  const [inazumaBuilding, setInazumaBuilding] = useState(false);
   const [dsBuilding, setDsBuilding] = useState(false);
   const [khbbsBuilding, setKHBbsBuilding] = useState(false);
   const [khbbsIsoBuilding, setKHBbsIsoBuilding] = useState(false);
@@ -408,6 +413,39 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
     } finally {
       setPlatBuilding(false);
+    }
+  };
+
+  const handleInazumaBuild = async () => {
+    setInazumaBuilding(true);
+    try {
+      const buf = await idbGet<ArrayBuffer>(INAZUMA_BUFFER_KEY);
+      if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة Inazuma Eleven");
+      const result = buildInazumaRom(new Uint8Array(buf), editor.state?.translations || {});
+      const { toast } = await import("@/hooks/use-toast");
+      const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "InazumaEleven_ar.nds";
+      a.click();
+      URL.revokeObjectURL(url);
+      const refused = result.brokenTags.length + result.tooLong.length;
+      toast({
+        title: refused > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : "✅ تم بناء روم معرّب",
+        description:
+          `${result.translatedLines} سطر مترجم` +
+          (result.brokenTags.length > 0 ? ` | ${result.brokenTags.length} سطراً سقط منه رمز تضعه اللعبة أو فيه حرف بلا خانة — أصلحه بالفحص العميق` : "") +
+          (result.tooLong.length > 0 ? ` | ${result.tooLong.length} وصفاً أطول من خانته (١٢٧ بايتاً) — اختصرها` : "") +
+          (result.missingGlyphs.length > 0 ? ` | حروف بلا خانة في الخط: ${result.missingGlyphs.join(" ")}` : "") +
+          (result.warnings.length > 0 ? ` | ${result.warnings[0]}` : ""),
+        variant: refused > 0 ? "destructive" : undefined,
+      });
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "خطأ في البناء", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setInazumaBuilding(false);
     }
   };
 
@@ -1272,6 +1310,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         ) : isPlatinum ? (
           <Button size="lg" onClick={handlePlatinumBuild} disabled={platBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يعيد بناء أرشيف رسائل اللعبة داخل الروم ثم ينزّله">
             {platBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم ‎.nds‎ معرّب وتنزيله
+          </Button>
+        ) : isInazuma ? (
+          <Button size="lg" onClick={handleInazumaBuild} disabled={inazumaBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يكتب الترجمات في أرشيفات اللعبة ويحقن الخط العربي ثم ينزّل الروم">
+            {inazumaBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم ‎.nds‎ معرّب وتنزيله
           </Button>
         ) : isRisen ? (
           <Button size="lg" onClick={handleRisenBuild} disabled={risenBuilding} className="flex-1 min-w-[200px] font-display font-bold">

@@ -196,6 +196,18 @@ const games = [
     arrowClass: "text-[hsl(265,70%,65%)]",
   },
   {
+    title: "Inazuma Eleven",
+    subtitle: "عرّب لعبة كرة القدم على النينتندو DS",
+    desc: "يقرأ حوارات القصة وقوائم النظام وأوصاف اللاعبين من أرشيفات الروم، ويحقن خطاً عربياً موصول الحروف في خطوط اللعبة الثلاثة، ثم يبني ‎.nds‎ معرّباً",
+    link: "/inazuma",
+    image: pokemonBg,
+    formats: [".nds", "NDS ROM"],
+    cardClass: "border-[hsl(200,80%,50%)]/30 hover:border-[hsl(200,80%,50%)]/60",
+    formatClass: "bg-[hsl(200,80%,50%)]/20 text-[hsl(200,85%,62%)] border-[hsl(200,80%,50%)]/30",
+    subtitleClass: "text-[hsl(200,85%,62%)]",
+    arrowClass: "text-[hsl(200,85%,62%)]",
+  },
+  {
     title: "شعار عنوان Phantom Hourglass",
     subtitle: "ركّب شعاراً عربياً على شاشة العنوان",
     desc: "ارفع صورة الشعار الذي صممته (أي مقاس) ونسخة الروم — يُحوَّل تلقائياً لصيغة نسيج اللعبة (256×128، NARC مضغوط بLZ10) ويُركَّب في روم جديد. لا رسم هنا، فقط تحويل الصيغة.",

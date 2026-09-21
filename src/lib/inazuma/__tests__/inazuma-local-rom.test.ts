@@ -4,6 +4,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readInazumaText, writeInazumaText } from "../inazuma-rom";
+import { extractInazumaEntries, buildInazumaRom } from "../inazuma-editor-bridge";
+import { findNdsFile } from "@/lib/nds/nds-rom";
 
 const path = process.env.INAZUMA_TEST_ROM;
 
@@ -79,5 +81,52 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     const result = writeInazumaText(original, edited);
     expect(result.changed).toBe(0);
     expect(result.warnings.join(" ")).toMatch(/unitbase\.STR/);
+  });
+
+  it("opens only the English lines in the editor and keeps the Japanese out", { timeout: 120_000 }, () => {
+    const { entries, japanese, total } = extractInazumaEntries(rom());
+    expect(entries.length).toBeGreaterThan(30000);
+    // roughly 40% of this release's records are untranslated Japanese
+    expect(japanese).toBeGreaterThan(20000);
+    expect(entries.length + japanese).toBeLessThanOrEqual(total);
+    expect(entries.every((e) => e.msbtFile.startsWith("inazuma/"))).toBe(true);
+    // every row the editor shows is readable English, not mojibake
+    expect(entries.every((e) => [...e.original].every((c) => c.charCodeAt(0) < 0x80))).toBe(true);
+    // a fixed-slot description carries the byte budget its slot actually has
+    const bio = entries.find((e) => e.original.startsWith("No one has more love"))!;
+    expect(bio.msbtFile).toBe("inazuma/unitbase");
+    expect(bio.maxBytes).toBe(127);
+  });
+
+  it("builds a ROM whose Arabic reads back as Arabic, and refuses the bad lines", { timeout: 240_000 }, () => {
+    const original = rom();
+    const { entries } = extractInazumaEntries(original);
+    const bio = entries.find((e) => e.original.startsWith("No one has more love"))!;
+    const withTag = entries.find((e) => e.original.includes("\\n") && e.msbtFile === "inazuma/evet")!;
+
+    const result = buildInazumaRom(original, {
+      [`${bio.msbtFile}:${bio.index}`]: "مرحبا بكم",
+      // drops the \n the original carries, so it must be refused
+      [`${withTag.msbtFile}:${withTag.index}`]: "سطر بلا فاصل",
+    });
+
+    expect(result.translatedLines).toBe(1);
+    expect(result.brokenTags).toContain(`${withTag.msbtFile}:${withTag.index}`);
+    expect(result.missingGlyphs).toEqual([]);
+
+    // the written line comes back as the font's own byte pairs, and the
+    // refused one is still its English self
+    const after = readInazumaText(result.rom);
+    const writtenBio = after.find((r) => r.source === "unitbase" && r.entry === bio.index)!;
+    expect(writtenBio.text).not.toBe(bio.original);
+    expect([...writtenBio.text].some((c) => c.charCodeAt(0) >= 0x80)).toBe(true);
+    expect(after.some((r) => r.text === withTag.original)).toBe(true);
+
+    // and the fonts really were patched: the glyph slots differ from stock
+    const stockFont = findNdsFile(original, "data_iz/font/FONT12.NFTR")!;
+    const builtFont = findNdsFile(result.rom, "data_iz/font/FONT12.NFTR")!;
+    expect(Array.from(result.rom.subarray(builtFont.start, builtFont.end))).not.toEqual(
+      Array.from(original.subarray(stockFont.start, stockFont.end))
+    );
   });
 });

@@ -60,6 +60,7 @@ const LumenTale = lazyWithIgnoredRef(() => import("./pages/LumenTale"));
 const GtaIV = lazyWithIgnoredRef(() => import("./pages/GtaIV"));
 const SteinsGatePSP = lazyWithIgnoredRef(() => import("./pages/SteinsGatePSP"));
 const Crashlands = lazyWithIgnoredRef(() => import("./pages/Crashlands"));
+const Inazuma = lazyWithIgnoredRef(() => import("./pages/Inazuma"));
 const NinthDawnRemake = lazyWithIgnoredRef(() => import("./pages/NinthDawnRemake"));
 const FireEmblem12 = lazyWithIgnoredRef(() => import("./pages/FireEmblem12"));
 const PhTranslate = lazyWithIgnoredRef(() => import("./pages/PhTranslate"));
@@ -122,6 +123,7 @@ const App = () => (
                 <Route path="/lumentale" element={<ErrorBoundary fallbackTitle="خطأ في أداة LumenTale"><LumenTale /></ErrorBoundary>} />
                 <Route path="/gta-iv" element={<ErrorBoundary fallbackTitle="خطأ في فاحص GTA IV"><GtaIV /></ErrorBoundary>} />
                 <Route path="/steins-gate-psp" element={<ErrorBoundary fallbackTitle="خطأ في أداة Steins;Gate PSP"><SteinsGatePSP /></ErrorBoundary>} />
+                <Route path="/inazuma" element={<ErrorBoundary fallbackTitle="خطأ في أداة Inazuma Eleven"><Inazuma /></ErrorBoundary>} />
                 <Route path="/crashlands" element={<ErrorBoundary fallbackTitle="خطأ في أداة Crashlands"><Crashlands /></ErrorBoundary>} />
                 <Route path="/ninth-dawn-remake" element={<ErrorBoundary fallbackTitle="خطأ في أداة 9th Dawn Remake"><NinthDawnRemake /></ErrorBoundary>} />
                 <Route path="/fire-emblem-12" element={<ErrorBoundary fallbackTitle="خطأ في فاحص Fire Emblem 12"><FireEmblem12 /></ErrorBoundary>} />

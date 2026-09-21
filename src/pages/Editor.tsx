@@ -28,6 +28,7 @@ import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
 import { PH_CATEGORIES } from "@/lib/ph/ph-categories";
 import { STEINSGATE_CATEGORIES } from "@/lib/steinsgate/steinsgate-categories";
 import { CRASHLANDS_CATEGORIES } from "@/lib/crashlands/crashlands-categories";
+import { INAZUMA_CATEGORIES } from "@/lib/inazuma/inazuma-categories";
 import { NINTHDAWN_CATEGORIES } from "@/lib/ninthdawn/ninthdawn-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
@@ -169,6 +170,7 @@ const Editor = () => {
   const isNinthDawnEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("ninthdawn/") ?? false;
   const isFe12Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("fe12/") ?? false;
   const isPlatinumEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
+  const isInazumaEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("inazuma/") ?? false;
   const isPhEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("ph/") ?? false;
 
   // LumenTale can contain an intentionally empty table. It has no editor rows,
@@ -245,10 +247,11 @@ const Editor = () => {
     if (isCrashlandsEntries) return CRASHLANDS_CATEGORIES;
     if (isNinthDawnEntries) return NINTHDAWN_CATEGORIES;
     if (isPlatinumEntries) return PLATINUM_CATEGORIES;
+    if (isInazumaEntries) return INAZUMA_CATEGORIES;
     if (isPhEntries) return PH_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isPlatinumEntries, isPhEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isPlatinumEntries, isInazumaEntries, isPhEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -756,6 +759,7 @@ const Editor = () => {
             isMetroidPrime={isMetroidPrimeEntries}
             isPokemon={isPokemonEntries}
             isPlatinum={isPlatinumEntries}
+            isInazuma={isInazumaEntries}
             isPokemonXp={isPokemonXpEntries}
             isDragonSword={isDragonSwordEntries}
             isKingdomHearts={isKingdomHeartsEntries}

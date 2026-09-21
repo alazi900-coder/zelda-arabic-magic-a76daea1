@@ -157,3 +157,34 @@ export function encodeInazumaArabicText(shapedText: string): { text: string; mis
   }
   return { text: out, missing: [...missing] };
 }
+
+/** One character this font has no slot for, and how often a line asked for it. */
+export interface InazumaUnsupportedCharacter {
+  character: string;
+  /** `U+0651` — what to show for a character that has nothing to draw. */
+  unicode: string;
+  count: number;
+}
+
+/**
+ * Every character `encodeInazumaArabicText` would refuse, counted rather
+ * than just named once.
+ *
+ * The encoder itself only needs to know *that* a line has one, to refuse the
+ * whole line rather than write it half-encoded. A translator needs to know
+ * *which* character, and how many lines it costs, to find and fix it --
+ * this is the same walk with that answer collected instead of thrown away.
+ */
+export function analyzeInazumaUnsupportedCharacters(shapedText: string): InazumaUnsupportedCharacter[] {
+  const found = new Map<string, InazumaUnsupportedCharacter>();
+  for (const raw of shapedText) {
+    const ch = PUNCTUATION_TO_LATIN[raw] ?? raw;
+    const cp = ch.codePointAt(0)!;
+    if (cp <= 0x7e || inazumaArabicGlyphBytes(cp) !== null) continue;
+    const previous = found.get(ch);
+    found.set(ch, previous
+      ? { ...previous, count: previous.count + 1 }
+      : { character: ch, unicode: `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`, count: 1 });
+  }
+  return [...found.values()];
+}

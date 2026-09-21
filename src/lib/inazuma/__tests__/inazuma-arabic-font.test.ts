@@ -4,6 +4,7 @@ import {
   patchInazumaFont8,
   inazumaArabicGlyphBytes,
   encodeInazumaArabicText,
+  analyzeInazumaUnsupportedCharacters,
 } from "../inazuma-arabic-font";
 import { INAZUMA_ARABIC_CODEPOINTS, INAZUMA_SHIFT_JIS_CODES, INAZUMA_GLYPH_INDICES } from "../inazuma-arabic-glyphs";
 
@@ -126,5 +127,16 @@ describe("Inazuma Arabic text encoding", () => {
     expect(text).toContain("...");
     // none of the Arabic marks survive -- they were converted, not just tolerated
     for (const mark of ["؟", "،", "؛", "٫", "…"]) expect(text.includes(mark)).toBe(false);
+  });
+
+  it("counts an unsupported character across the whole line instead of stopping at the first", () => {
+    const uncovered = "ﹰ"; // not in the covered glyph set
+    const result = analyzeInazumaUnsupportedCharacters(`${uncovered} ${uncovered} ${uncovered}`);
+    expect(result).toEqual([{ character: uncovered, unicode: "U+FE70", count: 3 }]);
+  });
+
+  it("reports nothing for text that already latinizes or has a glyph", () => {
+    const covered = String.fromCodePoint(INAZUMA_ARABIC_CODEPOINTS[0]);
+    expect(analyzeInazumaUnsupportedCharacters(`Go! ${covered}؟ ${covered}،`)).toEqual([]);
   });
 });

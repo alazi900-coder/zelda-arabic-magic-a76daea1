@@ -36,6 +36,7 @@ import type { KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 import type { GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
 import type { PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import type { SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
+import type { InazumaUnsupportedCharacter } from "@/lib/inazuma/inazuma-arabic-font";
 import type { SteinsGateReplacement } from "@/lib/steinsgate/steinsgate-normalize";
 
 type EditorSubset = Pick<
@@ -86,6 +87,10 @@ interface EditorBuildSectionProps {
   steinsGateUnsupportedCharacters?: SteinsGateUnsupportedCharacter[];
   steinsGateUnsupportedFilterActive?: boolean;
   onFilterSteinsGateUnsupported?: () => void;
+  inazumaUnsupportedCount?: number;
+  inazumaUnsupportedCharacters?: InazumaUnsupportedCharacter[];
+  inazumaUnsupportedFilterActive?: boolean;
+  onFilterInazumaUnsupported?: () => void;
   /** `U+XXXX` the list is narrowed to, or null for every unsupported row. */
   unsupportedCharFilter?: string | null;
   onPickUnsupportedChar?: (unicode: string) => void;
@@ -177,6 +182,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   steinsGateUnsupportedCharacters = [],
   steinsGateUnsupportedFilterActive = false,
   onFilterSteinsGateUnsupported,
+  inazumaUnsupportedCount = 0,
+  inazumaUnsupportedCharacters = [],
+  inazumaUnsupportedFilterActive = false,
+  onFilterInazumaUnsupported,
   unsupportedCharFilter = null,
   onPickUnsupportedChar,
   steinsGateNormalizeReplacements = [],
@@ -980,6 +989,55 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                     <Wand2 className="w-4 h-4" />
                     تحويل الحروف غير المدعومة ({steinsGateNormalizeRows})
                   </Button>
+                )}
+              </div>
+            )}
+            {isInazuma && (
+              <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inazumaUnsupportedFilterActive ? "secondary" : "outline"}
+                  onClick={onFilterInazumaUnsupported}
+                  disabled={!inazumaUnsupportedFilterActive && inazumaUnsupportedCount === 0}
+                  className="font-body gap-1 shrink-0"
+                  title={inazumaUnsupportedFilterActive
+                    ? "يلغي الفلتر ويعيد عرض كل النصوص في المحرر"
+                    : inazumaUnsupportedCount > 0
+                      ? "يعرض النصوص التي فيها حرف لا خانة له في خط اللعبة — البناء يرفض كل واحد منها"
+                      : "لا توجد حروف بلا خانة في الترجمات الحالية"}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  {inazumaUnsupportedFilterActive
+                    ? "إظهار كل النصوص"
+                    : `عرض الحروف بلا خانة (${inazumaUnsupportedCount})`}
+                </Button>
+                {inazumaUnsupportedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
+                    <span>الحروف:</span>
+                    {/* Each chip is a button: one character is usually one
+                        mistake repeated, and seeing only its rows is what makes
+                        it fixable. Pressing the active chip widens back out. */}
+                    {inazumaUnsupportedCharacters.map((item) => (
+                      <button
+                        key={item.unicode}
+                        type="button"
+                        onClick={() => onPickUnsupportedChar?.(item.unicode)}
+                        aria-pressed={unsupportedCharFilter === item.unicode}
+                        title={unsupportedCharFilter === item.unicode
+                          ? "يعود إلى عرض كل الحروف بلا خانة"
+                          : "يعرض النصوص التي فيها هذا الحرف وحده"}
+                        className={`rounded border px-1.5 py-0.5 font-mono text-foreground transition-colors ${
+                          unsupportedCharFilter === item.unicode
+                            ? "border-amber-500 bg-amber-500/25"
+                            : "border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/20"
+                        }`}
+                        dir="rtl"
+                      >
+                        {formatUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

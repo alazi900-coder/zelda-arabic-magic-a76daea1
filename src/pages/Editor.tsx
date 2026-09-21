@@ -852,12 +852,41 @@ const Editor = () => {
             steinsGateNormalizeReplacements={editor.steinsGateNormalizeReplacements}
             steinsGateNormalizeRows={editor.steinsGateNormalizeRows}
             onNormalizeSteinsGate={editor.applySteinsGateNormalize}
+            inazumaUnsupportedCount={editor.inazumaUnsupportedCount}
+            inazumaUnsupportedCharacters={editor.inazumaUnsupportedCharacters}
+            inazumaUnsupportedFilterActive={editor.filterStatus === "inazuma-unsupported"}
+            onFilterInazumaUnsupported={() => {
+              if (editor.filterStatus === "inazuma-unsupported") {
+                editor.setUnsupportedCharFilter(null);
+                editor.setFilterStatus("all");
+                return;
+              }
+              // Same reason the Platinum/Steins;Gate buttons clear these: a
+              // category or search still in place leaves the list empty
+              // while the report shows a count.
+              editor.setSearch("");
+              editor.setFilterFile("all");
+              editor.setFilterCategory([]);
+              editor.setFilterTechnical("all");
+              editor.setFilterTable("all");
+              editor.setFilterColumn("all");
+              editor.setFilterRisenOwner("");
+              editor.setFilterRisenItemPrefix("");
+              editor.setFilterRisenSection(null);
+              editor.setPinnedKeys(null);
+              editor.setIsSearchPinned(false);
+              editor.setUnsupportedCharFilter(null);
+              editor.setFilterStatus("inazuma-unsupported");
+            }}
             unsupportedCharFilter={editor.unsupportedCharFilter}
             onPickUnsupportedChar={(unicode) => {
               // Pressing the chip that is already on widens back to every
-              // unsupported row rather than emptying the list.
+              // unsupported row rather than emptying the list. Which status
+              // to switch to depends on which game is loaded -- the two
+              // reports never coexist, since only one game's entries are
+              // ever open at once.
               editor.setUnsupportedCharFilter(editor.unsupportedCharFilter === unicode ? null : unicode);
-              editor.setFilterStatus("steinsgate-unsupported");
+              editor.setFilterStatus(isInazumaEntries ? "inazuma-unsupported" : "steinsgate-unsupported");
             }}
             unprocessedArabicCount={unprocessedArabicCount}
             showBuildSection={showBuildSection}

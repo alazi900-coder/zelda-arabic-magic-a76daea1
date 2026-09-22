@@ -52,21 +52,73 @@ export function validateInazumaTags(original: string, translation: string): Inaz
 }
 
 /**
- * Repairs only an unambiguous trailing run of tokens the translation dropped
- * entirely.
+ * Puts back tokens the translation lost, in the place the original kept them.
  *
- * Most of these tokens sit inline inside a sentence -- "%s joined you!" --
- * where guessing a position would put the engine's substitution in the wrong
- * place. Only a clean run at the very end the translation lost outright is
- * safe to reattach; anything else (a token missing from the middle, or one
- * swapped for another) is left for the translator to look at.
+ * Two things a machine translator does to these tokens, measured on the
+ * cartridge's own lines:
+ *  • writes a lookalike character -- `٪s` (Arabic percent sign), `％s`
+ *    (fullwidth), `\ن`, `/n` -- which the engine does not read as a token.
+ *  • drops the token entirely, most often the `\n` between the words and the
+ *    run of tokens at either end of the line.
+ *
+ * Both are repaired by rebuilding the line as: the original's leading run of
+ * tokens, then the translated words with whatever tokens they still carry,
+ * then the original's trailing run. A token missing from the middle is only
+ * restored when every missing one is `\n`, by re-splitting the Arabic into
+ * the original's line count. Anything else -- a token swapped for another, an
+ * extra token, a `%1F`/`%2F` reorder -- is left for the translator, because
+ * guessing its slot puts the wrong value on screen.
  */
+function normalizeInazumaLookalikes(original: string, translation: string): string {
+  let text = translation.replace(/[٪％]/g, "%").replace(/\\\s*ن/g, "\\n");
+  if (original.includes("\\n") && !text.includes("\\n")) text = text.replace(/[/／∕]n/g, "\\n");
+  if (original.includes("\\f") && !text.includes("\\f")) text = text.replace(/[/／∕]f/g, "\\f");
+  // "% s" written with a stray space between the sign and its letter.
+  return text.replace(/%\s+([1-4]F|\d?d|s)/g, "%$1");
+}
+
+/** Splits a run of words into `count` lines of roughly equal length. */
+function splitIntoLines(text: string, count: number): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (count <= 1 || words.length < count) return [];
+  const per = Math.ceil(words.length / count);
+  const lines: string[] = [];
+  for (let i = 0; i < count; i++) lines.push(words.slice(i * per, (i + 1) * per).join(" "));
+  return lines.every((l) => l.length > 0) ? lines : [];
+}
+
+const LEAD_RUN_RE = /^((?:\\[nf]|%[1-4]F|%\d?d|%s)+)/;
+const TAIL_RUN_RE = /((?:\\[nf]|%[1-4]F|%\d?d|%s)+)\s*$/;
+
 export function repairInazumaTags(original: string, translation: string): { text: string; changed: boolean } {
-  if (validateInazumaTags(original, translation).valid) return { text: translation, changed: false };
-  const suffix = original.match(/((?:\\[nf]|%[1-4]F|%\d?d|%s)\s*)+$/)?.[0]?.trim();
-  if (!suffix || !translation.replace(INAZUMA_TAG_RE, "").trim()) return { text: translation, changed: false };
-  const candidate = `${translation.replace(INAZUMA_TAG_RE, "").trimEnd()}${suffix}`;
-  return validateInazumaTags(original, candidate).valid ? { text: candidate, changed: true } : { text: translation, changed: false };
+  const normalized = normalizeInazumaLookalikes(original, translation);
+  const done = (text: string) => ({ text, changed: text !== translation });
+  if (validateInazumaTags(original, normalized).valid) return done(normalized);
+
+  const expected = extractInazumaTags(original);
+  const lead = original.match(LEAD_RUN_RE)?.[1] ?? "";
+  const tail = original.match(TAIL_RUN_RE)?.[1] ?? "";
+  const leadTags = extractInazumaTags(lead);
+  const tailTags = extractInazumaTags(tail);
+  const interior = expected.slice(leadTags.length, expected.length - tailTags.length);
+
+  // The translated words, with the tokens that survived at either end removed.
+  let core = normalized.trim().replace(LEAD_RUN_RE, "").replace(TAIL_RUN_RE, "").trim();
+  if (!core) return { text: translation, changed: false };
+
+  const coreTags = extractInazumaTags(core);
+  if (coreTags.length !== interior.length || coreTags.some((t, i) => t !== interior[i])) {
+    // Only an all-`\n` interior can be rebuilt: it marks a line break, not a
+    // value slot, so re-splitting the words is safe.
+    const missingAllNewlines = coreTags.length === 0 && interior.length > 0 && interior.every((t) => t === "\\n");
+    if (!missingAllNewlines) return { text: translation, changed: false };
+    const lines = splitIntoLines(core, interior.length + 1);
+    if (lines.length === 0) return { text: translation, changed: false };
+    core = lines.join("\\n");
+  }
+
+  const candidate = `${lead}${core}${tail}`;
+  return validateInazumaTags(original, candidate).valid ? done(candidate) : { text: translation, changed: false };
 }
 
 /**

@@ -186,10 +186,13 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     const check = validateCrashlandsTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز Crashlands التقنية أو فواصل # مختلفة: ${check.reason}` });
   }
-  if (entry.msbtFile.startsWith("inazuma/") && trimmed) {
-    const check = validateInazumaTags(entry.original, translation);
-    if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز إينازوما التقنية مختلفة: ${check.reason}` });
-  }
+  // Inazuma Eleven writes its line breaks as the two characters `\` and `n`
+  // and its runtime slots as `%s`/`%1F`, none of which the bracket-based
+  // Xenoblade checks or the generic printf check below can read correctly:
+  // together they reported the same one missing token three times over and
+  // offered a fix that restored the English line. This cartridge gets its own
+  // short list of checks instead.
+  if (entry.msbtFile.startsWith("inazuma/")) return detectInazumaIssues(entry, translation, base);
   if (entry.msbtFile.startsWith("ninthdawn/") && trimmed) {
     const check = validateNinthDawnTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز 9th Dawn Remake التقنية مختلفة: ${check.reason}` });

@@ -113,9 +113,19 @@ describe("Inazuma line breaks", () => {
     expect(inazumaSlotsAgree("%1F beat %2F", "%2F هزم %1F")).toBe(false);
   });
 
-  it("still refuses to move a page break, which starts a whole new box", () => {
-    const result = repairInazumaTags("Ready?\\fLet's go, %1F!", "مستعد؟ هيا بنا يا %1F!");
-    expect(result.changed).toBe(false);
+  it("restores a page break as a page break, not as a line", () => {
+    // \\f ends the whole box: the words after it are what the player sees
+    // once they tap. It goes back in the original's place, in its own kind.
+    const original = "Ready?\\fLet's go, %1F!";
+    const result = repairInazumaTags(original, "مستعد؟ هيا بنا يا %1F!");
+    expect(result.text).toBe("مستعد؟\\fهيا بنا يا %1F!");
+    expect(validateInazumaTags(original, result.text).valid).toBe(true);
+  });
+
+  it("keeps each break its own kind when the original mixes them", () => {
+    const original = "One\\nTwo\\fThree";
+    const result = repairInazumaTags(original, "واحد اثنان ثلاثة");
+    expect(result.text).toBe("واحد\\nاثنان\\fثلاثة");
   });
 });
 

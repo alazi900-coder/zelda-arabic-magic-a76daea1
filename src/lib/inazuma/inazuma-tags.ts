@@ -99,7 +99,8 @@ function splitIntoLines(text: string, count: number): string[] {
 // A run of "\n" carries no gap, so nothing is added where nothing was there.
 /**
  * Whether both texts carry the same value slots in the same order -- so the
- * only thing that can differ between them is where the lines break.
+ * only thing that can differ between them is where the text is cut into
+ * lines and boxes.
  *
  * The editor asks this before calling a line a "damaged token": a translation
  * that ran two lines together has lost nothing the player can see a hole for,
@@ -113,19 +114,24 @@ export function inazumaSlotsAgree(original: string, translation: string): boolea
 }
 
 /**
- * The line break, written as the two characters `\` and `n`.
+ * The two breaks, each written as two plain characters: `\n` ends a line and
+ * `\f` ends a whole dialogue box, the player tapping to reach what follows.
  *
- * This is the one token in the cartridge that carries no value: it says where
- * a line ends and nothing more. Every other game in this editor writes that as
- * a real newline, which is why their splitters handle it and this one's did
- * not -- here it sits in the same regex as `%s`, so a translation that merged
- * two lines read as a missing *value*, and the repair refused to guess it. It
- * is safe to guess, though: the original says exactly where the cut goes.
+ * Neither carries a value -- they say where the text is cut and nothing more.
+ * Every other game in this editor writes a line end as a real newline, which
+ * is why their splitters handle it and this one's did not: here both sit in
+ * the same regex as `%s`, so a translation that ran two lines (or two boxes)
+ * together read as a missing *value*, and the repair refused to guess it.
+ * Both are safe to place, though, because the original says exactly where the
+ * cut goes and which kind of cut it is.
  */
-const NEWLINE_TOKEN = "\\n";
+const BREAK_RE = /\\[nf]/;
 
-/** Every token EXCEPT the line break: these hold a value and are never guessed. */
-const SLOT_RE = /\\f|%[1-4]F|%\d?d|%s/g;
+/** The same, with the token captured, so a split keeps which break it was. */
+const BREAK_SPLIT_RE = /(\\[nf])/;
+
+/** Every token EXCEPT the two breaks: these hold a value and are never guessed. */
+const SLOT_RE = /%[1-4]F|%\d?d|%s/g;
 
 /** Splits text into the prose between its value slots: [prose, slot, prose, ...]. */
 function splitOnSlots(text: string): { prose: string[]; slots: string[] } {
@@ -187,15 +193,17 @@ function shareWords(text: string, share: number[]): string[] | null {
 }
 
 /**
- * Puts back the line breaks a translation lost, cutting the Arabic where the
- * original cuts the English.
+ * Puts back the breaks a translation lost, cutting the Arabic where the
+ * original cuts the English, and keeping each cut's own kind: a `\n` stays a
+ * line inside the box, a `\f` stays the point the box ends and the next one
+ * begins.
  *
  * Only runs when every value slot is still present, in the original's order --
  * so the slots anchor the two texts to each other, and each break can be
  * placed in the same prose run it occupies in the original. Returns null when
  * the two do not line up, leaving the sentence untouched.
  */
-function restoreNewlines(original: string, translation: string): string | null {
+function restoreBreaks(original: string, translation: string): string | null {
   const o = splitOnSlots(original);
   const t = splitOnSlots(translation);
   if (o.slots.length !== t.slots.length) return null;
@@ -203,16 +211,33 @@ function restoreNewlines(original: string, translation: string): string | null {
 
   const rebuilt: string[] = [];
   for (let i = 0; i < o.prose.length; i++) {
-    const origLines = o.prose[i].split(NEWLINE_TOKEN);
-    if (origLines.length === 1) {
+    // Odd positions are the breaks themselves, even ones the prose between.
+    const parts = o.prose[i].split(new RegExp(BREAK_SPLIT_RE.source, "g"));
+    if (parts.length === 1) {
       rebuilt.push(t.prose[i]);
       continue;
     }
     // A break the translation already has here would be doubled by the rebuild.
-    if (t.prose[i].includes(NEWLINE_TOKEN)) return null;
-    const pieces = shareWords(t.prose[i], origLines.map((line) => wordsOf(line).length));
-    if (!pieces) return null;
-    rebuilt.push(pieces.join(NEWLINE_TOKEN));
+    if (BREAK_RE.test(t.prose[i])) return null;
+
+    const pieces = parts.filter((_, k) => k % 2 === 0);
+    const breaks = parts.filter((_, k) => k % 2 === 1);
+    const shared = shareWords(t.prose[i], pieces.map((piece) => wordsOf(piece).length));
+    if (!shared) return null;
+
+    let joined = shared[0];
+    for (let k = 0; k < breaks.length; k++) joined += breaks[k] + shared[k + 1];
+
+    // Sharing the words out rebuilds them separated by single spaces, which
+    // drops whatever sat against the slot on either side -- and a slot with no
+    // space before it prints the name glued to the word. The space is put back
+    // only where a slot actually touches text: against a break there was never
+    // one to begin with, and adding it would push the break off the word.
+    const lead = i > 0 && shared[0] !== "" ? (t.prose[i].match(/^[ \t]*/)?.[0] ?? "") : "";
+    const trail = i < t.slots.length && shared[shared.length - 1] !== ""
+      ? (t.prose[i].match(/[ \t]*$/)?.[0] ?? "")
+      : "";
+    rebuilt.push(lead + joined + trail);
   }
 
   let out = rebuilt[0];
@@ -228,10 +253,10 @@ export function repairInazumaTags(original: string, translation: string): { text
   const done = (text: string) => ({ text, changed: text !== translation });
   if (validateInazumaTags(original, normalized).valid) return done(normalized);
 
-  // Losing a line break is a splitting problem, not a token one: every value
-  // slot is still there, the words were just run onto one line. Put the breaks
-  // back where the original puts them before falling back to the token repair.
-  const split = restoreNewlines(original, normalized);
+  // Losing a break is a splitting problem, not a token one: every value slot is
+  // still there, the words were just run together. Put the breaks back where
+  // the original puts them before falling back to the token repair.
+  const split = restoreBreaks(original, normalized);
   if (split !== null && validateInazumaTags(original, split).valid) return done(split);
 
   const expected = extractInazumaTags(original);

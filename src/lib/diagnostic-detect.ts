@@ -206,10 +206,11 @@ function detectInazumaIssues(
 
   const check = validateInazumaTags(entry.original, trimmed);
   if (!check.valid) {
-    // Are the two token lists identical once the line breaks are set aside?
-    // If so the only thing that moved is the number of lines, which is a
-    // splitting problem, not a token problem.
-    const withoutBreaks = (tags: string[]) => tags.filter((t) => t !== "\\n");
+    // Are the two token lists identical once the breaks are set aside? If so
+    // the only thing that moved is where the text is cut -- `\n` into lines,
+    // `\f` into dialogue boxes -- which is a splitting problem, not a token
+    // problem, and the repair can place both from the original.
+    const withoutBreaks = (tags: string[]) => tags.filter((t) => t !== "\\n" && t !== "\\f");
     const origSlots = withoutBreaks(check.expected);
     const transSlots = withoutBreaks(check.actual);
     const slotsMatch = origSlots.length === transSlots.length && origSlots.every((t, i) => t === transSlots[i]);

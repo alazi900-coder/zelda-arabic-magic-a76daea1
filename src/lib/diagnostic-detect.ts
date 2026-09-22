@@ -172,91 +172,6 @@ function countUnescapedBrackets(text: string): { open: number; close: number } {
 // Detection (pure)
 // ───────────────────────────────────────────────────────────────────────────
 
-/**
- * Inazuma Eleven's own short list of checks.
- *
- * This cartridge writes its line breaks as the two characters `\` and `n` and
- * its runtime slots as `%s` / `%1F`. None of the checks below this point can
- * read either: the bracket-based Xenoblade guard and the generic printf guard
- * both saw the same one missing token and reported it twice over, and the fix
- * button registered for their category restores the English line. So these
- * rows get their own detection and return early.
- *
- * The important distinction is between a missing `\n` and a missing value
- * slot. A `\n` is a line break: every other game in this editor reports that
- * as `under_split` ("يحتاج تقسيم") and splits the Arabic across the original's
- * line count. Only when a `%s`-style slot is missing, added, or reordered is
- * there anything a translator has to decide, and that is what
- * `inazuma_tag_mismatch` is for.
- */
-function detectInazumaIssues(
-  entry: DetectableEntry,
-  translation: string,
-  base: { key: string; label: string; original: string; translation: string },
-): DiagnosticIssue[] {
-  const issues: DiagnosticIssue[] = [];
-  const trimmed = translation.trim();
-
-  if (translation.length > 0 && trimmed.length === 0) {
-    issues.push({ ...base, severity: "warning", category: "empty_translation",
-      message: "الترجمة تحتوي مسافات أو أحرف غير مرئية فقط" });
-    return issues;
-  }
-  if (!trimmed) return issues;
-
-  const check = validateInazumaTags(entry.original, trimmed);
-  if (!check.valid) {
-    // Are the two token lists identical once the breaks are set aside? If so
-    // the only thing that moved is where the text is cut -- `\n` into lines,
-    // `\f` into dialogue boxes -- which is a splitting problem, not a token
-    // problem, and the repair can place both from the original.
-    const withoutBreaks = (tags: string[]) => tags.filter((t) => t !== "\\n" && t !== "\\f");
-    const origSlots = withoutBreaks(check.expected);
-    const transSlots = withoutBreaks(check.actual);
-    const slotsMatch = origSlots.length === transSlots.length && origSlots.every((t, i) => t === transSlots[i]);
-    const origLines = check.expected.length - origSlots.length + 1;
-    const transLines = check.actual.length - transSlots.length + 1;
-
-    if (slotsMatch && transLines < origLines) {
-      issues.push({ ...base, severity: "warning", category: "under_split",
-        message: `${origLines} سطر في الأصل لكن الترجمة ${transLines} فقط — يحتاج تقسيم` });
-    } else if (slotsMatch && transLines > origLines) {
-      issues.push({ ...base, severity: "warning", category: "excessive_lines",
-        message: `${transLines} سطر مقابل ${origLines} في الأصل — زيادة ${transLines - origLines}` });
-    } else {
-      issues.push({ ...base, severity: "critical", category: "inazuma_tag_mismatch",
-        message: `رموز إينازوما التقنية مختلفة: الأصل ${check.expected.join(" ") || "بلا رموز"} والترجمة ${check.actual.join(" ") || "بلا رموز"}` });
-    }
-  }
-
-  // The .STR tables give every entry a fixed slot; going past it overwrites
-  // the next string rather than being refused, so this stays a hard error.
-  if (entry.maxBytes > 0) {
-    const byteLen = measureEntryBytes(entry.msbtFile, trimmed);
-    if (byteLen > entry.maxBytes) {
-      issues.push({ ...base, severity: "critical", category: "byte_overflow",
-        message: `${byteLen} بايت من حد أقصى ${entry.maxBytes} (تجاوز ${byteLen - entry.maxBytes})` });
-    }
-  }
-
-  if (RE_NULL_CHAR.test(trimmed)) {
-    issues.push({ ...base, severity: "critical", category: "null_char",
-      message: "يحتوي رمز NULL (\\0) — يقطع النص ويسبب تجمّد المحرك" });
-  }
-
-  if ((RE_PRESENTATION_B.test(trimmed) || RE_PRESENTATION_A.test(trimmed)) && RE_ARABIC_STANDARD.test(trimmed)) {
-    issues.push({ ...base, severity: "critical", category: "double_shaped",
-      message: "النص يحتوي حروف عربية عادية ومعالجة في نفس الوقت — معالجة مزدوجة" });
-  }
-
-  if (trimmed === entry.original.trim() && trimmed.length > 6) {
-    issues.push({ ...base, severity: "info", category: "identical_to_original",
-      message: "النص مطابق للأصل الإنجليزي (لم يُترجم)" });
-  }
-
-  return issues;
-}
-
 export function detectIssues(entry: DetectableEntry, translation: string): DiagnosticIssue[] {
   const key = `${entry.msbtFile}:${entry.index}`;
   const trimmed = translation.trim();
@@ -271,13 +186,20 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     const check = validateCrashlandsTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز Crashlands التقنية أو فواصل # مختلفة: ${check.reason}` });
   }
-  // Inazuma Eleven writes its line breaks as the two characters `\` and `n`
-  // and its runtime slots as `%s`/`%1F`, none of which the bracket-based
-  // Xenoblade checks or the generic printf check below can read correctly:
-  // together they reported the same one missing token three times over and
-  // offered a fix that restored the English line. This cartridge gets its own
-  // short list of checks instead.
-  if (entry.msbtFile.startsWith("inazuma/")) return detectInazumaIssues(entry, translation, base);
+  // Inazuma Eleven stores its line break as a real newline in the editor --
+  // like every other game here -- so the shared line-count checks below
+  // (newline_mismatch / excessive_lines / under_split) already read it
+  // correctly with no special case. Only `%s`/`%1F`/`\f` are this cartridge's
+  // own tokens, which the bracket-based Xenoblade checks and the generic
+  // printf check cannot read, so those get one check of their own; nothing
+  // returns early, so every shared check below still runs.
+  if (entry.msbtFile.startsWith("inazuma/") && trimmed) {
+    const check = validateInazumaTags(entry.original, translation);
+    if (!check.valid) {
+      issues.push({ ...base, severity: "critical", category: "inazuma_tag_mismatch",
+        message: `رموز إينازوما التقنية مختلفة: الأصل ${check.expected.join(" ") || "بلا رموز"} والترجمة ${check.actual.join(" ") || "بلا رموز"}` });
+    }
+  }
   if (entry.msbtFile.startsWith("ninthdawn/") && trimmed) {
     const check = validateNinthDawnTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز 9th Dawn Remake التقنية مختلفة: ${check.reason}` });

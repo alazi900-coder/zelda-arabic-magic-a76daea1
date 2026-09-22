@@ -6,9 +6,20 @@
  * hands back a playable `.nds`.
  *
  * Two things are refused rather than written half-right:
- *  • a line that lost one of the engine's own tokens (`\n`, `\f`, `%1F`, `%d`,
- *    `%s`) -- the missing one is a blank or a run-on the player cannot explain
+ *  • a line that lost one of the engine's own VALUE tokens (`\f`, `%1F`, `%d`,
+ *    `%s`) -- the missing one is a blank or a wrong box the player cannot
+ *    explain. Losing a `\n` is not refused: it is a wrapping problem, the
+ *    same as in every other game here, not a hole in the sentence.
  *  • a fixed-slot description longer than the 128 bytes its slot holds
+ *
+ * The engine stores its line break as the two characters `\` and `n`, not as
+ * a real newline byte -- but the editor converts at exactly this module's
+ * boundary (`extractInazumaEntries` in, `buildInazumaRom` out) so every tool
+ * elsewhere in the editor (line counting, the line-rebalance button, the
+ * deep-scan split warning) sees an ordinary real newline, the same as it
+ * would for any other game. `\f`, the page break, is left as its literal two
+ * characters throughout: it marks a whole new dialogue box, not a wrap point,
+ * so the shared line tools must not treat it as one.
  *
  * The editor holds ordinary logical Arabic. Shaping into the presentation
  * forms the patched font carries, and reversing into the visual order this
@@ -49,6 +60,16 @@ function preview(text: string): string {
   return t.length > 60 ? `${t.slice(0, 57)}…` : t;
 }
 
+/** ROM's literal `\n` (the two characters `\` and `n`) → a real editor newline. */
+function toEditorText(text: string): string {
+  return text.replace(/\\n/g, "\n");
+}
+
+/** Reverses `toEditorText`: a real newline → the ROM's literal `\n`. */
+function toRomText(text: string): string {
+  return text.replace(/\n/g, "\\n");
+}
+
 export interface InazumaExtractResult {
   entries: ExtractedEntry[];
   /** Lines left out because they are untranslated Japanese, not English. */
@@ -70,7 +91,7 @@ export function extractInazumaEntries(rom: Uint8Array): InazumaExtractResult {
       msbtFile: entryFile(row),
       index: entryIndex(row),
       label: preview(row.text),
-      original: row.text,
+      original: toEditorText(row.text),
       // A fixed slot is bounded by its own 128 bytes; a packed line is not,
       // because its archive is rebuilt around whatever it now holds.
       ...(row.limit !== undefined ? { maxBytes: row.limit - 1 } : {}),
@@ -84,7 +105,11 @@ export function extractInazumaEntries(rom: Uint8Array): InazumaExtractResult {
  * Carries saved translations onto a freshly read set of entries.
  *
  * A line's identity is its file and its index, and neither moves between
- * reads of the same ROM, so re-opening a cartridge never drops work.
+ * reads of the same ROM, so re-opening a cartridge never drops work. A
+ * translation saved before the editor held this cartridge's line break as a
+ * real newline -- typed by hand, or inserted by the old repair button -- may
+ * still carry the literal `\n`; `toEditorText` is a no-op on anything that
+ * does not, so this is safe to run over every saved line unconditionally.
  */
 export function restoreInazumaTranslations(
   entries: ExtractedEntry[],
@@ -93,7 +118,7 @@ export function restoreInazumaTranslations(
   const out: Record<string, string> = {};
   for (const e of entries) {
     const key = `${e.msbtFile}:${e.index}`;
-    if (saved[key] !== undefined) out[key] = saved[key];
+    if (saved[key] !== undefined) out[key] = toEditorText(saved[key]);
   }
   return out;
 }
@@ -136,12 +161,20 @@ export function buildInazumaRom(
 
   const edited = rows.map((row) => {
     const key = `${entryFile(row)}:${entryIndex(row)}`;
-    const translation = translations[key];
-    if (!translation || !translation.trim()) return row;
+    const editorTranslation = translations[key];
+    if (!editorTranslation || !editorTranslation.trim()) return row;
     if (!isInazumaTranslatable(row.text)) return row;
 
+    // The editor holds this line break as a real newline; the cartridge wants
+    // its own literal `\` + `n`, which is what `row.text` (read fresh from the
+    // ROM, never converted) is about to be checked and written against.
+    const translation = toRomText(editorTranslation);
+
     // A token the engine fills in is not decoration: losing one leaves a hole
-    // in the sentence with nothing on screen to explain it.
+    // in the sentence with nothing on screen to explain it. A missing `\n` is
+    // not one of these any more -- it is a wrapping problem the same as in
+    // every other game, not refused here, just reported to the translator by
+    // the deep-scan panel.
     const check = validateInazumaTags(row.text, translation);
     if (!check.valid) {
       brokenTags.push(key);

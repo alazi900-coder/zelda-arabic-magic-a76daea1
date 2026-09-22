@@ -1,5 +1,3 @@
-import { splitChunkEvenly } from "@/lib/balance-lines";
-
 /**
  * The things in an Inazuma Eleven string that are not words.
  *
@@ -7,10 +5,20 @@ import { splitChunkEvenly } from "@/lib/balance-lines";
  * from evet, mcht, unitbase.STR, item.STR, command.STR, games.STR,
  * rpgtitle.STR, team.pkb and fmt.pkb) rather than guessed:
  *
- *  • `\n` -- 30,051 times. A line break, stored as the two characters `\`
- *    and `n`, not as a 0x0A byte. Losing one runs two lines together.
+ *  • `\n` -- 30,051 times. A line break. The cartridge stores it as the two
+ *    characters `\` and `n`, not as a 0x0A byte, but the editor converts
+ *    between the two at its boundary (`inazuma-editor-bridge.ts`) so a real
+ *    newline is what every tool in this editor -- line counting, the
+ *    line-rebalance button, the deep-scan split warning -- ever sees, the
+ *    same as every other game. It is deliberately NOT one of this module's
+ *    tracked tokens any more: a missing one is a splitting problem, not a
+ *    broken token, and guessing its place is exactly what the shared
+ *    line-balancer already does correctly for every other game.
  *  • `\f` -- 2,432 times. A page break: everything after it is a second box
- *    the player taps to reach. Losing one pushes that text off the bottom.
+ *    the player taps to reach. It stays a tracked token here, unlike `\n`,
+ *    because losing one is not a wrapping problem the line-balancer
+ *    understands -- it is a decision about where one box ends and the next
+ *    begins.
  *  • `%1F` `%2F` `%3F` `%4F` -- 11,011 times between them. Slots the engine
  *    fills at runtime with a name or a noun.
  *  • `%d` `%2d` `%4d` and `%s` -- 3,878 times. printf-style number and string
@@ -19,7 +27,7 @@ import { splitChunkEvenly } from "@/lib/balance-lines";
  * A bare `%` is left alone: "30% cheaper than shops" is a sentence, and only
  * three strings in the whole cartridge use one that way.
  */
-export const INAZUMA_TAG_RE = /\\[nf]|%[1-4]F|%\d?d|%s/g;
+export const INAZUMA_TAG_RE = /\\f|%[1-4]F|%\d?d|%s/g;
 
 export function extractInazumaTags(text: string): string[] {
   return text.match(INAZUMA_TAG_RE) ?? [];
@@ -49,7 +57,7 @@ export function validateInazumaTags(original: string, translation: string): Inaz
     actual,
     reason: valid
       ? undefined
-      : `يجب إبقاء رموز إينازوما بالعدد والترتيب نفسيهما: ${expected.join(" ") || "لا توجد"} (‎\\n سطر جديد، ‎\\f صفحة جديدة، و‎%1F/%d/%s قيم تضعها اللعبة).`,
+      : `يجب إبقاء رموز إينازوما بالعدد والترتيب نفسيهما: ${expected.join(" ") || "لا توجد"} (‎\\f صفحة جديدة، و‎%1F/%d/%s قيم تضعها اللعبة؛ فاصل السطر ‎\\n نفسه يُعامَل كسطر محرر عادي).`,
   };
 }
 
@@ -59,38 +67,21 @@ export function validateInazumaTags(original: string, translation: string): Inaz
  * Two things a machine translator does to these tokens, measured on the
  * cartridge's own lines:
  *  • writes a lookalike character -- `٪s` (Arabic percent sign), `％s`
- *    (fullwidth), `\ن`, `/n` -- which the engine does not read as a token.
- *  • drops the token entirely, most often the `\n` between the words and the
- *    run of tokens at either end of the line.
+ *    (fullwidth) -- which the engine does not read as a token.
+ *  • drops the token entirely, most often the run of tokens at either end
+ *    of the line.
  *
- * Both are repaired by rebuilding the line as: the original's leading run of
- * tokens, then the translated words with whatever tokens they still carry,
- * then the original's trailing run. A token missing from the middle is only
- * restored when every missing one is `\n`, by re-splitting the Arabic into
- * the original's line count. Anything else -- a token swapped for another, an
- * extra token, a `%1F`/`%2F` reorder -- is left for the translator, because
- * guessing its slot puts the wrong value on screen.
+ * Repaired by rebuilding the line as: the original's leading run of tokens,
+ * then the translated words with whatever tokens they still carry, then the
+ * original's trailing run. A token swapped for another, an extra token, or a
+ * `%1F`/`%2F` reorder is left for the translator, because guessing its slot
+ * puts the wrong value on screen.
  */
 function normalizeInazumaLookalikes(original: string, translation: string): string {
-  let text = translation.replace(/[٪％]/g, "%").replace(/\\\s*ن/g, "\\n");
-  if (original.includes("\\n") && !text.includes("\\n")) text = text.replace(/[/／∕]n/g, "\\n");
+  let text = translation.replace(/[٪％]/g, "%");
   if (original.includes("\\f") && !text.includes("\\f")) text = text.replace(/[/／∕]f/g, "\\f");
   // "% s" written with a stray space between the sign and its letter.
   return text.replace(/%\s+([1-4]F|\d?d|s)/g, "%$1");
-}
-
-/**
- * Splits a run of words into `count` lines of roughly equal length, using the
- * same balancer every other game in this editor splits with, so a line breaks
- * in the Arabic where it breaks in the English rather than at a word count.
- * The balancer joins with a real newline; this cartridge stores a break as the
- * two characters `\` and `n`, so that is what comes back out.
- */
-function splitIntoLines(text: string, count: number): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (count <= 1 || words.length < count) return [];
-  const lines = splitChunkEvenly(text, count).split("\n");
-  return lines.length === count && lines.every((l) => l.trim().length > 0) ? lines : [];
 }
 
 // The gap is captured alongside the run so the original's own spacing comes
@@ -125,10 +116,10 @@ export function inazumaSlotsAgree(original: string, translation: string): boolea
  * Both are safe to place, though, because the original says exactly where the
  * cut goes and which kind of cut it is.
  */
-const BREAK_RE = /\\[nf]/;
+const BREAK_RE = /\\f/;
 
-/** The same, with the token captured, so a split keeps which break it was. */
-const BREAK_SPLIT_RE = /(\\[nf])/;
+/** The same, with the token captured, so a split keeps where it falls. */
+const BREAK_SPLIT_RE = /(\\f)/;
 
 /** Every token EXCEPT the two breaks: these hold a value and are never guessed. */
 const SLOT_RE = /%[1-4]F|%\d?d|%s/g;
@@ -245,8 +236,8 @@ function restoreBreaks(original: string, translation: string): string | null {
   return out;
 }
 
-const LEAD_RUN_RE = /^((?:\\[nf]|%[1-4]F|%\d?d|%s)+)([ \t]*)/;
-const TAIL_RUN_RE = /([ \t]*)((?:\\[nf]|%[1-4]F|%\d?d|%s)+)\s*$/;
+const LEAD_RUN_RE = /^((?:\\f|%[1-4]F|%\d?d|%s)+)([ \t]*)/;
+const TAIL_RUN_RE = /([ \t]*)((?:\\f|%[1-4]F|%\d?d|%s)+)\s*$/;
 
 export function repairInazumaTags(original: string, translation: string): { text: string; changed: boolean } {
   const normalized = normalizeInazumaLookalikes(original, translation);
@@ -287,14 +278,13 @@ export function repairInazumaTags(original: string, translation: string): { text
   if (!core) return { text: translation, changed: false };
 
   const coreTags = extractInazumaTags(core);
+  // Every token left in `interior` is now `\f` or a value slot -- `\n` is no
+  // longer tracked here at all -- so a mismatch in the middle always means a
+  // real token moved, swapped, or vanished, never a line that just needs
+  // re-splitting. That case is handled entirely by `restoreBreaks` above, so
+  // nothing is guessed here: it is left for the translator.
   if (coreTags.length !== interior.length || coreTags.some((t, i) => t !== interior[i])) {
-    // Only an all-`\n` interior can be rebuilt: it marks a line break, not a
-    // value slot, so re-splitting the words is safe.
-    const missingAllNewlines = coreTags.length === 0 && interior.length > 0 && interior.every((t) => t === "\\n");
-    if (!missingAllNewlines) return { text: translation, changed: false };
-    const lines = splitIntoLines(core, interior.length + 1);
-    if (lines.length === 0) return { text: translation, changed: false };
-    core = lines.join("\\n");
+    return { text: translation, changed: false };
   }
 
   const candidate = `${lead}${core}${tail}`;

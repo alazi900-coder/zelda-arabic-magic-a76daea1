@@ -10,6 +10,7 @@ const entry = (msbtFile: string, index = 0, original = "Hello"): ExtractedEntry 
   index,
   label: original,
   original,
+  maxBytes: 0,
 });
 
 describe("Inazuma editor bridge", () => {
@@ -50,7 +51,7 @@ describe("Inazuma wiring", () => {
 
   it("makes the deep diagnostic flag a dropped engine token", () => {
     const issues = detectIssues(
-      { msbtFile: "inazuma/evet", index: 3, label: "x", original: "Ready?\\fLet's go, %1F!" },
+      { msbtFile: "inazuma/evet", index: 3, label: "x", maxBytes: 0, original: "Ready?\\fLet's go, %1F!" },
       "مستعد؟ هيا بنا!"
     );
     expect(issues.some((i) => i.category === "inazuma_tag_mismatch" && i.severity === "critical")).toBe(true);
@@ -58,7 +59,7 @@ describe("Inazuma wiring", () => {
 
   it("passes a translation that kept them", () => {
     const issues = detectIssues(
-      { msbtFile: "inazuma/evet", index: 3, label: "x", original: "Ready?\\fLet's go, %1F!" },
+      { msbtFile: "inazuma/evet", index: 3, label: "x", maxBytes: 0, original: "Ready?\\fLet's go, %1F!" },
       "مستعد؟\\fهيا بنا يا %1F!"
     );
     expect(issues.some((i) => i.category === "inazuma_tag_mismatch")).toBe(false);
@@ -68,8 +69,11 @@ describe("Inazuma wiring", () => {
     // Every other game in this editor reports a translation that ran two
     // lines together as "يحتاج تقسيم" and offers to split it. This one used
     // to call the same thing a missing tag and offer the English back.
+    // `original` carries a real newline here, the same as extractInazumaEntries
+    // hands the rest of the editor -- the cartridge's own literal `\n` never
+    // reaches this layer.
     const issues = detectIssues(
-      { msbtFile: "inazuma/evet", index: 4, label: "x", maxBytes: 0, original: "You got the manual for\\n%s!" },
+      { msbtFile: "inazuma/evet", index: 4, label: "x", maxBytes: 0, original: "You got the manual for\n%s!" },
       "حصلت على دليل %s!"
     );
     expect(issues.some((i) => i.category === "under_split")).toBe(true);

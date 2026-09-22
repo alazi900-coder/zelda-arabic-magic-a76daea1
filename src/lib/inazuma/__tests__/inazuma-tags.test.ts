@@ -3,8 +3,11 @@ import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairI
 
 describe("Inazuma technical tokens", () => {
   it("finds the engine's own tokens and nothing else", () => {
-    expect(extractInazumaTags("Go\\nnow\\fthen %1F and %2F, %d points, %s!")).toEqual([
-      "\\n", "\\f", "%1F", "%2F", "%d", "%s",
+    // The line break is deliberately absent here: the editor holds it as a
+    // real newline (see inazuma-editor-bridge.ts), the same as every other
+    // game, so this module never sees it as a token to track.
+    expect(extractInazumaTags("Go\\fthen %1F and %2F, %d points, %s!")).toEqual([
+      "\\f", "%1F", "%2F", "%d", "%s",
     ]);
   });
 
@@ -17,16 +20,27 @@ describe("Inazuma technical tokens", () => {
     expect(extractInazumaTags("goods 30% cheaper than shops.")).toEqual([]);
   });
 
+  it("does not track a real newline as a token", () => {
+    // A merged line is a splitting problem for the shared line tools every
+    // other game already uses, not a token this module refuses to guess.
+    expect(extractInazumaTags("Hi\nthere")).toEqual([]);
+  });
+
   it("accepts a translation that kept every token in order", () => {
-    const check = validateInazumaTags("%1F joined!\\nWelcome", "انضمّ %1F!\\nأهلاً");
+    const check = validateInazumaTags("%1F joined!\\fWelcome", "انضمّ %1F!\\fأهلاً");
     expect(check.valid).toBe(true);
   });
 
-  it("refuses a translation that dropped a line break", () => {
-    const check = validateInazumaTags("Hello\\nthere", "مرحباً هناك");
+  it("refuses a translation that dropped a page break", () => {
+    const check = validateInazumaTags("Hello\\fthere", "مرحباً هناك");
     expect(check.valid).toBe(false);
-    expect(check.expected).toEqual(["\\n"]);
+    expect(check.expected).toEqual(["\\f"]);
     expect(check.actual).toEqual([]);
+  });
+
+  it("passes a translation that only differs by a merged line, since that is not this module's concern", () => {
+    const check = validateInazumaTags("Hello\nthere %s", "مرحباً هناك %s");
+    expect(check.valid).toBe(true);
   });
 
   it("refuses a translation that swapped two runtime slots", () => {
@@ -59,12 +73,9 @@ describe("Inazuma token repair", () => {
     expect(validateInazumaTags("%s joined you!", result.text).valid).toBe(true);
   });
 
-  it("restores a dropped line break by splitting the Arabic in two", () => {
-    // \\n is a line break, not a value, so re-splitting the words across the
-    // original's line count puts it back without guessing at any meaning.
-    const result = repairInazumaTags("Hi\\nthere %s", "أهلاً هناك");
-    expect(result.text).toBe("أهلاً\\nهناك %s");
-    expect(validateInazumaTags("Hi\\nthere %s", result.text).valid).toBe(true);
+  it("leaves a merged line untouched -- that is the shared line-balancer's job, not this function's", () => {
+    const result = repairInazumaTags("Hi\nthere %s", "أهلاً هناك %s");
+    expect(result.changed).toBe(false);
   });
 
   it("still refuses to guess when a value slot is reordered", () => {
@@ -80,36 +91,37 @@ describe("Inazuma token repair", () => {
   });
 });
 
-describe("Inazuma line breaks", () => {
-  // Both of these are real rows from the cartridge that the editor showed as
-  // "رمز تقني مختلف (1 مفقود)" with a fix button that changed nothing.
-  it("puts the break back with the slot alone on its own line", () => {
-    const result = repairInazumaTags("%s\\njoined you!", "%s انضم إليك!");
-    expect(result.text).toBe("%s\\nانضم إليك!");
-    expect(validateInazumaTags("%s\\njoined you!", result.text).valid).toBe(true);
-  });
-
-  it("breaks before the slot when that is where the original breaks", () => {
-    const original = "You got the manual for\\n%s!";
-    const result = repairInazumaTags(original, "لقد حصلت على الدليل الخاص بـ %s !");
-    expect(result.text).toBe("لقد حصلت على الدليل الخاص بـ\\n%s !");
+describe("Inazuma page breaks", () => {
+  it("puts a page break back with the slot alone on its own line", () => {
+    // Same shape as a merged-line case, except `\\f` starts a whole new
+    // dialogue box, so it stays a tracked token this module places itself.
+    const original = "%s\\fjoined you!";
+    const result = repairInazumaTags(original, "%s انضم إليك!");
+    expect(result.text).toBe("%s\\fانضم إليك!");
     expect(validateInazumaTags(original, result.text).valid).toBe(true);
   });
 
-  it("restores every break when the original has more than one", () => {
-    const result = repairInazumaTags("A\\nB\\nC", "واحد اثنان ثلاثة");
-    expect(result.text).toBe("واحد\\nاثنان\\nثلاثة");
+  it("breaks before the slot when that is where the original breaks", () => {
+    const original = "You got the manual for\\f%s!";
+    const result = repairInazumaTags(original, "لقد حصلت على الدليل الخاص بـ %s !");
+    expect(result.text).toBe("لقد حصلت على الدليل الخاص بـ\\f%s !");
+    expect(validateInazumaTags(original, result.text).valid).toBe(true);
   });
 
-  it("leaves the line alone when there are too few words to fill it", () => {
-    // one word cannot become two lines without rendering a blank one
-    const result = repairInazumaTags("A\\nB", "واحد");
+  it("restores every page break when the original has more than one", () => {
+    const result = repairInazumaTags("A\\fB\\fC", "واحد اثنان ثلاثة");
+    expect(result.text).toBe("واحد\\fاثنان\\fثلاثة");
+  });
+
+  it("leaves the text alone when there are too few words to fill every box", () => {
+    // one word cannot become two boxes without rendering a blank one
+    const result = repairInazumaTags("A\\fB", "واحد");
     expect(result.changed).toBe(false);
   });
 
-  it("sees that only the breaks differ, so the editor can stop calling it a damaged token", () => {
-    expect(inazumaSlotsAgree("%s\\njoined you!", "%s انضم إليك!")).toBe(true);
-    expect(inazumaSlotsAgree("You got %s", "حصلت على")).toBe(false);
+  it("sees that only breaks differ, so the editor can stop calling it a damaged token", () => {
+    expect(inazumaSlotsAgree("%s\\fjoined you!", "%s انضم إليك!")).toBe(true);
+    expect(inazumaSlotsAgree("Hi\nthere %s", "أهلاً هناك")).toBe(false);
     expect(inazumaSlotsAgree("%1F beat %2F", "%2F هزم %1F")).toBe(false);
   });
 
@@ -120,12 +132,6 @@ describe("Inazuma line breaks", () => {
     const result = repairInazumaTags(original, "مستعد؟ هيا بنا يا %1F!");
     expect(result.text).toBe("مستعد؟\\fهيا بنا يا %1F!");
     expect(validateInazumaTags(original, result.text).valid).toBe(true);
-  });
-
-  it("keeps each break its own kind when the original mixes them", () => {
-    const original = "One\\nTwo\\fThree";
-    const result = repairInazumaTags(original, "واحد اثنان ثلاثة");
-    expect(result.text).toBe("واحد\\nاثنان\\fثلاثة");
   });
 });
 

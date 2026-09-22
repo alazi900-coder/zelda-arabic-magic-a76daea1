@@ -1,3 +1,5 @@
+import { splitChunkEvenly } from "@/lib/balance-lines";
+
 /**
  * The things in an Inazuma Eleven string that are not words.
  *
@@ -77,18 +79,26 @@ function normalizeInazumaLookalikes(original: string, translation: string): stri
   return text.replace(/%\s+([1-4]F|\d?d|s)/g, "%$1");
 }
 
-/** Splits a run of words into `count` lines of roughly equal length. */
+/**
+ * Splits a run of words into `count` lines of roughly equal length, using the
+ * same balancer every other game in this editor splits with, so a line breaks
+ * in the Arabic where it breaks in the English rather than at a word count.
+ * The balancer joins with a real newline; this cartridge stores a break as the
+ * two characters `\` and `n`, so that is what comes back out.
+ */
 function splitIntoLines(text: string, count: number): string[] {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (count <= 1 || words.length < count) return [];
-  const per = Math.ceil(words.length / count);
-  const lines: string[] = [];
-  for (let i = 0; i < count; i++) lines.push(words.slice(i * per, (i + 1) * per).join(" "));
-  return lines.every((l) => l.length > 0) ? lines : [];
+  const lines = splitChunkEvenly(text, count).split("\n");
+  return lines.length === count && lines.every((l) => l.trim().length > 0) ? lines : [];
 }
 
-const LEAD_RUN_RE = /^((?:\\[nf]|%[1-4]F|%\d?d|%s)+)/;
-const TAIL_RUN_RE = /((?:\\[nf]|%[1-4]F|%\d?d|%s)+)\s*$/;
+// The gap is captured alongside the run so the original's own spacing comes
+// back with it: "%s joined you!" puts a space between the name and the verb,
+// and rebuilding the line without it prints the name glued to the next word.
+// A run of "\n" carries no gap, so nothing is added where nothing was there.
+const LEAD_RUN_RE = /^((?:\\[nf]|%[1-4]F|%\d?d|%s)+)([ \t]*)/;
+const TAIL_RUN_RE = /([ \t]*)((?:\\[nf]|%[1-4]F|%\d?d|%s)+)\s*$/;
 
 export function repairInazumaTags(original: string, translation: string): { text: string; changed: boolean } {
   const normalized = normalizeInazumaLookalikes(original, translation);
@@ -96,14 +106,30 @@ export function repairInazumaTags(original: string, translation: string): { text
   if (validateInazumaTags(original, normalized).valid) return done(normalized);
 
   const expected = extractInazumaTags(original);
-  const lead = original.match(LEAD_RUN_RE)?.[1] ?? "";
-  const tail = original.match(TAIL_RUN_RE)?.[1] ?? "";
+  const leadMatch = original.match(LEAD_RUN_RE);
+  const tailMatch = original.match(TAIL_RUN_RE);
+  const lead = leadMatch ? leadMatch[1] + leadMatch[2] : "";
+  const tail = tailMatch ? tailMatch[1] + tailMatch[2] : "";
   const leadTags = extractInazumaTags(lead);
   const tailTags = extractInazumaTags(tail);
   const interior = expected.slice(leadTags.length, expected.length - tailTags.length);
 
+  // Whatever run of tokens the translation already carries at either end is
+  // about to be replaced by the original's. That is only safe when the two
+  // agree: "%2F هزم %1F" against "%1F beat %2F" would otherwise be rewritten
+  // into the original's order and print the wrong name in each slot, which is
+  // exactly the kind of guess this function must not make.
+  const trimmedTrans = normalized.trim();
+  const transLead = extractInazumaTags(trimmedTrans.match(LEAD_RUN_RE)?.[1] ?? "");
+  const transTail = extractInazumaTags(trimmedTrans.match(TAIL_RUN_RE)?.[2] ?? "");
+  const runAgrees = (theirs: string[], ours: string[]) =>
+    theirs.length === 0 || (theirs.length === ours.length && theirs.every((t, i) => t === ours[i]));
+  if (!runAgrees(transLead, leadTags) || !runAgrees(transTail, tailTags)) {
+    return { text: translation, changed: false };
+  }
+
   // The translated words, with the tokens that survived at either end removed.
-  let core = normalized.trim().replace(LEAD_RUN_RE, "").replace(TAIL_RUN_RE, "").trim();
+  let core = trimmedTrans.replace(LEAD_RUN_RE, "").replace(TAIL_RUN_RE, "").trim();
   if (!core) return { text: translation, changed: false };
 
   const coreTags = extractInazumaTags(core);

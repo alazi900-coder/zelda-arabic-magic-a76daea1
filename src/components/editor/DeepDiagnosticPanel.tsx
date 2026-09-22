@@ -91,6 +91,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "translated_tags", label: "وسوم مترجمة", icon: "🔀", severity: "warning", description: "وسوم تقنية تم ترجمتها بالخطأ (عربي داخل أقواس تقنية) — يجب إصلاحها" },
   { id: "invisible_chars", label: "أحرف غير مرئية مشبوهة", icon: "👻", severity: "warning", description: "أحرف Unicode غير مرئية (ZWJ, ZWNJ, BOM, إلخ) قد تُربك المحرك" },
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم أصلية مفقودة فعلياً بعد استثناء الوسوم التي تُرجمت بالخطأ — قد تسبب خلل في العرض" },
+  { id: "inazuma_tag_mismatch", label: "رموز إينازوما التقنية", icon: "⚽", severity: "critical", description: "رمز مثل %s أو %1F حُذف أو زاد أو تبدّل ترتيبه — تفقد الجملة الاسم أو الرقم الذي تضعه اللعبة. الإصلاح يعيد الرمز إلى موضعه في الأصل ولا يمسّ الترجمة العربية" },
   { id: "technical_mismatch", label: "اختلاف الرموز التقنية", icon: "🧷", severity: "critical", description: "مجموعة الرموز التقنية لا تطابق الأصل بدقة حتى لو كان العدد متساوياً — قد تسبب تجمّد اللعبة" },
   { id: "gtaiv_runtime_token_mismatch", label: "رموز GTA IV بين ~...~", icon: "🛡️", severity: "critical", description: "رموز GTA IV بين ~...~ ناقصة أو زائدة أو تغيّرت قيمتها/ترتيبها أو تحتوي ~ منفردة؛ البناء يرفضها. الإصلاح التلقائي يستبدل الرموز فقط عندما تكون مواضعها مكتملة ومتساوية." },
   { id: "gtaiv_line_break_display", label: "سهم كسر سطر GTA IV", icon: "↵", severity: "warning", description: "علامة ~n~ موجودة بلا سطر محرر بعدها. الإصلاح يضيف السطر المرئي فقط ويعيد الباني حفظ ~n~ داخل GXT." },
@@ -191,8 +192,15 @@ const RISEN_TAG_FIXABLE_CATEGORIES = new Set(["risen_tag_mismatch"]);
  * nothing else — see pkm-line-split.ts for why a `{fb}` may not be invented.
  */
 const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
+/**
+ * Inazuma's own tokens. Kept out of RESTORE_ORIGINAL_CATEGORIES on purpose:
+ * that strategy throws the Arabic away and writes the English line back, and
+ * a dropped `%s` is not worth an untranslated line. `repairInazumaTags` puts
+ * the token back where the original kept it, or changes nothing at all.
+ */
+const INAZUMA_TAG_FIXABLE_CATEGORIES = new Set(["inazuma_tag_mismatch"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, ...INAZUMA_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -381,6 +389,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const trans = state.translations[issue.key] || '';
     if (!trans.trim()) return { fixResult: '', reason: '❌ الترجمة فارغة' };
 
+    // Inazuma rows are repaired by their own function and nothing else. This
+    // sits ahead of every strategy below because several of them end in
+    // "restore the English original", which is what the fix button used to do
+    // to a perfectly good Arabic line that had merely lost its `\n`.
+    if (entry.msbtFile.startsWith('inazuma/')) {
+      const repaired = repairInazumaTags(entry.original, trans);
+      return {
+        fixResult: repaired.text,
+        reason: repaired.changed
+          ? '⚽ سيعود الرمز التقني إلى موضعه في الأصل (ويُقسَّم السطر عند الحاجة) دون المساس بالكلمات العربية'
+          : '⚠️ موضع الرمز الناقص غير مؤكد (مثل تبادل %1F و%2F) — أعِده يدوياً، ولن يُستبدل النص بالإنجليزي',
+      };
+    }
+
     if (GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category)) {
       const repaired = repairGtaIvProtectedSequence(issue.category, entry.original, trans);
       if (!repaired.safe) {
@@ -531,6 +553,20 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
   const handleFixSingle = useCallback((issue: DiagnosticIssue) => {
     const entry = entryMap.get(issue.key);
     if (!entry) return;
+
+    // Same rule as the preview above: an Inazuma row is only ever repaired by
+    // its own function, never restored to English and never re-wrapped by the
+    // XENO-aware balancer, which cannot see this game's `\n`.
+    if (entry.msbtFile.startsWith('inazuma/') && onApplyFix) {
+      const repaired = repairInazumaTags(entry.original, issue.translation);
+      if (repaired.changed) {
+        onApplyFix(issue.key, repaired.text);
+        toast({ title: '⚽ إصلاح إينازوما', description: 'أُعيد الرمز التقني إلى موضعه في الأصل؛ بقيت الترجمة العربية كما هي' });
+      } else {
+        toast({ title: '⚠️ مراجعة يدوية مطلوبة', description: 'موضع الرمز الناقص غير مؤكد — لم يُستبدل النص بالإنجليزي' });
+      }
+      return;
+    }
 
     if (GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category)) {
       const repaired = repairGtaIvProtectedSequence(issue.category, entry.original, issue.translation);

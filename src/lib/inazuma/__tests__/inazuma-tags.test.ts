@@ -40,7 +40,7 @@ describe("Inazuma token repair", () => {
   it("reattaches a clean trailing token the translation dropped", () => {
     const result = repairInazumaTags("You got %s", "حصلت على");
     expect(result.changed).toBe(true);
-    expect(result.text).toBe("حصلت على%s");
+    expect(result.text).toBe("حصلت على %s");
     expect(validateInazumaTags("You got %s", result.text).valid).toBe(true);
   });
 
@@ -50,19 +50,33 @@ describe("Inazuma token repair", () => {
     expect(result.text).toBe("حصلت على %s");
   });
 
-  it("refuses to guess when the dropped token led the original sentence, not trailed it", () => {
-    // %s here is a name slot the sentence opens with -- reattaching it at
-    // the end would put it in the wrong place, so this is left for the
-    // translator rather than guessed at.
+  it("puts a token back at the start when that is where the original opened", () => {
+    // %s here is a name slot the sentence opens with, so it goes back to the
+    // front -- with the space the original kept after it, or the name would
+    // print glued to the next word.
     const result = repairInazumaTags("%s joined you!", "انضم إليك");
-    expect(result.changed).toBe(false);
-    expect(result.text).toBe("انضم إليك");
+    expect(result.text).toBe("%s انضم إليك");
+    expect(validateInazumaTags("%s joined you!", result.text).valid).toBe(true);
   });
 
-  it("refuses to guess when a token is missing from the middle, not the end", () => {
+  it("restores a dropped line break by splitting the Arabic in two", () => {
+    // \\n is a line break, not a value, so re-splitting the words across the
+    // original's line count puts it back without guessing at any meaning.
     const result = repairInazumaTags("Hi\\nthere %s", "أهلاً هناك");
+    expect(result.text).toBe("أهلاً\\nهناك %s");
+    expect(validateInazumaTags("Hi\\nthere %s", result.text).valid).toBe(true);
+  });
+
+  it("still refuses to guess when a value slot is reordered", () => {
+    // %1F and %2F hold different values: putting them back the wrong way
+    // round prints the wrong name in each place.
+    const result = repairInazumaTags("%1F beat %2F", "%2F هزم %1F");
     expect(result.changed).toBe(false);
-    expect(result.text).toBe("أهلاً هناك");
+  });
+
+  it("repairs the lookalike percent an auto-translator writes", () => {
+    const result = repairInazumaTags("You got %s", "حصلت على ٪s");
+    expect(result.text).toBe("حصلت على %s");
   });
 });
 

@@ -32,6 +32,7 @@ import { useEditorCleanup } from "@/hooks/useEditorCleanup";
 import { hasActiveEditorScope } from "@/lib/editor-scope";
 import { deepDiagPredicates, matchesDeepDiagFilter } from "@/lib/deep-diagnostic-predicates";
 import { useAutoPilot } from "@/hooks/useAutoPilot";
+import { repairInazumaTags } from "@/lib/inazuma/inazuma-tags";
 import { ExtractedEntry, EditorState, AUTOSAVE_DELAY, PAGE_SIZE, categorizeFile, categorizeBdatTable, categorizeDanganronpaFile, categorizeRisenEntry, hasArabicChars, unReverseBidi, isTechnicalText, isTranslationExcludedText, hasTechnicalTags, restoreTagsLocally, FilterStatus, FilterTechnical } from "@/components/editor/types";
 import {
   scanTranslationsForRestore,
@@ -1641,18 +1642,35 @@ export function useEditorState() {
     triggerAutoSmartReview();
   }, [_handleRetranslatePageRaw, triggerAutoSmartReview]);
 
+  /**
+   * The repair behind the inline "إصلاح" button under each row.
+   *
+   * `restoreTagsLocally` reads Xenoblade's bracketed tags. Inazuma Eleven has
+   * none: it writes `\n` as two characters and its value slots as `%s`/`%1F`,
+   * so that function found nothing to restore and fell back to writing the
+   * English original into the row -- which is what this button was reported
+   * doing. These rows go to their own repair instead, which either puts the
+   * token back where the original kept it or changes nothing.
+   */
+  const restoreEntryTagsLocally = useCallback((entry: ExtractedEntry, translation: string): string => {
+    if (entry.msbtFile.startsWith("inazuma/")) {
+      return repairInazumaTags(entry.original, translation).text;
+    }
+    return restoreTagsLocally(entry.original, translation);
+  }, []);
+
   // === Local (offline) fix for damaged tags — no AI needed ===
   const handleLocalFixDamagedTag = useCallback((entry: ExtractedEntry) => {
     if (!state) return;
     const key = `${entry.msbtFile}:${entry.index}`;
     const translation = state.translations[key] || '';
     if (!translation.trim()) return;
-    const fixed = restoreTagsLocally(entry.original, translation);
+    const fixed = restoreEntryTagsLocally(entry, translation);
     if (fixed !== translation) {
       setPreviousTranslations(old => ({ ...old, [key]: translation }));
       setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, { [key]: fixed }) } : null);
     }
-  }, [state, setState, setPreviousTranslations]);
+  }, [state, setState, setPreviousTranslations, restoreEntryTagsLocally]);
 
   const handleLocalFixAllDamagedTags = useCallback((damagedTagKeys: Set<string>) => {
     if (!state || damagedTagKeys.size === 0) return;
@@ -1663,7 +1681,7 @@ export function useEditorState() {
       if (!damagedTagKeys.has(key)) continue;
       const translation = state.translations[key] || '';
       if (!translation.trim()) continue;
-      const fixed = restoreTagsLocally(entry.original, translation);
+      const fixed = restoreEntryTagsLocally(entry, translation);
       if (fixed !== translation) {
         prevTrans[key] = translation;
         updates[key] = fixed;
@@ -1680,7 +1698,7 @@ export function useEditorState() {
     toast({ title: "✅ تم الإصلاح المحلي", description: `تم استعادة الرموز في ${fixedCount} نص بدون ذكاء اصطناعي` });
     setLastSaved(`✅ تم إصلاح ${fixedCount} نص محلياً`);
     setTimeout(() => setLastSaved(""), 4000);
-  }, [state, setState, setPreviousTranslations, setLastSaved]);
+  }, [state, setState, setPreviousTranslations, setLastSaved, restoreEntryTagsLocally]);
 
   // Apply tag repairs only for selected keys
   const handleLocalFixSelectedTags = useCallback((selectedKeys: string[]) => {
@@ -1692,7 +1710,7 @@ export function useEditorState() {
       if (!selectedKeys.includes(key)) continue;
       const translation = state.translations[key] || '';
       if (!translation.trim()) continue;
-      const fixed = restoreTagsLocally(entry.original, translation);
+      const fixed = restoreEntryTagsLocally(entry, translation);
       if (fixed !== translation) {
         prevTrans[key] = translation;
         updates[key] = fixed;
@@ -1705,7 +1723,7 @@ export function useEditorState() {
     toast({ title: "✅ تم الإصلاح", description: `تم استعادة الرموز في ${fixedCount} نص` });
     setLastSaved(`✅ تم إصلاح ${fixedCount} نص`);
     setTimeout(() => setLastSaved(""), 4000);
-  }, [state, setState, setPreviousTranslations, setLastSaved]);
+  }, [state, setState, setPreviousTranslations, setLastSaved, restoreEntryTagsLocally]);
 
   // === أداة موحَّدة: إصلاح الرموز التقنية + فواصل الأسطر (محلي، بدون AI) ===
   // منقولة من مشروع Zelda — تستخدم محرّك tag-restore + line-split-quality.

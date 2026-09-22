@@ -368,7 +368,7 @@ export function balanceLines(text: string, targetMax?: number, maxLines?: number
 }
 
 
-function splitChunkEvenly(
+export function splitChunkEvenly(
   chunk: string,
   numLines: number,
 ): string {

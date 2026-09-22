@@ -53,7 +53,7 @@ describe("Inazuma wiring", () => {
       { msbtFile: "inazuma/evet", index: 3, label: "x", original: "Ready?\\fLet's go, %1F!" },
       "مستعد؟ هيا بنا!"
     );
-    expect(issues.some((i) => i.category === "tag_mismatch" && i.severity === "critical")).toBe(true);
+    expect(issues.some((i) => i.category === "inazuma_tag_mismatch" && i.severity === "critical")).toBe(true);
   });
 
   it("passes a translation that kept them", () => {
@@ -61,6 +61,27 @@ describe("Inazuma wiring", () => {
       { msbtFile: "inazuma/evet", index: 3, label: "x", original: "Ready?\\fLet's go, %1F!" },
       "مستعد؟\\fهيا بنا يا %1F!"
     );
-    expect(issues.some((i) => i.category === "tag_mismatch")).toBe(false);
+    expect(issues.some((i) => i.category === "inazuma_tag_mismatch")).toBe(false);
+  });
+
+  it("calls a dropped line break a split, not a broken token", () => {
+    // Every other game in this editor reports a translation that ran two
+    // lines together as "يحتاج تقسيم" and offers to split it. This one used
+    // to call the same thing a missing tag and offer the English back.
+    const issues = detectIssues(
+      { msbtFile: "inazuma/evet", index: 4, label: "x", maxBytes: 0, original: "You got the manual for\\n%s!" },
+      "حصلت على دليل %s!"
+    );
+    expect(issues.some((i) => i.category === "under_split")).toBe(true);
+    expect(issues.some((i) => i.category === "inazuma_tag_mismatch")).toBe(false);
+  });
+
+  it("still calls a dropped value slot a broken token", () => {
+    const issues = detectIssues(
+      { msbtFile: "inazuma/evet", index: 5, label: "x", maxBytes: 0, original: "Obtained: %s" },
+      "تم الحصول عليه"
+    );
+    expect(issues.some((i) => i.category === "inazuma_tag_mismatch")).toBe(true);
+    expect(issues.some((i) => i.category === "under_split")).toBe(false);
   });
 });

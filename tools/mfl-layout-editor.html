@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>محرّر تخطيط MFL</title>
+<style>
+  :root {
+    --bg: #11131a; --panel: #1a1d27; --panel2: #222634; --line: #2f3446;
+    --ink: #e8eaf2; --dim: #9aa2bb; --accent: #6ea8ff; --warn: #ffb86b; --ok: #7ee3a5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.6 "Segoe UI", Tahoma, system-ui, sans-serif;
+  }
+  header {
+    padding: 14px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 12px; }
+  button, .filebtn {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 7px; padding: 7px 14px; cursor: pointer; font: inherit;
+  }
+  button:hover, .filebtn:hover { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; border-color: var(--line); }
+  button.primary { background: #274a86; border-color: #3a67b4; }
+  #file { display: none; }
+  main { padding: 16px; display: grid; gap: 16px; grid-template-columns: 1fr; max-width: 1400px; }
+  @media (min-width: 1100px) { main { grid-template-columns: 1fr 380px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  section > h2 { font-size: 14px; margin: 0 0 10px; color: var(--accent); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 5px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--dim); font-weight: 500; font-size: 12px; }
+  tr.pic td.name { color: var(--ok); }
+  td.name { font-family: ui-monospace, Consolas, monospace; }
+  input[type=number] {
+    width: 82px; background: var(--panel2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; font: inherit; text-align: left;
+    direction: ltr;
+  }
+  input[type=number].dirty { border-color: var(--warn); color: var(--warn); }
+  .depth { color: var(--dim); }
+  canvas { background: #0a0c11; border: 1px solid var(--line); border-radius: 8px; display: block; width: 100%; }
+  .legend { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  .legend b { color: var(--ok); font-weight: 600; }
+  #diff { font-family: ui-monospace, Consolas, monospace; font-size: 12px; direction: ltr; text-align: left;
+          max-height: 220px; overflow: auto; color: var(--dim); }
+  #diff div { padding: 1px 0; }
+  .empty { color: var(--dim); font-style: italic; }
+  .err { color: #ff8b8b; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--dim); font-size: 12px; }
+  .raw { direction: ltr; text-align: left; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+  .note { color: var(--dim); font-size: 12px; line-height: 1.8; }
+  .note code { color: var(--warn); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>محرّر تخطيط MFL</h1>
+  <span class="sub">يعدّل مواضع الصور داخل ملفات <code>.mfl</code> دون المساس بأي بايت آخر</span>
+  <span style="flex:1"></span>
+  <label class="filebtn">افتح ملف .mfl<input type="file" id="file" accept=".mfl,.MFL"></label>
+  <button id="reset" disabled>تراجع عن كل التعديلات</button>
+  <button id="save" class="primary" disabled>احفظ الملف</button>
+</header>
+
+<main>
+  <div style="display:grid; gap:16px">
+    <section id="infoSec" hidden>
+      <h2>الملف</h2>
+      <div id="info" class="note"></div>
+    </section>
+
+    <section id="partsSec" hidden>
+      <h2>الصور — موضع كل صورة وحجمها</h2>
+      <table id="parts"></table>
+      <div class="note" style="margin-top:10px">
+        الإزاحة هي موضع الصورة بالنسبة إلى العقدة التي تحملها. صورة بإزاحة <code>-21, -21</code>
+        وحجم <code>42×42</code> تعني أنها مركزيّة حول العقدة.
+      </div>
+    </section>
+
+    <section id="panesSec" hidden>
+      <h2>العُقد — الشجرة ومواضعها</h2>
+      <table id="panes"></table>
+      <div class="note" style="margin-top:10px">
+        الأخضر = عقدة تحمل صورة. العقدة الأب تحرّك كل ما تحتها، ولهذا يغيّر تعديل
+        <code>root</code> أو <code>all</code> كل شيء دفعة واحدة. لتحريك أيقونة واحدة فقط،
+        عدّل العقدة التي تحمل اسم تلك الصورة أو أباها المباشر.
+      </div>
+      <details>
+        <summary>الحقول الأخرى في كل عقدة (لم تُسمَّ بعد — عدّلها على مسؤوليتك)</summary>
+        <table id="extra" class="raw"></table>
+      </details>
+    </section>
+  </div>
+
+  <div style="display:grid; gap:16px; align-content:start">
+    <section id="previewSec" hidden>
+      <h2>معاينة</h2>
+      <canvas id="cv" width="360" height="360"></canvas>
+      <div class="legend">
+        المربّعات هي الصور في مواضعها المحسوبة. <b>الأخضر</b> = الصورة المحدّدة.
+        التقاطع في المنتصف هو نقطة الأصل.
+      </div>
+    </section>
+
+    <section id="diffSec" hidden>
+      <h2>البايتات التي ستتغيّر</h2>
+      <div id="diff"><span class="empty">لا تعديلات بعد.</span></div>
+      <div class="note" style="margin-top:10px">
+        الحفظ ينسخ الملف الأصلي كما هو ويكتب هذه المواضع فقط. حجم الملف لا يتغيّر،
+        والأقسام الأخرى — الحركات والأسماء — تبقى كما كانت بايتاً ببايت.
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/**
+ * The MFL container, as measured against Level-5's ItemIcon.mfl.
+ *
+ *   0x00  "MFL "                      magic
+ *   0x04  u32   version (4)
+ *   0x08  u16   unknown (8)
+ *   0x0A  u16   pane count
+ *   0x0C  u16   unknown (0)
+ *   0x0E  u16   part count
+ *   0x10  u16   group count
+ *   0x12  u16   animation count
+ *   0x14  u32   offset of the part table
+ *   0x18  u32   offset of the animation block
+ *   0x1C  u32   offset of the string table
+ *   0x20        pane table: `pane count` records of 68 bytes
+ *               part table: `part count` records of 48 bytes
+ *               animations, then a run of null-terminated names in the order
+ *               file, parts, panes, groups, animations.
+ *
+ * Panes form a depth-first tree: a pane whose flags are 0x3F draws a part and
+ * its second field is that part's index, otherwise the second field is how many
+ * children follow it. Everything the editor writes is a 32-bit float already in
+ * the file -- no field moves, nothing is appended, so the bytes it does not
+ * touch are the bytes that were there.
+ */
+const PANE_SIZE = 68, PART_SIZE = 48;
+const PANE_PICTURE_FLAG = 0x3F;
+
+// Offsets inside a pane record that this editor understands. The rest stay raw.
+const PANE_FIELDS = [
+  { off: 0x08, label: "س (X)" },
+  { off: 0x0C, label: "ص (Y)" },
+  { off: 0x10, label: "ع (Z)" },
+];
+const PANE_KNOWN = new Set([0x00, 0x04, 0x08, 0x0C, 0x10, 0x40]);
+
+const PART_FIELDS = [
+  { off: 0x04, label: "إزاحة س" },
+  { off: 0x08, label: "إزاحة ص" },
+  { off: 0x10, label: "العرض" },
+  { off: 0x14, label: "الارتفاع" },
+];
+
+let original = null;   // Uint8Array as loaded, never written to
+let working = null;    // DataView over a copy
+let doc = null;        // parsed structure
+let fileName = "layout.mfl";
+let selected = -1;     // index of the highlighted part
+
+const $ = (id) => document.getElementById(id);
+
+function parse(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+  if (magic !== "MFL ") throw new Error(`ليس ملف MFL — التوقيع المقروء «${magic}»`);
+
+  const paneCount = dv.getUint16(0x0A, true);
+  const partCount = dv.getUint16(0x0E, true);
+  const groupCount = dv.getUint16(0x10, true);
+  const animCount = dv.getUint16(0x12, true);
+  const partsOff = dv.getUint32(0x14, true);
+  const animOff = dv.getUint32(0x18, true);
+  const stringsOff = dv.getUint32(0x1C, true);
+  const panesOff = 0x20;
+
+  if (stringsOff > bytes.length || animOff > stringsOff || partsOff > animOff) {
+    throw new Error("عناوين الأقسام في الترويسة غير منطقية — الملف تالف أو بصيغة أخرى");
+  }
+  if (partsOff - panesOff !== paneCount * PANE_SIZE) {
+    throw new Error(`حجم جدول العُقد ${partsOff - panesOff} لا يساوي ${paneCount} × ${PANE_SIZE}`);
+  }
+  if (animOff - partsOff !== partCount * PART_SIZE) {
+    throw new Error(`حجم جدول الصور ${animOff - partsOff} لا يساوي ${partCount} × ${PART_SIZE}`);
+  }
+
+  const names = [];
+  for (let p = stringsOff; p < bytes.length; ) {
+    let e = p;
+    while (e < bytes.length && bytes[e] !== 0) e++;
+    if (e > p) names.push(String.fromCharCode(...bytes.subarray(p, e)));
+    p = e + 1;
+  }
+  let n = 0;
+  const fileTitle = names[n++] ?? "";
+  const partNames = names.slice(n, n += partCount);
+  const paneNames = names.slice(n, n += paneCount);
+  const groupNames = names.slice(n, n += groupCount);
+  const animNames = names.slice(n, n += animCount);
+
+  const panes = [];
+  for (let i = 0; i < paneCount; i++) {
+    const base = panesOff + i * PANE_SIZE;
+    const flags = dv.getUint32(base, true);
+    const second = dv.getUint32(base + 4, true);
+    const isPicture = flags === PANE_PICTURE_FLAG;
+    panes.push({
+      index: i, base, flags, isPicture,
+      name: paneNames[i] ?? `pane${i}`,
+      partIndex: isPicture ? second : -1,
+      childCount: isPicture ? 0 : second,
+      depth: 0, parent: -1, children: [],
+    });
+  }
+  // Depth-first: a container is followed by exactly `childCount` subtrees.
+  (function link(at, parent, depth) {
+    if (at >= panes.length) return at;
+    const p = panes[at];
+    p.parent = parent; p.depth = depth;
+    if (parent >= 0) panes[parent].children.push(at);
+    let next = at + 1;
+    for (let c = 0; c < p.childCount; c++) next = link(next, at, depth + 1);
+    return next;
+  })(0, -1, 0);
+
+  const parts = [];
+  for (let i = 0; i < partCount; i++) {
+    const base = partsOff + i * PART_SIZE;
+    parts.push({ index: i, base, name: partNames[i] ?? `part${i}` });
+  }
+
+  return {
+    fileTitle, panes, parts, groupNames, animNames,
+    partsOff, animOff, stringsOff, paneCount, partCount, groupCount, animCount,
+  };
+}
+
+const fget = (off) => working.getFloat32(off, true);
+const fset = (off, v) => working.setFloat32(off, v, true);
+
+/** Walks up the tree so the preview shows where a part actually lands. */
+function absolutePos(paneIndex) {
+  let x = 0, y = 0, i = paneIndex;
+  while (i >= 0) {
+    x += fget(doc.panes[i].base + 0x08);
+    y += fget(doc.panes[i].base + 0x0C);
+    i = doc.panes[i].parent;
+  }
+  return { x, y };
+}
+
+function changedOffsets() {
+  const out = [];
+  const a = original, b = new Uint8Array(working.buffer);
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) out.push(i);
+  return out;
+}
+
+function fmt(v) {
+  if (!isFinite(v)) return String(v);
+  return Number(v.toFixed(4)).toString();
+}
+
+function numberCell(off, onChange) {
+  const inp = document.createElement("input");
+  inp.type = "number";
+  inp.step = "any";
+  inp.value = fmt(fget(off));
+  const originalValue = new DataView(original.buffer, original.byteOffset).getFloat32(off, true);
+  const mark = () => inp.classList.toggle("dirty", fget(off) !== originalValue);
+  mark();
+  inp.addEventListener("input", () => {
+    const v = parseFloat(inp.value);
+    if (!isFinite(v)) return;
+    fset(off, v);
+    mark();
+    onChange();
+  });
+  const td = document.createElement("td");
+  td.appendChild(inp);
+  return td;
+}
+
+function render() {
+  renderInfo();
+  renderParts();
+  renderPanes();
+  renderExtra();
+  renderDiff();
+  draw();
+}
+
+function renderInfo() {
+  $("info").innerHTML =
+    `<b>${doc.fileTitle}</b> — ${original.length} بايت<br>` +
+    `${doc.paneCount} عقدة · ${doc.partCount} صورة · ${doc.groupCount} مجموعة · ${doc.animCount} حركة<br>` +
+    `<span style="color:var(--dim)">المجموعات:</span> ${doc.groupNames.join("، ") || "—"}<br>` +
+    `<span style="color:var(--dim)">الحركات:</span> ${doc.animNames.join("، ") || "—"}`;
+  $("infoSec").hidden = false;
+}
+
+function renderParts() {
+  const t = $("parts");
+  t.innerHTML = "<tr><th>#</th><th>الاسم</th>" +
+    PART_FIELDS.map((f) => `<th>${f.label}</th>`).join("") + "</tr>";
+  doc.parts.forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.className = "pic";
+    tr.innerHTML = `<td>${p.index}</td><td class="name">${p.name}</td>`;
+    for (const f of PART_FIELDS) tr.appendChild(numberCell(p.base + f.off, afterEdit));
+    tr.addEventListener("click", () => { selected = p.index; draw(); });
+    t.appendChild(tr);
+  });
+  $("partsSec").hidden = false;
+}
+
+function renderPanes() {
+  const t = $("panes");
+  t.innerHTML = "<tr><th>#</th><th>الاسم</th><th>الصورة</th>" +
+    PANE_FIELDS.map((f) => `<th>${f.label}</th>`).join("") + "</tr>";
+  doc.panes.forEach((p) => {
+    const tr = document.createElement("tr");
+    if (p.isPicture) tr.className = "pic";
+    const indent = "·".repeat(p.depth * 2);
+    tr.innerHTML =
+      `<td>${p.index}</td>` +
+      `<td class="name"><span class="depth">${indent}</span> ${p.name}</td>` +
+      `<td>${p.isPicture ? doc.parts[p.partIndex]?.name ?? p.partIndex : "—"}</td>`;
+    for (const f of PANE_FIELDS) tr.appendChild(numberCell(p.base + f.off, afterEdit));
+    tr.addEventListener("click", () => {
+      selected = p.isPicture ? p.partIndex : -1;
+      draw();
+    });
+    t.appendChild(tr);
+  });
+  $("panesSec").hidden = false;
+}
+
+function renderExtra() {
+  const t = $("extra");
+  const offsets = [];
+  for (let o = 0; o < PANE_SIZE; o += 4) if (!PANE_KNOWN.has(o)) offsets.push(o);
+  t.innerHTML = "<tr><th>pane</th>" + offsets.map((o) => `<th>+0x${o.toString(16).toUpperCase()}</th>`).join("") + "</tr>";
+  doc.panes.forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="name">${p.name}</td>`;
+    for (const o of offsets) tr.appendChild(numberCell(p.base + o, afterEdit));
+    t.appendChild(tr);
+  });
+}
+
+function renderDiff() {
+  const offs = changedOffsets();
+  const box = $("diff");
+  $("diffSec").hidden = false;
+  $("save").disabled = offs.length === 0;
+  $("reset").disabled = offs.length === 0;
+  if (offs.length === 0) { box.innerHTML = '<span class="empty">لا تعديلات بعد.</span>'; return; }
+  // Group into runs so a changed float reads as one line, not four.
+  const runs = [];
+  for (const o of offs) {
+    const last = runs[runs.length - 1];
+    if (last && o === last.start + last.len) last.len++;
+    else runs.push({ start: o, len: 1 });
+  }
+  const b = new Uint8Array(working.buffer);
+  box.innerHTML = runs.map((r) => {
+    const hexOld = [...original.subarray(r.start, r.start + r.len)].map((x) => x.toString(16).padStart(2, "0")).join(" ");
+    const hexNew = [...b.subarray(r.start, r.start + r.len)].map((x) => x.toString(16).padStart(2, "0")).join(" ");
+    return `<div>0x${r.start.toString(16).toUpperCase().padStart(6, "0")}  ${hexOld} &rarr; ${hexNew}</div>`;
+  }).join("") + `<div style="color:var(--warn);margin-top:6px">${offs.length} بايت</div>`;
+}
+
+function draw() {
+  const cv = $("cv"), g = cv.getContext("2d");
+  const W = cv.width, H = cv.height, cx = W / 2, cy = H / 2;
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = "#2b3040";
+  g.beginPath(); g.moveTo(0, cy); g.lineTo(W, cy); g.moveTo(cx, 0); g.lineTo(cx, H); g.stroke();
+
+  // Fit every part on screen, whatever the layout's scale.
+  let extent = 32;
+  for (const pane of doc.panes) {
+    if (!pane.isPicture) continue;
+    const part = doc.parts[pane.partIndex];
+    if (!part) continue;
+    const p = absolutePos(pane.index);
+    const ox = fget(part.base + 0x04), oy = fget(part.base + 0x08);
+    const w = fget(part.base + 0x10), h = fget(part.base + 0x14);
+    extent = Math.max(extent, Math.abs(p.x + ox) + w, Math.abs(p.y + oy) + h);
+  }
+  const s = (Math.min(W, H) / 2 - 12) / extent;
+
+  for (const pane of doc.panes) {
+    if (!pane.isPicture) continue;
+    const part = doc.parts[pane.partIndex];
+    if (!part) continue;
+    const p = absolutePos(pane.index);
+    const ox = fget(part.base + 0x04), oy = fget(part.base + 0x08);
+    const w = fget(part.base + 0x10), h = fget(part.base + 0x14);
+    const x = cx + (p.x + ox) * s, y = cy - (p.y + oy) * s - h * s;
+    const on = pane.partIndex === selected;
+    g.fillStyle = on ? "rgba(126,227,165,.22)" : "rgba(110,168,255,.12)";
+    g.strokeStyle = on ? "#7ee3a5" : "#6ea8ff";
+    g.lineWidth = on ? 2 : 1;
+    g.fillRect(x, y, w * s, h * s);
+    g.strokeRect(x, y, w * s, h * s);
+    g.fillStyle = on ? "#7ee3a5" : "#9aa2bb";
+    g.font = "11px ui-monospace, monospace";
+    // Parts often sit on top of each other, so stagger the labels by index
+    // rather than letting them pile up into one unreadable smear.
+    g.fillText(part.name, x + 3, y + 12 + part.index * 12);
+  }
+}
+
+function afterEdit() { renderDiff(); draw(); }
+
+$("file").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  fileName = f.name;
+  try {
+    original = new Uint8Array(await f.arrayBuffer());
+    working = new DataView(original.slice().buffer);
+    doc = parse(original);
+    selected = -1;
+    render();
+  } catch (err) {
+    $("info").innerHTML = `<span class="err">${err.message}</span>`;
+    $("infoSec").hidden = false;
+    $("partsSec").hidden = $("panesSec").hidden = $("previewSec").hidden = $("diffSec").hidden = true;
+    return;
+  }
+  $("previewSec").hidden = false;
+});
+
+$("reset").addEventListener("click", () => {
+  working = new DataView(original.slice().buffer);
+  render();
+});
+
+$("save").addEventListener("click", () => {
+  const blob = new Blob([new Uint8Array(working.buffer)], { type: "application/octet-stream" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+</script>
+</body>
+</html>

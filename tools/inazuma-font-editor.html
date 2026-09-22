@@ -172,6 +172,13 @@ header h1 .ver{font-style:normal;font-size:12px;color:#1a1205;background:var(--a
   <span class="badge" id="fileBadge">لم يُفتح ملف</span>
   <div class="grow"></div>
   <button id="btnOpen">📂 فتح ملفات الخطّ</button>
+  <select id="sheetScale" title="حجم خليّة الحرف في الورقة">
+    <option value="1" selected>1× (مطابق للأصل)</option>
+    <option value="2">2×</option>
+    <option value="4">4×</option>
+    <option value="8">8×</option>
+    <option value="12">12×</option>
+  </select>
   <button id="btnSheetOut" disabled>🖼️ تصدير ورقة رسم</button>
   <button id="btnSheetIn" disabled>📥 استيراد ورقة رسم</button>
   <button id="btnVerify" disabled>🔍 تحقّق</button>
@@ -1846,13 +1853,19 @@ window.addEventListener("beforeunload", (e) => {
  * الإرشاد -- الإطار وحدّ العرض وخطّ الأساس -- محجوزة وتُقرأ خلفيةً دائماً،
  * فالخطوط التي ترشد الرسّام لا تدخل الخطّ.
  */
-const SHEET_SCALE = 12;      // بكسل الصورة لكل بكسل من الخطّ
-const SHEET_PAD = 10;        // الفراغ حول كل خليّة، وفيه يُكتب الاسم
-const SHEET_LABEL = 16;      // ارتفاع سطر الاسم فوق كل خليّة
+const SHEET_SCALES = [1, 2, 4, 8, 12];
+const SHEET_PAD = 2;         // إطار الخليّة يعيش هنا، خارج بكسلات الحرف
+// سطر الاسم فوق كل خليّة، في الفراغ لا في الخليّة. عند المقاييس الصغيرة تكون
+// الخليّة أضيق من الاسم فيتداخل مع جاره، فيُسقَط ويبقى الترتيب هو الدليل --
+// وهو ترتيب الشبكة في الأداة نفسها.
+const SHEET_LABEL_AT = 4;
+const labelHeight = (scale) => (scale >= SHEET_LABEL_AT ? 14 : 0);
 const SHEET_COLS = 10;
-const SHEET_BORDER = "#c0392b";   // إطار الخليّة
-const SHEET_GUIDE = "#1f6fd0";    // حدّ العرض وخطّ الأساس
-const SHEET_BG = "#000000";
+const SHEET_BORDER = [0xc0, 0x39, 0x2b];   // إطار الخليّة
+const SHEET_GUIDE = [0x1f, 0x6f, 0xd0];    // حدّ العرض وخطّ الأساس
+const SHEET_BG = [0x00, 0x00, 0x00];
+
+const sheetScale = () => +$("sheetScale").value;
 
 function sheetSlots() {
   const f = FONTS[cur];
@@ -1864,71 +1877,83 @@ function sheetSlots() {
   return out;
 }
 
-function sheetGeometry(f, count) {
-  const cellW = f.cw * SHEET_SCALE, cellH = f.ch * SHEET_SCALE;
+function sheetGeometry(f, count, scale) {
+  const cellW = f.cw * scale, cellH = f.ch * scale;
   const stepX = cellW + SHEET_PAD * 2;
-  const stepY = cellH + SHEET_PAD * 2 + SHEET_LABEL;
+  const stepY = cellH + SHEET_PAD * 2 + labelHeight(scale);
   const cols = Math.min(SHEET_COLS, count);
   const rows = Math.ceil(count / cols);
-  return { cellW, cellH, stepX, stepY, cols, rows, W: cols * stepX, H: rows * stepY };
+  return { cellW, cellH, stepX, stepY, cols, rows, scale, W: cols * stepX, H: rows * stepY };
+}
+
+/** Top-left corner of cell k's glyph area, in image pixels. */
+function cellOrigin(G, k) {
+  return {
+    x: (k % G.cols) * G.stepX + SHEET_PAD,
+    y: Math.floor(k / G.cols) * G.stepY + labelHeight(G.scale) + SHEET_PAD,
+  };
 }
 
 function exportSheet() {
   const f = FONTS[cur];
   const slots = sheetSlots();
   if (!slots.length) { toast("لا حروف معروضة لتصديرها", "bad"); return; }
-  const G = sheetGeometry(f, slots.length);
+  const scale = sheetScale();
+  const G = sheetGeometry(f, slots.length, scale);
 
   const cv = document.createElement("canvas");
   cv.width = G.W; cv.height = G.H;
   const ctx = cv.getContext("2d");
-  ctx.fillStyle = SHEET_BG;
+  const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+  ctx.fillStyle = rgb(SHEET_BG);
   ctx.fillRect(0, 0, G.W, G.H);
 
   slots.forEach((g, k) => {
-    const cx = (k % G.cols) * G.stepX + SHEET_PAD;
-    const cy = Math.floor(k / G.cols) * G.stepY + SHEET_LABEL + SHEET_PAD;
+    const { x: cx, y: cy } = cellOrigin(G, k);
 
     for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
       const [r, gg, b] = PAL[getPixel(f, g, x, y)];
       ctx.fillStyle = `rgb(${r},${gg},${b})`;
-      ctx.fillRect(cx + x * SHEET_SCALE, cy + y * SHEET_SCALE, SHEET_SCALE, SHEET_SCALE);
+      ctx.fillRect(cx + x * scale, cy + y * scale, scale, scale);
     }
 
-    ctx.strokeStyle = SHEET_GUIDE;
-    ctx.lineWidth = 2;
-    const advX = cx + f.adv[g] * SHEET_SCALE;
-    ctx.beginPath(); ctx.moveTo(advX, cy); ctx.lineTo(advX, cy + G.cellH); ctx.stroke();
-    const baseY = cy + (f.baselinePos + 1) * SHEET_SCALE;
-    ctx.beginPath(); ctx.moveTo(cx, baseY); ctx.lineTo(cx + G.cellW, baseY); ctx.stroke();
+    // The guides live in the padding ring, never on a glyph pixel, so at 1:1
+    // the cell is nothing but the glyph and the drawing stays exact.
+    ctx.fillStyle = rgb(SHEET_GUIDE);
+    const advX = cx + f.adv[g] * scale;
+    ctx.fillRect(advX - (f.adv[g] === f.cw ? 1 : 0), cy - SHEET_PAD, 1, SHEET_PAD);
+    ctx.fillRect(advX - (f.adv[g] === f.cw ? 1 : 0), cy + G.cellH, 1, SHEET_PAD);
+    const baseY = cy + (f.baselinePos + 1) * scale;
+    ctx.fillRect(cx - SHEET_PAD, baseY - 1, SHEET_PAD, 1);
+    ctx.fillRect(cx + G.cellW, baseY - 1, SHEET_PAD, 1);
 
-    ctx.strokeStyle = SHEET_BORDER;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(cx - 1, cy - 1, G.cellW + 2, G.cellH + 2);
+    ctx.strokeStyle = rgb(SHEET_BORDER);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx - 0.5, cy - 0.5, G.cellW + 1, G.cellH + 1);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "12px monospace";
-    ctx.textBaseline = "bottom";
-    ctx.fillText(`${g}  ${describeSlot(g)}`.slice(0, 26), cx, cy - 3);
+    if (labelHeight(scale)) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "11px monospace";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`${g} ${describeSlot(g)}`.slice(0, Math.floor(G.cellW / 6)), cx - SHEET_PAD, cy - SHEET_PAD - 1);
+    }
   });
 
   cv.toBlob((blob) => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${f.name.replace(/\.nftr$/i, "")}-sheet.png`;
+    a.download = `${f.name.replace(/\.nftr$/i, "")}-sheet-${scale}x.png`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }, "image/png");
 
-  toast(`صُدّرت ${slots.length} خانة — ${G.W}×${G.H}`, "ok");
+  toast(`صُدّرت ${slots.length} خانة بمقياس ${scale}× — ${G.W}×${G.H}`, "ok");
 }
 
 /** أقرب مستوى في لوحة الخطّ إلى لون مقروء من الصورة. */
 function nearestLevel(r, g, b) {
-  // الألوان المحجوزة للإرشاد ليست حبراً مهما بدت.
-  const hex = (v) => v.toString(16).padStart(2, "0");
-  const asHex = "#" + hex(r) + hex(g) + hex(b);
-  if (asHex === SHEET_BORDER || asHex === SHEET_GUIDE) return 0;
+  const same = (c) => c[0] === r && c[1] === g && c[2] === b;
+  if (same(SHEET_BORDER) || same(SHEET_GUIDE)) return 0;   // إرشاد، ليس حبراً
   let best = 0, bestD = Infinity;
   PAL.forEach((c, v) => {
     const d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
@@ -1940,28 +1965,34 @@ function nearestLevel(r, g, b) {
 async function importSheet(file) {
   const f = FONTS[cur];
   const slots = sheetSlots();
-  const G = sheetGeometry(f, slots.length);
-
   const bmp = await createImageBitmap(file);
-  if (bmp.width !== G.W || bmp.height !== G.H) {
-    toast(`أبعاد الصورة ${bmp.width}×${bmp.height} لا تطابق ورقة هذا الخطّ ${G.W}×${G.H} — ` +
+
+  // The scale is read back from the image itself, so a sheet exported at any
+  // zoom comes home without the person having to remember which one.
+  const G = SHEET_SCALES.map((s) => sheetGeometry(f, slots.length, s))
+    .find((g) => g.W === bmp.width && g.H === bmp.height);
+  if (!G) {
+    const sizes = SHEET_SCALES.map((s) => { const g = sheetGeometry(f, slots.length, s); return `${s}×: ${g.W}×${g.H}`; });
+    toast(`أبعاد الصورة ${bmp.width}×${bmp.height} لا تطابق ورقة هذا الخطّ بأي مقياس (${sizes.join("، ")}) — ` +
           `صدّر الورقة بنفس الفلتر أولاً`, "bad");
     return;
   }
+
   const cv = document.createElement("canvas");
   cv.width = bmp.width; cv.height = bmp.height;
   const ctx = cv.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(bmp, 0, 0);
   const img = ctx.getImageData(0, 0, cv.width, cv.height).data;
 
-  const half = Math.floor(SHEET_SCALE / 2);
+  // At 1:1 the sample is the pixel itself; zoomed in, take the block's middle
+  // so a stroke that spills a little over a boundary does not reach its neighbour.
+  const half = G.scale >> 1;
   let changedGlyphs = 0, changedPixels = 0;
   slots.forEach((g, k) => {
-    const cx = (k % G.cols) * G.stepX + SHEET_PAD;
-    const cy = Math.floor(k / G.cols) * G.stepY + SHEET_LABEL + SHEET_PAD;
+    const { x: cx, y: cy } = cellOrigin(G, k);
     let touched = false;
     for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
-      const px = cx + x * SHEET_SCALE + half, py = cy + y * SHEET_SCALE + half;
+      const px = cx + x * G.scale + half, py = cy + y * G.scale + half;
       const o = (py * cv.width + px) * 4;
       const v = nearestLevel(img[o], img[o + 1], img[o + 2]);
       if (getPixel(f, g, x, y) === v) continue;
@@ -1975,8 +2006,8 @@ async function importSheet(file) {
   selectSlot(slot);
   afterEdit();
   toast(changedPixels === 0
-    ? "الورقة مطابقة — لم يتغيّر شيء"
-    : `طُبّقت: ${changedGlyphs} حرفاً · ${changedPixels} بكسلاً`, "ok");
+    ? `الورقة (${G.scale}×) مطابقة — لم يتغيّر شيء`
+    : `طُبّقت من ورقة ${G.scale}×: ${changedGlyphs} حرفاً · ${changedPixels} بكسلاً`, "ok");
 }
 
 $("btnSheetOut").onclick = exportSheet;

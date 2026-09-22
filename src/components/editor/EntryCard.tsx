@@ -11,6 +11,7 @@ import { pkmLooksNonLinguistic } from "@/lib/pokemon/pkm-junk";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { hasRisenTags, diffRisenTags, restoreRisenTags } from "@/lib/risen-tag-guard";
+import { validateInazumaTags, repairInazumaTags } from "@/lib/inazuma/inazuma-tags";
 import {
   hasOrphanLines, visualLength, splitEvenlyByLines, splitByOriginalBreaks,
   hasEngineLineBreakTags, mapTranslationToLineSkeleton,
@@ -268,6 +269,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
   const editorOriginal = isGtaIvEntry ? gtaIvRuntimeTextToEditorText(entry.original) : entry.original;
   const editorTranslation = isGtaIvEntry ? gtaIvRuntimeTextToEditorText(translation) : translation;
   const isRisenEntry = /\.tab$/i.test(entry.msbtFile);
+  const isInazumaEntry = entry.msbtFile.startsWith("inazuma/");
   const gameParam = resolveGameParam(entry.msbtFile, risenVariant);
   const isPokemonXpEntry = gameParam === "pokemon-xp";
   const isTech = isTechnicalText(entry.original, entry.msbtFile);
@@ -297,11 +299,26 @@ const EntryCard: React.FC<EntryCardProps> = ({
       if (diff.exactTagMatch) return null;
       return diff;
     }
+    if (isInazumaEntry) {
+      // The generic tag reader below (`diffTechnicalTags`) does not know this
+      // cartridge's tokens at all, so it never checked `%s`/`%1F`/`\f` here --
+      // this card simply never flagged a dropped one. `validateInazumaTags`
+      // is also the one function guaranteed to never disagree with the fix
+      // button just below, since both read the exact same list.
+      const check = validateInazumaTags(entry.original, translation);
+      if (check.valid) return null;
+      return {
+        exactTagMatch: false,
+        sequenceMatch: false,
+        missingTags: check.expected.filter((t) => !check.actual.includes(t)),
+        extraTags: check.actual.filter((t) => !check.expected.includes(t)),
+      };
+    }
     if (!hasTechnicalTags(entry.original)) return null;
     const diff = diffTechnicalTags(entry.original, translation);
     if (diff.exactTagMatch) return null;
     return diff;
-  }, [entry.original, translation, isRisenEntry]);
+  }, [entry.original, translation, isRisenEntry, isInazumaEntry]);
 
   const handleCopyTags = () => {
     const charRegex = /#[0-5]|[\uFFF9-\uFFFC\uE000-\uF8FF]/g;
@@ -558,7 +575,7 @@ const EntryCard: React.FC<EntryCardProps> = ({
                 )}
                 {technicalDiff && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 font-semibold flex items-center gap-1">
-                    🧷 {isRisenEntry ? "وسوم Risen مختلفة" : "رموز تقنية مختلفة"}
+                    🧷 {isRisenEntry ? "وسوم Risen مختلفة" : isInazumaEntry ? "رموز إينازوما مختلفة" : "رموز تقنية مختلفة"}
                     {technicalDiff.missingTags.length > 0 && (
                       isRisenEntry
                         ? ` (مفقود: ${formatTagCounts(technicalDiff.missingTags)})`
@@ -582,6 +599,21 @@ const EntryCard: React.FC<EntryCardProps> = ({
                             title: "🔧 إصلاح تلقائي",
                             description: repaired.changed ? "أُلحق الوسم الناقص — راجع النص" : "لا يوجد وسم مفقود لإلحاقه",
                           });
+                          return;
+                        }
+                        if (isInazumaEntry) {
+                          // This cartridge's own repair only: it places a
+                          // dropped token where the original kept it, or
+                          // changes nothing when the place is not certain --
+                          // it never falls back to restoring the English
+                          // original the way the generic path below does.
+                          const repaired = repairInazumaTags(entry.original, translation);
+                          if (repaired.changed) {
+                            updateTranslation(key, repaired.text);
+                            toast({ title: "🔧 إصلاح تلقائي", description: "أُعيد الرمز إلى موضعه في الأصل" });
+                          } else {
+                            toast({ title: "⚠️ مراجعة يدوية مطلوبة", description: "موضع الرمز الناقص غير مؤكد — لم يُستبدل النص بالإنجليزي" });
+                          }
                           return;
                         }
                         const fixed = restoreTagsLocally(entry.original, translation);

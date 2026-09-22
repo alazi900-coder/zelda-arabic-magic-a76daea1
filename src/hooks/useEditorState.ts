@@ -213,6 +213,29 @@ export function useEditorState() {
   const quality = useEditorQuality({ state });
   const { isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, needsImprovement, qualityStats, needsImproveCount, categoryProgress, translatedCount } = quality;
 
+  /**
+   * Drops a category id from `filterCategory` once it's clear no loaded entry
+   * can ever match it -- typically a stale id restored from a saved workspace
+   * after that category was renamed (e.g. Inazuma's "iz-menu" becoming
+   * "iz-match"). Left in place, such an id makes `filterCategory.length > 0`
+   * forever without matching anything, so the editor opens to "0 نص" and
+   * never recovers until a fresh, valid card is clicked.
+   *
+   * `categoryProgress` is exactly the set of category ids the currently
+   * loaded entries actually produce (built by the same chunked pass that
+   * feeds the category cards), so a dead id is simply one missing from it.
+   * Waiting for it to be non-empty avoids pruning against a progress object
+   * still mid-computation from a game switch.
+   */
+  useEffect(() => {
+    const validIds = Object.keys(categoryProgress);
+    if (validIds.length === 0) return;
+    setFilterCategory(prev => {
+      const pruned = prev.filter(id => validIds.includes(id));
+      return pruned.length === prev.length ? prev : pruned;
+    });
+  }, [categoryProgress]);
+
   // Ref wired below to fileIO.handleExportTranslations so the build can auto-export after success
   const onBuildSuccessRef = useRef<(() => void) | null>(null);
   const build = useEditorBuild({ state, setState, setLastSaved, arabicNumerals, mirrorPunctuation, forceSaveRef, onBuildSuccessRef });

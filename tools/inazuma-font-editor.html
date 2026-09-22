@@ -117,6 +117,9 @@ td.tip{color:var(--dim);font-size:13.5px;line-height:1.65;max-width:520px}
   padding:11px 22px;opacity:0;pointer-events:none;transition:.25s;z-index:50;
   box-shadow:0 10px 30px rgba(0,0,0,.45)}
 #toast.on{opacity:1}
+#restoreBar{display:flex;gap:10px;align-items:center;padding:10px 18px;
+  background:rgba(245,196,81,.12);border-bottom:1px solid rgba(245,196,81,.35);font-size:13.5px}
+#restoreBar[hidden]{display:none}
 #toast.ok{border-color:rgba(74,222,128,.5)}
 #toast.bad{border-color:rgba(248,113,113,.5)}
 
@@ -169,11 +172,20 @@ header h1 .ver{font-style:normal;font-size:12px;color:#1a1205;background:var(--a
   <span class="badge" id="fileBadge">لم يُفتح ملف</span>
   <div class="grow"></div>
   <button id="btnOpen">📂 فتح ملفات الخطّ</button>
+  <button id="btnSheetOut" disabled>🖼️ تصدير ورقة رسم</button>
+  <button id="btnSheetIn" disabled>📥 استيراد ورقة رسم</button>
   <button id="btnVerify" disabled>🔍 تحقّق</button>
   <button id="btnExport" disabled>⬇️ تصدير لملف الأداة</button>
   <button id="btnSave" class="primary" disabled>💾 حفظ الخطّ</button>
   <input type="file" id="file" accept=".NFTR,.nftr" multiple hidden>
+  <input type="file" id="sheetFile" accept="image/png,image/*" hidden>
 </header>
+
+<div id="restoreBar" hidden>
+  <span id="restoreMsg"></span>
+  <button id="btnRestore" class="primary">استعادة</button>
+  <button id="btnDiscard">تجاهل</button>
+</div>
 
 <nav>
   <button id="tabFiles" class="on">ملفات الخطّ</button>
@@ -378,13 +390,17 @@ function decodeNftr(buf, name) {
     p += size;
   }
   if (plgcOff < 0 || hdwcOff < 0) throw new Error("الملفّ ناقص كتلة PLGC أو HDWC");
-  if (depth !== 1) throw new Error(`عمق ألوان غير مدعوم (${depth} بتّ)`);
+  if (![1, 2, 4, 8].includes(depth)) throw new Error(`عمق ألوان غير مدعوم (${depth} بتّ)`);
 
   const bits = cw * ch;
+  const mask = (1 << depth) - 1;
   const pix = new Uint8Array(n * bits);
   for (let g = 0; g < n; g++) {
     const off = plgcOff + g * tb;
-    for (let i = 0; i < bits; i++) pix[g * bits + i] = (buf[off + (i >> 3)] >> (7 - (i & 7))) & 1;
+    for (let i = 0; i < bits; i++) {
+      const bit = i * depth;
+      pix[g * bits + i] = (buf[off + (bit >> 3)] >> (8 - depth - (bit & 7))) & mask;
+    }
   }
   const lb = new Array(n), gw = new Array(n), adv = new Array(n);
   for (let g = 0; g < n; g++) {
@@ -392,7 +408,7 @@ function decodeNftr(buf, name) {
     gw[g] = buf[hdwcOff + g * 3 + 1];
     adv[g] = buf[hdwcOff + g * 3 + 2];
   }
-  return { name, raw: buf, cw, ch, tb, n, plgcOff, hdwcOff, baselinePos, pix, lb, gw, adv };
+  return { name, raw: buf, cw, ch, tb, n, depth, plgcOff, hdwcOff, baselinePos, pix, lb, gw, adv };
 }
 
 /** يُعيد بناء الملفّ كاملاً: منطقة الرسمات تُصفّر ثمّ تُكتب من جديد، فالتحقّق يعني شيئاً. */
@@ -403,7 +419,10 @@ function encodeNftr(f) {
   for (let g = 0; g < f.n; g++) {
     const off = f.plgcOff + g * f.tb;
     for (let i = 0; i < bits; i++) {
-      if (f.pix[g * bits + i]) out[off + (i >> 3)] |= 1 << (7 - (i & 7));
+      const v = f.pix[g * bits + i];
+      if (!v) continue;
+      const bit = i * f.depth;
+      out[off + (bit >> 3)] |= v << (8 - f.depth - (bit & 7));
     }
     out[f.hdwcOff + g * 3] = f.lb[g];
     out[f.hdwcOff + g * 3 + 1] = f.gw[g];
@@ -413,7 +432,10 @@ function encodeNftr(f) {
 }
 
 function getPixel(f, g, x, y) { return f.pix[(g * f.ch + y) * f.cw + x]; }
-function setPixel(f, g, x, y, v) { f.pix[(g * f.ch + y) * f.cw + x] = v ? 1 : 0; }
+function setPixel(f, g, x, y, v) {
+  const max = (1 << f.depth) - 1;
+  f.pix[(g * f.ch + y) * f.cw + x] = Math.max(0, Math.min(max, v | 0));
+}
 
 /* ===================== خانات العربية الـ١٢٥ ===================== */
 
@@ -747,8 +769,24 @@ const FILE_TIPS = {
 
 /* ===================== الحالة ===================== */
 
-const PAL = [[0x12,0x14,0x1a],[0xff,0xff,0xff]];
-const PAL_NAMES = ["خلفية", "حبر"];
+/**
+ * لوحة الألوان ليست ثابتة: عمق الخطّ يحدّد كم مستوى حبر فيه. FONT12 وFONT8
+ * بتّ واحد فخلفية وحبر، وFONT12T بتّان فأربعة مستويات. تُعاد بناؤها عند فتح
+ * كل خطّ، فتبقى مواضع استعمالها الثلاثة كما هي.
+ */
+let PAL = [[0x12,0x14,0x1a],[0xff,0xff,0xff]];
+let PAL_NAMES = ["خلفية", "حبر"];
+
+function rebuildPalette(depth) {
+  const levels = 1 << depth;
+  PAL = []; PAL_NAMES = [];
+  for (let v = 0; v < levels; v++) {
+    if (v === 0) { PAL.push([0x12, 0x14, 0x1a]); PAL_NAMES.push("خلفية"); continue; }
+    const t = Math.round(0x40 + (0xff - 0x40) * (v / (levels - 1)));
+    PAL.push([t, t, t]);
+    PAL_NAMES.push(levels === 2 ? "حبر" : `حبر ${v}`);
+  }
+}
 
 const $ = (id) => document.getElementById(id);
 let FONTS = [], PRISTINE = [], cur = 0, slot = 0, color = 1, tool = "pen";
@@ -782,11 +820,16 @@ async function loadFiles(fileList) {
     }
   }
   if (!FONTS.length) return;
+  finishLoad();
+  toast(`فُتح ${added.length} ملف`, "ok");
+}
 
+/** الخطوة المشتركة بين فتح الملفات واستعادة جلسة محفوظة. */
+function finishLoad() {
   $("fileBadge").textContent = `${FONTS.length} ملف · ` + FONTS.map((f) => f.name).join(" · ");
-  $("btnSave").disabled = false;
-  $("btnVerify").disabled = false;
-  $("btnExport").disabled = false;
+  for (const id of ["btnSave", "btnVerify", "btnExport", "btnSheetOut", "btnSheetIn"]) {
+    $(id).disabled = false;
+  }
 
   const sel = $("fontSel");
   sel.innerHTML = "";
@@ -798,9 +841,9 @@ async function loadFiles(fileList) {
   });
   cur = Math.max(0, FONTS.findIndex((f) => f.name.toUpperCase() === "FONT12.NFTR"));
   sel.value = String(cur);
+  rebuildPalette(FONTS[cur].depth);
   renderFiles();
   showPage("files");
-  toast(`فُتح ${added.length} ملف`, "ok");
 }
 
 function showPage(which) {
@@ -929,7 +972,11 @@ function refreshCell(g) {
 function openFont(i) {
   cur = i;
   const f = FONTS[i];
-  slot = SLOT_SET.has(slot) && slot < f.n ? slot : AR_SLOTS[0];
+  rebuildPalette(f.depth);
+  if (color >= PAL.length) color = PAL.length - 1;
+  // Any slot is editable, not only the 125 Arabic ones -- the only thing that
+  // has to hold is that the slot exists in this font.
+  if (!(slot >= 0 && slot < f.n)) slot = AR_SLOTS.find((s) => s < f.n) ?? 0;
   $("width").max = String(f.cw);
   $("gBase").min = String(Math.max(2, f.ch - 8));
   $("gBase").max = String(f.ch - 1);
@@ -1133,6 +1180,7 @@ function updateUndo() { $("undo").disabled = !undoStack.length; $("redo").disabl
 function afterEdit() {
   drawPaint(); refreshCell(slot); drawCompare(); renderForms(slot);
   drawPreview(); runAudit(); refreshModCount();
+  scheduleAutosave();
 }
 
 function refreshModCount() {
@@ -1522,6 +1570,7 @@ function applyGen() {
   }
   $("btnGenUndo").disabled = false;
   openFont(cur);
+  scheduleAutosave();
   toast(`كُتب ${n} شكلاً عربياً في ${f.name}`, "ok");
 }
 
@@ -1599,6 +1648,7 @@ $("width").oninput = (e) => {
   f.gw[slot] = +e.target.value;
   $("widthVal").textContent = e.target.value;
   drawPaint(); drawPreview(); refreshCell(slot);
+  scheduleAutosave();
 };
 $("shiftR").onclick = () => shift(1, 0);
 $("shiftL").onclick = () => shift(-1, 0);
@@ -1675,6 +1725,271 @@ $("btnTestAdd").onclick = () => {
   renderTests();
 };
 $("testAdd").onkeydown = (e) => { if (e.key === "Enter") $("btnTestAdd").click(); };
+
+/* ===================== الحفظ التلقائي ===================== */
+
+/**
+ * كل ما في هذه الأداة كان يعيش في ذاكرة الصفحة وحدها: لا localStorage ولا
+ * IndexedDB ولا تحذير قبل المغادرة. فإذا أسقط المتصفّح التبويب -- وهذا ما
+ * تفعله الهواتف بالتبويبات الخاملة، وما تفعله إيماءة الرجوع أو تحديث
+ * الصفحة -- ذهب العمل كلّه بلا إشعار. هنا تُحفظ الخطوط بعد كل تعديل،
+ * وتُعرض عند الفتح إن وُجدت.
+ *
+ * المحفوظ هو بايتات NFTR المعادة بناؤها لكل خطّ مع أصله، فالاستعادة تمرّ
+ * بنفس مسار فتح الملفات ولا تحتاج شكلاً خاصاً على القرص.
+ */
+const DB_NAME = "inazuma-font-editor", STORE = "session";
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open(DB_NAME, 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore(STORE);
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+
+async function dbPut(key, value) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(value, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+async function dbGet(key) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, "readonly");
+    const rq = tx.objectStore(STORE).get(key);
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+
+async function dbDel(key) {
+  const db = await openDB();
+  return new Promise((res) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = () => res();
+  });
+}
+
+let dirty = false, autosaveTimer = 0;
+
+function scheduleAutosave() {
+  dirty = true;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(saveSession, 500);
+}
+
+async function saveSession() {
+  if (!FONTS.length) return;
+  try {
+    await dbPut("fonts", {
+      when: Date.now(),
+      files: FONTS.map((f, i) => ({
+        name: f.name,
+        edited: encodeNftr(f),
+        pristine: PRISTINE[i].raw,
+      })),
+    });
+  } catch (e) {
+    toast("تعذّر الحفظ التلقائي: " + e.message, "bad");
+  }
+}
+
+async function offerRestore() {
+  let saved;
+  try { saved = await dbGet("fonts"); } catch { return; }
+  if (!saved || !saved.files || !saved.files.length) return;
+  const when = new Date(saved.when).toLocaleString("ar");
+  $("restoreMsg").textContent =
+    `وُجد عمل غير محفوظ من ${when} — ${saved.files.map((f) => f.name).join("، ")}`;
+  $("restoreBar").hidden = false;
+  $("btnRestore").onclick = () => { restoreSession(saved); $("restoreBar").hidden = true; };
+  $("btnDiscard").onclick = async () => { await dbDel("fonts"); $("restoreBar").hidden = true; };
+}
+
+function restoreSession(saved) {
+  FONTS = []; PRISTINE = [];
+  for (const file of saved.files) {
+    try {
+      FONTS.push(decodeNftr(new Uint8Array(file.edited), file.name));
+      PRISTINE.push(decodeNftr(new Uint8Array(file.pristine), file.name));
+    } catch (e) {
+      toast(`${file.name}: ${e.message}`, "bad");
+    }
+  }
+  if (!FONTS.length) return;
+  finishLoad();
+  toast(`استُعيد ${FONTS.length} خطّاً`, "ok");
+}
+
+window.addEventListener("beforeunload", (e) => {
+  if (!dirty) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+/* ===================== ورقة الرسم ===================== */
+
+/**
+ * ورقة PNG واحدة فيها كل حرف داخل مربّعه، لتُرسم في أي محرّر صور ثمّ تعود.
+ *
+ * الأبعاد ثابتة ومشتقّة من الخطّ نفسه، فالاستيراد يعيد حسابها ويرفض أي صورة
+ * لا تطابقها بالضبط بدل أن يكتب حروفاً مشوّهة بصمت. القراءة تأخذ مركز كل
+ * مربّع لا حافّته، فرسمة تتجاوز حدّ البكسل بقليل لا تُفسد جاره. وألوان
+ * الإرشاد -- الإطار وحدّ العرض وخطّ الأساس -- محجوزة وتُقرأ خلفيةً دائماً،
+ * فالخطوط التي ترشد الرسّام لا تدخل الخطّ.
+ */
+const SHEET_SCALE = 12;      // بكسل الصورة لكل بكسل من الخطّ
+const SHEET_PAD = 10;        // الفراغ حول كل خليّة، وفيه يُكتب الاسم
+const SHEET_LABEL = 16;      // ارتفاع سطر الاسم فوق كل خليّة
+const SHEET_COLS = 10;
+const SHEET_BORDER = "#c0392b";   // إطار الخليّة
+const SHEET_GUIDE = "#1f6fd0";    // حدّ العرض وخطّ الأساس
+const SHEET_BG = "#000000";
+
+function sheetSlots() {
+  const f = FONTS[cur];
+  const out = [];
+  for (let g = 0; g < f.n; g++) {
+    const empty = !cellInk(f, g).some((r) => r.some((v) => v));
+    if (passesFilter(g, empty)) out.push(g);
+  }
+  return out;
+}
+
+function sheetGeometry(f, count) {
+  const cellW = f.cw * SHEET_SCALE, cellH = f.ch * SHEET_SCALE;
+  const stepX = cellW + SHEET_PAD * 2;
+  const stepY = cellH + SHEET_PAD * 2 + SHEET_LABEL;
+  const cols = Math.min(SHEET_COLS, count);
+  const rows = Math.ceil(count / cols);
+  return { cellW, cellH, stepX, stepY, cols, rows, W: cols * stepX, H: rows * stepY };
+}
+
+function exportSheet() {
+  const f = FONTS[cur];
+  const slots = sheetSlots();
+  if (!slots.length) { toast("لا حروف معروضة لتصديرها", "bad"); return; }
+  const G = sheetGeometry(f, slots.length);
+
+  const cv = document.createElement("canvas");
+  cv.width = G.W; cv.height = G.H;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = SHEET_BG;
+  ctx.fillRect(0, 0, G.W, G.H);
+
+  slots.forEach((g, k) => {
+    const cx = (k % G.cols) * G.stepX + SHEET_PAD;
+    const cy = Math.floor(k / G.cols) * G.stepY + SHEET_LABEL + SHEET_PAD;
+
+    for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
+      const [r, gg, b] = PAL[getPixel(f, g, x, y)];
+      ctx.fillStyle = `rgb(${r},${gg},${b})`;
+      ctx.fillRect(cx + x * SHEET_SCALE, cy + y * SHEET_SCALE, SHEET_SCALE, SHEET_SCALE);
+    }
+
+    ctx.strokeStyle = SHEET_GUIDE;
+    ctx.lineWidth = 2;
+    const advX = cx + f.adv[g] * SHEET_SCALE;
+    ctx.beginPath(); ctx.moveTo(advX, cy); ctx.lineTo(advX, cy + G.cellH); ctx.stroke();
+    const baseY = cy + (f.baselinePos + 1) * SHEET_SCALE;
+    ctx.beginPath(); ctx.moveTo(cx, baseY); ctx.lineTo(cx + G.cellW, baseY); ctx.stroke();
+
+    ctx.strokeStyle = SHEET_BORDER;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx - 1, cy - 1, G.cellW + 2, G.cellH + 2);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "12px monospace";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`${g}  ${describeSlot(g)}`.slice(0, 26), cx, cy - 3);
+  });
+
+  cv.toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${f.name.replace(/\.nftr$/i, "")}-sheet.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, "image/png");
+
+  toast(`صُدّرت ${slots.length} خانة — ${G.W}×${G.H}`, "ok");
+}
+
+/** أقرب مستوى في لوحة الخطّ إلى لون مقروء من الصورة. */
+function nearestLevel(r, g, b) {
+  // الألوان المحجوزة للإرشاد ليست حبراً مهما بدت.
+  const hex = (v) => v.toString(16).padStart(2, "0");
+  const asHex = "#" + hex(r) + hex(g) + hex(b);
+  if (asHex === SHEET_BORDER || asHex === SHEET_GUIDE) return 0;
+  let best = 0, bestD = Infinity;
+  PAL.forEach((c, v) => {
+    const d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
+    if (d < bestD) { bestD = d; best = v; }
+  });
+  return best;
+}
+
+async function importSheet(file) {
+  const f = FONTS[cur];
+  const slots = sheetSlots();
+  const G = sheetGeometry(f, slots.length);
+
+  const bmp = await createImageBitmap(file);
+  if (bmp.width !== G.W || bmp.height !== G.H) {
+    toast(`أبعاد الصورة ${bmp.width}×${bmp.height} لا تطابق ورقة هذا الخطّ ${G.W}×${G.H} — ` +
+          `صدّر الورقة بنفس الفلتر أولاً`, "bad");
+    return;
+  }
+  const cv = document.createElement("canvas");
+  cv.width = bmp.width; cv.height = bmp.height;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0);
+  const img = ctx.getImageData(0, 0, cv.width, cv.height).data;
+
+  const half = Math.floor(SHEET_SCALE / 2);
+  let changedGlyphs = 0, changedPixels = 0;
+  slots.forEach((g, k) => {
+    const cx = (k % G.cols) * G.stepX + SHEET_PAD;
+    const cy = Math.floor(k / G.cols) * G.stepY + SHEET_LABEL + SHEET_PAD;
+    let touched = false;
+    for (let y = 0; y < f.ch; y++) for (let x = 0; x < f.cw; x++) {
+      const px = cx + x * SHEET_SCALE + half, py = cy + y * SHEET_SCALE + half;
+      const o = (py * cv.width + px) * 4;
+      const v = nearestLevel(img[o], img[o + 1], img[o + 2]);
+      if (getPixel(f, g, x, y) === v) continue;
+      setPixel(f, g, x, y, v);
+      changedPixels++; touched = true;
+    }
+    if (touched) changedGlyphs++;
+  });
+
+  renderGrid();
+  selectSlot(slot);
+  afterEdit();
+  toast(changedPixels === 0
+    ? "الورقة مطابقة — لم يتغيّر شيء"
+    : `طُبّقت: ${changedGlyphs} حرفاً · ${changedPixels} بكسلاً`, "ok");
+}
+
+$("btnSheetOut").onclick = exportSheet;
+$("btnSheetIn").onclick = () => $("sheetFile").click();
+$("sheetFile").onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try { await importSheet(file); }
+  catch (err) { toast("تعذّرت قراءة الصورة: " + err.message, "bad"); }
+};
+
+offerRestore();
 
 </script>
 </body>

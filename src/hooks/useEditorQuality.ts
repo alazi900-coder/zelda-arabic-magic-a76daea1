@@ -15,7 +15,7 @@ import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
 import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
-import { validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
+import { inazumaSlotsAgree, validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry, isPhEntry } from "@/lib/ph/ph-categories";
@@ -199,9 +199,17 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
   }
   if (hasContent && entry.msbtFile.startsWith("inazuma/")) {
     const check = validateInazumaTags(entry.original, translation);
-    damagedTags = !check.valid;
-    qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
-    tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;
+    // This cartridge writes its line break as the two characters `\` and `n`,
+    // which puts it in the same token list as `%s`. A translation that merged
+    // two lines therefore read as a missing *value* and raised both the
+    // "رموز تالفة" and "رموز تقنية مختلفة" badges at once, for a line whose
+    // only fault is that it needs splitting. That is reported by the deep scan
+    // as "يحتاج تقسيم", the same as every other game, so it is not a tag fault
+    // here either.
+    const onlyLineBreaks = !check.valid && inazumaSlotsAgree(entry.original, translation);
+    damagedTags = !check.valid && !onlyLineBreaks;
+    qMissingTags = !onlyLineBreaks && check.expected.some(tag => !check.actual.includes(tag));
+    tagOrderMismatch = !check.valid && !onlyLineBreaks && check.expected.length === check.actual.length;
   }
   return { translation, cat, isTranslated, qTooLong, qNearLimit, qMissingTags, qPlaceholderMismatch, damagedTags, tagOrderMismatch, niTooShort, niTooLong, niStuck, niMixed };
 }

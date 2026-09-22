@@ -97,6 +97,129 @@ function splitIntoLines(text: string, count: number): string[] {
 // back with it: "%s joined you!" puts a space between the name and the verb,
 // and rebuilding the line without it prints the name glued to the next word.
 // A run of "\n" carries no gap, so nothing is added where nothing was there.
+/**
+ * Whether both texts carry the same value slots in the same order -- so the
+ * only thing that can differ between them is where the lines break.
+ *
+ * The editor asks this before calling a line a "damaged token": a translation
+ * that ran two lines together has lost nothing the player can see a hole for,
+ * and reporting it as a broken `%s` sent the translator looking for a fault
+ * that was not there -- twice over, since two separate checks said it.
+ */
+export function inazumaSlotsAgree(original: string, translation: string): boolean {
+  const o = original.match(new RegExp(SLOT_RE.source, "g")) ?? [];
+  const t = translation.match(new RegExp(SLOT_RE.source, "g")) ?? [];
+  return o.length === t.length && o.every((slot, i) => slot === t[i]);
+}
+
+/**
+ * The line break, written as the two characters `\` and `n`.
+ *
+ * This is the one token in the cartridge that carries no value: it says where
+ * a line ends and nothing more. Every other game in this editor writes that as
+ * a real newline, which is why their splitters handle it and this one's did
+ * not -- here it sits in the same regex as `%s`, so a translation that merged
+ * two lines read as a missing *value*, and the repair refused to guess it. It
+ * is safe to guess, though: the original says exactly where the cut goes.
+ */
+const NEWLINE_TOKEN = "\\n";
+
+/** Every token EXCEPT the line break: these hold a value and are never guessed. */
+const SLOT_RE = /\\f|%[1-4]F|%\d?d|%s/g;
+
+/** Splits text into the prose between its value slots: [prose, slot, prose, ...]. */
+function splitOnSlots(text: string): { prose: string[]; slots: string[] } {
+  const prose: string[] = [];
+  const slots: string[] = [];
+  const re = new RegExp(SLOT_RE.source, "g");
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    prose.push(text.slice(last, m.index));
+    slots.push(m[0]);
+    last = m.index + m[0].length;
+  }
+  prose.push(text.slice(last));
+  return { prose, slots };
+}
+
+function wordsOf(text: string): string[] {
+  return text.trim().split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Hands out `text`'s words to as many pieces as `share` has entries, each
+ * piece getting words in the proportion the original gave it.
+ *
+ * A piece the original left empty gets nothing -- that is what puts `%s` alone
+ * on its own line in "%s\njoined you!" instead of dragging a word up with it.
+ * A piece the original filled gets at least one word, so no line renders
+ * blank; when there are not enough words to go round, nothing is returned and
+ * the line is left for the translator.
+ */
+function shareWords(text: string, share: number[]): string[] | null {
+  const words = wordsOf(text);
+  const filled = share.filter((n) => n > 0).length;
+  const total = share.reduce((a, b) => a + b, 0);
+  if (total === 0 || words.length < filled) return null;
+
+  const counts = share.map((n) => (n > 0 ? Math.max(1, Math.round((n / total) * words.length)) : 0));
+  let diff = words.length - counts.reduce((a, b) => a + b, 0);
+  while (diff !== 0) {
+    let pick = -1;
+    for (let i = 0; i < counts.length; i++) {
+      if (share[i] === 0) continue;
+      if (diff < 0 && counts[i] <= 1) continue;
+      if (pick < 0 || counts[i] > counts[pick]) pick = i;
+    }
+    if (pick < 0) return null;
+    counts[pick] += diff > 0 ? 1 : -1;
+    diff += diff > 0 ? -1 : 1;
+  }
+
+  const out: string[] = [];
+  let at = 0;
+  for (const count of counts) {
+    out.push(words.slice(at, at + count).join(" "));
+    at += count;
+  }
+  return out;
+}
+
+/**
+ * Puts back the line breaks a translation lost, cutting the Arabic where the
+ * original cuts the English.
+ *
+ * Only runs when every value slot is still present, in the original's order --
+ * so the slots anchor the two texts to each other, and each break can be
+ * placed in the same prose run it occupies in the original. Returns null when
+ * the two do not line up, leaving the sentence untouched.
+ */
+function restoreNewlines(original: string, translation: string): string | null {
+  const o = splitOnSlots(original);
+  const t = splitOnSlots(translation);
+  if (o.slots.length !== t.slots.length) return null;
+  if (o.slots.some((slot, i) => slot !== t.slots[i])) return null;
+
+  const rebuilt: string[] = [];
+  for (let i = 0; i < o.prose.length; i++) {
+    const origLines = o.prose[i].split(NEWLINE_TOKEN);
+    if (origLines.length === 1) {
+      rebuilt.push(t.prose[i]);
+      continue;
+    }
+    // A break the translation already has here would be doubled by the rebuild.
+    if (t.prose[i].includes(NEWLINE_TOKEN)) return null;
+    const pieces = shareWords(t.prose[i], origLines.map((line) => wordsOf(line).length));
+    if (!pieces) return null;
+    rebuilt.push(pieces.join(NEWLINE_TOKEN));
+  }
+
+  let out = rebuilt[0];
+  for (let i = 0; i < t.slots.length; i++) out += t.slots[i] + rebuilt[i + 1];
+  return out;
+}
+
 const LEAD_RUN_RE = /^((?:\\[nf]|%[1-4]F|%\d?d|%s)+)([ \t]*)/;
 const TAIL_RUN_RE = /([ \t]*)((?:\\[nf]|%[1-4]F|%\d?d|%s)+)\s*$/;
 
@@ -104,6 +227,12 @@ export function repairInazumaTags(original: string, translation: string): { text
   const normalized = normalizeInazumaLookalikes(original, translation);
   const done = (text: string) => ({ text, changed: text !== translation });
   if (validateInazumaTags(original, normalized).valid) return done(normalized);
+
+  // Losing a line break is a splitting problem, not a token one: every value
+  // slot is still there, the words were just run onto one line. Put the breaks
+  // back where the original puts them before falling back to the token repair.
+  const split = restoreNewlines(original, normalized);
+  if (split !== null && validateInazumaTags(original, split).valid) return done(split);
 
   const expected = extractInazumaTags(original);
   const leadMatch = original.match(LEAD_RUN_RE);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairInazumaTags } from "../inazuma-tags";
+import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairInazumaTags, inazumaSlotsAgree } from "../inazuma-tags";
 
 describe("Inazuma technical tokens", () => {
   it("finds the engine's own tokens and nothing else", () => {
@@ -77,6 +77,45 @@ describe("Inazuma token repair", () => {
   it("repairs the lookalike percent an auto-translator writes", () => {
     const result = repairInazumaTags("You got %s", "حصلت على ٪s");
     expect(result.text).toBe("حصلت على %s");
+  });
+});
+
+describe("Inazuma line breaks", () => {
+  // Both of these are real rows from the cartridge that the editor showed as
+  // "رمز تقني مختلف (1 مفقود)" with a fix button that changed nothing.
+  it("puts the break back with the slot alone on its own line", () => {
+    const result = repairInazumaTags("%s\\njoined you!", "%s انضم إليك!");
+    expect(result.text).toBe("%s\\nانضم إليك!");
+    expect(validateInazumaTags("%s\\njoined you!", result.text).valid).toBe(true);
+  });
+
+  it("breaks before the slot when that is where the original breaks", () => {
+    const original = "You got the manual for\\n%s!";
+    const result = repairInazumaTags(original, "لقد حصلت على الدليل الخاص بـ %s !");
+    expect(result.text).toBe("لقد حصلت على الدليل الخاص بـ\\n%s !");
+    expect(validateInazumaTags(original, result.text).valid).toBe(true);
+  });
+
+  it("restores every break when the original has more than one", () => {
+    const result = repairInazumaTags("A\\nB\\nC", "واحد اثنان ثلاثة");
+    expect(result.text).toBe("واحد\\nاثنان\\nثلاثة");
+  });
+
+  it("leaves the line alone when there are too few words to fill it", () => {
+    // one word cannot become two lines without rendering a blank one
+    const result = repairInazumaTags("A\\nB", "واحد");
+    expect(result.changed).toBe(false);
+  });
+
+  it("sees that only the breaks differ, so the editor can stop calling it a damaged token", () => {
+    expect(inazumaSlotsAgree("%s\\njoined you!", "%s انضم إليك!")).toBe(true);
+    expect(inazumaSlotsAgree("You got %s", "حصلت على")).toBe(false);
+    expect(inazumaSlotsAgree("%1F beat %2F", "%2F هزم %1F")).toBe(false);
+  });
+
+  it("still refuses to move a page break, which starts a whole new box", () => {
+    const result = repairInazumaTags("Ready?\\fLet's go, %1F!", "مستعد؟ هيا بنا يا %1F!");
+    expect(result.changed).toBe(false);
   });
 });
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairInazumaTags, inazumaSlotsAgree, maskInazumaTokens, unmaskInazumaTokens } from "../inazuma-tags";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { INAZUMA_TAG_RE } from "../inazuma-tags";
+import { INAZUMA_TAG_RE, findMisplacedInazumaBreak } from "../inazuma-tags";
+import { detectIssues } from "@/lib/diagnostic-detect";
 import { toInazumaBreakTokens, fromInazumaBreakTokens } from "../inazuma-break-tokens";
 
 describe("Inazuma technical tokens", () => {
@@ -274,5 +275,30 @@ describe("Inazuma page break held as ▼ in the editor, like Platinum's pauses",
   it("leaves a line that needs nothing exactly as it was", () => {
     const original = toInazumaBreakTokens("A.\\fB.");
     expect(repairInazumaTags(original, "أ.▼ب.")).toEqual({ text: "أ.▼ب.", changed: false });
+  });
+});
+
+describe("Inazuma page break in the wrong place", () => {
+  const original = toInazumaBreakTokens("Your speed will drop if you lose too much FP.\\fYou can see when this happens.");
+  const entry = { msbtFile: "inazuma/evet", index: 1, label: "", original, maxBytes: 0 };
+
+  it("finds a ▼ mid-sentence and moves it to the end of the sentence, words untouched", () => {
+    const damaged = "ستنخفض سرعتك إذا فقدت الكثير من▼\nنقاط اللياقة. سترى ذلك عندما يحدث.";
+    expect(detectIssues(entry, damaged).map((i) => i.category)).toContain("inazuma_break_misplaced");
+    expect(repairInazumaTags(original, damaged).text).toBe(
+      "ستنخفض سرعتك إذا فقدت الكثير من نقاط اللياقة.▼\nسترى ذلك عندما يحدث.",
+    );
+  });
+
+  it("leaves a ▼ that ends a sentence alone, even where the English would not put it", () => {
+    // the translator may have split one English sentence into two
+    const other = "ستنخفض سرعتك. إذا فقدت الكثير من نقاط اللياقة.▼\nسترى ذلك.";
+    expect(findMisplacedInazumaBreak(original, other)).toBeNull();
+    expect(detectIssues(entry, other).map((i) => i.category)).not.toContain("inazuma_break_misplaced");
+  });
+
+  it("says nothing about a correctly placed ▼", () => {
+    const good = "ستنخفض سرعتك إذا فقدت الكثير من نقاط اللياقة.▼\nسترى ذلك.";
+    expect(findMisplacedInazumaBreak(original, good)).toBeNull();
   });
 });

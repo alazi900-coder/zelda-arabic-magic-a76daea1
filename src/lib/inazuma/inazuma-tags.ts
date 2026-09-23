@@ -331,6 +331,41 @@ function restoreBreaksBySentence(original: string, translation: string): string 
   return validateInazumaTags(o, out).valid ? out : null;
 }
 
+/** A page break with no sentence end right before it -- `…من▼ نقاط اللياقة.` */
+function hasBreakMidSentence(text: string): boolean {
+  const t = toInazumaBreakTokens(fromInazumaBreakTokens(text));
+  for (let i = t.indexOf("▼"); i >= 0; i = t.indexOf("▼", i + 1)) {
+    if (!/[.!?…؟۔]["'”’»)]*$/.test(t.slice(0, i).trimEnd())) return true;
+  }
+  return false;
+}
+
+/**
+ * The translation with its page breaks moved to the end of their sentences,
+ * or `null` when nothing is wrong or it cannot be said for certain.
+ *
+ * Only a break that sits mid-sentence is called wrong: 99.6% of the
+ * cartridge's own breaks end a sentence, so one that does not is a mistake
+ * almost every time. A break that ends a sentence -- just not the one the
+ * English would suggest -- is left alone, since the translator may have split
+ * one English sentence into two Arabic ones and put it exactly right. Nothing
+ * is proposed either when the English itself breaks mid-sentence, when the
+ * sentences do not line up, or when the move would change a single word.
+ *
+ * The misplaced break's display newline becomes a space: it was the box
+ * edge, not a line the translator chose.
+ */
+export function findMisplacedInazumaBreak(original: string, translation: string): string | null {
+  if (!validateInazumaTags(original, translation).valid) return null;
+  if (!hasBreakMidSentence(translation) || hasBreakMidSentence(original)) return null;
+  const flat = toInazumaBreakTokens(fromInazumaBreakTokens(translation)).replace(/▼\n?/g, " ");
+  const moved = restoreBreaksBySentence(original, flat);
+  if (moved === null || hasBreakMidSentence(moved)) return null;
+  const bare = (t: string) => fromInazumaBreakTokens(t).replace(/\\f/g, " ").replace(/\s+/g, " ").trim();
+  if (bare(moved) !== bare(translation)) return null;
+  return moved === translation ? null : moved;
+}
+
 /**
  * Repairs in the cartridge's own spelling and hands the result back in the
  * editor's: the rules below were written against `\f`, and the editor holds
@@ -345,6 +380,9 @@ export function repairInazumaTags(original: string, translation: string): { text
   if (!validateInazumaTags(original, translation).valid) {
     const bySentence = restoreBreaksBySentence(original, translation);
     if (bySentence !== null) return { text: bySentence, changed: bySentence !== translation };
+  } else {
+    const moved = findMisplacedInazumaBreak(original, translation);
+    if (moved !== null) return { text: moved, changed: true };
   }
   const romTranslation = fromInazumaBreakTokens(translation);
   const repaired = repairInazumaTagsInRomForm(fromInazumaBreakTokens(original), romTranslation);

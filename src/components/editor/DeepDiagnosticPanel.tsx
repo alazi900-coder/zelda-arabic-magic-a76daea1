@@ -92,6 +92,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "invisible_chars", label: "أحرف غير مرئية مشبوهة", icon: "👻", severity: "warning", description: "أحرف Unicode غير مرئية (ZWJ, ZWNJ, BOM, إلخ) قد تُربك المحرك" },
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم أصلية مفقودة فعلياً بعد استثناء الوسوم التي تُرجمت بالخطأ — قد تسبب خلل في العرض" },
   { id: "inazuma_tag_mismatch", label: "رموز إينازوما التقنية", icon: "⚽", severity: "critical", description: "رمز مثل ▼ (صندوق حوار جديد) أو %s أو %1F حُذف أو زاد أو تبدّل ترتيبه — تفقد الجملة الاسم أو الرقم الذي تضعه اللعبة. الإصلاح يعيد الرمز إلى موضعه في الأصل ولا يمسّ الترجمة العربية" },
+  { id: "inazuma_break_misplaced", label: "فاصل صندوق إينازوما في غير مكانه", icon: "▼", severity: "warning", description: "▼ (صندوق حوار جديد) موجود لكنه وسط جملة، فتنقسم الجملة بين صندوقين. الإصلاح ينقله إلى نهاية الجملة المقابلة في الأصل ولا يغيّر أي كلمة. لا يُبلَّغ عن فاصل في نهاية جملة، حتى لو اختلف عن الأصل" },
   { id: "technical_mismatch", label: "اختلاف الرموز التقنية", icon: "🧷", severity: "critical", description: "مجموعة الرموز التقنية لا تطابق الأصل بدقة حتى لو كان العدد متساوياً — قد تسبب تجمّد اللعبة" },
   { id: "gtaiv_runtime_token_mismatch", label: "رموز GTA IV بين ~...~", icon: "🛡️", severity: "critical", description: "رموز GTA IV بين ~...~ ناقصة أو زائدة أو تغيّرت قيمتها/ترتيبها أو تحتوي ~ منفردة؛ البناء يرفضها. الإصلاح التلقائي يستبدل الرموز فقط عندما تكون مواضعها مكتملة ومتساوية." },
   { id: "gtaiv_line_break_display", label: "سهم كسر سطر GTA IV", icon: "↵", severity: "warning", description: "علامة ~n~ موجودة بلا سطر محرر بعدها. الإصلاح يضيف السطر المرئي فقط ويعيد الباني حفظ ~n~ داخل GXT." },
@@ -198,7 +199,7 @@ const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
  * a dropped `%s` is not worth an untranslated line. `repairInazumaTags` puts
  * the token back where the original kept it, or changes nothing at all.
  */
-const INAZUMA_TAG_FIXABLE_CATEGORIES = new Set(["inazuma_tag_mismatch"]);
+const INAZUMA_TAG_FIXABLE_CATEGORIES = new Set(["inazuma_tag_mismatch", "inazuma_break_misplaced"]);
 // All locally fixable categories
 const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, ...INAZUMA_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
 

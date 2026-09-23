@@ -17,7 +17,7 @@ import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
-import { validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
+import { validateInazumaTags, findMisplacedInazumaBreak } from "@/lib/inazuma/inazuma-tags";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
@@ -198,6 +198,12 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
     if (!check.valid) {
       issues.push({ ...base, severity: "critical", category: "inazuma_tag_mismatch",
         message: `رموز إينازوما التقنية مختلفة: الأصل ${check.expected.join(" ") || "بلا رموز"} والترجمة ${check.actual.join(" ") || "بلا رموز"}` });
+    }
+    // Right count, wrong place: a ▼ mid-sentence splits one sentence across
+    // two dialogue boxes. Only reported when the fix is certain.
+    else if (findMisplacedInazumaBreak(entry.original, translation) !== null) {
+      issues.push({ ...base, severity: "warning", category: "inazuma_break_misplaced",
+        message: "فاصل الصندوق ▼ وسط جملة — يقسم الجملة بين صندوقين؛ مكانه الصحيح نهاية الجملة المقابلة في الأصل" });
     }
   }
   if (entry.msbtFile.startsWith("ninthdawn/") && trimmed) {

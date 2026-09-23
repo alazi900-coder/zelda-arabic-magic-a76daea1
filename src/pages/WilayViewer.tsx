@@ -14,6 +14,8 @@ import {
 } from "@/lib/wilay-parser";
 import { unwrapWilaySource, rewrapWilayData } from "@/lib/xbc1-utils";
 import { matchWilayZipEntry } from "@/lib/wilay-zip-import";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import JSZip from "jszip";
 
@@ -33,6 +35,16 @@ interface LoadedFile {
   info: WilayInfo;
   compressionSteps: string[];
   xbc1Header: Uint8Array | null;
+}
+
+/** One Arabised picture from a ZIP, read and matched but not yet written. */
+interface PendingZipImage {
+  name: string;
+  fileIndex: number;
+  texIndex: number;
+  rgba: Uint8Array;
+  beforeUrl: string;
+  afterUrl: string;
 }
 
 // Combined texture reference pointing to its parent file
@@ -75,7 +87,11 @@ export default function WilayViewer() {
   const [pixelPerfect, setPixelPerfect] = useState(false);
   const [modifiedFiles, setModifiedFiles] = useState<Set<number>>(new Set());
   const [zipImporting, setZipImporting] = useState(false);
-  const [zipReport, setZipReport] = useState<{ replaced: string[]; unchanged: number; problems: string[] } | null>(null);
+  const [zipReport, setZipReport] = useState<{ replaced: string[]; unchanged: number; declined?: number; problems: string[] } | null>(null);
+  // Arabised pictures waiting for review before anything is written.
+  const [zipReview, setZipReview] = useState<{ items: PendingZipImage[]; unchanged: number; problems: string[] } | null>(null);
+  const [reviewChecked, setReviewChecked] = useState<Set<number>>(new Set());
+  const [reviewOpen, setReviewOpen] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const zipImportRef = useRef<HTMLInputElement>(null);
@@ -339,25 +355,25 @@ export default function WilayViewer() {
     setDecoded(newDecoded);
   }, [replacePreview, files, decoded]);
 
-  // Import an Arabised ZIP: every PNG goes back over the texture it was
-  // exported from, by its folder (the file) and `tex<N>` (the texture).
+  // Import an Arabised ZIP, step 1: read every PNG, match it to the texture
+  // it was exported from (its folder is the file, `tex<N>` the texture), and
+  // keep only the ones that actually changed -- for review, nothing written.
   const handleImportZip = useCallback(async (zipFile: File) => {
     if (files.length === 0) return;
     setZipImporting(true);
     setZipReport(null);
-    const replaced: string[] = [];
+    const items: PendingZipImage[] = [];
     const problems: string[] = [];
     let unchanged = 0;
     try {
       const zip = await JSZip.loadAsync(zipFile);
       const names = files.map(f => f.name);
-      const nextData = files.map(f => f.data);
-      const touched = new Set<number>();
       const reasonText: Record<string, string> = {
         'no-texture-number': 'لا يحمل رقم صورة texN في اسمه',
         'no-file': 'لم يُعرف ملفه — افتح ملف wilay الأصلي أولاً',
         'ambiguous-file': 'يطابق أكثر من ملف مفتوح',
       };
+      const seen = new Set<string>();
       const entries = Object.values(zip.files).filter(e => !e.dir);
       for (const entry of entries) {
         const match = matchWilayZipEntry(entry.name, names);
@@ -366,12 +382,11 @@ export default function WilayViewer() {
           continue;
         }
         const lf = files[match.fileIndex];
-        // Re-read from the file's current bytes: an earlier picture in this
-        // ZIP may already have been written into it.
-        const info = analyzeWilay(nextData[match.fileIndex]);
-        const tex = info.textures.find(t => t.index === match.texIndex);
+        const tex = lf.info.textures.find(t => t.index === match.texIndex);
         if (!tex) { problems.push(`${entry.name}: الملف ${lf.name} لا يحتوي الصورة ${match.texIndex}`); continue; }
         if (tex.type !== 'mibl') { problems.push(`${entry.name}: هذه الصورة لا تُستبدل (${tex.type})`); continue; }
+        const slot = texKey(match.fileIndex, tex.index);
+        if (seen.has(slot)) { problems.push(`${entry.name}: صورة ثانية لنفس المكان — تُركت`); continue; }
 
         const blob = await entry.async('blob');
         const url = URL.createObjectURL(blob);
@@ -387,47 +402,80 @@ export default function WilayViewer() {
 
           // A picture left as exported is skipped: writing it again would only
           // re-encode it, and the block compression loses a little each time.
-          const current = decoded.get(texKey(match.fileIndex, tex.index));
+          const current = decoded.get(slot);
           if (current && current.width === tex.width && current.height === tex.height && img.naturalWidth === tex.width && img.naturalHeight === tex.height) {
             const now = current.canvas.getContext('2d')!.getImageData(0, 0, tex.width, tex.height).data;
             let same = true;
             for (let i = 0; i < now.length; i++) if (now[i] !== rgba[i]) { same = false; break; }
             if (same) { unchanged++; continue; }
           }
-
-          const newData = replaceWilayTexture(nextData[match.fileIndex], tex, new Uint8Array(rgba.buffer), tex.width, tex.height);
-          if (!newData) { problems.push(`${entry.name}: تعذّر ترميز الصورة`); continue; }
-          nextData[match.fileIndex] = newData;
-          touched.add(match.fileIndex);
-          replaced.push(entry.name);
+          seen.add(slot);
+          items.push({
+            name: `${lf.name.replace(/\.[^.]+$/, '')} / tex${tex.index}`,
+            fileIndex: match.fileIndex,
+            texIndex: tex.index,
+            rgba: new Uint8Array(rgba.buffer.slice(0)),
+            beforeUrl: current?.dataUrl ?? '',
+            afterUrl: canvas.toDataURL(),
+          });
         } catch {
           problems.push(`${entry.name}: ليست صورة PNG صالحة`);
         } finally {
           URL.revokeObjectURL(url);
         }
       }
-
-      if (touched.size > 0) {
-        const nextFiles = files.map((f, i) => touched.has(i) ? { ...f, data: nextData[i], info: analyzeWilay(nextData[i]) } : f);
-        const newDecoded = new Map(decoded);
-        for (const fi of touched) {
-          for (const t of nextFiles[fi].info.textures) {
-            try {
-              const result = await decodeWilayTextureAsync(nextFiles[fi].data, t);
-              if (result) newDecoded.set(texKey(fi, t.index), { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
-            } catch { /* ignore */ }
-          }
-        }
-        setFiles(nextFiles);
-        setDecoded(newDecoded);
-        setModifiedFiles(prev => { const next = new Set(prev); touched.forEach(i => next.add(i)); return next; });
-      }
     } catch (e) {
       problems.push(`${zipFile.name}: ليس ملف ZIP صالحاً — ${e instanceof Error ? e.message : String(e)}`);
     }
-    setZipReport({ replaced, unchanged, problems });
     setZipImporting(false);
+    if (items.length === 0) {
+      setZipReport({ replaced: [], unchanged, problems });
+      return;
+    }
+    setZipReview({ items, unchanged, problems });
+    setReviewChecked(new Set(items.map((_, i) => i)));
+    setReviewOpen(null);
   }, [files, decoded]);
+
+  // Step 2: write the chosen pictures, re-decode each touched file once.
+  const applyZipImages = useCallback(async (chosen: number[]) => {
+    if (!zipReview) return;
+    const { items, unchanged, problems } = zipReview;
+    const picked = chosen.map(i => items[i]);
+    const nextData = files.map(f => f.data);
+    const touched = new Set<number>();
+    const replaced: string[] = [];
+    const failed = [...problems];
+    for (const it of picked) {
+      // Re-read from the file's current bytes: an earlier picture may already
+      // have been written into the same file, moving what follows it.
+      const tex = analyzeWilay(nextData[it.fileIndex]).textures.find(t => t.index === it.texIndex);
+      const newData = tex ? replaceWilayTexture(nextData[it.fileIndex], tex, it.rgba, tex.width, tex.height) : null;
+      if (!newData) { failed.push(`${it.name}: تعذّر ترميز الصورة`); continue; }
+      nextData[it.fileIndex] = newData;
+      touched.add(it.fileIndex);
+      replaced.push(it.name);
+    }
+    if (touched.size > 0) {
+      const nextFiles = files.map((f, i) => touched.has(i) ? { ...f, data: nextData[i], info: analyzeWilay(nextData[i]) } : f);
+      const newDecoded = new Map(decoded);
+      for (const fi of touched) {
+        for (const t of nextFiles[fi].info.textures) {
+          try {
+            const result = await decodeWilayTextureAsync(nextFiles[fi].data, t);
+            if (result) newDecoded.set(texKey(fi, t.index), { canvas: result.canvas, dataUrl: result.canvas.toDataURL(), width: result.width, height: result.height });
+          } catch { /* ignore */ }
+        }
+      }
+      setFiles(nextFiles);
+      setDecoded(newDecoded);
+      setModifiedFiles(prev => { const next = new Set(prev); touched.forEach(i => next.add(i)); return next; });
+    }
+    const declined = items.length - picked.length;
+    setZipReview(null);
+    setReviewOpen(null);
+    setZipReport({ replaced, unchanged, declined, problems: failed });
+  }, [zipReview, files, decoded]);
 
   // Download modified file (re-wrapped with original compression)
   const handleDownloadModified = useCallback(async (fileIndex: number) => {
@@ -715,7 +763,7 @@ export default function WilayViewer() {
           accept=".zip,application/zip"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImportZip(f); e.currentTarget.value = ""; }}
         />
-        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => zipImportRef.current?.click()} disabled={totalTextures === 0 || zipImporting} title="ارفع ZIP بنفس مجلدات وأسماء التصدير، فتُستبدل كل صورة بأصلها تلقائياً">
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => zipImportRef.current?.click()} disabled={totalTextures === 0 || zipImporting} title="ارفع ZIP بنفس مجلدات وأسماء التصدير، فتُطابَق كل صورة بأصلها وتراجعها قبل الاستبدال">
           {zipImporting ? <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" /> : <PackageOpen className="w-3.5 h-3.5 ml-1" />} استيراد ZIP معرّب
         </Button>
         {modifiedFiles.size > 0 && (
@@ -734,6 +782,7 @@ export default function WilayViewer() {
             <p className="font-semibold">
               استُبدلت {zipReport.replaced.length} صورة
               {zipReport.unchanged > 0 && ` • تُخطّيت ${zipReport.unchanged} لم تتغيّر عن الأصل`}
+              {!!zipReport.declined && ` • رفضتَ ${zipReport.declined} — بقيت كما هي`}
               {zipReport.problems.length > 0 && ` • ${zipReport.problems.length} لم تُطبَّق`}
               {zipReport.replaced.length > 0 && ' — اضغط «حفظ المعدلة» لتنزيل الملفات'}
             </p>
@@ -1119,6 +1168,79 @@ export default function WilayViewer() {
           </div>
         </div>
       )}
+
+      {/* Arabised ZIP review: one collapsed row per changed picture */}
+      <Dialog open={zipReview !== null} onOpenChange={(open) => { if (!open) { setZipReview(null); setReviewOpen(null); } }}>
+        <DialogContent className="w-[96vw] max-w-3xl max-h-[90vh] p-3 sm:p-6 flex flex-col gap-3" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">مراجعة {zipReview?.items.length ?? 0} صورة قبل الاستبدال</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              اضغط على رقم لترى الصورة قبل وبعد. أزل العلامة عن أي صورة لا تريدها.
+              {zipReview && zipReview.unchanged > 0 && ` (${zipReview.unchanged} صورة لم تتغيّر فلم تُعرض.)`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-1 -mx-1 px-1">
+            {zipReview?.items.map((it, i) => {
+              const open = reviewOpen === i;
+              const checked = reviewChecked.has(i);
+              return (
+                <div key={i} className={`rounded-md border ${open ? 'border-primary/50 bg-muted/30' : 'border-border'}`}>
+                  <div className="flex items-center gap-2 px-2 py-2 sm:py-1.5">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => setReviewChecked(prev => { const next = new Set(prev); if (v) next.add(i); else next.delete(i); return next; })}
+                      className="h-5 w-5 sm:h-4 sm:w-4"
+                      aria-label={`قبول ${it.name}`}
+                    />
+                    <button
+                      type="button"
+                      className="flex-1 flex items-center gap-2 min-w-0 text-right"
+                      onClick={() => setReviewOpen(open ? null : i)}
+                    >
+                      <span className="shrink-0 w-7 text-center text-xs font-bold rounded bg-primary/15 text-primary py-0.5">{i + 1}</span>
+                      <span className="truncate font-mono text-xs sm:text-sm" dir="ltr">{it.name}</span>
+                      <ChevronLeft className={`w-4 h-4 shrink-0 mr-auto transition-transform ${open ? '-rotate-90' : ''}`} />
+                    </button>
+                  </div>
+                  {open && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2 pb-2">
+                      {[{ label: 'قبل', url: it.beforeUrl }, { label: 'بعد', url: it.afterUrl }].map(({ label, url }) => (
+                        <figure key={label} className="space-y-1">
+                          <figcaption className="text-xs text-muted-foreground">{label}</figcaption>
+                          <div
+                            className="rounded border border-border flex items-center justify-center h-40 sm:h-56"
+                            style={{ backgroundImage: 'repeating-conic-gradient(hsl(var(--muted)) 0% 25%, transparent 0% 50%)', backgroundSize: '16px 16px' }}
+                          >
+                            {url ? <img src={url} alt={label} className="max-w-full max-h-full object-contain" style={{ imageRendering: 'pixelated' }} /> : <span className="text-xs text-muted-foreground">—</span>}
+                          </div>
+                        </figure>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-2 sm:justify-start">
+            <Button className="w-full sm:w-auto" onClick={() => zipReview && void applyZipImages(zipReview.items.map((_, i) => i))}>
+              <Check className="w-4 h-4 ml-1" /> قبول الكل ({zipReview?.items.length ?? 0})
+            </Button>
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              disabled={reviewChecked.size === 0}
+              onClick={() => void applyZipImages([...reviewChecked].sort((a, b) => a - b))}
+            >
+              استبدال المحدّد ({reviewChecked.size})
+            </Button>
+            <Button variant="ghost" className="w-full sm:w-auto" onClick={() => { setZipReview(null); setReviewOpen(null); }}>
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Hidden replace input */}
       <input

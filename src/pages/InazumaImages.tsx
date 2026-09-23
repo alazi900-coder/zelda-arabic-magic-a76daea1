@@ -10,6 +10,7 @@ import {
   readInazumaContainers, inazumaContainerImages, parseInazumaImage,
   inazumaImageWidths, guessInazumaImageWidth, renderInazumaImage, encodeInazumaImage,
   buildInazumaImagesRom, classifyInazumaImage, buildInazumaImageSections,
+  restoreOriginalBackground, overlayBackgroundMask, overlayEdgeColour,
   type InazumaImageRef,
 } from "@/lib/inazuma/inazuma-images";
 import { looksLikeNdsRom } from "@/lib/nds/nds-rom";
@@ -125,7 +126,7 @@ function saveWidths(widths: Map<string, number>): void {
 // ============================================================================
 
 function LazyThumb({
-  entry, revision, decode, selected, modified, onSelect,
+  entry, revision, decode, selected, modified, onSelect, checked, onToggleCheck,
 }: {
   entry: InazumaImageRef;
   revision: string;
@@ -133,6 +134,8 @@ function LazyThumb({
   selected: boolean;
   modified: boolean;
   onSelect: () => void;
+  checked: boolean;
+  onToggleCheck: () => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [result, setResult] = useState<ThumbResult | null>(null);
@@ -162,11 +165,12 @@ function LazyThumb({
   const name = entry.entryName ?? entry.romPath.slice(entry.romPath.lastIndexOf("/") + 1);
 
   return (
+    <div className="relative">
     <button
       ref={ref}
       onClick={onSelect}
-      className={`flex flex-col gap-1 p-2 rounded border text-right transition-colors ${
-        selected ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
+      className={`w-full flex flex-col gap-1 p-2 rounded border text-right transition-colors ${
+        checked ? "border-emerald-500 bg-emerald-500/10" : selected ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
       }`}
       title={displayPath(entry)}
     >
@@ -182,6 +186,10 @@ function LazyThumb({
       </div>
       <span className="text-[10px] text-muted-foreground truncate font-mono">{name}</span>
     </button>
+    <label className="absolute top-1 right-1 p-1.5 cursor-pointer" title="تحديد للتحميل في ZIP">
+      <input type="checkbox" checked={checked} onChange={onToggleCheck} className="w-4 h-4 accent-emerald-500 cursor-pointer" />
+    </label>
+    </div>
   );
 }
 
@@ -210,6 +218,9 @@ export default function InazumaImages() {
   /** The entry's bytes as they were in the loaded ROM, for undo. */
   const [modifiedLog, setModifiedLog] = useState<Map<string, Uint8Array>>(new Map());
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** Pictures ticked for "تحميل المحدد ZIP". */
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [zipping, setZipping] = useState(false);
   const [saving, setSaving] = useState(false);
   const [useOriginalAlpha, setUseOriginalAlpha] = useState(false);
 
@@ -278,6 +289,7 @@ export default function InazumaImages() {
     setSelectedId(null);
     setRevisions(new Map());
     setModifiedLog(new Map());
+    setChecked(new Set());
     setActiveFilter("all");
     setSearch("");
   }, [modifiedLog]);
@@ -351,7 +363,7 @@ export default function InazumaImages() {
 
   /** Writes `rgba` (at the picture's current layout) into the entry; the common
    * tail of both the whole-picture replace and the region composite. */
-  const applyRgba = useCallback(async (entry: InazumaImageRef, width: number, rgba: Uint8ClampedArray) => {
+  const applyRgba = useCallback(async (entry: InazumaImageRef, width: number, rgba: Uint8ClampedArray, note = "") => {
     const { toast } = await import("sonner");
     const current = containers.get(entry.romPath);
     if (!current) return;
@@ -368,7 +380,8 @@ export default function InazumaImages() {
     toast.success(
       merged > 0
         ? `تم الاستبدال — دُمج ${merged} مربّعاً متشابهاً لأن مساحة الصورة لا تتّسع لكل المربّعات الجديدة`
-        : "تم الاستبدال — اضغط «حفظ الروم» لتنزيل الروم المعدّل"
+        : "تم الاستبدال — اضغط «حفظ الروم» لتنزيل الروم المعدّل",
+      note ? { description: note } : undefined
     );
   }, [containers, bump]);
 
@@ -398,7 +411,9 @@ export default function InazumaImages() {
       if (useOriginalAlpha) {
         for (let i = 3; i < rgba.length; i += 4) rgba[i] = selectedDecoded.rgba[i];
       }
-      await applyRgba(selectedEntry, width, rgba);
+      // A picture drawn on a background of its own gets the original's back.
+      const restored = restoreOriginalBackground(rgba, selectedDecoded.rgba, width, height);
+      await applyRgba(selectedEntry, width, rgba, restored > 0 ? `أُعيدت الخلفية الأصلية تلقائياً (${restored} بكسل)` : "");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -447,6 +462,37 @@ export default function InazumaImages() {
       setSaving(false);
     }
   }, [rom, romName, modifiedLog, refs, containers]);
+
+  /** Every ticked picture as a PNG at its current width, one folder per file. */
+  const handleDownloadChecked = useCallback(async () => {
+    if (checked.size === 0) return;
+    const { toast } = await import("sonner");
+    setZipping(true);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      let added = 0;
+      for (const id of checked) {
+        const entry = refs.find((r) => r.id === id);
+        if (!entry) continue;
+        const d = decode(entry);
+        if (d.kind !== "ok") continue;
+        const png = await encodePngRawNoCanvas(d.rgba, d.width, d.height);
+        if (!png) continue;
+        const folder = entry.romPath.replace(/^data_iz\//, "").replace(/\.(SPF_|pac_?)$/i, "");
+        const path = entry.entryName ? `${folder}/${shortNameOf(entry)}_${d.width}x${d.height}.png` : `${folder}_${d.width}x${d.height}.png`;
+        zip.file(path, png);
+        added++;
+      }
+      const bytes = await zip.generateAsync({ type: "uint8array" });
+      downloadBlob(bytes, "inazuma-images.zip");
+      toast.success(`تم تحميل ${added} صورة في ملف ZIP`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setZipping(false);
+    }
+  }, [checked, refs, decode]);
 
   const handleExportPng = useCallback(async () => {
     if (selectedDecoded?.kind !== "ok" || !selectedEntry) return;
@@ -679,6 +725,17 @@ export default function InazumaImages() {
         ? scaleRgbaContainFit(direct.rgba, direct.width, direct.height, selectionRect.w, selectionRect.h)
         : getScaledImageRgba(compositeOverlayImg, selectionRect.w, selectionRect.h);
       const composited = new Uint8ClampedArray(compositeIntoRegion(compositeBaseImageData.data, width, height, overlay, selectionRect));
+      // The overlay's own background (its edge colour, or transparent) keeps
+      // the picture underneath, so the word lands on the button cut out.
+      const edge = direct ? overlayEdgeColour(direct.rgba, direct.width, direct.height) : overlayEdgeColour(overlay, selectionRect.w, selectionRect.h);
+      const mask = overlayBackgroundMask(overlay, selectionRect.w, selectionRect.h, edge);
+      for (let y = 0; y < selectionRect.h; y++) for (let x = 0; x < selectionRect.w; x++) {
+        if (!mask[y * selectionRect.w + x]) continue;
+        const dx = selectionRect.x + x, dy = selectionRect.y + y;
+        if (dx >= width || dy >= height) continue;
+        const o = (dy * width + dx) * 4;
+        for (let k = 0; k < 4; k++) composited[o + k] = compositeBaseImageData.data[o + k];
+      }
       if (useOriginalAlpha) {
         const x0 = Math.floor(selectionRect.x), y0 = Math.floor(selectionRect.y);
         const x1 = Math.min(width, x0 + Math.floor(selectionRect.w));
@@ -755,6 +812,17 @@ export default function InazumaImages() {
         <span className="text-sm text-muted-foreground font-mono">{romName}</span>
         <span className="text-xs text-muted-foreground">({refs.length} صورة)</span>
         <div className="flex-1" />
+        {checked.size > 0 && (
+          <>
+            <Button size="sm" variant="outline" onClick={handleDownloadChecked} disabled={zipping}>
+              {zipping ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <Download className="w-4 h-4 ml-1" />}
+              تحميل المحدد ZIP ({checked.size})
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setChecked(new Set())}>
+              <X className="w-4 h-4 ml-1" /> إلغاء التحديد
+            </Button>
+          </>
+        )}
         <Button size="sm" onClick={handleSaveRom} disabled={modifiedLog.size === 0 || saving} style={{ backgroundColor: ACCENT, color: "white" }}>
           {saving ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <Save className="w-4 h-4 ml-1" />}
           حفظ الروم ({modifiedLog.size})
@@ -965,6 +1033,12 @@ export default function InazumaImages() {
                 selected={entry.id === selectedId}
                 modified={modifiedLog.has(entry.id)}
                 onSelect={() => setSelectedId(entry.id)}
+                checked={checked.has(entry.id)}
+                onToggleCheck={() => setChecked((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id);
+                  return next;
+                })}
               />
             ))}
             {filteredRefs.length === 0 && (

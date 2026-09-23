@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseSfpEntries, inazumaContainerImages, parseInazumaImage, inazumaImageWidths,
   renderInazumaImage, encodeInazumaImage, buildInazumaImagesRom, classifyInazumaImage,
+  verifyInazumaContainer, restoreOriginalBackground,
   type InazumaImageRef,
 } from "../inazuma-images";
 import { compressLz10, decompressLz10 } from "@/lib/fireemblem12/nds-lz";
@@ -169,5 +170,48 @@ describe("inazuma-images", () => {
     expect(classifyInazumaImage("data_iz/pic2d/menu/en/MMName.SPF_").id).toBe("menu");
     expect(classifyInazumaImage("data_iz/pic3d/en/mbd_s001r.pac_").id).toBe("tex-en");
     expect(classifyInazumaImage("data_iz/pic3d/mf01gm01.pac_").group).toBe("other");
+  });
+
+  it("accepts an edit the encoder made, and refuses one that touched the palette or a cell's flips", () => {
+    const original = tiledEntry([0, 1, 1, 0], [solid(1), solid(2), solid(0)]);
+    const edited = original.slice();
+    const img = parseInazumaImage(edited, bare(edited))!;
+    const rgba = renderInazumaImage(edited, img, 16).rgba.slice();
+    rgba.set([0, 0, 255, 255], 0);
+    encodeInazumaImage(edited, img, 16, rgba);
+    expect(() => verifyInazumaContainer("x.pac_", original, edited)).not.toThrow();
+
+    const palette = edited.slice();
+    palette[34] ^= 1;
+    expect(() => verifyInazumaContainer("x.pac_", original, palette)).toThrow(/لوحة الألوان/);
+
+    const flipped = edited.slice();
+    flipped[65] ^= 0x04; // cell 0's H-flip bit
+    expect(() => verifyInazumaContainer("x.pac_", original, flipped)).toThrow(/قلب أو لوحة/);
+
+    expect(() => verifyInazumaContainer("x.pac_", original, edited.slice(0, -1))).toThrow(/حجم/);
+  });
+
+  it("gives a picture drawn on its own background the original's background back", () => {
+    // Original: transparent all round, a red 2x2 in the middle of a 4x4.
+    const w = 4, h = 4;
+    const original = new Uint8ClampedArray(w * h * 4);
+    for (const i of [5, 6, 9, 10]) original.set([255, 0, 0, 255], i * 4);
+    // Replacement: the same shape in green, on solid black.
+    const next = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < w * h; i++) next.set([0, 0, 0, 255], i * 4);
+    for (const i of [5, 6, 9, 10]) next.set([0, 255, 0, 255], i * 4);
+    expect(restoreOriginalBackground(next, original, w, h)).toBe(12);
+    expect(next[3]).toBe(0);              // the black edge is transparent again
+    expect(Array.from(next.slice(20, 24))).toEqual([0, 255, 0, 255]); // the drawing stays
+  });
+
+  it("leaves a picture alone when its edge already matches the original", () => {
+    const w = 4, h = 4;
+    const original = new Uint8ClampedArray(w * h * 4).fill(0);
+    for (let i = 0; i < w * h; i++) original.set([0, 0, 255, 255], i * 4);
+    const next = original.slice();
+    next.set([0, 0, 255, 255], 5 * 4); // painted over with the button's own colour
+    expect(restoreOriginalBackground(next, original, w, h)).toBe(0);
   });
 });

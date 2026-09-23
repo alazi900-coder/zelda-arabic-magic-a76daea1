@@ -402,16 +402,66 @@ export function encodeInazumaImage(
 }
 
 /**
+ * Checks that an edited picture file is still encoded exactly as the game
+ * wrote it, and throws naming the first picture that is not.
+ *
+ * Same length and the same entry table; outside the pictures, not one byte
+ * different. Inside an edited picture: the same header, the same palette,
+ * the same layout and colour depth, and every map cell keeping its flips and
+ * palette -- only which tile a cell names, and the pixels, may change.
+ */
+export function verifyInazumaContainer(romPath: string, original: Uint8Array, edited: Uint8Array): void {
+  const fail = (what: string): never => { throw new Error(`${romPath}: ${what} — أُوقف البناء حتى لا يُكتب ملف تالف`); };
+  if (original.length !== edited.length) fail("تغيّر حجم الملف");
+  const refs = inazumaContainerImages(romPath, original);
+  const refs2 = inazumaContainerImages(romPath, edited);
+  if (refs.length !== refs2.length || refs.some((r, i) => r.dataOffset !== refs2[i].dataOffset || r.size !== refs2[i].size)) fail("تغيّر جدول الصور");
+  const inside = new Uint8Array(original.length);
+  for (const r of refs) inside.fill(1, r.dataOffset, r.dataOffset + r.size);
+  for (let i = 0; i < original.length; i++) if (!inside[i] && original[i] !== edited[i]) fail("تغيّر بايت خارج الصور");
+
+  for (const r of refs) {
+    const name = r.entryName ?? romPath;
+    let same = true;
+    for (let i = r.dataOffset; i < r.dataOffset + r.size; i++) if (original[i] !== edited[i]) { same = false; break; }
+    if (same) continue;
+    for (let i = r.dataOffset; i < r.dataOffset + 32; i++) if (original[i] !== edited[i]) fail(`${name}: تغيّرت ترويسة الصورة`);
+    const a = parseInazumaImage(original, r), b = parseInazumaImage(edited, r);
+    if (!a || !b || a.kind !== b.kind) return fail(`${name}: تغيّر نوع الصورة`);
+    // Which bytes may change: the tiles and the map (tiled), or the pixels (texture).
+    const allowed = new Uint8Array(original.length);
+    if (a.kind === "tiled" && b.kind === "tiled") {
+      if (a.map.length !== b.map.length || a.tileCount !== b.tileCount || a.palettes.length !== b.palettes.length) fail(`${name}: تغيّرت أبعاد الصورة`);
+      for (let m = 0; m < a.map.length; m++) if ((a.map[m] & 0xfc00) !== (b.map[m] & 0xfc00)) fail(`${name}: تغيّر قلب أو لوحة خلية في الخريطة`);
+      allowed.fill(1, a.mapOffset, a.mapOffset + a.map.length * 2);
+      allowed.fill(1, a.tileOffset, a.tileOffset + a.tileCount * 32);
+    } else if (a.kind === "linear" && b.kind === "linear") {
+      if (a.bpp !== b.bpp || a.pixels !== b.pixels) fail(`${name}: تغيّر عمق الألوان`);
+      allowed.fill(1, a.texOffset, a.texOffset + (a.pixels * a.bpp) / 8);
+    }
+    for (let i = r.dataOffset; i < r.dataOffset + r.size; i++) {
+      if (!allowed[i] && original[i] !== edited[i]) fail(`${name}: تغيّرت لوحة الألوان أو جزء آخر غير الرسم`);
+    }
+  }
+}
+
+/**
  * A copy of the ROM with every edited picture file packed back in. Each file
- * is recompressed and checked by unpacking it again before it is written.
+ * is checked against the ROM's own copy (see verifyInazumaContainer), packed
+ * with the same LZ10 compression the game uses, and unpacked again to prove
+ * the packing before it is written.
  */
 export function buildInazumaImagesRom(rom: Uint8Array, edited: Map<string, Uint8Array>): Uint8Array {
   let out = rom;
   const ids = ndsFileIdByPath(rom);
+  const files = ndsFiles(rom);
   for (const [romPath, data] of edited) {
     const id = ids.get(romPath);
     const f = id === undefined ? undefined : ndsFiles(out)[id];
-    if (!f) throw new Error(`الملف ${romPath} غير موجود في الروم`);
+    if (!f || id === undefined) throw new Error(`الملف ${romPath} غير موجود في الروم`);
+    const raw = rom.subarray(files[id].start, files[id].end);
+    if (raw[0] !== 0x10) throw new Error(`${romPath}: الملف الأصلي ليس بضغط LZ10`);
+    verifyInazumaContainer(romPath, decompressLz10(raw), data);
     const packed = compressLz10(data);
     const back = decompressLz10(packed);
     if (back.length !== data.length || back.some((b, i) => b !== data[i])) {
@@ -422,6 +472,90 @@ export function buildInazumaImagesRom(rom: Uint8Array, edited: Map<string, Uint8
     out = writeNdsFile(out, f, padded);
   }
   return out;
+}
+
+type Rgba = Uint8ClampedArray | Uint8Array;
+const SAME_COLOUR = 40 * 40 * 3;
+
+/** The colour most of an area's edge is, or "transparent"; null if the edge has no majority. */
+function edgeColour(rgba: Rgba, width: number, x0: number, y0: number, w: number, h: number): [number, number, number] | "transparent" | null {
+  const counts = new Map<string, number>();
+  let total = 0;
+  const add = (x: number, y: number) => {
+    const o = ((y0 + y) * width + x0 + x) * 4;
+    const key = rgba[o + 3] < 128 ? "t" : `${rgba[o] >> 4},${rgba[o + 1] >> 4},${rgba[o + 2] >> 4}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    total++;
+  };
+  for (let x = 0; x < w; x++) { add(x, 0); add(x, h - 1); }
+  for (let y = 1; y < h - 1; y++) { add(0, y); add(w - 1, y); }
+  let best = "", n = 0;
+  for (const [k, v] of counts) if (v > n) { n = v; best = k; }
+  if (n < total * 0.5) return null;
+  if (best === "t") return "transparent";
+  const [r, g, b] = best.split(",").map((v) => Number(v) * 16 + 8);
+  return [r, g, b];
+}
+
+function isColour(rgba: Rgba, o: number, c: [number, number, number] | "transparent"): boolean {
+  if (c === "transparent") return rgba[o + 3] < 128;
+  if (rgba[o + 3] < 128) return false;
+  return (rgba[o] - c[0]) ** 2 + (rgba[o + 1] - c[1]) ** 2 + (rgba[o + 2] - c[2]) ** 2 <= SAME_COLOUR;
+}
+
+/**
+ * A replacement drawn on a background of its own (black, white, any flat
+ * colour, or transparent where the original was not) gets the original's
+ * background back: every pixel of that colour takes the original pixel.
+ *
+ * Only when the new picture's edge mostly differs from the original's -- a
+ * PNG that was exported from here and painted on keeps the original edge, and
+ * is left alone, so a fill the translator painted over English text is not
+ * mistaken for background and turned back into the English.
+ * Returns how many pixels were restored.
+ */
+export function restoreOriginalBackground(next: Rgba, original: Rgba, width: number, height: number): number {
+  if (width < 2 || height < 2) return 0;
+  const bg = edgeColour(next, width, 0, 0, width, height);
+  if (!bg) return 0;
+  let edge = 0, differ = 0;
+  const check = (x: number, y: number) => {
+    const o = (y * width + x) * 4;
+    edge++;
+    const clearNext = next[o + 3] < 128, clearOriginal = original[o + 3] < 128;
+    if (clearNext !== clearOriginal) differ++;
+    else if (!clearNext && (next[o] - original[o]) ** 2 + (next[o + 1] - original[o + 1]) ** 2 + (next[o + 2] - original[o + 2]) ** 2 > SAME_COLOUR) differ++;
+  };
+  for (let x = 0; x < width; x++) { check(x, 0); check(x, height - 1); }
+  for (let y = 1; y < height - 1; y++) { check(0, y); check(width - 1, y); }
+  if (differ < edge * 0.5) return 0;
+  let restored = 0;
+  for (let o = 0; o < next.length; o += 4) {
+    if (!isColour(next, o, bg)) continue;
+    next[o] = original[o]; next[o + 1] = original[o + 1]; next[o + 2] = original[o + 2]; next[o + 3] = original[o + 3];
+    restored++;
+  }
+  return restored;
+}
+
+/**
+ * For a word pasted into a region: which of the overlay's pixels are its own
+ * background (its edge colour, or transparent). Those keep the picture
+ * underneath, so a word drawn on black or white lands on the button as if
+ * cut out. `overlay` is already scaled to the region.
+ */
+export function overlayBackgroundMask(overlay: Rgba, w: number, h: number, sourceEdge: [number, number, number] | "transparent" | null): Uint8Array {
+  const mask = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const o = i * 4;
+    if (overlay[o + 3] < 128 || (sourceEdge && sourceEdge !== "transparent" && isColour(overlay, o, sourceEdge))) mask[i] = 1;
+  }
+  return mask;
+}
+
+/** The overlay image's own background colour, read from its unscaled edge. */
+export function overlayEdgeColour(rgba: Rgba, width: number, height: number): [number, number, number] | "transparent" | null {
+  return width >= 2 && height >= 2 ? edgeColour(rgba, width, 0, 0, width, height) : null;
 }
 
 export interface InazumaImageSection {

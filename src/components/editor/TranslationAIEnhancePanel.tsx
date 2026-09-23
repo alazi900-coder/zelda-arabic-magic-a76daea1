@@ -43,6 +43,7 @@ import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, val
 import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 import { repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
+import { repairInazumaTags, validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
 
 interface TranslationAIEnhancePanelProps {
   entries: ExtractedEntry[];
@@ -272,6 +273,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const isPokemonXp = gameParam === "pokemon-xp";
   const isCrashlands = gameParam === "crashlands";
   const isNinthDawn = gameParam === "ninthdawn";
+  const isInazuma = gameParam === "inazuma";
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
@@ -288,6 +290,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // Same reasoning as Crashlands above: repair a clean trailing drop first,
     // exactly as the save path does, before deciding the suggestion is unsafe.
     if (isNinthDawn) return validateNinthDawnTags(original, repairNinthDawnTags(original, suggestion).text).reason ?? null;
+    // Same shape again: `repairInazumaTags` is the exact function the save
+    // path runs, so a suggestion it can repair is not refused here as unsafe
+    // only to be accepted (and silently repaired) a moment later at save.
+    if (isInazuma) return validateInazumaTags(original, repairInazumaTags(original, suggestion).text).reason ?? null;
     if (isGtaIv) {
       const dollarRepair = repairGtaIvDollarAmountSequence(original, suggestion);
       if (!dollarRepair.safe) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";

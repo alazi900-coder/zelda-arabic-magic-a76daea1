@@ -241,6 +241,23 @@ function preservesNinthDawnTokenSequence(original: string, candidate: string): b
   return expected.length === actual.length && expected.every((token, index) => token === actual[index]);
 }
 
+/**
+ * Inazuma Eleven's own tokens, matched by the same pattern the client uses
+ * (INAZUMA_TAG_RE in src/lib/inazuma/inazuma-tags.ts) so both sides refuse
+ * exactly the same suggestion. `\f` is a whole new dialogue box -- the two
+ * literal characters `\` and `f`, not a form-feed byte -- and `%1F`..`%4F`/
+ * `%d`/`%Nd`/`%s` are values the engine fills in at runtime. `\n` is
+ * deliberately absent: the editor holds it as a real newline, the same as
+ * every other game, and a missing one is a wrapping problem, not a dropped
+ * token.
+ */
+const INAZUMA_TOKEN_REGEX = /\\f|%[1-4]F|%\d?d|%s/g;
+function preservesInazumaTokenSequence(original: string, candidate: string): boolean {
+  const expected = (original || '').match(INAZUMA_TOKEN_REGEX) || [];
+  const actual = (candidate || '').match(INAZUMA_TOKEN_REGEX) || [];
+  return expected.length === actual.length && expected.every((token, index) => token === actual[index]);
+}
+
 function extractTechTags(text: string): string[] {
   return [...(text || '').matchAll(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags))].map(m => m[0]);
 }
@@ -331,7 +348,7 @@ function preservesGtaIvDollarAmountSequence(original: string, candidate: string)
   return before.length === after.length && before.every((amount, index) => normalize(amount) === normalize(after[index] || ''));
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false): boolean {
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
@@ -345,7 +362,8 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
       !ARABIC_DIACRITICS_REGEX.test(suggested)
     )) &&
     (!isCrashlands || preservesCrashlandsTokenSequence(original, suggested)) &&
-    (!isNinthDawn || preservesNinthDawnTokenSequence(original, suggested));
+    (!isNinthDawn || preservesNinthDawnTokenSequence(original, suggested)) &&
+    (!isInazuma || preservesInazumaTokenSequence(original, suggested));
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -373,6 +391,7 @@ function buildRuleSections(
   isPlatinum = false,
   isCrashlands = false,
   isNinthDawn = false,
+  isInazuma = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -409,7 +428,7 @@ function buildRuleSections(
     (!PLATINUM_ONLY_RULE_IDS.has(r.id) || isPlatinum) &&
     (!CRASHLANDS_ONLY_RULE_IDS.has(r.id) || isCrashlands) &&
     (!NINTHDAWN_ONLY_RULE_IDS.has(r.id) || isNinthDawn) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn));
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -533,7 +552,7 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'lumentale' | 'gtaiv';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'lumentale' | 'gtaiv' | 'inazuma';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
@@ -557,6 +576,7 @@ Deno.serve(async (req) => {
     const isSteinsGate = game === 'steinsgate';
     const isCrashlands = game === 'crashlands';
     const isNinthDawn = game === 'ninthdawn';
+    const isInazuma = game === 'inazuma';
     const gameLabel = isLumenTale
       ? 'LumenTale: Memories of Trey'
       : isNinthDawn
@@ -573,6 +593,8 @@ Deno.serve(async (req) => {
       ? 'Pokémon Ruby Destiny: Reign of Legends (تعديل على Pokémon Ruby)'
       : isPokemonXp
       ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)'
+      : isInazuma
+      ? 'Inazuma Eleven (Nintendo DS)'
       : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
     const forgetOtherGame = isMetroidPrime
       ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
@@ -594,6 +616,8 @@ Deno.serve(async (req) => {
       ? '\nهذه مراجعة خاصة بـ Pokémon Unbreakable Ties المبنية على Pokémon Essentials / RPG Maker XP. لا تفترض سياق Pokémon GBA أو Ruby Destiny أو Xenoblade. استند حصراً إلى النص والقاموس المعطى، ولا تخترع أحداثاً أو أسماء أو أوامر.\n'
       : isNinthDawn
       ? '\nهذه مراجعة خاصة بـ 9th Dawn Remake — لعبة استكشاف وبقاء بأسلوب RPG كلاسيكي. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. في نصّ هذه اللعبة أربعة أشكال من الرموز التقنية: `[0]`/`[1]`… فهرس يضعه المحرّك وقت التشغيل؛ `[playername]`/`[cardgamename]` قيم اسمية؛ `[c=N]`/`[p=N]`/`[i=N]` تلوين ومعامل وعنصر؛ و`<b>`/`</b>`/`<i>`/`</i>`/`<br>` وسوم تنسيق حرفية. أبقِ كل هذه الرموز بنفس العدد والترتيب والموضع بين الكلمات حرفياً.\n'
+      : isInazuma
+      ? '\nهذه مراجعة خاصة بـ Inazuma Eleven (Nintendo DS) — لعبة كرة قدم، لا علاقة لها بـ Xenoblade أو أي لعبة أخرى؛ لا تفترض مصطلحاتها أو شخصياتها. رموز هذه اللعبة التقنية: `\\f` (الحرفان \\ وf، لا حرف تحكم) يبدأ صندوق حوار جديد؛ `%1F`..`%4F` وَ`%d`/`%2d`/`%s` قيم كاسم أو رقم يضعها المحرّك وقت التشغيل. أبقِ كل هذه الرموز بنفس العدد والترتيب والموضع بين الكلمات حرفياً؛ فاصل السطر الحقيقي `\\n` نفسه ليس من هذه الرموز، وتقسيم الأسطر عمل خطوة لاحقة، فلا داعي لإدخال سطر جديد بنفسك.\n'
       : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`
@@ -692,12 +716,12 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn
+    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -1154,7 +1178,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma) &&
           isCategoryEnabled(i.category, ruleSections.enabledSet) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1273,7 +1297,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma) &&
             isTypeEnabled(r.type, ruleSections.enabledSet) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1362,7 +1386,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
               .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1370,7 +1394,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma) &&
         isTypeEnabled(s.type, ruleSections.enabledSet) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

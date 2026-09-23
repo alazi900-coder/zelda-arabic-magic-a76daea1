@@ -117,7 +117,7 @@ describe("the suggestion gate runs on both sides", () => {
     expect(EDGE_SOURCE).toContain("preservesNinthDawnTokenSequence");
     expect(EDGE_SOURCE).toContain("(!isNinthDawn || preservesNinthDawnTokenSequence(original, suggested))");
     expect(EDGE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
-      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn\)/g)?.length ?? 0) + 1
+      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma\)/g)?.length ?? 0) + 1
     );
   });
 

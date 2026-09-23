@@ -59,7 +59,7 @@ describe("Pokémon rules in the AI enhancement tool", () => {
     expect(gate).not.toBeNull();
     expect(gate![1]).toContain("detect_line_breaks");
     expect(gate![1]).toContain("detect_split_and_tags");
-    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn))");
+    expect(EDGE_SOURCE).toContain("(!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma))");
   });
 
   it("names the game it is reviewing", () => {
@@ -162,7 +162,7 @@ describe("Crashlands rules in the AI enhancement tool", () => {
     const gate = /const CRASHLANDS_ONLY_RULE_IDS = new Set\(\[([^\]]+)\]\)/.exec(EDGE_SOURCE);
     expect(gate).not.toBeNull();
     for (const id of IDS) expect(gate![1]).toContain(id);
-    expect(EDGE_SOURCE).toContain("isPlatinum, isCrashlands, isNinthDawn)");
+    expect(EDGE_SOURCE).toContain("isPlatinum, isCrashlands, isNinthDawn, isInazuma)");
   });
 
   it("names the game it is reviewing", () => {

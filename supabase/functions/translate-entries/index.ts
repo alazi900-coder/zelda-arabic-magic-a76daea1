@@ -486,6 +486,21 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
       matches.push({ start: gMatch.index, end: gMatch.index + gMatch[0].length, original: gMatch[0], gtaiv: true });
     }
   }
+  if (_game === 'inazuma') {
+    // Inazuma Eleven's own tokens (see INAZUMA_TAG_RE in
+    // src/lib/inazuma/inazuma-tags.ts): `\f` starts a whole new dialogue box
+    // -- the two literal characters `\` and `f`, not a form-feed byte -- and
+    // `%1F`..`%4F` are name/noun slots the engine fills at runtime. Masked
+    // before the model ever sees them, same as every other game's own tag
+    // syntax, so it cannot translate, drop, or reorder them.
+    // `%d`/`%2d`/`%4d`/`%s` need no separate mask: the generic printf pattern
+    // below already shields anything ending in a lowercase s/d.
+    const inazumaRegex = /\\f|%[1-4]F/g;
+    let iMatch: RegExpExecArray | null;
+    while ((iMatch = inazumaRegex.exec(shielded)) !== null) {
+      matches.push({ start: iMatch.index, end: iMatch.index + iMatch[0].length, original: iMatch[0] });
+    }
+  }
   for (const pattern of patterns) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let match: RegExpExecArray | null;
@@ -616,7 +631,7 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' | 'inazuma' = 'xenoblade';
 
 const STEINSGATE_SYSTEM_PROMPT = `أنت مترجم محترف للعبة Steins;Gate على PSP. استخدم فصحى طبيعية حديثة تحافظ على التوتر العلمي والكوميديا وشخصيات العمل: أوكابي مسرحي، كوريسو ذكية ولاذعة، مايوري لطيفة، ودارو ساخر تقني. ثبّت أسماء الشخصيات ومصطلحات خط العالم وD-Mail وPhoneWave وReading Steiner. القوائم قصيرة ومباشرة. كل رمز يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك: انسخه حرفياً وبالعدد والترتيب والموضع نفسه ولا تترجمه.`;
 
@@ -2222,7 +2237,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'inazuma';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -2234,7 +2249,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : 'xenoblade';
+    _game = game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : game === 'inazuma' ? 'inazuma' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

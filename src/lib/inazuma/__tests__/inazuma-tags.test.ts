@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairInazumaTags, inazumaSlotsAgree, maskInazumaTokens, unmaskInazumaTokens } from "../inazuma-tags";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { INAZUMA_TAG_RE } from "../inazuma-tags";
 
 describe("Inazuma technical tokens", () => {
   it("finds the engine's own tokens and nothing else", () => {
@@ -181,5 +184,43 @@ describe("Inazuma token masking", () => {
     expect(masked).toBe(text);
     expect(tokens).toEqual([]);
     expect(unmaskInazumaTokens(masked, tokens)).toBe(text);
+  });
+});
+
+describe("Inazuma tokens are protected by the AI enhance/translate tools", () => {
+  it("refuses (client-side) a suggestion that drops \\f/%1F/%d/%s", () => {
+    const wouldSave = (original: string, suggestion: string) =>
+      validateInazumaTags(original, repairInazumaTags(original, suggestion).text).valid;
+    expect(wouldSave("Go\\fthen %1F points", "اذهب ثم نقاط")).toBe(false); // \f and %1F both dropped
+    expect(wouldSave("Go\\fthen %1F points", "اذهب\\fثم %1F نقاط")).toBe(true);
+  });
+
+  const PANEL = readFileSync(resolve(__dirname, "../../../components/editor/TranslationAIEnhancePanel.tsx"), "utf8");
+  const ENHANCE_SOURCE = readFileSync(resolve(__dirname, "../../../../supabase/functions/enhance-translations/index.ts"), "utf8");
+  const TRANSLATE_SOURCE = readFileSync(resolve(__dirname, "../../../../supabase/functions/translate-entries/index.ts"), "utf8");
+
+  it("checks the panel before counting a suggestion as applied", () => {
+    expect(PANEL).toContain('const isInazuma = gameParam === "inazuma"');
+    expect(PANEL).toContain("if (isInazuma) return validateInazumaTags(original, repairInazumaTags(original, suggestion).text).reason ?? null;");
+  });
+
+  it("rejects the suggestion in the edge function before it is returned", () => {
+    expect(ENHANCE_SOURCE).toContain("preservesInazumaTokenSequence");
+    expect(ENHANCE_SOURCE).toContain("(!isInazuma || preservesInazumaTokenSequence(original, suggested))");
+    expect(ENHANCE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
+      (ENHANCE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma\)/g)?.length ?? 0) + 1
+    );
+  });
+
+  it("uses the same four token shapes as the editor", () => {
+    const edge = /const INAZUMA_TOKEN_REGEX = (\/.+?\/g);/.exec(ENHANCE_SOURCE);
+    expect(edge).not.toBeNull();
+    expect(edge![1]).toBe(INAZUMA_TAG_RE.source.replace(/^/, "/") + "/g");
+  });
+
+  it("masks \\f and %1F..%4F before the auto-translate model ever sees them", () => {
+    expect(TRANSLATE_SOURCE).toContain("if (_game === 'inazuma')");
+    expect(TRANSLATE_SOURCE).toContain("const inazumaRegex = /\\\\f|%[1-4]F/g;");
+    expect(TRANSLATE_SOURCE).toContain("game === 'inazuma' ? 'inazuma' : 'xenoblade';");
   });
 });

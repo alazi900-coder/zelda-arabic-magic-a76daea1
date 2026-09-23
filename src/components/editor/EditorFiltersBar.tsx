@@ -43,6 +43,7 @@ type EditorSubset = Pick<
   | "byteOverflowCount"
   | "gtaIvNeedsModCount"
   | "steinsGateUnsupportedCount"
+  | "crashlandsChineseCount"
   | "deepDiagnosticCounts"
   | "quickReviewMode"
   | "setQuickReviewMode"

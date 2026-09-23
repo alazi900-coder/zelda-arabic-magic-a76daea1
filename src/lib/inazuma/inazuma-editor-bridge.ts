@@ -107,7 +107,8 @@ export function extractInazumaEntries(rom: Uint8Array): InazumaExtractResult {
       original: toEditorText(row.text),
       // A fixed slot is bounded by its own 128 bytes; a packed line is not,
       // because its archive is rebuilt around whatever it now holds.
-      ...(row.limit !== undefined ? { maxBytes: row.limit - 1 } : {}),
+      // maxBytes 0 tells the byte-limit checks this line is unbounded.
+      maxBytes: row.limit !== undefined ? row.limit - 1 : 0,
     });
   }
 

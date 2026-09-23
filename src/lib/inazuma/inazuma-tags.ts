@@ -332,7 +332,7 @@ function restoreBreaksBySentence(original: string, translation: string): string 
 }
 
 /** A page break with no sentence end right before it -- `…من▼ نقاط اللياقة.` */
-function hasBreakMidSentence(text: string): boolean {
+export function hasBreakMidSentence(text: string): boolean {
   const t = toInazumaBreakTokens(fromInazumaBreakTokens(text));
   for (let i = t.indexOf("▼"); i >= 0; i = t.indexOf("▼", i + 1)) {
     if (!/[.!?…؟۔]["'”’»)]*$/.test(t.slice(0, i).trimEnd())) return true;

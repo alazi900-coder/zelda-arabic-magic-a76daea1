@@ -5,6 +5,8 @@ import QualityChecksPanel from "@/components/editor/QualityChecksPanel";
 import CleanupToolsPanel from "@/components/editor/CleanupToolsPanel";
 import LineBalancePanel from "@/components/editor/LineBalancePanel";
 import PlatBreakRestorePanel from "@/components/editor/PlatBreakRestorePanel";
+import InazumaBreakRestorePanel from "@/components/editor/InazumaBreakRestorePanel";
+import { INAZUMA_FILE_PREFIX } from "@/lib/inazuma/inazuma-editor-bridge";
 import { PLAT_FILE_PREFIX } from "@/lib/nds/plat-editor-bridge";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -35,6 +37,7 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
   const state = editor.state;
   const isPokemonXpSession = state.entries.some((entry) => entry.msbtFile.startsWith("pokemon-xp/"));
   const isPlatinumSession = state.entries.some((entry) => entry.msbtFile.startsWith(PLAT_FILE_PREFIX));
+  const isInazumaSession = state.entries.some((entry) => entry.msbtFile.startsWith(INAZUMA_FILE_PREFIX));
 
   // Honor the editor's active filters/search when scanning so users can scope
   // the deep diagnostic to the current view (cards/search/file/category/table/column/pinned).
@@ -149,6 +152,14 @@ const EditorGameSafetySection: React.FC<EditorGameSafetySectionProps> = ({ edito
 
       {isPlatinumSession && (
         <PlatBreakRestorePanel
+          state={state}
+          onApplyAll={(fixes) => editor.updateTranslationsBatch(fixes)}
+          onFilterByKeys={(keys) => focusDeepDiagnosticKeys(new Set(keys))}
+        />
+      )}
+
+      {isInazumaSession && (
+        <InazumaBreakRestorePanel
           state={state}
           onApplyAll={(fixes) => editor.updateTranslationsBatch(fixes)}
           onFilterByKeys={(keys) => focusDeepDiagnosticKeys(new Set(keys))}

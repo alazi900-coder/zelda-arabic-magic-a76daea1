@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { restoreInazumaTranslations, INAZUMA_FILE_RE } from "../inazuma-editor-bridge";
+import { restoreInazumaTranslations, prepareInazumaLine, INAZUMA_FILE_RE } from "../inazuma-editor-bridge";
 import { categorizeInazumaEntry, INAZUMA_CATEGORIES } from "../inazuma-categories";
 import { resolveGameParam } from "@/lib/game-param";
 import { detectIssues } from "@/lib/diagnostic-detect";
@@ -87,5 +87,42 @@ describe("Inazuma wiring", () => {
     );
     expect(issues.some((i) => i.category === "inazuma_tag_mismatch")).toBe(true);
     expect(issues.some((i) => i.category === "under_split")).toBe(false);
+  });
+});
+
+describe("Inazuma forced build", () => {
+  const long = "مرحبا يا صديقي العزيز كيف حالك اليوم";
+
+  it("refuses an overlong line without force, and cuts it from its end with force", () => {
+    expect(prepareInazumaLine("Hello there", long, 20)).toMatchObject({ encoded: null, tooLong: true });
+
+    const forced = prepareInazumaLine("Hello there", long, 20, true);
+    expect(forced.encoded).not.toBeNull();
+    expect(forced.encoded!.length + 1).toBeLessThanOrEqual(20);
+    expect(forced.cutWords).toBeGreaterThan(0);
+    // what is left is the sentence's own opening words, not its closing ones
+    const kept = long.split(" ").slice(0, long.split(" ").length - forced.cutWords).join(" ");
+    expect(forced.encoded).toBe(prepareInazumaLine("Hello there", kept, undefined).encoded);
+  });
+
+  it("writes a line that lost an engine token only when forced", () => {
+    expect(prepareInazumaLine("You got %d points!", "حصلت على نقاط", undefined).encoded).toBeNull();
+    const forced = prepareInazumaLine("You got %d points!", "حصلت على نقاط", undefined, true);
+    expect(forced.encoded).not.toBeNull();
+    expect(forced.brokenTag).toBe(true);
+  });
+
+  it("drops a character the font cannot draw only when forced", () => {
+    const plain = prepareInazumaLine("Hello", "ڤيديو", undefined);
+    expect(plain.encoded).toBeNull();
+    expect(plain.missing.length).toBeGreaterThan(0);
+    const forced = prepareInazumaLine("Hello", "ڤيديو", undefined, true);
+    expect(forced.encoded).not.toBeNull();
+    expect([...forced.encoded!].every((ch) => ch.charCodeAt(0) <= 0xff)).toBe(true);
+  });
+
+  it("leaves a line that already fits exactly as the normal build writes it", () => {
+    const normal = prepareInazumaLine("Hello", "مرحبا", 128);
+    expect(prepareInazumaLine("Hello", "مرحبا", 128, true)).toEqual(normal);
   });
 });

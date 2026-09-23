@@ -228,6 +228,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   }, [isPokemon]);
   const [shapeArabic, setShapeArabic] = useState(true);
   const [m3ForceBuild, setM3ForceBuild] = useState(false);
+  const [inazumaForceBuild, setInazumaForceBuild] = useState(false);
   const [m3SkippedItems, setM3SkippedItems] = useState<M3SkippedItem[] | null>(null);
   const [showSkippedDialog, setShowSkippedDialog] = useState(false);
   const [showNormalizeConfirm, setShowNormalizeConfirm] = useState(false);
@@ -430,7 +431,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     try {
       const buf = await idbGet<ArrayBuffer>(INAZUMA_BUFFER_KEY);
       if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة Inazuma Eleven");
-      const result = buildInazumaRom(new Uint8Array(buf), editor.state?.translations || {});
+      const result = buildInazumaRom(new Uint8Array(buf), editor.state?.translations || {}, { force: inazumaForceBuild });
       const { toast } = await import("@/hooks/use-toast");
       const blob = new Blob([result.rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
@@ -441,9 +442,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       URL.revokeObjectURL(url);
       const refused = result.brokenTags.length + result.tooLong.length;
       toast({
-        title: refused > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : "✅ تم بناء روم معرّب",
+        title: refused > 0 ? "⚠️ تم البناء مع أسطر مرفوضة" : inazumaForceBuild ? "✅ تم بناء روم معرّب (بناء إجباري)" : "✅ تم بناء روم معرّب",
         description:
           `${result.translatedLines} سطر مترجم` +
+          (result.forcedTags.length > 0 ? ` | ${result.forcedTags.length} سطراً كُتب رغم وسم ساقط` : "") +
+          (result.cut.length > 0 ? ` | ${result.cut.length} سطراً قُصّ من آخره ليتّسع لخانته` : "") +
           (result.brokenTags.length > 0 ? ` | ${result.brokenTags.length} سطراً سقط منه رمز تضعه اللعبة أو فيه حرف بلا خانة — أصلحه بالفحص العميق` : "") +
           (result.tooLong.length > 0 ? ` | ${result.tooLong.length} وصفاً أطول من خانته (١٢٧ بايتاً) — اختصرها` : "") +
           (result.missingGlyphs.length > 0 ? ` | حروف بلا خانة في الخط: ${result.missingGlyphs.join(" ")}` : "") +
@@ -819,6 +822,12 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               <label className="flex items-center gap-2 cursor-pointer text-sm font-body" title="يتجاهل الأحرف غير المدعومة (يحذفها بدل الفشل) ويحتفظ بالإنجليزية للبنوك التي تجاوزت مساحتها بدلاً من إيقاف البناء">
                 <input type="checkbox" checked={m3ForceBuild} onChange={(e) => setM3ForceBuild(e.target.checked)} disabled={m3Building} className="rounded border-border" />
                 🛠️ البناء القسري (تجاهل تحذيرات الأحرف والبنوك الممتلئة)
+              </label>
+            )}
+            {isInazuma && (
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-body" title="يكتب كل سطر مترجم: الوسم الساقط يبقى ساقطاً، والحرف الذي لا رسم له يُحذف، والسطر الأطول من خانته يُقصّ من آخره كلمةً كلمة حتى يتّسع">
+                <input type="checkbox" checked={inazumaForceBuild} onChange={(e) => setInazumaForceBuild(e.target.checked)} disabled={inazumaBuilding} className="rounded border-border" />
+                🛠️ البناء الإجباري (كتابة كل الترجمات دون رفض أي سطر)
               </label>
             )}
             {isMother3 && m3SkippedItems && m3SkippedItems.length > 0 && (

@@ -12,6 +12,11 @@
  *    same as in every other game here, not a hole in the sentence.
  *  • a fixed-slot description longer than the 128 bytes its slot holds
  *
+ * A forced build (`{ force: true }`) writes those lines anyway, each the least
+ * damaging way it can: the lost token is simply absent, a character the font
+ * cannot draw is dropped, and an overlong line loses words off its end until
+ * it fits -- never bytes past its slot, which are the next line's.
+ *
  * The engine stores its line break as the two characters `\` and `n`, not as
  * a real newline byte -- but the editor converts at exactly this module's
  * boundary (`extractInazumaEntries` in, `buildInazumaRom` out) so every tool
@@ -133,6 +138,76 @@ export interface InazumaBuildResult {
   /** Presentation forms with no glyph in the patched font, named once each. */
   missingGlyphs: string[];
   warnings: string[];
+  /** Forced build only: lines written although an engine token went missing. */
+  forcedTags: string[];
+  /** Forced build only: lines that lost words off their end to fit their slot. */
+  cut: string[];
+}
+
+export interface InazumaBuildOptions {
+  /** Write every translated line, repaired as far as it can be, instead of refusing it. */
+  force?: boolean;
+}
+
+export interface InazumaLineResult {
+  /** The bytes to write, or null when the line is refused and keeps its English. */
+  encoded: string | null;
+  brokenTag: boolean;
+  tooLong: boolean;
+  /** Presentation forms the font has no drawing for. */
+  missing: string[];
+  /** Words taken off the end so the line fits its slot (forced build only). */
+  cutWords: number;
+}
+
+function encodeLine(translation: string): { text: string; missing: string[] } {
+  return encodeInazumaArabicText(processArabicText(translation));
+}
+
+/**
+ * One translated line, checked and encoded -- or, in a forced build, repaired.
+ *
+ * An overlong line is cut in its logical order, before shaping reverses it for
+ * this engine: cutting the encoded bytes instead would take the words off the
+ * start of the Arabic sentence, not its end. Words come off one at a time, the
+ * `\n` between lines counting as a word gap, so what is left is still whole
+ * words.
+ */
+export function prepareInazumaLine(
+  original: string,
+  translation: string,
+  limit: number | undefined,
+  force = false
+): InazumaLineResult {
+  const brokenTag = !validateInazumaTags(original, translation).valid;
+  const first = encodeLine(translation);
+  const fits = (t: string) => limit === undefined || t.length + 1 <= limit;
+
+  if (!force) {
+    const refusal = { encoded: null, brokenTag, missing: first.missing, cutWords: 0 };
+    if (brokenTag || first.missing.length > 0) return { ...refusal, tooLong: false };
+    if (!fits(first.text)) return { ...refusal, tooLong: true };
+    return { encoded: first.text, brokenTag, tooLong: false, missing: first.missing, cutWords: 0 };
+  }
+
+  // Shortening can change which form the new last letter takes, so every
+  // re-encode may name a form the first one did not.
+  const absent = new Set(first.missing);
+  const drop = (t: string) => [...t].filter((ch) => !absent.has(ch)).join("");
+  let text = drop(first.text);
+  let cutWords = 0;
+  const parts = translation.split(/(\s+|\\n)/);
+  while (!fits(text) && parts.length > 1) {
+    parts.pop(); // the last word
+    parts.pop(); // and the gap before it
+    cutWords++;
+    const next = encodeLine(parts.join(""));
+    for (const ch of next.missing) absent.add(ch);
+    text = drop(next.text);
+  }
+  const missing = [...absent];
+  if (!fits(text) || text.trim() === "") return { encoded: null, brokenTag, tooLong: true, missing, cutWords: 0 };
+  return { encoded: text, brokenTag, tooLong: false, missing, cutWords };
 }
 
 /** Patches the Arabic glyphs into all three fonts, leaving every other glyph as it was. */
@@ -151,12 +226,15 @@ export function patchInazumaFonts(rom: Uint8Array): Uint8Array {
 
 export function buildInazumaRom(
   rom: Uint8Array,
-  translations: Record<string, string>
+  translations: Record<string, string>,
+  options: InazumaBuildOptions = {}
 ): InazumaBuildResult {
   const rows = readInazumaText(rom);
   const brokenTags: string[] = [];
   const tooLong: string[] = [];
   const missing = new Set<string>();
+  const forcedTags: string[] = [];
+  const cut: string[] = [];
   let translatedLines = 0;
 
   const edited = rows.map((row) => {
@@ -175,23 +253,15 @@ export function buildInazumaRom(
     // not one of these any more -- it is a wrapping problem the same as in
     // every other game, not refused here, just reported to the translator by
     // the deep-scan panel.
-    const check = validateInazumaTags(row.text, translation);
-    if (!check.valid) {
-      brokenTags.push(key);
+    const line = prepareInazumaLine(row.text, translation, row.limit, options.force);
+    for (const ch of line.missing) missing.add(ch);
+    if (line.encoded === null) {
+      (line.tooLong ? tooLong : brokenTags).push(key);
       return row;
     }
-
-    const { text: encoded, missing: absent } = encodeInazumaArabicText(processArabicText(translation));
-    for (const ch of absent) missing.add(ch);
-    if (absent.length > 0) {
-      brokenTags.push(key);
-      return row;
-    }
-
-    if (row.limit !== undefined && encoded.length + 1 > row.limit) {
-      tooLong.push(key);
-      return row;
-    }
+    if (line.brokenTag) forcedTags.push(key);
+    if (line.cutWords > 0) cut.push(key);
+    const encoded = line.encoded;
 
     translatedLines++;
     return { ...row, text: encoded };
@@ -205,5 +275,7 @@ export function buildInazumaRom(
     tooLong,
     missingGlyphs: [...missing],
     warnings: written.warnings,
+    forcedTags,
+    cut,
   };
 }

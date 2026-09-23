@@ -42,6 +42,28 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     expect(result.rom).toBe(original);
   });
 
+  it("reads the cutscene subtitles and rewrites one, keeping its timing", { timeout: 120_000 }, () => {
+    const original = rom();
+    const before = readInazumaText(original);
+    const movie = before.filter((r) => r.source === "movie");
+    expect(movie.some((r) => r.text === "Why did we come to this school?")).toBe(true);
+    const target = movie.find((r) => r.text === "Hey, Kidou.")!;
+    const file = findNdsFile(original, "data_iz/movie/txt/en/am0501.dat")!;
+    const timing = Array.from(original.subarray(file.start, file.start + 8));
+
+    const result = writeInazumaText(original, before.map((r) => (r === target ? { ...r, text: "A LONGER SUBTITLE THAN BEFORE" } : r)));
+    expect(result.changed).toBe(1);
+    const after = readInazumaText(result.rom);
+    expect(after.filter((r, i) => r.text !== before[i].text).map((r) => r.text)).toEqual(["A LONGER SUBTITLE THAN BEFORE"]);
+    const moved = findNdsFile(result.rom, "data_iz/movie/txt/en/am0501.dat")!;
+    expect(Array.from(result.rom.subarray(moved.start, moved.start + 8))).toEqual(timing);
+  });
+
+  it("puts the cutscene subtitles in their own editor section", { timeout: 120_000 }, () => {
+    const { entries } = extractInazumaEntries(rom());
+    expect(entries.some((e) => categorizeInazumaEntry(e) === "iz-movie" && e.original === "Hey, Kidou.")).toBe(true);
+  });
+
   it("carries one edited line into the rebuilt ROM and leaves the rest alone", { timeout: 120_000 }, () => {
     const original = rom();
     const before = readInazumaText(original);

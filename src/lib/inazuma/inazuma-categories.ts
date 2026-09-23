@@ -9,7 +9,8 @@ import type { ExtractedEntry, FileCategory } from "@/components/editor/types";
  * like dialogue does, and its content is lines like "Hey, spikeyhead!
  * We'll show you how to play our way."), `unitbase.STR` the fixed-slot
  * table of player descriptions, `item.STR` the item shop's descriptions,
- * and `command.STR` the special-move names shown on the tactics screen.
+ * `command.STR` the special-move names shown on the tactics screen, and
+ * `movie` the subtitles of the cutscene videos.
  */
 export const INAZUMA_CATEGORIES: FileCategory[] = [
   { id: "iz-dialogue", label: "حوارات القصة", emoji: "…", icon: "MessageCircle", color: "text-violet-400" },
@@ -17,6 +18,7 @@ export const INAZUMA_CATEGORIES: FileCategory[] = [
   { id: "iz-players", label: "أوصاف اللاعبين", emoji: "✦", icon: "Users", color: "text-emerald-400" },
   { id: "iz-items", label: "أوصاف الأغراض", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
   { id: "iz-commands", label: "أسماء المهارات", emoji: "★", icon: "Sparkles", color: "text-rose-400" },
+  { id: "iz-movie", label: "ترجمات المشاهد السينمائية", emoji: "🎬", icon: "Film", color: "text-orange-400" },
   { id: "iz-other", label: "نصوص أخرى", emoji: "•", icon: "FileText", color: "text-zinc-400" },
 ];
 
@@ -27,5 +29,6 @@ export function categorizeInazumaEntry(entry: ExtractedEntry): string {
   if (file.startsWith("inazuma/unitbase")) return "iz-players";
   if (file.startsWith("inazuma/item")) return "iz-items";
   if (file.startsWith("inazuma/command")) return "iz-commands";
+  if (file.startsWith("inazuma/movie")) return "iz-movie";
   return "iz-other";
 }

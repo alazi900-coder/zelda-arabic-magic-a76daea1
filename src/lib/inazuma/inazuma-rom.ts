@@ -13,6 +13,7 @@
  *                           every one NUL-terminated with nothing after it
  *   logic/en/item.STR      item descriptions, 32-byte-aligned slots
  *   logic/en/command.STR   special-move names, 32-byte-aligned slots
+ *   movie/txt/en/*.dat     the cutscene videos' subtitles, 21 files
  *
  * item.STR and command.STR looked pointer-addressed at first -- a same-named
  * `.dat` sits beside each -- but no byte-offset field in either `.dat`
@@ -31,7 +32,7 @@
  * Nothing here ever needs to know what a byte offset means to the game's own
  * code, only that it never moves.
  */
-import { findNdsFile, writeNdsFile, type NdsFile } from "@/lib/nds/nds-rom";
+import { findNdsFile, ndsFileIdByPath, writeNdsFile, type NdsFile } from "@/lib/nds/nds-rom";
 import { INAZUMA_TEXT_KIND, readPack, writePack, type InazumaPack } from "./inazuma-pack";
 
 const PACKS = [
@@ -51,8 +52,59 @@ const ITEM: OverflowTable = { source: "item", path: "data_iz/logic/en/item.STR",
 const COMMAND: OverflowTable = { source: "command", path: "data_iz/logic/en/command.STR", slot: 32 };
 const OVERFLOW_TABLES = [ITEM, COMMAND];
 
+/**
+ * The cutscene videos' subtitles are not in the video: each movie has a
+ * small file of its own under movie/txt/en/, a run of records
+ * {start frame u32, end frame u32, byte length u32, text} closed by
+ * 0xFFFFFFFF. The length covers the text, its NUL and padding. Read back and
+ * rebuilt unchanged, all 21 files come out byte for byte the same.
+ */
+const MOVIE_DIR = "data_iz/movie/txt/en/";
+
+interface MovieRecord {
+  /** The record exactly as stored, for writing an untranslated one back unchanged. */
+  raw: Uint8Array;
+  start: number;
+  end: number;
+  text: string;
+}
+
+function moviePaths(rom: Uint8Array): string[] {
+  return [...ndsFileIdByPath(rom).keys()].filter((p) => p.startsWith(MOVIE_DIR) && p.endsWith(".dat")).sort();
+}
+
+function readMovieRecords(data: Uint8Array): { records: MovieRecord[]; tail: Uint8Array } {
+  const view = new DataView(data.buffer, data.byteOffset, data.length);
+  const records: MovieRecord[] = [];
+  let at = 0;
+  while (at + 12 <= data.length && view.getUint32(at, true) !== 0xffffffff) {
+    const length = view.getUint32(at + 8, true);
+    if (at + 12 + length > data.length) break;
+    let text = "";
+    for (let i = at + 12; i < at + 12 + length && data[i] !== 0; i++) text += String.fromCharCode(data[i]);
+    records.push({ raw: data.subarray(at, at + 12 + length), start: view.getUint32(at, true), end: view.getUint32(at + 4, true), text });
+    at += 12 + length;
+  }
+  return { records, tail: data.subarray(at) };
+}
+
+function movieRecordBytes(record: MovieRecord, text: string): Uint8Array {
+  const length = Math.ceil((text.length + 1) / 4) * 4;
+  const out = new Uint8Array(12 + length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, record.start, true);
+  view.setUint32(4, record.end, true);
+  view.setUint32(8, length, true);
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 0xff) throw new Error(`الحرف "${text[i]}" خارج نطاق بايت واحد — النصّ العربي يحتاج جدول ترميز اللعبة.`);
+    out[12 + i] = code;
+  }
+  return out;
+}
+
 export interface InazumaTextRow {
-  /** Which file it came from: "evet", "mcht" or "unitbase". */
+  /** Which file it came from: "evet", "mcht", "unitbase", "item", "command" or "movie". */
   source: string;
   /** The pack entry's id, or the slot number in a fixed table. */
   entry: number;
@@ -189,6 +241,10 @@ export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
   }
   readSlots(rom, rows);
   for (const table of OVERFLOW_TABLES) readOverflowTable(rom, table, rows);
+  moviePaths(rom).forEach((path, fileIndex) => {
+    const { records } = readMovieRecords(bytesOf(rom, requireFile(rom, path)));
+    records.forEach((record, key) => rows.push({ source: "movie", entry: fileIndex, key, text: record.text }));
+  });
   return rows;
 }
 
@@ -270,6 +326,27 @@ export function writeInazumaText(
     const result = writeOverflowTable(out, table, wanted, seen, warnings);
     out = result.rom;
     changed += result.changed;
+  }
+
+  for (const [fileIndex, path] of moviePaths(out).entries()) {
+    const file = requireFile(out, path);
+    const { records, tail } = readMovieRecords(bytesOf(out, file));
+    let touched = false;
+    const parts = records.map((record, key) => {
+      const id = rowId({ source: "movie", entry: fileIndex, key });
+      seen.add(id);
+      const text = wanted.get(id);
+      if (text === undefined || text === record.text) return record.raw;
+      touched = true;
+      changed++;
+      return movieRecordBytes(record, text);
+    });
+    if (!touched) continue;
+    const size = parts.reduce((n, p) => n + p.length, 0) + tail.length;
+    const data = new Uint8Array(size);
+    let at = 0;
+    for (const part of [...parts, tail]) { data.set(part, at); at += part.length; }
+    out = writeNdsFile(out, file, data);
   }
 
   for (const row of rows) {

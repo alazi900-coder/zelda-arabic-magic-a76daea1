@@ -261,7 +261,7 @@ export function patchInazumaFonts(rom: Uint8Array): Uint8Array {
   for (const path of FONT12_PATHS) {
     const file = findNdsFile(out, path);
     if (!file) throw new Error(`الروم لا يحتوي على ${path}`);
-    out = writeNdsFile(out, file, patchInazumaFont12(out.subarray(file.start, file.end)));
+    out = writeNdsFile(out, file, patchInazumaFont12(out.subarray(file.start, file.end), { tightSpace: !path.endsWith("FONT12N.NFTR") }));
   }
   const font8 = findNdsFile(out, FONT8_PATH);
   if (!font8) throw new Error(`الروم لا يحتوي على ${FONT8_PATH}`);

@@ -33,6 +33,40 @@ export function extractInazumaTags(text: string): string[] {
   return text.match(INAZUMA_TAG_RE) ?? [];
 }
 
+/**
+ * Shields every engine token (`\f`, `%1F`..`%4F`, `%d`/`%Nd`, `%s`) from Arabic
+ * BiDi reversal, each whole match becoming one character from `U+E000`-
+ * `U+E04F` -- comfortably inside the `U+E000`-`U+E0FF` island `reverseBidi`
+ * (arabic-processing.ts) already carries through unreversed and untouched as
+ * a single block, the same way it protects `[XENO:n]`. Left unmasked, a token
+ * gets torn apart mid-sentence: `\` and `f` fall on opposite sides of whatever
+ * Arabic surrounds them and reach the ROM as `f\`, which the engine does not
+ * recognise as a page break at all.
+ *
+ * Kept away from the `U+E0A0`-`U+E0FF` slice `reverseBidi` uses for its own
+ * protected tags, so the two shielding passes can never collide.
+ */
+const TOKEN_MASK_BASE = 0xE000;
+const TOKEN_MASK_LIMIT = 0x50;
+
+export function maskInazumaTokens(text: string): { masked: string; tokens: string[] } {
+  const tokens: string[] = [];
+  const masked = text.replace(INAZUMA_TAG_RE, (match) => {
+    if (tokens.length >= TOKEN_MASK_LIMIT) return match; // never happens on a real line; left unshielded rather than crashing
+    tokens.push(match);
+    return String.fromCharCode(TOKEN_MASK_BASE + tokens.length - 1);
+  });
+  return { masked, tokens };
+}
+
+/** Reverses `maskInazumaTokens`, once shaping has run. */
+export function unmaskInazumaTokens(text: string, tokens: string[]): string {
+  if (tokens.length === 0) return text;
+  const last = TOKEN_MASK_BASE + TOKEN_MASK_LIMIT - 1;
+  const re = new RegExp(`[\\u${TOKEN_MASK_BASE.toString(16)}-\\u${last.toString(16)}]`, "g");
+  return text.replace(re, (ch) => tokens[ch.charCodeAt(0) - TOKEN_MASK_BASE] ?? ch);
+}
+
 export interface InazumaTagCheck {
   valid: boolean;
   expected: string[];

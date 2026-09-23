@@ -28,14 +28,18 @@
  *
  * The editor holds ordinary logical Arabic. Shaping into the presentation
  * forms the patched font carries, and reversing into the visual order this
- * engine draws in, both happen here at build time.
+ * engine draws in, both happen here at build time -- on the editor's own real
+ * newline and literal engine tokens, still in the translator's order, before
+ * either is converted to what the ROM stores. Converting the newline first
+ * merges every printed line into one for reversal, which both scrambles line
+ * order and turns the break itself into `n\`; see `encodeLine` below.
  */
 import { findNdsFile, writeNdsFile } from "@/lib/nds/nds-rom";
 import { processArabicText } from "@/lib/arabic-processing";
 import type { ExtractedEntry } from "@/components/editor/types";
 import { readInazumaText, writeInazumaText, type InazumaTextRow } from "./inazuma-rom";
 import { patchInazumaFont12, patchInazumaFont8, encodeInazumaArabicText } from "./inazuma-arabic-font";
-import { isInazumaTranslatable, validateInazumaTags } from "./inazuma-tags";
+import { isInazumaTranslatable, validateInazumaTags, maskInazumaTokens, unmaskInazumaTokens } from "./inazuma-tags";
 
 export const INAZUMA_BUFFER_KEY = "inazumaSourceBuffer";
 export const INAZUMA_SOURCE_GAME = "inazuma";
@@ -160,8 +164,42 @@ export interface InazumaLineResult {
   cutWords: number;
 }
 
+/**
+ * Shapes and encodes one line, given in the editor's own order: a real
+ * newline between printed lines, and `\f`/`%d`/`%s`/`%1F`..`%4F` written out
+ * as literal characters, exactly as `row.text` reads out of the ROM.
+ *
+ * `\f` starts a whole new dialogue box, so it is split on first, before
+ * anything else: `processArabicText` only ever hard-breaks a BiDi run on a
+ * real newline, so a `\f` merely *masked* as an inline token -- the way
+ * `%d`/`%s`/`%1F`..`%4F` correctly are, since those values belong inside the
+ * sentence around them -- still leaves the Arabic on either side of it as one
+ * continuous run, and reversal can swap whole words across the page break.
+ * Each box gets its own independent shaping pass instead, the same way each
+ * printed line already gets one from `processArabicText`'s own `\n` split.
+ *
+ * Within a box, the surviving value tokens are masked before shaping and put
+ * back after: unmasked, BiDi reversal treats `%` and `d` as two unrelated
+ * characters and can split them onto opposite sides of the Arabic around
+ * them. `\n` needs no such shielding -- `processArabicText` reverses each
+ * line between real newlines on its own, which is exactly why the newline
+ * must still be a real newline going in: converting it to the ROM's literal
+ * `\n` first (as this used to do, for the whole message in one pass) merges
+ * every printed line into one for reversal, scrambling both the line order
+ * and the two characters of the break itself into `n\`. So the ROM's literal
+ * `\n` is written only at the very end of each box, after shaping, not
+ * before it.
+ */
 function encodeLine(translation: string): { text: string; missing: string[] } {
-  return encodeInazumaArabicText(processArabicText(translation));
+  const missing: string[] = [];
+  const boxes = translation.split("\\f").map((box) => {
+    const { masked, tokens } = maskInazumaTokens(box); // \f is already split out; only %d/%s/%1F..%4F remain to shield
+    const shaped = unmaskInazumaTokens(processArabicText(masked), tokens);
+    const encoded = encodeInazumaArabicText(toRomText(shaped));
+    missing.push(...encoded.missing);
+    return encoded.text;
+  });
+  return { text: boxes.join("\\f"), missing };
 }
 
 /**
@@ -196,7 +234,7 @@ export function prepareInazumaLine(
   const drop = (t: string) => [...t].filter((ch) => !absent.has(ch)).join("");
   let text = drop(first.text);
   let cutWords = 0;
-  const parts = translation.split(/(\s+|\\n)/);
+  const parts = translation.split(/(\s+)/); // a real newline is whitespace here, same as any other gap
   while (!fits(text) && parts.length > 1) {
     parts.pop(); // the last word
     parts.pop(); // and the gap before it
@@ -243,17 +281,18 @@ export function buildInazumaRom(
     if (!editorTranslation || !editorTranslation.trim()) return row;
     if (!isInazumaTranslatable(row.text)) return row;
 
-    // The editor holds this line break as a real newline; the cartridge wants
-    // its own literal `\` + `n`, which is what `row.text` (read fresh from the
-    // ROM, never converted) is about to be checked and written against.
-    const translation = toRomText(editorTranslation);
-
+    // Handed to `prepareInazumaLine` in the editor's own order -- real
+    // newline, literal `\f`/`%d`/`%s`/`%1F`..`%4F` -- because shaping (inside
+    // `encodeLine`) needs to see the real line breaks to reverse each printed
+    // line on its own instead of the whole message as one. `row.text` (read
+    // fresh from the ROM, never converted) is what it is checked against.
+    //
     // A token the engine fills in is not decoration: losing one leaves a hole
     // in the sentence with nothing on screen to explain it. A missing `\n` is
     // not one of these any more -- it is a wrapping problem the same as in
     // every other game, not refused here, just reported to the translator by
     // the deep-scan panel.
-    const line = prepareInazumaLine(row.text, translation, row.limit, options.force);
+    const line = prepareInazumaLine(row.text, editorTranslation, row.limit, options.force);
     for (const ch of line.missing) missing.add(ch);
     if (line.encoded === null) {
       (line.tooLong ? tooLong : brokenTags).push(key);

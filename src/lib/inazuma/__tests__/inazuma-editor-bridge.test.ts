@@ -126,3 +126,58 @@ describe("Inazuma forced build", () => {
     expect(prepareInazumaLine("Hello", "مرحبا", 128, true)).toEqual(normal);
   });
 });
+
+describe("Inazuma multi-line and page-break shaping", () => {
+  it("shapes each printed line on its own, matching what shaping each line separately gives", () => {
+    // The bug this guards: converting the real newline to the ROM's literal
+    // `\n` *before* shaping merges every printed line into one BiDi run, so
+    // shaping the whole message stops matching shaping each line alone --
+    // which is exactly what a translator sees as lines swapping order on
+    // screen. `original` carries no engine token, so any three-line Arabic
+    // translation is accepted regardless of what it says.
+    const original = "Line one. Line two. Line three.";
+    const lines = ["سمعت شائعات أن النادي", "سيحل على أي حال. لا", "فائدة من الحماس الآن..."];
+    const whole = prepareInazumaLine(original, lines.join("\n"), undefined).encoded;
+    const perLine = lines.map((l) => prepareInazumaLine(original, l, undefined).encoded);
+    expect(perLine.every((e) => e !== null)).toBe(true);
+    expect(whole).toBe(perLine.join("\\n"));
+  });
+
+  it("writes \\n and \\f in their own order, never reversed into n\\ or f\\", () => {
+    const original = "Miss Natsumi's fallen in love with someone...\\fIt's a lie! Tell me it's not true";
+    const translation =
+      "سمعت شائعات أن النادي\nسيحل على أي حال. لا\nفائدة من الحماس الآن...\\fإنها كذبة! قل لي إنها غير صحيحة!";
+    const r = prepareInazumaLine(original, translation, undefined);
+    expect(r.encoded).not.toBeNull();
+    expect(r.encoded).not.toContain("n\\");
+    expect(r.encoded).not.toContain("f\\");
+    expect((r.encoded!.match(/\\n/g) ?? []).length).toBe(2);
+    expect((r.encoded!.match(/\\f/g) ?? []).length).toBe(1);
+  });
+
+  it("keeps a %d/%s slot's characters together instead of splitting them across the reversed Arabic", () => {
+    const original = "You got %d points, %s!";
+    const r = prepareInazumaLine(original, "حصلت على %d نقطة يا %s!", undefined);
+    expect(r.encoded).not.toBeNull();
+    expect(r.encoded).toContain("%d");
+    expect(r.encoded).toContain("%s");
+    expect(r.brokenTag).toBe(false);
+  });
+
+  it("never lets Arabic on either side of a page break swap words across it", () => {
+    // The bug this guards: masking `\f` as an inline token (like `%d`) keeps
+    // its own two characters together, but does not stop `processArabicText`
+    // from treating the whole message as one BiDi run when there is no real
+    // newline between the boxes -- so a translation with only a `\f` between
+    // two Arabic sentences had its words reordered *across* the page break,
+    // mixing box one's words into box two and back.
+    const original = "First box.\\fSecond box, unrelated.";
+    const box1 = "بوصف اول جزء هنا";
+    const box2 = "ثم جزء ثاني منفصل";
+    const whole = prepareInazumaLine(original, `${box1}\\f${box2}`, undefined).encoded;
+    expect(whole).not.toBeNull();
+    const [gotBox1, gotBox2] = whole!.split("\\f");
+    expect(gotBox1).toBe(prepareInazumaLine("x", box1, undefined).encoded);
+    expect(gotBox2).toBe(prepareInazumaLine("x", box2, undefined).encoded);
+  });
+});

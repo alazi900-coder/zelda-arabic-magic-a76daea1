@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairInazumaTags, inazumaSlotsAgree } from "../inazuma-tags";
+import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairInazumaTags, inazumaSlotsAgree, maskInazumaTokens, unmaskInazumaTokens } from "../inazuma-tags";
 
 describe("Inazuma technical tokens", () => {
   it("finds the engine's own tokens and nothing else", () => {
@@ -162,5 +162,24 @@ describe("Inazuma translatable lines", () => {
   it("still keeps a player name, which is a single ASCII token too", () => {
     expect(isInazumaTranslatable("Gouenji")).toBe(true);
     expect(isInazumaTranslatable("Kabeyama")).toBe(true);
+  });
+});
+
+describe("Inazuma token masking", () => {
+  it("replaces every token with one private-use character and restores it exactly", () => {
+    const text = "Go\\fthen %1F and %2F, %d points, %s!";
+    const { masked, tokens } = maskInazumaTokens(text);
+    expect(tokens).toEqual(["\\f", "%1F", "%2F", "%d", "%s"]);
+    expect(masked).not.toContain("\\f");
+    expect(masked).not.toContain("%1F");
+    expect(unmaskInazumaTokens(masked, tokens)).toBe(text);
+  });
+
+  it("leaves text with no tokens untouched", () => {
+    const text = "لا رموز هنا";
+    const { masked, tokens } = maskInazumaTokens(text);
+    expect(masked).toBe(text);
+    expect(tokens).toEqual([]);
+    expect(unmaskInazumaTokens(masked, tokens)).toBe(text);
   });
 });

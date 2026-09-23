@@ -114,6 +114,13 @@ export default function Inazuma() {
           />
         </label>
 
+        <Link
+          to="/inazuma/images"
+          className="mt-4 flex items-center justify-center gap-2 rounded-xl border p-4 text-sm font-medium transition hover:bg-muted/50"
+        >
+          🖼️ أداة صور اللعبة — القوائم وشاشة العنوان وواجهات المباراة
+        </Link>
+
         <div className="mt-6 space-y-2 text-xs text-muted-foreground">
           <p>
             <strong className="text-foreground">الرموز التقنية</strong>: <code>{"\\n"}</code> سطر جديد،

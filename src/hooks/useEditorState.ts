@@ -58,6 +58,7 @@ import { isChineseSource, repairCrashlandsTags, validateCrashlandsTags } from "@
 import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
 import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { analyzeInazumaUnsupportedCharacters, type InazumaUnsupportedCharacter } from "@/lib/inazuma/inazuma-arabic-font";
+import { fromInazumaBreakTokens } from "@/lib/inazuma/inazuma-break-tokens";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
@@ -1148,7 +1149,8 @@ export function useEditorState() {
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key] || "";
       if (!translation.trim()) continue;
-      const unsupported = analyzeInazumaUnsupportedCharacters(processArabicText(translation));
+      // `▼` is the editor's page break, not a letter: it goes to the ROM as `\f`.
+      const unsupported = analyzeInazumaUnsupportedCharacters(processArabicText(fromInazumaBreakTokens(translation)));
       if (unsupported.length === 0) continue;
       keys.add(key);
       for (const item of unsupported) {

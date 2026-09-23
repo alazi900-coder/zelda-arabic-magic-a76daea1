@@ -27,10 +27,17 @@
  * A bare `%` is left alone: "30% cheaper than shops" is a sentence, and only
  * three strings in the whole cartridge use one that way.
  */
-export const INAZUMA_TAG_RE = /\\f|%[1-4]F|%\d?d|%s/g;
+import { fromInazumaBreakTokens, toInazumaBreakTokens } from "./inazuma-break-tokens";
+
+/**
+ * `▼` is the editor's own spelling of `\f` (inazuma-break-tokens.ts). It is in
+ * the pattern so anything matching tokens in editor text sees it; every
+ * function below reads both spellings as the one token `\f`.
+ */
+export const INAZUMA_TAG_RE = /\\f|▼|%[1-4]F|%\d?d|%s/g;
 
 export function extractInazumaTags(text: string): string[] {
-  return text.match(INAZUMA_TAG_RE) ?? [];
+  return fromInazumaBreakTokens(text).match(INAZUMA_TAG_RE) ?? [];
 }
 
 /**
@@ -273,7 +280,80 @@ function restoreBreaks(original: string, translation: string): string | null {
 const LEAD_RUN_RE = /^((?:\\f|%[1-4]F|%\d?d|%s)+)([ \t]*)/;
 const TAIL_RUN_RE = /([ \t]*)((?:\\f|%[1-4]F|%\d?d|%s)+)\s*$/;
 
+/** A sentence ends at `.`/`!`/`?`/`…` in English, and also `؟`/`۔` in Arabic. */
+const SENTENCE_END = /[.!?…؟۔]/;
+
+/** Index of the whitespace that closes each sentence (never the end of the text). */
+function sentenceEnds(text: string): number[] {
+  const out: number[] = [];
+  for (let i = 1; i < text.length; i++) {
+    if (/\s/.test(text[i]) && SENTENCE_END.test(text[i - 1])) out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Puts lost page breaks back at the end of the matching sentence -- Platinum's
+ * rule (nds/plat-restore-breaks.ts), in the editor's `▼` spelling.
+ *
+ * A page break in this cartridge ends a sentence 99.6% of the time (2,102 of
+ * its 2,110), and a translator rendering two English sentences writes two
+ * Arabic ones. So the English is cut into the boxes its breaks make, each
+ * box's sentences are counted, and the Arabic is cut after the matching one --
+ * where a translator who put a line break there gets it turned into the box
+ * break it was meant to be. Returns `null` when the sentences do not line up,
+ * or when a value slot is missing, so the word-count placement below decides.
+ */
+function restoreBreaksBySentence(original: string, translation: string): string | null {
+  const o = toInazumaBreakTokens(fromInazumaBreakTokens(original));
+  if (!o.includes("▼") || !inazumaSlotsAgree(o, translation)) return null;
+  const pieces = o.split("▼");
+  const wanted: number[] = [];
+  let running = 0;
+  for (const piece of pieces.slice(0, -1)) {
+    running += sentenceEnds(piece.trim()).length + 1;
+    wanted.push(running);
+  }
+  // Whatever breaks survived are re-cut from scratch, so a partly damaged
+  // line is treated the same as a fully damaged one.
+  const flat = toInazumaBreakTokens(fromInazumaBreakTokens(translation)).replace(/▼\n?/g, "\n").trimEnd();
+  const ends = sentenceEnds(flat);
+  if (ends.length < wanted[wanted.length - 1]) return null;
+  const cuts = wanted.map((n) => ends[n - 1]);
+  if (new Set(cuts).size !== cuts.length) return null;
+  let out = "";
+  let prev = 0;
+  for (const cut of cuts) {
+    out += flat.slice(prev, cut) + "▼\n";
+    prev = cut + 1;
+  }
+  out += flat.slice(prev);
+  return validateInazumaTags(o, out).valid ? out : null;
+}
+
+/**
+ * Repairs in the cartridge's own spelling and hands the result back in the
+ * editor's: the rules below were written against `\f`, and the editor holds
+ * `▼`. A line the repair leaves alone comes back exactly as it went in.
+ *
+ * A lost page break goes back at the end of its sentence first; the
+ * word-count placement of `restoreBreaks` is only the fallback for a line
+ * whose sentences do not line up, because it cuts wherever the count lands --
+ * mid-sentence as often as not.
+ */
 export function repairInazumaTags(original: string, translation: string): { text: string; changed: boolean } {
+  if (!validateInazumaTags(original, translation).valid) {
+    const bySentence = restoreBreaksBySentence(original, translation);
+    if (bySentence !== null) return { text: bySentence, changed: bySentence !== translation };
+  }
+  const romTranslation = fromInazumaBreakTokens(translation);
+  const repaired = repairInazumaTagsInRomForm(fromInazumaBreakTokens(original), romTranslation);
+  if (repaired.text === romTranslation) return { text: translation, changed: false };
+  const text = toInazumaBreakTokens(repaired.text);
+  return { text, changed: text !== translation };
+}
+
+function repairInazumaTagsInRomForm(original: string, translation: string): { text: string; changed: boolean } {
   const normalized = normalizeInazumaLookalikes(original, translation);
   const done = (text: string) => ({ text, changed: text !== translation });
   if (validateInazumaTags(original, normalized).valid) return done(normalized);

@@ -244,14 +244,14 @@ function preservesNinthDawnTokenSequence(original: string, candidate: string): b
 /**
  * Inazuma Eleven's own tokens, matched by the same pattern the client uses
  * (INAZUMA_TAG_RE in src/lib/inazuma/inazuma-tags.ts) so both sides refuse
- * exactly the same suggestion. `\f` is a whole new dialogue box -- the two
- * literal characters `\` and `f`, not a form-feed byte -- and `%1F`..`%4F`/
+ * exactly the same suggestion. `▼` -- the editor's spelling of the
+ * cartridge's two-character `\f` -- is a whole new dialogue box, and `%1F`..`%4F`/
  * `%d`/`%Nd`/`%s` are values the engine fills in at runtime. `\n` is
  * deliberately absent: the editor holds it as a real newline, the same as
  * every other game, and a missing one is a wrapping problem, not a dropped
  * token.
  */
-const INAZUMA_TOKEN_REGEX = /\\f|%[1-4]F|%\d?d|%s/g;
+const INAZUMA_TOKEN_REGEX = /\\f|▼|%[1-4]F|%\d?d|%s/g;
 function preservesInazumaTokenSequence(original: string, candidate: string): boolean {
   const expected = (original || '').match(INAZUMA_TOKEN_REGEX) || [];
   const actual = (candidate || '').match(INAZUMA_TOKEN_REGEX) || [];
@@ -617,7 +617,7 @@ Deno.serve(async (req) => {
       : isNinthDawn
       ? '\nهذه مراجعة خاصة بـ 9th Dawn Remake — لعبة استكشاف وبقاء بأسلوب RPG كلاسيكي. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. في نصّ هذه اللعبة أربعة أشكال من الرموز التقنية: `[0]`/`[1]`… فهرس يضعه المحرّك وقت التشغيل؛ `[playername]`/`[cardgamename]` قيم اسمية؛ `[c=N]`/`[p=N]`/`[i=N]` تلوين ومعامل وعنصر؛ و`<b>`/`</b>`/`<i>`/`</i>`/`<br>` وسوم تنسيق حرفية. أبقِ كل هذه الرموز بنفس العدد والترتيب والموضع بين الكلمات حرفياً.\n'
       : isInazuma
-      ? '\nهذه مراجعة خاصة بـ Inazuma Eleven (Nintendo DS) — لعبة كرة قدم، لا علاقة لها بـ Xenoblade أو أي لعبة أخرى؛ لا تفترض مصطلحاتها أو شخصياتها. رموز هذه اللعبة التقنية: `\\f` (الحرفان \\ وf، لا حرف تحكم) يبدأ صندوق حوار جديد؛ `%1F`..`%4F` وَ`%d`/`%2d`/`%s` قيم كاسم أو رقم يضعها المحرّك وقت التشغيل. أبقِ كل هذه الرموز بنفس العدد والترتيب والموضع بين الكلمات حرفياً؛ فاصل السطر الحقيقي `\\n` نفسه ليس من هذه الرموز، وتقسيم الأسطر عمل خطوة لاحقة، فلا داعي لإدخال سطر جديد بنفسك.\n'
+      ? '\nهذه مراجعة خاصة بـ Inazuma Eleven (Nintendo DS) — لعبة كرة قدم، لا علاقة لها بـ Xenoblade أو أي لعبة أخرى؛ لا تفترض مصطلحاتها أو شخصياتها. رموز هذه اللعبة التقنية: `▼` يبدأ صندوق حوار جديد (ينتظر اللاعب ثم يمسح الصندوق)؛ `%1F`..`%4F` وَ`%d`/`%2d`/`%s` قيم كاسم أو رقم يضعها المحرّك وقت التشغيل. أبقِ كل هذه الرموز بنفس العدد والترتيب والموضع بين الكلمات حرفياً؛ فاصل السطر الحقيقي `\\n` نفسه ليس من هذه الرموز، وتقسيم الأسطر عمل خطوة لاحقة، فلا داعي لإدخال سطر جديد بنفسك.\n'
       : '';
     const extraInstructionsBlock = extraInstructions?.trim()
       ? `تعليمات إضافية من المستخدم (أولوية عالية — طبّقها إن لم تتعارض مع القواعد الإلزاميّة أعلاه):\n${extraInstructions.trim().slice(0, 4000)}\n\n`

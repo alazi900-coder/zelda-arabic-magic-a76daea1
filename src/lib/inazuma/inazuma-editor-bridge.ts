@@ -22,9 +22,9 @@
  * boundary (`extractInazumaEntries` in, `buildInazumaRom` out) so every tool
  * elsewhere in the editor (line counting, the line-rebalance button, the
  * deep-scan split warning) sees an ordinary real newline, the same as it
- * would for any other game. `\f`, the page break, is left as its literal two
- * characters throughout: it marks a whole new dialogue box, not a wrap point,
- * so the shared line tools must not treat it as one.
+ * would for any other game. `\f`, the page break, is held as `▼` plus a
+ * newline, the way Platinum holds its pause codes: two plain characters were
+ * easy to drop and impossible to see. See inazuma-break-tokens.ts.
  *
  * The editor holds ordinary logical Arabic. Shaping into the presentation
  * forms the patched font carries, and reversing into the visual order this
@@ -40,6 +40,7 @@ import type { ExtractedEntry } from "@/components/editor/types";
 import { readInazumaText, writeInazumaText, type InazumaTextRow } from "./inazuma-rom";
 import { patchInazumaFont12, patchInazumaFont8, encodeInazumaArabicText } from "./inazuma-arabic-font";
 import { isInazumaTranslatable, validateInazumaTags, maskInazumaTokens, unmaskInazumaTokens } from "./inazuma-tags";
+import { toInazumaBreakTokens, fromInazumaBreakTokens } from "./inazuma-break-tokens";
 
 export const INAZUMA_BUFFER_KEY = "inazumaSourceBuffer";
 export const INAZUMA_SOURCE_GAME = "inazuma";
@@ -69,9 +70,12 @@ function preview(text: string): string {
   return t.length > 60 ? `${t.slice(0, 57)}…` : t;
 }
 
-/** ROM's literal `\n` (the two characters `\` and `n`) → a real editor newline. */
+/**
+ * ROM's literal `\n` (the two characters `\` and `n`) → a real editor newline,
+ * and its literal `\f` → `▼` (see inazuma-break-tokens.ts).
+ */
 function toEditorText(text: string): string {
-  return text.replace(/\\n/g, "\n");
+  return toInazumaBreakTokens(text.replace(/\\n/g, "\n"));
 }
 
 /** Reverses `toEditorText`: a real newline → the ROM's literal `\n`. */
@@ -117,8 +121,10 @@ export function extractInazumaEntries(rom: Uint8Array): InazumaExtractResult {
  * reads of the same ROM, so re-opening a cartridge never drops work. A
  * translation saved before the editor held this cartridge's line break as a
  * real newline -- typed by hand, or inserted by the old repair button -- may
- * still carry the literal `\n`; `toEditorText` is a no-op on anything that
- * does not, so this is safe to run over every saved line unconditionally.
+ * still carry the literal `\n`, and one saved before the page break became
+ * `▼` still carries the literal `\f`; `toEditorText` converts both and is a
+ * no-op on anything that does not, so this is safe to run over every saved
+ * line unconditionally.
  */
 export function restoreInazumaTranslations(
   entries: ExtractedEntry[],
@@ -282,7 +288,8 @@ export function buildInazumaRom(
     if (!isInazumaTranslatable(row.text)) return row;
 
     // Handed to `prepareInazumaLine` in the editor's own order -- real
-    // newline, literal `\f`/`%d`/`%s`/`%1F`..`%4F` -- because shaping (inside
+    // newline, `▼` back to the literal `\f`, literal `%d`/`%s`/`%1F`..`%4F` --
+    // because shaping (inside
     // `encodeLine`) needs to see the real line breaks to reverse each printed
     // line on its own instead of the whole message as one. `row.text` (read
     // fresh from the ROM, never converted) is what it is checked against.
@@ -292,7 +299,7 @@ export function buildInazumaRom(
     // not one of these any more -- it is a wrapping problem the same as in
     // every other game, not refused here, just reported to the translator by
     // the deep-scan panel.
-    const line = prepareInazumaLine(row.text, editorTranslation, row.limit, options.force);
+    const line = prepareInazumaLine(row.text, fromInazumaBreakTokens(editorTranslation), row.limit, options.force);
     for (const ch of line.missing) missing.add(ch);
     if (line.encoded === null) {
       (line.tooLong ? tooLong : brokenTags).push(key);

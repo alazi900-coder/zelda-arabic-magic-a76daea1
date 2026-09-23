@@ -488,14 +488,14 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   }
   if (_game === 'inazuma') {
     // Inazuma Eleven's own tokens (see INAZUMA_TAG_RE in
-    // src/lib/inazuma/inazuma-tags.ts): `\f` starts a whole new dialogue box
-    // -- the two literal characters `\` and `f`, not a form-feed byte -- and
+    // src/lib/inazuma/inazuma-tags.ts): `▼` -- the editor's spelling of the
+    // cartridge's two-character `\f` -- starts a whole new dialogue box, and
     // `%1F`..`%4F` are name/noun slots the engine fills at runtime. Masked
     // before the model ever sees them, same as every other game's own tag
     // syntax, so it cannot translate, drop, or reorder them.
     // `%d`/`%2d`/`%4d`/`%s` need no separate mask: the generic printf pattern
     // below already shields anything ending in a lowercase s/d.
-    const inazumaRegex = /\\f|%[1-4]F/g;
+    const inazumaRegex = /\\f|▼|%[1-4]F/g;
     let iMatch: RegExpExecArray | null;
     while ((iMatch = inazumaRegex.exec(shielded)) !== null) {
       matches.push({ start: iMatch.index, end: iMatch.index + iMatch[0].length, original: iMatch[0] });

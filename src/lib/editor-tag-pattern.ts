@@ -32,6 +32,9 @@ const HASH_COLOUR_RULE = "#[0-5]";
  */
 const PLAT_BREAK_RULE = "[\\u25BC\\u25BD]";
 
+/** Inazuma Eleven's page break `\\f`, held in the editor as `▼`. */
+const INAZUMA_BREAK_RULE = "\\u25BC";
+
 const RULES = [
   "\\[\\s*\\w+\\s*:[^\\]]*?\\](?:\\s*\\([^)]{1,100}\\))?",
   "\\[\\s*\\w+\\s*=\\s*[^\\]]*\\]",
@@ -76,6 +79,10 @@ export function editorTagPattern(msbtFile?: string): RegExp {
   // whose loss silently runs two lines together.
   const rules = msbtFile?.startsWith("platinum/")
     ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), PLAT_BREAK_RULE]
+    // Inazuma's page break, held as `▼` for the same reason -- see
+    // inazuma/inazuma-break-tokens.ts.
+    : msbtFile?.startsWith("inazuma/")
+      ? [...RULES, INAZUMA_BREAK_RULE]
     : msbtFile?.startsWith("steinsgate/")
       ? [...RULES, STEINSGATE_TAG_RE.source]
       : msbtFile?.startsWith("crashlands/")

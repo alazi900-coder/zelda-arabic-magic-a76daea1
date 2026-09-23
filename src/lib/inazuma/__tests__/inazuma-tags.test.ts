@@ -3,6 +3,7 @@ import { extractInazumaTags, validateInazumaTags, isInazumaTranslatable, repairI
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { INAZUMA_TAG_RE } from "../inazuma-tags";
+import { toInazumaBreakTokens, fromInazumaBreakTokens } from "../inazuma-break-tokens";
 
 describe("Inazuma technical tokens", () => {
   it("finds the engine's own tokens and nothing else", () => {
@@ -94,26 +95,28 @@ describe("Inazuma token repair", () => {
   });
 });
 
+// The repair hands the break back as `▼`, the editor's spelling of `\\f`
+// (inazuma-break-tokens.ts): its result goes straight into the editor.
 describe("Inazuma page breaks", () => {
   it("puts a page break back with the slot alone on its own line", () => {
     // Same shape as a merged-line case, except `\\f` starts a whole new
     // dialogue box, so it stays a tracked token this module places itself.
     const original = "%s\\fjoined you!";
     const result = repairInazumaTags(original, "%s انضم إليك!");
-    expect(result.text).toBe("%s\\fانضم إليك!");
+    expect(result.text).toBe("%s▼\nانضم إليك!");
     expect(validateInazumaTags(original, result.text).valid).toBe(true);
   });
 
   it("breaks before the slot when that is where the original breaks", () => {
     const original = "You got the manual for\\f%s!";
     const result = repairInazumaTags(original, "لقد حصلت على الدليل الخاص بـ %s !");
-    expect(result.text).toBe("لقد حصلت على الدليل الخاص بـ\\f%s !");
+    expect(result.text).toBe("لقد حصلت على الدليل الخاص بـ▼\n%s !");
     expect(validateInazumaTags(original, result.text).valid).toBe(true);
   });
 
   it("restores every page break when the original has more than one", () => {
     const result = repairInazumaTags("A\\fB\\fC", "واحد اثنان ثلاثة");
-    expect(result.text).toBe("واحد\\fاثنان\\fثلاثة");
+    expect(result.text).toBe("واحد▼\nاثنان▼\nثلاثة");
   });
 
   it("leaves the text alone when there are too few words to fill every box", () => {
@@ -133,7 +136,7 @@ describe("Inazuma page breaks", () => {
     // once they tap. It goes back in the original's place, in its own kind.
     const original = "Ready?\\fLet's go, %1F!";
     const result = repairInazumaTags(original, "مستعد؟ هيا بنا يا %1F!");
-    expect(result.text).toBe("مستعد؟\\fهيا بنا يا %1F!");
+    expect(result.text).toBe("مستعد؟▼\nهيا بنا يا %1F!");
     expect(validateInazumaTags(original, result.text).valid).toBe(true);
   });
 });
@@ -220,7 +223,56 @@ describe("Inazuma tokens are protected by the AI enhance/translate tools", () =>
 
   it("masks \\f and %1F..%4F before the auto-translate model ever sees them", () => {
     expect(TRANSLATE_SOURCE).toContain("if (_game === 'inazuma')");
-    expect(TRANSLATE_SOURCE).toContain("const inazumaRegex = /\\\\f|%[1-4]F/g;");
+    expect(TRANSLATE_SOURCE).toContain("const inazumaRegex = /\\\\f|▼|%[1-4]F/g;");
     expect(TRANSLATE_SOURCE).toContain("game === 'inazuma' ? 'inazuma' : 'xenoblade';");
+  });
+});
+
+describe("Inazuma page break held as ▼ in the editor, like Platinum's pauses", () => {
+  it("round-trips the cartridge's \\f exactly", () => {
+    const rom = "Your speed will drop if you lose\ntoo much FP.\\fYou can see when this happens";
+    const editor = toInazumaBreakTokens(rom);
+    expect(editor).toBe("Your speed will drop if you lose\ntoo much FP.▼\nYou can see when this happens");
+    expect(editor).not.toContain("\\f");
+    expect(fromInazumaBreakTokens(editor)).toBe(rom);
+  });
+
+  it("accepts ▼ typed without its newline, and a literal \\f saved before ▼ existed", () => {
+    expect(fromInazumaBreakTokens("أ▼ب")).toBe("أ\\fب");
+    expect(fromInazumaBreakTokens("أ\\fب")).toBe("أ\\fب");
+    expect(toInazumaBreakTokens(toInazumaBreakTokens("a\\fb"))).toBe("a▼\nb");
+  });
+
+  it("reads ▼ and \\f as the same token, so neither spelling is a missing break", () => {
+    expect(validateInazumaTags("FP.\\fYou can", "اللياقة.▼\nسترى").valid).toBe(true);
+    expect(validateInazumaTags("FP.▼\nYou can", "اللياقة. سترى").valid).toBe(false);
+  });
+
+  it("puts a lost page break back as ▼, where the English has it", () => {
+    const original = toInazumaBreakTokens("Your speed will drop.\\fYou can see it.");
+    const fixed = repairInazumaTags(original, "ستنخفض سرعتك. سترى ذلك.");
+    expect(fixed.changed).toBe(true);
+    expect(fixed.text).toContain("▼");
+    expect(fixed.text).not.toContain("\\f");
+    expect(validateInazumaTags(original, fixed.text).valid).toBe(true);
+  });
+
+  it("puts a lost page break at the end of its sentence, not where a word count lands", () => {
+    // The line reported from the editor: the translator wrote the two boxes as
+    // two lines and the break was lost. Counting words put ▼ after "من",
+    // mid-sentence; the English box ends a sentence, so the Arabic cut goes
+    // after "اللياقة." -- and the translator's own line break becomes the ▼.
+    const original = toInazumaBreakTokens(
+      "Your speed will drop if you lose\\ntoo much FP.\\fYou can see when this happens to\\none of your players because he'll\\nstart sweating.".replace(/\\\\n/g, "\n"),
+    );
+    const translation = "ستنخفض سرعتك إذا فقدت الكثير من نقاط اللياقة.\nسترى ذلك عندما يبدأ أحد لاعبيك بالتعرق.";
+    expect(repairInazumaTags(original, translation).text).toBe(
+      "ستنخفض سرعتك إذا فقدت الكثير من نقاط اللياقة.▼\nسترى ذلك عندما يبدأ أحد لاعبيك بالتعرق.",
+    );
+  });
+
+  it("leaves a line that needs nothing exactly as it was", () => {
+    const original = toInazumaBreakTokens("A.\\fB.");
+    expect(repairInazumaTags(original, "أ.▼ب.")).toEqual({ text: "أ.▼ب.", changed: false });
   });
 });

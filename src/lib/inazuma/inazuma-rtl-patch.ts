@@ -28,22 +28,36 @@
  *   2. After the dialogue draws a box, each marked line's rectangles are
  *      reversed, so the typewriter starts at the right edge (hook after
  *      0x020580C4).
- *   3. No letter spacing after an Arabic letter (slots 0x8140-0x829A) or a
- *      space, in all three draw loops and both measure loops. With the
- *      engine's 1 pixel after every character, Arabic letters never joined,
- *      and a word gap was 1 + space + 1. Measuring adds the same spacing the
- *      drawing does, so right alignment lands where the text ends.
+ *   3. No letter spacing after an Arabic letter (a byte 0x80-0xFF but é, or
+ *      one of the older two-byte slots 0x8140-0x829A) or a space, in all
+ *      three draw loops and both measure loops. With the engine's 1 pixel
+ *      after every character, Arabic letters never joined, and a word gap
+ *      was 1 + space + 1. Measuring adds the same spacing the drawing does,
+ *      so right alignment lands where the text ends.
+ *   4. One byte per Arabic letter. The engine reads text as Shift-JIS: a
+ *      byte 0x81-0x9F or 0xE0-0xFC starts a two-byte character. After the
+ *      patch only 0x81 and 0x82 do -- the English script's quotes, brackets
+ *      and 【】 condition lines, and the marker, are all codes led by one of
+ *      them -- and every other byte is a character of its own, which is
+ *      where the Arabic goes (see INAZUMA_ARABIC_BYTES). The character
+ *      length routine (0x02033B18) and the font library's own reader
+ *      (0x0202790C) are patched, and so is each inlined lead-byte test
+ *      (LEAD_TESTS), in the ARM9 and in overlays 0, 15, 17, 23 and 40: a
+ *      test left alone would take an Arabic letter and the byte after it
+ *      for one character, and at the end of a line that byte is the NUL.
  *
- * The new code (tools/inazuma-rtl/cave.s, 408 bytes) goes at the end of the
+ * The new code (tools/inazuma-rtl/cave.s, 436 bytes) goes at the end of the
  * ITCM autoload block, 0x01FFF420, which the SDK otherwise leaves to the
  * ITCM arena; the arena's start is moved past it. The ARM9 binary is BLZ
  * compressed on the cartridge, so it is decompressed, patched, and written
  * back uncompressed past the end of the used ROM, with the header pointing
- * at it. Every instruction replaced is checked first: a ROM that is not the
- * European release, or is already patched, is refused unchanged.
+ * at it; the five overlays are too, each through its own FAT entry, with its
+ * overlay-table entry marked uncompressed. Every instruction replaced is
+ * checked first: a ROM that is not the European release, or is already
+ * patched, is refused unchanged.
  */
 
-import { ndsFiles } from "@/lib/nds/nds-rom";
+import { ndsFiles, writeNdsFile } from "@/lib/nds/nds-rom";
 
 /** Starts every line of Arabic dialogue: a zero-width glyph the engine reads as "align right". */
 export const INAZUMA_RTL_MARKER = "\x82\x95";
@@ -55,23 +69,24 @@ const ITCM_ADDR = 0x01ff8000;
 
 const CAVE_HEX =
   "00c0d3e582005ce301c0d30595005c030600001a00c09de500005ce30300001a02c0a0e300c08de5e80052e3e820a0c3" +
-  "38402de958f19fe520005ce30500000a81cc4ce240c05ce20100004a570f5ce30000003a1eff2fe10000a0e31eff2fe1" +
-  "20c09de5000000ea18c09de501402de914009ae5efffffeb0010a0e10140bde81eff2fe10c402de90620a0e10730a0e1" +
-  "090000eb004084e00c40bde81eff2fe10c402de90720a0e10830a0e1020000eb005085e00c40bde81eff2fe10000a0e3" +
-  "000051e31eff2f0104e02de500c0d2e581005ce382005c130100d2050cc48001140093e5d3ffffeb04e09de41eff2fe1" +
-  "f0032de92e5e84e2010a84e2686cd0e50070a0e3060057e11e0000aa870185e0f210d0e1f490d0e1018087e2060058e1" +
-  "040000aa880185e0f220d0e1010052e101808802f8ffff0a000059e30f00001a870185e0881185e0081041e2010050e1" +
-  "0a0000aa002090e5003091e5003080e5002081e5042090e5043091e5043080e5042081e5080080e2081041e2f2ffffea" +
-  "0870a0e1deffffeaf003bde82c109de51eff2fe104410302";
+  "38402de974f19fe520005ce30c00000a80005ce30900003a010c5ce30200002aba005ce31eff2f01050000ea81cc4ce2" +
+  "40c05ce20100004a570f5ce30000003a1eff2fe10000a0e31eff2fe120c09de5000000ea18c09de501402de914009ae5" +
+  "e8ffffeb0010a0e10140bde81eff2fe10c402de90620a0e10730a0e1090000eb004084e00c40bde81eff2fe10c402de9" +
+  "0720a0e10830a0e1020000eb005085e00c40bde81eff2fe10000a0e3000051e31eff2f0104e02de500c0d2e581005ce3" +
+  "82005c130100d2050cc48001140093e5ccffffeb04e09de41eff2fe1f0032de92e5e84e2010a84e2686cd0e50070a0e3" +
+  "060057e11e0000aa870185e0f210d0e1f490d0e1018087e2060058e1040000aa880185e0f220d0e1010052e101808802" +
+  "f8ffff0a000059e30f00001a870185e0881185e0081041e2010050e10a0000aa002090e5003091e5003080e5002081e5" +
+  "042090e5043091e5043080e5042081e5080080e2081041e2f2ffffea0870a0e1deffffeaf003bde82c109de51eff2fe1" +
+  "04410302";
 
 /** Entry points in the cave, from `arm-none-eabi-nm` on the assembled cave.s. */
 const CAVE = {
   align: 0x01fff420,
-  drawSp20: 0x01fff480,
-  drawSp18: 0x01fff488,
-  measureA: 0x01fff4a4,
-  measureB: 0x01fff4c0,
-  reverse: 0x01fff510,
+  drawSp20: 0x01fff49c,
+  drawSp18: 0x01fff4a4,
+  measureA: 0x01fff4c0,
+  measureB: 0x01fff4dc,
+  reverse: 0x01fff52c,
 };
 
 const NOP = 0xe1a00000;
@@ -141,9 +156,50 @@ function headerCrc(rom: Uint8Array): number {
   return crc;
 }
 
+/**
+ * Every inlined Shift-JIS lead-byte test, by overlay (null for the ARM9) and
+ * the address of its `cmp rN,#0x81`, with N. All 22 are the same code:
+ *
+ *   cmp rN,#0x81 / bcc (the 0xE0 test) / cmp rN,#0x9F / bls lead /
+ *   cmp rN,#0xE0 / bcc single / cmp rN,#0xFC / bhi single
+ *
+ * #0x9F becomes #0x82 and #0xFC becomes #0: a lead byte is 0x81 or 0x82, and
+ * one from 0xE0 up is always single.
+ */
+const LEAD_TESTS: { overlay: number | null; sites: [number, number][] }[] = [
+  { overlay: null, sites: [[0x02056b98, 0], [0x02057fc4, 0]] },
+  {
+    overlay: 0,
+    sites: [
+      [0x02114fa8, 0], [0x02115248, 0], [0x02115364, 0], [0x0211554c, 0], [0x02115658, 0], [0x02115780, 0],
+      [0x021158cc, 0], [0x02115a00, 0], [0x02115b38, 0], [0x02115c74, 0], [0x02115d9c, 0], [0x02116468, 0],
+    ],
+  },
+  { overlay: 15, sites: [[0x0214f584, 3], [0x0214f624, 0]] },
+  { overlay: 17, sites: [[0x02166fa4, 2], [0x0216703c, 0]] },
+  { overlay: 23, sites: [[0x02166538, 0], [0x02166798, 1]] },
+  { overlay: 40, sites: [[0x02166394, 0], [0x02166660, 1]] },
+];
+
+type Hook = { addr: number; expect: number; put: number };
+
+/** `cmp rN,#imm` for an 8-bit imm. */
+function cmpImm(reg: number, imm: number): number {
+  return (0xe3500000 | (reg << 16) | imm) >>> 0;
+}
+
+function leadTestHooks(sites: [number, number][]): Hook[] {
+  return sites.flatMap(([at, reg]) => [
+    { addr: at, expect: cmpImm(reg, 0x81), put: cmpImm(reg, 0x81) },
+    { addr: at + 8, expect: cmpImm(reg, 0x9f), put: cmpImm(reg, 0x82) },
+    { addr: at + 0x10, expect: cmpImm(reg, 0xe0), put: cmpImm(reg, 0xe0) },
+    { addr: at + 0x18, expect: cmpImm(reg, 0xfc), put: cmpImm(reg, 0) },
+  ]);
+}
+
 /** The hooks: address, the instruction expected there, and what replaces it. */
-function hooks(): { addr: number; expect: number; put: number }[] {
-  const out: { addr: number; expect: number; put: number }[] = [
+function hooks(): Hook[] {
+  const out: Hook[] = [
     { addr: 0x02034100, expect: 0xe92d4038, put: branch(0x02034100, CAVE.align, false) },
     { addr: 0x02033efc, expect: 0xe59a1014, put: branch(0x02033efc, CAVE.drawSp20, true) },
     { addr: 0x020346e8, expect: 0xe59a1014, put: branch(0x020346e8, CAVE.drawSp18, true) },
@@ -157,7 +213,57 @@ function hooks(): { addr: number; expect: number; put: number }[] {
     { addr: 0x02033fe0, expect: 0x15980014, put: NOP },
     { addr: 0x02033fe4, expect: 0x10855000, put: NOP },
     { addr: 0x020580c8, expect: 0xe59d102c, put: branch(0x020580c8, CAVE.reverse, true) },
+    // Character length (0x02033B18): was 1 for 0x20-0x7E and 0xA1-0xDF, else
+    // 2; now 2 below 0x20 and for 0x81-0x82, else 1.
+    { addr: 0x02033b30, expect: 0xe350007e, put: 0xe3500081 }, // cmp r0,#0x81
+    { addr: 0x02033b34, expect: 0x9a000003, put: 0x3a000003 }, // bcc one byte
+    { addr: 0x02033b38, expect: 0xe35000a1, put: 0xe3500082 }, // cmp r0,#0x82
+    { addr: 0x02033b3c, expect: 0x3a000003, put: 0x9a000003 }, // bls two bytes
+    { addr: 0x02033b40, expect: 0xe35000df, put: NOP },
+    { addr: 0x02033b44, expect: 0x8a000001, put: NOP },
+    // The font library's reader (0x0202790C): two bytes for 0x81-0x9F and
+    // 0xE0 up; now for 0x81-0x82 only.
+    { addr: 0x0202791c, expect: 0xe35300a0, put: 0xe3530083 }, // cmp r3,#0x83
+    { addr: 0x02027924, expect: 0xe35300e0, put: 0xe3530c01 }, // cmp r3,#0x100
+    ...leadTestHooks(LEAD_TESTS[0].sites),
   ];
+  return out;
+}
+
+/**
+ * The lead-byte tests in overlays, patched. Each overlay is BLZ compressed
+ * like the ARM9 (the whole file is the stream); it is written back
+ * uncompressed and its overlay-table entry says so. Throws, before anything
+ * is written, if an overlay is not the size or the code that was traced.
+ */
+function patchOverlays(rom: Uint8Array): Uint8Array {
+  const table = u32(rom, 0x50);
+  const patched: { entry: number; file: number; code: Uint8Array }[] = [];
+  for (const { overlay, sites } of LEAD_TESTS) {
+    if (overlay === null) continue;
+    const entry = table + overlay * 32;
+    const ram = u32(rom, entry + 4);
+    const size = u32(rom, entry + 8);
+    const file = u32(rom, entry + 0x18);
+    const fat = u32(rom, 0x48) + file * 8;
+    const stored = rom.slice(u32(rom, fat), u32(rom, fat + 4));
+    const code = u32(rom, entry + 0x1c) >>> 24 & 1 ? blzDecompress(stored) : stored;
+    if (u32(rom, entry) !== overlay || code.length !== size) {
+      throw new Error(`الجزء ${overlay} من كود اللعبة ليس كما قيس — الروم معدَّل أو نسخة أخرى`);
+    }
+    for (const h of leadTestHooks(sites)) {
+      if (u32(code, h.addr - ram) !== h.expect) {
+        throw new Error(`التعليمة عند 0x${h.addr.toString(16)} في الجزء ${overlay} ليست كما قيست — الروم معدَّل أو نسخة أخرى`);
+      }
+      setU32(code, h.addr - ram, h.put);
+    }
+    patched.push({ entry, file, code });
+  }
+  let out = rom;
+  for (const { entry, file, code } of patched) {
+    out = writeNdsFile(out, ndsFiles(out)[file], code);
+    setU32(out, entry + 0x1c, 0); // not compressed
+  }
   return out;
 }
 
@@ -220,13 +326,14 @@ export function patchInazumaRtl(rom: Uint8Array): Uint8Array {
   setU32(a9, listStart + grow + 4, itcmSize + grow);
   setU32(a9, arenaLiteral, (CAVE_ADDR + grow + 31) & ~31);
   for (const h of hooks()) setU32(a9, h.addr - ARM9_RAM, h.put);
+  const withOverlays = patchOverlays(rom);
 
   // Past the end of everything the ROM uses, 512-aligned, as a grown file is.
-  const used = Math.max(u32(rom, 0x80), ...ndsFiles(rom).map((f) => f.end), a9Off + a9Size);
+  const used = Math.max(u32(withOverlays, 0x80), ...ndsFiles(withOverlays).map((f) => f.end), a9Off + a9Size);
   const start = Math.ceil(used / 512) * 512;
   const end = start + a9.length;
-  const out = new Uint8Array(Math.max(rom.length, Math.ceil(end / 512) * 512)).fill(0xff);
-  out.set(rom);
+  const out = new Uint8Array(Math.max(withOverlays.length, Math.ceil(end / 512) * 512)).fill(0xff);
+  out.set(withOverlays);
   out.set(a9, start);
   setU32(out, 0x20, start);
   setU32(out, 0x2c, a9.length);

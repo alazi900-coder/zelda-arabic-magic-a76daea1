@@ -15,6 +15,12 @@ describe("markInazumaRtlLines", () => {
     const glyph = String.fromCharCode(0x81, 0x5c);
     expect(markInazumaRtlLines(`${glyph}n`)).toBe(`${M}${glyph}n`);
   });
+
+  it("reads an Arabic letter as one byte, even one that used to lead a Shift-JIS pair", () => {
+    // 0xE3 and 0x9F were lead bytes; now each is a letter, and the break after it is a break.
+    const letters = String.fromCharCode(0xe3, 0x9f);
+    expect(markInazumaRtlLines(`${letters}\\n${letters}`)).toBe(`${M}${letters}\\n${M}${letters}`);
+  });
 });
 
 /** A minimal NFTR: PLGC with two 2-byte glyphs, HDWC, a type-0 PAMC for 0x8294-0x8295. */

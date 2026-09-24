@@ -5,6 +5,8 @@ import {
   inazumaArabicGlyphBytes,
   encodeInazumaArabicText,
   analyzeInazumaUnsupportedCharacters,
+  addInazumaByteMap,
+  INAZUMA_ARABIC_BYTES,
 } from "../inazuma-arabic-font";
 import { INAZUMA_ARABIC_CODEPOINTS, INAZUMA_SHIFT_JIS_CODES, INAZUMA_GLYPH_INDICES } from "../inazuma-arabic-glyphs";
 
@@ -91,14 +93,21 @@ describe("Inazuma Arabic font patch", () => {
 });
 
 describe("Inazuma Arabic text encoding", () => {
-  it("maps every covered presentation form to its verified-safe Shift-JIS byte pair", () => {
+  it("writes every covered presentation form as one byte of its own", () => {
     for (let i = 0; i < INAZUMA_ARABIC_CODEPOINTS.length; i++) {
-      const cp = INAZUMA_ARABIC_CODEPOINTS[i];
-      const bytes = inazumaArabicGlyphBytes(cp)!;
-      const expectedCode = INAZUMA_SHIFT_JIS_CODES[i];
-      expect(bytes.length).toBe(2);
-      expect(bytes.charCodeAt(0)).toBe((expectedCode >> 8) & 0xff);
-      expect(bytes.charCodeAt(1)).toBe(expectedCode & 0xff);
+      const bytes = inazumaArabicGlyphBytes(INAZUMA_ARABIC_CODEPOINTS[i])!;
+      expect(bytes.length).toBe(1);
+      expect(bytes.charCodeAt(0)).toBe(INAZUMA_ARABIC_BYTES[i]);
+    }
+  });
+
+  it("gives the 125 forms 125 different bytes, none of them a lead byte or é", () => {
+    expect(INAZUMA_ARABIC_BYTES.length).toBe(INAZUMA_ARABIC_CODEPOINTS.length);
+    expect(new Set(INAZUMA_ARABIC_BYTES).size).toBe(INAZUMA_ARABIC_BYTES.length);
+    for (const b of INAZUMA_ARABIC_BYTES) {
+      expect(b).toBeGreaterThanOrEqual(0x80);
+      expect(b).toBeLessThanOrEqual(0xff);
+      expect([0x81, 0x82, 0xba]).not.toContain(b);
     }
   });
 
@@ -138,5 +147,68 @@ describe("Inazuma Arabic text encoding", () => {
   it("reports nothing for text that already latinizes or has a glyph", () => {
     const covered = String.fromCodePoint(INAZUMA_ARABIC_CODEPOINTS[0]);
     expect(analyzeInazumaUnsupportedCharacters(`Go! ${covered}؟ ${covered}،`)).toEqual([]);
+  });
+});
+
+/**
+ * A minimal real-shaped NFTR: header, FINF (its map pointer at 0x28), and two
+ * type-1 maps -- the Arabic slots' two-byte codes, and 0xA1-0xDF.
+ */
+function buildMappedFont(): Uint8Array {
+  const low = 0x8140, high = 0x82ff;
+  const lowSize = 20 + (high - low + 1) * 2;
+  const latinSize = 20 + (0xdf - 0xa1 + 1) * 2;
+  const first = 0x30;
+  const second = first + lowSize;
+  const out = new Uint8Array(second + latinSize);
+  const v = new DataView(out.buffer);
+  out.set([0x52, 0x54, 0x46, 0x4e], 0); // "RTFN"
+  v.setUint32(8, out.length, true);
+  v.setUint16(0x0e, 3, true);
+  out.set([0x46, 0x4e, 0x49, 0x46], 0x10); // "FNIF"
+  v.setUint32(0x14, 0x20, true);
+  v.setUint32(0x28, first + 8, true);
+  for (const [at, begin, end, next, glyphOf] of [
+    [first, low, high, second + 8, (c: number) => 1000 + c - low],
+    [second, 0xa1, 0xdf, 0, (c: number) => 100 + c - 0xa1],
+  ] as const) {
+    out.set([0x50, 0x41, 0x4d, 0x43], at); // "PAMC"
+    v.setUint32(at + 4, 20 + (end - begin + 1) * 2, true);
+    v.setUint16(at + 8, begin, true);
+    v.setUint16(at + 10, end, true);
+    v.setUint16(at + 12, 1, true);
+    v.setUint32(at + 16, next, true);
+    for (let c = begin; c <= end; c++) v.setUint16(at + 20 + (c - begin) * 2, glyphOf(c), true);
+  }
+  return out;
+}
+
+describe("addInazumaByteMap", () => {
+  const before = buildMappedFont();
+  const after = addInazumaByteMap(before);
+  const v = new DataView(after.buffer);
+  const map = v.getUint32(0x28, true);
+  const glyph = (b: number) => v.getUint16(map + 12 + (b - 0x80) * 2, true);
+
+  it("puts a 0x80-0xFF table first in the font's list, pointing on to the old first map", () => {
+    expect(map).toBe(Math.ceil(before.length / 4) * 4 + 8);
+    expect(v.getUint16(map, true)).toBe(0x80);
+    expect(v.getUint16(map + 2, true)).toBe(0xff);
+    expect(v.getUint16(map + 4, true)).toBe(1);
+    expect(v.getUint32(map + 8, true)).toBe(0x30 + 8);
+    // the header counts the new block and the new size; nothing old moved
+    expect(v.getUint32(8, true)).toBe(after.length);
+    expect(v.getUint16(0x0e, true)).toBe(4);
+    expect(Array.from(after.subarray(0x2c, before.length))).toEqual(Array.from(before.subarray(0x2c)));
+  });
+
+  it("sends each Arabic byte to the glyph its old two-byte code draws", () => {
+    INAZUMA_ARABIC_BYTES.forEach((b, i) => expect(glyph(b)).toBe(1000 + INAZUMA_SHIFT_JIS_CODES[i] - 0x8140));
+  });
+
+  it("keeps é, and leaves the lead bytes to the maps behind it", () => {
+    expect(glyph(0xba)).toBe(100 + 0xba - 0xa1);
+    expect(glyph(0x81)).toBe(0xffff);
+    expect(glyph(0x82)).toBe(0xffff);
   });
 });

@@ -4,7 +4,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readInazumaText, writeInazumaText } from "../inazuma-rom";
-import { extractInazumaEntries, buildInazumaRom } from "../inazuma-editor-bridge";
+import { extractInazumaEntries, buildInazumaRom, patchInazumaFonts } from "../inazuma-editor-bridge";
+import { INAZUMA_ARABIC_BYTES } from "../inazuma-arabic-font";
+import { INAZUMA_SHIFT_JIS_CODES } from "../inazuma-arabic-glyphs";
 import { INAZUMA_CATEGORIES, categorizeInazumaEntry } from "../inazuma-categories";
 import { findNdsFile, ndsFiles } from "@/lib/nds/nds-rom";
 import { patchInazumaRtl } from "../inazuma-rtl-patch";
@@ -70,9 +72,38 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     const patched = patchInazumaRtl(original);
     expect(patched).not.toBe(original);
     expect(patchInazumaRtl(patched)).toBe(patched);
-    // every file the ROM names is untouched; only the ARM9 moved
+    // every file the ROM names is untouched but the five patched overlays,
+    // which are now stored uncompressed, at their full size
+    const overlays = [0, 15, 17, 23, 40];
     const a = ndsFiles(original), b = ndsFiles(patched);
-    expect(b.every((f, i) => f.start === a[i].start && f.end === a[i].end)).toBe(true);
+    expect(b.every((f, i) => overlays.includes(i) || (f.start === a[i].start && f.end === a[i].end))).toBe(true);
+    const table = new DataView(patched.buffer, patched.byteOffset + new DataView(patched.buffer).getUint32(0x50, true));
+    for (const id of overlays) {
+      expect(table.getUint32(id * 32 + 0x1c, true)).toBe(0);
+      expect(b[id].end - b[id].start).toBe(table.getUint32(id * 32 + 8, true));
+    }
+  });
+
+  it("draws each Arabic byte with its letter in every patched font, and 0xBA still with é", { timeout: 120_000 }, () => {
+    const original = rom();
+    const built = patchInazumaFonts(original);
+    for (const path of ["data_iz/font/FONT12.NFTR", "data_iz/font/FONT12N.NFTR", "data_iz/font/FONT8.NFTR"]) {
+      const stockFile = findNdsFile(original, path)!, builtFile = findNdsFile(built, path)!;
+      const stock = original.subarray(stockFile.start, stockFile.end);
+      const font = built.subarray(builtFile.start, builtFile.end);
+      const glyph = (f: Uint8Array, code: number) => {
+        const v = new DataView(f.buffer, f.byteOffset, f.byteLength);
+        for (let at = v.getUint32(0x28, true); at; at = v.getUint32(at + 8, true)) {
+          const first = v.getUint16(at, true), last = v.getUint16(at + 2, true), type = v.getUint16(at + 4, true);
+          if (code < first || code > last) continue;
+          return type === 0 ? v.getUint16(at + 12, true) + code - first : v.getUint16(at + 12 + (code - first) * 2, true);
+        }
+        return -1;
+      };
+      INAZUMA_ARABIC_BYTES.forEach((b, i) => expect(glyph(font, b)).toBe(glyph(stock, INAZUMA_SHIFT_JIS_CODES[i])));
+      expect(glyph(font, 0xba)).toBe(glyph(stock, 0xba));
+      expect(glyph(font, 0x41)).toBe(glyph(stock, 0x41));
+    }
   });
 
   it("carries one edited line into the rebuilt ROM and leaves the rest alone", { timeout: 120_000 }, () => {

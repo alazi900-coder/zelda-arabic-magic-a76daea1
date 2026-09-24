@@ -38,7 +38,7 @@ import { findNdsFile, writeNdsFile } from "@/lib/nds/nds-rom";
 import { processArabicText } from "@/lib/arabic-processing";
 import type { ExtractedEntry } from "@/components/editor/types";
 import { readInazumaText, writeInazumaText, type InazumaTextRow } from "./inazuma-rom";
-import { patchInazumaFont12, patchInazumaFont8, encodeInazumaArabicText, blankInazumaGlyph } from "./inazuma-arabic-font";
+import { patchInazumaFont12, patchInazumaFont8, encodeInazumaArabicText, blankInazumaGlyph, addInazumaByteMap } from "./inazuma-arabic-font";
 import { patchInazumaRtl, INAZUMA_RTL_MARKER, INAZUMA_RTL_MARKER_CODE } from "./inazuma-rtl-patch";
 import { isInazumaTranslatable, validateInazumaTags, maskInazumaTokens, unmaskInazumaTokens } from "./inazuma-tags";
 import { toInazumaBreakTokens, fromInazumaBreakTokens } from "./inazuma-break-tokens";
@@ -260,15 +260,16 @@ export function prepareInazumaLine(
 
 /**
  * `INAZUMA_RTL_MARKER` at the start of every printed line of an encoded
- * message: before the first, and after each `\n` and `\f`. The walk is
- * Shift-JIS aware, so a glyph whose second byte happens to be `\` is never
- * taken for the start of a break.
+ * message: before the first, and after each `\n` and `\f`. The walk knows
+ * the patched game's two-byte codes -- those led by 0x81 or 0x82, every
+ * other byte is one character -- so a code whose second byte happens to be
+ * `\` is never taken for the start of a break.
  */
 export function markInazumaRtlLines(romText: string): string {
   let out = INAZUMA_RTL_MARKER;
   for (let i = 0; i < romText.length; i++) {
     const c = romText.charCodeAt(i);
-    if ((c >= 0x81 && c <= 0x9f) || (c >= 0xe0 && c <= 0xfc)) {
+    if (c === 0x81 || c === 0x82) {
       out += romText.slice(i, i + 2);
       i++;
     } else if (c === 0x5c && (romText[i + 1] === "n" || romText[i + 1] === "f")) {
@@ -282,19 +283,20 @@ export function markInazumaRtlLines(romText: string): string {
 }
 
 /**
- * Patches the Arabic glyphs into FONT12, FONT12N and FONT8, and blanks the
- * right-to-left marker in those and FONT12T, leaving every other glyph as it was.
+ * Patches the Arabic glyphs into FONT12, FONT12N and FONT8, with the map that
+ * draws them from one byte each, and blanks the right-to-left marker in those
+ * and FONT12T, leaving every other glyph as it was.
  */
 export function patchInazumaFonts(rom: Uint8Array): Uint8Array {
   let out = rom;
   for (const path of FONT12_PATHS) {
     const file = findNdsFile(out, path);
     if (!file) throw new Error(`الروم لا يحتوي على ${path}`);
-    out = writeNdsFile(out, file, blankInazumaGlyph(patchInazumaFont12(out.subarray(file.start, file.end)), INAZUMA_RTL_MARKER_CODE));
+    out = writeNdsFile(out, file, addInazumaByteMap(blankInazumaGlyph(patchInazumaFont12(out.subarray(file.start, file.end)), INAZUMA_RTL_MARKER_CODE)));
   }
   const font8 = findNdsFile(out, FONT8_PATH);
   if (!font8) throw new Error(`الروم لا يحتوي على ${FONT8_PATH}`);
-  out = writeNdsFile(out, font8, blankInazumaGlyph(patchInazumaFont8(out.subarray(font8.start, font8.end)), INAZUMA_RTL_MARKER_CODE));
+  out = writeNdsFile(out, font8, addInazumaByteMap(blankInazumaGlyph(patchInazumaFont8(out.subarray(font8.start, font8.end)), INAZUMA_RTL_MARKER_CODE)));
   const font12t = findNdsFile(out, FONT12T_PATH);
   if (!font12t) throw new Error(`الروم لا يحتوي على ${FONT12T_PATH}`);
   out = writeNdsFile(out, font12t, blankInazumaGlyph(out.subarray(font12t.start, font12t.end), INAZUMA_RTL_MARKER_CODE));

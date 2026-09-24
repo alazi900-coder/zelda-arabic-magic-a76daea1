@@ -32,13 +32,21 @@ cave_align:
     ldr     pc, =0x02034104
 
 @ ---- letter spacing for the current character ---------------------------
-@ in: ip = character code. out: r0 = spacing (obj+0x14), or 0 for the
-@ Arabic slots 0x8140-0x829A and the space, so Arabic letters join and a
-@ word gap is the space glyph alone.
+@ in: ip = character code. out: r0 = spacing (obj+0x14), or 0 for an
+@ Arabic letter and the space, so Arabic letters join and a word gap is the
+@ space glyph alone. Arabic is one byte, 0x80-0xFF (0xBA stays e-acute, and
+@ keeps its spacing), or one of the older two-byte slots 0x8140-0x829A.
 spacing_of:
     cmp     ip, #0x20
     beq     2f
-    sub     ip, ip, #0x8100
+    cmp     ip, #0x80
+    blo     3f
+    cmp     ip, #0x100
+    bhs     4f
+    cmp     ip, #0xBA
+    bxeq    lr
+    b       2f
+4:  sub     ip, ip, #0x8100
     subs    ip, ip, #0x40
     bmi     3f
     cmp     ip, #0x15C                  @ 0x829A - 0x8140 + 1

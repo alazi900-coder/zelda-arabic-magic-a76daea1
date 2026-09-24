@@ -16,6 +16,11 @@
  * wrong -- this cartridge still ships thousands of untranslated Japanese
  * lines that do -- so the codes and glyph indices here are an explicit,
  * verified, non-contiguous list rather than a single base + offset.
+ *
+ * Text is written one byte per Arabic letter, not two: the engine patch
+ * (inazuma-rtl-patch.ts) makes every byte from 0x80 up a character of its
+ * own except 0x81 and 0x82, and `addInazumaByteMap` points those bytes at
+ * the same glyphs the two-byte codes above draw.
  */
 import {
   INAZUMA_FONT12_GLYPHS_B64,
@@ -46,18 +51,31 @@ export function patchInazumaFont8(nftr: Uint8Array): Uint8Array {
 }
 
 /**
- * Makes the glyph `code` draws an empty, zero-width one -- for the
- * right-to-left marker (see inazuma-rtl-patch.ts), which must take no room
- * and show nothing. The glyph is found through the font's own character map,
- * so it works on every font whatever its glyph numbering.
+ * The byte each Arabic form is written as, same order as
+ * INAZUMA_ARABIC_CODEPOINTS: every byte from 0x80 up except 0x81 and 0x82,
+ * which stay Shift-JIS lead bytes (the English script's quotes and brackets
+ * and the right-to-left marker are two-byte codes starting with them), and
+ * 0xBA, which this font draws as é ("Maid Café"). That leaves exactly 125,
+ * one per form. The rest of 0xA1-0xDF is accented Latin the European text
+ * never uses, apart from è and ï once each.
  */
-export function blankInazumaGlyph(nftr: Uint8Array, code: number): Uint8Array {
-  const out = nftr.slice();
-  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+export const INAZUMA_ARABIC_BYTES: number[] = [0x80];
+for (let b = 0x83; b <= 0xff; b++) if (b !== 0xba) INAZUMA_ARABIC_BYTES.push(b);
+
+interface FontBlocks {
+  view: DataView;
+  plgc: number;
+  tileBytes: number;
+  hdwc: number;
+  cmaps: number[];
+}
+
+function fontBlocks(nftr: Uint8Array): FontBlocks {
+  const view = new DataView(nftr.buffer, nftr.byteOffset, nftr.byteLength);
   let plgc = -1, tileBytes = 0, hdwc = -1;
   const cmaps: number[] = [];
-  for (let p = 0x10; p < out.length - 8; ) {
-    const kind = String.fromCharCode(out[p], out[p + 1], out[p + 2], out[p + 3]);
+  for (let p = 0x10; p < nftr.length - 8; ) {
+    const kind = String.fromCharCode(nftr[p], nftr[p + 1], nftr[p + 2], nftr[p + 3]);
     const size = view.getUint32(p + 4, true);
     if (size === 0) break;
     if (kind === "PLGC") { plgc = p + 16; tileBytes = view.getUint16(p + 10, true); }
@@ -65,21 +83,84 @@ export function blankInazumaGlyph(nftr: Uint8Array, code: number): Uint8Array {
     if (kind === "PAMC") cmaps.push(p + 8);
     p += size;
   }
-  let glyph = -1;
+  // The game searches the maps in list order, from FINF's pointer on.
+  if (String.fromCharCode(nftr[0x10], nftr[0x11], nftr[0x12], nftr[0x13]) === "FNIF") {
+    cmaps.length = 0;
+    for (let at = view.getUint32(0x28, true); at && at < nftr.length; at = view.getUint32(at + 8, true)) cmaps.push(at);
+  }
+  return { view, plgc, tileBytes, hdwc, cmaps };
+}
+
+/** The glyph `code` draws, through the first of the font's maps that holds it; -1 if none. */
+function fontGlyphIndex({ view, cmaps }: FontBlocks, code: number): number {
   for (const at of cmaps) {
     const first = view.getUint16(at, true), last = view.getUint16(at + 2, true), type = view.getUint32(at + 4, true);
     if (code < first || code > last) continue;
+    let glyph = 0xffff;
     if (type === 0) glyph = view.getUint16(at + 12, true) + code - first;
     else if (type === 1) glyph = view.getUint16(at + 12 + (code - first) * 2, true);
     else {
       const n = view.getUint16(at + 12, true);
       for (let i = 0; i < n; i++) if (view.getUint16(at + 14 + i * 4, true) === code) glyph = view.getUint16(at + 16 + i * 4, true);
     }
+    return glyph === 0xffff ? -1 : glyph;
   }
-  if (plgc < 0 || hdwc < 0 || glyph < 0 || glyph === 0xffff) throw new Error(`الخطّ لا يحتوي الرمز 0x${code.toString(16)}`);
+  return -1;
+}
+
+/**
+ * Makes the glyph `code` draws an empty, zero-width one -- for the
+ * right-to-left marker (see inazuma-rtl-patch.ts), which must take no room
+ * and show nothing. The glyph is found through the font's own character map,
+ * so it works on every font whatever its glyph numbering.
+ */
+export function blankInazumaGlyph(nftr: Uint8Array, code: number): Uint8Array {
+  const out = nftr.slice();
+  const font = fontBlocks(out);
+  const { view, plgc, tileBytes, hdwc } = font;
+  const glyph = fontGlyphIndex(font, code);
+  if (plgc < 0 || hdwc < 0 || glyph < 0) throw new Error(`الخطّ لا يحتوي الرمز 0x${code.toString(16)}`);
   out.fill(0, plgc + glyph * tileBytes, plgc + (glyph + 1) * tileBytes);
   const firstGlyph = view.getUint16(hdwc, true);
   out.fill(0, hdwc + 8 + (glyph - firstGlyph) * 3, hdwc + 8 + (glyph - firstGlyph) * 3 + 3);
+  return out;
+}
+
+/**
+ * Adds a character-map block for the single bytes 0x80-0xFF: each byte in
+ * INAZUMA_ARABIC_BYTES draws the glyph its form's two-byte code draws (so
+ * run this after the glyphs are patched in, on FONT12, FONT12N and FONT8),
+ * and every other byte keeps what it drew before -- 0xBA its é.
+ *
+ * The block goes at the end of the file and first in the font's list of
+ * maps (FINF's pointer at 0x28 now points at it, and it points on to the old
+ * first map), because the game takes the first map whose range holds a code,
+ * and the old 0xA1-0xDF block would otherwise still answer for those bytes.
+ */
+export function addInazumaByteMap(nftr: Uint8Array): Uint8Array {
+  const font = fontBlocks(nftr);
+  const table = new Uint16Array(0x80);
+  for (let b = 0x80; b <= 0xff; b++) {
+    const slot = INAZUMA_ARABIC_BYTES.indexOf(b);
+    const glyph = fontGlyphIndex(font, slot >= 0 ? INAZUMA_SHIFT_JIS_CODES[slot] : b);
+    if (slot >= 0 && glyph < 0) throw new Error(`الخطّ لا يرسم الرمز 0x${INAZUMA_SHIFT_JIS_CODES[slot].toString(16)}`);
+    table[b - 0x80] = glyph < 0 ? 0xffff : glyph;
+  }
+  const at = Math.ceil(nftr.length / 4) * 4;
+  const size = 8 + 12 + table.length * 2;
+  const out = new Uint8Array(at + size);
+  out.set(nftr);
+  const view = new DataView(out.buffer);
+  out.set([0x50, 0x41, 0x4d, 0x43], at); // "PAMC"
+  view.setUint32(at + 4, size, true);
+  view.setUint16(at + 8, 0x80, true);
+  view.setUint16(at + 10, 0xff, true);
+  view.setUint16(at + 12, 1, true); // a table, one glyph index per code
+  view.setUint32(at + 16, view.getUint32(0x28, true), true); // on to the old first map
+  table.forEach((glyph, i) => view.setUint16(at + 20 + i * 2, glyph, true));
+  view.setUint32(0x28, at + 8, true);
+  view.setUint32(0x08, out.length, true); // file size
+  view.setUint16(0x0e, view.getUint16(0x0e, true) + 1, true); // block count
   return out;
 }
 
@@ -145,12 +226,11 @@ function patchGlyphSlots(nftr: Uint8Array, spec: GlyphSetSpec): Uint8Array {
 
 const CODEPOINT_TO_SLOT = new Map<number, number>(INAZUMA_ARABIC_CODEPOINTS.map((cp, i) => [cp, i]));
 
-/** The two raw bytes (as one 2-character string) this font draws `cp` as, or null if it has no glyph yet. */
+/** The one raw byte (as a 1-character string) the patched game draws `cp` as, or null if it has no glyph yet. */
 export function inazumaArabicGlyphBytes(cp: number): string | null {
   const slot = CODEPOINT_TO_SLOT.get(cp);
   if (slot === undefined) return null;
-  const code = INAZUMA_SHIFT_JIS_CODES[slot];
-  return String.fromCharCode((code >> 8) & 0xff, code & 0xff);
+  return String.fromCharCode(INAZUMA_ARABIC_BYTES[slot]);
 }
 
 /**
@@ -170,8 +250,8 @@ const PUNCTUATION_TO_LATIN: Record<string, string> = {
 };
 
 /**
- * `text` (already run through `reshapeArabic`) turned into the raw
- * Shift-JIS-shaped byte stream this ROM's strings are stored as. A
+ * `text` (already run through `reshapeArabic`) turned into the raw byte
+ * stream this ROM's strings are stored as, one byte per Arabic letter. A
  * presentation form with no glyph yet is left as-is and reported, rather than
  * silently dropped or replaced with something misleading.
  */

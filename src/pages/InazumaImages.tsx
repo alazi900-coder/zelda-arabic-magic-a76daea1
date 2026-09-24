@@ -5,6 +5,7 @@ import {
   ArrowLeft, FolderOpen, Loader2, AlertTriangle, Download, ImageDown,
   Replace, Undo2, Search, ChevronDown, ChevronUp, ImageOff, Crop, X,
   ZoomIn, ZoomOut, Maximize, Eraser, Target, ChevronLeft, ChevronRight, Save, Wand2,
+  PackageOpen, Check,
 } from "lucide-react";
 import {
   readInazumaContainers, inazumaContainerImages, parseInazumaImage,
@@ -13,7 +14,10 @@ import {
   restoreOriginalBackground, overlayBackgroundMask, overlayEdgeColour,
   type InazumaImageRef,
 } from "@/lib/inazuma/inazuma-images";
+import { inazumaImageShortName, inazumaImageZipPath, inazumaZipMatcher } from "@/lib/inazuma/inazuma-zip-import";
 import { looksLikeNdsRom } from "@/lib/nds/nds-rom";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   compositeIntoRegion, detectRegionBounds, scaleRgbaContainFit, scaleRgbaStretch, cropRegion,
   type CompositeRect,
@@ -34,6 +38,20 @@ import { encodePngRawNoCanvas } from "@/lib/png-encode";
 
 const ACCENT = "#1d6fb8";
 const WIDTHS_KEY = "inazuma-image-widths";
+
+/** One picture from an Arabised ZIP, ready to write, waiting for review. */
+interface PendingZipImage {
+  id: string;
+  name: string;
+  width: number;
+  /** What will be written, background already restored, at `width`. */
+  rgba: Uint8ClampedArray;
+  beforeUrl: string;
+  /** How it will look in the game: after the game's own colours are applied. */
+  afterUrl: string;
+}
+
+interface ZipReport { replaced: number; unchanged: number; declined: number; merged: number; problems: string[] }
 
 type ThumbResult =
   | {
@@ -94,12 +112,6 @@ function rgbaToDataUrl(rgba: Uint8ClampedArray, width: number, height: number): 
   if (!ctx) return "";
   ctx.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
   return canvas.toDataURL("image/png");
-}
-
-/** A short ASCII name for downloads: the entry's name, else the file's. */
-function shortNameOf(ref: InazumaImageRef): string {
-  const base = ref.entryName ?? ref.romPath.slice(ref.romPath.lastIndexOf("/") + 1);
-  return base.replace(/\.(pac_?|PAC|SPF_)$/i, "").replace(/[^\w.-]/g, "_");
 }
 
 function displayPath(ref: InazumaImageRef): string {
@@ -221,6 +233,12 @@ export default function InazumaImages() {
   /** Pictures ticked for "تحميل المحدد ZIP". */
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [zipping, setZipping] = useState(false);
+  const [zipImporting, setZipImporting] = useState(false);
+  const [zipReview, setZipReview] = useState<{ items: PendingZipImage[]; unchanged: number; problems: string[] } | null>(null);
+  const [reviewChecked, setReviewChecked] = useState<Set<number>>(new Set());
+  const [reviewOpen, setReviewOpen] = useState<number | null>(null);
+  const [zipReport, setZipReport] = useState<ZipReport | null>(null);
+  const zipImportRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [useOriginalAlpha, setUseOriginalAlpha] = useState(false);
 
@@ -290,6 +308,7 @@ export default function InazumaImages() {
     setRevisions(new Map());
     setModifiedLog(new Map());
     setChecked(new Set());
+    setZipReport(null);
     setActiveFilter("all");
     setSearch("");
   }, [modifiedLog]);
@@ -479,9 +498,7 @@ export default function InazumaImages() {
         if (d.kind !== "ok") continue;
         const png = await encodePngRawNoCanvas(d.rgba, d.width, d.height);
         if (!png) continue;
-        const folder = entry.romPath.replace(/^data_iz\//, "").replace(/\.(SPF_|pac_?)$/i, "");
-        const path = entry.entryName ? `${folder}/${shortNameOf(entry)}_${d.width}x${d.height}.png` : `${folder}_${d.width}x${d.height}.png`;
-        zip.file(path, png);
+        zip.file(inazumaImageZipPath(entry, d.width, d.height), png);
         added++;
       }
       const bytes = await zip.generateAsync({ type: "uint8array" });
@@ -494,9 +511,143 @@ export default function InazumaImages() {
     }
   }, [checked, refs, decode]);
 
+  // Import an Arabised ZIP, step 1: match every PNG to its picture by name,
+  // lay it out at the width in that name, and keep only the ones that
+  // actually change -- for review, nothing written yet.
+  const handleImportZip = useCallback(async (zipFile: File) => {
+    setZipImporting(true);
+    setZipReport(null);
+    const items: PendingZipImage[] = [];
+    const problems: string[] = [];
+    let unchanged = 0;
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(zipFile);
+      const match = inazumaZipMatcher(refs);
+      const byId = new Map(refs.map((r) => [r.id, r]));
+      const reasons: Record<string, string> = {
+        "no-size": "لا يحمل العرض والارتفاع في اسمه (مثل _256x24)",
+        "no-image": "لا توجد صورة بهذا الاسم في الروم",
+        ambiguous: "الاسم يطابق أكثر من صورة — أبقِه داخل مجلده كما خرج",
+      };
+      const seen = new Set<string>();
+      for (const entry of Object.values(zip.files).filter((e) => !e.dir)) {
+        const m = match(entry.name);
+        if (!m.ok) {
+          if (m.reason !== "not-png") problems.push(`${entry.name}: ${reasons[m.reason]}`);
+          continue;
+        }
+        if (seen.has(m.id)) { problems.push(`${entry.name}: صورة ثانية لنفس المكان — تُركت`); continue; }
+        const ref = byId.get(m.id)!;
+        const d = containers.get(ref.romPath);
+        const img = d && parseInazumaImage(d, ref);
+        if (!d || !img) { problems.push(`${entry.name}: صيغة هذه الصورة غير مدعومة`); continue; }
+        if (!inazumaImageWidths(img).includes(m.width)) { problems.push(`${entry.name}: العرض ${m.width} لا يناسب هذه الصورة`); continue; }
+        const before = renderInazumaImage(d, img, m.width);
+        if (before.height !== m.height) { problems.push(`${entry.name}: الارتفاع ${m.height} لا يطابق ${before.height}`); continue; }
+
+        const bytes = await entry.async("uint8array");
+        const direct = await decodePngRawNoCanvas(bytes);
+        let rgba: Uint8ClampedArray;
+        if (direct && direct.width === before.width && direct.height === before.height) {
+          rgba = new Uint8ClampedArray(direct.rgba);
+        } else {
+          try {
+            const el = await loadImageElement(new File([bytes as BlobPart], "x.png", { type: "image/png" }));
+            const canvas = document.createElement("canvas");
+            canvas.width = before.width;
+            canvas.height = before.height;
+            const ctx = canvas.getContext("2d")!;
+            ctx.drawImage(el, 0, 0, before.width, before.height);
+            rgba = ctx.getImageData(0, 0, before.width, before.height).data;
+          } catch {
+            problems.push(`${entry.name}: ليست صورة PNG صالحة`);
+            continue;
+          }
+        }
+        if (useOriginalAlpha) for (let i = 3; i < rgba.length; i += 4) rgba[i] = before.rgba[i];
+        restoreOriginalBackground(rgba, before.rgba, before.width, before.height);
+
+        // What the game would show, after its own colours are applied. A
+        // picture that comes out the same as today is skipped: re-encoding it
+        // would only spend tile slots for nothing.
+        const scratch = d.slice();
+        encodeInazumaImage(scratch, parseInazumaImage(scratch, ref)!, m.width, rgba);
+        const after = renderInazumaImage(scratch, parseInazumaImage(scratch, ref)!, m.width);
+        let same = true;
+        for (let i = 0; i < after.rgba.length && same; i += 4) {
+          if (after.rgba[i + 3] !== before.rgba[i + 3]) same = false;
+          else if (after.rgba[i + 3] && (after.rgba[i] !== before.rgba[i] || after.rgba[i + 1] !== before.rgba[i + 1] || after.rgba[i + 2] !== before.rgba[i + 2])) same = false;
+        }
+        if (same) { unchanged++; continue; }
+        seen.add(m.id);
+        items.push({
+          id: m.id,
+          name: ref.entryName ? `${ref.romPath.replace(/^data_iz\//, "")} › ${ref.entryName}` : ref.romPath.replace(/^data_iz\//, ""),
+          width: m.width,
+          rgba,
+          beforeUrl: rgbaToDataUrl(before.rgba, before.width, before.height),
+          afterUrl: rgbaToDataUrl(after.rgba, after.width, after.height),
+        });
+      }
+    } catch (e) {
+      problems.push(`${zipFile.name}: ليس ملف ZIP صالحاً — ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setZipImporting(false);
+    if (items.length === 0) {
+      setZipReport({ replaced: 0, unchanged, declined: 0, merged: 0, problems });
+      return;
+    }
+    setZipReview({ items, unchanged, problems });
+    setReviewChecked(new Set(items.map((_, i) => i)));
+    setReviewOpen(null);
+  }, [refs, containers, useOriginalAlpha]);
+
+  // Step 2: write the chosen pictures, all in one pass over a copy of the
+  // unpacked files, and remember the width each was drawn at.
+  const applyZipImages = useCallback((chosen: number[]) => {
+    if (!zipReview) return;
+    const { items, unchanged, problems } = zipReview;
+    const byId = new Map(refs.map((r) => [r.id, r]));
+    const next = new Map(containers);
+    const copied = new Set<string>();
+    const originals = new Map<string, Uint8Array>();
+    let merged = 0, replaced = 0;
+    for (const it of chosen.map((i) => items[i])) {
+      const ref = byId.get(it.id);
+      const current = ref && containers.get(ref.romPath);
+      if (!ref || !current) continue;
+      if (!copied.has(ref.romPath)) { next.set(ref.romPath, current.slice()); copied.add(ref.romPath); }
+      const d = next.get(ref.romPath)!;
+      originals.set(it.id, current.slice(ref.dataOffset, ref.dataOffset + ref.size));
+      merged += encodeInazumaImage(d, parseInazumaImage(d, ref)!, it.width, it.rgba).merged;
+      replaced++;
+    }
+    setContainers(next);
+    setModifiedLog((prev) => {
+      const out = new Map(prev);
+      for (const [id, bytes] of originals) if (!out.has(id)) out.set(id, bytes);
+      return out;
+    });
+    setWidths((prev) => {
+      const out = new Map(prev);
+      for (const i of chosen) out.set(items[i].id, items[i].width);
+      saveWidths(out);
+      return out;
+    });
+    setRevisions((prev) => {
+      const out = new Map(prev);
+      for (const i of chosen) out.set(items[i].id, (out.get(items[i].id) ?? 0) + 1);
+      return out;
+    });
+    setZipReview(null);
+    setReviewOpen(null);
+    setZipReport({ replaced, unchanged, declined: items.length - chosen.length, merged, problems });
+  }, [zipReview, refs, containers]);
+
   const handleExportPng = useCallback(async () => {
     if (selectedDecoded?.kind !== "ok" || !selectedEntry) return;
-    const name = `${shortNameOf(selectedEntry)}_${selectedDecoded.width}x${selectedDecoded.height}.png`;
+    const name = `${inazumaImageShortName(selectedEntry)}_${selectedDecoded.width}x${selectedDecoded.height}.png`;
     // Encoded straight from the pixels: a canvas export zeroes the colour of
     // transparent pixels.
     const png = await encodePngRawNoCanvas(selectedDecoded.rgba, selectedDecoded.width, selectedDecoded.height);
@@ -511,7 +662,7 @@ export default function InazumaImages() {
     if (!selectedEntry) return;
     const d = containers.get(selectedEntry.romPath);
     if (!d) return;
-    downloadBlob(d.slice(selectedEntry.dataOffset, selectedEntry.dataOffset + selectedEntry.size), `${shortNameOf(selectedEntry)}.bin`);
+    downloadBlob(d.slice(selectedEntry.dataOffset, selectedEntry.dataOffset + selectedEntry.size), `${inazumaImageShortName(selectedEntry)}.bin`);
   }, [selectedEntry, containers]);
 
   // ==========================================================================
@@ -674,7 +825,7 @@ export default function InazumaImages() {
     const cropped = cropRegion(compositeBaseImageData.data, compositeBaseImageData.width, compositeBaseImageData.height, selectionRect);
     const pngBytes = await encodePngRawNoCanvas(cropped, selectionRect.w, selectionRect.h);
     if (!pngBytes) return;
-    downloadBlob(pngBytes, `${shortNameOf(selectedEntry)}-region-${selectionRect.x}x${selectionRect.y}.png`);
+    downloadBlob(pngBytes, `${inazumaImageShortName(selectedEntry)}-region-${selectionRect.x}x${selectionRect.y}.png`);
   }, [compositeBaseImageData, selectionRect, selectedEntry]);
 
   const ZOOM_MIN = 0.25;
@@ -823,12 +974,49 @@ export default function InazumaImages() {
             </Button>
           </>
         )}
+        <input
+          ref={zipImportRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void handleImportZip(f); }}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => zipImportRef.current?.click()}
+          disabled={zipImporting}
+          title="ارفع ZIP بنفس المجلدات والأسماء التي خرجت بها الصور، فتذهب كل صورة إلى مكانها وتراجعها قبل الاستبدال"
+        >
+          {zipImporting ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <PackageOpen className="w-4 h-4 ml-1" />}
+          استيراد ZIP معرّب
+        </Button>
         <Button size="sm" onClick={handleSaveRom} disabled={modifiedLog.size === 0 || saving} style={{ backgroundColor: ACCENT, color: "white" }}>
           {saving ? <Loader2 className="w-4 h-4 ml-1 animate-spin" /> : <Save className="w-4 h-4 ml-1" />}
           حفظ الروم ({modifiedLog.size})
         </Button>
         <Button variant="outline" size="sm" onClick={handleClose}>إغلاق</Button>
       </div>
+
+      {zipReport && (
+        <div className={`border-b px-4 py-2 flex items-start gap-2 ${zipReport.problems.length > 0 ? "bg-amber-500/10 border-amber-500/30" : "bg-primary/10 border-primary/30"}`}>
+          {zipReport.problems.length > 0 ? <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" /> : <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />}
+          <div className="flex-1 text-xs space-y-0.5 max-h-32 overflow-y-auto">
+            <p className="font-semibold">
+              استُبدلت {zipReport.replaced} صورة
+              {zipReport.unchanged > 0 && ` • تُخطّيت ${zipReport.unchanged} لم تتغيّر عن الأصل`}
+              {zipReport.declined > 0 && ` • رفضتَ ${zipReport.declined} — بقيت كما هي`}
+              {zipReport.merged > 0 && ` • دُمج ${zipReport.merged} مربّعاً لضيق المساحة`}
+              {zipReport.problems.length > 0 && ` • ${zipReport.problems.length} لم تُطبَّق`}
+              {zipReport.replaced > 0 && " — اضغط «حفظ الروم» لتنزيل الروم المعدّل"}
+            </p>
+            {zipReport.problems.map((p, i) => <p key={i} className="font-mono text-muted-foreground" dir="ltr">{p}</p>)}
+          </div>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setZipReport(null)}>
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+      )}
 
       {compositeMode && selectedEntry && selectedDecoded?.kind === "ok" ? (
         <div className="flex-1 min-h-0 flex flex-col">
@@ -1185,6 +1373,74 @@ export default function InazumaImages() {
         </div>
       </div>
       )}
+
+      <Dialog open={zipReview !== null} onOpenChange={(open) => { if (!open) { setZipReview(null); setReviewOpen(null); } }}>
+        <DialogContent className="w-[96vw] max-w-3xl max-h-[90vh] p-3 sm:p-6 flex flex-col gap-3" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">مراجعة {zipReview?.items.length ?? 0} صورة قبل الاستبدال</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              اضغط على رقم لترى الصورة قبل وبعد — «بعد» كما ستظهر في اللعبة بألوانها. أزل العلامة عن أي صورة لا تريدها.
+              {zipReview && zipReview.unchanged > 0 && ` (${zipReview.unchanged} صورة لم تتغيّر فلم تُعرض.)`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-1 -mx-1 px-1">
+            {zipReview?.items.map((it, i) => {
+              const open = reviewOpen === i;
+              const isChecked = reviewChecked.has(i);
+              return (
+                <div key={it.id} className={`rounded-md border ${open ? "border-primary/50 bg-muted/30" : "border-border"}`}>
+                  <div className="flex items-center gap-2 px-2 py-2 sm:py-1.5">
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={(v) => setReviewChecked((prev) => { const out = new Set(prev); if (v) out.add(i); else out.delete(i); return out; })}
+                      className="h-5 w-5 sm:h-4 sm:w-4"
+                      aria-label={`قبول ${it.name}`}
+                    />
+                    <button type="button" className="flex-1 flex items-center gap-2 min-w-0 text-right" onClick={() => setReviewOpen(open ? null : i)}>
+                      <span className="shrink-0 w-7 text-center text-xs font-bold rounded bg-primary/15 text-primary py-0.5">{i + 1}</span>
+                      <span className="truncate font-mono text-xs sm:text-sm" dir="ltr">{it.name}</span>
+                      <ChevronLeft className={`w-4 h-4 shrink-0 mr-auto transition-transform ${open ? "-rotate-90" : ""}`} />
+                    </button>
+                  </div>
+                  {open && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2 pb-2">
+                      {[{ label: "قبل", url: it.beforeUrl }, { label: "بعد", url: it.afterUrl }].map(({ label, url }) => (
+                        <figure key={label} className="space-y-1">
+                          <figcaption className="text-xs text-muted-foreground">{label}</figcaption>
+                          <div
+                            className="rounded border border-border flex items-center justify-center h-40 sm:h-56"
+                            style={{ backgroundImage: "repeating-conic-gradient(#88888844 0% 25%, transparent 0% 50%)", backgroundSize: "16px 16px" }}
+                          >
+                            <img src={url} alt={label} className="max-w-full max-h-full object-contain" style={{ imageRendering: "pixelated" }} />
+                          </div>
+                        </figure>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-2 sm:justify-start">
+            <Button className="w-full sm:w-auto" onClick={() => zipReview && applyZipImages(zipReview.items.map((_, i) => i))} style={{ backgroundColor: ACCENT, color: "white" }}>
+              <Check className="w-4 h-4 ml-1" /> قبول الكل ({zipReview?.items.length ?? 0})
+            </Button>
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              disabled={reviewChecked.size === 0}
+              onClick={() => applyZipImages([...reviewChecked].sort((a, b) => a - b))}
+            >
+              استبدال المحدّد ({reviewChecked.size})
+            </Button>
+            <Button variant="ghost" className="w-full sm:w-auto" onClick={() => { setZipReview(null); setReviewOpen(null); }}>
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

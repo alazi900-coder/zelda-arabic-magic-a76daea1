@@ -2,7 +2,6 @@
 // improve-line-splits — يعيد توزيع فواصل الأسطر في ترجمة عربية لتطابق هيكل الأصل.
 // يدعم: Lovable AI Gateway (Gemini/GPT)، Google Gemini API مباشر، Google Translate.
 // =============================================================================
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { maskRisenTagPair, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {

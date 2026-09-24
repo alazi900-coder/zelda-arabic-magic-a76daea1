@@ -1,4 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const corsHeaders = {

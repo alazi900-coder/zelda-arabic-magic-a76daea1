@@ -18,6 +18,7 @@ import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { reshapeArabic, reverseBidi } from "@/lib/arabic-processing";
 import { ARABIC_GLYPH_RASTERS } from "@/lib/fireemblem12/fe12-arabic-charmap";
 import { measurePlatChars, PLAT_FILE_RE } from "@/lib/nds/plat-editor-bridge";
+import { measureInazumaLine, INAZUMA_FILE_RE } from "@/lib/inazuma/inazuma-editor-bridge";
 
 /**
  * Bytes Fire Emblem 12 will actually spend on `text`: 1 for each ASCII
@@ -59,6 +60,10 @@ export function measureEntryBytes(msbtFile: string | undefined, text: string): n
   // several of them rather than its own length in letters.
   if (msbtFile && PLAT_FILE_RE.test(msbtFile)) {
     return measurePlatChars(text);
+  }
+  // Inazuma Eleven's patched engine stores one byte per Arabic letter.
+  if (msbtFile && INAZUMA_FILE_RE.test(msbtFile)) {
+    return measureInazumaLine(msbtFile, text);
   }
   return new TextEncoder().encode(text).length;
 }

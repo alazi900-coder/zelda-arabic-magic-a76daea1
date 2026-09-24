@@ -10,15 +10,17 @@
  *    `%s`) -- the missing one is a blank or a wrong box the player cannot
  *    explain. Losing a `\n` is not refused: it is a wrapping problem, the
  *    same as in every other game here, not a hole in the sentence.
- *  • a fixed-slot description longer than the 128 bytes its slot holds
+ *  • a fixed-slot line longer than its slot: a description's 128 bytes, a
+ *    name's 32, and so on (see inazuma-rom.ts)
  *
  * A forced build (`{ force: true }`) writes those lines anyway, each the least
  * damaging way it can: the lost token is simply absent, a character the font
  * cannot draw is dropped, and an overlong line loses words off its end until
  * it fits -- never bytes past its slot, which are the next line's.
  *
- * The engine stores its line break as the two characters `\` and `n`, not as
- * a real newline byte -- but the editor converts at exactly this module's
+ * The script archives store their line break as the two characters `\` and
+ * `n`, not as a real newline byte (the other files use the byte; see
+ * `inazumaNewline`) -- but the editor converts at exactly this module's
  * boundary (`extractInazumaEntries` in, `buildInazumaRom` out) so every tool
  * elsewhere in the editor (line counting, the line-rebalance button, the
  * deep-scan split warning) sees an ordinary real newline, the same as it
@@ -37,7 +39,7 @@
 import { findNdsFile, writeNdsFile } from "@/lib/nds/nds-rom";
 import { processArabicText } from "@/lib/arabic-processing";
 import type { ExtractedEntry } from "@/components/editor/types";
-import { readInazumaText, writeInazumaText, type InazumaTextRow } from "./inazuma-rom";
+import { readInazumaText, writeInazumaText, inazumaNewline, type InazumaTextRow } from "./inazuma-rom";
 import { patchInazumaFont12, patchInazumaFont8, encodeInazumaArabicText, blankInazumaGlyph, addInazumaByteMap } from "./inazuma-arabic-font";
 import { patchInazumaRtl, INAZUMA_RTL_MARKER, INAZUMA_RTL_MARKER_CODE } from "./inazuma-rtl-patch";
 import { isInazumaTranslatable, validateInazumaTags, maskInazumaTokens, unmaskInazumaTokens } from "./inazuma-tags";
@@ -81,9 +83,9 @@ function toEditorText(text: string): string {
   return toInazumaBreakTokens(text.replace(/\\n/g, "\n"));
 }
 
-/** Reverses `toEditorText`: a real newline → the ROM's literal `\n`. */
-function toRomText(text: string): string {
-  return text.replace(/\n/g, "\\n");
+/** Reverses `toEditorText`: a real newline → the file's own line break (`inazumaNewline`). */
+function toRomText(text: string, newline: string): string {
+  return text.replace(/\n/g, newline);
 }
 
 export interface InazumaExtractResult {
@@ -200,12 +202,12 @@ export interface InazumaLineResult {
  * `\n` is written only at the very end of each box, after shaping, not
  * before it.
  */
-function encodeLine(translation: string): { text: string; missing: string[] } {
+function encodeLine(translation: string, newline: string): { text: string; missing: string[] } {
   const missing: string[] = [];
   const boxes = translation.split("\\f").map((box) => {
     const { masked, tokens } = maskInazumaTokens(box); // \f is already split out; only %d/%s/%1F..%4F remain to shield
     const shaped = unmaskInazumaTokens(processArabicText(masked), tokens);
-    const encoded = encodeInazumaArabicText(toRomText(shaped));
+    const encoded = encodeInazumaArabicText(toRomText(shaped, newline));
     missing.push(...encoded.missing);
     return encoded.text;
   });
@@ -225,10 +227,11 @@ export function prepareInazumaLine(
   original: string,
   translation: string,
   limit: number | undefined,
-  force = false
+  force = false,
+  newline = "\\n"
 ): InazumaLineResult {
   const brokenTag = !validateInazumaTags(original, translation).valid;
-  const first = encodeLine(translation);
+  const first = encodeLine(translation, newline);
   const fits = (t: string) => limit === undefined || t.length + 1 <= limit;
 
   if (!force) {
@@ -249,13 +252,21 @@ export function prepareInazumaLine(
     parts.pop(); // the last word
     parts.pop(); // and the gap before it
     cutWords++;
-    const next = encodeLine(parts.join(""));
+    const next = encodeLine(parts.join(""), newline);
     for (const ch of next.missing) absent.add(ch);
     text = drop(next.text);
   }
   const missing = [...absent];
   if (!fits(text) || text.trim() === "") return { encoded: null, brokenTag, tooLong: true, missing, cutWords: 0 };
   return { encoded: text, brokenTag, tooLong: false, missing, cutWords };
+}
+
+/**
+ * How many bytes an editor line becomes in the ROM, for the editor's byte
+ * counter: one per Arabic letter, and a line break as its file stores it.
+ */
+export function measureInazumaLine(msbtFile: string, text: string): number {
+  return encodeLine(fromInazumaBreakTokens(text), inazumaNewline(msbtFile.replace(INAZUMA_FILE_RE, ""))).text.length;
 }
 
 /**
@@ -334,7 +345,7 @@ export function buildInazumaRom(
     // not one of these any more -- it is a wrapping problem the same as in
     // every other game, not refused here, just reported to the translator by
     // the deep-scan panel.
-    const line = prepareInazumaLine(row.text, fromInazumaBreakTokens(editorTranslation), row.limit, options.force);
+    const line = prepareInazumaLine(row.text, fromInazumaBreakTokens(editorTranslation), row.limit, options.force, inazumaNewline(row.source));
     for (const ch of line.missing) missing.add(ch);
     if (line.encoded === null) {
       (line.tooLong ? tooLong : brokenTags).push(key);

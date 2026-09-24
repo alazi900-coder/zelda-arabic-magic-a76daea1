@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { restoreInazumaTranslations, prepareInazumaLine, INAZUMA_FILE_RE } from "../inazuma-editor-bridge";
+import { restoreInazumaTranslations, prepareInazumaLine, measureInazumaLine, INAZUMA_FILE_RE } from "../inazuma-editor-bridge";
+import { inazumaNewline } from "../inazuma-rom";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 import { categorizeInazumaEntry, INAZUMA_CATEGORIES } from "../inazuma-categories";
 import { resolveGameParam } from "@/lib/game-param";
 import { detectIssues } from "@/lib/diagnostic-detect";
@@ -34,6 +36,13 @@ describe("Inazuma categories", () => {
     expect(categorizeInazumaEntry(entry("inazuma/evet"))).toBe("iz-dialogue");
     expect(categorizeInazumaEntry(entry("inazuma/mcht"))).toBe("iz-match");
     expect(categorizeInazumaEntry(entry("inazuma/unitbase"))).toBe("iz-players");
+    expect(categorizeInazumaEntry(entry("inazuma/pname"))).toBe("iz-names");
+    expect(categorizeInazumaEntry(entry("inazuma/pshort"))).toBe("iz-names");
+    expect(categorizeInazumaEntry(entry("inazuma/sname"))).toBe("iz-search");
+    expect(categorizeInazumaEntry(entry("inazuma/iname"))).toBe("iz-itemnames");
+    expect(categorizeInazumaEntry(entry("inazuma/blogr"))).toBe("iz-blog");
+    expect(categorizeInazumaEntry(entry("inazuma/games"))).toBe("iz-minigames");
+    expect(categorizeInazumaEntry(entry("inazuma/shout"))).toBe("iz-titles");
   });
 
   it("only produces categories the filter bar knows", () => {
@@ -179,5 +188,27 @@ describe("Inazuma multi-line and page-break shaping", () => {
     const [gotBox1, gotBox2] = whole!.split("\\f");
     expect(gotBox1).toBe(prepareInazumaLine("x", box1, undefined).encoded);
     expect(gotBox2).toBe(prepareInazumaLine("x", box2, undefined).encoded);
+  });
+});
+
+describe("Inazuma line breaks and byte counts", () => {
+  it("writes a line break the way each file stores it", () => {
+    expect(inazumaNewline("evet")).toBe("\\n");
+    expect(inazumaNewline("mcht")).toBe("\\n");
+    expect(inazumaNewline("unitbase")).toBe("\n");
+    expect(inazumaNewline("blogp")).toBe("\n");
+    const script = prepareInazumaLine("a\\nb", "سطر\nآخر", undefined).encoded!;
+    const description = prepareInazumaLine("a\nb", "سطر\nآخر", 128, false, "\n").encoded!;
+    expect(script).toContain("\\n");
+    expect(description).toContain("\n");
+    expect(description).not.toContain("\\");
+    expect(description.length).toBe(script.length - 1);
+  });
+
+  it("counts one byte per Arabic letter, and a break as its file stores it", () => {
+    expect(measureInazumaLine("inazuma/pname", "مرحبا")).toBe(5);
+    expect(measureEntryBytes("inazuma/pname", "مرحبا")).toBe(5);
+    expect(measureInazumaLine("inazuma/unitbase", "سطر\nآخر")).toBe(7);
+    expect(measureInazumaLine("inazuma/evet", "سطر\nآخر")).toBe(8);
   });
 });

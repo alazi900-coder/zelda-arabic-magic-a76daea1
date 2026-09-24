@@ -261,6 +261,40 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     expect(counts.get("iz-players")).toBeGreaterThan(1000);
     expect(counts.get("iz-items")).toBeGreaterThan(500);
     expect(counts.get("iz-commands")).toBeGreaterThan(500);
+    expect(counts.get("iz-names")).toBeGreaterThan(3800);
+    expect(counts.get("iz-search")).toBeGreaterThan(3800);
+    expect(counts.get("iz-itemnames")).toBeGreaterThan(500);
+    expect(counts.get("iz-blog")).toBeGreaterThan(250);
+    expect(counts.get("iz-minigames")).toBeGreaterThan(100);
+    expect(counts.get("iz-titles")).toBeGreaterThan(100);
     expect(counts.get("iz-other") ?? 0).toBe(0);
+  });
+
+  it("writes a player's name into its own field of its record and nothing else", { timeout: 120_000 }, () => {
+    const original = rom();
+    const rows = readInazumaText(original);
+    const endou = rows.find((r) => r.source === "pshort" && r.text === "Endou")!;
+    expect(endou.limit).toBe(32);
+    const result = writeInazumaText(original, rows.map((r) => (r === endou ? { ...r, text: "\x90\x91\x92" } : r)));
+    expect(result.changed).toBe(1);
+    const before = findNdsFile(original, "data_iz/logic/en/unitbase.dat")!;
+    const after = findNdsFile(result.rom, "data_iz/logic/en/unitbase.dat")!;
+    const a = original.subarray(before.start, before.end), b = result.rom.subarray(after.start, after.end);
+    const changed = [...a].map((x, i) => (x !== b[i] ? i : -1)).filter((i) => i >= 0);
+    const field = endou.entry * 96 + 32;
+    expect(changed.every((i) => i >= field && i < field + 32)).toBe(true);
+    expect(Array.from(b.subarray(field, field + 6))).toEqual([0x90, 0x91, 0x92, 0, 0, 0]);
+    // a line break in a blog post is written as the byte the file uses
+    const post = rows.find((r) => r.source === "blogp" && r.text.includes("\n"))!;
+    expect(post.text).not.toContain("\\n");
+  });
+
+  it("refuses a name longer than its field instead of running into the stats after it", { timeout: 120_000 }, () => {
+    const original = rom();
+    const rows = readInazumaText(original);
+    const name = rows.find((r) => r.source === "pname")!;
+    const result = writeInazumaText(original, rows.map((r) => (r === name ? { ...r, text: "x".repeat(32) } : r)));
+    expect(result.changed).toBe(0);
+    expect(result.warnings.some((w) => w.includes(`pname:${name.entry}`))).toBe(true);
   });
 });

@@ -20,6 +20,7 @@ import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry, isPhEntry } from "@/lib/ph/ph-categories";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
+import { measureEntryBytes } from "@/lib/entry-bytes";
 
 export interface QualityStats {
   tooLong: number;
@@ -116,7 +117,8 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
 
   if (hasContent) {
     if (entry.maxBytes > 0) {
-      const bytes = encoder.encode(trimmed).length;
+      // Inazuma's patched engine stores one byte per Arabic letter, not UTF-8's two.
+      const bytes = entry.msbtFile.startsWith("inazuma/") ? measureEntryBytes(entry.msbtFile, trimmed) : encoder.encode(trimmed).length;
       if (bytes > entry.maxBytes) qTooLong = true;
       else if (bytes / entry.maxBytes > 0.8) qNearLimit = true;
     }
@@ -230,6 +232,7 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
 
   const isTranslationTooLong = useCallback((entry: ExtractedEntry, translation: string): boolean => {
     if (!translation?.trim() || entry.maxBytes <= 0) return false;
+    if (entry.msbtFile.startsWith("inazuma/")) return measureEntryBytes(entry.msbtFile, translation) > entry.maxBytes;
     return encoder.encode(translation).length > entry.maxBytes;
   }, []);
 

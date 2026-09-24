@@ -14,6 +14,10 @@
  *   logic/en/item.STR      item descriptions, 32-byte-aligned slots
  *   logic/en/command.STR   special-move names, 32-byte-aligned slots
  *   movie/txt/en/*.dat     the cutscene videos' subtitles, 21 files
+ *   logic/en/games.STR     the mini-games' instructions, 32-byte-aligned slots
+ *   FIELD_TABLES           names and short texts, each in one fixed field of
+ *                          a fixed-size record: players, items and moves, the
+ *                          in-game blog, titles, schools, places, shouts
  *
  * item.STR and command.STR looked pointer-addressed at first -- a same-named
  * `.dat` sits beside each -- but no byte-offset field in either `.dat`
@@ -50,7 +54,58 @@ interface OverflowTable {
 }
 const ITEM: OverflowTable = { source: "item", path: "data_iz/logic/en/item.STR", slot: 32 };
 const COMMAND: OverflowTable = { source: "command", path: "data_iz/logic/en/command.STR", slot: 32 };
-const OVERFLOW_TABLES = [ITEM, COMMAND];
+const GAMES: OverflowTable = { source: "games", path: "data_iz/logic/en/games.STR", slot: 32 };
+const OVERFLOW_TABLES = [ITEM, COMMAND, GAMES];
+
+/**
+ * Text kept in one fixed field of every record of a fixed-size table; the
+ * rest of the record is the game's data and is never touched. A translation
+ * is written into its field, NUL-padded, or refused when it does not fit.
+ *
+ * Each field's size was measured on the cartridge, not guessed: past the
+ * text, every record's field is zero up to where its data starts, apart from
+ * a stray byte after the NUL in a few names (left over from the Japanese
+ * ones, never read). Where that was not clear-cut the smaller size is used:
+ * schinfo's names get 32 of the 39 bytes before its data, livetalk's shouts
+ * 12 of 16.
+ */
+interface FieldTable {
+  source: string;
+  path: string;
+  /** Bytes per record. */
+  record: number;
+  /** Where the text field starts in its record, and its size including the NUL. */
+  field: number;
+  size: number;
+}
+const FIELD_TABLES: FieldTable[] = [
+  // 2,400 players, 96 bytes each: full name, short name (the one over the dialogue box), stats
+  { source: "pname", path: "data_iz/logic/en/unitbase.dat", record: 96, field: 0, size: 32 },
+  { source: "pshort", path: "data_iz/logic/en/unitbase.dat", record: 96, field: 32, size: 32 },
+  // the same players in the scouting search, 56 bytes each: surname, full name, data
+  { source: "skey", path: "data_iz/logic/en/usearch.dat", record: 56, field: 0, size: 16 },
+  { source: "sname", path: "data_iz/logic/en/usearch.dat", record: 56, field: 16, size: 24 },
+  // 1,024 items and special moves, 48 bytes each: name, data
+  { source: "iname", path: "data_iz/logic/en/item.dat", record: 48, field: 0, size: 32 },
+  // the blog: 108 posts of 584 bytes (id, title, body, order) and 94 replies of 264 (id, text)
+  { source: "blogt", path: "data_iz/script/en/blogpost.dat", record: 584, field: 2, size: 64 },
+  { source: "blogp", path: "data_iz/script/en/blogpost.dat", record: 584, field: 68, size: 514 },
+  { source: "blogr", path: "data_iz/script/en/blogres.dat", record: 264, field: 4, size: 260 },
+  { source: "rpgtitle", path: "data_iz/logic/en/rpgtitle.STR", record: 32, field: 0, size: 32 },
+  { source: "teamtitle", path: "data_iz/logic/en/teamtitle.dat", record: 32, field: 0, size: 26 },
+  { source: "school", path: "data_iz/logic/en/schinfo.dat", record: 48, field: 0, size: 32 },
+  { source: "mapname", path: "data_iz/logic/en/gmapbase.dat", record: 32, field: 0, size: 32 },
+  { source: "shout", path: "data_iz/logic/en/livetalk.dat", record: 16, field: 0, size: 12 },
+];
+
+/**
+ * How a line break is stored: the two characters `\` `n` in the script
+ * archives and the subtitles, the single byte 0x0A everywhere else -- the
+ * descriptions, the blog and the mini-games are all laid out with it.
+ */
+export function inazumaNewline(source: string): string {
+  return source === "evet" || source === "mcht" || source === "movie" ? "\\n" : "\n";
+}
 
 /**
  * The cutscene videos' subtitles are not in the video: each movie has a
@@ -104,7 +159,7 @@ function movieRecordBytes(record: MovieRecord, text: string): Uint8Array {
 }
 
 export interface InazumaTextRow {
-  /** Which file it came from: "evet", "mcht", "unitbase", "item", "command" or "movie". */
+  /** Which file it came from: "evet", "mcht", "unitbase", "item", "command", "games", "movie", or a FIELD_TABLES source. */
   source: string;
   /** The pack entry's id, or the slot number in a fixed table. */
   entry: number;
@@ -224,6 +279,62 @@ function writeOverflowTable(
   return { rom: changed > 0 ? writeNdsFile(rom, file, data) : rom, changed };
 }
 
+function fieldText(data: Uint8Array, at: number, size: number): string {
+  let text = "";
+  for (let i = at; i < at + size && data[i] !== 0; i++) text += String.fromCharCode(data[i]);
+  return text;
+}
+
+function readFieldTable(rom: Uint8Array, table: FieldTable, rows: InazumaTextRow[]): void {
+  const data = bytesOf(rom, requireFile(rom, table.path));
+  for (let record = 0; (record + 1) * table.record <= data.length; record++) {
+    const text = fieldText(data, record * table.record + table.field, table.size);
+    // An empty field, or the question marks the search list shows for a player it has no name for.
+    if (text === "" || /^\?+$/.test(text)) continue;
+    rows.push({ source: table.source, entry: record, key: -1, text, limit: table.size });
+  }
+}
+
+/** Writes each table's wanted fields into one copy of its file, shared by the tables that live in it. */
+function writeFieldTables(
+  rom: Uint8Array,
+  wanted: Map<string, string>,
+  seen: Set<string>,
+  warnings: string[],
+): { rom: Uint8Array; changed: number } {
+  let out = rom;
+  let changed = 0;
+  for (const path of new Set(FIELD_TABLES.map((t) => t.path))) {
+    const file = requireFile(out, path);
+    const data = bytesOf(out, file).slice();
+    let touched = false;
+    for (const table of FIELD_TABLES.filter((t) => t.path === path)) {
+      for (let record = 0; (record + 1) * table.record <= data.length; record++) {
+        const id = rowId({ source: table.source, entry: record, key: -1 });
+        const text = wanted.get(id);
+        if (text === undefined) continue;
+        seen.add(id);
+        const at = record * table.record + table.field;
+        if (text === fieldText(data, at, table.size)) continue;
+        if (text.length + 1 > table.size) {
+          warnings.push(`النصّ في ${table.source}:${record} يتّسع لـ ${table.size - 1} بايت والترجمة ${text.length} — تُركت كما هي.`);
+          continue;
+        }
+        data.fill(0, at, at + table.size);
+        for (let i = 0; i < text.length; i++) {
+          const code = text.charCodeAt(i);
+          if (code > 0xff) throw new Error(`الحرف "${text[i]}" خارج نطاق بايت واحد — النصّ العربي يحتاج جدول ترميز اللعبة.`);
+          data[at + i] = code;
+        }
+        touched = true;
+        changed++;
+      }
+    }
+    if (touched) out = writeNdsFile(out, file, data);
+  }
+  return { rom: out, changed };
+}
+
 /** Every translatable line in the ROM, in the order the files lay them out. */
 export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
   const rows: InazumaTextRow[] = [];
@@ -241,6 +352,7 @@ export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
   }
   readSlots(rom, rows);
   for (const table of OVERFLOW_TABLES) readOverflowTable(rom, table, rows);
+  for (const table of FIELD_TABLES) readFieldTable(rom, table, rows);
   moviePaths(rom).forEach((path, fileIndex) => {
     const { records } = readMovieRecords(bytesOf(rom, requireFile(rom, path)));
     records.forEach((record, key) => rows.push({ source: "movie", entry: fileIndex, key, text: record.text }));
@@ -327,6 +439,10 @@ export function writeInazumaText(
     out = result.rom;
     changed += result.changed;
   }
+
+  const fields = writeFieldTables(out, wanted, seen, warnings);
+  out = fields.rom;
+  changed += fields.changed;
 
   for (const [fileIndex, path] of moviePaths(out).entries()) {
     const file = requireFile(out, path);

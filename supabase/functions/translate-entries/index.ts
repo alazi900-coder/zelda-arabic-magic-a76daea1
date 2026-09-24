@@ -1,4 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { RISEN_TAG_REGEX } from "../_shared/risen-tag-mask.ts";
 import { PLAT_TAG_RE } from "../_shared/plat-tag-mask.ts";
 import { GMICLOUD_OPENAI_BASE_URL, resolveGmiCloudTextModel } from "../_shared/gmicloud.ts";

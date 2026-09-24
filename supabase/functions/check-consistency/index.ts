@@ -1,4 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createRisenMasker, unmaskRisenTags } from "../_shared/risen-tag-mask.ts";
 
 const POKEMON_XP_TOKEN_REGEX = /\\(?:PN|PM)|\\(?:wt|dxn|v|c|p|i|w|l)\[[^\]\r\n]{0,80}\]|\\[nNbBGg{}\\]/gi;

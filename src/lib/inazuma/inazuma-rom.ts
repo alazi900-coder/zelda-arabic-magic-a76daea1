@@ -17,7 +17,10 @@
  *   logic/en/games.STR     the mini-games' instructions, 32-byte-aligned slots
  *   FIELD_TABLES           names and short texts, each in one fixed field of
  *                          a fixed-size record: players, items and moves, the
- *                          in-game blog, titles, schools, places, shouts
+ *                          in-game blog, titles, schools, places, shouts,
+ *                          clubs, pitches, match rules, the movie list
+ *   JinmyakuData.dat       the friendship events, each after its length
+ *   the ARM9 itself        the menus' and system messages (SYSTEM_TEXT)
  *
  * item.STR and command.STR looked pointer-addressed at first -- a same-named
  * `.dat` sits beside each -- but no byte-offset field in either `.dat`
@@ -38,6 +41,7 @@
  */
 import { findNdsFile, ndsFileIdByPath, writeNdsFile, type NdsFile } from "@/lib/nds/nds-rom";
 import { INAZUMA_TEXT_KIND, readPack, writePack, type InazumaPack } from "./inazuma-pack";
+import { readInazumaArm9 } from "./inazuma-rtl-patch";
 
 const PACKS = [
   { source: "evet", pkh: "data_iz/script/en/evet.pkh", pkb: "data_iz/script/en/evet.pkb" },
@@ -72,6 +76,8 @@ const OVERFLOW_TABLES = [ITEM, COMMAND, GAMES];
 interface FieldTable {
   source: string;
   path: string;
+  /** Where the first record starts, when the file has a header before them. */
+  base?: number;
   /** Bytes per record. */
   record: number;
   /** Where the text field starts in its record, and its size including the NUL. */
@@ -96,7 +102,35 @@ const FIELD_TABLES: FieldTable[] = [
   { source: "school", path: "data_iz/logic/en/schinfo.dat", record: 48, field: 0, size: 32 },
   { source: "mapname", path: "data_iz/logic/en/gmapbase.dat", record: 32, field: 0, size: 32 },
   { source: "shout", path: "data_iz/logic/en/livetalk.dat", record: 16, field: 0, size: 12 },
+  // 13 win conditions of 81 bytes: id, text
+  { source: "clear", path: "data_iz/logic/en/ClearCondition.dat", record: 81, field: 1, size: 80 },
+  { source: "club", path: "data_iz/logic/en/clubinfo.dat", record: 32, field: 0, size: 31 },
+  // 64 match rules of 288 bytes: settings, text
+  { source: "rule", path: "data_iz/logic/en/gamerule.dat", record: 288, field: 32, size: 256 },
+  // 129 pitches of 384 bytes: model files, name, layout
+  { source: "pitch", path: "data_iz/logic/en/fieldinf.dat", record: 384, field: 144, size: 24 },
+  // the movie list after a 2-byte count, 114 bytes each: video file (never
+  // translated -- the game opens it by that name), number, title
+  { source: "movienum", path: "data_iz/logic/en/movie_view.dat", base: 2, record: 114, field: 16, size: 48 },
+  { source: "movietitle", path: "data_iz/logic/en/movie_view.dat", base: 2, record: 114, field: 64, size: 48 },
 ];
+
+/**
+ * The friendship events: variable records, each text preceded by a 16-bit
+ * length -- the text's own, or a little more for padding. A translation is
+ * written in place and must leave room for its NUL inside that length; the
+ * length itself is left as it is.
+ */
+const EVENTS = { source: "event", path: "data_iz/logic/en/JinmyakuData.dat" };
+
+/**
+ * The menus' and system messages built into the ARM9: one pool of 661
+ * strings, 0x020AFFCC-0x020B3F04, each starting on a 4-byte boundary and
+ * reached through a pointer at its first byte (none into the middle of one).
+ * The file paths and engine names just before it are left alone. A message
+ * gets the room up to the next one: its own bytes and the zeros after them.
+ */
+const SYSTEM_TEXT = { source: "sys", from: 0x020affcc, to: 0x020b3f04 };
 
 /**
  * How a line break is stored: the two characters `\` `n` in the script
@@ -285,10 +319,17 @@ function fieldText(data: Uint8Array, at: number, size: number): string {
   return text;
 }
 
+/** Where each record's field starts, for every record whose field lies inside the file. */
+function fieldStarts(table: FieldTable, length: number): number[] {
+  const out: number[] = [];
+  for (let at = (table.base ?? 0) + table.field; at + table.size <= length; at += table.record) out.push(at);
+  return out;
+}
+
 function readFieldTable(rom: Uint8Array, table: FieldTable, rows: InazumaTextRow[]): void {
   const data = bytesOf(rom, requireFile(rom, table.path));
-  for (let record = 0; (record + 1) * table.record <= data.length; record++) {
-    const text = fieldText(data, record * table.record + table.field, table.size);
+  for (const [record, at] of fieldStarts(table, data.length).entries()) {
+    const text = fieldText(data, at, table.size);
     // An empty field, or the question marks the search list shows for a player it has no name for.
     if (text === "" || /^\?+$/.test(text)) continue;
     rows.push({ source: table.source, entry: record, key: -1, text, limit: table.size });
@@ -309,12 +350,11 @@ function writeFieldTables(
     const data = bytesOf(out, file).slice();
     let touched = false;
     for (const table of FIELD_TABLES.filter((t) => t.path === path)) {
-      for (let record = 0; (record + 1) * table.record <= data.length; record++) {
+      for (const [record, at] of fieldStarts(table, data.length).entries()) {
         const id = rowId({ source: table.source, entry: record, key: -1 });
         const text = wanted.get(id);
         if (text === undefined) continue;
         seen.add(id);
-        const at = record * table.record + table.field;
         if (text === fieldText(data, at, table.size)) continue;
         if (text.length + 1 > table.size) {
           warnings.push(`النصّ في ${table.source}:${record} يتّسع لـ ${table.size - 1} بايت والترجمة ${text.length} — تُركت كما هي.`);
@@ -335,7 +375,44 @@ function writeFieldTables(
   return { rom: out, changed };
 }
 
-/** Every translatable line in the ROM, in the order the files lay them out. */
+function isTextByte(c: number): boolean {
+  return (c >= 0x20 && c <= 0x7e) || c === 0x0a;
+}
+
+/** Each friendship event's text by its offset, with the length before it. */
+function eventTexts(data: Uint8Array): { at: number; text: string; room: number }[] {
+  const out: { at: number; text: string; room: number }[] = [];
+  for (let at = 2; at < data.length; at++) {
+    if (!isTextByte(data[at])) continue;
+    let end = at;
+    while (end < data.length && isTextByte(data[end])) end++;
+    const room = data[at - 2] | (data[at - 1] << 8);
+    const text = String.fromCharCode(...data.subarray(at, end));
+    if (end < data.length && data[end] === 0 && text.length >= 2 && room >= text.length && room <= text.length + 4 && /[a-z]{2}/.test(text)) {
+      out.push({ at, text, room });
+    }
+    at = end;
+  }
+  return out;
+}
+
+/** Each system message by its RAM address, with the room it has. */
+function systemTexts(a9: Uint8Array): { addr: number; text: string; room: number }[] {
+  const out: { addr: number; text: string; room: number }[] = [];
+  const base = 0x02000000;
+  for (let at = SYSTEM_TEXT.from - base; at < SYSTEM_TEXT.to - base; at++) {
+    if (a9[at] === 0 || at % 4 !== 0 || a9[at - 1] !== 0) continue;
+    let end = at;
+    while (a9[end] !== 0) end++;
+    let next = end;
+    while (next < SYSTEM_TEXT.to - base && a9[next] === 0) next++;
+    out.push({ addr: base + at, text: String.fromCharCode(...a9.subarray(at, end)), room: next - at });
+    at = end;
+  }
+  return out;
+}
+
+/** Every translatable line in the ROM, in the order the files lay them out. *//** Every translatable line in the ROM, in the order the files lay them out. */
 export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
   const rows: InazumaTextRow[] = [];
   for (const pack of PACKS) {
@@ -353,6 +430,12 @@ export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
   readSlots(rom, rows);
   for (const table of OVERFLOW_TABLES) readOverflowTable(rom, table, rows);
   for (const table of FIELD_TABLES) readFieldTable(rom, table, rows);
+  for (const { at, text, room } of eventTexts(bytesOf(rom, requireFile(rom, EVENTS.path)))) {
+    rows.push({ source: EVENTS.source, entry: at, key: -1, text, limit: room });
+  }
+  for (const { addr, text, room } of systemTexts(readInazumaArm9(rom))) {
+    if (!/^\?*$/.test(text)) rows.push({ source: SYSTEM_TEXT.source, entry: addr, key: -1, text, limit: room });
+  }
   moviePaths(rom).forEach((path, fileIndex) => {
     const { records } = readMovieRecords(bytesOf(rom, requireFile(rom, path)));
     records.forEach((record, key) => rows.push({ source: "movie", entry: fileIndex, key, text: record.text }));
@@ -370,7 +453,7 @@ export function readInazumaText(rom: Uint8Array): InazumaTextRow[] {
 export function writeInazumaText(
   rom: Uint8Array,
   rows: InazumaTextRow[],
-): { rom: Uint8Array; changed: number; warnings: string[] } {
+): { rom: Uint8Array; changed: number; warnings: string[]; arm9: Map<number, Uint8Array> } {
   const wanted = new Map(rows.map((row) => [rowId(row), row.text]));
   const seen = new Set<string>();
   const warnings: string[] = [];
@@ -444,6 +527,45 @@ export function writeInazumaText(
   out = fields.rom;
   changed += fields.changed;
 
+  const eventFile = requireFile(out, EVENTS.path);
+  const events = bytesOf(out, eventFile).slice();
+  let eventsTouched = false;
+  for (const { at, text: current, room } of eventTexts(events)) {
+    const id = rowId({ source: EVENTS.source, entry: at, key: -1 });
+    const text = wanted.get(id);
+    if (text === undefined) continue;
+    seen.add(id);
+    if (text === current) continue;
+    if (text.length + 1 > room) {
+      warnings.push(`النصّ في ${EVENTS.source}:${at} يتّسع لـ ${room - 1} بايت والترجمة ${text.length} — تُركت كما هي.`);
+      continue;
+    }
+    events.fill(0, at, at + room);
+    events.set(latin1Bytes(text), at);
+    eventsTouched = true;
+    changed++;
+  }
+  if (eventsTouched) out = writeNdsFile(out, eventFile, events);
+
+  // The ARM9 is compressed on the cartridge; its text is handed back for the
+  // engine patch (patchInazumaRtl), which writes the ARM9 out anyway.
+  const arm9 = new Map<number, Uint8Array>();
+  for (const { addr, text: current, room } of systemTexts(readInazumaArm9(out))) {
+    const id = rowId({ source: SYSTEM_TEXT.source, entry: addr, key: -1 });
+    const text = wanted.get(id);
+    if (text === undefined) continue;
+    seen.add(id);
+    if (text === current) continue;
+    if (text.length + 1 > room) {
+      warnings.push(`النصّ في ${SYSTEM_TEXT.source}:${addr.toString(16)} يتّسع لـ ${room - 1} بايت والترجمة ${text.length} — تُركت كما هي.`);
+      continue;
+    }
+    const bytes = new Uint8Array(room);
+    bytes.set(latin1Bytes(text));
+    arm9.set(addr, bytes);
+    changed++;
+  }
+
   for (const [fileIndex, path] of moviePaths(out).entries()) {
     const file = requireFile(out, path);
     const { records, tail } = readMovieRecords(bytesOf(out, file));
@@ -468,5 +590,15 @@ export function writeInazumaText(
   for (const row of rows) {
     if (!seen.has(rowId(row))) warnings.push(`لا يوجد نصّ بهذا المعرّف في الروم: ${rowId(row)}`);
   }
-  return { rom: out, changed, warnings };
+  return { rom: out, changed, warnings, arm9 };
+}
+
+function latin1Bytes(text: string): Uint8Array {
+  const out = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 0xff) throw new Error(`الحرف "${text[i]}" خارج نطاق بايت واحد — النصّ العربي يحتاج جدول ترميز اللعبة.`);
+    out[i] = code;
+  }
+  return out;
 }

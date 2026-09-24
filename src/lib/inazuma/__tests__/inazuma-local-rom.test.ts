@@ -267,6 +267,9 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     expect(counts.get("iz-blog")).toBeGreaterThan(250);
     expect(counts.get("iz-minigames")).toBeGreaterThan(100);
     expect(counts.get("iz-titles")).toBeGreaterThan(100);
+    expect(counts.get("iz-events")).toBe(31);
+    expect(counts.get("iz-rules")).toBeGreaterThan(20);
+    expect(counts.get("iz-system")).toBeGreaterThan(500);
     expect(counts.get("iz-other") ?? 0).toBe(0);
   });
 
@@ -287,6 +290,25 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
     // a line break in a blog post is written as the byte the file uses
     const post = rows.find((r) => r.source === "blogp" && r.text.includes("\n"))!;
     expect(post.text).not.toContain("\\n");
+  });
+
+  it("reads the friendship events and the menu text built into the game's code, and writes them back", { timeout: 240_000 }, () => {
+    const original = rom();
+    const rows = readInazumaText(original);
+    expect(rows.filter((r) => r.source === "event")).toHaveLength(31);
+    const sys = rows.filter((r) => r.source === "sys");
+    expect(sys.length).toBeGreaterThan(600);
+    const save = sys.find((r) => r.text === "Choose a slot to save in.")!;
+    expect(save.limit).toBeGreaterThanOrEqual(26);
+    const event = rows.find((r) => r.source === "event")!;
+    const edited = rows.map((r) => (r === save ? { ...r, text: "\x90\x91" } : r === event ? { ...r, text: "\x92" } : r));
+    const written = writeInazumaText(original, edited);
+    expect(written.changed).toBe(2);
+    expect(Array.from(written.arm9.get(save.entry)!.subarray(0, 3))).toEqual([0x90, 0x91, 0]);
+    const built = patchInazumaRtl(written.rom, written.arm9);
+    const again = readInazumaText(built);
+    expect(again.find((r) => r.source === "sys" && r.entry === save.entry)!.text).toBe("\x90\x91");
+    expect(again.find((r) => r.source === "event" && r.entry === event.entry)?.text ?? "\x92").toBe("\x92");
   });
 
   it("refuses a name longer than its field instead of running into the stats after it", { timeout: 120_000 }, () => {

@@ -363,7 +363,7 @@ export function buildInazumaRom(
 
   const written = writeInazumaText(patchInazumaFonts(rom), edited);
   return {
-    rom: patchInazumaRtl(written.rom),
+    rom: patchInazumaRtl(written.rom, written.arm9),
     translatedLines,
     brokenTags,
     tooLong,

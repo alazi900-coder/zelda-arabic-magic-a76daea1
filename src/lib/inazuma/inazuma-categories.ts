@@ -13,7 +13,9 @@ import type { ExtractedEntry, FileCategory } from "@/components/editor/types";
  * `movie` the subtitles of the cutscene videos, and the fixed-field tables
  * of inazuma-rom.ts: player names (full and short, and again in the scouting
  * search), item and move names, the in-game blog, the mini-games'
- * instructions, and the short titles and names.
+ * instructions, the short titles and names (clubs, pitches and the movie
+ * list among them), the friendship events, the match rules and win
+ * conditions, and the menus' and system messages built into the ARM9.
  */
 export const INAZUMA_CATEGORIES: FileCategory[] = [
   { id: "iz-dialogue", label: "حوارات القصة", emoji: "…", icon: "MessageCircle", color: "text-violet-400" },
@@ -28,6 +30,9 @@ export const INAZUMA_CATEGORIES: FileCategory[] = [
   { id: "iz-blog", label: "رسائل المدوّنة", emoji: "📝", icon: "BookText", color: "text-pink-400" },
   { id: "iz-minigames", label: "شرح الألعاب المصغّرة", emoji: "🎮", icon: "Gamepad2", color: "text-lime-400" },
   { id: "iz-titles", label: "ألقاب ومدارس وأماكن وصيحات", emoji: "🏷️", icon: "MapPin", color: "text-indigo-400" },
+  { id: "iz-events", label: "أحداث العلاقات", emoji: "🤝", icon: "Users", color: "text-fuchsia-400" },
+  { id: "iz-rules", label: "قواعد وشروط المباريات", emoji: "📋", icon: "ScrollText", color: "text-red-400" },
+  { id: "iz-system", label: "رسائل القوائم والنظام", emoji: "⚙️", icon: "Settings", color: "text-slate-400" },
   { id: "iz-other", label: "نصوص أخرى", emoji: "•", icon: "FileText", color: "text-zinc-400" },
 ];
 
@@ -47,6 +52,14 @@ const FIELD_CATEGORY: Record<string, string> = {
   school: "iz-titles",
   mapname: "iz-titles",
   shout: "iz-titles",
+  club: "iz-titles",
+  pitch: "iz-titles",
+  movienum: "iz-titles",
+  movietitle: "iz-titles",
+  event: "iz-events",
+  clear: "iz-rules",
+  rule: "iz-rules",
+  sys: "iz-system",
 };
 
 export function categorizeInazumaEntry(entry: ExtractedEntry): string {

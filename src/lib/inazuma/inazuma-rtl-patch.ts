@@ -267,11 +267,8 @@ function patchOverlays(rom: Uint8Array): Uint8Array {
   return out;
 }
 
-/**
- * A copy of the ROM with the right-to-left engine patch applied. Throws,
- * leaving nothing half-written, if the code is not exactly what was traced.
- */
-export function patchInazumaRtl(rom: Uint8Array): Uint8Array {
+/** The ARM9 binary as it sits in RAM from 0x02000000: decompressed, or as stored once patched. */
+function arm9Of(rom: Uint8Array): { a9Off: number; a9Size: number; mp: number; compressedEnd: number; a9: Uint8Array } {
   const a9Off = u32(rom, 0x20);
   const a9Ram = u32(rom, 0x28);
   const a9Size = u32(rom, 0x2c);
@@ -288,7 +285,29 @@ export function patchInazumaRtl(rom: Uint8Array): Uint8Array {
   // The compressed stream ends where the module parameters say, not at the
   // end of the file: the bytes after it are overwritten by the output.
   const compressedEnd = u32(packed, mp + 0x14);
-  let a9 = compressedEnd ? blzDecompress(packed.subarray(0, compressedEnd - ARM9_RAM)) : packed;
+  const a9 = compressedEnd ? blzDecompress(packed.subarray(0, compressedEnd - ARM9_RAM)) : packed;
+  return { a9Off, a9Size, mp, compressedEnd, a9 };
+}
+
+/** The ARM9 binary as it sits in RAM from 0x02000000, for reading the text built into it. */
+export function readInazumaArm9(rom: Uint8Array): Uint8Array {
+  return arm9Of(rom).a9;
+}
+
+/** `texts` (RAM address → bytes, NUL included) written into the ARM9. */
+function writeTexts(a9: Uint8Array, texts: Map<number, Uint8Array>): void {
+  for (const [addr, bytes] of texts) a9.set(bytes, addr - ARM9_RAM);
+}
+
+/**
+ * A copy of the ROM with the right-to-left engine patch applied, and with
+ * `texts` (the menu text built into the ARM9, by RAM address, each already
+ * checked against its room) written into it. Throws, leaving nothing
+ * half-written, if the code is not exactly what was traced.
+ */
+export function patchInazumaRtl(rom: Uint8Array, texts: Map<number, Uint8Array> = new Map()): Uint8Array {
+  const { a9Off, a9Size, mp, compressedEnd, a9: unpacked } = arm9Of(rom);
+  let a9 = unpacked;
 
   const listStart = u32(a9, mp) - ARM9_RAM;
   const listEnd = u32(a9, mp + 4) - ARM9_RAM;
@@ -296,7 +315,14 @@ export function patchInazumaRtl(rom: Uint8Array): Uint8Array {
   if (listEnd - listStart !== 24 || u32(a9, listStart) !== ITCM_ADDR) throw new Error("جدول التحميل التلقائي ليس كما قيس");
   // Built once already (the editor keeps the ROM it was opened with, but a
   // patched ROM can be opened too): leave it as it is.
-  if (!compressedEnd && hooks().every((h) => u32(a9, h.addr - ARM9_RAM) === h.put)) return rom;
+  if (!compressedEnd && hooks().every((h) => u32(a9, h.addr - ARM9_RAM) === h.put)) {
+    if (texts.size === 0) return rom;
+    // Stored uncompressed already: the text goes straight into it, in place.
+    writeTexts(a9, texts);
+    const out = rom.slice();
+    out.set(a9, a9Off);
+    return out;
+  }
   const itcmSize = u32(a9, listStart + 4);
   if (ITCM_ADDR + itcmSize !== CAVE_ADDR) {
     throw new Error("الروم معدَّل مسبقاً أو ليس النسخة الأوروبية — ITCM لا ينتهي حيث يُتوقَّع");
@@ -326,6 +352,7 @@ export function patchInazumaRtl(rom: Uint8Array): Uint8Array {
   setU32(a9, listStart + grow + 4, itcmSize + grow);
   setU32(a9, arenaLiteral, (CAVE_ADDR + grow + 31) & ~31);
   for (const h of hooks()) setU32(a9, h.addr - ARM9_RAM, h.put);
+  writeTexts(a9, texts);
   const withOverlays = patchOverlays(rom);
 
   // Past the end of everything the ROM uses, 512-aligned, as a grown file is.

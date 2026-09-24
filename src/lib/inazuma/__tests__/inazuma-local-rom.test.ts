@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 import { readInazumaText, writeInazumaText } from "../inazuma-rom";
 import { extractInazumaEntries, buildInazumaRom } from "../inazuma-editor-bridge";
 import { INAZUMA_CATEGORIES, categorizeInazumaEntry } from "../inazuma-categories";
-import { findNdsFile } from "@/lib/nds/nds-rom";
+import { findNdsFile, ndsFiles } from "@/lib/nds/nds-rom";
+import { patchInazumaRtl } from "../inazuma-rtl-patch";
 
 const path = process.env.INAZUMA_TEST_ROM;
 
@@ -62,6 +63,16 @@ describe.skipIf(!path)("Inazuma Eleven (Europe) cartridge", () => {
   it("puts the cutscene subtitles in their own editor section", { timeout: 120_000 }, () => {
     const { entries } = extractInazumaEntries(rom());
     expect(entries.some((e) => categorizeInazumaEntry(e) === "iz-movie" && e.original === "Hey, Kidou.")).toBe(true);
+  });
+
+  it("patches the right-to-left engine once, and leaves an already patched ROM alone", { timeout: 120_000 }, () => {
+    const original = rom();
+    const patched = patchInazumaRtl(original);
+    expect(patched).not.toBe(original);
+    expect(patchInazumaRtl(patched)).toBe(patched);
+    // every file the ROM names is untouched; only the ARM9 moved
+    const a = ndsFiles(original), b = ndsFiles(patched);
+    expect(b.every((f, i) => f.start === a[i].start && f.end === a[i].end)).toBe(true);
   });
 
   it("carries one edited line into the rebuilt ROM and leaves the rest alone", { timeout: 120_000 }, () => {

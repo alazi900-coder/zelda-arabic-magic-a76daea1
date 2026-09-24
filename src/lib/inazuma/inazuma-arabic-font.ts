@@ -36,59 +36,50 @@ interface GlyphSetSpec {
 const FONT12_SPEC: GlyphSetSpec = { tileBytes: 17, glyphsB64: INAZUMA_FONT12_GLYPHS_B64, widths: INAZUMA_FONT12_WIDTHS };
 const FONT8_SPEC: GlyphSetSpec = { tileBytes: 7, glyphsB64: INAZUMA_FONT8_GLYPHS_B64, widths: INAZUMA_FONT8_WIDTHS };
 
-/**
- * `FONT12.NFTR` and `FONT12N.NFTR` are byte-identical in shape (11x12, 1bpp).
- *
- * `tightSpace` narrows the space: see `tightenSpace`. FONT12N's space is a
- * full 11-pixel cell -- a fixed-width font, whose space is deliberately as
- * wide as a letter -- so it is left alone there.
- */
-export function patchInazumaFont12(nftr: Uint8Array, options: { tightSpace?: boolean } = {}): Uint8Array {
-  const out = patchGlyphSlots(nftr, FONT12_SPEC);
-  return options.tightSpace === false ? out : tightenSpace(out);
+/** `FONT12.NFTR` and `FONT12N.NFTR` are byte-identical in shape (11x12, 1bpp). */
+export function patchInazumaFont12(nftr: Uint8Array): Uint8Array {
+  return patchGlyphSlots(nftr, FONT12_SPEC);
 }
 
 export function patchInazumaFont8(nftr: Uint8Array): Uint8Array {
-  return tightenSpace(patchGlyphSlots(nftr, FONT8_SPEC));
+  return patchGlyphSlots(nftr, FONT8_SPEC);
 }
 
 /**
- * Takes the left bearing off the space, leaving its advance.
- *
- * This font's space is the only glyph with a bearing (FONT12: 3 bearing +
- * 3 advance), and the game adds the two: every word gap measured on a real
- * screenshot of Arabic dialogue is 6 pixels. English letters carry their own
- * side spacing, so 6 reads as one space there; Arabic letters join edge to
- * edge, so beside them the same 6 pixels read as a double space.
+ * Makes the glyph `code` draws an empty, zero-width one -- for the
+ * right-to-left marker (see inazuma-rtl-patch.ts), which must take no room
+ * and show nothing. The glyph is found through the font's own character map,
+ * so it works on every font whatever its glyph numbering.
  */
-export function tightenSpace(nftr: Uint8Array): Uint8Array {
+export function blankInazumaGlyph(nftr: Uint8Array, code: number): Uint8Array {
   const out = nftr.slice();
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
-  let hdwc = -1;
+  let plgc = -1, tileBytes = 0, hdwc = -1;
   const cmaps: number[] = [];
   for (let p = 0x10; p < out.length - 8; ) {
     const kind = String.fromCharCode(out[p], out[p + 1], out[p + 2], out[p + 3]);
     const size = view.getUint32(p + 4, true);
     if (size === 0) break;
+    if (kind === "PLGC") { plgc = p + 16; tileBytes = view.getUint16(p + 10, true); }
     if (kind === "HDWC") hdwc = p + 8;
     if (kind === "PAMC") cmaps.push(p + 8);
     p += size;
   }
-  if (hdwc < 0) return out;
   let glyph = -1;
   for (const at of cmaps) {
     const first = view.getUint16(at, true), last = view.getUint16(at + 2, true), type = view.getUint32(at + 4, true);
-    if (0x20 < first || 0x20 > last) continue;
-    if (type === 0) glyph = view.getUint16(at + 12, true) + 0x20 - first;
-    else if (type === 1) glyph = view.getUint16(at + 12 + (0x20 - first) * 2, true);
+    if (code < first || code > last) continue;
+    if (type === 0) glyph = view.getUint16(at + 12, true) + code - first;
+    else if (type === 1) glyph = view.getUint16(at + 12 + (code - first) * 2, true);
     else {
       const n = view.getUint16(at + 12, true);
-      for (let i = 0; i < n; i++) if (view.getUint16(at + 14 + i * 4, true) === 0x20) glyph = view.getUint16(at + 16 + i * 4, true);
+      for (let i = 0; i < n; i++) if (view.getUint16(at + 14 + i * 4, true) === code) glyph = view.getUint16(at + 16 + i * 4, true);
     }
   }
+  if (plgc < 0 || hdwc < 0 || glyph < 0 || glyph === 0xffff) throw new Error(`الخطّ لا يحتوي الرمز 0x${code.toString(16)}`);
+  out.fill(0, plgc + glyph * tileBytes, plgc + (glyph + 1) * tileBytes);
   const firstGlyph = view.getUint16(hdwc, true);
-  if (glyph < firstGlyph) return out;
-  out[hdwc + 8 + (glyph - firstGlyph) * 3] = 0; // leftBearing
+  out.fill(0, hdwc + 8 + (glyph - firstGlyph) * 3, hdwc + 8 + (glyph - firstGlyph) * 3 + 3);
   return out;
 }
 

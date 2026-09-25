@@ -17,6 +17,7 @@
  *   - `steinsgate/<file>.BIN`      → Steins;Gate PSP CriWare scripts
  *   - `crashlands/<section>/<n>`  → Crashlands
  *   - `inazuma/<source>`          → Inazuma Eleven (NDS)
+ *   - `goldensun/<source>`         → Golden Sun (GBA)
  *   - `ninthdawn/<section>/<n>`    → 9th Dawn Remake
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
@@ -37,7 +38,8 @@ export type GameParam =
   | "steinsgate"
   | "crashlands"
   | "ninthdawn"
-  | "inazuma";
+  | "inazuma"
+  | "goldensun";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -56,6 +58,7 @@ export function resolveGameParam(
   if (f.startsWith("steinsgate/")) return "steinsgate";
   if (f.startsWith("crashlands/")) return "crashlands";
   if (f.startsWith("inazuma/")) return "inazuma";
+  if (f.startsWith("goldensun/")) return "goldensun";
   if (f.startsWith("ninthdawn/")) return "ninthdawn";
   return "xenoblade";
 }

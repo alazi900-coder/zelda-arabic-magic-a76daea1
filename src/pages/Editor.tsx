@@ -29,6 +29,7 @@ import { PH_CATEGORIES } from "@/lib/ph/ph-categories";
 import { STEINSGATE_CATEGORIES } from "@/lib/steinsgate/steinsgate-categories";
 import { CRASHLANDS_CATEGORIES } from "@/lib/crashlands/crashlands-categories";
 import { INAZUMA_CATEGORIES } from "@/lib/inazuma/inazuma-categories";
+import { GOLDENSUN_CATEGORIES } from "@/lib/goldensun/goldensun-categories";
 import { NINTHDAWN_CATEGORIES } from "@/lib/ninthdawn/ninthdawn-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
@@ -172,6 +173,7 @@ const Editor = () => {
   const isPlatinumEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
   const isInazumaEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("inazuma/") ?? false;
   const isPhEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("ph/") ?? false;
+  const isGoldenSunEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("goldensun/") ?? false;
 
   // LumenTale can contain an intentionally empty table. It has no editor rows,
   // so it is represented only by the immutable bundle metadata and must still
@@ -225,6 +227,8 @@ const Editor = () => {
     ? "/crashlands"
     : isNinthDawnEntries
     ? "/ninth-dawn-remake"
+    : isGoldenSunEntries
+    ? "/golden-sun"
     : isRisen
     ? "/risen/process"
     : "/process";
@@ -249,9 +253,10 @@ const Editor = () => {
     if (isPlatinumEntries) return PLATINUM_CATEGORIES;
     if (isInazumaEntries) return INAZUMA_CATEGORIES;
     if (isPhEntries) return PH_CATEGORIES;
+    if (isGoldenSunEntries) return GOLDENSUN_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isPlatinumEntries, isInazumaEntries, isPhEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isPlatinumEntries, isInazumaEntries, isPhEntries, isGoldenSunEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -750,6 +755,7 @@ const Editor = () => {
             isGtaIv={isGtaIvEntries}
             isFe12={isFe12Entries}
             isPh={isPhEntries}
+            isGoldenSun={isGoldenSunEntries}
           />
 
           <EditorBuildSection
@@ -770,6 +776,7 @@ const Editor = () => {
             isNinthDawn={isNinthDawnEntries}
             isFe12={isFe12Entries}
             isPh={isPhEntries}
+            isGoldenSun={isGoldenSunEntries}
             khbbsUnsupportedCount={editor.khbbsUnsupportedCount}
             khbbsUnsupportedCharacters={editor.khbbsUnsupportedCharacters}
             khbbsUnsupportedFilterActive={editor.filterStatus === "khbbs-unsupported"}

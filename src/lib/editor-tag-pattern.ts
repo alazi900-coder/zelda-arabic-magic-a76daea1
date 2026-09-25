@@ -35,6 +35,9 @@ const PLAT_BREAK_RULE = "[\\u25BC\\u25BD]";
 /** Inazuma Eleven's page break `\\f`, held in the editor as `▼`. */
 const INAZUMA_BREAK_RULE = "\\u25BC";
 
+/** Golden Sun's control codes, written in the editor as `\xNN` -- see goldensun-tags.ts. */
+const GOLDENSUN_CODE_RULE = "\\\\x[0-9a-fA-F]{2}";
+
 const RULES = [
   "\\[\\s*\\w+\\s*:[^\\]]*?\\](?:\\s*\\([^)]{1,100}\\))?",
   "\\[\\s*\\w+\\s*=\\s*[^\\]]*\\]",
@@ -55,6 +58,7 @@ const RULES = [
   "[\\uFFF9-\\uFFFC]",
   "<\\/?[A-Za-z][^>]*>|<\\/>",
   "\\\\[nrt]",
+  GOLDENSUN_CODE_RULE,
   "%(?:\\d+\\$)?[\\d.$-]*[sdif]",
   RISEN_TAG_REGEX.source,
 ];

@@ -19,6 +19,8 @@ import { reshapeArabic, reverseBidi } from "@/lib/arabic-processing";
 import { ARABIC_GLYPH_RASTERS } from "@/lib/fireemblem12/fe12-arabic-charmap";
 import { measurePlatChars, PLAT_FILE_RE } from "@/lib/nds/plat-editor-bridge";
 import { measureInazumaLine, INAZUMA_FILE_RE } from "@/lib/inazuma/inazuma-editor-bridge";
+import { goldensunTextToBytes } from "@/lib/goldensun/goldensun-rom";
+import { GOLDENSUN_FILE_RE } from "@/lib/goldensun/goldensun-editor-bridge";
 
 /**
  * Bytes Fire Emblem 12 will actually spend on `text`: 1 for each ASCII
@@ -38,6 +40,23 @@ function measureFe12Bytes(text: string): number {
     else if (ARABIC_GLYPH_RASTERS.has(codepoint)) bytes += 2;
   }
   return bytes;
+}
+
+/**
+ * Bytes Golden Sun's engine stores for `text` BEFORE Huffman compression
+ * (one byte per letter or control-code argument, matching `goldensunTextToBytes`).
+ * The game's real limit is on the COMPRESSED size (254 bytes, see
+ * goldensun-rom.ts), which depends on every other translated line too and
+ * can't be known per-keystroke -- this is a cheap, always-available proxy,
+ * not a guarantee. `buildGoldenSunRom` throws if a line still doesn't fit
+ * once actually compressed.
+ */
+function measureGoldenSunBytes(text: string): number {
+  try {
+    return goldensunTextToBytes(text).length;
+  } catch {
+    return new TextEncoder().encode(text).length;
+  }
 }
 
 /**
@@ -64,6 +83,9 @@ export function measureEntryBytes(msbtFile: string | undefined, text: string): n
   // Inazuma Eleven's patched engine stores one byte per Arabic letter.
   if (msbtFile && INAZUMA_FILE_RE.test(msbtFile)) {
     return measureInazumaLine(msbtFile, text);
+  }
+  if (msbtFile && GOLDENSUN_FILE_RE.test(msbtFile)) {
+    return measureGoldenSunBytes(text);
   }
   return new TextEncoder().encode(text).length;
 }

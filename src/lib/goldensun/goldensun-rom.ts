@@ -1,28 +1,47 @@
 /**
  * Reads and rebuilds Golden Sun's compressed string table.
  *
- * Layout (all addresses fixed in the US ROM, confirmed against the decomp's
- * `tools/unpack_strings.c` and matched byte-for-byte in this project's own
- * tests):
- *   - 0x3842C: { u32 treesPtr, u32 offsetsPtr } -- the Huffman tables.
- *   - 0x736B8: 42 x { u32 dataPtr, u32 lengthsPtr } -- one per 256-string
- *     chunk (10,722 strings = 41 full chunks + one 226-string chunk).
+ * Two fixed-position pointer tables lead to the text (confirmed against the
+ * decomp's `tools/unpack_strings.c` and matched byte-for-byte in this
+ * project's own tests):
+ *   - HuffmanTreePointers: { u32 treesPtr, u32 offsetsPtr }.
+ *   - StringPointers: 42 x { u32 dataPtr, u32 lengthsPtr } -- one per
+ *     256-string chunk (10,722 strings = 41 full chunks + one of 226).
  * Every pointer is a GBA ROM address (0x08xxxxxx); mask with 0xFFFFFF for
- * the file offset.
+ * the file offset. Where the two tables sit depends on the ROM -- see
+ * `detectGoldenSunLayout`.
  */
 import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
 import { GOLDENSUN_ARABIC_BYTE_MAP } from "./goldensun-arabic-font";
 import { isGoldenSunPlainAscii, tokenizeGoldenSunBytes } from "./goldensun-tags";
 
-export const GS_HUFFMAN_OFFSET = 0x3842c;
-export const GS_DATA_OFFSET = 0x736b8;
 export const GS_NUM_STRINGS = 10722;
 export const GS_ITEMS_PER_FILE = 256;
-export const GS_HEADER_TITLE = "Golden Sun"; // ASCII at 0xA0 in every GBA ROM header
+const GS_CHUNKS = Math.ceil(GS_NUM_STRINGS / GS_ITEMS_PER_FILE);
+
+export interface GoldenSunLayout {
+  /** `rtl`: the ROM already carries the Arabic font and right-to-left engine. */
+  id: "vanilla" | "rtl";
+  huffmanOffset: number;
+  dataOffset: number;
+}
+
+/** The untouched US ROM. */
+export const GS_LAYOUT_VANILLA: GoldenSunLayout = { id: "vanilla", huffmanOffset: 0x3842c, dataOffset: 0x736b8 };
+
+/**
+ * The US ROM with GoldenSun-AR-RTL-FONT.ups applied: goldensun-arabic/engine.patch
+ * built from the decomp with the English text. Rebuilding relinked the ROM,
+ * so both tables moved (goldensun.map of that build).
+ */
+export const GS_LAYOUT_RTL: GoldenSunLayout = { id: "rtl", huffmanOffset: 0x38618, dataOffset: 0x738a4 };
+
+/** `Func_80155d0`'s character limit: 0x6F in the untouched ROM, 0xDF once the RTL+font patch is in. */
+const CHAR_LIMIT_OFFSET = 0x155f0;
 
 function readU32(rom: Uint8Array, off: number): number {
-  return rom[off] | (rom[off + 1] << 8) | (rom[off + 2] << 16) | (rom[off + 3] << 24);
+  return (rom[off] | (rom[off + 1] << 8) | (rom[off + 2] << 16) | (rom[off + 3] << 24)) >>> 0;
 }
 function writeU32(rom: Uint8Array, off: number, val: number) {
   rom[off] = val & 0xff;
@@ -35,9 +54,33 @@ const romPtr = (off: number) => 0x08000000 | off;
 
 /** GBA header game code for Golden Sun (US), at ROM offset 0xAC. */
 export function looksLikeGoldenSunRom(rom: Uint8Array): boolean {
-  if (rom.length < GS_DATA_OFFSET + GS_ITEMS_PER_FILE * 8) return false;
+  if (rom.length < 0x800000) return false;
   const code = String.fromCharCode(...rom.slice(0xac, 0xb0));
   return code === "AGSE";
+}
+
+/**
+ * Which of the two known ROMs this is, or null. The character-limit byte
+ * says whether the RTL+font patch is in; every pointer in both tables must
+ * then be a ROM address, so a ROM patched with some other build (the
+ * earlier test patch, whose tables sit elsewhere) is refused instead of
+ * decoded into garbage. A ROM this tool built keeps its layout: only the
+ * pointer values change.
+ */
+export function detectGoldenSunLayout(rom: Uint8Array): GoldenSunLayout | null {
+  if (!looksLikeGoldenSunRom(rom)) return null;
+  const limit = rom[CHAR_LIMIT_OFFSET];
+  const layout = limit === 0xdf ? GS_LAYOUT_RTL : limit === 0x6f ? GS_LAYOUT_VANILLA : null;
+  if (!layout) return null;
+  const isRomPtr = (off: number) => {
+    const p = readU32(rom, off);
+    return p >>> 24 === 0x08 && (p & 0xffffff) < rom.length;
+  };
+  if (!isRomPtr(layout.huffmanOffset) || !isRomPtr(layout.huffmanOffset + 4)) return null;
+  for (let c = 0; c < GS_CHUNKS; c++) {
+    if (!isRomPtr(layout.dataOffset + c * 8) || !isRomPtr(layout.dataOffset + c * 8 + 4)) return null;
+  }
+  return layout;
 }
 
 export interface GoldenSunEntry {
@@ -100,15 +143,15 @@ export function goldensunTextToBytes(text: string): number[] {
   return out;
 }
 
-/** Reads every string from `rom` (a vanilla or already-patched-but-not-yet-relocated Golden Sun ROM) into editor entries, in id order. */
-export function extractGoldenSunEntries(rom: Uint8Array): GoldenSunEntry[] {
-  const treesAddr = romOff(readU32(rom, GS_HUFFMAN_OFFSET));
-  const offsetsAddr = romOff(readU32(rom, GS_HUFFMAN_OFFSET + 4));
+/** Reads every string from `rom` into editor entries, in id order, through `layout`'s tables. */
+export function extractGoldenSunEntries(rom: Uint8Array, layout: GoldenSunLayout): GoldenSunEntry[] {
+  const treesAddr = romOff(readU32(rom, layout.huffmanOffset));
+  const offsetsAddr = romOff(readU32(rom, layout.huffmanOffset + 4));
   const entries: GoldenSunEntry[] = [];
   let stringId = 0;
   for (let i = 0; stringId < GS_NUM_STRINGS; i++) {
-    const dataAddr = romOff(readU32(rom, GS_DATA_OFFSET + i * 8));
-    const lengthsAddr = romOff(readU32(rom, GS_DATA_OFFSET + i * 8 + 4));
+    const dataAddr = romOff(readU32(rom, layout.dataOffset + i * 8));
+    const lengthsAddr = romOff(readU32(rom, layout.dataOffset + i * 8 + 4));
     let cursor = dataAddr;
     for (let j = 0; j < GS_ITEMS_PER_FILE && stringId < GS_NUM_STRINGS; j++, stringId++) {
       const bytes = decompressString(rom, cursor, treesAddr, offsetsAddr);
@@ -122,19 +165,21 @@ export function extractGoldenSunEntries(rom: Uint8Array): GoldenSunEntry[] {
 }
 
 /**
- * Rebuilds the string table with `translations` (keyed by "goldensun/strings:<index>")
- * substituted in, and writes it back into `rom` (mutated in place; also returned).
+ * Returns a copy of `rom` whose string table carries `translations` (keyed
+ * by "goldensun/strings:<index>"), falling back to each line's original.
  *
- * The two pointer tables (0x3842C and 0x736B8) keep their own size and
- * position -- only the pointer VALUES change, to a fresh table appended
- * past the ROM's original end (the GBA cart address space allows this up
- * to 32MB; we only ever need a few hundred KB more). Every other byte in
- * the original ROM is untouched.
+ * `layout`'s two pointer tables keep their size and position -- only the
+ * pointer VALUES change, to a fresh table placed right after the 8MB
+ * cartridge image (the GBA cart address space allows up to 32MB; this
+ * needs a few hundred KB). A ROM this tool built before is cut back to 8MB
+ * first, so rebuilding it replaces the old table instead of growing the
+ * file. Every byte of the 8MB image outside the two tables is untouched.
  */
 export function buildGoldenSunStringTable(
   rom: Uint8Array,
   entries: GoldenSunEntry[],
-  translations: Record<string, string>
+  translations: Record<string, string>,
+  layout: GoldenSunLayout
 ): Uint8Array {
   const bytesPerString: number[][] = entries.map((e) => {
     const key = `${e.msbtFile}:${e.index}`;
@@ -181,12 +226,13 @@ export function buildGoldenSunStringTable(
     offsetsBytes[i * 2 + 1] = (built.offsets[i] >> 8) & 0xff;
   }
 
-  const appendStart = align2(rom.length);
-  const layout: { bytes: Uint8Array; addr: number }[] = [];
+  const imageLen = Math.min(rom.length, 0x800000);
+  const appendStart = align2(imageLen);
+  const pieces: { bytes: Uint8Array; addr: number }[] = [];
   let cursor = appendStart;
   const place = (bytes: Uint8Array) => {
     const addr = cursor;
-    layout.push({ bytes, addr });
+    pieces.push({ bytes, addr });
     cursor = align2(cursor + bytes.length);
     return addr;
   };
@@ -201,14 +247,14 @@ export function buildGoldenSunStringTable(
   }
 
   const result = new Uint8Array(cursor);
-  result.set(rom, 0);
-  for (const { bytes, addr } of layout) result.set(bytes, addr);
+  result.set(rom.subarray(0, imageLen), 0);
+  for (const { bytes, addr } of pieces) result.set(bytes, addr);
 
-  writeU32(result, GS_HUFFMAN_OFFSET, romPtr(treesBlobAddr));
-  writeU32(result, GS_HUFFMAN_OFFSET + 4, romPtr(offsetsAddr));
+  writeU32(result, layout.huffmanOffset, romPtr(treesBlobAddr));
+  writeU32(result, layout.huffmanOffset + 4, romPtr(offsetsAddr));
   for (let c = 0; c < nChunks; c++) {
-    writeU32(result, GS_DATA_OFFSET + c * 8, romPtr(chunkDataAddrs[c]));
-    writeU32(result, GS_DATA_OFFSET + c * 8 + 4, romPtr(chunkLengthAddrs[c]));
+    writeU32(result, layout.dataOffset + c * 8, romPtr(chunkDataAddrs[c]));
+    writeU32(result, layout.dataOffset + c * 8 + 4, romPtr(chunkLengthAddrs[c]));
   }
 
   return result;

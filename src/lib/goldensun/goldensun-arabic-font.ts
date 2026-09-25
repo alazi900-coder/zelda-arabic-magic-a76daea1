@@ -33,9 +33,11 @@ for (let b = 0x90; b <= 0xff; b++) if (b !== 0xde && b !== 0xdf) COMMON_HIGH_SLO
  * by `reshapeArabic` for this font's coverage) take 0x90-0xFF.
  */
 export const GOLDENSUN_ARABIC_BYTE_MAP: Record<number, number> = (() => {
-  const rareSet = new Set([0xfef5, 0xfef6, 0xfef7, 0xfef8, 0xfef9, 0xfefa, 0xfe81, 0xfe82, 0xfe85, 0xfe86, 0xfec5, 0xfec6, 0xfe99, 0xfe9a, 0xfe89]);
+  // In this exact order: gsfont.py pairs this list with the overflow slots
+  // one-to-one, and the RTL+font patch's font was drawn from it.
+  const rare = [0xfef5, 0xfef6, 0xfef7, 0xfef8, 0xfef9, 0xfefa, 0xfe81, 0xfe82, 0xfe85, 0xfe86, 0xfec5, 0xfec6, 0xfe99, 0xfe9a, 0xfe89];
+  const rareSet = new Set(rare);
   const common = GOLDENSUN_ARABIC_CODEPOINTS.filter((cp) => !rareSet.has(cp));
-  const rare = GOLDENSUN_ARABIC_CODEPOINTS.filter((cp) => rareSet.has(cp));
   if (common.length !== COMMON_HIGH_SLOTS.length || rare.length !== RARE_OVERFLOW_SLOTS.length) {
     throw new Error("goldensun-arabic-font: codepoint/slot count mismatch");
   }

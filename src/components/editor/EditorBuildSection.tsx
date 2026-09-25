@@ -72,7 +72,7 @@ interface EditorBuildSectionProps {
   isFe12?: boolean;
   /** Phantom Hourglass (NDS): rebuilds the BMG dialogue files inside the .nds. */
   isPh?: boolean;
-  /** Golden Sun (GBA): rebuilds the Huffman string table and Arabic font. Right-to-left display isn't wired in yet -- see goldensun-engine-patch.ts. */
+  /** Golden Sun (GBA): rebuilds the Huffman string table inside the ROM with the RTL+font patch. */
   isGoldenSun?: boolean;
   khbbsUnsupportedCount?: number;
   khbbsUnsupportedCharacters?: KHBBSUnsupportedCharacter[];
@@ -760,7 +760,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     try {
       const buf = await idbGet<ArrayBuffer>(GOLDENSUN_BUFFER_KEY);
       if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة Golden Sun");
-      const rom = buildGoldenSunRom(new Uint8Array(buf), editor.state?.translations || {});
+      const { rom, rtl } = buildGoldenSunRom(new Uint8Array(buf), editor.state?.translations || {});
       const blob = new Blob([rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -771,7 +771,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       const { toast } = await import("@/hooks/use-toast");
       toast({
         title: "تم بناء روم Golden Sun",
-        description: "النص والخط العربي جاهزان. اتجاه الكتابة من اليمين لليسار لم يُربط بعد في الموقع، فالنص يظهر من اليسار لليمين حالياً.",
+        description: rtl
+          ? "النص العربي مكتوب في روم الرقعة: الخط وعكس الاتجاه فيه أصلاً."
+          : "هذا روم أصلي بلا رقعة الاتجاه: الخط العربي فيه لكن النص يظهر من اليسار لليمين. طبّق GoldenSun-AR-RTL-FONT.ups على الروم الأصلي وارفعه بدلاً منه.",
+        variant: rtl ? undefined : "destructive",
       });
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");
@@ -1394,7 +1397,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             {phBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم Phantom Hourglass معرّب وتنزيله
           </Button>
         ) : isGoldenSun ? (
-          <Button size="lg" onClick={handleGoldenSunBuild} disabled={gsBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يعيد ضغط النص والخط العربي داخل الروم ثم ينزّله. اتجاه الكتابة من اليمين لليسار ليس فيه بعد.">
+          <Button size="lg" onClick={handleGoldenSunBuild} disabled={gsBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يعيد ضغط النص المترجم داخل الروم ثم ينزّله">
             {gsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم Golden Sun معرّب وتنزيله
           </Button>
         ) : isMother3 ? (

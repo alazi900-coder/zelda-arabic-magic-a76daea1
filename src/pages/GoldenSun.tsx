@@ -6,18 +6,19 @@ import { idbSet, idbGet } from "@/lib/idb-storage";
 import {
   extractGoldenSunEditorEntries,
   restoreGoldenSunTranslations,
-  looksLikeGoldenSunRom,
+  detectGoldenSunLayout,
   GOLDENSUN_BUFFER_KEY,
   GOLDENSUN_SOURCE_GAME,
+  GOLDENSUN_UNKNOWN_ROM_MESSAGE,
 } from "@/lib/goldensun/goldensun-editor-bridge";
 import { APP_VERSION } from "@/lib/version";
 
 /**
  * Golden Sun opener: reads the cartridge's Huffman-compressed string table
- * into the shared editor (`/editor`), which rewrites it and overlays the
- * Arabic font when it builds the `.gba` back out. Right-to-left display
- * isn't wired in yet (see goldensun-engine-patch.ts) -- the built ROM has
- * the Arabic text and font, but still reads left-to-right.
+ * into the shared editor (`/editor`), which rewrites it when it builds the
+ * `.gba` back out. The ROM to open is the one with GoldenSun-AR-RTL-FONT.ups
+ * applied: it already has the Arabic font and right-to-left engine, so the
+ * build only changes the text.
  */
 export default function GoldenSun() {
   const [busy, setBusy] = useState(false);
@@ -29,10 +30,9 @@ export default function GoldenSun() {
       setBusy(true);
       try {
         const rom = new Uint8Array(await file.arrayBuffer());
-        if (!looksLikeGoldenSunRom(rom)) {
-          throw new Error("لم يُعثر على توقيع Golden Sun في هذا الملف — ارفع روم ‎.gba‎ الأمريكي للعبة");
-        }
-        const entries = extractGoldenSunEditorEntries(rom);
+        const layout = detectGoldenSunLayout(rom);
+        if (!layout) throw new Error(GOLDENSUN_UNKNOWN_ROM_MESSAGE);
+        const entries = extractGoldenSunEditorEntries(rom, layout);
         if (entries.length === 0) throw new Error("لم يُعثر على نصوص في هذا الروم");
 
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
@@ -49,6 +49,9 @@ export default function GoldenSun() {
         await idbSet("originalTexts", originals);
 
         const restored = Object.keys(translations).length;
+        if (layout.id === "vanilla") {
+          toast.warning("هذا روم أصلي بلا رقعة الاتجاه — الروم المبني سيظهر من اليسار لليمين. طبّق GoldenSun-AR-RTL-FONT.ups أولاً.");
+        }
         toast.success(
           `استُخرج ${entries.length.toLocaleString("ar")} نصاً` +
             (restored > 0 ? ` — واسترجاع ${restored.toLocaleString("ar")} ترجمة محفوظة` : "")
@@ -77,15 +80,10 @@ export default function GoldenSun() {
         </div>
 
         <p className="mb-4 text-sm text-muted-foreground">
-          ارفع روم Golden Sun الأمريكي. تُقرأ منه كل النصوص (١٠,٧٢٢ سطراً) مضغوطة بطريقة
-          Huffman، تترجمها في المحرّر، ثم يعيد بناء الروم بجدول نصوص عربي والخط العربي مرسوماً
-          فوق خط اللعبة.
+          طبّق رقعة <code>GoldenSun-AR-RTL-FONT.ups</code> على روم Golden Sun الأمريكي الأصلي، ثم
+          ارفع الروم الناتج هنا. الرقعة فيها الخط العربي وعكس اتجاه الكتابة؛ تُقرأ النصوص كلها
+          (١٠,٧٢٢ سطراً)، تترجمها في المحرّر، ثم يُكتب النص المترجم في نفس الروم.
         </p>
-
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-secondary/40 bg-secondary/8 p-3 text-xs text-secondary">
-          ⚠️ اتجاه الكتابة من اليمين لليسار لم يُربط بالموقع بعد — الروم المبني فيه النص والخط
-          العربيان، لكنه يُعرض من اليسار لليمين حتى الآن.
-        </div>
 
         <label
           onDragOver={(e) => {

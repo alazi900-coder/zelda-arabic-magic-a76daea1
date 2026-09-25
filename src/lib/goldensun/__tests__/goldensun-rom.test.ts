@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { GOLDENSUN_ARABIC_BYTE_MAP } from "../goldensun-arabic-font";
 import { goldensunTextToBytes, goldensunBytesToText } from "../goldensun-rom";
 import { tokenizeGoldenSunBytes, goldensunControlCodeArgBytes } from "../goldensun-tags";
 
@@ -36,5 +38,14 @@ describe("goldensun-rom text<->bytes", () => {
   it("keeps `\\xNN` escapes untouched even inside an Arabic sentence", () => {
     const bytes = goldensunTextToBytes("أرجوك يا عزيزي، استيقظ!\\x02");
     expect(bytes[bytes.length - 1]).toBe(0x02);
+  });
+});
+
+
+describe("goldensun Arabic byte map", () => {
+  it("matches the font baked into GoldenSun-AR-RTL-FONT.ups (gsfont.py's codes.json) exactly", () => {
+    const ref: Record<string, number> = JSON.parse(readFileSync("goldensun-arabic/scripts/codes.json", "utf8"));
+    expect(Object.keys(GOLDENSUN_ARABIC_BYTE_MAP)).toHaveLength(Object.keys(ref).length);
+    for (const [cp, byte] of Object.entries(ref)) expect(GOLDENSUN_ARABIC_BYTE_MAP[Number(cp)]).toBe(byte);
   });
 });

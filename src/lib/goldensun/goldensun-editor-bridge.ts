@@ -1,12 +1,23 @@
 import type { ExtractedEntry } from "@/components/editor/types";
-import { extractGoldenSunEntries, buildGoldenSunStringTable, looksLikeGoldenSunRom, GoldenSunEntry } from "./goldensun-rom";
+import {
+  extractGoldenSunEntries,
+  buildGoldenSunStringTable,
+  detectGoldenSunLayout,
+  looksLikeGoldenSunRom,
+  GoldenSunEntry,
+  GoldenSunLayout,
+} from "./goldensun-rom";
 import { applyGoldenSunEnginePatch } from "./goldensun-engine-patch";
 
 export const GOLDENSUN_SOURCE_GAME = "goldensun";
 export const GOLDENSUN_BUFFER_KEY = "goldensunRomBuffer";
 export const GOLDENSUN_FILE_RE = /^goldensun\//;
 
-export { looksLikeGoldenSunRom };
+export { looksLikeGoldenSunRom, detectGoldenSunLayout };
+export type { GoldenSunLayout };
+
+export const GOLDENSUN_UNKNOWN_ROM_MESSAGE =
+  "روم Golden Sun غير معروف — طبّق رقعة GoldenSun-AR-RTL-FONT.ups على الروم الأمريكي الأصلي ثم ارفعه";
 
 function toExtractedEntry(e: GoldenSunEntry): ExtractedEntry {
   // maxBytes 0: the real limit is on the COMPRESSED size of the whole
@@ -16,8 +27,8 @@ function toExtractedEntry(e: GoldenSunEntry): ExtractedEntry {
   return { msbtFile: e.msbtFile, index: e.index, label: e.original.slice(0, 60), original: e.original, maxBytes: 0 };
 }
 
-export function extractGoldenSunEditorEntries(rom: Uint8Array): ExtractedEntry[] {
-  return extractGoldenSunEntries(rom).map(toExtractedEntry);
+export function extractGoldenSunEditorEntries(rom: Uint8Array, layout: GoldenSunLayout): ExtractedEntry[] {
+  return extractGoldenSunEntries(rom, layout).map(toExtractedEntry);
 }
 
 /** Restores previously-saved translations for entries that still exist (same file + index) after a fresh extraction. */
@@ -34,14 +45,17 @@ export function restoreGoldenSunTranslations(
 }
 
 /**
- * Builds the translated ROM: rewrites the string table with `translations`
- * substituted in, raises the character limit, and overlays the Arabic font
- * -- everything except right-to-left display, which is not wired in yet
- * (see goldensun-engine-patch.ts). The result reads left-to-right until
- * that lands.
+ * Builds the translated ROM by rewriting the string table with
+ * `translations`. A ROM with the RTL+font patch already has the Arabic
+ * font and right-to-left engine, so only the text changes and `rtl` is
+ * true. An untouched ROM also gets the character limit raised and the
+ * font overlaid, but reads left-to-right (`rtl` false).
  */
-export function buildGoldenSunRom(rom: Uint8Array, translations: Record<string, string>): Uint8Array {
-  const entries = extractGoldenSunEntries(rom);
-  const withText = buildGoldenSunStringTable(rom, entries, translations);
-  return applyGoldenSunEnginePatch(withText);
+export function buildGoldenSunRom(rom: Uint8Array, translations: Record<string, string>): { rom: Uint8Array; rtl: boolean } {
+  const layout = detectGoldenSunLayout(rom);
+  if (!layout) throw new Error(GOLDENSUN_UNKNOWN_ROM_MESSAGE);
+  const entries = extractGoldenSunEntries(rom, layout);
+  const withText = buildGoldenSunStringTable(rom, entries, translations, layout);
+  if (layout.id === "rtl") return { rom: withText, rtl: true };
+  return { rom: applyGoldenSunEnginePatch(withText), rtl: false };
 }

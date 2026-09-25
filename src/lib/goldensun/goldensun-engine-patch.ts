@@ -13,14 +13,12 @@
  * comparison (`cmp r3, r1; bhi ...`) that also assumed the old, narrower
  * range; both become an unconditional branch so nothing gets truncated.
  *
- * NOT included here: mirroring the text and its draw position for
- * right-to-left display (`BufferString`/`DrawText`). That needs a code
- * cave hooked onto both functions' entry points, which this project has
- * built and can decode dialogue with (see goldensun-arabic/ and the
- * session's emulator screenshots) but has not yet reproduced as a
- * self-contained binary patch safe to ship from the site -- an entry hook
- * built so far renders text at the wrong screen position. A ROM built with
- * only what is here has the Arabic font and glyphs but reads left-to-right.
+ * Only for the untouched ROM. Right-to-left display comes from
+ * GoldenSun-AR-RTL-FONT.ups (the decomp rebuilt with engine.patch), which
+ * already holds all of this plus the mirroring in `BufferString`/`DrawText`;
+ * a ROM with that patch skips this file entirely (see buildGoldenSunRom). A
+ * ROM built from the untouched one with only what is here has the Arabic
+ * font but reads left-to-right.
  */
 import { buildGoldenSunFont, GOLDENSUN_FONT_OFFSET } from "./goldensun-arabic-font";
 

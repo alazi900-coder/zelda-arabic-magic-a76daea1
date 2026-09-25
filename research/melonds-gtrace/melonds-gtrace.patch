@@ -1,0 +1,869 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index d322e2b..3724e6f 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -13,6 +13,8 @@ add_library(core STATIC
+     ARMInterpreter_Branch.cpp
+     ARMInterpreter_LoadStore.cpp
+     CP15.cpp
++	GlyphTrace.cpp
++	GlyphTrace.h
+     CRC32.cpp
+     DMA.cpp
+     DMA_Timings.h
+@@ -243,3 +245,8 @@ endif()
+ #  )
+ #endif()
+ 
++
++# Headless read tracer — see gtrace_main.cpp for why this exists.
++add_executable(gtrace gtrace_main.cpp gtrace_platform.cpp)
++target_link_libraries(gtrace PRIVATE core)
++target_include_directories(gtrace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+diff --git a/src/CP15.cpp b/src/CP15.cpp
+index 9fa0281..0f39b24 100644
+--- a/src/CP15.cpp
++++ b/src/CP15.cpp
+@@ -17,6 +17,7 @@
+ */
+ 
+ #include <stdio.h>
++#include "GlyphTrace.h"
+ #include <string.h>
+ #include "NDS.h"
+ #include "DSi.h"
+@@ -783,6 +784,9 @@ u32 ARMv5::CP15Read(u32 id) const
+ 
+ u32 ARMv5::CodeRead32(u32 addr, bool branch)
+ {
++    GT_Exec(addr);
++    GT_Regs(addr, R);
++    GT_CallLog(addr, R[0], R[1]);
+     /*if (branch || (!(addr & 0xFFF)))
+     {
+         if (!(PU_Map[addr>>12] & 0x04))
+@@ -817,6 +821,7 @@ u32 ARMv5::CodeRead32(u32 addr, bool branch)
+ 
+ void ARMv5::DataRead8(u32 addr, u32* val)
+ {
++    GT_Note(addr, R[15]);
+     if (!(PU_Map[addr>>12] & 0x01))
+     {
+         DataAbort();
+@@ -844,6 +849,7 @@ void ARMv5::DataRead8(u32 addr, u32* val)
+ 
+ void ARMv5::DataRead16(u32 addr, u32* val)
+ {
++    GT_Note(addr, R[15]);
+     if (!(PU_Map[addr>>12] & 0x01))
+     {
+         DataAbort();
+@@ -873,6 +879,7 @@ void ARMv5::DataRead16(u32 addr, u32* val)
+ 
+ void ARMv5::DataRead32(u32 addr, u32* val)
+ {
++    GT_Note(addr, R[15]);
+     if (!(PU_Map[addr>>12] & 0x01))
+     {
+         DataAbort();
+@@ -902,6 +909,7 @@ void ARMv5::DataRead32(u32 addr, u32* val)
+ 
+ void ARMv5::DataRead32S(u32 addr, u32* val)
+ {
++    GT_Note(addr, R[15]);
+     addr &= ~3;
+ 
+     if (addr < ITCMSize)
+@@ -923,6 +931,7 @@ void ARMv5::DataRead32S(u32 addr, u32* val)
+ 
+ void ARMv5::DataWrite8(u32 addr, u8 val)
+ {
++    GT_Wrote(addr, R[15], val);
+     if (!(PU_Map[addr>>12] & 0x02))
+     {
+         DataAbort();
+@@ -951,6 +960,7 @@ void ARMv5::DataWrite8(u32 addr, u8 val)
+ 
+ void ARMv5::DataWrite16(u32 addr, u16 val)
+ {
++    GT_Wrote(addr, R[15], val);
+     if (!(PU_Map[addr>>12] & 0x02))
+     {
+         DataAbort();
+@@ -981,6 +991,7 @@ void ARMv5::DataWrite16(u32 addr, u16 val)
+ 
+ void ARMv5::DataWrite32(u32 addr, u32 val)
+ {
++    GT_Wrote(addr, R[15], val);
+     if (!(PU_Map[addr>>12] & 0x02))
+     {
+         DataAbort();
+@@ -1011,6 +1022,7 @@ void ARMv5::DataWrite32(u32 addr, u32 val)
+ 
+ void ARMv5::DataWrite32S(u32 addr, u32 val)
+ {
++    GT_Wrote(addr, R[15], val);
+     addr &= ~3;
+ 
+     if (addr < ITCMSize)
+diff --git a/src/GlyphTrace.cpp b/src/GlyphTrace.cpp
+new file mode 100644
+index 0000000..8fe0336
+--- /dev/null
++++ b/src/GlyphTrace.cpp
+@@ -0,0 +1,18 @@
++#include "GlyphTrace.h"
++namespace melonDS
++{
++u32 GT_Lo = 0, GT_Hi = 0;
++u32 GT_WLo = 0, GT_WHi = 0;
++u32 GT_XLo = 0, GT_XHi = 0;
++u32 GT_RegsAt = 0;
++int GT_RegsLeft = 0;
++FILE* GT_Out = nullptr;
++u32 GT_WalkAt = 0;
++int GT_WalkLeft = 0;
++void (*GT_WalkFn)(u32) = nullptr;
++u32 GT_PeekAt = 0;
++int GT_PeekLeft = 0;
++void (*GT_PeekFn)(u32) = nullptr;
++u32 GT_LogAt = 0;
++int GT_LogLeft = 0;
++}
+diff --git a/src/GlyphTrace.h b/src/GlyphTrace.h
+new file mode 100644
+index 0000000..79ff9ca
+--- /dev/null
++++ b/src/GlyphTrace.h
+@@ -0,0 +1,69 @@
++// Purpose-built tracer for locating a game's text renderer.
++#pragma once
++#include "types.h"
++#include <cstdio>
++
++namespace melonDS
++{
++extern u32 GT_Lo, GT_Hi;
++extern u32 GT_WLo, GT_WHi;
++extern u32 GT_XLo, GT_XHi;
++extern u32 GT_RegsAt;
++extern int GT_RegsLeft;
++extern u32 GT_LogAt;
++extern int GT_LogLeft;
++extern FILE* GT_Out;
++
++inline void GT_Note(u32 addr, u32 pc)
++{
++    if (GT_Lo == 0 || addr < GT_Lo || addr >= GT_Hi || !GT_Out) return;
++    std::fprintf(GT_Out, "%08X %08X\n", addr, pc);
++}
++
++inline void GT_Wrote(u32 addr, u32 pc, u32 val)
++{
++    if (GT_WLo == 0 || addr < GT_WLo || addr >= GT_WHi || !GT_Out) return;
++    std::fprintf(GT_Out, "W %08X %08X %08X\n", addr, pc, val);
++}
++
++inline void GT_Exec(u32 addr)
++{
++    if (GT_XLo == 0 || addr < GT_XLo || addr >= GT_XHi || !GT_Out) return;
++    std::fprintf(GT_Out, "X %08X\n", addr);
++}
++
++extern u32 GT_WalkAt;   // address at which to walk the range-node list, using R0 as fontMgr
++extern int GT_WalkLeft;
++extern void (*GT_WalkFn)(u32 fontMgr);  // set by gtrace_main.cpp; walks live memory right here
++
++extern u32 GT_PeekAt;    // address at which to peek [SP+0x28] (the func_02033484 stack arg)
++extern int GT_PeekLeft;
++extern void (*GT_PeekFn)(u32 sp);
++
++inline void GT_Regs(u32 addr, const u32* R)
++{
++    if (GT_RegsAt != 0 && addr == GT_RegsAt && GT_RegsLeft > 0 && GT_Out) {
++        GT_RegsLeft--;
++        std::fprintf(GT_Out, "R %08X", addr);
++        for (int i = 0; i < 16; i++) std::fprintf(GT_Out, " %08X", R[i]);
++        std::fprintf(GT_Out, "\n");
++    }
++    if (GT_WalkAt != 0 && addr == GT_WalkAt && GT_WalkLeft > 0 && GT_WalkFn) {
++        GT_WalkLeft--;
++        // func_02023ea4's param1 arrives in R0 at function entry — that's the
++        // "fontMgr"-like object whose +0x10 field is the range-node list head.
++        GT_WalkFn(R[0]);
++    }
++    if (GT_PeekAt != 0 && addr == GT_PeekAt && GT_PeekLeft > 0 && GT_PeekFn) {
++        GT_PeekLeft--;
++        GT_PeekFn(R[13]);
++    }
++}
++
++inline void GT_CallLog(u32 pc, u32 r0, u32 r1)
++{
++    if (GT_LogAt == 0 || pc != GT_LogAt || GT_LogLeft <= 0 || !GT_Out) return;
++    GT_LogLeft--;
++    std::fprintf(GT_Out, "L %08X r0=%08X r1=%08X\n", pc, r0, r1);
++}
++}
+diff --git a/src/gtrace_main.cpp b/src/gtrace_main.cpp
+new file mode 100644
+index 0000000..259dcab
+--- /dev/null
++++ b/src/gtrace_main.cpp
+@@ -0,0 +1,286 @@
++// Headless driver: boot a ROM, run frames, log every ARM9 read of a watched
++// address range together with the PC that issued it.
++//
++// Built because the question — "which code reads the font's width table?" —
++// has an exact answer the emulator already knows, while the GDB stub's read
++// watchpoints silently never fire and the GUI adds an X server, a port and a
++// window manager to a problem that needs none of them.
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <memory>
++#include <vector>
++#include "NDS.h"
++#include "NDSCart.h"
++#include "Args.h"
++#include "GlyphTrace.h"
++#include "GPU.h"
++#include "Savestate.h"
++#include <string>
++
++using namespace melonDS;
++
++// Set once main() has the live NDS instance, so WalkFontMgr (called from deep
++// inside the CPU-hook chain) can issue live reads at the exact CPU cycle
++// GT_Regs fires it — not from a RAM dump taken at some other, later frame.
++static NDS* g_nds = nullptr;
++
++// Plain pointer reads into MainRAM — NOT nds->ARM9.DataRead*. This function
++// runs nested inside ARMv5::CodeRead32, itself called from the middle of an
++// instruction fetch; going back through the CPU's own DataRead path from
++// there is reentrant (it touches CodeCycles/timing state the current fetch
++// is still using) and silently wrecked the trace: the very first walk ever
++// fired, after which that PC was never reached again for the rest of the
++// run (confirmed by comparing against a GT_LOGAT trace at the identical PC,
++// which alone — no nested DataRead calls — kept firing normally, ~200 times).
++// A raw buffer read has no such side effect.
++static inline u32 RamAddr(u32 addr) { return addr & g_nds->MainRAMMask; }
++static inline u32 ReadRAM32(u32 addr) { return *(u32*)&g_nds->MainRAM[RamAddr(addr)]; }
++static inline u16 ReadRAM16(u32 addr) { return *(u16*)&g_nds->MainRAM[RamAddr(addr)]; }
++
++static void PeekSP(u32 sp)
++{
++    if (!g_nds || !GT_Out) return;
++    u32 addr = sp + 0x28;
++    u32 val;
++    if ((addr & g_nds->ARM9.DTCMMask) == g_nds->ARM9.DTCMBase)
++        val = *(u32*)&g_nds->ARM9.DTCM[addr & 0x3FFF];
++    else
++        val = ReadRAM32(addr);
++    std::fprintf(GT_Out, "PEEK sp=%08X [sp+0x28]=%08X\n", sp, val);
++    std::fflush(GT_Out);
++}
++
++static void WalkFontMgr(u32 fontMgr)
++{
++    if (!g_nds || !GT_Out) return;
++    std::fprintf(GT_Out, "WALK fontMgr=%08X\n", fontMgr);
++    // Original disasm notation was r0=[[param1+0]+0x10] — TWO dereferences:
++    // param1 (fontMgr/R0) itself isn't the node-list owner, it points to one.
++    u32 objPtr = ReadRAM32(fontMgr + 0x0);
++    u32 head = ReadRAM32(objPtr + 0x10);
++    std::fprintf(GT_Out, "WALK objPtr=%08X head=%08X\n", objPtr, head);
++    u32 node = head;
++    for (int guard = 0; node != 0 && guard < 64; guard++)
++    {
++        u16 first = ReadRAM16(node + 0x0);
++        u16 last  = ReadRAM16(node + 0x2);
++        u16 method = ReadRAM16(node + 0x4);
++        u32 next  = ReadRAM32(node + 0x8);
++        std::fprintf(GT_Out, "WALK node=%08X first=%04X last=%04X method=%04X next=%08X\n",
++                     node, first, last, method, next);
++        if (method == 2)
++        {
++            u16 count = ReadRAM16(node + 0xC);
++            std::fprintf(GT_Out, "WALK   count=%04X entries:", count);
++            for (u32 e = 0; e < count && e < 400; e++)
++            {
++                u16 k = ReadRAM16(node + 0xE + e * 4);
++                u16 v = ReadRAM16(node + 0xE + e * 4 + 2);
++                std::fprintf(GT_Out, " (%04X,%04X)", k, v);
++            }
++            std::fprintf(GT_Out, "\n");
++        }
++        if (next == node) break;
++        node = next;
++    }
++    std::fflush(GT_Out);
++}
++
++static void SaveShot(NDS& nds, const std::string& path)
++{
++    void* top = nullptr; void* bot = nullptr;
++    if (!nds.GPU.GetFramebuffers(&top, &bot) || !top || !bot) return;
++    FILE* p = std::fopen(path.c_str(), "wb");
++    if (!p) return;
++    std::fprintf(p, "P6\n256 384\n255\n");
++    for (int half = 0; half < 2; half++)
++    {
++        const u32* fb = (const u32*) (half ? bot : top);
++        for (int i = 0; i < 256*192; i++)
++        {
++            u32 c = fb[i];
++            u8 rgb[3] = { (u8)((c >> 16) & 0xFF), (u8)((c >> 8) & 0xFF), (u8)(c & 0xFF) };
++            std::fwrite(rgb, 1, 3, p);
++        }
++    }
++    std::fclose(p);
++}
++
++// A button script: one line per span, "<from> <to> <KEYS> [tx ty]". KEYS is
++// "-" or names joined by '+': A B SELECT START RIGHT LEFT UP DOWN R L X Y.
++// With a script loaded the automatic A-and-touch presses are off.
++struct ScriptLine { int from, to; u32 keys; int tx, ty; };
++static std::vector<ScriptLine> LoadScript(const char* path)
++{
++    std::vector<ScriptLine> out;
++    FILE* f = std::fopen(path, "r");
++    if (!f) return out;
++    char line[256];
++    const char* names[] = {"A","B","SELECT","START","RIGHT","LEFT","UP","DOWN","R","L","X","Y"};
++    while (std::fgets(line, sizeof line, f)) {
++        if (line[0] == '#' || line[0] == '\n') continue;
++        ScriptLine s { 0, 0, 0, -1, -1 };
++        char keys[128] = {0};
++        int n = std::sscanf(line, "%d %d %127s %d %d", &s.from, &s.to, keys, &s.tx, &s.ty);
++        if (n < 3) continue;
++        if (n < 5) { s.tx = -1; s.ty = -1; }
++        char* tok = std::strtok(keys, "+");
++        while (tok) {
++            for (int b = 0; b < 12; b++) if (!std::strcmp(tok, names[b])) s.keys |= 1u << b;
++            tok = std::strtok(nullptr, "+");
++        }
++        out.push_back(s);
++    }
++    std::fclose(f);
++    return out;
++}
++
++int main(int argc, char** argv)
++{
++    if (argc < 5) {
++        std::fprintf(stderr, "usage: gtrace <rom.nds> <lo hex> <hi hex> <frames> [out]\n");
++        return 2;
++    }
++    const char* rompath = argv[1];
++    u32 lo = (u32) strtoul(argv[2], nullptr, 16);
++    u32 hi = (u32) strtoul(argv[3], nullptr, 16);
++    int frames = atoi(argv[4]);
++    const char* outpath = (argc > 5) ? argv[5] : "/tmp/gtrace.txt";
++
++    FILE* f = std::fopen(rompath, "rb");
++    if (!f) { std::perror("rom"); return 1; }
++    std::fseek(f, 0, SEEK_END); long len = std::ftell(f); std::fseek(f, 0, SEEK_SET);
++    auto rom = std::make_unique<u8[]>(len);
++    if (std::fread(rom.get(), 1, len, f) != (size_t) len) { std::fprintf(stderr, "short read\n"); return 1; }
++    std::fclose(f);
++
++    NDSArgs args {};
++    // the JIT compiles its own memory accesses and never enters
++    // ARMv5::DataRead*, where the trace hook lives — the interpreter does
++    args.JIT = std::nullopt;
++    // on the heap: NDS carries the console's whole memory as members, so a
++    // stack instance overflows before main's first statement finishes
++    auto nds = std::make_unique<NDS>(std::move(args));
++    g_nds = nds.get();
++    nds->SetNDSCart(NDSCart::ParseROM(std::move(rom), (u32) len));
++    nds->Reset();
++    nds->SetupDirectBoot("gtrace");   // skip the firmware boot menu
++    nds->Start();
++
++    if (const char* ld = getenv("GT_LOAD")) {
++        FILE* sf = std::fopen(ld, "rb");
++        if (sf) {
++            std::fseek(sf, 0, SEEK_END); long n = std::ftell(sf); std::fseek(sf, 0, SEEK_SET);
++            std::vector<u8> buf(n);
++            if (std::fread(buf.data(), 1, n, sf) == (size_t) n) {
++                Savestate st(buf.data(), (u32) n, false);
++                bool ok = nds->DoSavestate(&st) && !st.Error;
++                std::fprintf(stderr, "load state %s: %s\n", ld, ok ? "ok" : "FAILED");
++            }
++            std::fclose(sf);
++        }
++    }
++    std::vector<ScriptLine> script;
++    if (const char* sc = getenv("GT_SCRIPT")) script = LoadScript(sc);
++    int saveAt = -1; std::string savePath;
++    if (const char* sv = getenv("GT_SAVE")) { char pth[400] = {0}; if (std::sscanf(sv, "%d:%399s", &saveAt, pth) == 2) savePath = pth; }
++    int shotEvery = getenv("GT_SHOT_EVERY") ? atoi(getenv("GT_SHOT_EVERY")) : 120;
++    int shotFrom = getenv("GT_SHOT_FROM") ? atoi(getenv("GT_SHOT_FROM")) : 0;
++
++    GT_Out = std::fopen(outpath, "w");
++    GT_Lo = lo; GT_Hi = hi;
++    if (const char* wr = getenv("GT_WRITE")) { unsigned a=0,b=0; sscanf(wr, "%x:%x", &a, &b); GT_WLo=a; GT_WHi=b; }
++    if (const char* rr = getenv("GT_REGS")) { unsigned a=0; int n=1; sscanf(rr, "%x:%d", &a, &n); GT_RegsAt=a; GT_RegsLeft=n; }
++    if (const char* xr = getenv("GT_EXEC")) { unsigned a=0,b=0; sscanf(xr, "%x:%x", &a, &b); GT_XLo=a; GT_XHi=b; }
++    if (const char* la = getenv("GT_LOGAT")) { GT_LogAt = (unsigned) strtoul(la, nullptr, 16); const char* ln = getenv("GT_LOGN"); GT_LogLeft = ln ? atoi(ln) : 20; }
++    if (const char* wa = getenv("GT_WALKAT")) { unsigned a=0; int n=1; sscanf(wa, "%x:%d", &a, &n); GT_WalkAt=a; GT_WalkLeft=n; GT_WalkFn=WalkFontMgr; }
++    if (const char* pa2 = getenv("GT_PEEKAT")) { unsigned a=0; int n=1; sscanf(pa2, "%x:%d", &a, &n); GT_PeekAt=a; GT_PeekLeft=n; GT_PeekFn=PeekSP; }
++    // Drive itself: the interesting code only runs once the game is past the
++    // title and into dialogue, and nothing here can press a button otherwise.
++    // A touch every half second plus A advances titles, menus and text boxes.
++    const char* dumpAt = getenv("GT_DUMP_FRAME");
++    const char* dumpPath = getenv("GT_DUMP_PATH");
++    for (int i = 0; i < frames; i++)
++    {
++        if (dumpAt && atoi(dumpAt) == i && dumpPath) {
++            FILE* mf = fopen(dumpPath, "wb");
++            for (u32 a = 0x02000000; a < 0x02400000; a += 4) {
++                u32 v; nds->ARM9.DataRead32(a, &v);
++                fwrite(&v, 4, 1, mf);
++            }
++            fclose(mf);
++            fprintf(stderr, "dumped mainram at frame %d to %s\n", i, dumpPath);
++        }
++        if (!script.empty()) {
++            u32 keys = 0; int tx = -1, ty = -1;
++            for (auto& l : script) if (i >= l.from && i <= l.to) { keys |= l.keys; if (l.tx >= 0) { tx = l.tx; ty = l.ty; } }
++            nds->SetKeyMask(~keys & 0xFFF);
++            if (tx >= 0) nds->TouchScreen(tx, ty); else nds->ReleaseScreen();
++        } else {
++        int ph = i % 30;
++        if (ph == 0)      { nds->TouchScreen(128, 96); nds->SetKeyMask(~0x0001); }  // A held
++        else if (ph == 6) { nds->ReleaseScreen();      nds->SetKeyMask(~0u); }
++        }
++        if (i == saveAt && !savePath.empty()) {
++            Savestate st;
++            nds->DoSavestate(&st);
++            FILE* sf = std::fopen(savePath.c_str(), "wb");
++            if (sf) { std::fwrite(st.Buffer(), 1, st.Length(), sf); std::fclose(sf); }
++            std::fprintf(stderr, "saved state at frame %d to %s (%u bytes)\n", i, savePath.c_str(), st.Length());
++        }
++        {
++            const char* pa = getenv("GT_POKE_ADDR");
++            if (pa) {
++                unsigned addr = (unsigned) strtoul(pa, nullptr, 16);
++                const char* pf = getenv("GT_POKE_FROM"); int from = pf ? atoi(pf) : 0;
++                const char* pt = getenv("GT_POKE_TO");   int to   = pt ? atoi(pt) : from;
++                if (i >= from && i <= to) {
++                    const char* pb = getenv("GT_POKE_BYTES"); // hex string, e.g. "E3FE0AFE"
++                    if (pb) {
++                        size_t n = strlen(pb) / 2;
++                        for (size_t k = 0; k < n; k++) {
++                            char byteStr[3] = { pb[k*2], pb[k*2+1], 0 };
++                            u8 v = (u8) strtoul(byteStr, nullptr, 16);
++                            nds->ARM9.DataWrite8(addr + (u32)k, v);
++                        }
++                    }
++                }
++            }
++        }
++        nds->RunFrame();
++        // a shot every two seconds of game time: dialogue comes and goes, and
++        // the one frame at the end is rarely the one with text on it
++        if (shotEvery > 0 && i >= shotFrom && (i - shotFrom) % shotEvery == shotEvery - 1) {
++            char buf[512];
++            std::snprintf(buf, sizeof buf, "%s.%06d.ppm", outpath, i);
++            SaveShot(*nds, buf);
++        }
++    }
++    GT_Lo = GT_Hi = 0;
++    std::fclose(GT_Out); GT_Out = nullptr;
++
++    // Dump both screens as a PPM: the trace proves which code runs, but only a
++    // picture proves the text came out in the right direction.
++    void* top = nullptr; void* bot = nullptr;
++    if (nds->GPU.GetFramebuffers(&top, &bot) && top && bot)
++    {
++        std::string shot = std::string(outpath) + ".ppm";
++        FILE* p = std::fopen(shot.c_str(), "wb");
++        std::fprintf(p, "P6\n256 384\n255\n");
++        for (int half = 0; half < 2; half++)
++        {
++            const u32* fb = (const u32*) (half ? bot : top);
++            for (int i = 0; i < 256*192; i++)
++            {
++                u32 c = fb[i];                       // BGRA-ish, 6-bit-ish channels
++                u8 rgb[3] = { (u8)((c >> 16) & 0xFF), (u8)((c >> 8) & 0xFF), (u8)(c & 0xFF) };
++                std::fwrite(rgb, 1, 3, p);
++            }
++        }
++        std::fclose(p);
++        std::fprintf(stderr, "screenshot: %s\n", shot.c_str());
++    }
++    std::fprintf(stderr, "ran %d frames; trace in %s\n", frames, outpath);
++    return 0;
++}
+diff --git a/src/gtrace_main.cpp.bak b/src/gtrace_main.cpp.bak
+new file mode 100644
+index 0000000..c8af527
+--- /dev/null
++++ b/src/gtrace_main.cpp.bak
+@@ -0,0 +1,221 @@
++// Headless driver: boot a ROM, run frames, log every ARM9 read of a watched
++// address range together with the PC that issued it.
++//
++// Built because the question — "which code reads the font's width table?" —
++// has an exact answer the emulator already knows, while the GDB stub's read
++// watchpoints silently never fire and the GUI adds an X server, a port and a
++// window manager to a problem that needs none of them.
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <memory>
++#include <vector>
++#include "NDS.h"
++#include "NDSCart.h"
++#include "Args.h"
++#include "GlyphTrace.h"
++#include "GPU.h"
++
++using namespace melonDS;
++
++// Set once main() has the live NDS instance, so WalkFontMgr (called from deep
++// inside the CPU-hook chain) can issue live reads at the exact CPU cycle
++// GT_Regs fires it — not from a RAM dump taken at some other, later frame.
++static NDS* g_nds = nullptr;
++
++// Plain pointer reads into MainRAM — NOT nds->ARM9.DataRead*. This function
++// runs nested inside ARMv5::CodeRead32, itself called from the middle of an
++// instruction fetch; going back through the CPU's own DataRead path from
++// there is reentrant (it touches CodeCycles/timing state the current fetch
++// is still using) and silently wrecked the trace: the very first walk ever
++// fired, after which that PC was never reached again for the rest of the
++// run (confirmed by comparing against a GT_LOGAT trace at the identical PC,
++// which alone — no nested DataRead calls — kept firing normally, ~200 times).
++// A raw buffer read has no such side effect.
++static inline u32 RamAddr(u32 addr) { return addr & g_nds->MainRAMMask; }
++static inline u32 ReadRAM32(u32 addr) { return *(u32*)&g_nds->MainRAM[RamAddr(addr)]; }
++static inline u16 ReadRAM16(u32 addr) { return *(u16*)&g_nds->MainRAM[RamAddr(addr)]; }
++
++static void PeekSP(u32 sp)
++{
++    if (!g_nds || !GT_Out) return;
++    u32 addr = sp + 0x28;
++    u32 val;
++    if ((addr & g_nds->ARM9.DTCMMask) == g_nds->ARM9.DTCMBase)
++        val = *(u32*)&g_nds->ARM9.DTCM[addr & 0x3FFF];
++    else
++        val = ReadRAM32(addr);
++    std::fprintf(GT_Out, "PEEK sp=%08X [sp+0x28]=%08X\n", sp, val);
++    std::fflush(GT_Out);
++}
++
++static void WalkFontMgr(u32 fontMgr)
++{
++    if (!g_nds || !GT_Out) return;
++    std::fprintf(GT_Out, "WALK fontMgr=%08X\n", fontMgr);
++    // Original disasm notation was r0=[[param1+0]+0x10] — TWO dereferences:
++    // param1 (fontMgr/R0) itself isn't the node-list owner, it points to one.
++    u32 objPtr = ReadRAM32(fontMgr + 0x0);
++    u32 head = ReadRAM32(objPtr + 0x10);
++    std::fprintf(GT_Out, "WALK objPtr=%08X head=%08X\n", objPtr, head);
++    u32 node = head;
++    for (int guard = 0; node != 0 && guard < 64; guard++)
++    {
++        u16 first = ReadRAM16(node + 0x0);
++        u16 last  = ReadRAM16(node + 0x2);
++        u16 method = ReadRAM16(node + 0x4);
++        u32 next  = ReadRAM32(node + 0x8);
++        std::fprintf(GT_Out, "WALK node=%08X first=%04X last=%04X method=%04X next=%08X\n",
++                     node, first, last, method, next);
++        if (method == 2)
++        {
++            u16 count = ReadRAM16(node + 0xC);
++            std::fprintf(GT_Out, "WALK   count=%04X entries:", count);
++            for (u32 e = 0; e < count && e < 400; e++)
++            {
++                u16 k = ReadRAM16(node + 0xE + e * 4);
++                u16 v = ReadRAM16(node + 0xE + e * 4 + 2);
++                std::fprintf(GT_Out, " (%04X,%04X)", k, v);
++            }
++            std::fprintf(GT_Out, "\n");
++        }
++        if (next == node) break;
++        node = next;
++    }
++    std::fflush(GT_Out);
++}
++
++static void SaveShot(NDS& nds, const std::string& path)
++{
++    void* top = nullptr; void* bot = nullptr;
++    if (!nds.GPU.GetFramebuffers(&top, &bot) || !top || !bot) return;
++    FILE* p = std::fopen(path.c_str(), "wb");
++    if (!p) return;
++    std::fprintf(p, "P6\n256 384\n255\n");
++    for (int half = 0; half < 2; half++)
++    {
++        const u32* fb = (const u32*) (half ? bot : top);
++        for (int i = 0; i < 256*192; i++)
++        {
++            u32 c = fb[i];
++            u8 rgb[3] = { (u8)((c >> 16) & 0xFF), (u8)((c >> 8) & 0xFF), (u8)(c & 0xFF) };
++            std::fwrite(rgb, 1, 3, p);
++        }
++    }
++    std::fclose(p);
++}
++
++int main(int argc, char** argv)
++{
++    if (argc < 5) {
++        std::fprintf(stderr, "usage: gtrace <rom.nds> <lo hex> <hi hex> <frames> [out]\n");
++        return 2;
++    }
++    const char* rompath = argv[1];
++    u32 lo = (u32) strtoul(argv[2], nullptr, 16);
++    u32 hi = (u32) strtoul(argv[3], nullptr, 16);
++    int frames = atoi(argv[4]);
++    const char* outpath = (argc > 5) ? argv[5] : "/tmp/gtrace.txt";
++
++    FILE* f = std::fopen(rompath, "rb");
++    if (!f) { std::perror("rom"); return 1; }
++    std::fseek(f, 0, SEEK_END); long len = std::ftell(f); std::fseek(f, 0, SEEK_SET);
++    auto rom = std::make_unique<u8[]>(len);
++    if (std::fread(rom.get(), 1, len, f) != (size_t) len) { std::fprintf(stderr, "short read\n"); return 1; }
++    std::fclose(f);
++
++    NDSArgs args {};
++    // the JIT compiles its own memory accesses and never enters
++    // ARMv5::DataRead*, where the trace hook lives — the interpreter does
++    args.JIT = std::nullopt;
++    // on the heap: NDS carries the console's whole memory as members, so a
++    // stack instance overflows before main's first statement finishes
++    auto nds = std::make_unique<NDS>(std::move(args));
++    g_nds = nds.get();
++    nds->SetNDSCart(NDSCart::ParseROM(std::move(rom), (u32) len));
++    nds->Reset();
++    nds->SetupDirectBoot("gtrace");   // skip the firmware boot menu
++    nds->Start();
++
++    GT_Out = std::fopen(outpath, "w");
++    GT_Lo = lo; GT_Hi = hi;
++    if (const char* wr = getenv("GT_WRITE")) { unsigned a=0,b=0; sscanf(wr, "%x:%x", &a, &b); GT_WLo=a; GT_WHi=b; }
++    if (const char* rr = getenv("GT_REGS")) { unsigned a=0; int n=1; sscanf(rr, "%x:%d", &a, &n); GT_RegsAt=a; GT_RegsLeft=n; }
++    if (const char* xr = getenv("GT_EXEC")) { unsigned a=0,b=0; sscanf(xr, "%x:%x", &a, &b); GT_XLo=a; GT_XHi=b; }
++    if (const char* la = getenv("GT_LOGAT")) { GT_LogAt = (unsigned) strtoul(la, nullptr, 16); const char* ln = getenv("GT_LOGN"); GT_LogLeft = ln ? atoi(ln) : 20; }
++    if (const char* wa = getenv("GT_WALKAT")) { unsigned a=0; int n=1; sscanf(wa, "%x:%d", &a, &n); GT_WalkAt=a; GT_WalkLeft=n; GT_WalkFn=WalkFontMgr; }
++    if (const char* pa2 = getenv("GT_PEEKAT")) { unsigned a=0; int n=1; sscanf(pa2, "%x:%d", &a, &n); GT_PeekAt=a; GT_PeekLeft=n; GT_PeekFn=PeekSP; }
++    // Drive itself: the interesting code only runs once the game is past the
++    // title and into dialogue, and nothing here can press a button otherwise.
++    // A touch every half second plus A advances titles, menus and text boxes.
++    const char* dumpAt = getenv("GT_DUMP_FRAME");
++    const char* dumpPath = getenv("GT_DUMP_PATH");
++    for (int i = 0; i < frames; i++)
++    {
++        if (dumpAt && atoi(dumpAt) == i && dumpPath) {
++            FILE* mf = fopen(dumpPath, "wb");
++            for (u32 a = 0x02000000; a < 0x02400000; a += 4) {
++                u32 v; nds->ARM9.DataRead32(a, &v);
++                fwrite(&v, 4, 1, mf);
++            }
++            fclose(mf);
++            fprintf(stderr, "dumped mainram at frame %d to %s\n", i, dumpPath);
++        }
++        int ph = i % 30;
++        if (ph == 0)      { nds->TouchScreen(128, 96); nds->SetKeyMask(~0x0001); }  // A held
++        else if (ph == 6) { nds->ReleaseScreen();      nds->SetKeyMask(~0u); }
++        {
++            const char* pa = getenv("GT_POKE_ADDR");
++            if (pa) {
++                unsigned addr = (unsigned) strtoul(pa, nullptr, 16);
++                const char* pf = getenv("GT_POKE_FROM"); int from = pf ? atoi(pf) : 0;
++                const char* pt = getenv("GT_POKE_TO");   int to   = pt ? atoi(pt) : from;
++                if (i >= from && i <= to) {
++                    const char* pb = getenv("GT_POKE_BYTES"); // hex string, e.g. "E3FE0AFE"
++                    if (pb) {
++                        size_t n = strlen(pb) / 2;
++                        for (size_t k = 0; k < n; k++) {
++                            char byteStr[3] = { pb[k*2], pb[k*2+1], 0 };
++                            u8 v = (u8) strtoul(byteStr, nullptr, 16);
++                            nds->ARM9.DataWrite8(addr + (u32)k, v);
++                        }
++                    }
++                }
++            }
++        }
++        nds->RunFrame();
++        // a shot every two seconds of game time: dialogue comes and goes, and
++        // the one frame at the end is rarely the one with text on it
++        if (i % 120 == 119) {
++            char buf[512];
++            std::snprintf(buf, sizeof buf, "%s.%04d.ppm", outpath, i / 120);
++            SaveShot(*nds, buf);
++        }
++    }
++    GT_Lo = GT_Hi = 0;
++    std::fclose(GT_Out); GT_Out = nullptr;
++
++    // Dump both screens as a PPM: the trace proves which code runs, but only a
++    // picture proves the text came out in the right direction.
++    void* top = nullptr; void* bot = nullptr;
++    if (nds->GPU.GetFramebuffers(&top, &bot) && top && bot)
++    {
++        std::string shot = std::string(outpath) + ".ppm";
++        FILE* p = std::fopen(shot.c_str(), "wb");
++        std::fprintf(p, "P6\n256 384\n255\n");
++        for (int half = 0; half < 2; half++)
++        {
++            const u32* fb = (const u32*) (half ? bot : top);
++            for (int i = 0; i < 256*192; i++)
++            {
++                u32 c = fb[i];                       // BGRA-ish, 6-bit-ish channels
++                u8 rgb[3] = { (u8)((c >> 16) & 0xFF), (u8)((c >> 8) & 0xFF), (u8)(c & 0xFF) };
++                std::fwrite(rgb, 1, 3, p);
++            }
++        }
++        std::fclose(p);
++        std::fprintf(stderr, "screenshot: %s\n", shot.c_str());
++    }
++    std::fprintf(stderr, "ran %d frames; trace in %s\n", frames, outpath);
++    return 0;
++}
+diff --git a/src/gtrace_platform.cpp b/src/gtrace_platform.cpp
+new file mode 100644
+index 0000000..4c7b74e
+--- /dev/null
++++ b/src/gtrace_platform.cpp
+@@ -0,0 +1,137 @@
++// Minimal Platform layer for the headless tracer.
++//
++// The Qt frontend's Platform.cpp drags in a window, audio and config system for
++// a program that only needs to run frames and read memory, so the handful of
++// hooks the core actually calls are implemented here against plain stdio and
++// std::thread instead.
++#include <cstdio>
++#include <cstdarg>
++#include <cstring>
++#include <string>
++#include <thread>
++#include <mutex>
++#include <condition_variable>
++#include <chrono>
++#include "Platform.h"
++
++namespace melonDS::Platform
++{
++
++void SignalStop(StopReason, void*) {}
++std::string InstanceFileSuffix() { return ""; }
++
++struct FileHandle { std::FILE* f; };
++
++static const char* ModeStr(FileMode mode)
++{
++    bool w = (mode & FileMode::Write) != FileMode::None;
++    bool a = (mode & FileMode::Append) != FileMode::None;
++    bool p = (mode & FileMode::Preserve) != FileMode::None;
++    if (a) return "ab";
++    if (w) return p ? "r+b" : "wb";
++    return "rb";
++}
++
++FileHandle* OpenFile(const std::string& path, FileMode mode)
++{
++    std::FILE* f = std::fopen(path.c_str(), ModeStr(mode));
++    if (!f && (mode & FileMode::Write) != FileMode::None) f = std::fopen(path.c_str(), "w+b");
++    if (!f) return nullptr;
++    return new FileHandle{f};
++}
++FileHandle* OpenLocalFile(const std::string& path, FileMode mode) { return OpenFile(path, mode); }
++std::string GetLocalFilePath(const std::string& filename) { return filename; }
++bool FileExists(const std::string& name) { std::FILE* f = std::fopen(name.c_str(), "rb"); if (!f) return false; std::fclose(f); return true; }
++bool LocalFileExists(const std::string& name) { return FileExists(name); }
++bool CheckFileWritable(const std::string&) { return true; }
++bool CheckLocalFileWritable(const std::string&) { return true; }
++bool CloseFile(FileHandle* file) { if (!file) return false; std::fclose(file->f); delete file; return true; }
++bool IsEndOfFile(FileHandle* file) { return std::feof(file->f) != 0; }
++bool FileReadLine(char* str, int count, FileHandle* file) { return std::fgets(str, count, file->f) != nullptr; }
++u64 FilePosition(FileHandle* file) { return (u64) std::ftell(file->f); }
++bool FileSeek(FileHandle* file, s64 offset, FileSeekOrigin origin)
++{
++    int o = origin == FileSeekOrigin::Start ? SEEK_SET : origin == FileSeekOrigin::Current ? SEEK_CUR : SEEK_END;
++    return std::fseek(file->f, (long) offset, o) == 0;
++}
++void FileRewind(FileHandle* file) { std::rewind(file->f); }
++u64 FileRead(void* data, u64 size, u64 count, FileHandle* file) { return std::fread(data, size, count, file->f); }
++bool FileFlush(FileHandle* file) { return std::fflush(file->f) == 0; }
++u64 FileWrite(const void* data, u64 size, u64 count, FileHandle* file) { return std::fwrite(data, size, count, file->f); }
++u64 FileWriteFormatted(FileHandle* file, const char* fmt, ...)
++{ va_list a; va_start(a, fmt); int r = std::vfprintf(file->f, fmt, a); va_end(a); return r < 0 ? 0 : (u64) r; }
++u64 FileLength(FileHandle* file)
++{ long p = std::ftell(file->f); std::fseek(file->f, 0, SEEK_END); long n = std::ftell(file->f); std::fseek(file->f, p, SEEK_SET); return (u64) n; }
++
++void Log(LogLevel, const char*, ...) {}   // the core is chatty; the trace is the output that matters
++
++struct Thread { std::thread t; };
++Thread* Thread_Create(std::function<void()> func) { return new Thread{std::thread(std::move(func))}; }
++void Thread_Free(Thread* thread) { if (thread->t.joinable()) thread->t.detach(); delete thread; }
++void Thread_Wait(Thread* thread) { if (thread->t.joinable()) thread->t.join(); }
++
++struct Semaphore { std::mutex m; std::condition_variable cv; int c = 0; };
++Semaphore* Semaphore_Create() { return new Semaphore; }
++void Semaphore_Free(Semaphore* s) { delete s; }
++void Semaphore_Reset(Semaphore* s) { std::lock_guard<std::mutex> l(s->m); s->c = 0; }
++void Semaphore_Wait(Semaphore* s) { std::unique_lock<std::mutex> l(s->m); s->cv.wait(l, [&]{ return s->c > 0; }); s->c--; }
++bool Semaphore_TryWait(Semaphore* s, int timeout_ms)
++{
++    std::unique_lock<std::mutex> l(s->m);
++    if (!s->cv.wait_for(l, std::chrono::milliseconds(timeout_ms), [&]{ return s->c > 0; })) return false;
++    s->c--; return true;
++}
++void Semaphore_Post(Semaphore* s, int count) { { std::lock_guard<std::mutex> l(s->m); s->c += count; } s->cv.notify_all(); }
++
++struct Mutex { std::mutex m; };
++Mutex* Mutex_Create() { return new Mutex; }
++void Mutex_Free(Mutex* m) { delete m; }
++void Mutex_Lock(Mutex* m) { m->m.lock(); }
++void Mutex_Unlock(Mutex* m) { m->m.unlock(); }
++bool Mutex_TryLock(Mutex* m) { return m->m.try_lock(); }
++
++void Sleep(u64 usecs) { std::this_thread::sleep_for(std::chrono::microseconds(usecs)); }
++u64 GetMSCount() { return (u64) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
++u64 GetUSCount() { return (u64) std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
++
++void WriteNDSSave(const u8*, u32, u32, u32, void*) {}
++void WriteGBASave(const u8*, u32, u32, u32, void*) {}
++void WriteFirmware(const Firmware&, u32, u32, void*) {}
++void WriteDateTime(int, int, int, int, int, int, void*) {}
++
++void MP_Begin(void*) {}
++void MP_End(void*) {}
++int MP_SendPacket(u8*, int, u64, void*) { return 0; }
++int MP_RecvPacket(u8*, u64*, void*) { return 0; }
++int MP_SendCmd(u8*, int, u64, void*) { return 0; }
++int MP_SendReply(u8*, int, u64, u16, void*) { return 0; }
++int MP_SendAck(u8*, int, u64, void*) { return 0; }
++int MP_RecvHostPacket(u8*, u64*, void*) { return 0; }
++u16 MP_RecvReplies(u8*, u64, u16, void*) { return 0; }
++
++int Net_SendPacket(u8*, int, void*) { return 0; }
++int Net_RecvPacket(u8*, void*) { return 0; }
++
++void Camera_Start(int, void*) {}
++void Camera_Stop(int, void*) {}
++void Camera_CaptureFrame(int, u32*, int, int, bool, void*) {}
++
++void Addon_RumbleStart(u32, void*) {}
++void Addon_RumbleStop(void*) {}
++float Addon_MotionQuery(MotionQueryType, void*) { return 0.f; }
++
++DynamicLibrary* DynamicLibrary_Load(const char*) { return nullptr; }
++void DynamicLibrary_Unload(DynamicLibrary*) {}
++void* DynamicLibrary_LoadFunction(DynamicLibrary*, const char*) { return nullptr; }
++
++
++void Mic_Start(void*) {}
++void Mic_Stop(void*) {}
++int Mic_ReadInput(s16*, int, void*) { return 0; }
++
++AACDecoder* AAC_Init() { return nullptr; }
++void AAC_DeInit(AACDecoder*) {}
++bool AAC_Configure(AACDecoder*, int, int) { return false; }
++bool AAC_DecodeFrame(AACDecoder*, const void*, int, void*, int) { return false; }
++
++}

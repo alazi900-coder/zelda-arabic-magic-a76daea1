@@ -1,0 +1,22 @@
+import pw from '/opt/node22/lib/node_modules/playwright/index.js';
+const { chromium } = pw;
+const FD = "/tmp/claude-0/-home-user-zelda-arabic-magic-a76daea1/30195602-0f97-5db6-98d0-4ccab372886b/scratchpad/inazuma/fontfiles_fixed";
+const SHOTS = "/tmp/claude-0/-home-user-zelda-arabic-magic-a76daea1/30195602-0f97-5db6-98d0-4ccab372886b/scratchpad/inazuma/shots";
+const WORDS = ["رياضة","أرض","ضربة","صديق","أصدقاء","طريق","خطة","ظلام","محظوظ","المغرب","ثلاثة","مشى","مسؤول","شيء","آخر","لاعب","ضغط","ظهر","خضراء","الأضواء"];
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const page = await browser.newContext({viewport:{width:1500,height:900}}).then(c=>c.newPage());
+page.on('pageerror', e => console.log('ERR:', String(e).slice(0,300)));
+await page.goto('file:///home/user/zelda-arabic-magic-a76daea1/tools/inazuma-font-editor.html');
+await page.setInputFiles('#file', [`${FD}/FONT12.NFTR`,`${FD}/FONT8.NFTR`]);
+await page.waitForTimeout(1200);
+await page.click('#tabTest'); await page.waitForTimeout(1200);
+for (const w of WORDS) { await page.fill('#testAdd', w); await page.click('#btnTestAdd'); await page.waitForTimeout(120); }
+await page.waitForTimeout(1200);
+console.log('FONT12:', await page.textContent('#testStat'));
+await page.locator('#testList').screenshot({ path: `${SHOTS}/words125_font12.png` });
+await page.click('#tabEdit'); await page.waitForTimeout(400);
+await page.selectOption('#fontSel','1'); await page.waitForTimeout(900);
+await page.click('#tabTest'); await page.waitForTimeout(1500);
+console.log('FONT8 :', await page.textContent('#testStat'));
+await page.locator('#testList').screenshot({ path: `${SHOTS}/words125_font8.png` });
+await browser.close();

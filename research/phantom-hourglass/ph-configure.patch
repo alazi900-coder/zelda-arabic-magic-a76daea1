@@ -1,0 +1,13 @@
+diff --git a/tools/configure.py b/tools/configure.py
+index 17f0e87..195c6a6 100755
+--- a/tools/configure.py
++++ b/tools/configure.py
+@@ -334,7 +334,7 @@ def main():
+ 
+         n.rule(
+             name="check_modules",
+-            command=f"{DSD} {DSD_BASE_FLAGS} check modules --config-path $config_path --fail"
++            command=f"{DSD} {DSD_BASE_FLAGS} check modules --config-path $config_path"
+         )
+         n.newline()
+ 

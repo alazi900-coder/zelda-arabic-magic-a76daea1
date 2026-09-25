@@ -287,3 +287,13 @@ android/SDL2/android-project/gradlew -p android :app:assembleDebug
 أصلاً — `merge_by_content.py` يحملها بالمحتوى: يقرن كل رسالة عربية بالإنجليزية
 التي حلّت محلّها من شجرتينا موضعاً بموضع، ثم يكتبها في أي ملف يحمل تلك
 الإنجليزية الآن، فلا يهمّه أين انزاحت الأسطر.
+
+## النسخ المحفوظة
+
+| الملف | القاعدة | ما فيه |
+|---|---|---|
+| `arabic.patch` | `pret/pokeemerald` @ `5eff78649` | التعريب كاملاً (المحرك + الخط + النصوص) |
+| `arabic-english-text.patch` | `pret/pokeemerald` @ `5eff78649` | المحرك والخط العربي مع إبقاء النصوص إنجليزية |
+| `arabic-multiplatform.patch` | `gradenGnostic/pokeemerald-multiplatform` @ `db1cab3` | منفذ الحاسوب/أندرويد بعد التركيب وحلّ القطع المرفوضة |
+
+كلها تُركَّب بـ`git apply --binary` على القاعدة المكتوبة أمامها.

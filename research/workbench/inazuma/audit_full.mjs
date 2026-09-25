@@ -1,0 +1,12 @@
+import pw from '/opt/node22/lib/node_modules/playwright/index.js';
+const { chromium } = pw;
+const F = "/tmp/claude-0/-home-user-zelda-arabic-magic-a76daea1/30195602-0f97-5db6-98d0-4ccab372886b/scratchpad/inazuma/FONT12_AR_CLEAN_TEST.NFTR";
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const page = await browser.newContext({ viewport: { width: 1500, height: 1000 } }).then(c=>c.newPage());
+await page.goto('file:///home/user/zelda-arabic-magic-a76daea1/tools/inazuma-font-editor.html');
+await page.setInputFiles('#file', [F]);
+await page.waitForTimeout(1200);
+await page.click('#tabEdit'); await page.waitForTimeout(900);
+const rows = await page.$$eval('#audit .w, #audit .b, #audit .sec', els => els.map(e => e.textContent));
+console.log(rows.join('\n'));
+await browser.close();

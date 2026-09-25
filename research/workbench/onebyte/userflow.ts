@@ -1,0 +1,13 @@
+import { readFileSync, writeFileSync } from "fs";
+import { extractInazumaEntries, buildInazumaRom } from "@/lib/inazuma/inazuma-editor-bridge";
+import { readInazumaText } from "@/lib/inazuma/inazuma-rom";
+const rom = new Uint8Array(readFileSync(process.env.ROM!));
+const { entries } = extractInazumaEntries(rom);
+const hits = entries.filter((e) => e.msbtFile === "inazuma/evet" && /few|so little|enough players/i.test(e.original) && /Endou/.test(e.original));
+for (const h of hits.slice(0, 5)) console.log(h.index, JSON.stringify(h.original));
+const target = hits[0];
+const res = buildInazumaRom(rom, { [`${target.msbtFile}:${target.index}`]: "إندو هل يمكننا اللعب بهذا العدد\nالقليل من اللاعبين؟" });
+console.log("written", res.translatedLines, res.brokenTags, res.tooLong);
+const row = readInazumaText(res.rom).find((r) => r.source === "evet" && r.entry * 100000 + r.key === target.index)!;
+console.log("bytes", [...row.text].slice(0, 8).map((c) => c.charCodeAt(0).toString(16)).join(" "));
+writeFileSync(process.env.OUT!, res.rom);

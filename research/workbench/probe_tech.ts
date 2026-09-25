@@ -1,0 +1,11 @@
+import { readFileSync } from "fs";
+import { isTechnicalText } from "../../../../home/user/zelda-arabic-magic-a76daea1/src/components/editor/types";
+const rows: { file: string; text: string }[] = JSON.parse(readFileSync("/tmp/plat_strings.json", "utf8"));
+const flagged = rows.filter(r => isTechnicalText(r.text, r.file));
+console.log("مُعلَّم كنص تقني:", flagged.length, "من", rows.length);
+const byFile = new Map<string, number>();
+for (const f of flagged) byFile.set(f.file, (byFile.get(f.file) || 0) + 1);
+console.log("\nأكثر الملفات إصابة:");
+for (const [f, n] of [...byFile].sort((a, b) => b[1] - a[1]).slice(0, 12)) console.log(`  ${n}\t${f}`);
+console.log("\nعيّنة:");
+for (const f of flagged.slice(0, 40)) console.log(`  ${JSON.stringify(f.text)}\t${f.file}`);

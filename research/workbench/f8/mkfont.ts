@@ -1,0 +1,10 @@
+import { readFileSync, writeFileSync } from "fs";
+import { findNdsFile, ndsFileIdByPath } from "@/lib/nds/nds-rom";
+import { patchInazumaFont8, blankInazumaGlyph, addInazumaByteMap } from "@/lib/inazuma/inazuma-arabic-font";
+import { INAZUMA_RTL_MARKER_CODE } from "@/lib/inazuma/inazuma-rtl-patch";
+const rom = new Uint8Array(readFileSync(process.env.ROM!));
+const f8 = findNdsFile(rom, "data_iz/font/FONT8.NFTR")!;
+const f12 = findNdsFile(rom, "data_iz/font/FONT12.NFTR")!;
+const font = addInazumaByteMap(blankInazumaGlyph(patchInazumaFont8(rom.subarray(f8.start, f8.end)), INAZUMA_RTL_MARKER_CODE));
+writeFileSync(process.env.OUT!, font);
+console.log(JSON.stringify({ font8: f8, font12: f12, size: font.length, fat: [...new DataView(rom.buffer).getUint32(0x48, true).toString(16)].join("") }));

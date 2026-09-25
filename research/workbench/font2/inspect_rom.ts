@@ -1,0 +1,11 @@
+import { readFileSync } from "node:fs";
+import { readInazumaText } from "@/lib/inazuma/inazuma-rom";
+import { findNdsFile } from "@/lib/nds/nds-rom";
+const rom = new Uint8Array(readFileSync(process.argv[2]));
+const rows = readInazumaText(rom);
+const arabic = rows.filter((r) => /[؀-ۿﭐ-﻿]/.test(r.text));
+console.log(process.argv[2].split("/").pop());
+console.log("  rows:", rows.length, " with Arabic:", arabic.length);
+console.log("  sample:", arabic.slice(0, 3).map((r) => JSON.stringify(r.text)).join("  "));
+const f = findNdsFile(rom, "data_iz/font/FONT12.NFTR");
+console.log("  FONT12 first 24 bytes of glyph data区:", f ? Buffer.from(rom.subarray(f.offset, f.offset + 16)).toString("hex") : "missing");

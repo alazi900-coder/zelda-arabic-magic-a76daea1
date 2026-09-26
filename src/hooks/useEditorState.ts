@@ -63,6 +63,8 @@ import { analyzeInazumaUnsupportedCharacters, type InazumaUnsupportedCharacter }
 import { fromInazumaBreakTokens } from "@/lib/inazuma/inazuma-break-tokens";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
+import { repairFranBowTags, validateFranBowTags } from "@/lib/franbow/franbow-tags";
+import { categorizeFranBowEntry } from "@/lib/franbow/franbow-categories";
 import { analyzePlatUnsupportedCharacters, ensurePlatTables, type PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import { fromBreakTokens } from "@/lib/nds/plat-break-tokens";
 import { categorizePkmEntry, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -1391,13 +1393,14 @@ export function useEditorState() {
       const isSteinsGate = e.msbtFile.startsWith('steinsgate/');
       const isCrashlands = e.msbtFile.startsWith('crashlands/');
       const isNinthDawn = e.msbtFile.startsWith('ninthdawn/');
+      const isFranBow = e.msbtFile.startsWith('franbow/');
       const isPlat = e.msbtFile.startsWith('platinum/');
       const isPh = e.msbtFile.startsWith('ph/');
       const isInazuma = e.msbtFile.startsWith('inazuma/');
       const isGoldenSun = e.msbtFile.startsWith('goldensun/');
-      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isInazuma && !isGoldenSun && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isFranBow && !isInazuma && !isGoldenSun && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isInazuma ? categorizeInazumaEntry(e) : isGoldenSun ? categorizeGoldenSunEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isFranBow ? categorizeFranBowEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isInazuma ? categorizeInazumaEntry(e) : isGoldenSun ? categorizeGoldenSunEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||
@@ -1505,6 +1508,12 @@ export function useEditorState() {
       finalValue = repairNinthDawnTags(entry.original, value).text;
       if (!validateNinthDawnTags(entry.original, finalValue).valid) {
         toast({ title: "لم تُحفظ الترجمة: رموز 9th Dawn Remake مختلفة", description: "أعد الرموز التقنية ([0]، [c=N]، <b>...) إلى العدد والترتيب الأصليين.", variant: "destructive" });
+        return;
+      }
+    } else if (entry?.msbtFile.startsWith("franbow/") && value.trim()) {
+      finalValue = repairFranBowTags(entry.original, value).text;
+      if (!validateFranBowTags(entry.original, finalValue).valid) {
+        toast({ title: "لم تُحفظ الترجمة: رموز Fran Bow مختلفة", description: "أعد الرموز التقنية إلى العدد والترتيب الأصليين.", variant: "destructive" });
         return;
       }
     }

@@ -19,6 +19,7 @@
  *   - `inazuma/<source>`          → Inazuma Eleven (NDS)
  *   - `goldensun/<source>`         → Golden Sun (GBA)
  *   - `ninthdawn/<section>/<n>`    → 9th Dawn Remake
+ *   - `franbow/<category>/<n>`     → Fran Bow
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -39,7 +40,8 @@ export type GameParam =
   | "crashlands"
   | "ninthdawn"
   | "inazuma"
-  | "goldensun";
+  | "goldensun"
+  | "franbow";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -60,5 +62,6 @@ export function resolveGameParam(
   if (f.startsWith("inazuma/")) return "inazuma";
   if (f.startsWith("goldensun/")) return "goldensun";
   if (f.startsWith("ninthdawn/")) return "ninthdawn";
+  if (f.startsWith("franbow/")) return "franbow";
   return "xenoblade";
 }

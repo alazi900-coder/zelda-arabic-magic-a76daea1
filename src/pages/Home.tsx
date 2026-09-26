@@ -39,6 +39,18 @@ const games = [
     arrowClass: "text-[hsl(195,65%,78%)]",
   },
   {
+    title: "Fran Bow",
+    subtitle: "محرر نصوص Fran Bow",
+    desc: "يرفع ملف JSON القابل للتحرير، ويعرض الأصل الإنجليزي وأي ترجمة عربية موجودة مسبقاً في حقل الترجمة، مع فلاتر (حوار وسرد، فحص الأشياء والتفاعل، النظام والحفظ، الواجهات والأزرار، الإعدادات، القائمة الرئيسية)، ثم يصدّر ملفاً آمناً جاهزاً للحقن داخل اللعبة.",
+    link: "/fran-bow",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='f' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%23140a1a'/%3E%3Cstop offset='.55' stop-color='%232a1233'/%3E%3Cstop offset='1' stop-color='%233d1a4a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23f)'/%3E%3Ccircle cx='1280' cy='200' r='140' fill='%23c98fe0' opacity='.22'/%3E%3Cpath d='M0 680l360-150 300 100 380-210 560 190v290H0z' fill='%230c0710' opacity='.75'/%3E%3Cpath d='M260 260l60-60 60 60-60 60z' fill='%23ff8fd0' opacity='.5'/%3E%3C/svg%3E",
+    formats: ["JSON", "Android", "APK"],
+    cardClass: "border-[hsl(280,45%,50%)]/35 hover:border-[hsl(285,65%,70%)]/70",
+    formatClass: "bg-[hsl(280,45%,50%)]/20 text-[hsl(285,65%,80%)] border-[hsl(280,45%,50%)]/35",
+    subtitleClass: "text-[hsl(285,65%,80%)]",
+    arrowClass: "text-[hsl(285,65%,80%)]",
+  },
+  {
     title: "Steins;Gate PSP",
     subtitle: "تعريب القوائم والحوارات",
     desc: "يفتح ISO الإنجليزي محلياً، يستخرج نصوص AFS/BIN إلى المحرر، يحمي وسوم المحرك ويحقن خطاً عربياً متصلاً، ثم يبني ISO معرّباً.",

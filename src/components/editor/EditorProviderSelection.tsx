@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Key, Loader2, CheckCircle2, XCircle, Wifi } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CRASHLANDS_PROMPT_PRESETS, GTAIV_PROMPT_PRESETS, NINTHDAWN_PROMPT_PRESETS, PROMPT_PRESETS, RISEN_PROMPT_PRESETS, STEINSGATE_PROMPT_PRESETS } from "@/components/editor/promptPresets";
+import { CRASHLANDS_PROMPT_PRESETS, FRANBOW_PROMPT_PRESETS, GTAIV_PROMPT_PRESETS, NINTHDAWN_PROMPT_PRESETS, PROMPT_PRESETS, RISEN_PROMPT_PRESETS, STEINSGATE_PROMPT_PRESETS } from "@/components/editor/promptPresets";
 import { CATEGORY_PROMPT_DEFAULTS, resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import AIRoutingToggle from "@/components/editor/AIRoutingToggle";
 import { fetchCodeCraftModels } from "@/lib/codecraft-direct";
@@ -116,7 +116,8 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
   const isSteinsGate = editor.state?.entries?.[0]?.msbtFile?.startsWith("steinsgate/") || false;
   const isCrashlands = editor.state?.entries?.[0]?.msbtFile?.startsWith("crashlands/") || false;
   const isNinthDawn = editor.state?.entries?.[0]?.msbtFile?.startsWith("ninthdawn/") || false;
-  const activePresets = isCrashlands ? CRASHLANDS_PROMPT_PRESETS : isNinthDawn ? NINTHDAWN_PROMPT_PRESETS : isSteinsGate ? STEINSGATE_PROMPT_PRESETS : isGtaIv ? GTAIV_PROMPT_PRESETS : isRisen ? RISEN_PROMPT_PRESETS : PROMPT_PRESETS;
+  const isFranBow = editor.state?.entries?.[0]?.msbtFile?.startsWith("franbow/") || false;
+  const activePresets = isCrashlands ? CRASHLANDS_PROMPT_PRESETS : isNinthDawn ? NINTHDAWN_PROMPT_PRESETS : isFranBow ? FRANBOW_PROMPT_PRESETS : isSteinsGate ? STEINSGATE_PROMPT_PRESETS : isGtaIv ? GTAIV_PROMPT_PRESETS : isRisen ? RISEN_PROMPT_PRESETS : PROMPT_PRESETS;
 
   return (
   <Card className="mb-6 border-primary/20 bg-primary/5">

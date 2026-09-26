@@ -32,6 +32,10 @@ export interface ExtractedEntry {
    * name, kept outside the visible source for the same reason as Crashlands'. */
   ninthDawnId?: string;
   ninthDawnSection?: string;
+  franBowId?: string;
+  franBowCategory?: string;
+  franBowContext?: string;
+  franBowOrigins?: string[];
 }
 
 

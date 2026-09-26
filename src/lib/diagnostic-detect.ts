@@ -17,6 +17,7 @@ import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
+import { validateFranBowTags } from "@/lib/franbow/franbow-tags";
 import { validateInazumaTags, findMisplacedInazumaBreak } from "@/lib/inazuma/inazuma-tags";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
@@ -209,6 +210,10 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   if (entry.msbtFile.startsWith("ninthdawn/") && trimmed) {
     const check = validateNinthDawnTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز 9th Dawn Remake التقنية مختلفة: ${check.reason}` });
+  }
+  if (entry.msbtFile.startsWith("franbow/") && trimmed) {
+    const check = validateFranBowTags(entry.original, translation);
+    if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز Fran Bow التقنية مختلفة: ${check.reason}` });
   }
 
   // GTA IV has its own runtime/control syntax: `~...~`. It is not an XC3 tag

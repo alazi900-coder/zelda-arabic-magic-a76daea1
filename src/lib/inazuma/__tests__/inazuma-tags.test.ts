@@ -212,7 +212,7 @@ describe("Inazuma tokens are protected by the AI enhance/translate tools", () =>
     expect(ENHANCE_SOURCE).toContain("preservesInazumaTokenSequence");
     expect(ENHANCE_SOURCE).toContain("(!isInazuma || preservesInazumaTokenSequence(original, suggested))");
     expect(ENHANCE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
-      (ENHANCE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma\)/g)?.length ?? 0) + 1
+      (ENHANCE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow\)/g)?.length ?? 0) + 1
     );
   });
 

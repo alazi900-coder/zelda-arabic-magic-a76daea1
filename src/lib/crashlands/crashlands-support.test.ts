@@ -134,7 +134,7 @@ describe("the suggestion gate runs on both sides", () => {
     // Remake's own flag rides on the same call sites, appended after
     // isCrashlands, so the trailing shape now ends there instead.
     expect(EDGE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
-      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma\)/g)?.length ?? 0) + 1
+      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow\)/g)?.length ?? 0) + 1
     );
   });
 

@@ -67,6 +67,9 @@ interface CategoryProgressProps {
   isNinthDawn?: boolean;
   /** Fixed list keyed off the export's own section names (ninthdawn-categories.ts). */
   ninthDawnCategories?: FileCategory[];
+  isFranBow?: boolean;
+  /** Fixed list keyed off the export's own Arabic category names (franbow-categories.ts). */
+  franBowCategories?: FileCategory[];
   isPlatinum?: boolean;
   /** Fixed list from the decompilation's archive names (see src/lib/nds/plat-categories.ts). */
   platinumCategories?: FileCategory[];
@@ -81,8 +84,8 @@ interface CategoryProgressProps {
   goldenSunCategories?: FileCategory[];
 }
 
-const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [], isLumenTale = false, lumentaleCategories = [], isGtaIv = false, gtaIvCategories = [], isSteinsGate = false, steinsGateCategories = [], isCrashlands = false, crashlandsCategories = [], isNinthDawn = false, ninthDawnCategories = [], isPlatinum = false, platinumCategories = [], isPh = false, phCategories = [], isInazuma = false, inazumaCategories = [], isGoldenSun = false, goldenSunCategories = [] }) => {
-  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isLumenTale ? lumentaleCategories : isGtaIv ? gtaIvCategories : isSteinsGate ? steinsGateCategories : isCrashlands ? crashlandsCategories : isNinthDawn ? ninthDawnCategories : isPlatinum ? platinumCategories : isPh ? phCategories : isInazuma ? inazumaCategories : isGoldenSun ? goldenSunCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
+const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [], isLumenTale = false, lumentaleCategories = [], isGtaIv = false, gtaIvCategories = [], isSteinsGate = false, steinsGateCategories = [], isCrashlands = false, crashlandsCategories = [], isNinthDawn = false, ninthDawnCategories = [], isFranBow = false, franBowCategories = [], isPlatinum = false, platinumCategories = [], isPh = false, phCategories = [], isInazuma = false, inazumaCategories = [], isGoldenSun = false, goldenSunCategories = [] }) => {
+  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isLumenTale ? lumentaleCategories : isGtaIv ? gtaIvCategories : isSteinsGate ? steinsGateCategories : isCrashlands ? crashlandsCategories : isNinthDawn ? ninthDawnCategories : isFranBow ? franBowCategories : isPlatinum ? platinumCategories : isPh ? phCategories : isInazuma ? inazumaCategories : isGoldenSun ? goldenSunCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
   const activeCats = categories.filter(cat => categoryProgress[cat.id]);
   if (activeCats.length === 0 && (isLumenTale || !categoryProgress['other'])) return null;
 

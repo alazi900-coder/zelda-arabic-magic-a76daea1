@@ -60,6 +60,30 @@ const getSceneType = (tablePrefix: string): { label: string; emoji: string; cls:
   return { label: "نص", emoji: "📄", cls: "bg-muted text-muted-foreground border-border" };
 };
 
+/**
+ * What counts as "the same file" for grouping neighbours.
+ *
+ * ROM/BMG games share one real `msbtFile` across many rows (a table, a BMG
+ * file), so an exact match is the right scene boundary. The JSON-import
+ * games (Fran Bow, 9th Dawn Remake, Crashlands) instead bake the row's own
+ * index into `msbtFile` (`franbow/<category>/<n>`) — every row's file name
+ * is unique to itself, so an exact match always finds a "file" of one, and
+ * "expand range" had nothing to expand into. Fran Bow's own `context` field
+ * (a real scene id, e.g. "ItherstaBookPage1") groups tighter than that; the
+ * other two fall back to the category-without-index, which is coarser but
+ * still real neighbours in upload order.
+ */
+export function sceneGroupKey(e: ExtractedEntry): string {
+  if (e.franBowContext) return `franbow-ctx:${e.franBowContext}`;
+  const parts = e.msbtFile.split("/");
+  const last = parts[parts.length - 1];
+  if (parts.length >= 3 && last === String(e.index)) return parts.slice(0, -1).join("/");
+  return e.msbtFile;
+}
+
+/** Xenoblade's own scene-type/speaker heuristics need a `bdat-bin:`-style msbtFile; anything else shows a neutral badge instead of a false guess. */
+export const isXenobladeFile = (msbtFile: string) => msbtFile.includes(":") && !/^(franbow|ninthdawn|crashlands)\//.test(msbtFile);
+
 const SceneContextPanel: React.FC<SceneContextPanelProps> = ({
   open, onClose, entry, entries, translations, range = 6,
 }) => {
@@ -67,8 +91,9 @@ const SceneContextPanel: React.FC<SceneContextPanelProps> = ({
 
   const data = useMemo(() => {
     if (!entry) return null;
+    const key = sceneGroupKey(entry);
     const fileEntries = entries
-      .filter((e) => e.msbtFile === entry.msbtFile)
+      .filter((e) => sceneGroupKey(e) === key)
       .sort((a, b) => a.index - b.index);
     const currentIdx = fileEntries.findIndex(
       (e) => e.msbtFile === entry.msbtFile && e.index === entry.index
@@ -81,11 +106,13 @@ const SceneContextPanel: React.FC<SceneContextPanelProps> = ({
     const translatedCount = fileEntries.filter(
       (e) => (translations[`${e.msbtFile}:${e.index}`] || "").trim()
     ).length;
-    const meta = parseFileMeta(entry.msbtFile);
+    const xeno = isXenobladeFile(entry.msbtFile);
+    const meta = xeno ? parseFileMeta(entry.msbtFile) : null;
     return {
       window, currentIdx, fileTotal: fileEntries.length, translatedCount,
-      sceneType: getSceneType(meta.tablePrefix), fileName: meta.fileName,
-      speaker: getSpeakerFromContent(entry.original),
+      sceneType: meta ? getSceneType(meta.tablePrefix) : null,
+      fileName: meta ? meta.fileName : (entry.franBowContext || key),
+      speaker: xeno ? getSpeakerFromContent(entry.original) : null,
     };
   }, [entry, entries, translations, range, extraRange]);
 
@@ -98,9 +125,11 @@ const SceneContextPanel: React.FC<SceneContextPanelProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center flex-wrap gap-2">
             <span>🎬 سياق المشهد</span>
-            <Badge variant="outline" className={data.sceneType.cls}>
-              {data.sceneType.emoji} {data.sceneType.label}
-            </Badge>
+            {data.sceneType && (
+              <Badge variant="outline" className={data.sceneType.cls}>
+                {data.sceneType.emoji} {data.sceneType.label}
+              </Badge>
+            )}
             {data.speaker && (
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                 👤 {data.speaker}

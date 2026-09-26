@@ -6,8 +6,15 @@ import { PLAT_TAG_RE } from "@/lib/nds/plat-tag-mask";
 // never a name followed by space-and-comma-separated numbers, so without this
 // a Platinum tag reads as plain text here and the "restore missing tags"
 // build guard below never notices it went missing.
+//
+// `\\xNN` is Golden Sun's control codes (box-end, line break, the hero's
+// name...), written in the editor as that literal escape -- see
+// goldensun-tags.ts. Without it here, a translation that dropped or
+// reordered one passed this check silently; it is still discounted
+// correctly for the "leftover English" check via editor-tag-pattern.ts,
+// but that is a different check from this one.
 const BUILD_TECH_TAG_REGEX = new RegExp(
-  `#[0-5]|%(?:\\d+\\$)?[\\d.$-]*[sdif]|%|[\\uFFF9-\\uFFFC]|[\\uE000-\\uE0FF]+|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9_]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{(?:\\d+(?:\\.[A-Za-z_][\\w.-]*)?|[A-Za-z_][\\w.-]*)\\}|<\\/?[A-Za-z][^>]*>|<\\/\\>|\\\\[nrt]|\\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\\]]+)?|[A-Za-z][\\w.-]*=[^\\]]+)\\]|${PLAT_TAG_RE.source}`,
+  `#[0-5]|%(?:\\d+\\$)?[\\d.$-]*[sdif]|%|[\\uFFF9-\\uFFFC]|[\\uE000-\\uE0FF]+|\\\\x[0-9a-fA-F]{2}|\\d+\\s*\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*\\w+\\s*:[^\\]]*?\\\\?\\]\\s*\\d+|\\d+\\s*\\\\?\\[[A-Z]{2,10}\\\\?\\]|\\\\?\\[[A-Z]{2,10}\\\\?\\]\\s*\\d+|\\\\?\\[\\s*\\/?\\s*\\w+\\s*:[^\\]]*?\\\\?\\]|\\\\?\\[\\s*[A-Za-z][A-Za-z0-9_]*(?:[ '/-]+[A-Za-z0-9]+)*\\s*\\\\?\\]|\\[\\s*\\w+\\s*=\\s*\\w[^\\]]*\\]|\\{\\s*\\w+\\s*:\\s*\\w[^}]*\\}|\\{(?:\\d+(?:\\.[A-Za-z_][\\w.-]*)?|[A-Za-z_][\\w.-]*)\\}|<\\/?[A-Za-z][^>]*>|<\\/\\>|\\\\[nrt]|\\[(?:[A-Za-z_][A-Za-z0-9_]*(?::[^\\]]+)?|[A-Za-z][\\w.-]*=[^\\]]+)\\]|${PLAT_TAG_RE.source}`,
   "g",
 );
 

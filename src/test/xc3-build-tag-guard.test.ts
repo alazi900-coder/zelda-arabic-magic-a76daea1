@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { repairTranslationTagsForBuild } from "@/lib/xc3-build-tag-guard";
+import { repairTranslationTagsForBuild, checkTagSequenceMatch } from "@/lib/xc3-build-tag-guard";
+
+describe("checkTagSequenceMatch \u2014 Golden Sun's \\xNN control codes", () => {
+  it("passes when every \\xNN code survived translation in the same order", () => {
+    expect(checkTagSequenceMatch("\\x11\\x01, wake up!\\x02", "\\x11\\x01\u060c \u0627\u0633\u062a\u064a\u0642\u0638!\\x02")).toBe(true);
+  });
+  it("fails when a code is dropped", () => {
+    expect(checkTagSequenceMatch("\\x11\\x01, wake up!\\x02", "\\x11\\x01\u060c \u0627\u0633\u062a\u064a\u0642\u0638!")).toBe(false);
+  });
+  it("fails when codes are reordered", () => {
+    expect(checkTagSequenceMatch("\\x11\\x01, wake up!\\x02", "\\x02\u0627\u0633\u062a\u064a\u0642\u0638 \u064a\u0627 \\x11\\x01")).toBe(false);
+  });
+});
 
 describe("repairTranslationTagsForBuild", () => {
   it("restores 1[XENO:n] before build and marks it safe", () => {

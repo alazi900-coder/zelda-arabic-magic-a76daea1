@@ -112,35 +112,85 @@ export function goldensunBytesToText(bytes: number[]): string {
   return out;
 }
 
-const PUNCT_TO_ASCII: Record<string, string> = { "،": ",", "؟": "?", "؛": ";" };
+/**
+ * Characters the font has no cell for, but that have a drawn equivalent:
+ * the Persian yeh and keheh (they look like the Arabic ي and ك but are
+ * different code points, and AI translators and Persian keyboards often
+ * produce them), Arabic punctuation and digits, the ellipsis, and every
+ * long dash (the game only draws `-`). Swapped before shaping, so a
+ * replaced letter still joins the way the Arabic one does.
+ */
+const GOLDENSUN_SUBSTITUTIONS: Record<string, string> = {
+  "\u06CC": "\u064A", // ی Persian yeh -> ي
+  "\u06A9": "\u0643", // ک keheh -> ك
+  "،": ",", "؟": "?", "؛": ";", "٫": ".", "٪": "%", "…": "...",
+  "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-", "\u2015": "-", "\u2212": "-",
+};
+for (let d = 0; d <= 9; d++) {
+  GOLDENSUN_SUBSTITUTIONS[String.fromCharCode(0x0660 + d)] = String(d); // ٠-٩
+  GOLDENSUN_SUBSTITUTIONS[String.fromCharCode(0x06f0 + d)] = String(d); // ۰-۹
+}
 
-/** The text the editor holds -> bytes to compress: reshapes logical Arabic to presentation forms, maps punctuation, and reads back every `\xNN` escape and mapped Arabic form. */
-export function goldensunTextToBytes(text: string): number[] {
-  const out: number[] = [];
-  // `\xNN` escapes travel through untouched; everything else is shaped.
+function substituteGoldenSun(segment: string): string {
+  let out = "";
+  for (const ch of segment) out += GOLDENSUN_SUBSTITUTIONS[ch] ?? ch;
+  return out;
+}
+
+/**
+ * The text the editor holds -> bytes to compress, plus every character that
+ * has no cell in the font (repeated as often as it occurs). `\xNN` escapes
+ * travel through untouched; everything else is substituted, shaped and
+ * mapped. A character with no cell is left out of the bytes rather than
+ * stopping the build, and is reported so the translator can fix it.
+ */
+function encodeGoldenSunText(text: string): { bytes: number[]; missing: string[] } {
+  const bytes: number[] = [];
+  const missing: string[] = [];
   const CODE = /\\x[0-9a-f]{2}/gi;
   let lastIndex = 0;
   const pushShaped = (segment: string) => {
-    const shaped = reshapeArabic(stripDiacritics(segment));
+    const shaped = reshapeArabic(stripDiacritics(substituteGoldenSun(segment)));
     for (const ch of shaped) {
       const cp = ch.codePointAt(0)!;
-      const mapped = PUNCT_TO_ASCII[ch];
-      if (mapped) { out.push(mapped.charCodeAt(0)); continue; }
-      if (cp < 0x80 && isGoldenSunPlainAscii(cp)) { out.push(cp); continue; }
+      if (cp < 0x80 && isGoldenSunPlainAscii(cp)) { bytes.push(cp); continue; }
       const byte = GOLDENSUN_ARABIC_BYTE_MAP[cp];
-      if (byte === undefined) throw new Error(`goldensun-rom: no glyph for "${ch}" (U+${cp.toString(16)})`);
-      out.push(byte);
+      if (byte === undefined) { missing.push(ch); continue; }
+      bytes.push(byte);
     }
   };
   let m: RegExpExecArray | null;
-  CODE.lastIndex = 0;
   while ((m = CODE.exec(text))) {
     if (m.index > lastIndex) pushShaped(text.slice(lastIndex, m.index));
-    out.push(parseInt(m[0].slice(2), 16));
+    bytes.push(parseInt(m[0].slice(2), 16));
     lastIndex = CODE.lastIndex;
   }
   if (lastIndex < text.length) pushShaped(text.slice(lastIndex));
-  return out;
+  return { bytes, missing };
+}
+
+/** The text the editor holds -> bytes to compress (characters with no cell left out; see `analyzeGoldenSunUnsupportedCharacters`). */
+export function goldensunTextToBytes(text: string): number[] {
+  return encodeGoldenSunText(text).bytes;
+}
+
+/** One character the font has no cell for, and how often a line asked for it. */
+export interface GoldenSunUnsupportedCharacter {
+  character: string;
+  /** `U+06AF` -- what to show for a character that has nothing to draw. */
+  unicode: string;
+  count: number;
+}
+
+/** Every character `goldensunTextToBytes` would leave out of `text`, counted. */
+export function analyzeGoldenSunUnsupportedCharacters(text: string): GoldenSunUnsupportedCharacter[] {
+  const found = new Map<string, GoldenSunUnsupportedCharacter>();
+  for (const ch of encodeGoldenSunText(text).missing) {
+    const previous = found.get(ch);
+    const unicode = `U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`;
+    found.set(ch, previous ? { ...previous, count: previous.count + 1 } : { character: ch, unicode, count: 1 });
+  }
+  return [...found.values()];
 }
 
 /** Reads every string from `rom` into editor entries, in id order, through `layout`'s tables. */

@@ -38,6 +38,7 @@ import type { GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
 import type { PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import type { SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
 import type { InazumaUnsupportedCharacter } from "@/lib/inazuma/inazuma-arabic-font";
+import type { GoldenSunUnsupportedCharacter } from "@/lib/goldensun/goldensun-rom";
 import type { SteinsGateReplacement } from "@/lib/steinsgate/steinsgate-normalize";
 
 type EditorSubset = Pick<
@@ -92,6 +93,10 @@ interface EditorBuildSectionProps {
   onFilterSteinsGateUnsupported?: () => void;
   inazumaUnsupportedCount?: number;
   inazumaUnsupportedCharacters?: InazumaUnsupportedCharacter[];
+  goldenSunUnsupportedCount?: number;
+  goldenSunUnsupportedCharacters?: GoldenSunUnsupportedCharacter[];
+  goldenSunUnsupportedFilterActive?: boolean;
+  onFilterGoldenSunUnsupported?: () => void;
   inazumaUnsupportedFilterActive?: boolean;
   onFilterInazumaUnsupported?: () => void;
   /** `U+XXXX` the list is narrowed to, or null for every unsupported row. */
@@ -188,6 +193,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   onFilterSteinsGateUnsupported,
   inazumaUnsupportedCount = 0,
   inazumaUnsupportedCharacters = [],
+  goldenSunUnsupportedCount = 0,
+  goldenSunUnsupportedCharacters = [],
+  goldenSunUnsupportedFilterActive = false,
+  onFilterGoldenSunUnsupported,
   inazumaUnsupportedFilterActive = false,
   onFilterInazumaUnsupported,
   unsupportedCharFilter = null,
@@ -1062,6 +1071,55 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
                         mistake repeated, and seeing only its rows is what makes
                         it fixable. Pressing the active chip widens back out. */}
                     {inazumaUnsupportedCharacters.map((item) => (
+                      <button
+                        key={item.unicode}
+                        type="button"
+                        onClick={() => onPickUnsupportedChar?.(item.unicode)}
+                        aria-pressed={unsupportedCharFilter === item.unicode}
+                        title={unsupportedCharFilter === item.unicode
+                          ? "يعود إلى عرض كل الحروف بلا خانة"
+                          : "يعرض النصوص التي فيها هذا الحرف وحده"}
+                        className={`rounded border px-1.5 py-0.5 font-mono text-foreground transition-colors ${
+                          unsupportedCharFilter === item.unicode
+                            ? "border-amber-500 bg-amber-500/25"
+                            : "border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/20"
+                        }`}
+                        dir="rtl"
+                      >
+                        {formatUnsupportedCharacter(item)}{item.count > 1 ? ` ×${item.count}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {isGoldenSun && (
+              <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={goldenSunUnsupportedFilterActive ? "secondary" : "outline"}
+                  onClick={onFilterGoldenSunUnsupported}
+                  disabled={!goldenSunUnsupportedFilterActive && goldenSunUnsupportedCount === 0}
+                  className="font-body gap-1 shrink-0"
+                  title={goldenSunUnsupportedFilterActive
+                    ? "يلغي الفلتر ويعيد عرض كل النصوص في المحرر"
+                    : goldenSunUnsupportedCount > 0
+                      ? "يعرض النصوص التي فيها حرف لا خانة له في خط اللعبة — البناء يحذف هذا الحرف من السطر"
+                      : "لا توجد حروف بلا خانة في الترجمات الحالية"}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  {goldenSunUnsupportedFilterActive
+                    ? "إظهار كل النصوص"
+                    : `عرض الحروف بلا خانة (${goldenSunUnsupportedCount})`}
+                </Button>
+                {goldenSunUnsupportedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400" aria-live="polite">
+                    <span>الحروف:</span>
+                    {/* Each chip is a button: one character is usually one
+                        mistake repeated, and seeing only its rows is what makes
+                        it fixable. Pressing the active chip widens back out. */}
+                    {goldenSunUnsupportedCharacters.map((item) => (
                       <button
                         key={item.unicode}
                         type="button"

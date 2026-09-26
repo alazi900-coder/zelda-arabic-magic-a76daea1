@@ -58,6 +58,7 @@ import { isChineseSource, repairCrashlandsTags, validateCrashlandsTags } from "@
 import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categories";
 import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { categorizeGoldenSunEntry } from "@/lib/goldensun/goldensun-categories";
+import { analyzeGoldenSunUnsupportedCharacters, type GoldenSunUnsupportedCharacter } from "@/lib/goldensun/goldensun-rom";
 import { analyzeInazumaUnsupportedCharacters, type InazumaUnsupportedCharacter } from "@/lib/inazuma/inazuma-arabic-font";
 import { fromInazumaBreakTokens } from "@/lib/inazuma/inazuma-break-tokens";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
@@ -1173,6 +1174,41 @@ export function useEditorState() {
   const inazumaUnsupportedKeys = inazumaUnsupportedReport.keys;
   const inazumaUnsupportedCount = inazumaUnsupportedKeys.size;
 
+  // Golden Sun: the same report, through the same encoder the build uses
+  // (goldensunTextToBytes), which leaves such a character out of the line.
+  const goldenSunUnsupportedReport = useMemo(() => {
+    const keys = new Set<string>();
+    const keysByCharacter = new Map<string, Set<string>>();
+    const characters = new Map<string, GoldenSunUnsupportedCharacter>();
+    if (!state) return { keys, keysByCharacter, characters: [] as GoldenSunUnsupportedCharacter[] };
+
+    for (const entry of state.entries) {
+      if (!entry.msbtFile.startsWith("goldensun/")) continue;
+      const key = `${entry.msbtFile}:${entry.index}`;
+      const translation = state.translations[key] || "";
+      if (!translation.trim()) continue;
+      const unsupported = analyzeGoldenSunUnsupportedCharacters(translation);
+      if (unsupported.length === 0) continue;
+      keys.add(key);
+      for (const item of unsupported) {
+        const previous = characters.get(item.unicode);
+        characters.set(item.unicode, previous
+          ? { ...previous, count: previous.count + item.count }
+          : { ...item });
+        const rows = keysByCharacter.get(item.unicode);
+        if (rows) rows.add(key);
+        else keysByCharacter.set(item.unicode, new Set([key]));
+      }
+    }
+    return {
+      keys,
+      keysByCharacter,
+      characters: [...characters.values()].sort((a, b) => b.count - a.count || a.unicode.localeCompare(b.unicode)),
+    };
+  }, [state?.entries, state?.translations]);
+  const goldenSunUnsupportedKeys = goldenSunUnsupportedReport.keys;
+  const goldenSunUnsupportedCount = goldenSunUnsupportedKeys.size;
+
   // Crashlands: 5,711 rows come out of `campaign_story_zh-cn.json`, a file
   // whose name says Chinese but whose contents are mostly untranslated
   // English. The few hundred that really are Chinese have no English to work
@@ -1197,12 +1233,15 @@ export function useEditorState() {
   const inazumaUnsupportedFilterKeys = unsupportedCharFilter
     ? inazumaUnsupportedReport.keysByCharacter.get(unsupportedCharFilter) ?? new Set<string>()
     : inazumaUnsupportedKeys;
+  const goldenSunUnsupportedFilterKeys = unsupportedCharFilter
+    ? goldenSunUnsupportedReport.keysByCharacter.get(unsupportedCharFilter) ?? new Set<string>()
+    : goldenSunUnsupportedKeys;
 
   // Leaving the filter drops the single-character narrowing with it, so coming
   // back through the dropdown shows every affected row rather than the one
   // character that happened to be picked last time.
   useEffect(() => {
-    if (filterStatus !== "steinsgate-unsupported" && filterStatus !== "inazuma-unsupported" && unsupportedCharFilter) setUnsupportedCharFilter(null);
+    if (filterStatus !== "steinsgate-unsupported" && filterStatus !== "inazuma-unsupported" && filterStatus !== "goldensun-unsupported" && unsupportedCharFilter) setUnsupportedCharFilter(null);
   }, [filterStatus, unsupportedCharFilter]);
 
   // What pressing "convert" would do, worked out before it is pressed: which
@@ -1386,6 +1425,7 @@ export function useEditorState() {
         (filterStatus === "plat-unsupported" && platUnsupportedKeys.has(key)) ||
         (filterStatus === "steinsgate-unsupported" && steinsGateUnsupportedFilterKeys.has(key)) ||
         (filterStatus === "inazuma-unsupported" && inazumaUnsupportedFilterKeys.has(key)) ||
+        (filterStatus === "goldensun-unsupported" && goldenSunUnsupportedFilterKeys.has(key)) ||
         (filterStatus === "crashlands-chinese" && crashlandsChineseKeys.has(key)) ||
         // Rows written entirely in capitals — move and ability names, menu
         // labels. Latin letters must be present and none may be lowercase; a
@@ -1415,7 +1455,7 @@ export function useEditorState() {
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
       return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenSection;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys, platUnsupportedKeys, inazumaUnsupportedFilterKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys, platUnsupportedKeys, inazumaUnsupportedFilterKeys, goldenSunUnsupportedFilterKeys]);
 
   useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection]);
 
@@ -1923,6 +1963,7 @@ export function useEditorState() {
     'plat-unsupported': 'حروف بلا خانة في الخط',
     'steinsgate-unsupported': 'حروف بلا خانة في الخط',
     'inazuma-unsupported': 'حروف بلا خانة في الخط',
+    'goldensun-unsupported': 'حروف بلا خانة في الخط',
     'crashlands-chinese': 'نصوص صينية',
     'uppercase': 'أحرف إنجليزية كبيرة',
     'has-newlines': 'أسطر متعددة',
@@ -2394,6 +2435,7 @@ export function useEditorState() {
     platUnsupportedCount, platUnsupportedCharacters: platUnsupportedReport.characters,
     steinsGateUnsupportedCount, steinsGateUnsupportedCharacters: steinsGateUnsupportedReport.characters,
     inazumaUnsupportedCount, inazumaUnsupportedCharacters: inazumaUnsupportedReport.characters,
+    goldenSunUnsupportedCount, goldenSunUnsupportedCharacters: goldenSunUnsupportedReport.characters,
     crashlandsChineseCount,
     steinsGateNormalizeReplacements: steinsGateNormalizePreview.replacements,
     steinsGateNormalizeRows: steinsGateNormalizePreview.rows, applySteinsGateNormalize,

@@ -616,6 +616,9 @@ export function isTranslationExcludedText(text: string, msbtFile?: string): bool
 export function hasTechnicalTags(text: string, msbtFile?: string): boolean {
   return /[\uFFF9\uFFFA\uFFFB\uFFFC\uE000-\uE0FF]/.test(text)
     || /#[0-5]|%/.test(text)
+    // Golden Sun's control codes (box-end, line break, the hero's name...),
+    // written in the editor as this literal escape -- see goldensun-tags.ts.
+    || /\\x[0-9a-fA-F]{2}/.test(text)
     || /\[\s*\/?\s*\w+\s*:[^\]]*\]/.test(text)
     || /\d+\s*\[[A-Z]{2,10}\]/.test(text)
     || /\[[A-Z]{2,10}\]\s*\d+/.test(text)

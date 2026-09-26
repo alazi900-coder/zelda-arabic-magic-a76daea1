@@ -49,3 +49,14 @@ describe("goldensun Arabic byte map", () => {
     for (const [cp, byte] of Object.entries(ref)) expect(GOLDENSUN_ARABIC_BYTE_MAP[Number(cp)]).toBe(byte);
   });
 });
+
+import { hasTechnicalTags } from "@/components/editor/types";
+
+describe("hasTechnicalTags recognizes Golden Sun's \\xNN codes", () => {
+  it("is true for a line carrying a \\xNN code", () => {
+    expect(hasTechnicalTags("\\x11\\x01, wake up!\\x02")).toBe(true);
+  });
+  it("is false for a line with no codes at all", () => {
+    expect(hasTechnicalTags("Mimic")).toBe(false);
+  });
+});

@@ -29,6 +29,7 @@ import type { ExtractedEntry } from "@/components/editor/types";
 import { reshapeArabic, isArabicChar } from "@/lib/arabic-processing";
 import { findNdsFile, ndsFiles, ndsFileIdByPath, writeNdsFile, type NdsFile } from "@/lib/nds/nds-rom";
 import { parseBmg, buildBmg, type BmgFile } from "./ph-bmg";
+import { applyPhRtlPatch } from "./ph-rtl-patch";
 
 export const PH_SOURCE_GAME = "ph";
 export const PH_BUFFER_KEY = "ph:rom-buffer";
@@ -173,6 +174,8 @@ export function buildPhRom(romBuffer: ArrayBuffer, entries: ExtractedEntry[], tr
     const rebuilt = buildBmg(parsed, replacements);
     rom = writeNdsFile(rom, ndsFile, rebuilt);
   }
+
+  rom = applyPhRtlPatch(rom);
 
   return {
     buffer: rom.buffer.slice(rom.byteOffset, rom.byteOffset + rom.byteLength) as ArrayBuffer,

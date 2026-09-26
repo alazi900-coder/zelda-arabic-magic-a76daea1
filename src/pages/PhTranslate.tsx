@@ -83,13 +83,13 @@ export default function PhTranslate() {
 
         <div className="mb-6 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
           <p className="flex gap-2 font-semibold"><FileCode2 className="h-5 w-5 shrink-0 text-primary" /> ارفع ملف الروم (.nds) — يُستخرَج منه كل نصّ حوار قابل للترجمة من ملفات BMG (٣٢ ملفاً)، وتُبنى نسخة معرَّبة منه.</p>
-          <p className="mt-2 text-muted-foreground">النص يُخزَّن بترتيبه المنطقي الطبيعي (بدون عكس)، اعتماداً على رقعة اتجاه العرض بالمعالج — راجع الملاحظة أدناه.</p>
+          <p className="mt-2 text-muted-foreground">النص يُخزَّن بترتيبه المنطقي الطبيعي، ورقعة اتجاه العرض (من اليمين) تُطبَّق على الروم تلقائياً عند البناء — لا حاجة لرقعة منفصلة لها. الكلمات الإنجليزية والأرقام داخل النص تُقلب مسبقاً فتظهر صحيحة.</p>
         </div>
 
         <div className="mb-6 flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
           <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
           <p className="text-muted-foreground">
-            <strong className="text-foreground">هذه الأداة تبني الملف فقط — عرض النص العربي بشكل صحيح بالشاشة (اتجاهاً وخطّاً) يعتمد على رقعة منفصلة بمعالج اللعبة (ARM9) لا تزال قيد التحقق.</strong> جرّب النتيجة على محاكٍ أو جهاز حقيقي، ولا تتفاجأ إن ظهر النص بشكل غير صحيح حتى تكتمل تلك الرقعة.
+            <strong className="text-foreground">الخط العربي لا تضيفه هذه الأداة — ارفع روماً فيه الخط العربي مسبقاً.</strong> اتجاه العرض تطبّقه الأداة بنفسها، وإن كان الروم مرقّعاً مسبقاً يُترك كما هو.
           </p>
         </div>
 

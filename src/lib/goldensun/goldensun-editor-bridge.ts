@@ -51,11 +51,25 @@ export function restoreGoldenSunTranslations(
  * true. An untouched ROM also gets the character limit raised and the
  * font overlaid, but reads left-to-right (`rtl` false).
  */
+/**
+ * The space's advance width (the first u16 of font cell 0x20): 6px suits the
+ * Latin letters, but next to Arabic letters of ~5px it opens a gap wider than
+ * a letter between words. The font sits at 0x32224 in the untouched ROM and
+ * at 0x32410 once the RTL+font patch relinked it.
+ */
+const GOLDENSUN_SPACE_WIDTH = 3;
+function setGoldenSunSpaceWidth(rom: Uint8Array, layout: GoldenSunLayout) {
+  const off = layout.id === "rtl" ? 0x32410 : 0x32224;
+  rom[off] = GOLDENSUN_SPACE_WIDTH;
+  rom[off + 1] = 0;
+}
+
 export function buildGoldenSunRom(rom: Uint8Array, translations: Record<string, string>): { rom: Uint8Array; rtl: boolean } {
   const layout = detectGoldenSunLayout(rom);
   if (!layout) throw new Error(GOLDENSUN_UNKNOWN_ROM_MESSAGE);
   const entries = extractGoldenSunEntries(rom, layout);
   const withText = buildGoldenSunStringTable(rom, entries, translations, layout);
+  setGoldenSunSpaceWidth(withText, layout);
   if (layout.id === "rtl") return { rom: withText, rtl: true };
   return { rom: applyGoldenSunEnginePatch(withText), rtl: false };
 }

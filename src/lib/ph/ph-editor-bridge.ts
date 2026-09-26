@@ -15,9 +15,9 @@
  * work — see decomps/ph/.claude_notes/bidi_progress.md) a right-to-left
  * *rendering* patch that reverses the pen's drawing direction per line, so
  * text is expected to stay stored in logical (natural reading) order.
- * Storing it pre-reversed here would be actively wrong once that patch is
- * confirmed working, and produces no worse a result than reshaping alone
- * while it's still unverified.
+ * Storing it pre-reversed here would be actively wrong now that the patch
+ * works. Only embedded English/number runs are pre-reversed
+ * (`reverseLatinRunsForPh`), so the per-glyph RTL draw flips them back.
  *
  * Messages containing a BMG escape/control code (player-name insertion,
  * icons, etc.) are excluded from translation entirely — `ph-bmg.ts` flags
@@ -26,7 +26,7 @@
  * silently corrupting it.
  */
 import type { ExtractedEntry } from "@/components/editor/types";
-import { reshapeArabic } from "@/lib/arabic-processing";
+import { reshapeArabic, isArabicChar } from "@/lib/arabic-processing";
 import { findNdsFile, ndsFiles, ndsFileIdByPath, writeNdsFile, type NdsFile } from "@/lib/nds/nds-rom";
 import { parseBmg, buildBmg, type BmgFile } from "./ph-bmg";
 
@@ -107,6 +107,34 @@ export interface PhRomBuild {
   translatedLines: number;
 }
 
+const isLtrChar = (c: string) => /[A-Za-z0-9]/.test(c);
+
+/**
+ * The RTL patch draws every glyph right-to-left, so an English word or number
+ * would read backwards ("Link" -> "kniL"). Messages with control codes are
+ * never translated, so any Latin text is literal in the string: store each
+ * run pre-reversed and the renderer flips it back. A run goes from a Latin
+ * letter or digit to the last one before the next Arabic letter or line
+ * break, taking the spaces/punctuation between them ("1,000", "Mr. Link").
+ */
+export function reverseLatinRunsForPh(text: string): string {
+  return text.split("\n").map((line) => {
+    const chars = [...line];
+    let i = 0;
+    while (i < chars.length) {
+      if (!isLtrChar(chars[i])) { i++; continue; }
+      let last = i;
+      for (let j = i; j < chars.length && !isArabicChar(chars[j]); j++) {
+        if (isLtrChar(chars[j])) last = j;
+      }
+      const run = chars.slice(i, last + 1).reverse();
+      chars.splice(i, run.length, ...run);
+      i = last + 1;
+    }
+    return chars.join("");
+  }).join("\n");
+}
+
 export function buildPhRom(romBuffer: ArrayBuffer, entries: ExtractedEntry[], translations: Record<string, string>): PhRomBuild {
   let rom: Uint8Array = new Uint8Array(romBuffer);
 
@@ -129,7 +157,7 @@ export function buildPhRom(romBuffer: ArrayBuffer, entries: ExtractedEntry[], tr
     const replacements = new Map<number, string>();
     for (const entry of fileEntries) {
       const translation = translations[`${entry.msbtFile}:${entry.index}`];
-      const shaped = reshapeArabic(translation);
+      const shaped = reverseLatinRunsForPh(reshapeArabic(translation));
       // Every message index that originally shared this entry's offset
       // gets the same shaped translation, matching how extraction only
       // ever emits one editable entry per shared string.

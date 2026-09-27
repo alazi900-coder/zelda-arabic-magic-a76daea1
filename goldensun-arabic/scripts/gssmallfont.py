@@ -7,6 +7,12 @@ Golden Sun's menu font is file 0x13 (ROM 0x320FB0, stored raw): 256 tiles
 of 8x8 4bpp, background 4, ink 1, a shadow 3 one pixel down-right, with the
 advance widths in Data_370d4 (0x370D4, one byte per code from 0x20).
 
+Each glyph is packed to the left of its cell and its width is its ink, so
+joined letters touch. Isolated and final forms do not join the letter after
+them (to their left, the text runs right to left), so they get one blank
+column on that side; without it a following letter touches them (ا then ق
+in الرشاقة, د then ف in الدفاع), except the four that fill the cell.
+
 smallfont_map.json gives, for every Golden Sun code the text encoder writes
 an Arabic form to (the same codes as the dialogue font), the presentation
 form and the Mother 3 cell that draws it. Five forms Mother 3 has no cell
@@ -17,6 +23,7 @@ usage: gssmallfont.py goldensun.gba out.gba
 import json
 import os
 import sys
+import unicodedata
 
 FONT_OFF = 0x320FB0
 WIDTHS_OFF = 0x370D4
@@ -32,11 +39,14 @@ for code_hex, (_form, cell) in codes.items():
     rows = cells[cell * 10 + 2 : cell * 10 + 10]
     cols = [x for x in range(8) if any(r >> (7 - x) & 1 for r in rows)]
     lo, hi = min(cols), max(cols)
+    name = unicodedata.name(chr(int(_form, 16)), "")
+    # the finals/isolated of seen, sheen, sad and dad fill all 8 columns: no room
+    pad = 0 if ("INITIAL" in name or "MEDIAL" in name or hi - lo == 7) else 1
     px = [[BG] * 8 for _ in range(8)]
     for y, r in enumerate(rows):
         for x in range(lo, hi + 1):
             if r >> (7 - x) & 1:
-                px[y][x - lo] = INK
+                px[y][x - lo + pad] = INK
     for y in range(6, -1, -1):
         for x in range(6, -1, -1):
             if px[y][x] == INK and px[y + 1][x + 1] == BG:
@@ -46,7 +56,7 @@ for code_hex, (_form, cell) in codes.items():
         for x in range(0, 8, 2):
             tile[y * 4 + x // 2] = px[y][x] | (px[y][x + 1] << 4)
     rom[FONT_OFF + code * 32 : FONT_OFF + code * 32 + 32] = tile
-    rom[WIDTHS_OFF + code - 0x20] = hi - lo + 1
+    rom[WIDTHS_OFF + code - 0x20] = hi - lo + 1 + pad
 
 open(sys.argv[2], "wb").write(rom)
 print("small font:", len(codes), "glyphs")

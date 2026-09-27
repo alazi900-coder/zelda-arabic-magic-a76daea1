@@ -18,6 +18,26 @@ index 4cd4ae3..7a0895d 100644
 -.func_end Func_801de5c
 +.func_end Func_801de5c_orig
  
+diff --git a/asm/ui/text/Func_801e7c0.s b/asm/ui/text/Func_801e7c0.s
+index 8e627f2..8ff07b6 100644
+--- a/asm/ui/text/Func_801e7c0.s
++++ b/asm/ui/text/Func_801e7c0.s
+@@ -1,7 +1,7 @@
+ 	.include "macros.inc"
+ 	.include "gba.inc"
+ 
+-.thumb_func_start Func_801e7c0  @ 0x0801e7c0
++.thumb_func_start Func_801e7c0_orig  @ 0x0801e7c0
+ 	push	{r5, r6, r7, lr}
+ 	mov	r7, r10
+ 	mov	r6, r9
+@@ -75,5 +75,5 @@
+ 	pop	{r5, r6, r7}
+ 	pop	{r0}
+ 	bx	r0
+-.func_end Func_801e7c0
++.func_end Func_801e7c0_orig
+ 
 diff --git a/asm/ui/ui/AdvanceMsgText.s b/asm/ui/ui/AdvanceMsgText.s
 index d3489a5..f103170 100644
 --- a/asm/ui/ui/AdvanceMsgText.s
@@ -129,10 +149,10 @@ index f0bf98c..91b819f 100644
  	bhi	.L158dc
 diff --git a/src/ui/rtl.c b/src/ui/rtl.c
 new file mode 100644
-index 0000000..282e61b
+index 0000000..556c826
 --- /dev/null
 +++ b/src/ui/rtl.c
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,226 @@
 +/* ---- Arabic: right-to-left text ------------------------------------------
 + * Text is stored in logical order. DrawText mirrors each glyph's x inside its
 + * window, so the first letter lands on the right, every line is right-aligned
@@ -320,6 +340,44 @@ index 0000000..282e61b
 +    ret = Func_801de5c_orig(s, a1, a2, a3);
 +    free(s);
 +    return ret;
++}
++
++/* Func_801e7c0 draws one game string in a window, from x pixels in. The
++   same steps, but a single-line window (a title, the menu bar's label) whose
++   text starts at its left edge gets the text against its right edge. */
++int Func_801e7c0(unsigned int id, void *win, int x, int y)
++{
++    unsigned char *base = gRtlTextBase;
++    unsigned short *index = (unsigned short *)(base + 0x12b2);
++    unsigned short *buf = (unsigned short *)(base + 0xeb0);
++    unsigned short *w16 = (unsigned short *)win;
++    int tile, i;
++
++    *index = 0;
++    BufferString(id, 1);
++    buf[*index] = 0;
++    *index = (*index + 1) & 0x1ff;
++
++    if (x == 0 && w16[5] == 3) {
++        int width = 0, room = (w16[4] - 2) * 8;
++
++        for (i = 0; i < 0x1ff && buf[i] != 0; i++) {
++            unsigned int c = buf[i];
++            if (c < 0x20)
++                i += RtlCodeArgs(c);
++            else if (c <= 0xff)
++                width += Data_370d4[c - 0x20];
++            else
++                width += 8;
++        }
++        if (width < room)
++            x = room - width;
++    }
++
++    tile = ((w16[7] + (y >> 3) + 1) << 5) + w16[6] + (x >> 3) + 1;
++    if (tile >= 0x280)
++        return 0;
++    return Func_801de5c(buf, base + tile * 2, (unsigned char *)0x6002000 + tile * 2, x & 7);
 +}
 diff --git a/stage1.ld b/stage1.ld
 index 69402c3..cf2b08d 100644

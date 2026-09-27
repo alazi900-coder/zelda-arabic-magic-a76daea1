@@ -18,10 +18,10 @@ export { looksLikeGoldenSunRom, detectGoldenSunLayout, isBrokenGoldenSunRtlRom }
 export type { GoldenSunLayout };
 
 export const GOLDENSUN_UNKNOWN_ROM_MESSAGE =
-  "روم Golden Sun غير معروف — طبّق رقعة GoldenSun-AR-RTL-FONT-v2.ups على الروم الأمريكي الأصلي ثم ارفعه";
+  "روم Golden Sun غير معروف — طبّق رقعة GoldenSun-AR-RTL-FONT-v3.ups على الروم الأمريكي الأصلي ثم ارفعه";
 
 export const GOLDENSUN_BROKEN_RTL_MESSAGE =
-  "هذا الروم مرقّع بالرقعة القديمة GoldenSun-AR-RTL-FONT.ups التي تجمّد اللعبة عند فتح القوائم — طبّق GoldenSun-AR-RTL-FONT-v2.ups على الروم الأمريكي الأصلي (الإنجليزي) ثم ارفعه. ترجماتك محفوظة وستُسترجع.";
+  "هذا الروم مرقّع بالرقعة القديمة GoldenSun-AR-RTL-FONT.ups التي تجمّد اللعبة عند فتح القوائم — طبّق GoldenSun-AR-RTL-FONT-v3.ups على الروم الأمريكي الأصلي (الإنجليزي) ثم ارفعه. ترجماتك محفوظة وستُسترجع.";
 
 function toExtractedEntry(e: GoldenSunEntry): ExtractedEntry {
   // maxBytes 0: the real limit is on the COMPRESSED size of the whole

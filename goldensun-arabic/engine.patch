@@ -1,3 +1,23 @@
+diff --git a/asm/ui/text/Func_801de5c.s b/asm/ui/text/Func_801de5c.s
+index 4cd4ae3..7a0895d 100644
+--- a/asm/ui/text/Func_801de5c.s
++++ b/asm/ui/text/Func_801de5c.s
+@@ -1,7 +1,7 @@
+ 	.include "macros.inc"
+ 	.include "gba.inc"
+ 
+-.thumb_func_start Func_801de5c  @ 0x0801de5c
++.thumb_func_start Func_801de5c_orig  @ 0x0801de5c
+ 	push	{r5, r6, r7, lr}
+ 	mov	r7, r11
+ 	mov	r6, r10
+@@ -471,5 +471,5 @@
+ 	pop	{r5, r6, r7}
+ 	pop	{r1}
+ 	bx	r1
+-.func_end Func_801de5c
++.func_end Func_801de5c_orig
+ 
 diff --git a/asm/ui/ui/AdvanceMsgText.s b/asm/ui/ui/AdvanceMsgText.s
 index d3489a5..f103170 100644
 --- a/asm/ui/ui/AdvanceMsgText.s
@@ -109,10 +129,10 @@ index f0bf98c..91b819f 100644
  	bhi	.L158dc
 diff --git a/src/ui/rtl.c b/src/ui/rtl.c
 new file mode 100644
-index 0000000..f551bb4
+index 0000000..282e61b
 --- /dev/null
 +++ b/src/ui/rtl.c
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,188 @@
 +/* ---- Arabic: right-to-left text ------------------------------------------
 + * Text is stored in logical order. DrawText mirrors each glyph's x inside its
 + * window, so the first letter lands on the right, every line is right-aligned
@@ -123,8 +143,12 @@ index 0000000..f551bb4
 +
 +extern unsigned char *gRtlTextBase __asm__("iwram_3001e8c");
 +extern const unsigned short Data_32224[];
++extern const unsigned char Data_370d4[];
 +extern int BufferString_orig(unsigned int id, int flag);
 +extern int DrawText_orig(void *win, unsigned int ch, int x, int y, int flag);
++extern int Func_801de5c_orig(unsigned short *s, void *a1, void *a2, int a3);
++extern void *alloc_ewram(int size);
++extern void free(void *p);
 +
 +/* Extra halfwords each control code carries, as Func_8017aa4 skips them.
 +   (A function, not a table: this unit's .rodata is not linked.) */
@@ -203,7 +227,10 @@ index 0000000..f551bb4
 +int DrawText(void *win, unsigned int ch, int x, int y, int flag)
 +{
 +    if (ch > 0x20 && ch <= 0xff) {
-+        int w = Data_32224[(ch - 0x20) * 16];
++        /* windows with flag 8 draw with the small 8x8 font (file 0x13), whose
++           advance widths are Data_370d4, as DrawText_orig picks it */
++        int small = flag != 1 && (*(unsigned short *)((unsigned char *)win + 0x16) & 8);
++        int w = small ? Data_370d4[ch - 0x20] : Data_32224[(ch - 0x20) * 16];
 +        int bound = *(unsigned short *)((unsigned char *)win + 8) * 8 - 12;
 +
 +        x = bound - x - w;
@@ -211,6 +238,88 @@ index 0000000..f551bb4
 +            x = 0;
 +    }
 +    return DrawText_orig(win, ch, x, y, flag);
++}
++
++/* Button and status icons: 0x80-0x8B, and the 0xF0xx codes */
++static int RtlIsIcon(unsigned int c)
++{
++    return c > 0xff || (c >= 0x80 && c <= 0x8b);
++}
++
++static void RtlReverse(unsigned short *s, int i, int j)
++{
++    while (i < j) {
++        unsigned short t = s[i];
++        s[i] = s[j];
++        s[j] = t;
++        i++;
++        j--;
++    }
++}
++
++/* Menus draw a whole string at once with Func_801de5c (small font, packed
++   into tiles), not glyph by glyph through DrawText, so there is no x to
++   mirror: each run of printable text is put in visual order instead, the
++   first letter last. A string BufferString expanded (it sits in its buffer)
++   already has its Latin runs flipped, and the reversal turns them back; any
++   other string (a number, a name) gets them flipped here first. */
++int Func_801de5c(unsigned short *src, void *a1, void *a2, int a3)
++{
++    unsigned char *ring = gRtlTextBase + 0xeb0;
++    int expanded = (unsigned char *)src >= ring && (unsigned char *)src < ring + 0x400;
++    unsigned short *s;
++    int n, i, j, k, ret;
++
++    for (n = 0; n < 0x1ff && src[n] != 0; n++)
++        ;
++    s = alloc_ewram((n + 1) * 2);
++    for (i = 0; i <= n; i++)
++        s[i] = src[i];
++
++    i = 0;
++    while (i < n) {
++        if (s[i] < 0x20) {
++            i += 1 + RtlCodeArgs(s[i]);
++            continue;
++        }
++        for (j = i; j < n && s[j] >= 0x20; j++)
++            ;
++        if (!expanded) {
++            /* Latin runs, neutral marks between their letters included */
++            for (k = i; k < j; k++) {
++                int last;
++                if (!RtlIsLtr(s[k]))
++                    continue;
++                last = k;
++                while (last + 1 < j && s[last + 1] <= 0xff && !RtlIsArabic(s[last + 1])) {
++                    int m = last + 1;
++                    while (m < j && s[m] <= 0xff && !RtlIsArabic(s[m]) && !RtlIsLtr(s[m]))
++                        m++;
++                    if (m < j && RtlIsLtr(s[m]))
++                        last = m;
++                    else
++                        break;
++                }
++                RtlReverse(s, k, last);
++                k = last;
++            }
++        }
++        RtlReverse(s, i, j - 1);
++        /* icons drawn over two cells (the L/R buttons, HP/PP) keep their order */
++        for (k = i; k < j; k++) {
++            int m;
++            if (!RtlIsIcon(s[k]))
++                continue;
++            for (m = k; m + 1 < j && RtlIsIcon(s[m + 1]); m++)
++                ;
++            RtlReverse(s, k, m);
++            k = m;
++        }
++        i = j;
++    }
++    ret = Func_801de5c_orig(s, a1, a2, a3);
++    free(s);
++    return ret;
 +}
 diff --git a/stage1.ld b/stage1.ld
 index 69402c3..cf2b08d 100644

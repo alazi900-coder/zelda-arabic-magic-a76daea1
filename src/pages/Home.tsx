@@ -51,6 +51,18 @@ const games = [
     arrowClass: "text-[hsl(285,65%,80%)]",
   },
   {
+    title: "This War of Mine: Stories",
+    subtitle: "محرر نصوص This War of Mine: Stories",
+    desc: "يرفع ملف JSON الخاص باللعبة (7990 نصاً)، ويعرض الأصل الإنجليزي والترجمات الموجودة مع فلاتر (الحوارات، كلام الشخصيات، الشخصيات والسير، السجلات والراديو، الأماكن والزيارات، العناصر، الواجهة والقوائم). يحمي رموز المحرك ووسوم الجنس {mr|…} ويسمح بترجمة الكلمة التي بداخلها، ثم يصدّر الملف بنفس شكله.",
+    link: "/twom-stories",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='w' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop stop-color='%23262320'/%3E%3Cstop offset='1' stop-color='%23100f0e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23w)'/%3E%3Cpath d='M0 900V560l140-40v-120l90 30v-90l120 20v200l160-60v-160l110 40v220l170-40V380l130-50v240l150 20V420l120 30v200l110-30v330z' fill='%23070606' opacity='.9'/%3E%3Cpath d='M300 620h40v50h-40zM720 560h30v40h-30zM1180 600h40v40h-40z' fill='%23d9a441' opacity='.55'/%3E%3C/svg%3E",
+    formats: ["JSON", "Unity"],
+    cardClass: "border-[hsl(30,20%,45%)]/35 hover:border-[hsl(38,60%,60%)]/70",
+    formatClass: "bg-[hsl(30,20%,45%)]/20 text-[hsl(38,60%,75%)] border-[hsl(30,20%,45%)]/35",
+    subtitleClass: "text-[hsl(38,60%,75%)]",
+    arrowClass: "text-[hsl(38,60%,75%)]",
+  },
+  {
     title: "Steins;Gate PSP",
     subtitle: "تعريب القوائم والحوارات",
     desc: "يفتح ISO الإنجليزي محلياً، يستخرج نصوص AFS/BIN إلى المحرر، يحمي وسوم المحرك ويحقن خطاً عربياً متصلاً، ثم يبني ISO معرّباً.",

@@ -13,6 +13,7 @@ import { repairSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { repairCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { repairNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { repairInazumaTags } from "@/lib/inazuma/inazuma-tags";
+import { repairTwomTags } from "@/lib/twom/twom-tags";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
@@ -93,6 +94,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "tag_mismatch", label: "وسوم [Tag] مفقودة", icon: "🏷️", severity: "warning", description: "وسوم أصلية مفقودة فعلياً بعد استثناء الوسوم التي تُرجمت بالخطأ — قد تسبب خلل في العرض" },
   { id: "inazuma_tag_mismatch", label: "رموز إينازوما التقنية", icon: "⚽", severity: "critical", description: "رمز مثل ▼ (صندوق حوار جديد) أو %s أو %1F حُذف أو زاد أو تبدّل ترتيبه — تفقد الجملة الاسم أو الرقم الذي تضعه اللعبة. الإصلاح يعيد الرمز إلى موضعه في الأصل ولا يمسّ الترجمة العربية" },
   { id: "inazuma_break_misplaced", label: "فاصل صندوق إينازوما في غير مكانه", icon: "▼", severity: "warning", description: "▼ (صندوق حوار جديد) موجود لكنه وسط جملة، فتنقسم الجملة بين صندوقين. الإصلاح ينقله إلى نهاية الجملة المقابلة في الأصل ولا يغيّر أي كلمة. لا يُبلَّغ عن فاصل في نهاية جملة، حتى لو اختلف عن الأصل" },
+  { id: "twom_tag_mismatch", label: "رموز This War of Mine", icon: "🕯️", severity: "critical", description: "إطار وسم الجنس مكسور ({mr| أو القوس } مفقود أو فيه فراغ) أو رمز مثل ^CharacterName^ أو <BR> أو |XPadA| مفقود/زائد. الكلمة داخل وسم الجنس لا تُفحص أبداً؛ الإصلاح يعيد الإطار فقط." },
   { id: "technical_mismatch", label: "اختلاف الرموز التقنية", icon: "🧷", severity: "critical", description: "مجموعة الرموز التقنية لا تطابق الأصل بدقة حتى لو كان العدد متساوياً — قد تسبب تجمّد اللعبة" },
   { id: "gtaiv_runtime_token_mismatch", label: "رموز GTA IV بين ~...~", icon: "🛡️", severity: "critical", description: "رموز GTA IV بين ~...~ ناقصة أو زائدة أو تغيّرت قيمتها/ترتيبها أو تحتوي ~ منفردة؛ البناء يرفضها. الإصلاح التلقائي يستبدل الرموز فقط عندما تكون مواضعها مكتملة ومتساوية." },
   { id: "gtaiv_line_break_display", label: "سهم كسر سطر GTA IV", icon: "↵", severity: "warning", description: "علامة ~n~ موجودة بلا سطر محرر بعدها. الإصلاح يضيف السطر المرئي فقط ويعيد الباني حفظ ~n~ داخل GXT." },
@@ -200,8 +202,10 @@ const PKM_WIDTH_FIXABLE_CATEGORIES = new Set(["pkm_line_too_wide"]);
  * the token back where the original kept it, or changes nothing at all.
  */
 const INAZUMA_TAG_FIXABLE_CATEGORIES = new Set(["inazuma_tag_mismatch", "inazuma_break_misplaced"]);
+/** This War of Mine: `repairTwomTags` fixes the tag frame only and never the word inside a gender tag. */
+const TWOM_TAG_FIXABLE_CATEGORIES = new Set(["twom_tag_mismatch"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, ...INAZUMA_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...RESTORE_ORIGINAL_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, ...INAZUMA_TAG_FIXABLE_CATEGORIES, ...TWOM_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -362,6 +366,10 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       const repaired = repairInazumaTags(entry.original, text);
       return { finalText: repaired.text, repairedText: repaired.text, changed: repaired.changed, restoredOriginal: false, repairedIssues: detectIssues(entry, repaired.text) };
     }
+    if (entry.msbtFile.startsWith("twom/")) {
+      const repaired = repairTwomTags(entry.original, text);
+      return { finalText: repaired.text, repairedText: repaired.text, changed: repaired.changed, restoredOriginal: false, repairedIssues: detectIssues(entry, repaired.text) };
+    }
     const repaired = repairTranslationTagsForBuild(entry.original, text);
     const repairedIssues = detectIssues(entry, repaired.text);
     const stillCritical = repairedIssues.some((issue) => issue.severity === "critical");
@@ -394,6 +402,15 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     // sits ahead of every strategy below because several of them end in
     // "restore the English original", which is what the fix button used to do
     // to a perfectly good Arabic line that had merely lost its `\n`.
+    if (entry.msbtFile.startsWith('twom/')) {
+      const repaired = repairTwomTags(entry.original, trans);
+      return {
+        fixResult: repaired.text,
+        reason: repaired.changed
+          ? '🕯️ سيُصلَح إطار الوسم فقط ({mr| … } أو الرمز التقني) دون المساس بالكلمات العربية ولا بالكلمة داخل وسم الجنس'
+          : '⚠️ الرمز الناقص لا يمكن تخمين مكانه — أعِده يدوياً، ولن يُستبدل النص بالإنجليزي',
+      };
+    }
     if (entry.msbtFile.startsWith('inazuma/')) {
       const repaired = repairInazumaTags(entry.original, trans);
       return {
@@ -558,6 +575,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     // Same rule as the preview above: an Inazuma row is only ever repaired by
     // its own function, never restored to English and never re-wrapped by the
     // XENO-aware balancer, which cannot see this game's `\n`.
+    if (entry.msbtFile.startsWith('twom/') && onApplyFix) {
+      const repaired = repairTwomTags(entry.original, issue.translation);
+      if (repaired.changed) {
+        onApplyFix(issue.key, repaired.text);
+        toast({ title: '🕯️ إصلاح This War of Mine', description: 'أُصلح إطار الوسم فقط؛ بقيت الترجمة والكلمة داخل وسم الجنس كما هي' });
+      } else {
+        toast({ title: '⚠️ مراجعة يدوية مطلوبة', description: 'الرمز الناقص لا يمكن تخمين مكانه — لم يُستبدل النص بالإنجليزي' });
+      }
+      return;
+    }
     if (entry.msbtFile.startsWith('inazuma/') && onApplyFix) {
       const repaired = repairInazumaTags(entry.original, issue.translation);
       if (repaired.changed) {
@@ -989,7 +1016,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           continue;
         }
 
-        if (TAG_FIXABLE_CATEGORIES.has(issue.category)) {
+        if (TAG_FIXABLE_CATEGORIES.has(issue.category) || TWOM_TAG_FIXABLE_CATEGORIES.has(issue.category)) {
           tagFixKeys.push(issue.key);
           processedKeys.add(issue.key);
           continue;

@@ -65,6 +65,7 @@ const InazumaImages = lazyWithIgnoredRef(() => import("./pages/InazumaImages"));
 const GoldenSun = lazyWithIgnoredRef(() => import("./pages/GoldenSun"));
 const NinthDawnRemake = lazyWithIgnoredRef(() => import("./pages/NinthDawnRemake"));
 const FranBow = lazyWithIgnoredRef(() => import("./pages/FranBow"));
+const TwomStories = lazyWithIgnoredRef(() => import("./pages/TwomStories"));
 const FireEmblem12 = lazyWithIgnoredRef(() => import("./pages/FireEmblem12"));
 const PhTranslate = lazyWithIgnoredRef(() => import("./pages/PhTranslate"));
 const MajorasMaskLogo = lazyWithIgnoredRef(() => import("./pages/MajorasMaskLogo"));
@@ -132,6 +133,7 @@ const App = () => (
                 <Route path="/crashlands" element={<ErrorBoundary fallbackTitle="خطأ في أداة Crashlands"><Crashlands /></ErrorBoundary>} />
                 <Route path="/ninth-dawn-remake" element={<ErrorBoundary fallbackTitle="خطأ في أداة 9th Dawn Remake"><NinthDawnRemake /></ErrorBoundary>} />
                 <Route path="/fran-bow" element={<ErrorBoundary fallbackTitle="خطأ في أداة Fran Bow"><FranBow /></ErrorBoundary>} />
+                <Route path="/twom-stories" element={<ErrorBoundary fallbackTitle="خطأ في أداة This War of Mine: Stories"><TwomStories /></ErrorBoundary>} />
                 <Route path="/fire-emblem-12" element={<ErrorBoundary fallbackTitle="خطأ في فاحص Fire Emblem 12"><FireEmblem12 /></ErrorBoundary>} />
                 <Route path="/ph-translate" element={<ErrorBoundary fallbackTitle="خطأ في مسار ترجمة Phantom Hourglass"><PhTranslate /></ErrorBoundary>} />
                 <Route path="/majoras-mask-logo" element={<ErrorBoundary fallbackTitle="خطأ في أداة شعار Majora's Mask 3D"><MajorasMaskLogo /></ErrorBoundary>} />

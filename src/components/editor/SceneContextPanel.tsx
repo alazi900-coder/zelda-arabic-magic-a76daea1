@@ -75,6 +75,9 @@ const getSceneType = (tablePrefix: string): { label: string; emoji: string; cls:
  */
 export function sceneGroupKey(e: ExtractedEntry): string {
   if (e.franBowContext) return `franbow-ctx:${e.franBowContext}`;
+  // This War of Mine: the key is a path (`Dialogues/Anna/Intro/01`); rows of
+  // one conversation share everything but the last segment.
+  if (e.twomKey) return `twom-ctx:${e.twomKey.split("/").slice(0, -1).join("/")}`;
   const parts = e.msbtFile.split("/");
   const last = parts[parts.length - 1];
   if (parts.length >= 3 && last === String(e.index)) return parts.slice(0, -1).join("/");
@@ -82,7 +85,7 @@ export function sceneGroupKey(e: ExtractedEntry): string {
 }
 
 /** Xenoblade's own scene-type/speaker heuristics need a `bdat-bin:`-style msbtFile; anything else shows a neutral badge instead of a false guess. */
-export const isXenobladeFile = (msbtFile: string) => msbtFile.includes(":") && !/^(franbow|ninthdawn|crashlands)\//.test(msbtFile);
+export const isXenobladeFile = (msbtFile: string) => msbtFile.includes(":") && !/^(franbow|ninthdawn|crashlands|twom)\//.test(msbtFile);
 
 const SceneContextPanel: React.FC<SceneContextPanelProps> = ({
   open, onClose, entry, entries, translations, range = 6,
@@ -111,7 +114,7 @@ const SceneContextPanel: React.FC<SceneContextPanelProps> = ({
     return {
       window, currentIdx, fileTotal: fileEntries.length, translatedCount,
       sceneType: meta ? getSceneType(meta.tablePrefix) : null,
-      fileName: meta ? meta.fileName : (entry.franBowContext || key),
+      fileName: meta ? meta.fileName : (entry.franBowContext || key.replace(/^twom-ctx:/, "") || key),
       speaker: xeno ? getSpeakerFromContent(entry.original) : null,
     };
   }, [entry, entries, translations, range, extraRange]);

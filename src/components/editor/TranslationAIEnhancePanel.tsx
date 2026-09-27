@@ -43,6 +43,7 @@ import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, val
 import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
 import { repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
+import { repairTwomTags, validateTwomTags } from "@/lib/twom/twom-tags";
 import { repairInazumaTags, validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
 
 interface TranslationAIEnhancePanelProps {
@@ -274,6 +275,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const isCrashlands = gameParam === "crashlands";
   const isNinthDawn = gameParam === "ninthdawn";
   const isInazuma = gameParam === "inazuma";
+  const isTwom = gameParam === "twom";
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
@@ -294,6 +296,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // path runs, so a suggestion it can repair is not refused here as unsafe
     // only to be accepted (and silently repaired) a moment later at save.
     if (isInazuma) return validateInazumaTags(original, repairInazumaTags(original, suggestion).text).reason ?? null;
+    // Only the tag frame is checked; the word inside a gender tag is the translator's.
+    if (isTwom) return validateTwomTags(original, repairTwomTags(original, suggestion).text).reason ?? null;
     if (isGtaIv) {
       const dollarRepair = repairGtaIvDollarAmountSequence(original, suggestion);
       if (!dollarRepair.safe) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";

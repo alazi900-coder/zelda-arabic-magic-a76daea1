@@ -38,6 +38,13 @@ const INAZUMA_BREAK_RULE = "\\u25BC";
 /** Golden Sun's control codes, written in the editor as `\xNN` -- see goldensun-tags.ts. */
 const GOLDENSUN_CODE_RULE = "\\\\x[0-9a-fA-F]{2}";
 
+/**
+ * This War of Mine: Stories. A gender tag's frame (`{mr|` and its `}`) is
+ * marked, the word between them is not — it is text the translator writes.
+ * Plus the game's fixed tokens `^CharacterName^` and `|XPadA|`/`|#color=…|`.
+ */
+const TWOM_RULES = ["\\{(?:mr|fr|ms|fs)\\|+", "\\}", "\\^[A-Za-z]+\\^", "\\|#?[A-Za-z0-9=]+\\|"];
+
 const RULES = [
   "\\[\\s*\\w+\\s*:[^\\]]*?\\](?:\\s*\\([^)]{1,100}\\))?",
   "\\[\\s*\\w+\\s*=\\s*[^\\]]*\\]",
@@ -93,6 +100,8 @@ export function editorTagPattern(msbtFile?: string): RegExp {
         ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), CRASHLANDS_TAG_RE.source]
         : msbtFile?.startsWith("ninthdawn/")
           ? [...RULES, NINTHDAWN_TAG_RE.source]
-          : RULES;
+          : msbtFile?.startsWith("twom/")
+            ? [...TWOM_RULES, ...RULES]
+            : RULES;
   return new RegExp(`(${rules.join("|")})`, "g");
 }

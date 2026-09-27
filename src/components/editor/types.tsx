@@ -36,6 +36,13 @@ export interface ExtractedEntry {
   franBowCategory?: string;
   franBowContext?: string;
   franBowOrigins?: string[];
+  /** This War of Mine: Stories — the export's own row, kept whole so the
+   * rebuilt JSON changes nothing but `translation`/`status`. */
+  twomKey?: string;
+  twomRow?: Record<string, unknown>;
+  /** Top-level fields of the imported file (format, game, version,
+   * instructions). Carried on the first entry only. */
+  twomDocMeta?: Record<string, unknown>;
 }
 
 

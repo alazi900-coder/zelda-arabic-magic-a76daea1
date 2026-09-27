@@ -20,6 +20,7 @@
  *   - `goldensun/<source>`         → Golden Sun (GBA)
  *   - `ninthdawn/<section>/<n>`    → 9th Dawn Remake
  *   - `franbow/<category>/<n>`     → Fran Bow
+ *   - `twom/<category>/<n>`        → This War of Mine: Stories
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -41,7 +42,8 @@ export type GameParam =
   | "ninthdawn"
   | "inazuma"
   | "goldensun"
-  | "franbow";
+  | "franbow"
+  | "twom";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -63,5 +65,6 @@ export function resolveGameParam(
   if (f.startsWith("goldensun/")) return "goldensun";
   if (f.startsWith("ninthdawn/")) return "ninthdawn";
   if (f.startsWith("franbow/")) return "franbow";
+  if (f.startsWith("twom/")) return "twom";
   return "xenoblade";
 }

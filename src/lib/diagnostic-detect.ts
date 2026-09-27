@@ -18,6 +18,7 @@ import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { validateFranBowTags } from "@/lib/franbow/franbow-tags";
+import { TWOM_FIXED_RE, TWOM_GENDER_RE, validateTwomTags } from "@/lib/twom/twom-tags";
 import { validateInazumaTags, findMisplacedInazumaBreak } from "@/lib/inazuma/inazuma-tags";
 import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
@@ -115,6 +116,14 @@ const SPECIFIC_TECHNICAL_ISSUE_CATEGORIES = new Set([
 ]);
 
 type TechnicalTagKind = "bracket" | "brace";
+
+/** Shared tag checks that This War of Mine's own check replaces (see detectIssues). */
+const TWOM_SHADOWED_CATEGORIES = new Set([
+  ...SPECIFIC_TECHNICAL_ISSUE_CATEGORIES,
+  "technical_mismatch",
+  "tag_order_mismatch",
+  "twom_tag_mismatch",
+]);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -214,6 +223,23 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   if (entry.msbtFile.startsWith("franbow/") && trimmed) {
     const check = validateFranBowTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز Fran Bow التقنية مختلفة: ${check.reason}` });
+  }
+  // This War of Mine: Stories. Its gender tags are translated on purpose
+  // (`{mr|he}` → `{mr|هو}`), so the shared bracket/brace checks below would
+  // call every correct one a "translated tag". The game's own check looks at
+  // the tag frame only, never the word inside; the shared checks still run,
+  // on both texts with every token taken out, and their tag categories are
+  // dropped because the game's own check already covers them.
+  if (entry.msbtFile.startsWith("twom/")) {
+    if (trimmed) {
+      const check = validateTwomTags(entry.original, translation);
+      if (!check.valid) issues.push({ ...base, severity: "critical", category: "twom_tag_mismatch", message: `رموز This War of Mine غير سليمة: ${check.reason}` });
+    }
+    const strip = (s: string) => s.replace(new RegExp(TWOM_GENDER_RE.source, "g"), "").replace(new RegExp(TWOM_FIXED_RE.source, "g"), "");
+    const shared = detectIssues({ ...entry, msbtFile: `twom-masked/${entry.msbtFile}`, original: strip(entry.original) }, strip(translation))
+      .filter((issue) => !TWOM_SHADOWED_CATEGORIES.has(issue.category))
+      .map((issue) => ({ ...issue, key, label: entry.label, original: entry.original, translation }));
+    return [...issues, ...shared];
   }
 
   // GTA IV has its own runtime/control syntax: `~...~`. It is not an XC3 tag

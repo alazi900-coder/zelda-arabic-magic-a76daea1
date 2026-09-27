@@ -146,3 +146,13 @@ export const FRANBOW_PROMPT_PRESETS: PromptPreset[] = [
   { id: "examine", label: "◈ فحص الأشياء والتفاعل", text: "جمل فحص الأشياء والتفاعل مع البيئة قصيرة ومباشرة، كأنها ملاحظة عابرة من الشخصية لا وصفاً رسمياً." },
   { id: "menu", label: "▤ الواجهة والقوائم", text: "القوائم والأزرار والإعدادات قصيرة جداً ومباشرة. استخدم كلمة أو كلمتين متى أمكن." },
 ];
+
+/** This War of Mine: Stories — civilians surviving a siege; plain, weary,
+ * human voices. Gender tags carry the part of the sentence that changes with
+ * the character, and Arabic moves more words there than English does. */
+export const TWOM_PROMPT_PRESETS: PromptPreset[] = [
+  { id: "default", label: "🕯️ أسلوب This War of Mine", text: "ترجم This War of Mine: Stories بعربية فصحى حديثة بسيطة وصادقة، بصوت مدنيين أنهكهم الحصار والحرب. لا تجمّل القسوة ولا تضف مبالغة. وسوم الجنس مثل {mr|he}{fr|she}: أبقِ بداية الوسم {mr| ونهايته } كما هما وترجم ما بداخله فقط، ويجوز نقل الفعل أو الصفة كاملة داخل الوسم لتطابق جنس الشخصية بالعربية، مثل {mr|ذهب}{fr|ذهبت}. الرموز ^CharacterName^ و<BR> و|XPadA| و|#color=...| تبقى حرفياً." },
+  { id: "dialogue", label: "💬 الحوارات وكلام الشخصيات", text: "كلام الشخصيات قصير وعفوي ومتعب، كما يتكلم الناس في الأزمات. طابق الفعل والضمير مع جنس الشخصية عبر وسوم الجنس، ولا تترك كلمة إنجليزية داخل أي وسم." },
+  { id: "bios", label: "● الشخصيات والسجلات", text: "السير الذاتية ويوميات الحرب والراديو بلغة سردية هادئة ومباشرة، دون زخرفة. حافظ على أسماء الأشخاص والأماكن ثابتة في كل النصوص." },
+  { id: "menu", label: "▣ الواجهة والقوائم", text: "القوائم والأزرار قصيرة جداً، كلمة أو كلمتان، مع إبقاء رموز الأزرار مثل |XPadA| في مكانها." },
+];

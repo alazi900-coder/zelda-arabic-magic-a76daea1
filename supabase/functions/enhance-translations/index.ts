@@ -96,6 +96,9 @@ const RULES: RuleDef[] = [
   // is 'franbow' (see FRANBOW_ONLY_RULE_IDS). The 7,280-entry export checked
   // this session carries none of these today; kept as a safety net.
   { id: 'detect_franbow_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـFran Bow] إن ظهر في السطر رمز بين `{…}` أو `<…>` أو `[…]` أو `%s`/`%d` أو `\\n` فهو قيمة أو تنسيق يضعه المحرّك وقت التشغيل، وليس نصّاً. أبقِ كل رمز من هذه بنفس العدد والترتيب والموضع حرفياً، ولا تخترع رمزاً غير موجود في الأصل ولا تحذف رمزاً موجوداً فيه.' },
+  // This War of Mine: Stories-only rule, injected only when the request's
+  // game is 'twom' (see TWOM_ONLY_RULE_IDS).
+  { id: 'detect_twom_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـThis War of Mine: Stories] وسوم الجنس `{mr|…}` و`{fr|…}` و`{ms|…}` و`{fs|…}` يختار المحرّك منها ما يطابق جنس الشخصية: أبقِ بداية الوسم (`{mr|`) ونهايته (`}`) حرفياً وترجم ما بينهما، ويجوز نقل الفعل أو الصفة كاملة داخل الوسم وإضافة وسوم من الأنواع نفسها الموجودة في الأصل. ولا تترك كلمة إنجليزية داخل وسم. أما `^CharacterName^` وأمثاله و`<BR>` `<HEADER>` `<NAME>` `<HAND>` وأكواد اللون `|#color=…|` `|#defaultcolor|` ورموز الأزرار `|XPadA|` فأبقِها بنفس العدد حرفياً، ويجوز تغيير موضعها ليناسب ترتيب الجملة العربية.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -123,6 +126,8 @@ const CRASHLANDS_ONLY_RULE_IDS = new Set(['detect_crashlands_tags', 'detect_cras
 const NINTHDAWN_ONLY_RULE_IDS = new Set(['detect_ninthdawn_tags']);
 /** Rules whose prompt text only makes sense for Fran Bow — never injected elsewhere. */
 const FRANBOW_ONLY_RULE_IDS = new Set(['detect_franbow_tags']);
+/** Rules whose prompt text only makes sense for This War of Mine: Stories — never injected elsewhere. */
+const TWOM_ONLY_RULE_IDS = new Set(['detect_twom_tags']);
 /**
  * Rules that teach the model Xenoblade's tag syntax, withheld from Pokémon.
  *
@@ -247,6 +252,25 @@ function preservesNinthDawnTokenSequence(original: string, candidate: string): b
 }
 
 const FRANBOW_TOKEN_REGEX = /\{[^}]*\}|<[^>]*>|\[[^\]]*\]|%[a-zA-Z]|\\n/g;
+/**
+ * This War of Mine: Stories, mirrored from src/lib/twom/twom-tags.ts. Gender
+ * tags `{mr|…}` are translated on purpose, so only their frame is checked:
+ * every kind in the source must still appear, no new kind may appear, and no
+ * stray brace may be left. Fixed tokens must keep their count; Arabic word
+ * order may move them.
+ */
+const TWOM_GENDER_REGEX = /\{(mr|fr|ms|fs)(\|+)([^{}]*)\}/g;
+const TWOM_FIXED_REGEX = /\^[A-Za-z]+\^|<[A-Za-z/]+>|\|#?[A-Za-z0-9=]+\|/g;
+function preservesTwomTokens(original: string, candidate: string): boolean {
+  const strip = (s: string) => (s || '').replace(new RegExp(TWOM_GENDER_REGEX.source, 'g'), ' ');
+  const fixed = (s: string) => (strip(s).match(new RegExp(TWOM_FIXED_REGEX.source, 'g')) || []).sort().join('\u0000');
+  const kinds = (s: string) => new Set([...(s || '').matchAll(new RegExp(TWOM_GENDER_REGEX.source, 'g'))].map(m => m[1]));
+  const a = kinds(original), b = kinds(candidate);
+  return fixed(original) === fixed(candidate) &&
+    [...a].every(k => b.has(k)) && [...b].every(k => a.has(k)) &&
+    !(/[{}]/.test(strip(candidate)) && !/[{}]/.test(strip(original)));
+}
+
 function preservesFranBowTokenSequence(original: string, candidate: string): boolean {
   const expected = (original || '').match(FRANBOW_TOKEN_REGEX) || [];
   const actual = (candidate || '').match(FRANBOW_TOKEN_REGEX) || [];
@@ -360,7 +384,7 @@ function preservesGtaIvDollarAmountSequence(original: string, candidate: string)
   return before.length === after.length && before.every((amount, index) => normalize(amount) === normalize(after[index] || ''));
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false): boolean {
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
@@ -376,7 +400,8 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
     (!isCrashlands || preservesCrashlandsTokenSequence(original, suggested)) &&
     (!isNinthDawn || preservesNinthDawnTokenSequence(original, suggested)) &&
     (!isInazuma || preservesInazumaTokenSequence(original, suggested)) &&
-    (!isFranBow || preservesFranBowTokenSequence(original, suggested));
+    (!isFranBow || preservesFranBowTokenSequence(original, suggested)) &&
+    (!isTwom || preservesTwomTokens(original, suggested));
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -406,6 +431,7 @@ function buildRuleSections(
   isNinthDawn = false,
   isInazuma = false,
   isFranBow = false,
+  isTwom = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -443,7 +469,8 @@ function buildRuleSections(
     (!CRASHLANDS_ONLY_RULE_IDS.has(r.id) || isCrashlands) &&
     (!NINTHDAWN_ONLY_RULE_IDS.has(r.id) || isNinthDawn) &&
     (!FRANBOW_ONLY_RULE_IDS.has(r.id) || isFranBow) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow));
+    (!TWOM_ONLY_RULE_IDS.has(r.id) || isTwom) &&
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -593,7 +620,10 @@ Deno.serve(async (req) => {
     const isNinthDawn = game === 'ninthdawn';
     const isInazuma = game === 'inazuma';
     const isFranBow = game === 'franbow';
-    const gameLabel = isLumenTale
+    const isTwom = game === 'twom';
+    const gameLabel = isTwom
+      ? 'This War of Mine: Stories'
+      : isLumenTale
       ? 'LumenTale: Memories of Trey'
       : isNinthDawn
       ? '9th Dawn Remake'
@@ -616,7 +646,9 @@ Deno.serve(async (req) => {
       : isFranBow
       ? 'Fran Bow'
       : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
-    const forgetOtherGame = isMetroidPrime
+    const forgetOtherGame = isTwom
+      ? '\nهذه مراجعة خاصة بـ This War of Mine: Stories — مدنيون يحاولون النجاة في مدينة محاصرة. لا تفترض مصطلحات أو شخصيات من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. وسوم الجنس `{mr|…}` `{fr|…}` `{ms|…}` `{fs|…}`: أبقِ بداية الوسم ونهايته حرفياً وترجم ما بينهما، ويجوز نقل الفعل كاملاً داخل الوسم. الرموز `^CharacterName^` و`<BR>` و`|XPadA|` و`|#color=…|` تبقى بنفس العدد حرفياً.\n'
+      : isMetroidPrime
       ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
       : isMother3
       ? `\n${MOTHER3_FORGET_OTHER_GAME_RULE}\n`
@@ -738,12 +770,12 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow
+    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow || isTwom
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -1200,7 +1232,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom) &&
           isCategoryEnabled(i.category, ruleSections.enabledSet) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1319,7 +1351,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom) &&
             isTypeEnabled(r.type, ruleSections.enabledSet) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1408,7 +1440,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
               .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1416,7 +1448,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom) &&
         isTypeEnabled(s.type, ruleSections.enabledSet) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

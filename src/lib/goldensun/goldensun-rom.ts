@@ -31,11 +31,20 @@ export interface GoldenSunLayout {
 export const GS_LAYOUT_VANILLA: GoldenSunLayout = { id: "vanilla", huffmanOffset: 0x3842c, dataOffset: 0x736b8 };
 
 /**
- * The US ROM with GoldenSun-AR-RTL-FONT.ups applied: goldensun-arabic/engine.patch
- * built from the decomp with the English text. Rebuilding relinked the ROM,
- * so both tables moved (goldensun.map of that build).
+ * The US ROM with GoldenSun-AR-RTL-FONT-v2.ups applied: goldensun-arabic/engine.patch
+ * built from the decomp with the English text. The right-to-left code is
+ * linked after everything else, so no game code moved and both tables stay
+ * where the untouched ROM has them.
  */
-export const GS_LAYOUT_RTL: GoldenSunLayout = { id: "rtl", huffmanOffset: 0x38618, dataOffset: 0x738a4 };
+export const GS_LAYOUT_RTL: GoldenSunLayout = { id: "rtl", huffmanOffset: 0x3842c, dataOffset: 0x736b8 };
+
+/**
+ * The first GoldenSun-AR-RTL-FONT.ups put the right-to-left code in the
+ * middle of the game's code, moving everything after it by 0x1EC bytes while
+ * the menus' jump tables kept the old addresses: opening any menu froze the
+ * game. Its tables sat here.
+ */
+const GS_LAYOUT_BROKEN_RTL: GoldenSunLayout = { id: "rtl", huffmanOffset: 0x38618, dataOffset: 0x738a4 };
 
 /** `Func_80155d0`'s character limit: 0x6F in the untouched ROM, 0xDF once the RTL+font patch is in. */
 const CHAR_LIMIT_OFFSET = 0x155f0;
@@ -67,20 +76,34 @@ export function looksLikeGoldenSunRom(rom: Uint8Array): boolean {
  * decoded into garbage. A ROM this tool built keeps its layout: only the
  * pointer values change.
  */
-export function detectGoldenSunLayout(rom: Uint8Array): GoldenSunLayout | null {
-  if (!looksLikeGoldenSunRom(rom)) return null;
-  const limit = rom[CHAR_LIMIT_OFFSET];
-  const layout = limit === 0xdf ? GS_LAYOUT_RTL : limit === 0x6f ? GS_LAYOUT_VANILLA : null;
-  if (!layout) return null;
+function hasStringTables(rom: Uint8Array, layout: GoldenSunLayout): boolean {
   const isRomPtr = (off: number) => {
     const p = readU32(rom, off);
     return p >>> 24 === 0x08 && (p & 0xffffff) < rom.length;
   };
-  if (!isRomPtr(layout.huffmanOffset) || !isRomPtr(layout.huffmanOffset + 4)) return null;
+  if (!isRomPtr(layout.huffmanOffset) || !isRomPtr(layout.huffmanOffset + 4)) return false;
   for (let c = 0; c < GS_CHUNKS; c++) {
-    if (!isRomPtr(layout.dataOffset + c * 8) || !isRomPtr(layout.dataOffset + c * 8 + 4)) return null;
+    if (!isRomPtr(layout.dataOffset + c * 8) || !isRomPtr(layout.dataOffset + c * 8 + 4)) return false;
   }
+  return true;
+}
+
+export function detectGoldenSunLayout(rom: Uint8Array): GoldenSunLayout | null {
+  if (!looksLikeGoldenSunRom(rom)) return null;
+  const limit = rom[CHAR_LIMIT_OFFSET];
+  const layout = limit === 0xdf ? GS_LAYOUT_RTL : limit === 0x6f ? GS_LAYOUT_VANILLA : null;
+  if (!layout || !hasStringTables(rom, layout)) return null;
   return layout;
+}
+
+/** A ROM with the first, menu-freezing RTL patch (or built from one by this tool). */
+export function isBrokenGoldenSunRtlRom(rom: Uint8Array): boolean {
+  return (
+    looksLikeGoldenSunRom(rom) &&
+    rom[CHAR_LIMIT_OFFSET] === 0xdf &&
+    !hasStringTables(rom, GS_LAYOUT_RTL) &&
+    hasStringTables(rom, GS_LAYOUT_BROKEN_RTL)
+  );
 }
 
 export interface GoldenSunEntry {

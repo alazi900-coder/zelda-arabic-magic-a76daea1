@@ -76,6 +76,24 @@ index f48b585..8c85033 100644
 +	.global Data_32224
 +Data_32224:
 +	.incbin "data/arabic_font.bin"
+diff --git a/goldensun.ld b/goldensun.ld
+index 5b8643e..d774d55 100644
+--- a/goldensun.ld
++++ b/goldensun.ld
+@@ -96,6 +96,13 @@ SECTIONS {
+ 		data/rom_320000/rom_320000.o(.rodata.mftdata)
+ 	} > rom
+ 
++	/* Arabic right-to-left code, after everything else: added in the middle
++	   of rom_15000 it moved the game's code, and the absolute addresses the
++	   game keeps in data (menu jump tables) no longer matched. */
++	rom_rtl : ALIGN(4) {
++		stage1.o(rom_rtl)
++	} > rom
++
+ 	.fill : {
+ 		. = ORIGIN(rom) + LENGTH(rom) - 1;
+ 		BYTE(0);
 diff --git a/src/decompress/huffman.s b/src/decompress/huffman.s
 index f0bf98c..91b819f 100644
 --- a/src/decompress/huffman.s
@@ -89,15 +107,12 @@ index f0bf98c..91b819f 100644
  	str	r0, [sp, #0x1c]
  	movhi	r0, #1
  	bhi	.L158dc
-diff --git a/src/ui/ui.c b/src/ui/ui.c
-index 1192c61..a94c0f0 100644
---- a/src/ui/ui.c
-+++ b/src/ui/ui.c
-@@ -340,3 +340,103 @@ INCLUDE_ASM("asm/ui/ui/Func_8019d0c.s");
- INCLUDE_ASM("asm/ui/ui/GetPortrait.s");
- INCLUDE_ASM("asm/ui/ui/Func_8019da8.s");
- INCLUDE_ASM("asm/ui/ui/Func_8019e48.s");
-+
+diff --git a/src/ui/rtl.c b/src/ui/rtl.c
+new file mode 100644
+index 0000000..f551bb4
+--- /dev/null
++++ b/src/ui/rtl.c
+@@ -0,0 +1,99 @@
 +/* ---- Arabic: right-to-left text ------------------------------------------
 + * Text is stored in logical order. DrawText mirrors each glyph's x inside its
 + * window, so the first letter lands on the right, every line is right-aligned
@@ -197,6 +212,21 @@ index 1192c61..a94c0f0 100644
 +    }
 +    return DrawText_orig(win, ch, x, y, flag);
 +}
+diff --git a/stage1.ld b/stage1.ld
+index 69402c3..cf2b08d 100644
+--- a/stage1.ld
++++ b/stage1.ld
+@@ -509,6 +509,10 @@ SECTIONS {
+ 		. += 0x1000;
+ 	} > rom
+ 
++	rom_rtl : {
++		src/ui/rtl.o(.text)
++	} > rom
++
+ 	/DISCARD/ : {
+ 		*(*)
+ 	}
 diff --git a/tools/pack_strings.c b/tools/pack_strings.c
 index 1b151fa..f9192e1 100644
 --- a/tools/pack_strings.c

@@ -7,6 +7,8 @@ import {
   extractGoldenSunEditorEntries,
   restoreGoldenSunTranslations,
   detectGoldenSunLayout,
+  isBrokenGoldenSunRtlRom,
+  GOLDENSUN_BROKEN_RTL_MESSAGE,
   GOLDENSUN_BUFFER_KEY,
   GOLDENSUN_SOURCE_GAME,
   GOLDENSUN_UNKNOWN_ROM_MESSAGE,
@@ -16,7 +18,7 @@ import { APP_VERSION } from "@/lib/version";
 /**
  * Golden Sun opener: reads the cartridge's Huffman-compressed string table
  * into the shared editor (`/editor`), which rewrites it when it builds the
- * `.gba` back out. The ROM to open is the one with GoldenSun-AR-RTL-FONT.ups
+ * `.gba` back out. The ROM to open is the one with GoldenSun-AR-RTL-FONT-v2.ups
  * applied: it already has the Arabic font and right-to-left engine, so the
  * build only changes the text.
  */
@@ -31,7 +33,7 @@ export default function GoldenSun() {
       try {
         const rom = new Uint8Array(await file.arrayBuffer());
         const layout = detectGoldenSunLayout(rom);
-        if (!layout) throw new Error(GOLDENSUN_UNKNOWN_ROM_MESSAGE);
+        if (!layout) throw new Error(isBrokenGoldenSunRtlRom(rom) ? GOLDENSUN_BROKEN_RTL_MESSAGE : GOLDENSUN_UNKNOWN_ROM_MESSAGE);
         const entries = extractGoldenSunEditorEntries(rom, layout);
         if (entries.length === 0) throw new Error("لم يُعثر على نصوص في هذا الروم");
 
@@ -50,7 +52,7 @@ export default function GoldenSun() {
 
         const restored = Object.keys(translations).length;
         if (layout.id === "vanilla") {
-          toast.warning("هذا روم أصلي بلا رقعة الاتجاه — الروم المبني سيظهر من اليسار لليمين. طبّق GoldenSun-AR-RTL-FONT.ups أولاً.");
+          toast.warning("هذا روم أصلي بلا رقعة الاتجاه — الروم المبني سيظهر من اليسار لليمين. طبّق GoldenSun-AR-RTL-FONT-v2.ups أولاً.");
         }
         toast.success(
           `استُخرج ${entries.length.toLocaleString("ar")} نصاً` +
@@ -80,7 +82,7 @@ export default function GoldenSun() {
         </div>
 
         <p className="mb-4 text-sm text-muted-foreground">
-          طبّق رقعة <code>GoldenSun-AR-RTL-FONT.ups</code> على روم Golden Sun الأمريكي الأصلي، ثم
+          طبّق رقعة <code>GoldenSun-AR-RTL-FONT-v2.ups</code> على روم Golden Sun الأمريكي الأصلي، ثم
           ارفع الروم الناتج هنا. الرقعة فيها الخط العربي وعكس اتجاه الكتابة؛ تُقرأ النصوص كلها
           (١٠,٧٢٢ سطراً)، تترجمها في المحرّر، ثم يُكتب النص المترجم في نفس الروم.
         </p>

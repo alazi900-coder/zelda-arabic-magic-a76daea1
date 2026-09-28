@@ -19,6 +19,18 @@ code.update(zip(RARE, OVERFLOW))
 rom = bytearray(open('/home/user/coaltergeist/goldensun-decomp/baserom.gba', 'rb').read())
 font = bytearray(rom[0x32224:0x33e40])
 ROW0 = 3  # glyph row 0 -> GS row 3: baseline (glyph row 6) on GS row 9, descenders to row 14
+# Glyphs of the user's font redrawn here (rows of the 11x12 NFTR cell, baseline row 7):
+# its initial/medial hah was the same small hook as dal, so نحو read ند و; jeem and
+# khah get the same body with their dots. The initial/medial lam stem stopped one
+# pixel above the baseline, leaving a hole under it (الملف read المـل ف).
+HAH_I = {4: '.####', 5: '...#.', 6: '..#..', 7: '####.'}
+HAH_M = {4: '.####', 5: '...#.', 6: '..#..', 7: '######'}
+REDRAW = {
+    0xFEA3: HAH_I, 0xFEA4: HAH_M,
+    0xFE9F: {**HAH_I, 9: '..#..'}, 0xFEA0: {**HAH_M, 9: '..#..'},
+    0xFEA7: {2: '..#..', **HAH_I}, 0xFEA8: {2: '..#..', **HAH_M},
+}
+LAM_FILL = {0xFEDF: (7, 2), 0xFEE0: (7, 2)}  # (row, column) to ink
 for cp, c in code.items():
     i = cps.index(cp)
     g = glyph_of(d, cm, sj[i]); bits = d[pl + 16 + g * tb:pl + 16 + (g + 1) * tb]
@@ -27,8 +39,13 @@ for cp, c in code.items():
     struct.pack_into('<H', cell, 0, adv)
     for y in range(ch):
         row = 0
-        for x in range(cw):
-            if (bits[(y * cw + x) // 8] >> (7 - (y * cw + x) % 8)) & 1: row |= 0x8000 >> x
+        if cp in REDRAW:
+            for x, px in enumerate(REDRAW[cp].get(y, '')):
+                if px == '#': row |= 0x8000 >> x
+        else:
+            for x in range(cw):
+                if (bits[(y * cw + x) // 8] >> (7 - (y * cw + x) % 8)) & 1: row |= 0x8000 >> x
+            if cp in LAM_FILL and LAM_FILL[cp][0] == y: row |= 0x8000 >> LAM_FILL[cp][1]
         struct.pack_into('<H', cell, 2 + (ROW0 + y) * 2, row)
     at = (c - 0x20) * 32
     n = min(32, len(font) - at)

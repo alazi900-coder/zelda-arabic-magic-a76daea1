@@ -36,6 +36,10 @@ rom = bytearray(open(sys.argv[1], "rb").read())
 
 for code_hex, (_form, cell) in codes.items():
     code = int(code_hex, 16)
+    if code == 0x7F:
+        # the solid tile the game clears windows with (battle bar, menus): kept;
+        # rtl.c draws the isolated yeh-hamza sent there with the final form
+        continue
     rows = cells[cell * 10 + 2 : cell * 10 + 10]
     cols = [x for x in range(8) if any(r >> (7 - x) & 1 for r in rows)]
     lo, hi = min(cols), max(cols)

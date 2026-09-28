@@ -1,3 +1,33 @@
+diff --git a/asm/battle/mechanics/WaitTextPrompt.s b/asm/battle/mechanics/WaitTextPrompt.s
+index 439701d..8afdc6f 100644
+--- a/asm/battle/mechanics/WaitTextPrompt.s
++++ b/asm/battle/mechanics/WaitTextPrompt.s
+@@ -65,16 +65,19 @@
+ 	and	r3, r2
+ 	mov	r2, r10
+ 	orr	r3, r0
++	strh	r3, [r7, #8]
++	@ Arabic: the text runs right to left, so it ends on the left: the arrow
++	@ goes at (window x + width) * 8 - end of text - 22 instead of window x * 8
++	@ + end of text + 4 (same size; the & 0x1ff is dropped, x stays in range)
+ 	ldrh	r1, [r2, #0xc]
++	ldrh	r3, [r2, #8]
++	add	r1, r3
++	lsl	r1, #3
+ 	mov	r2, r9
+-	strh	r3, [r7, #8]
+ 	ldrh	r3, [r2, #4]
+-	lsl	r1, #3
+ 	lsr	r3, #8
+-	add	r1, r3
+-	ldr	r3, .Lbb70c	@ 0x1ff
+-	add	r1, #4
+-	and	r1, r3
++	sub	r1, r3
++	sub	r1, #22
+ 	ldr	r2, .Lbb710	@ 0xfffffe00
+ 	ldrh	r3, [r7, #6]
+ 	and	r3, r2
 diff --git a/asm/ui/text/Func_801de5c.s b/asm/ui/text/Func_801de5c.s
 index 4cd4ae3..7a0895d 100644
 --- a/asm/ui/text/Func_801de5c.s
@@ -169,10 +199,10 @@ index f0bf98c..91b819f 100644
  	bhi	.L158dc
 diff --git a/src/ui/rtl.c b/src/ui/rtl.c
 new file mode 100644
-index 0000000..09f472b
+index 0000000..56ba252
 --- /dev/null
 +++ b/src/ui/rtl.c
-@@ -0,0 +1,245 @@
+@@ -0,0 +1,255 @@
 +/* ---- Arabic: right-to-left text ------------------------------------------
 + * Text is stored in logical order. DrawText mirrors each glyph's x inside its
 + * window, so the first letter lands on the right, every line is right-aligned
@@ -180,6 +210,12 @@ index 0000000..09f472b
 + * (an English name, a number the game fills in) must still read left to
 + * right: BufferString flips each such run once the text is expanded, and the
 + * mirroring flips it back. */
++
++/* 0x7F in the menu font is the solid tile the game clears windows with, so it
++   keeps it; the isolated yeh-hamza the text puts there is drawn as the final
++   form (0x95), which looks the same. */
++#define RTL_SMALL_BLANK 0x7f
++#define RTL_YEH_HAMZA_FINAL 0x95
 +
 +extern unsigned char *gRtlTextBase __asm__("iwram_3001e8c");
 +extern const unsigned short Data_32224[];
@@ -271,8 +307,12 @@ index 0000000..09f472b
 +        /* windows with flag 8 draw with the small 8x8 font (file 0x13), whose
 +           advance widths are Data_370d4, as DrawText_orig picks it */
 +        int small = flag != 1 && (*(unsigned short *)((unsigned char *)win + 0x16) & 8);
-+        int w = small ? Data_370d4[ch - 0x20] : Data_32224[(ch - 0x20) * 16];
 +        int bound = *(unsigned short *)((unsigned char *)win + 8) * 8 - 12;
++        int w;
++
++        if (small && ch == RTL_SMALL_BLANK)
++            ch = RTL_YEH_HAMZA_FINAL;
++        w = small ? Data_370d4[ch - 0x20] : Data_32224[(ch - 0x20) * 16];
 +
 +        x = bound - x - w;
 +        if (x < 0)
@@ -315,7 +355,7 @@ index 0000000..09f472b
 +        ;
 +    s = alloc_ewram((n + 1) * 2);
 +    for (i = 0; i <= n; i++)
-+        s[i] = src[i];
++        s[i] = src[i] == RTL_SMALL_BLANK ? RTL_YEH_HAMZA_FINAL : src[i];
 +
 +    i = 0;
 +    while (i < n) {

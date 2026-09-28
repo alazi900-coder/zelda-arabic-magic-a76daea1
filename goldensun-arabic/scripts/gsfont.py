@@ -21,16 +21,16 @@ font = bytearray(rom[0x32224:0x33e40])
 ROW0 = 3  # glyph row 0 -> GS row 3: baseline (glyph row 6) on GS row 9, descenders to row 14
 # Glyphs of the user's font redrawn here (rows of the 11x12 NFTR cell, baseline row 7):
 # its initial/medial hah was the same small hook as dal, so نحو read ند و. It is now
-# a top stroke and a slant one row taller than dal and ain (a shorter one read as ain:
-# الحرب as العرب); jeem and khah get the same body with their dots. The initial/medial
-# lam stem stopped one pixel above the baseline, leaving a hole under it (الملف read
-# المـل ف).
-HAH_I = {3: '#####', 4: '....#', 5: '...#.', 6: '..#..', 7: '###..'}
-HAH_M = {3: '#####', 4: '....#', 5: '...#.', 6: '..#..', 7: '######'}
+# a wide top stroke with a slant, at the height of the other letters (one row higher
+# looked like a half ta; a narrower stroke read as ain: الحرب as العرب); jeem and
+# khah get the same body with their dots. The initial/medial lam stem stopped one
+# pixel above the baseline, leaving a hole under it.
+HAH_I = {4: '#####', 5: '....#', 6: '...#.', 7: '####.'}
+HAH_M = {4: '#####', 5: '....#', 6: '...#.', 7: '######'}
 REDRAW = {
     0xFEA3: HAH_I, 0xFEA4: HAH_M,
     0xFE9F: {**HAH_I, 9: '..#..'}, 0xFEA0: {**HAH_M, 9: '..#..'},
-    0xFEA7: {1: '..#..', **HAH_I}, 0xFEA8: {1: '..#..', **HAH_M},
+    0xFEA7: {2: '..#..', **HAH_I}, 0xFEA8: {2: '..#..', **HAH_M},
 }
 LAM_FILL = {0xFEDF: (7, 2), 0xFEE0: (7, 2)}  # (row, column) to ink
 for cp, c in code.items():

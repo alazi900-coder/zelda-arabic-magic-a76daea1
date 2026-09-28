@@ -71,6 +71,26 @@ index c94ce1d..e50fdd5 100644
 -.func_end BufferString
 +.func_end BufferString_orig
  
+diff --git a/asm/ui/ui/DrawMsgGlyph.s b/asm/ui/ui/DrawMsgGlyph.s
+index 145ca81..04f709d 100644
+--- a/asm/ui/ui/DrawMsgGlyph.s
++++ b/asm/ui/ui/DrawMsgGlyph.s
+@@ -1,7 +1,7 @@
+ 	.include "macros.inc"
+ 	.include "gba.inc"
+ 
+-.thumb_func_start DrawMsgGlyph  @ 0x080178b0
++.thumb_func_start DrawMsgGlyph_orig  @ 0x080178b0
+ 	push	{r5, r6, r7, lr}
+ 	mov	r7, r11
+ 	mov	r6, r10
+@@ -202,5 +202,5 @@
+ 	pop	{r5, r6, r7}
+ 	pop	{r1}
+ 	bx	r1
+-.func_end DrawMsgGlyph
++.func_end DrawMsgGlyph_orig
+ 
 diff --git a/asm/ui/ui/DrawText.s b/asm/ui/ui/DrawText.s
 index 882c099..b38f142 100644
 --- a/asm/ui/ui/DrawText.s
@@ -149,10 +169,10 @@ index f0bf98c..91b819f 100644
  	bhi	.L158dc
 diff --git a/src/ui/rtl.c b/src/ui/rtl.c
 new file mode 100644
-index 0000000..556c826
+index 0000000..09f472b
 --- /dev/null
 +++ b/src/ui/rtl.c
-@@ -0,0 +1,226 @@
+@@ -0,0 +1,245 @@
 +/* ---- Arabic: right-to-left text ------------------------------------------
 + * Text is stored in logical order. DrawText mirrors each glyph's x inside its
 + * window, so the first letter lands on the right, every line is right-aligned
@@ -166,6 +186,7 @@ index 0000000..556c826
 +extern const unsigned char Data_370d4[];
 +extern int BufferString_orig(unsigned int id, int flag);
 +extern int DrawText_orig(void *win, unsigned int ch, int x, int y, int flag);
++extern int DrawMsgGlyph_orig(unsigned int ch, unsigned char *out);
 +extern int Func_801de5c_orig(unsigned short *s, void *a1, void *a2, int a3);
 +extern void *alloc_ewram(int size);
 +extern void free(void *p);
@@ -378,6 +399,24 @@ index 0000000..556c826
 +    if (tile >= 0x280)
 +        return 0;
 +    return Func_801de5c(buf, base + tile * 2, (unsigned char *)0x6002000 + tile * 2, x & 7);
++}
++
++/* A dialogue letter is a 16x16 sprite: the glyph from column 0, its shadow one
++   pixel down and right. Drawn right to left, a letter's shadow past its own
++   width landed on the first column of the letter before it (on its right) and
++   cut the join (الملف, نحو); what lies past the width is cleared. */
++int DrawMsgGlyph(unsigned int ch, unsigned char *out)
++{
++    int w = DrawMsgGlyph_orig(ch, out);
++    int x, y;
++
++    for (y = 0; y < 16; y++) {
++        for (x = w; x < 16; x++) {
++            unsigned char *p = out + ((y >> 3) * 2 + (x >> 3)) * 32 + (y & 7) * 4 + (x & 7) / 2;
++            *p &= (x & 1) ? 0x0f : 0xf0;
++        }
++    }
++    return w;
 +}
 diff --git a/stage1.ld b/stage1.ld
 index 69402c3..cf2b08d 100644

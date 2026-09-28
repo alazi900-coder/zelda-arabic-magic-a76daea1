@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>محرّر خط Golden Sun</title>
+<style>
+:root {
+  --bg: #f4f5f7; --panel: #fff; --ink: #1d2330; --muted: #667085; --line: #d9dde5;
+  --accent: #2c5aa0; --accent-ink: #fff; --warn: #b54708; --mod: #d92d20;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14171d; --panel: #1d2129; --ink: #e6e9ef; --muted: #98a2b3; --line: #343a46;
+          --accent: #5b8def; --accent-ink: #0b1020; --warn: #f79009; --mod: #f97066; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, "Segoe UI", Tahoma, sans-serif; }
+header { padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+header h1 { font-size: 18px; margin: 0 0 0 auto; }
+main { padding: 16px; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 380px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+button, select, input[type=text], input[type=number] { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.muted { color: var(--muted); font-size: 13px; }
+.warn { color: var(--warn); }
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 4px; }
+.cell { border: 1px solid var(--line); border-radius: 6px; padding: 3px; text-align: center; cursor: pointer; position: relative; }
+.cell.sel { outline: 2px solid var(--accent); }
+.cell.mod::after { content: ""; position: absolute; top: 3px; left: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--mod); }
+.cell canvas { image-rendering: pixelated; display: block; margin: 0 auto; }
+.cell .lab { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.cell.locked { opacity: .4; cursor: not-allowed; }
+#paint { image-rendering: pixelated; width: 100%; touch-action: none; cursor: crosshair; border: 1px solid var(--line); border-radius: 6px; display: block; }
+#preview { image-rendering: pixelated; width: 100%; border-radius: 6px; display: block; cursor: pointer; }
+.sw { width: 28px; height: 28px; padding: 0; border-radius: 6px; }
+.sw.on { outline: 3px solid var(--accent); outline-offset: 1px; }
+#drop { border: 2px dashed var(--line); border-radius: 10px; padding: 40px 16px; text-align: center; margin: 16px; }
+#drop.hover { border-color: var(--accent); }
+.hidden { display: none !important; }
+h2 { font-size: 16px; margin: 0 0 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>محرّر خط Golden Sun</h1>
+  <label><button onclick="$('file').click()">فتح الروم…</button><input id="file" type="file" accept=".gba" class="hidden"></label>
+  <button id="saveBtn" disabled>حفظ الروم</button>
+  <span id="romInfo" class="muted"></span>
+</header>
+
+<div id="drop">
+  <p><b>اسحب ملف الروم المعرّب (.gba) إلى هنا</b> أو اضغط «فتح الروم».</p>
+  <p class="muted">كل شيء يجري في المتصفح، ولا يُرفع الملف إلى أي مكان. الحفظ يكتب روماً جديداً بالحجم نفسه، لا يتغيّر فيه إلا بايتات الخط والعروض.</p>
+</div>
+
+<main id="app" class="hidden">
+  <section class="panel">
+    <div class="row">
+      <button id="tabBig" class="on">الخط الكبير (الحوار)</button>
+      <button id="tabSmall">الخط الصغير (القوائم)</button>
+      <span style="flex:1"></span>
+      <select id="filter">
+        <option value="all">الكل</option>
+        <option value="ar">العربية</option>
+        <option value="mod">المعدّلة</option>
+      </select>
+      <span id="modCount" class="muted"></span>
+    </div>
+    <div id="grid"></div>
+  </section>
+
+  <aside>
+    <section class="panel">
+      <h2 id="glyphTitle"></h2>
+      <div id="glyphInfo" class="muted"></div>
+      <canvas id="paint"></canvas>
+      <div class="row" id="tools"></div>
+      <div class="row" id="swatches"></div>
+      <div class="row">
+        <label>العرض <input id="width" type="number" min="0" max="16" style="width:64px"></label>
+        <button id="autoW" title="آخر عمود فيه حبر + 1">من الرسم</button>
+        <button id="shadowBtn" title="يمسح الظل ويرسمه من جديد: بكسل تحت كل حبر ويمينه">إعادة رسم الظل</button>
+      </div>
+      <div class="row">
+        <button data-shift="1,0" title="يمين">→</button>
+        <button data-shift="-1,0" title="يسار">←</button>
+        <button data-shift="0,-1" title="أعلى">↑</button>
+        <button data-shift="0,1" title="أسفل">↓</button>
+        <button id="undoBtn">تراجع</button>
+        <button id="revertBtn">إرجاع الحرف لأصله</button>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <h2>معاينة</h2>
+      <input id="prevText" type="text" value="الطاقة السحرية نحو الملف" style="width:100%">
+      <canvas id="preview" style="margin-top:8px"></canvas>
+      <div class="muted">تُرسم الكلمة بالأشكال والعروض كما تكتبها اللعبة، من اليمين. اضغط على حرف فيها لفتحه.</div>
+    </section>
+  </aside>
+</main>
+
+<script>
+/* بيانات الأشكال: الرمز ← [الشكل، الحرف، موضعه] وأشكال كل حرف في يونيكود.
+   مأخوذة من goldensun-arabic/scripts/codes.json (نفس ترميز الموقع). */
+const DATA = {"arabic":{"144":[65152,"ء","منفرد"],"145":[65155,"أ","منفرد"],"146":[65156,"أ","آخر"],"147":[65159,"إ","منفرد"],"148":[65160,"إ","آخر"],"149":[65162,"ئ","آخر"],"150":[65163,"ئ","أول"],"151":[65164,"ئ","وسط"],"152":[65165,"ا","منفرد"],"153":[65166,"ا","آخر"],"154":[65167,"ب","منفرد"],"155":[65168,"ب","آخر"],"156":[65169,"ب","أول"],"157":[65170,"ب","وسط"],"158":[65171,"ة","منفرد"],"159":[65172,"ة","آخر"],"160":[65173,"ت","منفرد"],"161":[65174,"ت","آخر"],"162":[65175,"ت","أول"],"163":[65176,"ت","وسط"],"164":[65179,"ث","أول"],"165":[65180,"ث","وسط"],"166":[65181,"ج","منفرد"],"167":[65182,"ج","آخر"],"168":[65183,"ج","أول"],"169":[65184,"ج","وسط"],"170":[65185,"ح","منفرد"],"171":[65186,"ح","آخر"],"172":[65187,"ح","أول"],"173":[65188,"ح","وسط"],"174":[65189,"خ","منفرد"],"175":[65190,"خ","آخر"],"176":[65191,"خ","أول"],"177":[65192,"خ","وسط"],"178":[65193,"د","منفرد"],"179":[65194,"د","آخر"],"180":[65195,"ذ","منفرد"],"181":[65196,"ذ","آخر"],"182":[65197,"ر","منفرد"],"183":[65198,"ر","آخر"],"184":[65199,"ز","منفرد"],"185":[65200,"ز","آخر"],"186":[65201,"س","منفرد"],"187":[65202,"س","آخر"],"188":[65203,"س","أول"],"189":[65204,"س","وسط"],"190":[65205,"ش","منفرد"],"191":[65206,"ش","آخر"],"192":[65207,"ش","أول"],"193":[65208,"ش","وسط"],"194":[65209,"ص","منفرد"],"195":[65210,"ص","آخر"],"196":[65211,"ص","أول"],"197":[65212,"ص","وسط"],"198":[65213,"ض","منفرد"],"199":[65214,"ض","آخر"],"200":[65215,"ض","أول"],"201":[65216,"ض","وسط"],"202":[65217,"ط","منفرد"],"203":[65218,"ط","آخر"],"204":[65219,"ط","أول"],"205":[65220,"ط","وسط"],"206":[65223,"ظ","أول"],"207":[65224,"ظ","وسط"],"208":[65225,"ع","منفرد"],"209":[65226,"ع","آخر"],"210":[65227,"ع","أول"],"211":[65228,"ع","وسط"],"212":[65229,"غ","منفرد"],"213":[65230,"غ","آخر"],"214":[65231,"غ","أول"],"215":[65232,"غ","وسط"],"216":[65233,"ف","منفرد"],"217":[65234,"ف","آخر"],"218":[65235,"ف","أول"],"219":[65236,"ف","وسط"],"220":[65237,"ق","منفرد"],"221":[65238,"ق","آخر"],"224":[65239,"ق","أول"],"225":[65240,"ق","وسط"],"226":[65241,"ك","منفرد"],"227":[65242,"ك","آخر"],"228":[65243,"ك","أول"],"229":[65244,"ك","وسط"],"230":[65245,"ل","منفرد"],"231":[65246,"ل","آخر"],"232":[65247,"ل","أول"],"233":[65248,"ل","وسط"],"234":[65249,"م","منفرد"],"235":[65250,"م","آخر"],"236":[65251,"م","أول"],"237":[65252,"م","وسط"],"238":[65253,"ن","منفرد"],"239":[65254,"ن","آخر"],"240":[65255,"ن","أول"],"241":[65256,"ن","وسط"],"242":[65257,"ه","منفرد"],"243":[65258,"ه","آخر"],"244":[65259,"ه","أول"],"245":[65260,"ه","وسط"],"246":[65261,"و","منفرد"],"247":[65262,"و","آخر"],"248":[65263,"ى","منفرد"],"249":[65264,"ى","آخر"],"250":[65265,"ي","منفرد"],"251":[65266,"ي","آخر"],"252":[65267,"ي","أول"],"253":[65268,"ي","وسط"],"254":[65275,"لا","منفرد"],"255":[65276,"لا","آخر"],"140":[65269,"لآ","منفرد"],"141":[65270,"لآ","آخر"],"60":[65271,"لأ","منفرد"],"62":[65272,"لأ","آخر"],"64":[65273,"لإ","منفرد"],"91":[65274,"لإ","آخر"],"92":[65153,"آ","منفرد"],"93":[65154,"آ","آخر"],"94":[65157,"ؤ","منفرد"],"96":[65158,"ؤ","آخر"],"123":[65221,"ظ","منفرد"],"124":[65222,"ظ","آخر"],"125":[65177,"ث","منفرد"],"126":[65178,"ث","آخر"],"127":[65161,"ئ","منفرد"]},"forms":{"ء":{"iso":65152},"آ":{"iso":65153,"fin":65154},"أ":{"iso":65155,"fin":65156},"ؤ":{"iso":65157,"fin":65158},"إ":{"iso":65159,"fin":65160},"ئ":{"iso":65161,"fin":65162,"ini":65163,"med":65164},"ا":{"iso":65165,"fin":65166},"ب":{"iso":65167,"fin":65168,"ini":65169,"med":65170},"ة":{"iso":65171,"fin":65172},"ت":{"iso":65173,"fin":65174,"ini":65175,"med":65176},"ث":{"iso":65177,"fin":65178,"ini":65179,"med":65180},"ج":{"iso":65181,"fin":65182,"ini":65183,"med":65184},"ح":{"iso":65185,"fin":65186,"ini":65187,"med":65188},"خ":{"iso":65189,"fin":65190,"ini":65191,"med":65192},"د":{"iso":65193,"fin":65194},"ذ":{"iso":65195,"fin":65196},"ر":{"iso":65197,"fin":65198},"ز":{"iso":65199,"fin":65200},"س":{"iso":65201,"fin":65202,"ini":65203,"med":65204},"ش":{"iso":65205,"fin":65206,"ini":65207,"med":65208},"ص":{"iso":65209,"fin":65210,"ini":65211,"med":65212},"ض":{"iso":65213,"fin":65214,"ini":65215,"med":65216},"ط":{"iso":65217,"fin":65218,"ini":65219,"med":65220},"ظ":{"iso":65221,"fin":65222,"ini":65223,"med":65224},"ع":{"iso":65225,"fin":65226,"ini":65227,"med":65228},"غ":{"iso":65229,"fin":65230,"ini":65231,"med":65232},"ف":{"iso":65233,"fin":65234,"ini":65235,"med":65236},"ق":{"iso":65237,"fin":65238,"ini":65239,"med":65240},"ك":{"iso":65241,"fin":65242,"ini":65243,"med":65244},"ل":{"iso":65245,"fin":65246,"ini":65247,"med":65248},"م":{"iso":65249,"fin":65250,"ini":65251,"med":65252},"ن":{"iso":65253,"fin":65254,"ini":65255,"med":65256},"ه":{"iso":65257,"fin":65258,"ini":65259,"med":65260},"و":{"iso":65261,"fin":65262},"ى":{"iso":65263,"fin":65264},"ي":{"iso":65265,"fin":65266,"ini":65267,"med":65268}}};
+
+const BIG = { off: 0x32224, cell: 32, first: 0x20, last: 0xFF, w: 16, h: 15 };
+const SMALL = { off: 0x320FB0, widths: 0x370D4, first: 0x20, last: 0xFF, w: 8, h: 8 };
+const LOCKED_SMALL = 0x7F;   // بلاطة المسح المصمتة في القوائم وشريط القتال
+const BG = 4, INK = 1, SHADOW = 3;
+// ألوان نافذة القوائم تقريباً: حبر أبيض وظل داكن على أزرق
+const PAL = ["#000000", "#f8f8f8", "#b8c8e0", "#283040", "#2c5aa0", "#90a0b8", "#607090", "#405070",
+             "#e05050", "#e0a040", "#e0e040", "#50c050", "#50c0c0", "#5050e0", "#c050c0", "#808080"];
+
+const $ = (id) => document.getElementById(id);
+let rom = null, orig = null, romName = "";
+let kind = "big", sel = 0xA0, tool = "pen", color = INK;
+const undo = [];
+
+/* ---------- قراءة الحرف وكتابته ---------- */
+function bigAt(c) { return BIG.off + (c - 0x20) * BIG.cell; }
+function getPx(buf, c, x, y) {
+  if (kind === "big") {
+    const a = bigAt(c) + 2 + y * 2;
+    return (buf[a] | buf[a + 1] << 8) & (0x8000 >> x) ? 1 : 0;
+  }
+  const b = buf[SMALL.off + c * 32 + y * 4 + (x >> 1)];
+  return (b >> ((x & 1) * 4)) & 15;
+}
+function setPx(c, x, y, v) {
+  if (kind === "big") {
+    const a = bigAt(c) + 2 + y * 2;
+    let r = rom[a] | rom[a + 1] << 8;
+    r = v ? r | (0x8000 >> x) : r & ~(0x8000 >> x);
+    rom[a] = r & 255; rom[a + 1] = r >> 8;
+  } else {
+    const a = SMALL.off + c * 32 + y * 4 + (x >> 1), s = (x & 1) * 4;
+    rom[a] = (rom[a] & ~(15 << s)) | (v << s);
+  }
+}
+function getW(buf, c) {
+  return kind === "big" ? buf[bigAt(c)] | buf[bigAt(c) + 1] << 8 : buf[SMALL.widths + c - 0x20];
+}
+function setW(c, w) {
+  if (kind === "big") { rom[bigAt(c)] = w & 255; rom[bigAt(c) + 1] = w >> 8; }
+  else rom[SMALL.widths + c - 0x20] = w;
+}
+// كل البايتات التي تخص حرفاً واحداً في الخط الحالي
+function glyphBytes(c) {
+  return kind === "big" ? [[bigAt(c), 32]] : [[SMALL.off + c * 32, 32], [SMALL.widths + c - 0x20, 1]];
+}
+function isModified(c) {
+  return glyphBytes(c).some(([a, n]) => { for (let i = 0; i < n; i++) if (rom[a + i] !== orig[a + i]) return true; return false; });
+}
+const F = () => (kind === "big" ? BIG : SMALL);
+
+/* ---------- الرسم ---------- */
+function drawGlyph(ctx, buf, c, ox, oy, sc, bgFill) {
+  const f = F();
+  for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) {
+    const v = getPx(buf, c, x, y);
+    let col = null;
+    if (kind === "big") col = v ? "#f8f8f8" : bgFill;
+    else col = v === BG ? bgFill : PAL[v];
+    if (!col) continue;
+    ctx.fillStyle = col; ctx.fillRect(ox + x * sc, oy + y * sc, sc, sc);
+  }
+}
+function label(c) {
+  const a = DATA.arabic[c];
+  if (a) return a[1] + " " + a[2];
+  if (c >= 0x21 && c < 0x7F) return String.fromCharCode(c);
+  return "0x" + c.toString(16).toUpperCase();
+}
+
+function buildGrid() {
+  const f = F(), grid = $("grid"), filt = $("filter").value;
+  grid.innerHTML = "";
+  let mods = 0;
+  for (let c = f.first; c <= f.last; c++) {
+    const mod = isModified(c);
+    if (mod) mods++;
+    if (filt === "ar" && !DATA.arabic[c]) continue;
+    if (filt === "mod" && !mod) continue;
+    const d = document.createElement("div");
+    d.className = "cell" + (c === sel ? " sel" : "") + (mod ? " mod" : "");
+    const locked = kind === "small" && c === LOCKED_SMALL;
+    if (locked) { d.classList.add("locked"); d.title = "بلاطة المسح التي تنظّف بها اللعبة النوافذ — لا تُعدّل"; }
+    const sc = kind === "big" ? 2 : 3;
+    const cv = document.createElement("canvas");
+    cv.width = f.w * sc; cv.height = f.h * sc;
+    drawGlyph(cv.getContext("2d"), rom, c, 0, 0, sc, "#2c5aa0");
+    const lab = document.createElement("div");
+    lab.className = "lab"; lab.textContent = label(c);
+    d.append(cv, lab);
+    d.dataset.c = c;
+    if (!locked) d.onclick = () => select(c);
+    grid.append(d);
+  }
+  $("modCount").textContent = "المعدّلة: " + mods;
+}
+function refreshCell(c) {
+  const d = document.querySelector(`.cell[data-c="${c}"]`);
+  if (!d) return;
+  const cv = d.querySelector("canvas"), sc = kind === "big" ? 2 : 3;
+  drawGlyph(cv.getContext("2d"), rom, c, 0, 0, sc, "#2c5aa0");
+  d.classList.toggle("mod", isModified(c));
+  let mods = 0;
+  for (let k = F().first; k <= F().last; k++) if (isModified(k)) mods++;
+  $("modCount").textContent = "المعدّلة: " + mods;
+}
+
+const PS = 22;   // حجم البكسل في لوحة الرسم
+function drawPaint() {
+  const f = F(), cv = $("paint");
+  cv.width = f.w * PS; cv.height = f.h * PS;
+  const ctx = cv.getContext("2d");
+  drawGlyph(ctx, rom, sel, 0, 0, PS, "#2c5aa0");
+  ctx.strokeStyle = "rgba(255,255,255,.18)";
+  for (let x = 0; x <= f.w; x++) { ctx.beginPath(); ctx.moveTo(x * PS + .5, 0); ctx.lineTo(x * PS + .5, cv.height); ctx.stroke(); }
+  for (let y = 0; y <= f.h; y++) { ctx.beginPath(); ctx.moveTo(0, y * PS + .5); ctx.lineTo(cv.width, y * PS + .5); ctx.stroke(); }
+  // خط العرض: الحرف التالي يبدأ عنده
+  const w = getW(rom, sel);
+  ctx.strokeStyle = "#f04438"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(w * PS, 0); ctx.lineTo(w * PS, cv.height); ctx.stroke(); ctx.lineWidth = 1;
+  if (kind === "big") {   // خط الأساس: الصف 9
+    ctx.strokeStyle = "rgba(250,200,60,.7)";
+    ctx.beginPath(); ctx.moveTo(0, 10 * PS); ctx.lineTo(cv.width, 10 * PS); ctx.stroke();
+  }
+  $("width").value = w;
+}
+
+function select(c) {
+  sel = c;
+  document.querySelectorAll(".cell.sel").forEach((e) => e.classList.remove("sel"));
+  const d = document.querySelector(`.cell[data-c="${c}"]`);
+  if (d) d.classList.add("sel");
+  const a = DATA.arabic[c];
+  $("glyphTitle").textContent = label(c);
+  $("glyphInfo").innerHTML = `الرمز <span dir="ltr">0x${c.toString(16).toUpperCase()}</span>` +
+    (a ? ` · الشكل <span dir="ltr">U+${a[0].toString(16).toUpperCase()}</span>` : "") +
+    (kind === "big" ? " · الخط الأصفر خط الأساس، والأحمر العرض" : " · الأحمر العرض");
+  drawPaint();
+}
+
+/* ---------- الأدوات ---------- */
+function buildTools() {
+  const t = $("tools"); t.innerHTML = "";
+  const list = kind === "big" ? [["pen", "قلم"], ["erase", "ممحاة"], ["fill", "تعبئة"]] : [["pen", "قلم"], ["fill", "تعبئة"], ["pick", "لاقط اللون"]];
+  if (kind === "small" && tool === "erase") tool = "pen";
+  for (const [id, name] of list) {
+    const b = document.createElement("button");
+    b.textContent = name; b.className = tool === id ? "on" : "";
+    b.onclick = () => { tool = id; buildTools(); };
+    t.append(b);
+  }
+  const s = $("swatches"); s.innerHTML = "";
+  if (kind === "big") { s.classList.add("hidden"); $("shadowBtn").classList.add("hidden"); return; }
+  s.classList.remove("hidden"); $("shadowBtn").classList.remove("hidden");
+  const names = { 1: "حبر", 3: "ظل", 4: "خلفية" };
+  for (let v = 0; v < 16; v++) {
+    const b = document.createElement("button");
+    b.className = "sw" + (v === color ? " on" : "");
+    b.style.background = PAL[v];
+    b.title = `اللون ${v}` + (names[v] ? ` (${names[v]})` : "");
+    b.onclick = () => { color = v; buildTools(); };
+    s.append(b);
+  }
+}
+function snapshot() {
+  return { kind, c: sel, bytes: glyphBytes(sel).map(([a, n]) => [a, rom.slice(a, a + n)]) };
+}
+function pushUndo() { undo.push(snapshot()); if (undo.length > 300) undo.shift(); }
+function afterEdit() { drawPaint(); refreshCell(sel); drawPreview(); }
+
+let painting = false;
+function paintEvent(ev) {
+  const f = F(), cv = $("paint"), r = cv.getBoundingClientRect();
+  const x = Math.floor((ev.clientX - r.left) / (r.width / f.w));
+  const y = Math.floor((ev.clientY - r.top) / (r.height / f.h));
+  if (x < 0 || y < 0 || x >= f.w || y >= f.h) return;
+  if (tool === "pick") { color = getPx(rom, sel, x, y); buildTools(); return; }
+  const v = kind === "big" ? (tool === "erase" ? 0 : 1) : color;
+  if (tool === "fill") { floodFill(x, y, v); afterEdit(); return; }
+  if (getPx(rom, sel, x, y) === v) return;
+  setPx(sel, x, y, v); afterEdit();
+}
+function floodFill(sx, sy, v) {
+  const f = F(), target = getPx(rom, sel, sx, sy);
+  if (target === v) return;
+  const q = [[sx, sy]];
+  while (q.length) {
+    const [x, y] = q.pop();
+    if (x < 0 || y < 0 || x >= f.w || y >= f.h || getPx(rom, sel, x, y) !== target) continue;
+    setPx(sel, x, y, v);
+    q.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+}
+function shift(dx, dy) {
+  pushUndo();
+  const f = F(), empty = kind === "big" ? 0 : BG, old = [];
+  for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) old.push(getPx(rom, sel, x, y));
+  for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) {
+    const sx = x - dx, sy = y - dy;
+    setPx(sel, x, y, sx < 0 || sy < 0 || sx >= f.w || sy >= f.h ? empty : old[sy * f.w + sx]);
+  }
+  afterEdit();
+}
+function redrawShadow() {
+  pushUndo();
+  const f = F();
+  for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) if (getPx(rom, sel, x, y) === SHADOW) setPx(sel, x, y, BG);
+  // من الأسفل إلى الأعلى كما في gssmallfont.py
+  for (let y = f.h - 2; y >= 0; y--) for (let x = f.w - 2; x >= 0; x--)
+    if (getPx(rom, sel, x, y) === INK && getPx(rom, sel, x + 1, y + 1) === BG) setPx(sel, x + 1, y + 1, SHADOW);
+  afterEdit();
+}
+function autoWidth() {
+  const f = F();
+  let last = -1;
+  for (let x = 0; x < f.w; x++) for (let y = 0; y < f.h; y++) {
+    const v = getPx(rom, sel, x, y);
+    if (kind === "big" ? v : v === INK) last = x;
+  }
+  pushUndo(); setW(sel, last + 1); afterEdit();
+}
+
+/* ---------- المعاينة ---------- */
+const CODE_OF = {};
+for (const [c, a] of Object.entries(DATA.arabic)) CODE_OF[a[0]] = +c;
+const LAM_ALEF = { "ا": "لا", "أ": "لأ", "إ": "لإ", "آ": "لآ" };
+function ligCode(alef, joined) {
+  for (const [c, a] of Object.entries(DATA.arabic))
+    if (a[1] === LAM_ALEF[alef] && (a[2] === "آخر") === joined) return +c;
+  return null;
+}
+// كل عنصر: رمز اللعبة، وهل هو من مقطع لاتيني (يبقى بترتيبه)
+function shape(text) {
+  const ch = [...text], out = [];
+  const joinsNext = (b) => b && DATA.forms[b] && DATA.forms[b].ini;
+  let prev = false;
+  for (let i = 0; i < ch.length; i++) {
+    const b = ch[i], fm = DATA.forms[b];
+    if (!fm) {
+      const code = b.charCodeAt(0);
+      const latin = code >= 0x21 && code < 0x7F && !DATA.arabic[code];
+      if (b === " " || latin) out.push({ code: b === " " ? 0x20 : code, latin });
+      prev = false; continue;
+    }
+    if (b === "ل" && LAM_ALEF[ch[i + 1]]) {
+      const c = ligCode(ch[i + 1], prev);
+      if (c) { out.push({ code: c }); i++; prev = false; continue; }
+    }
+    const next = DATA.forms[ch[i + 1]];
+    const toNext = !!(joinsNext(b) && next);
+    const key = prev ? (toNext ? "med" : "fin") : (toNext ? "ini" : "iso");
+    const cp = fm[key] || fm[prev ? "fin" : "iso"] || fm.iso;
+    if (CODE_OF[cp] !== undefined) out.push({ code: CODE_OF[cp] });
+    prev = toNext;
+  }
+  // الترتيب المرئي: النص يُعكس، ومقاطع اللاتيني تبقى من اليسار
+  const vis = [];
+  let run = [];
+  for (const it of out.reverse()) {
+    if (it.latin) { run.push(it); continue; }
+    if (run.length) { vis.push(...run.reverse()); run = []; }
+    vis.push(it);
+  }
+  vis.push(...run.reverse());
+  return vis;
+}
+let previewHits = [];
+function drawPreview() {
+  const f = F(), items = shape($("prevText").value), SC = kind === "big" ? 3 : 4;
+  let x = 8;
+  previewHits = [];
+  for (const it of items) {
+    const w = it.code >= f.first && it.code <= f.last ? getW(rom, it.code) : 4;
+    previewHits.push({ c: it.code, x, w }); x += w;
+  }
+  const cv = $("preview");
+  cv.width = Math.max(x + 8, 120) * SC; cv.height = (f.h + 6) * SC;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#2c5aa0"; ctx.fillRect(0, 0, cv.width, cv.height);
+  for (const h of previewHits) {
+    if (h.c < f.first || h.c > f.last) continue;
+    for (let y = 0; y < f.h; y++) for (let px = 0; px < f.w; px++) {
+      const v = getPx(rom, h.c, px, y);
+      if (kind === "big") {   // الحوار: حبر أبيض وظله تحته ويمينه، والعمود بعد العرض ممسوح
+        if (!v || px >= h.w) continue;
+        ctx.fillStyle = "#283040"; ctx.fillRect((h.x + px + 1) * SC, (y + 3 + 1) * SC, SC, SC);
+      }
+    }
+    for (let y = 0; y < f.h; y++) for (let px = 0; px < f.w; px++) {
+      const v = getPx(rom, h.c, px, y);
+      if (kind === "big") { if (!v || px >= h.w) continue; ctx.fillStyle = "#f8f8f8"; }
+      else { if (v === BG || v === 0) continue; ctx.fillStyle = PAL[v]; }
+      ctx.fillRect((h.x + px) * SC, (y + 3) * SC, SC, SC);
+    }
+  }
+  cv.style.width = Math.min(cv.width, 360) + "px";
+  cv.dataset.sc = SC;
+}
+$("preview").onclick = (ev) => {
+  const cv = $("preview"), r = cv.getBoundingClientRect();
+  const x = (ev.clientX - r.left) * (cv.width / r.width) / +cv.dataset.sc;
+  const h = previewHits.find((h) => x >= h.x && x < h.x + h.w);
+  if (h && h.c >= F().first && h.c <= F().last && !(kind === "small" && h.c === LOCKED_SMALL)) {
+    select(h.c);
+    const d = document.querySelector(`.cell[data-c="${h.c}"]`);
+    if (d) d.scrollIntoView({ block: "nearest" });
+  }
+};
+
+/* ---------- الملف ---------- */
+function load(buf, name) {
+  const b = new Uint8Array(buf);
+  if (b.length < 0x400000 || String.fromCharCode(...b.slice(0xA0, 0xAC)) !== "Golden_Sun_A") {
+    alert("هذا ليس روم Golden Sun (الاسم في رأس الروم لا يطابق).");
+    return;
+  }
+  rom = b; orig = b.slice(); romName = name; undo.length = 0;
+  const patched = b[0x155F0] === 0xDF;
+  $("romInfo").innerHTML = name + (patched ? "" : ' · <span class="warn">لا تبدو عليه رقعة التعريب: الحروف العربية لن تكون في خاناتها</span>');
+  $("drop").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("saveBtn").disabled = false;
+  switchKind("big");
+}
+function readFile(file) { file.arrayBuffer().then((buf) => load(buf, file.name)); }
+$("file").onchange = (e) => e.target.files[0] && readFile(e.target.files[0]);
+document.addEventListener("dragover", (e) => { e.preventDefault(); $("drop").classList.add("hover"); });
+document.addEventListener("dragleave", () => $("drop").classList.remove("hover"));
+document.addEventListener("drop", (e) => { e.preventDefault(); $("drop").classList.remove("hover"); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
+$("saveBtn").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([rom], { type: "application/octet-stream" }));
+  a.download = romName.replace(/\.gba$/i, "") + "_font.gba";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+window.addEventListener("beforeunload", (e) => {
+  if (rom && rom.some((v, i) => v !== orig[i])) e.preventDefault();
+});
+
+function switchKind(k) {
+  kind = k;
+  $("tabBig").classList.toggle("on", k === "big");
+  $("tabSmall").classList.toggle("on", k === "small");
+  color = INK;
+  if (sel < F().first || sel > F().last || (k === "small" && sel === LOCKED_SMALL)) sel = 0xA0;
+  buildTools(); buildGrid(); select(sel); drawPreview();
+}
+$("tabBig").onclick = () => switchKind("big");
+$("tabSmall").onclick = () => switchKind("small");
+$("filter").onchange = buildGrid;
+$("prevText").oninput = drawPreview;
+$("width").onchange = () => {
+  const w = Math.max(0, Math.min(F().w, +$("width").value | 0));
+  pushUndo(); setW(sel, w); afterEdit();
+};
+$("autoW").onclick = autoWidth;
+$("shadowBtn").onclick = redrawShadow;
+document.querySelectorAll("[data-shift]").forEach((b) => {
+  const [dx, dy] = b.dataset.shift.split(",").map(Number);
+  b.onclick = () => shift(dx, dy);
+});
+$("undoBtn").onclick = doUndo;
+function doUndo() {
+  const s = undo.pop();
+  if (!s) return;
+  if (s.kind !== kind) switchKind(s.kind);
+  for (const [a, bytes] of s.bytes) rom.set(bytes, a);
+  select(s.c); refreshCell(s.c); drawPreview();
+}
+$("revertBtn").onclick = () => {
+  pushUndo();
+  for (const [a, n] of glyphBytes(sel)) rom.set(orig.slice(a, a + n), a);
+  afterEdit();
+};
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && rom && document.activeElement.tagName !== "INPUT") { e.preventDefault(); doUndo(); }
+});
+const paint = $("paint");
+paint.addEventListener("pointerdown", (e) => { painting = true; paint.setPointerCapture(e.pointerId); if (tool !== "pick") pushUndo(); paintEvent(e); });
+paint.addEventListener("pointermove", (e) => { if (painting && tool !== "fill" && tool !== "pick") paintEvent(e); });
+paint.addEventListener("pointerup", () => { painting = false; });
+</script>
+</body>
+</html>

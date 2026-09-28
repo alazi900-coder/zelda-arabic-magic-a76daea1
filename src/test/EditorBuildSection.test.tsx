@@ -20,6 +20,7 @@ function makeEditor(overrides: Partial<Parameters<typeof EditorBuildSection>[0][
     handleCheckIntegrity: vi.fn(),
     handlePreBuild: vi.fn(),
     forceSave: vi.fn(),
+    updateTranslationsBatch: vi.fn(() => 0),
     ...overrides,
   };
 }

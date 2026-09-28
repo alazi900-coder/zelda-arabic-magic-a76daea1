@@ -41,6 +41,7 @@ import type { PlatUnsupportedCharacter } from "@/lib/nds/plat-charmap";
 import type { SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
 import type { InazumaUnsupportedCharacter } from "@/lib/inazuma/inazuma-arabic-font";
 import type { GoldenSunUnsupportedCharacter } from "@/lib/goldensun/goldensun-rom";
+import { goldenSunSpacingFixes } from "@/lib/goldensun/goldensun-spacing";
 import type { SteinsGateReplacement } from "@/lib/steinsgate/steinsgate-normalize";
 
 type EditorSubset = Pick<
@@ -51,6 +52,7 @@ type EditorSubset = Pick<
   | "handleApplyArabicProcessing" | "applyingArabic"
   | "handleUndoArabicProcessing"
   | "building" | "handleCheckIntegrity" | "handlePreBuild" | "forceSave"
+  | "updateTranslationsBatch"
 >;
 
 interface EditorBuildSectionProps {
@@ -770,6 +772,15 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
     }
   };
 
+  const goldenSunSpacingCount = isGoldenSun ? Object.keys(goldenSunSpacingFixes(editor.state?.translations || {})).length : 0;
+
+  const handleGoldenSunFixSpacing = async () => {
+    const fixes = goldenSunSpacingFixes(editor.state?.translations || {});
+    const count = editor.updateTranslationsBatch(fixes);
+    const { toast } = await import("@/hooks/use-toast");
+    toast({ title: count > 0 ? `أُصلحت المسافات في ${count} نصاً` : "لا توجد مسافات ناقصة" });
+  };
+
   const handleGoldenSunBuild = async () => {
     setGsBuilding(true);
     try {
@@ -1101,6 +1112,18 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             )}
             {isGoldenSun && (
               <div className="basis-full flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGoldenSunFixSpacing}
+                  disabled={goldenSunSpacingCount === 0}
+                  className="font-body gap-1 shrink-0"
+                  title="يضيف المسافة الناقصة بعد «ة» و«ى» إذا التصق بهما حرف (مثل «الطاقة السحريةمن»)، وبعد الفاصلة"
+                >
+                  <Wand2 className="w-4 h-4" />
+                  {`إصلاح المسافات تلقائياً (${goldenSunSpacingCount})`}
+                </Button>
                 <Button
                   type="button"
                   size="sm"

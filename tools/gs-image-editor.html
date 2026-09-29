@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>محرّر صور Golden Sun</title>
+<style>
+:root {
+  --bg: #f4f5f7; --panel: #fff; --ink: #1d2330; --muted: #667085; --line: #d9dde5;
+  --accent: #2c5aa0; --accent-ink: #fff; --warn: #b54708; --ok: #067647; --mod: #d92d20;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14171d; --panel: #1d2129; --ink: #e6e9ef; --muted: #98a2b3; --line: #343a46;
+          --accent: #5b8def; --accent-ink: #0b1020; --warn: #f79009; --ok: #47cd89; --mod: #f97066; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, "Segoe UI", Tahoma, sans-serif; }
+header { padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+header h1 { font-size: 18px; margin: 0 0 0 auto; }
+main { padding: 16px; max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.card.mod { border-color: var(--mod); }
+.card h2 { font-size: 16px; margin: 0 0 4px; }
+.card canvas { image-rendering: pixelated; width: 100%; display: block; border-radius: 6px; margin: 8px 0;
+  background: repeating-conic-gradient(#8883 0% 25%, transparent 0% 50%) 0 0 / 16px 16px; }
+button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.muted { color: var(--muted); font-size: 13px; }
+.warn { color: var(--warn); }
+.ok { color: var(--ok); }
+#drop { border: 2px dashed var(--line); border-radius: 10px; padding: 40px 16px; text-align: center; margin: 16px; }
+#drop.hover { border-color: var(--accent); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>محرّر صور Golden Sun</h1>
+  <button onclick="document.getElementById('file').click()">فتح الروم…</button>
+  <input id="file" type="file" accept=".gba" class="hidden">
+  <button id="saveBtn" disabled>حفظ الروم</button>
+  <span id="romInfo" class="muted"></span>
+</header>
+
+<div id="drop">
+  <p><b>اسحب ملف الروم المعرّب (.gba) إلى هنا</b> أو اضغط «فتح الروم».</p>
+  <p class="muted">صدّر الصورة PNG، عدّلها في أي برنامج رسم بالمقاس نفسه، ثم استوردها. الألوان تُحوَّل إلى أقرب
+    لون في لوحة الصورة الأصلية، والصورة تُضغط بضغط اللعبة وتُكتب داخل أول 8 ميغابايت، فلا يمسحها بناء الموقع.</p>
+</div>
+
+<main id="app" class="hidden"></main>
+
+<script>
+/* ---------- ضغط اللعبة (DecompressLZ1) ----------
+   بايت أعلام لكل 8 عمليات، البت الأعلى أولاً: 0 بايت كما هو، 1 نسخ من الخلف.
+   النسخ بايتان: b1 = (المسافة >> 8) << 4 | n، b2 = المسافة & 0xFF. الطول n+1 (2..16)،
+   وإن كان n صفراً فالطول البايت التالي + 17. المسافة صفر مع n صفر نهاية الملف. */
+function lz1Decode(src, p) {
+  const out = [];
+  for (;;) {
+    const f = src[p++];
+    for (let bit = 7; bit >= 0; bit--) {
+      if (!((f >> bit) & 1)) { out.push(src[p++]); continue; }
+      const b1 = src[p++], b2 = src[p++];
+      const dist = b2 | (b1 >> 4) << 8;
+      let n = b1 & 15;
+      if (n === 0) {
+        if (dist === 0) return new Uint8Array(out);
+        n = src[p++] + 17;
+      } else n += 1;
+      if (dist > out.length) throw new Error("بيانات مضغوطة تالفة");
+      for (let i = 0; i < n; i++) out.push(out[out.length - dist]);
+    }
+  }
+}
+// لكل موضع: أقرب مسافة لكل طول نسخ ممكن (الأقرب أولاً، فكل طول يأخذ أقرب مسافة)
+function nearestMatches(data, MAXD, MAXL) {
+  const N = data.length, head = new Int32Array(65536).fill(-1), prev = new Int32Array(N).fill(-1), all = [];
+  for (let i = 0; i < N; i++) {
+    const ds = new Int32Array(Math.min(MAXL, N - i) + 1);
+    if (i + 1 < N) {
+      const k = data[i] | data[i + 1] << 8;
+      let top = 1;
+      for (let j = head[k], tries = 0; j >= 0 && i - j <= MAXD && tries < 2048; j = prev[j], tries++) {
+        let l = 2;
+        while (l < MAXL && i + l < N && data[j + l] === data[i + l]) l++;
+        for (let m = top + 1; m <= l; m++) ds[m] = i - j;
+        if (l > top) top = l;
+        if (top === MAXL) break;
+      }
+      prev[i] = head[k]; head[k] = i;
+    }
+    all.push(ds);
+  }
+  return all;
+}
+// أقصر ترميز بالبرمجة الديناميكية؛ refBits(i, l, d) كلفة النسخ بالبتات
+function shortestParse(data, matches, litBits, refBits, maxDAt) {
+  const N = data.length, cost = new Float64Array(N + 1), step = new Int32Array(N);
+  for (let i = N - 1; i >= 0; i--) {
+    cost[i] = litBits + cost[i + 1]; step[i] = 1;
+    const ds = matches[i];
+    for (let l = 2; l < ds.length; l++) {
+      if (!ds[l] || ds[l] > maxDAt(i)) continue;
+      const c = refBits(i, l, ds[l]) + cost[i + l];
+      if (c < cost[i]) { cost[i] = c; step[i] = l; }
+    }
+  }
+  return step;
+}
+function lz1Encode(data) {
+  // حرف 9 بتات، ونسخ 17 بتاً (حتى 16 بايتاً) أو 25
+  const N = data.length, m = nearestMatches(data, 4095, 272);
+  const step = shortestParse(data, m, 9, (i, l) => (l <= 16 ? 17 : 25), () => 4095);
+  const out = [];
+  let flagPos = -1, bit = 8;
+  const op = (isRef) => {
+    if (bit === 8) { flagPos = out.length; out.push(0); bit = 0; }
+    if (isRef) out[flagPos] |= 0x80 >> bit;
+    bit++;
+  };
+  for (let i = 0; i < N;) {
+    const l = step[i];
+    if (l === 1) { op(false); out.push(data[i]); i++; continue; }
+    const d = m[i][l];
+    op(true);
+    if (l <= 16) out.push((d >> 8) << 4 | (l - 1), d & 255);
+    else out.push((d >> 8) << 4, d & 255, l - 17);
+    i += l;
+  }
+  op(true); out.push(0, 0);
+  return new Uint8Array(out);
+}
+
+/* ---------- DecompressLZ بالنوع 0 (لوغو شاشة المتابعة) ----------
+   البايت الأول 0، ثم بتات تُقرأ من البت الأدنى. 1 + 8 بتات: بايت كما هو. 0 ثم طول:
+   0→2، 10→3، 110→4، 1110→5، 11110 ثم 0→6 أو 1→7، 11111 ثم بتان x: x+7، وإن كانا 00
+   فسبع بتات y: y+10 (و y=0 نهاية الملف). ثم المسافة: 1 + 5 بتات (1..32)، أو 0 + بتات
+   بعدد خانات (المكتوب − 0x21) — أو 12 إن بلغ 0x800 — والمسافة القيمة + 0x21. */
+function lz0DistBits(written) {
+  const w = written - 0x21;
+  return w < 0 || w >= 0x800 ? 12 : (w === 0 ? 0 : 32 - Math.clz32(w));
+}
+function lz0LenBits(l) {
+  return l === 2 ? 2 : l === 3 ? 3 : l === 4 ? 4 : l === 5 ? 5 : l <= 7 ? 7 : l <= 10 ? 8 : 15;
+}
+function lz0Decode(src, p) {
+  if (src[p] !== 0) throw new Error("نوع ضغط غير متوقع");
+  let byte = p + 1, bitPos = 0;
+  const bits = (n) => {
+    let v = 0;
+    for (let k = 0; k < n; k++) {
+      v |= ((src[byte] >> bitPos) & 1) << k;
+      if (++bitPos === 8) { bitPos = 0; byte++; }
+    }
+    return v;
+  };
+  const out = [];
+  for (;;) {
+    if (bits(1)) { out.push(bits(8)); continue; }
+    let n = 0, len;
+    while (n < 4 && bits(1)) n++;
+    if (n < 4) len = 2 + n;
+    else if (bits(1)) {
+      const x = bits(2);
+      if (x) len = x + 7;
+      else { const y = bits(7); if (!y) return new Uint8Array(out); len = y + 10; }
+    } else len = bits(1) ? 7 : 6;
+    const d = bits(1) ? bits(5) + 1 : bits(lz0DistBits(out.length)) + 0x21;
+    if (d > out.length) throw new Error("بيانات مضغوطة تالفة");
+    for (let k = 0; k < len; k++) out.push(out[out.length - d]);
+  }
+}
+function lz0Encode(data) {
+  const N = data.length, m = nearestMatches(data, 0xFFF + 0x21, 137);
+  const maxD = (i) => { const b = lz0DistBits(i); return b === 12 ? 0xFFF + 0x21 : (1 << b) - 1 + 0x21; };
+  const step = shortestParse(data, m, 9, (i, l, d) => lz0LenBits(l) + 1 + (d <= 32 ? 5 : lz0DistBits(i)), maxD);
+  const out = [0];
+  let acc = 0, nb = 0;
+  const put = (v, n) => {
+    for (let k = 0; k < n; k++) {
+      acc |= ((v >> k) & 1) << nb;
+      if (++nb === 8) { out.push(acc); acc = 0; nb = 0; }
+    }
+  };
+  const putLen = (l) => {
+    if (l <= 5) put((1 << (l - 2)) - 1, l - 1);                          // l−2 آحاد ثم صفر
+    else if (l <= 7) { put(0b01111, 5); put(l - 6, 1); }
+    else if (l <= 10) { put(0b11111, 5); put(l - 7, 2); }
+    else { put(0b11111, 5); put(0, 2); put(l - 10, 7); }
+  };
+  for (let i = 0; i < N;) {
+    const l = step[i];
+    if (l === 1) { put(1, 1); put(data[i], 8); i++; continue; }
+    const d = m[i][l];
+    put(0, 1);
+    putLen(l);
+    if (d <= 32) { put(1, 1); put(d - 1, 5); }
+    else { put(0, 1); put(d - 0x21, lz0DistBits(i)); }
+    i += l;
+  }
+  put(0, 1); put(0b11111, 5); put(0, 2); put(0, 7);
+  if (nb) out.push(acc);
+  return new Uint8Array(out);
+}
+
+/* ---------- الصور ---------- */
+const BANNER_TABLE = 0x31864, BANNER_PAL = 0x779C, FILE_TABLE = 0x320000, LOGO_FILE = 0x16, SMALL_LOGO_FILE = 0x1A;
+const BANNER_NAMES = ["Save", "Continue", "Copy", "Erase", "Battle", "Link", "Pause", "Settings"];
+const FREE_FROM = 0x7FDB18, FREE_TO = 0x800000;   // بعد كود الاتجاه (rom_rtl) وقبل نهاية 8 ميغابايت
+const u32 = (b, a) => (b[a] | b[a + 1] << 8 | b[a + 2] << 16 | b[a + 3] << 24) >>> 0;
+const put32 = (b, a, v) => { b[a] = v & 255; b[a + 1] = v >> 8 & 255; b[a + 2] = v >> 16 & 255; b[a + 3] = v >>> 24; };
+const bgr = (b, a) => { const c = b[a] | b[a + 1] << 8; return [(c & 31) << 3 | (c & 31) >> 2, (c >> 5 & 31) << 3 | (c >> 5 & 31) >> 2, (c >> 10 & 31) << 3 | (c >> 10 & 31) >> 2]; };
+
+/* كل صورة: أين مؤشرها، وأين تبدأ بياناتها المضغوطة بالنسبة لما يشير إليه، وكيف تُرتّب بكسلاتها. */
+function images() {
+  const list = BANNER_NAMES.map((name, i) => ({
+    id: "b" + i, title: `عنوان القائمة «${name}»`, note: "64×16 · 16 لوناً (اللون 0 شفاف)",
+    ptr: BANNER_TABLE + i * 4, header: 0, codec: "lz1", w: 64, h: 16, bpp: 4, colors: 16, transparent0: true,
+    pal: () => Array.from({ length: 16 }, (_, k) => bgr(rom, BANNER_PAL + k * 2)),
+    // شبحان 32×16 متجاوران، كل واحد 4×2 بلاطات
+    tileAt: (t) => [((t >> 3) * 4 + (t & 3)) * 8, ((t & 7) >> 2) * 8],
+    tiles: 16,
+  }));
+  const screen = (id, file, header, colors, title, codec) => ({
+    id, title, note: `240×160 · ${colors} لوناً`, codec,
+    ptr: FILE_TABLE + file * 4, header, w: 240, h: 160, bpp: 8, colors, transparent0: false,
+    pal: () => Array.from({ length: colors }, (_, k) => bgr(rom, (u32(rom, FILE_TABLE + file * 4) & 0x1FFFFFF) + k * 2)),
+    tileAt: (t) => [(t % 30) * 8, ((t / 30) | 0) * 8],
+    tiles: 600,
+  });
+  list.push(screen("logo", LOGO_FILE, 0x200, 240, "لوغو شاشة البداية (مع السماء)", "lz1"));
+  list.push(screen("logo2", SMALL_LOGO_FILE, 0x1C0, 224, "لوغو شاشة المتابعة (على الأسود)", "lz0"));
+  return list;
+}
+// المساحة الأصلية لكل صورة في الروم كما فُتح: حتى المؤشر التالي في الجدول نفسه
+function slotOf(img) {
+  const at = u32(orig, img.ptr) & 0x1FFFFFF;
+  // بعد آخر عنوان يبدأ الخط الكبير
+  const next = img.id === "b7" ? 0x32224 : u32(orig, img.ptr + 4) & 0x1FFFFFF;   // ولكل ملف: الملف التالي
+  return { at, size: next - at };
+}
+
+function toPixels(img, raw) {
+  const px = new Uint8Array(img.w * img.h);
+  const tb = img.bpp * 8;
+  for (let t = 0; t < img.tiles; t++) {
+    const [ox, oy] = img.tileAt(t);
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+      const v = img.bpp === 8 ? raw[t * tb + y * 8 + x] : (raw[t * tb + y * 4 + (x >> 1)] >> ((x & 1) * 4)) & 15;
+      px[(oy + y) * img.w + ox + x] = v;
+    }
+  }
+  return px;
+}
+function fromPixels(img, px) {
+  const tb = img.bpp * 8, raw = new Uint8Array(img.tiles * tb);
+  for (let t = 0; t < img.tiles; t++) {
+    const [ox, oy] = img.tileAt(t);
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+      const v = px[(oy + y) * img.w + ox + x];
+      if (img.bpp === 8) raw[t * tb + y * 8 + x] = v;
+      else raw[t * tb + y * 4 + (x >> 1)] |= v << ((x & 1) * 4);
+    }
+  }
+  return raw;
+}
+function readImage(img, buf) {
+  const at = (u32(buf, img.ptr) & 0x1FFFFFF) + img.header;
+  return toPixels(img, img.codec === "lz0" ? lz0Decode(buf, at) : lz1Decode(buf, at));
+}
+function paint(canvas, img, px) {
+  const pal = img.pal();
+  canvas.width = img.w; canvas.height = img.h;
+  const ctx = canvas.getContext("2d"), id = ctx.createImageData(img.w, img.h);
+  for (let i = 0; i < px.length; i++) {
+    const v = px[i], [r, g, b] = pal[v] || [0, 0, 0];
+    id.data.set([r, g, b, img.transparent0 && v === 0 ? 0 : 255], i * 4);
+  }
+  ctx.putImageData(id, 0, 0);
+}
+
+/* ---------- الكتابة ---------- */
+function freeStart() {
+  let last = FREE_FROM - 1;
+  for (let a = FREE_TO - 1; a >= FREE_FROM; a--) if (rom[a] !== 0) { last = a; break; }
+  return Math.min(FREE_TO, (last + 16 + 3) & ~3);   // فاصل من الأصفار بعد آخر ما كُتب هناك
+}
+function writeImage(img, px) {
+  const comp = img.codec === "lz0" ? lz0Encode(fromPixels(img, px)) : lz1Encode(fromPixels(img, px));
+  const check = img.codec === "lz0" ? lz0Decode(comp, 0) : lz1Decode(comp, 0);
+  const want = fromPixels(img, px);
+  if (check.length !== want.length || check.some((v, i) => v !== want[i])) throw new Error("الضغط لم يرجع الصورة نفسها");
+  const header = img.header ? rom.slice(u32(rom, img.ptr) & 0x1FFFFFF, (u32(rom, img.ptr) & 0x1FFFFFF) + img.header) : new Uint8Array(0);
+  const need = header.length + comp.length;
+  const slot = slotOf(img);
+  let at, where;
+  if (need <= slot.size) { at = slot.at; where = "في مكانها الأصلي"; }
+  else {
+    at = freeStart();
+    if (at + need > FREE_TO)
+      throw new Error(`الصورة المضغوطة ${need} بايت ولا تتسع في مكانها (${slot.size}) ولا في المساحة الفارغة (${Math.max(0, FREE_TO - at)}). قلّل التفاصيل أو الألوان المتدرجة.`);
+    where = `بعد نقلها إلى 0x${at.toString(16).toUpperCase()}`;
+  }
+  rom.set(header, at); rom.set(comp, at + header.length);
+  put32(rom, img.ptr, 0x08000000 + at);
+  return { need, slot: slot.size, where };
+}
+
+/* ---------- الواجهة ---------- */
+const $ = (id) => document.getElementById(id);
+let rom = null, orig = null, romName = "";
+
+function nearest(pal, from, r, g, b) {
+  let best = from, bd = Infinity;
+  for (let k = from; k < pal.length; k++) {
+    const [pr, pg, pb] = pal[k], d = (pr - r) ** 2 * 3 + (pg - g) ** 2 * 4 + (pb - b) ** 2 * 2;
+    if (d < bd) { bd = d; best = k; }
+  }
+  return best;
+}
+function importPng(img, file, card) {
+  const im = new Image();
+  im.onload = () => {
+    if (im.width !== img.w || im.height !== img.h) {
+      alert(`المقاس ${im.width}×${im.height}، والمطلوب ${img.w}×${img.h} بالضبط.`); return;
+    }
+    const c = document.createElement("canvas"); c.width = img.w; c.height = img.h;
+    const ctx = c.getContext("2d"); ctx.drawImage(im, 0, 0);
+    const data = ctx.getImageData(0, 0, img.w, img.h).data, pal = img.pal();
+    const px = new Uint8Array(img.w * img.h), cache = new Map();
+    let changedColors = 0;
+    for (let i = 0; i < px.length; i++) {
+      const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2], a = data[i * 4 + 3];
+      if (img.transparent0 && a < 128) { px[i] = 0; continue; }
+      const k = r << 16 | g << 8 | b;
+      if (!cache.has(k)) {
+        const v = nearest(pal, img.transparent0 ? 1 : 0, r, g, b);
+        cache.set(k, v);
+        const [pr, pg, pb] = pal[v];
+        if (Math.abs(pr - r) > 8 || Math.abs(pg - g) > 8 || Math.abs(pb - b) > 8) changedColors++;
+      }
+      px[i] = cache.get(k);
+    }
+    try {
+      const res = writeImage(img, px);
+      render(card, img);
+      card.querySelector(".status").innerHTML =
+        `<span class="ok">كُتبت ${res.where}</span> · المضغوط ${res.need} من ${res.slot} بايت` +
+        (changedColors ? ` · <span class="warn">${changedColors} لوناً ليس في اللوحة حُوّل إلى أقرب لون</span>` : "");
+    } catch (e) { alert(e.message); }
+  };
+  im.src = URL.createObjectURL(file);
+}
+function exportPng(img) {
+  const c = document.createElement("canvas");
+  paint(c, img, readImage(img, rom));
+  c.toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `goldensun_${img.id.startsWith("logo") ? img.id : "banner_" + BANNER_NAMES[+img.id.slice(1)]}.png`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+}
+function isModified(img) {
+  const a = readImage(img, rom), b = readImage(img, orig);
+  return a.some((v, i) => v !== b[i]);
+}
+function render(card, img) {
+  paint(card.querySelector("canvas"), img, readImage(img, rom));
+  card.classList.toggle("mod", isModified(img));
+}
+function build() {
+  const app = $("app"); app.innerHTML = "";
+  for (const img of images()) {
+    const card = document.createElement("section");
+    card.className = "card";
+    const slot = slotOf(img);
+    card.innerHTML = `<h2>${img.title}</h2><div class="muted">${img.note} · مساحتها ${slot.size} بايت</div>
+      <canvas></canvas>
+      <div class="row"><button class="ex">تصدير PNG</button><button class="im">استيراد PNG…</button>
+      <button class="rv">إرجاع للأصل</button><input type="file" accept="image/png" class="hidden"></div>
+      <div class="status muted" style="margin-top:6px"></div>`;
+    const input = card.querySelector("input");
+    card.querySelector(".ex").onclick = () => exportPng(img);
+    card.querySelector(".im").onclick = () => input.click();
+    input.onchange = () => { if (input.files[0]) importPng(img, input.files[0], card); input.value = ""; };
+    card.querySelector(".rv").onclick = () => {
+      put32(rom, img.ptr, u32(orig, img.ptr));
+      const s = slotOf(img);
+      rom.set(orig.slice(s.at, s.at + s.size), s.at);
+      render(card, img);
+      card.querySelector(".status").textContent = "";
+    };
+    app.append(card);
+    render(card, img);
+  }
+}
+function load(buf, name) {
+  const b = new Uint8Array(buf);
+  if (b.length < 0x800000 || String.fromCharCode(...b.slice(0xA0, 0xAC)) !== "Golden_Sun_A") {
+    alert("هذا ليس روم Golden Sun (الاسم في رأس الروم لا يطابق)."); return;
+  }
+  rom = b; orig = b.slice(); romName = name;
+  try { build(); } catch (e) { alert("تعذّرت قراءة الصور: " + e.message); return; }
+  const patched = b[0x155F0] === 0xDF;
+  $("romInfo").innerHTML = name + (patched ? "" : ' · <span class="warn">لا تبدو عليه رقعة التعريب: لا مساحة فارغة إن كبرت صورة عن مكانها</span>');
+  $("drop").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("saveBtn").disabled = false;
+}
+function readFile(file) { file.arrayBuffer().then((buf) => load(buf, file.name)); }
+$("file").onchange = (e) => e.target.files[0] && readFile(e.target.files[0]);
+document.addEventListener("dragover", (e) => { e.preventDefault(); $("drop").classList.add("hover"); });
+document.addEventListener("dragleave", () => $("drop").classList.remove("hover"));
+document.addEventListener("drop", (e) => {
+  e.preventDefault(); $("drop").classList.remove("hover");
+  const f = e.dataTransfer.files[0];
+  if (f && /\.gba$/i.test(f.name)) readFile(f);
+});
+$("saveBtn").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([rom], { type: "application/octet-stream" }));
+  a.download = romName.replace(/\.gba$/i, "") + "_img.gba";
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+window.addEventListener("beforeunload", (e) => { if (rom && rom.some((v, i) => v !== orig[i])) e.preventDefault(); });
+</script>
+</body>
+</html>

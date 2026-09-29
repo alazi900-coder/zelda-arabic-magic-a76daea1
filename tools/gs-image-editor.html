@@ -209,6 +209,8 @@ function lz0Encode(data) {
 /* ---------- الصور ---------- */
 const BANNER_TABLE = 0x31864, BANNER_PAL = 0x779C, FILE_TABLE = 0x320000, LOGO_FILE = 0x16, SMALL_LOGO_FILE = 0x1A;
 const BANNER_NAMES = ["Save", "Continue", "Copy", "Erase", "Battle", "Link", "Pause", "Settings"];
+// StartTitleScreen يفك .Lf38bc (239 بايتاً تليها بيانات أخرى) ومؤشرها في مخزن ثوابته
+const PRESS_PTR = 0xF2A84, PRESS_SLOT = 239;
 const FREE_FROM = 0x7FDB18, FREE_TO = 0x800000;   // بعد كود الاتجاه (rom_rtl) وقبل نهاية 8 ميغابايت
 const u32 = (b, a) => (b[a] | b[a + 1] << 8 | b[a + 2] << 16 | b[a + 3] << 24) >>> 0;
 const put32 = (b, a, v) => { b[a] = v & 255; b[a + 1] = v >> 8 & 255; b[a + 2] = v >> 16 & 255; b[a + 3] = v >>> 24; };
@@ -231,6 +233,14 @@ function images() {
     tileAt: (t) => [(t % 30) * 8, ((t / 30) | 0) * 8],
     tiles: 600,
   });
+  list.push({
+    id: "press", title: "عبارة PRESS START", codec: "lz1",
+    note: "192×8 · 16 لوناً · اللعبة تعرض أول 96 بكسلاً فقط (PRESS START)؛ BUTTON بعدها لا يظهر",
+    ptr: PRESS_PTR, header: 0, w: 192, h: 8, bpp: 4, colors: 16, transparent0: true, slotSize: PRESS_SLOT,
+    pal: () => Array.from({ length: 16 }, (_, k) => bgr(rom, BANNER_PAL + k * 2)),
+    tileAt: (t) => [t * 8, 0],                                  // ستة أشباح 32×8 متتالية
+    tiles: 24,
+  });
   list.push(screen("logo", LOGO_FILE, 0x200, 240, "لوغو شاشة البداية (مع السماء)", "lz1"));
   list.push(screen("logo2", SMALL_LOGO_FILE, 0x1C0, 224, "لوغو شاشة المتابعة (على الأسود)", "lz0"));
   return list;
@@ -238,6 +248,7 @@ function images() {
 // المساحة الأصلية لكل صورة في الروم كما فُتح: حتى المؤشر التالي في الجدول نفسه
 function slotOf(img) {
   const at = u32(orig, img.ptr) & 0x1FFFFFF;
+  if (img.slotSize) return { at, size: img.slotSize };
   // بعد آخر عنوان يبدأ الخط الكبير
   const next = img.id === "b7" ? 0x32224 : u32(orig, img.ptr + 4) & 0x1FFFFFF;   // ولكل ملف: الملف التالي
   return { at, size: next - at };
@@ -360,7 +371,7 @@ function exportPng(img) {
   c.toBlob((blob) => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `goldensun_${img.id.startsWith("logo") ? img.id : "banner_" + BANNER_NAMES[+img.id.slice(1)]}.png`;
+    a.download = `goldensun_${img.id.startsWith("b") ? "banner_" + BANNER_NAMES[+img.id.slice(1)] : img.id}.png`;
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   });
 }

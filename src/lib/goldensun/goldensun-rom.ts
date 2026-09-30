@@ -31,7 +31,7 @@ export interface GoldenSunLayout {
 export const GS_LAYOUT_VANILLA: GoldenSunLayout = { id: "vanilla", huffmanOffset: 0x3842c, dataOffset: 0x736b8 };
 
 /**
- * The US ROM with GoldenSun-AR-RTL-FONT-v7.ups applied: goldensun-arabic/engine.patch
+ * The US ROM with GoldenSun-AR-RTL-FONT-v8.ups applied: goldensun-arabic/engine.patch
  * built from the decomp with the English text. The right-to-left code is
  * linked after everything else, so no game code moved and both tables stay
  * where the untouched ROM has them.

@@ -802,7 +802,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         title: "تم بناء روم Golden Sun",
         description: rtl
           ? "النص العربي مكتوب في روم الرقعة: الخط وعكس الاتجاه فيه أصلاً."
-          : "هذا روم أصلي بلا رقعة الاتجاه: الخط العربي فيه لكن النص يظهر من اليسار لليمين. طبّق GoldenSun-AR-RTL-FONT-v7.ups على الروم الأصلي وارفعه بدلاً منه.",
+          : "هذا روم أصلي بلا رقعة الاتجاه: الخط العربي فيه لكن النص يظهر من اليسار لليمين. طبّق GoldenSun-AR-RTL-FONT-v8.ups على الروم الأصلي وارفعه بدلاً منه.",
         variant: rtl ? undefined : "destructive",
       });
     } catch (err) {

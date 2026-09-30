@@ -18,7 +18,7 @@ import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
 import { fetchBundledTranslations, uploadBundledTranslations } from "@/lib/bundled-cloud";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
-import { buildPortableJson, parsePortableJson } from "@/lib/portable-json";
+import { buildPortableJson, findPortableJsonConflicts, parsePortableJson } from "@/lib/portable-json";
 
 /** Parse a single JSON object chunk, repairing common issues */
 function repairSingleChunk(raw: string): Record<string, string> | null {
@@ -1191,9 +1191,6 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
           allowedKeys,
         );
         const imported = Object.keys(result.updates).length;
-        if (imported > 0) {
-          setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, result.updates) } : null);
-        }
         if (result.rejected.length > 0) {
           const blob = new Blob([JSON.stringify(result.rejected, null, 2)], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -1207,8 +1204,18 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
         if (result.unchanged > 0) parts.push(`${result.unchanged} بلا تغيير`);
         if (result.rejected.length > 0) parts.push(`⛔ ${result.rejected.length} سطر مرفوض (نُزّل تقرير)`);
         if (result.outsideFilter > 0) parts.push(`${result.outsideFilter} خارج الفلتر`);
-        setLastSaved(parts.join(' · '));
-        setTimeout(() => setLastSaved(""), 8000);
+        const msg = parts.join(' · ');
+        // Same flow as the regular import: changed translations wait in the conflict dialog.
+        const conflicts = findPortableJsonConflicts(result.updates, state.entries, state.translations);
+        if (conflicts.length > 0) {
+          setPendingImport({ cleanedImported: result.updates, msg, repaired: {} });
+          setImportConflicts(conflicts);
+        } else if (imported > 0) {
+          applyImport(result.updates, msg, {});
+        } else {
+          setLastSaved(msg);
+          setTimeout(() => setLastSaved(""), 8000);
+        }
       } catch (err) {
         console.error('Portable JSON import error:', err);
         toast({ title: "ملف JSON غير صالح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ExtractedEntry } from "@/components/editor/types";
-import { buildPortableJson, parsePortableJson } from "@/lib/portable-json";
+import { buildPortableJson, findPortableJsonConflicts, parsePortableJson } from "@/lib/portable-json";
 import { importGtaSaJson } from "@/lib/gtasa/gtasa-editor-bridge";
 
 const entry = (msbtFile: string, index: number, original: string): ExtractedEntry =>
@@ -91,6 +91,20 @@ describe("portable JSON import", () => {
     const r = run([{ id: "gtasa/MAIN:2", source: "Hello", arabic: "مرحبا" }], translations, new Set(["twom/a.csv:5"]));
     expect(r.updates).toEqual({});
     expect(r.outsideFilter).toBe(1);
+  });
+});
+
+describe("portable JSON conflicts", () => {
+  it("sends only changed existing translations to the accept/reject dialog", () => {
+    const current = { ...translations, "twom/a.csv:5": "سطر قديم" };
+    const r = run([
+      { id: "gtasa/MAIN:1", source: entries[0].original, arabic: "~r~مت~s~ اضغط ~widget_attack~" },
+      { id: "gtasa/MAIN:2", source: "Hello", arabic: "مرحبا" },
+      { id: "twom/a.csv:5", source: "Plain line", arabic: "سطر جديد" },
+    ], current);
+    const conflicts = findPortableJsonConflicts(r.updates, entries, current);
+    expect(conflicts.map(c => c.key)).toEqual(["gtasa/MAIN:1", "twom/a.csv:5"]);
+    expect(conflicts[1]).toMatchObject({ oldValue: "سطر قديم", newValue: "سطر جديد" });
   });
 });
 

@@ -151,3 +151,20 @@ export function parsePortableJson(
 
   return result;
 }
+
+/** Imported lines that would overwrite an existing, different translation — shown for accept/reject. */
+export function findPortableJsonConflicts(
+  updates: Readonly<Record<string, string>>,
+  entries: readonly ExtractedEntry[],
+  translations: Readonly<Record<string, string>>,
+): { key: string; label: string; oldValue: string; newValue: string }[] {
+  const byKey = new Map(entries.map((entry) => [entryKey(entry), entry]));
+  const conflicts: { key: string; label: string; oldValue: string; newValue: string }[] = [];
+  for (const [key, newValue] of Object.entries(updates)) {
+    const oldValue = translations[key];
+    const entry = byKey.get(key);
+    if (!oldValue || !oldValue.trim() || oldValue === entry?.original || oldValue === newValue) continue;
+    conflicts.push({ key, label: entry ? entry.original.slice(0, 60) : key, oldValue, newValue });
+  }
+  return conflicts;
+}

@@ -17,6 +17,7 @@ import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { validateSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
+import { validateGtaSaTags } from "@/lib/gtasa/gtasa-tags";
 import { validateFranBowTags } from "@/lib/franbow/franbow-tags";
 import { TWOM_FIXED_RE, TWOM_GENDER_RE, validateTwomTags } from "@/lib/twom/twom-tags";
 import { validateInazumaTags, findMisplacedInazumaBreak } from "@/lib/inazuma/inazuma-tags";
@@ -219,6 +220,10 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   if (entry.msbtFile.startsWith("ninthdawn/") && trimmed) {
     const check = validateNinthDawnTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز 9th Dawn Remake التقنية مختلفة: ${check.reason}` });
+  }
+  if (entry.msbtFile.startsWith("gtasa/") && trimmed) {
+    const check = validateGtaSaTags(entry.original, translation);
+    if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `رموز GTA San Andreas التقنية مختلفة: ${check.reason}` });
   }
   if (entry.msbtFile.startsWith("franbow/") && trimmed) {
     const check = validateFranBowTags(entry.original, translation);

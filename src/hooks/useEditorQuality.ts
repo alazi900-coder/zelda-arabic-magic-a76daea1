@@ -20,6 +20,8 @@ import { categorizeGoldenSunEntry } from "@/lib/goldensun/goldensun-categories";
 import { validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { inazumaSlotsAgree, validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
+import { validateGtaSaTags } from "@/lib/gtasa/gtasa-tags";
+import { categorizeGtaSaEntry } from "@/lib/gtasa/gtasa-categories";
 import { categorizePlatEntry, isPlatEntry } from "@/lib/nds/plat-categories";
 import { categorizePhEntry, isPhEntry } from "@/lib/ph/ph-categories";
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
@@ -202,6 +204,12 @@ export function computeEntryResult(entry: ExtractedEntry, translation: string, c
     qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
     tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;
   }
+  if (hasContent && entry.msbtFile.startsWith("gtasa/")) {
+    const check = validateGtaSaTags(entry.original, translation);
+    damagedTags = !check.valid;
+    qMissingTags = check.expected.some(tag => !check.actual.includes(tag));
+    tagOrderMismatch = !check.valid && check.expected.length === check.actual.length;
+  }
   if (hasContent && entry.msbtFile.startsWith("inazuma/")) {
     const check = validateInazumaTags(entry.original, translation);
     // This cartridge writes its line break as the two characters `\` and `n`,
@@ -312,10 +320,11 @@ export function useEditorQuality({ state }: UseEditorQualityProps) {
           const isNinthDawn = entry.msbtFile.startsWith('ninthdawn/');
           const isFranBow = entry.msbtFile.startsWith('franbow/');
           const isTwom = entry.msbtFile.startsWith('twom/');
+          const isGtaSa = entry.msbtFile.startsWith('gtasa/');
           const isInazuma = entry.msbtFile.startsWith('inazuma/');
           const isGoldenSun = entry.msbtFile.startsWith('goldensun/');
-          const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isFranBow && !isTwom && !isInazuma && !isGoldenSun && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
-          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isSteinsGate ? categorizeSteinsGateEntry(entry) : isCrashlands ? categorizeCrashlandsEntry(entry) : isNinthDawn ? categorizeNinthDawnEntry(entry) : isFranBow ? categorizeFranBowEntry(entry) : isTwom ? categorizeTwomEntry(entry) : isPlatEntry(entry) ? categorizePlatEntry(entry) : isPhEntry(entry) ? categorizePhEntry(entry) : isInazuma ? categorizeInazumaEntry(entry) : isGoldenSun ? categorizeGoldenSunEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
+          const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isFranBow && !isTwom && !isGtaSa && !isInazuma && !isGoldenSun && entry.msbtFile.includes(':') && !entry.msbtFile.startsWith('bdat');
+          const cat = isBdat ? categorizeBdatTable(entry.label, sourceFile) : isRisen ? categorizeRisenEntry(entry) : isMother3 ? categorizeMother3Entry(entry) : isMetroidPrime ? categorizeMetroidPrimeEntry(entry) : isPkm ? categorizePkmEntry(entry) : isDs ? categorizeDsEntry(entry) : isLumenTale ? categorizeLumenTaleEntry(entry) : isGtaIv ? categorizeGtaIvEntry(entry) : isSteinsGate ? categorizeSteinsGateEntry(entry) : isCrashlands ? categorizeCrashlandsEntry(entry) : isNinthDawn ? categorizeNinthDawnEntry(entry) : isFranBow ? categorizeFranBowEntry(entry) : isTwom ? categorizeTwomEntry(entry) : isGtaSa ? categorizeGtaSaEntry(entry) : isPlatEntry(entry) ? categorizePlatEntry(entry) : isPhEntry(entry) ? categorizePhEntry(entry) : isInazuma ? categorizeInazumaEntry(entry) : isGoldenSun ? categorizeGoldenSunEntry(entry) : isDr ? categorizeDanganronpaFile(entry.msbtFile) : categorizeFile(entry.msbtFile);
 
           const cached = cache.get(key);
           let result: EntryCacheResult;

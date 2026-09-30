@@ -24,6 +24,7 @@ import { INAZUMA_CATEGORIES } from "@/lib/inazuma/inazuma-categories";
 import { NINTHDAWN_CATEGORIES } from "@/lib/ninthdawn/ninthdawn-categories";
 import { FRANBOW_CATEGORIES } from "@/lib/franbow/franbow-categories";
 import { TWOM_CATEGORIES } from "@/lib/twom/twom-categories";
+import { GTASA_CATEGORIES } from "@/lib/gtasa/gtasa-categories";
 import { GOLDENSUN_CATEGORIES } from "@/lib/goldensun/goldensun-categories";
 import type { useEditorState } from "@/hooks/useEditorState";
 
@@ -81,6 +82,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const isNinthDawn = !!entries?.some((e) => e.msbtFile.startsWith("ninthdawn/"));
   const isFranBow = !!entries?.some((e) => e.msbtFile.startsWith("franbow/"));
   const isTwom = !!entries?.some((e) => e.msbtFile.startsWith("twom/"));
+  const isGtaSa = !!entries?.some((e) => e.msbtFile.startsWith("gtasa/"));
   const isPlatinum = !!entries?.some((e) => e.msbtFile.startsWith("platinum/"));
   const isPh = !!entries?.some((e) => e.msbtFile.startsWith("ph/"));
   const isInazuma = !!entries?.some((e) => e.msbtFile.startsWith("inazuma/"));
@@ -132,6 +134,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         franBowCategories={FRANBOW_CATEGORIES}
         isTwom={isTwom}
         twomCategories={TWOM_CATEGORIES}
+        isGtaSa={isGtaSa}
+        gtaSaCategories={GTASA_CATEGORIES}
         isPlatinum={isPlatinum}
         platinumCategories={PLATINUM_CATEGORIES}
         isPh={isPh}

@@ -34,6 +34,7 @@ import { exportCrashlandsJson } from "@/lib/crashlands/crashlands-editor-bridge"
 import { exportNinthDawnJson } from "@/lib/ninthdawn/ninthdawn-editor-bridge";
 import { exportFranBowJson } from "@/lib/franbow/franbow-editor-bridge";
 import { exportTwomJson } from "@/lib/twom/twom-editor-bridge";
+import { exportGtaSaJson } from "@/lib/gtasa/gtasa-editor-bridge";
 import type { useEditorState } from "@/hooks/useEditorState";
 import type { KHBBSUnsupportedCharacter } from "@/lib/khbbs-ctd";
 import type { GtaIvUnsupportedCharacter } from "@/lib/gtaiv/gxt-format";
@@ -76,6 +77,7 @@ interface EditorBuildSectionProps {
   isNinthDawn?: boolean;
   isFranBow?: boolean;
   isTwom?: boolean;
+  isGtaSa?: boolean;
   isFe12?: boolean;
   /** Phantom Hourglass (NDS): rebuilds the BMG dialogue files inside the .nds. */
   isPh?: boolean;
@@ -182,6 +184,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isNinthDawn = false,
   isFranBow = false,
   isTwom = false,
+  isGtaSa = false,
   isFe12 = false,
   isPh = false,
   isGoldenSun = false,
@@ -1482,6 +1485,15 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               import("@/hooks/use-toast").then(({ toast }) => toast({ title: "تم بناء ملف JSON", description: "نفس شكل الملف الأصلي، لا يتغير فيه إلا الترجمة والحالة." }));
             } catch (error) { import("@/hooks/use-toast").then(({ toast }) => toast({ title: "تعذر بناء JSON", description: error instanceof Error ? error.message : "راجع الرموز التقنية.", variant: "destructive" })); }
           }} className="flex-1 min-w-[200px] font-display font-bold"><FileDown className="w-4 h-4 mr-2" /> بناء JSON This War of Mine: Stories</Button>
+        ) : isGtaSa ? (
+          <Button size="lg" onClick={() => {
+            try {
+              const rows = exportGtaSaJson(editor.state?.entries ?? [], editor.state?.translations ?? {});
+              const url = URL.createObjectURL(new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" }));
+              const a = document.createElement("a"); a.href = url; a.download = "GTA-SA-Arabic-Edited.json"; a.click(); URL.revokeObjectURL(url);
+              import("@/hooks/use-toast").then(({ toast }) => toast({ title: "تم بناء ملف JSON", description: "نفس شكل الملف الأصلي (table, hash, source, arabic)؛ لا يتغير فيه إلا حقل arabic." }));
+            } catch (error) { import("@/hooks/use-toast").then(({ toast }) => toast({ title: "تعذر بناء JSON", description: error instanceof Error ? error.message : "راجع الرموز التقنية.", variant: "destructive" })); }
+          }} className="flex-1 min-w-[200px] font-display font-bold"><FileDown className="w-4 h-4 mr-2" /> بناء JSON GTA San Andreas</Button>
         ) : isSteinsGate ? (
           <>
             <input ref={steinsGateIsoInputRef} type="file" accept=".iso,application/x-iso9660-image" className="hidden" onChange={(event) => void handleSteinsGateBuild(event)} />

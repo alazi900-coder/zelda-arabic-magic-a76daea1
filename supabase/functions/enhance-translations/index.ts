@@ -99,6 +99,11 @@ const RULES: RuleDef[] = [
   // This War of Mine: Stories-only rule, injected only when the request's
   // game is 'twom' (see TWOM_ONLY_RULE_IDS).
   { id: 'detect_twom_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـThis War of Mine: Stories] وسوم الجنس `{mr|…}` و`{fr|…}` و`{ms|…}` و`{fs|…}` يختار المحرّك منها ما يطابق جنس الشخصية: أبقِ بداية الوسم (`{mr|`) ونهايته (`}`) حرفياً وترجم ما بينهما، ويجوز نقل الفعل أو الصفة كاملة داخل الوسم وإضافة وسوم من الأنواع نفسها الموجودة في الأصل. ولا تترك كلمة إنجليزية داخل وسم. أما `^CharacterName^` وأمثاله و`<BR>` `<HEADER>` `<NAME>` `<HAND>` وأكواد اللون `|#color=…|` `|#defaultcolor|` ورموز الأزرار `|XPadA|` فأبقِها بنفس العدد حرفياً، ويجوز تغيير موضعها ليناسب ترتيب الجملة العربية.' },
+  // GTA San Andreas-only rules, injected only when the request's game is
+  // 'gtasa' (see GTASA_ONLY_RULE_IDS). The tag rule names the one token shape
+  // the 17,165-entry export contains: everything between two tildes.
+  { id: 'detect_gtasa_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـGTA San Andreas] في نصّ هذه اللعبة رمز واحد لا غير: أي شيء بين علامتين `~…~` هو تحكم يقرؤه المحرّك وليس كلاماً. `~s~` `~m~` `~r~` `~y~` `~b~` `~w~` `~g~` `~h~` تبدّل لون النص (والحرف الكبير مثل `~S~` رمز مختلف)، و`~n~` فاصل سطر، و`~1~` رقم أو مبلغ تضعه اللعبة (وعلامة `$` قبله نص عادي)، و`~widget_…~` أيقونة زر تظهر مكانها، و`~<~` `~>~` `~u~` `~d~` أسهم. أبقِ كل رمز بحرفه وعدده وترتيبه بين الرموز الأخرى، ولا تنقله ولا تترجمه ولا تضع كلمة داخله. الرمز الذي يحيط بكلمة (`~b~SWAT Tank~s~`) يبقى حول الكلمة العربية المقابلة نفسها. أبقِ `$` والأرقام كما في الأصل.' },
+  { id: 'detect_gtasa_names', kind: 'detect', prompt: '**accuracy** — [خاص بـGTA San Andreas] اللعبة تدور في لوس سانتوس وسان فييرو ولاس فنتورا عام 1992 بلغة شارع وعصابات (Grove Street وBallas وVagos وAztecas وLoco Syndicate وBig Smoke وRyder وSweet وCJ وCesar وWu Zi Mu). أسماء الأحياء والعصابات والشخصيات والمحلات والسيارات والأسلحة تبقى إنجليزية أو تُنقل صوتياً بالطريقة نفسها في كل نص، ولا تعتبر تعدد صيغتها خطأ إلا إن اختلفت بين سطر وآخر. لغة الشارع الخشنة والشتائم جزء من نبرة الشخصية: لا تقترح تلطيفها ولا تضف ما ليس في الأصل. لا تحكم على مصطلح بأنه خطأ اعتماداً على ألعاب Grand Theft Auto الأخرى.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -128,6 +133,8 @@ const NINTHDAWN_ONLY_RULE_IDS = new Set(['detect_ninthdawn_tags']);
 const FRANBOW_ONLY_RULE_IDS = new Set(['detect_franbow_tags']);
 /** Rules whose prompt text only makes sense for This War of Mine: Stories — never injected elsewhere. */
 const TWOM_ONLY_RULE_IDS = new Set(['detect_twom_tags']);
+/** Rules whose prompt text only makes sense for GTA San Andreas — never injected elsewhere. */
+const GTASA_ONLY_RULE_IDS = new Set(['detect_gtasa_tags', 'detect_gtasa_names']);
 /**
  * Rules that teach the model Xenoblade's tag syntax, withheld from Pokémon.
  *
@@ -294,6 +301,18 @@ function preservesInazumaTokenSequence(original: string, candidate: string): boo
   return expected.length === actual.length && expected.every((token, index) => token === actual[index]);
 }
 
+/**
+ * GTA San Andreas has one token shape: everything between two tildes
+ * (`~s~`, `~n~`, `~1~`, `~widget_brake~`). Matched by the same pattern the
+ * client uses (gtasa-tags.ts) so both sides refuse exactly the same suggestion.
+ */
+const GTASA_TOKEN_REGEX = /~[^~\n]*~/g;
+function preservesGtaSaTokenSequence(original: string, candidate: string): boolean {
+  const expected = (original || '').match(GTASA_TOKEN_REGEX) || [];
+  const actual = (candidate || '').match(GTASA_TOKEN_REGEX) || [];
+  return expected.length === actual.length && expected.every((token, index) => token === actual[index]);
+}
+
 function extractTechTags(text: string): string[] {
   return [...(text || '').matchAll(new RegExp(TECH_TAG_REGEX.source, TECH_TAG_REGEX.flags))].map(m => m[0]);
 }
@@ -384,7 +403,7 @@ function preservesGtaIvDollarAmountSequence(original: string, candidate: string)
   return before.length === after.length && before.every((amount, index) => normalize(amount) === normalize(after[index] || ''));
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false): boolean {
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
@@ -401,7 +420,8 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
     (!isNinthDawn || preservesNinthDawnTokenSequence(original, suggested)) &&
     (!isInazuma || preservesInazumaTokenSequence(original, suggested)) &&
     (!isFranBow || preservesFranBowTokenSequence(original, suggested)) &&
-    (!isTwom || preservesTwomTokens(original, suggested));
+    (!isTwom || preservesTwomTokens(original, suggested)) &&
+    (!isGtaSa || preservesGtaSaTokenSequence(original, suggested));
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -432,6 +452,7 @@ function buildRuleSections(
   isInazuma = false,
   isFranBow = false,
   isTwom = false,
+  isGtaSa = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -470,7 +491,8 @@ function buildRuleSections(
     (!NINTHDAWN_ONLY_RULE_IDS.has(r.id) || isNinthDawn) &&
     (!FRANBOW_ONLY_RULE_IDS.has(r.id) || isFranBow) &&
     (!TWOM_ONLY_RULE_IDS.has(r.id) || isTwom) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom));
+    (!GTASA_ONLY_RULE_IDS.has(r.id) || isGtaSa) &&
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -621,7 +643,10 @@ Deno.serve(async (req) => {
     const isInazuma = game === 'inazuma';
     const isFranBow = game === 'franbow';
     const isTwom = game === 'twom';
-    const gameLabel = isTwom
+    const isGtaSa = game === 'gtasa';
+    const gameLabel = isGtaSa
+      ? 'GTA San Andreas'
+      : isTwom
       ? 'This War of Mine: Stories'
       : isLumenTale
       ? 'LumenTale: Memories of Trey'
@@ -646,7 +671,9 @@ Deno.serve(async (req) => {
       : isFranBow
       ? 'Fran Bow'
       : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
-    const forgetOtherGame = isTwom
+    const forgetOtherGame = isGtaSa
+      ? '\nهذه مراجعة خاصة بـ GTA San Andreas — جريمة وعصابات في لوس سانتوس وسان فييرو ولاس فنتورا عام 1992، بلغة شارع خشنة وسخرية. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى، ولا من ألعاب Grand Theft Auto الأخرى؛ استند فقط إلى النص والقاموس المعطى. كل ما بين علامتين ~…~ رمز تقني تضعه اللعبة وليس كلاماً، فأبقِه بعدده وترتيبه.'
+      : isTwom
       ? '\nهذه مراجعة خاصة بـ This War of Mine: Stories — مدنيون يحاولون النجاة في مدينة محاصرة. لا تفترض مصطلحات أو شخصيات من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. وسوم الجنس `{mr|…}` `{fr|…}` `{ms|…}` `{fs|…}`: أبقِ بداية الوسم ونهايته حرفياً وترجم ما بينهما، ويجوز نقل الفعل كاملاً داخل الوسم. الرموز `^CharacterName^` و`<BR>` و`|XPadA|` و`|#color=…|` تبقى بنفس العدد حرفياً.\n'
       : isMetroidPrime
       ? `\n${METROID_PRIME_FORGET_OTHER_GAME_RULE}\n`
@@ -770,12 +797,12 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow || isTwom
+    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow || isTwom || isGtaSa
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -1232,7 +1259,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
           isCategoryEnabled(i.category, ruleSections.enabledSet) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1351,7 +1378,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
             isTypeEnabled(r.type, ruleSections.enabledSet) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1440,7 +1467,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
               .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1448,7 +1475,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
         isTypeEnabled(s.type, ruleSections.enabledSet) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

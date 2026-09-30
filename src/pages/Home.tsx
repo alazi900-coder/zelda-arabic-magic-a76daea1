@@ -63,6 +63,18 @@ const games = [
     arrowClass: "text-[hsl(38,60%,75%)]",
   },
   {
+    title: "GTA San Andreas",
+    subtitle: "محرر نصوص GTA San Andreas",
+    desc: "يرفع ملف JSON (17,165 نصاً)، ويعرض الأصل الإنجليزي والترجمة العربية مع فلاتر (أهداف المهام، حوارات المهام، المساعدة والأزرار، رسائل، أسماء وقوائم، الكازينو، مفاتيح داخلية)، ويحمي رموز ~s~ و~n~ و~1~ و~widget_...~ في الحفظ والفحص العميق وتحسين الترجمة بالذكاء الاصطناعي.",
+    link: "/gta-sa",
+    image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='s' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop stop-color='%23f2a65a'/%3E%3Cstop offset='.55' stop-color='%23a8455a'/%3E%3Cstop offset='1' stop-color='%231a1020'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23s)'/%3E%3Ctext x='800' y='470' font-family='Impact,Arial Black,sans-serif' font-size='150' text-anchor='middle' fill='%23fff' opacity='.92'%3ESAN ANDREAS%3C/text%3E%3C/svg%3E",
+    formats: ["JSON", "Android", "GXT"],
+    cardClass: "border-[hsl(20,60%,50%)]/35 hover:border-[hsl(30,85%,65%)]/70",
+    formatClass: "bg-[hsl(20,60%,50%)]/20 text-[hsl(30,85%,72%)] border-[hsl(20,60%,50%)]/35",
+    subtitleClass: "text-[hsl(30,85%,72%)]",
+    arrowClass: "text-[hsl(30,85%,72%)]",
+  },
+  {
     title: "Steins;Gate PSP",
     subtitle: "تعريب القوائم والحوارات",
     desc: "يفتح ISO الإنجليزي محلياً، يستخرج نصوص AFS/BIN إلى المحرر، يحمي وسوم المحرك ويحقن خطاً عربياً متصلاً، ثم يبني ISO معرّباً.",

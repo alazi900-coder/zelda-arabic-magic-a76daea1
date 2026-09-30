@@ -44,6 +44,7 @@ import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/p
 import { repairCrashlandsTags, validateCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { repairTwomTags, validateTwomTags } from "@/lib/twom/twom-tags";
+import { repairGtaSaTags, validateGtaSaTags } from "@/lib/gtasa/gtasa-tags";
 import { repairInazumaTags, validateInazumaTags } from "@/lib/inazuma/inazuma-tags";
 
 interface TranslationAIEnhancePanelProps {
@@ -276,6 +277,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const isNinthDawn = gameParam === "ninthdawn";
   const isInazuma = gameParam === "inazuma";
   const isTwom = gameParam === "twom";
+  const isGtaSa = gameParam === "gtasa";
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
@@ -298,6 +300,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     if (isInazuma) return validateInazumaTags(original, repairInazumaTags(original, suggestion).text).reason ?? null;
     // Only the tag frame is checked; the word inside a gender tag is the translator's.
     if (isTwom) return validateTwomTags(original, repairTwomTags(original, suggestion).text).reason ?? null;
+    // Repair a clean trailing drop first, exactly as the save path does.
+    if (isGtaSa) return validateGtaSaTags(original, repairGtaSaTags(original, suggestion).text).reason ?? null;
     if (isGtaIv) {
       const dollarRepair = repairGtaIvDollarAmountSequence(original, suggestion);
       if (!dollarRepair.safe) return "الاقتراح يغيّر مبلغ دولار محمياً أو ترتيبه.";

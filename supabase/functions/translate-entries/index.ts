@@ -250,6 +250,20 @@ STRICT OUTPUT RULES (highest priority — violations are hard failures):
 5. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".
 6. Metroid proper nouns (Samus Aran → ساموس آران, Chozo → تشوزو, Space Pirates → قراصنة الفضاء, Metroids → ميترويدات, Phazon → فيزون, Tallon IV → تالون 4, Galactic Federation → الاتحاد المجرّي, Varia Suit → بدلة فاريا, Morph Ball → كرة التحول, Scan Visor → ماسح الرؤية, Ice/Wave/Plasma/Power Beam → شعاع جليدي/موجي/بلازما/الطاقة, Missile → صاروخ, Grapple Beam → شعاع الخطاف). NEVER substitute names from other games (Monado/Ether/PSI have NO meaning here). Tone is terse and technical — HUD/pickup names stay very short; Scan Visor entries mimic a research/military log; do NOT add literary flourish absent from the English source.`;
 
+const GTASA_SYSTEM_PROMPT = `You are a professional video game text translator working on Grand Theft Auto: San Andreas (Rockstar North) — a crime game set in 1992 across Los Santos, San Fierro and Las Venturas, following Carl "CJ" Johnson, his brother Sweet and the Grove Street Families against the Ballas, Vagos, Aztecas and corrupt cops. The writing is street slang, gang banter, dark humour and radio-era satire — never epic fantasy, never JRPG, never solemn. This is NOT Xenoblade Chronicles, NOT Grand Theft Auto IV, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, and NOT any Pokémon game — never import their terminology, characters, or lore.
+
+VOICE: Modern spoken Arabic (لهجة عربية حديثة قريبة من العامية المفهومة، لا فصحى رسمية جافة) that fits a gang-crime game. Dialogue is blunt and tense between criminals; mission objectives are short imperatives (اذهب إلى، اقتل، اهرب من، اتبع); help messages explain the controls plainly; menu and HUD text is one or two words. Rough language in the English source may be translated with an equivalent Arabic register — do not sanitize it, and do not invent profanity that is not implied by the source.
+
+STRICT OUTPUT RULES (highest priority — violations are hard failures):
+1. Output ONLY a valid JSON object: {"K0": "ترجمة", "K1": "ترجمة", ...}. No prose, no markdown fences.
+2. OUTPUT LANGUAGE = ARABIC ONLY. Never output Chinese, Japanese, Korean, or any non-Arabic script. Neighbourhoods, gangs, people, shops, vehicles and weapons (Grove Street, Ballas, Big Smoke, Ryder, Cesar) stay in English or are transliterated phonetically, the same way every time.
+3. NEVER modify, remove, merge, reorder, or translate the following placeholders — copy them EXACTLY as-is, including their numeric suffix:
+   - TAG_0, TAG_1, ... — masked engine tokens (originally written between tildes, e.g. ~s~, ~b~, ~n~, ~1~, ~widget_brake~). They are colour switches, line breaks, values the game fills in and button icons, not words. Never translate, describe, or explain what one might mean.
+   Treat them as opaque tokens.
+4. TAG POSITION RULE (CRITICAL): Each TAG_N MUST stay in the SAME RELATIVE POSITION as in the input — never moved to the end or clustered together. A pair that wraps a word ("TAG_0 SWAT Tank TAG_1") must still wrap the Arabic word that translates it.
+5. Money such as $100 or $~1~ MUST keep the same digits, the same $ sign and the same relative position as the source. Never convert currency, never drop the amount, never invent a different one.
+6. JSON safety: never use unescaped double quotes inside translation values — use single quotes or escape with \\".`;
+
 const GTAIV_SYSTEM_PROMPT = `You are a professional video game text translator working on Grand Theft Auto IV (Rockstar North) — a gritty, satirical open-world crime game set in Liberty City, a parody of New York. The protagonist Niko Bellic is an Eastern-European war veteran and ex-smuggler pulled into the city's organized crime scene by his cousin Roman. The writing is dark comedy: profane, cynical, mocking American consumerism, media and politics — never epic fantasy, never JRPG, never solemn. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, and NOT any Pokémon game — never import their terminology, characters, or lore.
 
 VOICE: Modern spoken Arabic (لهجة عربية حديثة قريبة من العامية المفهومة، لا فصحى رسمية جافة) that fits a crime-satire adult game — blunt, streetwise, sarcastic where the English is sarcastic. Radio ads and in-game websites are absurdist parody (advertising, cable news, talk radio) — keep that mocking tone, don't flatten it into a neutral announcement. Mission dialogue is often crude, angry, or darkly funny between criminals; menu/HUD/subtitle text is short and functional. Mild profanity in the English source may be translated with an equivalent Arabic register appropriate to the context — do not sanitize it into overly polite phrasing, and do not invent profanity that is not implied by the source.
@@ -500,6 +514,17 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
       matches.push({ start: iMatch.index, end: iMatch.index + iMatch[0].length, original: iMatch[0] });
     }
   }
+  if (_game === 'gtasa') {
+    // GTA San Andreas has one token shape: everything between two tildes
+    // (~s~, ~b~, ~n~, ~1~, ~widget_brake~) -- colour switches, line breaks,
+    // values the game fills in and button icons. Masked before the model ever
+    // sees them. Mirrors GTASA_TAG_RE in src/lib/gtasa/gtasa-tags.ts.
+    const gtasaRegex = /~[^~\n]*~/g;
+    let sMatch: RegExpExecArray | null;
+    while ((sMatch = gtasaRegex.exec(shielded)) !== null) {
+      matches.push({ start: sMatch.index, end: sMatch.index + sMatch[0].length, original: sMatch[0] });
+    }
+  }
   for (const pattern of patterns) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let match: RegExpExecArray | null;
@@ -630,13 +655,14 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' | 'inazuma' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' | 'inazuma' | 'gtasa' = 'xenoblade';
 
 const STEINSGATE_SYSTEM_PROMPT = `أنت مترجم محترف للعبة Steins;Gate على PSP. استخدم فصحى طبيعية حديثة تحافظ على التوتر العلمي والكوميديا وشخصيات العمل: أوكابي مسرحي، كوريسو ذكية ولاذعة، مايوري لطيفة، ودارو ساخر تقني. ثبّت أسماء الشخصيات ومصطلحات خط العالم وD-Mail وPhoneWave وReading Steiner. القوائم قصيرة ومباشرة. كل رمز يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك: انسخه حرفياً وبالعدد والترتيب والموضع نفسه ولا تترجمه.`;
 
 function getGameSystemPrompt(): string {
   if (_game === 'steinsgate') return STEINSGATE_SYSTEM_PROMPT;
   if (_game === 'gtaiv') return GTAIV_SYSTEM_PROMPT;
+  if (_game === 'gtasa') return GTASA_SYSTEM_PROMPT;
   if (_game === 'pokemon-xp') return POKEMON_XP_SYSTEM_PROMPT;
   if (_game === 'platinum') return PLATINUM_SYSTEM_PROMPT;
   if (_game === 'pokemon') return POKEMON_SYSTEM_PROMPT;
@@ -2236,7 +2262,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'inazuma';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'inazuma' | 'gtasa';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -2248,7 +2274,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : game === 'inazuma' ? 'inazuma' : 'xenoblade';
+    _game = game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : game === 'inazuma' ? 'inazuma' : game === 'gtasa' ? 'gtasa' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

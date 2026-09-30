@@ -63,6 +63,8 @@ import { analyzeInazumaUnsupportedCharacters, type InazumaUnsupportedCharacter }
 import { fromInazumaBreakTokens } from "@/lib/inazuma/inazuma-break-tokens";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
 import { categorizeNinthDawnEntry } from "@/lib/ninthdawn/ninthdawn-categories";
+import { repairGtaSaTags, validateGtaSaTags } from "@/lib/gtasa/gtasa-tags";
+import { categorizeGtaSaEntry } from "@/lib/gtasa/gtasa-categories";
 import { repairFranBowTags, validateFranBowTags } from "@/lib/franbow/franbow-tags";
 import { categorizeFranBowEntry } from "@/lib/franbow/franbow-categories";
 import { repairTwomTags, validateTwomTags } from "@/lib/twom/twom-tags";
@@ -1397,13 +1399,14 @@ export function useEditorState() {
       const isNinthDawn = e.msbtFile.startsWith('ninthdawn/');
       const isFranBow = e.msbtFile.startsWith('franbow/');
       const isTwom = e.msbtFile.startsWith('twom/');
+      const isGtaSa = e.msbtFile.startsWith('gtasa/');
       const isPlat = e.msbtFile.startsWith('platinum/');
       const isPh = e.msbtFile.startsWith('ph/');
       const isInazuma = e.msbtFile.startsWith('inazuma/');
       const isGoldenSun = e.msbtFile.startsWith('goldensun/');
-      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isFranBow && !isTwom && !isInazuma && !isGoldenSun && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isFranBow && !isTwom && !isGtaSa && !isInazuma && !isGoldenSun && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isFranBow ? categorizeFranBowEntry(e) : isTwom ? categorizeTwomEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isInazuma ? categorizeInazumaEntry(e) : isGoldenSun ? categorizeGoldenSunEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isFranBow ? categorizeFranBowEntry(e) : isTwom ? categorizeTwomEntry(e) : isGtaSa ? categorizeGtaSaEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isInazuma ? categorizeInazumaEntry(e) : isGoldenSun ? categorizeGoldenSunEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||
@@ -1524,6 +1527,12 @@ export function useEditorState() {
       const check = validateTwomTags(entry.original, finalValue);
       if (!check.valid) {
         toast({ title: "لم تُحفظ الترجمة: رموز This War of Mine غير سليمة", description: check.reason ?? "أعد الرموز التقنية كما في الأصل.", variant: "destructive" });
+        return;
+      }
+    } else if (entry?.msbtFile.startsWith("gtasa/") && value.trim()) {
+      finalValue = repairGtaSaTags(entry.original, value).text;
+      if (!validateGtaSaTags(entry.original, finalValue).valid) {
+        toast({ title: "لم تُحفظ الترجمة: رموز GTA San Andreas مختلفة", description: "أعد الرموز التقنية (~s~، ~n~، ~1~، ~widget_...~) إلى العدد والترتيب الأصليين.", variant: "destructive" });
         return;
       }
     }

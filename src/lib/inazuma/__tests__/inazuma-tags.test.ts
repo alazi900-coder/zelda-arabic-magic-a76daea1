@@ -212,7 +212,7 @@ describe("Inazuma tokens are protected by the AI enhance/translate tools", () =>
     expect(ENHANCE_SOURCE).toContain("preservesInazumaTokenSequence");
     expect(ENHANCE_SOURCE).toContain("(!isInazuma || preservesInazumaTokenSequence(original, suggested))");
     expect(ENHANCE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
-      (ENHANCE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom\)/g)?.length ?? 0) + 1
+      (ENHANCE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa\)/g)?.length ?? 0) + 1
     );
   });
 
@@ -225,7 +225,7 @@ describe("Inazuma tokens are protected by the AI enhance/translate tools", () =>
   it("masks \\f and %1F..%4F before the auto-translate model ever sees them", () => {
     expect(TRANSLATE_SOURCE).toContain("if (_game === 'inazuma')");
     expect(TRANSLATE_SOURCE).toContain("const inazumaRegex = /\\\\f|▼|%[1-4]F/g;");
-    expect(TRANSLATE_SOURCE).toContain("game === 'inazuma' ? 'inazuma' : 'xenoblade';");
+    expect(TRANSLATE_SOURCE).toContain("game === 'inazuma' ? 'inazuma' : game === 'gtasa' ? 'gtasa' : 'xenoblade';");
   });
 });
 

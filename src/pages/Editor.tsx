@@ -33,6 +33,7 @@ import { GOLDENSUN_CATEGORIES } from "@/lib/goldensun/goldensun-categories";
 import { NINTHDAWN_CATEGORIES } from "@/lib/ninthdawn/ninthdawn-categories";
 import { FRANBOW_CATEGORIES } from "@/lib/franbow/franbow-categories";
 import { TWOM_CATEGORIES } from "@/lib/twom/twom-categories";
+import { GTASA_CATEGORIES } from "@/lib/gtasa/gtasa-categories";
 import { idbGet } from "@/lib/idb-storage";
 import { resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import EditorAsyncBoundary from "@/components/editor/EditorAsyncBoundary";
@@ -173,6 +174,7 @@ const Editor = () => {
   const isNinthDawnEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("ninthdawn/") ?? false;
   const isFranBowEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("franbow/") ?? false;
   const isTwomEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("twom/") ?? false;
+  const isGtaSaEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("gtasa/") ?? false;
   const isFe12Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("fe12/") ?? false;
   const isPlatinumEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
   const isInazumaEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("inazuma/") ?? false;
@@ -235,6 +237,8 @@ const Editor = () => {
     ? "/fran-bow"
     : isTwomEntries
     ? "/twom-stories"
+    : isGtaSaEntries
+    ? "/gta-sa"
     : isGoldenSunEntries
     ? "/golden-sun"
     : isRisen
@@ -260,13 +264,14 @@ const Editor = () => {
     if (isNinthDawnEntries) return NINTHDAWN_CATEGORIES;
     if (isFranBowEntries) return FRANBOW_CATEGORIES;
     if (isTwomEntries) return TWOM_CATEGORIES;
+    if (isGtaSaEntries) return GTASA_CATEGORIES;
     if (isPlatinumEntries) return PLATINUM_CATEGORIES;
     if (isInazumaEntries) return INAZUMA_CATEGORIES;
     if (isPhEntries) return PH_CATEGORIES;
     if (isGoldenSunEntries) return GOLDENSUN_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isFranBowEntries, isTwomEntries, isPlatinumEntries, isInazumaEntries, isPhEntries, isGoldenSunEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isFranBowEntries, isTwomEntries, isGtaSaEntries, isPlatinumEntries, isInazumaEntries, isPhEntries, isGoldenSunEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {
@@ -786,6 +791,7 @@ const Editor = () => {
             isNinthDawn={isNinthDawnEntries}
             isFranBow={isFranBowEntries}
             isTwom={isTwomEntries}
+            isGtaSa={isGtaSaEntries}
             isFe12={isFe12Entries}
             isPh={isPhEntries}
             isGoldenSun={isGoldenSunEntries}

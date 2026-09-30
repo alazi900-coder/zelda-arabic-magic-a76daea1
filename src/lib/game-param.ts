@@ -21,6 +21,7 @@
  *   - `ninthdawn/<section>/<n>`    → 9th Dawn Remake
  *   - `franbow/<category>/<n>`     → Fran Bow
  *   - `twom/<category>/<n>`        → This War of Mine: Stories
+ *   - `gtasa/<table>`              → GTA San Andreas GXT tables
  *   - otherwise                 → Xenoblade (default, backward-compatible)
  */
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -43,7 +44,8 @@ export type GameParam =
   | "inazuma"
   | "goldensun"
   | "franbow"
-  | "twom";
+  | "twom"
+  | "gtasa";
 
 export function resolveGameParam(
   msbtFile: string | undefined,
@@ -66,5 +68,6 @@ export function resolveGameParam(
   if (f.startsWith("ninthdawn/")) return "ninthdawn";
   if (f.startsWith("franbow/")) return "franbow";
   if (f.startsWith("twom/")) return "twom";
+  if (f.startsWith("gtasa/")) return "gtasa";
   return "xenoblade";
 }

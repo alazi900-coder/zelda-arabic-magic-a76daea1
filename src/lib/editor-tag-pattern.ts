@@ -21,6 +21,7 @@ import { PLAT_TAG_RE } from "@/lib/nds/plat-tag-mask";
 import { STEINSGATE_TAG_RE } from "@/lib/steinsgate/steinsgate-tags";
 import { CRASHLANDS_TAG_RE } from "@/lib/crashlands/crashlands-tags";
 import { NINTHDAWN_TAG_RE } from "@/lib/ninthdawn/ninthdawn-tags";
+import { GTASA_TAG_RE } from "@/lib/gtasa/gtasa-tags";
 
 /** Xenoblade colour codes; ordinary prose in Platinum, so it is dropped there. */
 const HASH_COLOUR_RULE = "#[0-5]";
@@ -102,6 +103,9 @@ export function editorTagPattern(msbtFile?: string): RegExp {
           ? [...RULES, NINTHDAWN_TAG_RE.source]
           : msbtFile?.startsWith("twom/")
             ? [...TWOM_RULES, ...RULES]
-            : RULES;
+            // `#2` is «controller port #2» in San Andreas, not a Xenoblade colour code.
+            : msbtFile?.startsWith("gtasa/")
+              ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), GTASA_TAG_RE.source]
+              : RULES;
   return new RegExp(`(${rules.join("|")})`, "g");
 }

@@ -30,6 +30,13 @@ describe("GTA San Andreas technical token guard", () => {
     expect(repairGtaSaTags("Money: ~1~", "المال:")).toEqual({ text: "المال:~1~", changed: true });
     expect(repairGtaSaTags("Press ~m~~widget_brake~ to stop", "اضغط للتوقف").changed).toBe(false);
   });
+
+  it("restores a tilde a token lost, and nothing it cannot place for certain", () => {
+    expect(repairGtaSaTags("~r~Wasted~s~", "~rخسرت~s~").text).toBe("~r~خسرت~s~");
+    expect(repairGtaSaTags("Press ~widget_brake~ now", "اضغط widget_brake~ الآن").text).toBe("اضغط ~widget_brake~ الآن");
+    expect(repairGtaSaTags("~r~A~n~B", "~rأ~nب").text).toBe("~r~أ~n~ب");
+    expect(repairGtaSaTags("~r~Wasted~s~", "~s~خسرت~r~").changed).toBe(false);
+  });
 });
 
 describe("GTA San Andreas filters", () => {

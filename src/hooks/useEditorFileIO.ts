@@ -18,6 +18,7 @@ import { murmur3_32 } from "@/lib/bdat-hash-dictionary";
 import { fetchBundledTranslations, uploadBundledTranslations } from "@/lib/bundled-cloud";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
+import { buildPortableJson, parsePortableJson } from "@/lib/portable-json";
 
 /** Parse a single JSON object chunk, repairing common issues */
 function repairSingleChunk(raw: string): Record<string, string> | null {
@@ -1153,6 +1154,69 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     input.click();
   };
 
+  /** Export portable JSON [{id, source, arabic}] — arabic is empty for untranslated lines */
+  const handleExportPortableJson = () => {
+    if (!state) return;
+    const entriesToExport = withoutTranslationExcludedEntries(isFilterActive ? filteredEntries : state.entries);
+    const rows = buildPortableJson(entriesToExport, state.translations);
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const suffix = isFilterActive ? `_${filterLabel}` : '';
+    a.download = `english-arabic${suffix}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    const translated = rows.filter(row => row.arabic !== '').length;
+    setLastSaved(`✅ تم تصدير ${rows.length} سطر (${translated} مترجم) كـ JSON إنجليزي + عربي`);
+    setTimeout(() => setLastSaved(""), 4000);
+  };
+
+  /** Import portable JSON [{id, source, arabic}]; lines with damaged tokens are refused and reported */
+  const handleImportPortableJson = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file || !state) return;
+      try {
+        const allowedKeys = isFilterActive && filteredEntries.length < state.entries.length
+          ? new Set(filteredEntries.map(entry => `${entry.msbtFile}:${entry.index}`))
+          : null;
+        const result = parsePortableJson(
+          await readFileAsText(file),
+          withoutTranslationExcludedEntries(state.entries),
+          state.translations,
+          allowedKeys,
+        );
+        const imported = Object.keys(result.updates).length;
+        if (imported > 0) {
+          setState(prev => prev ? { ...prev, ...mergeGuardedTranslations(prev, result.updates) } : null);
+        }
+        if (result.rejected.length > 0) {
+          const blob = new Blob([JSON.stringify(result.rejected, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `rejected-lines_${new Date().toISOString().slice(0, 10)}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        const parts = [`✅ تم استيراد ${imported} ترجمة — ${file.name}`];
+        if (result.unchanged > 0) parts.push(`${result.unchanged} بلا تغيير`);
+        if (result.rejected.length > 0) parts.push(`⛔ ${result.rejected.length} سطر مرفوض (نُزّل تقرير)`);
+        if (result.outsideFilter > 0) parts.push(`${result.outsideFilter} خارج الفلتر`);
+        setLastSaved(parts.join(' · '));
+        setTimeout(() => setLastSaved(""), 8000);
+      } catch (err) {
+        console.error('Portable JSON import error:', err);
+        toast({ title: "ملف JSON غير صالح", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      }
+    };
+    input.click();
+  };
+
   /** Build XLIFF 1.2 XML string */
   const buildXliff = (entries: ExtractedEntry[], translations: Record<string, string>): string => {
     const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1867,6 +1931,8 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
     handleExportAllEnglishJson,
     handleExportAllEnglishTxt,
     handleImportExternalJson,
+    handleExportPortableJson,
+    handleImportPortableJson,
     handleExportXLIFF,
     handleImportXLIFF,
     handleImportLegacyJson,

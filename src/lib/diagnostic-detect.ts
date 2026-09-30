@@ -430,7 +430,9 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   const dollarPattern = PLAT_FILE_RE.test(entry.msbtFile) ? RE_ORIG_MONEY_AMOUNTS : RE_ORIG_DOLLAR_VARS;
   const origDollarVars = getMatches(entry.original, dollarPattern);
   if (!isGtaIv && origDollarVars.length > 0) {
-    const corruptedMatches = getMatches(trimmed, RE_CORRUPTED_DOLLAR);
+    // GTA San Andreas amounts are literal money, so "$50." is just a sentence ending.
+    const isGtaSaMoney = entry.msbtFile.startsWith("gtasa/");
+    const corruptedMatches = getMatches(trimmed, RE_CORRUPTED_DOLLAR).filter(m => !(isGtaSaMoney && /^\$\d+\.$/.test(m)));
     if (corruptedMatches.length > 0) {
       issues.push({ ...base, severity: "critical", category: "corrupted_vars",
         message: `${corruptedMatches.length} متغير تالف: ${corruptedMatches.slice(0, 3).join("، ")} — يجب أن تكون ${origDollarVars.join("، ")}` });

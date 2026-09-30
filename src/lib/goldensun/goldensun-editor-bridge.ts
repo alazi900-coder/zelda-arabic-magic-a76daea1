@@ -9,6 +9,7 @@ import {
   GoldenSunLayout,
 } from "./goldensun-rom";
 import { applyGoldenSunEnginePatch } from "./goldensun-engine-patch";
+import { removeArabicPresentationForms } from "@/lib/arabic-processing";
 
 export const GOLDENSUN_SOURCE_GAME = "goldensun";
 export const GOLDENSUN_BUFFER_KEY = "goldensunRomBuffer";
@@ -28,7 +29,13 @@ function toExtractedEntry(e: GoldenSunEntry): ExtractedEntry {
   // rebuilt table (see buildGoldenSunStringTable), which depends on every
   // other line too and can't be checked per entry -- 0 turns off the
   // per-line "too long" flag instead of giving a false one.
-  return { msbtFile: e.msbtFile, index: e.index, label: e.original.slice(0, 60), original: e.original, maxBytes: 0 };
+  // Arabic already in the ROM decodes to shaped presentation forms, but in
+  // logical order (the engine flips it on screen). Every other game stores
+  // shaped Arabic reversed, so the editor "un-reverses" presentation forms
+  // on export, import and repair -- which would flip correct Golden Sun text.
+  // Plain letters are what a translator types; the build shapes them again.
+  const original = removeArabicPresentationForms(e.original);
+  return { msbtFile: e.msbtFile, index: e.index, label: original.slice(0, 60), original, maxBytes: 0 };
 }
 
 export function extractGoldenSunEditorEntries(rom: Uint8Array, layout: GoldenSunLayout): ExtractedEntry[] {

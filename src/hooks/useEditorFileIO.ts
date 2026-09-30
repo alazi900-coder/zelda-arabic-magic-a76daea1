@@ -906,7 +906,8 @@ export function useEditorFileIO({ state, setState, setLastSaved, filteredEntries
       for (const entry of prevState.entries) {
         const key = `${entry.msbtFile}:${entry.index}`;
         if (importedKeys.has(key)) continue;
-        if (hasArabicChars(entry.original)) {
+        // Golden Sun's Arabic originals are already in reading order (see goldensun-editor-bridge).
+        if (hasArabicChars(entry.original) && !entry.msbtFile.startsWith("goldensun/")) {
           if (newProtected.has(key)) continue;
           const existing = prevState.translations[key]?.trim();
           const isAutoDetected = !existing || existing === entry.original || existing === entry.original.trim();

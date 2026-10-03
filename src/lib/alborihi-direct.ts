@@ -1,17 +1,7 @@
 /**
- * البريهي direct-only transport: the translator's own key → codecraftapi.com.
- *
- * Why direct rather than through the Edge Function: the البريهي branch lives
- * in `translate-entries`, but a deployed function lags behind the repository,
- * and while it lags every البريهي request falls through that function's final
- * `else` onto the Gemini path — which then fails naming a model nobody chose.
- * Going straight from the browser removes the deploy from the loop entirely.
- * The browser can reach البريهي: the model picker already fetches /v1/models
- * from the same origin with the same key.
- *
- * Shaped after gmicloud-direct.ts, deliberately as its own module: GMICLOUD
- * works and is not worth disturbing to share code with a second provider.
- * This one must never fall back to Gemini, Lovable AI, or an Edge Function.
+ * Alborihi (البريهي) transport. Requests go through the `alborihi-proxy`
+ * backend function, which holds ALBORIHI_API_KEY — the key never reaches the
+ * browser. Never falls back to Gemini or Lovable AI.
  */
 import {
   maskPokemonXpTechnicalTokens,
@@ -19,8 +9,9 @@ import {
   unmaskPokemonXpTechnicalTokens,
   validatePokemonXpTechnicalTokens,
 } from '@/lib/pokemon-xp/pokemon-xp-rules';
+import { getEdgeFunctionUrl, getSupabaseHeaders } from '@/lib/supabase-edge';
 
-export const CODECRAFT_DIRECT_ENDPOINT = 'https://codecraftapi.com/v1/chat/completions';
+const ALBORIHI_PROXY_URL = () => getEdgeFunctionUrl('alborihi-proxy');
 /** Only covers a first run before the account's live catalogue has been fetched. */
 export const ALBORIHI_DEFAULT_MODEL = "gemini-3.6-flash";
 
@@ -103,25 +94,19 @@ Preserve every technical token, control code, placeholder, rich-text tag, variab
  * البريهي's own error naming that model, which is the useful failure.
  */
 async function requestCompletion(request: AlborihiDirectRequest & { system: string; user: string }): Promise<string> {
-  if (!request.apiKey?.trim()) {
-    throw new AlborihiDirectError('يحتاج البريهي مفتاح API — الصقه في حقل البريهي داخل المحرر.', 400);
-  }
   const model = request.model?.trim() || ALBORIHI_DEFAULT_MODEL;
 
   let response: Response | undefined;
   let payload: unknown = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      response = await fetch(CODECRAFT_DIRECT_ENDPOINT, {
+      response = await fetch(ALBORIHI_PROXY_URL(), {
         method: 'POST',
         signal: request.signal,
-        headers: {
-          Authorization: `Bearer ${request.apiKey.trim()}`,
-          'Content-Type': 'application/json',
-        },
+        headers: getSupabaseHeaders(),
         body: JSON.stringify({
+          action: 'chat',
           model,
-          temperature: 0.2,
           messages: [
             { role: 'system', content: request.system },
             { role: 'user', content: request.user },
@@ -172,9 +157,11 @@ async function requestCompletion(request: AlborihiDirectRequest & { system: stri
  * and changes; every panel that lets the translator pick a model reads it from
  * here rather than carrying names that go 404 the day one is retired.
  */
-export async function fetchAlborihiModels(apiKey: string | undefined, signal?: AbortSignal): Promise<string[]> {
-  const res = await fetch('https://codecraftapi.com/v1/models', {
-    headers: { Authorization: `Bearer ${apiKey || ''}` },
+export async function fetchAlborihiModels(_apiKey?: string, signal?: AbortSignal): Promise<string[]> {
+  const res = await fetch(ALBORIHI_PROXY_URL(), {
+    method: 'POST',
+    headers: getSupabaseHeaders(),
+    body: JSON.stringify({ action: 'models' }),
     signal,
   });
   const body = await res.json().catch(() => null);

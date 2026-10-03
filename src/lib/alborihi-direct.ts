@@ -127,7 +127,7 @@ async function requestCompletion(request: AlborihiDirectRequest & { system: stri
         // "connection failed" points the translator at their network when the
         // problem is on the provider's side, so say what it usually means.
         throw new AlborihiDirectError(
-          'لم يصل ردٌّ مقروء من البريهي بعد ثلاث محاولات. الغالب أنه ردّ بصفحة خطأ من بوّابته (502) لا تحمل ترويسة CORS فرفضها المتصفّح، لا أن الاتصال منقطع — فزرّ «جلب النماذج» يستعمل مساراً آخر وقد ينجح رغم ذلك. تحقّق من رصيد حسابك وحالة الخدمة في لوحة البريهي، أو استعمل مزوّداً آخر مؤقتاً.',
+          'تعذّر الاتصال بالبريهي بعد ثلاث محاولات — تحقّق من اتصالك أو حالة الخدمة.',
           502,
         );
       }

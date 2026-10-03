@@ -13,6 +13,7 @@ import {
 import { resolveGameParam } from "@/lib/game-param";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
 import { requestCodeCraftJson, fetchCodeCraftModels } from "@/lib/codecraft-direct";
+import { requestAlborihiJson } from "@/lib/alborihi-direct";
 import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
@@ -114,7 +115,7 @@ const PARALLEL_REQUESTS = 3;
 const SCAN_PASSES = 1;
 const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
-interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "tokenrouter" | "gmicloud" | "local" | "free"; }
+interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "tokenrouter" | "gmicloud" | "alborihi" | "local" | "free"; }
 
 const MODEL_OPTIONS: ModelOption[] = [
   { value: "google-translate-check", label: "Google Translate — فحص دقة (مجاني)", group: "free" },
@@ -132,6 +133,8 @@ const MODEL_OPTIONS: ModelOption[] = [
   { value: "tokenrouter-glm-5.2", label: "🔀 TokenRouter GLM-5.2 (مجاني)", group: "tokenrouter" },
   { value: "MiniMaxAI/MiniMax-M2.7", label: "☁️ MiniMax M2.7 عبر GMICLOUD", group: "gmicloud" },
   { value: "MiniMaxAI/MiniMax-M3", label: "☁️ MiniMax M3 عبر GMICLOUD", group: "gmicloud" },
+  ...["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.1-pro", "claude-sonnet-5", "claude-opus-5.5", "gpt-5.6-terra", "gpt-5.5", "deepseek-v4-pro-max", "qwen3.8-max", "kimi-k3", "grok-4.6", "glm-5.3"]
+    .map((id) => ({ value: `alborihi/${id}`, label: `🌙 ${id} عبر البريهي`, group: "alborihi" as const })),
 ];
 
 const GOOGLE_CHECK_CONCURRENCY = 3;
@@ -139,7 +142,8 @@ const GOOGLE_CHECK_CONCURRENCY = 3;
 const GOOGLE_PRESENCE_THRESHOLD = 0.7;
 const GOOGLE_ORDER_THRESHOLD = 0.4;
 
-function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | "gmicloud" | null {
+function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | "gmicloud" | "alborihi" | null {
+  if (model.startsWith("alborihi/")) return "alborihi";
   if (model.startsWith("deepseek")) return "deepseek";
   if (model.startsWith("tokenrouter")) return "tokenrouter";
   if (model.startsWith("MiniMaxAI/MiniMax-")) return "gmicloud";
@@ -157,6 +161,7 @@ function resolveEnhanceModelForProvider(provider: string | null | undefined, cur
   // switching provider without having picked one yet — sending another
   // provider's model name here would come back 404.
   if (provider === "codecraft") return currentModel || CODECRAFT_DEFAULT_MODEL;
+  if (provider === "alborihi") return currentModel?.startsWith("alborihi/") ? currentModel.slice("alborihi/".length) : (currentModel && !currentModel.includes("/") ? currentModel : "gemini-3.6-flash");
   return currentModel || "gemini-2.5-flash";
 }
 
@@ -819,13 +824,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       // Both direct providers keep this panel off the Edge Function: their keys
       // live in the browser, and `enhance-translations` has no CodeCraft branch
       // at all, so routing there would silently land on another provider.
-      if (effectiveProvider === 'gmicloud' || effectiveProvider === 'codecraft') {
+      if (effectiveProvider === 'gmicloud' || effectiveProvider === 'codecraft' || effectiveProvider === 'alborihi') {
         const responseShape = mode === 'enhance'
           ? '{"suggestions":[{"key":"","original":"","current":"","suggested":"","reason":"","type":"style"}]}'
           : mode === 'grammar'
             ? '{"issues":[{"key":"","original":"","translation":"","issue":"","suggestion":"","severity":"medium","category":"wrong"}]}'
             : '{"results":[{"key":"","original":"","current":"","suggested":"","category":"style","reason":"","type":"style"}]}'
-        const askJson = effectiveProvider === 'codecraft' ? requestCodeCraftJson : requestGmiCloudJson;
+        const askJson = effectiveProvider === 'codecraft' ? requestCodeCraftJson : effectiveProvider === 'alborihi' ? requestAlborihiJson : requestGmiCloudJson;
         const data = await askJson<Record<string, unknown>>({
           apiKey: effectiveProvider === 'codecraft' ? codeCraftKey : gmiCloudKey,
           model: requestModel,
@@ -1637,6 +1642,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                     <SelectGroup>
                       <SelectLabel className="text-[10px]">GMI Cloud — MiniMax</SelectLabel>
                       {MODEL_OPTIONS.filter(m => m.group === "gmicloud").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px]">البريهي (Alborihi)</SelectLabel>
+                      {MODEL_OPTIONS.filter(m => m.group === "alborihi").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
                     </SelectGroup>
                     {isCodeCraft && (
                       <SelectGroup>

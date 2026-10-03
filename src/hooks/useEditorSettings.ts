@@ -67,8 +67,8 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft';
-  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter', 'gmicloud', 'codecraft'];
+  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft' | 'alborihi';
+  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter', 'gmicloud', 'codecraft', 'alborihi'];
   const [translationProvider, _setTranslationProvider] = useState<TranslationProvider>(() => {
     try {
       const saved = localStorage.getItem('translationProvider') as TranslationProvider | null;

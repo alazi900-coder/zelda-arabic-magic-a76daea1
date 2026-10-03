@@ -139,6 +139,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'tokenrouter' as const, label: '🔀 TokenRouter', badge: editor.userTokenRouterKey ? '✅' : '⚠️' },
               { id: 'gmicloud' as const, label: '☁️ GMICLOUD', badge: editor.userGmiCloudKey ? '✅' : '⚠️' },
               { id: 'codecraft' as const, label: '🛠️ CodeCraft', badge: editor.userCodeCraftKey ? '✅' : '⚠️' },
+              { id: 'alborihi' as const, label: '🌙 البريهي', badge: '✅' },
             ].map(({ id, label, badge }) => (
               <Button
                 key={id}
@@ -150,6 +151,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                   // Otherwise a model name belonging to the previous provider
                   // would be sent to CodeCraft and come back 404.
                   if (id === 'codecraft') editor.setAiModel('claude-opus-5');
+                  if (id === 'alborihi') editor.setAiModel('gemini-3.6-flash');
                 }}
                 className="text-xs font-display gap-1"
               >

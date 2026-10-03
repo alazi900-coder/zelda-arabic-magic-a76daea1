@@ -20,6 +20,7 @@ import { resolveGameParam } from "@/lib/game-param";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 import { requestGmiCloudDirect, type GmiCloudEntry } from "@/lib/gmicloud-direct";
 import { requestCodeCraftDirect, type CodeCraftEntry } from "@/lib/codecraft-direct";
+import { requestAlborihiDirect, type AlborihiEntry } from "@/lib/alborihi-direct";
 import { createTranslationCoalescer, type CoalescerEntry } from "@/lib/translation-coalescer";
 import { cacheLookupMany, cacheStoreMany } from "@/lib/translation-cache";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
@@ -48,7 +49,7 @@ interface UseEditorTranslationProps {
   /** Session-only key; it is never persisted by useEditorSettings. */
   userGmiCloudKey: string;
   userCodeCraftKey: string;
-  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft';
+  translationProvider: 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft' | 'alborihi';
   myMemoryEmail: string;
   addMyMemoryChars: (chars: number) => void;
   addAiRequest: (count?: number) => void;
@@ -81,7 +82,8 @@ const PROVIDER_BATCH_DELAY_MS = {
   deepseek:   { free: 0,    paid: 0 },    // generous; no proactive throttle
   tokenrouter:{ free: 0,    paid: 0 },    // generous; no proactive throttle
   gmicloud:   { free: 0,    paid: 250 },  // modest spacing; no undocumented quota claim
-  codecraft:  { free: 0,    paid: 0 },    // billed per token from the translator's own balance
+  codecraft:  { free: 0,    paid: 0 },
+  alborihi:   { free: 2000, paid: 2000 }, // FREE plan: 10 requests/minute    // billed per token from the translator's own balance
   mymemory:   { free: 0,    paid: 0 },    // not AI; own char-budget logic
   google:     { free: 0,    paid: 0 },    // not AI
 } as const;
@@ -142,6 +144,16 @@ export function useEditorTranslation({
         apiKey: userCodeCraftKey,
         model: typeof payload.aiModel === 'string' ? payload.aiModel : undefined,
         entries: (payload.entries || []) as CodeCraftEntry[],
+        glossary: typeof payload.glossary === 'string' ? payload.glossary : undefined,
+        extraInstructions: typeof payload.extraInstructions === 'string' ? payload.extraInstructions : undefined,
+        game: typeof payload.game === 'string' ? payload.game : undefined,
+        signal,
+      });
+    }
+    if (payload.provider === 'alborihi') {
+      return requestAlborihiDirect({
+        model: typeof payload.aiModel === 'string' ? payload.aiModel : undefined,
+        entries: (payload.entries || []) as AlborihiEntry[],
         glossary: typeof payload.glossary === 'string' ? payload.glossary : undefined,
         extraInstructions: typeof payload.extraInstructions === 'string' ? payload.extraInstructions : undefined,
         game: typeof payload.game === 'string' ? payload.game : undefined,

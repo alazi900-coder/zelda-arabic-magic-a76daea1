@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from "react";
+import { requestAlborihiDirect } from "@/lib/alborihi-direct";
 import { toast } from "@/hooks/use-toast";
 import type { EditorState, ExtractedEntry } from "@/components/editor/types";
 import { isTechnicalText } from "@/components/editor/types";
@@ -137,7 +138,7 @@ export function useAutoPilot({
       rebalanceNewlines: rebalanceNewlines || undefined,
       npcMaxLines,
       npcMode: npcMode || undefined,
-      aiModel: forceModel || ((prov === 'gemini' || prov === 'gmicloud') ? aiModel : undefined),
+      aiModel: forceModel || ((prov === 'gemini' || prov === 'gmicloud' || prov === 'alborihi') ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
       game: resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant),
@@ -474,10 +475,12 @@ export function useAutoPilot({
           const batch = toFix.slice(b * AI_BATCH, (b + 1) * AI_BATCH);
           const entries = batch.map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original }));
           try {
-            const resp = await fetch(getEdgeFunctionUrl("translate-entries"), {
-              method: 'POST', headers: getSupabaseHeaders(), signal,
-              body: buildFetchBody(entries, aiProvider, aiModelOverride),
-            });
+            const resp = aiProvider === 'alborihi'
+              ? await requestAlborihiDirect({ ...JSON.parse(buildFetchBody(entries, aiProvider, aiModelOverride)), model: aiModelOverride || aiModel, entries, signal })
+              : await fetch(getEdgeFunctionUrl("translate-entries"), {
+                  method: 'POST', headers: getSupabaseHeaders(), signal,
+                  body: buildFetchBody(entries, aiProvider, aiModelOverride),
+                });
             if (!resp.ok) {
               const rawErr = await resp.text().catch(() => '');
               let parsedErr: { error?: string; message?: string } | null = null;

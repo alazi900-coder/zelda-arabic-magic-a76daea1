@@ -9,6 +9,7 @@ import { CRASHLANDS_PROMPT_PRESETS, FRANBOW_PROMPT_PRESETS, TWOM_PROMPT_PRESETS,
 import { CATEGORY_PROMPT_DEFAULTS, resolveCategoryPrompt } from "@/lib/categoryPromptDefaults";
 import AIRoutingToggle from "@/components/editor/AIRoutingToggle";
 import { fetchCodeCraftModels } from "@/lib/codecraft-direct";
+import { fetchAlborihiModels } from "@/lib/alborihi-direct";
 import type { useEditorState } from "@/hooks/useEditorState";
 
 type EditorSubset = Pick<
@@ -67,6 +68,21 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
       setCodeCraftModelsLoading(false);
     }
   }, [editor.userCodeCraftKey]);
+
+  const [alborihiModels, setAlborihiModels] = React.useState<string[]>([]);
+  const [alborihiModelsLoading, setAlborihiModelsLoading] = React.useState(false);
+  const [alborihiModelsError, setAlborihiModelsError] = React.useState("");
+  const loadAlborihiModels = React.useCallback(async () => {
+    setAlborihiModelsLoading(true);
+    setAlborihiModelsError("");
+    try {
+      setAlborihiModels(await fetchAlborihiModels());
+    } catch (e) {
+      setAlborihiModelsError((e as Error).message);
+    } finally {
+      setAlborihiModelsLoading(false);
+    }
+  }, []);
 
   // Google's catalogue moves the same way CodeCraft's does: gemini-2.0-flash was
   // retired mid-project and every request naming it came back 404. The buttons
@@ -431,6 +447,37 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                 </p>
               )}
             </div>
+          </div>
+        )}
+
+        {editor.translationProvider === 'alborihi' && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-display text-muted-foreground">🌙 نماذج البريهي (المفتاح محفوظ في الخادم):</span>
+              <Button variant="outline" size="sm" onClick={loadAlborihiModels} disabled={alborihiModelsLoading} className="text-xs h-6 gap-1">
+                {alborihiModelsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
+                جلب النماذج
+              </Button>
+            </div>
+            {alborihiModelsError && <p className="text-xs font-body text-destructive">❌ {alborihiModelsError}</p>}
+            {alborihiModels.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
+                {alborihiModels.map((id) => (
+                  <button
+                    key={id}
+                    onClick={() => editor.setAiModel(id)}
+                    className={`px-2 py-1 rounded border text-xs font-body text-left ${editor.aiModel === id ? 'border-primary bg-primary/10' : 'border-border'}`}
+                    dir="ltr"
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+            ) : !alborihiModelsError && (
+              <p className="text-xs font-body text-muted-foreground">
+                النموذج الحالي: <span dir="ltr">{editor.aiModel || 'gemini-3.6-flash'}</span>
+              </p>
+            )}
           </div>
         )}
 

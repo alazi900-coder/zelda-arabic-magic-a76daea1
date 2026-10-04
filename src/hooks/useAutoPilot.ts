@@ -137,7 +137,7 @@ export function useAutoPilot({
       rebalanceNewlines: rebalanceNewlines || undefined,
       npcMaxLines,
       npcMode: npcMode || undefined,
-      aiModel: forceModel || ((prov === 'gemini' || prov === 'gmicloud') ? aiModel : undefined),
+      aiModel: forceModel || ((prov === 'gemini' || prov === 'gmicloud' || prov === 'alborihi') ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
       game: resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant),

@@ -30,7 +30,7 @@ describe("Golden Sun: The Lost Age — enhancement rules", () => {
     expect(rules.find(r => r.id === "detect_gs2_control_codes")?.prompt).toContain("\\x03");
     expect(rules.find(r => r.id === "detect_gs2_names_terms")?.prompt).toContain("Felix");
     expect(rules.find(r => r.id === "detect_gs2_dialogue_voice")?.prompt).toContain("JRPG");
-    expect(rules.find(r => r.id === "protect_gs2_rtl_unicode")?.prompt).toContain("BiDi");
+    expect(rules.find(r => r.id === "protect_gs2_rtl_unicode")?.prompt).toContain("U+200E");
   });
 
   it("isolates all seven rules from Golden Sun I and Xenoblade", () => {

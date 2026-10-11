@@ -29,6 +29,8 @@ export interface GoldenSun2TextEntry {
   index: number;
   msbtFile: string;
   original: string;
+  /** Pre-fix appearance, used only to migrate a saved editor snapshot. */
+  legacyOriginal?: string;
 }
 
 function read32(b: Uint8Array, p: number): number {
@@ -110,30 +112,109 @@ export function hasGoldenSun2TextTables(rom: Uint8Array): boolean {
   }
 }
 
-/** No visual reversal: the existing AGFE right-to-left hook owns screen flow. */
+/** No visual reversal: the AGFE right-to-left hook owns screen flow. */
 const GS2_ARABIC_BYTE_TO_CODEPOINT: Record<number, number> = Object.fromEntries(
   Object.entries(GOLDENSUN_ARABIC_BYTE_MAP).map(([cp, byte]) => [Number(byte), Number(cp)])
 );
 
-/** Return readable Arabic on ROMs patched with the matching two GS1 fonts.
- * Raw, unpatched AGFE bytes remain escaped as \xNN when they occupy font slots.
+/**
+ * The original English AGFE cartridge contains a handful of Japanese test
+ * lines, encoded in Shift-JIS, as well as ordinary single-byte special
+ * punctuation (notably 0xB0). The old decoder displayed Japanese as
+ * \x83A\x83C... and incorrectly called isolated 0xB0 an Arabic glyph on
+ * ROMs containing the Arabic font patch.
+ *
+ * Decode only provably-valid multi-byte Shift-JIS character pairs. Every
+ * ambiguous byte stays an editable \xNN escape. Control codes and their
+ * raw argument bytes are NEVER passed through this character decoder.
  */
-export function goldenSun2BytesToText(bytes: number[], arabicFont = false): string {
-  let out = "";
+const GS2_JAPANESE_LEADS = new Set([0x81, 0x82, 0x83, 0x96]);
+let japaneseDecoder: TextDecoder | null | undefined;
+
+function decodeJapanesePair(first: number, second: number): string | null {
+  if (!GS2_JAPANESE_LEADS.has(first) || second < 0x40 || second > 0xfc || second === 0x7f) return null;
+  if (japaneseDecoder === undefined) {
+    try { japaneseDecoder = new TextDecoder("shift_jis", { fatal: true }); }
+    catch { japaneseDecoder = null; }
+  }
+  if (!japaneseDecoder) return null;
+  try {
+    const text = japaneseDecoder.decode(new Uint8Array([first, second]));
+    return text.length > 0 && !text.includes("\uFFFD") ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+const asHexTag = (byte: number): string =>
+  "\\x" + byte.toString(16).toUpperCase().padStart(2, "0");
+
+function legacyGoldenSun2BytesToText(bytes: number[], arabicFont: boolean): string {
+  let result = "";
   for (const token of tokenizeGoldenSunBytes(bytes)) {
     for (const b of token.bytes) {
-      if (token.kind === "code") {
-        out += "\\x" + b.toString(16).toUpperCase().padStart(2, "0");
-      } else if (arabicFont && GS2_ARABIC_BYTE_TO_CODEPOINT[b] !== undefined) {
-        out += String.fromCharCode(GS2_ARABIC_BYTE_TO_CODEPOINT[b]);
+      if (token.kind === "code") result += asHexTag(b);
+      else if (arabicFont && GS2_ARABIC_BYTE_TO_CODEPOINT[b] !== undefined) {
+        result += String.fromCharCode(GS2_ARABIC_BYTE_TO_CODEPOINT[b]);
+      } else if (isGoldenSunPlainAscii(b)) result += String.fromCharCode(b);
+      else result += asHexTag(b);
+    }
+  }
+  return result;
+}
+
+/** Detect Arabic byte runs, not isolated English punctuation in a patched ROM. */
+function hasEncodedArabicRun(bytes: number[]): boolean {
+  let consecutiveHigh = 0;
+  for (const b of bytes) {
+    if (b >= 0x90 && GS2_ARABIC_BYTE_TO_CODEPOINT[b] !== undefined) {
+      if (++consecutiveHigh >= 2) return true;
+    } else {
+      consecutiveHigh = 0;
+    }
+  }
+  return false;
+}
+
+/** Readable dialogue source: Japanese -> Unicode, verified Arabic -> normal
+ * Arabic letters, genuine game controls -> protected literal \xNN.
+ * Remaining unknown bytes are ALWAYS escaped instead of guessed.
+ */
+export function goldenSun2BytesToText(bytes: number[], arabicFont = false): string {
+  let output = "";
+  for (const token of tokenizeGoldenSunBytes(bytes)) {
+    if (token.kind === "code") {
+      output += token.bytes.map(asHexTag).join("");
+      continue;
+    }
+    const run = token.bytes;
+    const containsJapanese = run.some((b, i) =>
+      i + 1 < run.length && b >= 0x81 && b <= 0x83 &&
+      decodeJapanesePair(b, run[i + 1]) !== null
+    );
+    const containsArabic = arabicFont && !containsJapanese && hasEncodedArabicRun(run);
+    for (let i = 0; i < run.length; i++) {
+      const b = run[i];
+      // 0x96 is also a kanji lead, but only if this run has unambiguous
+      // Japanese bytes elsewhere: 0x96 may be an Arabic font slot.
+      const japanese = i + 1 < run.length &&
+        (b >= 0x81 && b <= 0x83 || (containsJapanese && b === 0x96))
+        ? decodeJapanesePair(b, run[i + 1]) : null;
+      if (japanese) {
+        output += japanese;
+        i++;
+      } else if (containsArabic && GS2_ARABIC_BYTE_TO_CODEPOINT[b] !== undefined) {
+        // Presentation Forms from ROM are display glyphs, not editable
+        // characters. NFKC returns the normal Arabic spelling for editing.
+        output += String.fromCharCode(GS2_ARABIC_BYTE_TO_CODEPOINT[b]).normalize("NFKC");
       } else if (isGoldenSunPlainAscii(b)) {
-        out += String.fromCharCode(b);
+        output += String.fromCharCode(b);
       } else {
-        out += "\\x" + b.toString(16).toUpperCase().padStart(2, "0");
+        output += asHexTag(b);
       }
     }
   }
-  return out;
+  return output;
 }
 
 const GS2_NORMALIZATION: Record<string, string> = {
@@ -193,9 +274,14 @@ function romTextTreePointers(rom: Uint8Array): { trees: number; offsets: number 
 /** Read all 12,288 real compressed strings, including control codes. */
 export function extractGoldenSun2Strings(rom: Uint8Array): GoldenSun2TextEntry[] {
   const arabicFont = isGoldenSun2ArabicFontRom(rom);
-  return readGoldenSun2Strings(rom).map((r, i) => ({
-    index: i, msbtFile: GS2_TEXT_FILE, original: goldenSun2BytesToText(r, arabicFont),
-  }));
+  return readGoldenSun2Strings(rom).map((r, i) => {
+    const original = goldenSun2BytesToText(r, arabicFont);
+    const legacy = legacyGoldenSun2BytesToText(r, arabicFont);
+    return {
+      index: i, msbtFile: GS2_TEXT_FILE, original,
+      ...(legacy === original ? {} : { legacyOriginal: legacy }),
+    };
+  });
 }
 
 function readGoldenSun2Strings(rom: Uint8Array): number[][] {

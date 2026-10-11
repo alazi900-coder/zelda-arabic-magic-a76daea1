@@ -64,4 +64,4 @@ export const readEditorWorkspace = (value: unknown): EditorWorkspaceSnapshot => 
 };
 
 export const editorWorkspaceStorageKey = (sourceGame?: string | null) =>
-  `${EDITOR_WORKSPACE_KEY}:${sourceGame?.trim() || "shared"}`;
+  `${EDITOR_WORKSPACE_KEY}:${sourceGame?.trim() === "goldensun2" ? "goldensun" : sourceGame?.trim() || "shared"}`;

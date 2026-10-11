@@ -4,7 +4,7 @@ import {
   GS2_CHUNK_COUNT, GS2_CHUNK_SIZE, GS2_TEXT_FILE, GS2_TREE_POINTERS,
   GS2_STRING_POINTERS, GS2_ORIGINAL_ROM_SIZE, GS2_STRING_COUNT,
   hasGoldenSun2TextTables, extractGoldenSun2Strings,
-  goldenSun2TextToBytes, buildGoldenSun2StringTable, isGoldenSun2ArabicFontRom,
+  goldenSun2TextToBytes, goldenSun2BytesToText, buildGoldenSun2StringTable, isGoldenSun2ArabicFontRom,
 } from "../goldensun2-huffman-rom";
 
 function write32(data: Uint8Array, at: number, number: number) {
@@ -53,6 +53,11 @@ function makeFixture(): Uint8Array {
 }
 
 describe("The Lost Age complete extraction and rebuild", () => {
+  it("retains argument bytes as immutable technical tags even when ASCII", () => {
+    expect(goldenSun2BytesToText([0x11, 0x41, 0x03, 0x42]))
+      .toBe(String.raw`\x11\x41\x03B`);
+  });
+
   it("extracts 12,288 actual Huffman text records and round-trips an English edit", () => {
     const rom = makeFixture();
     expect(hasGoldenSun2TextTables(rom)).toBe(true);

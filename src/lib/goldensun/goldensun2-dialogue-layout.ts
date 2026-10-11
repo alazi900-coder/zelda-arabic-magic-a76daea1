@@ -40,9 +40,15 @@ export function goldenSun2LargeGlyphWidth(rom: Uint8Array, code: number): number
 }
 
 export function goldenSun2HasDialogueControls(originalBytes: number[]): boolean {
-  // 0x03 is newline; 0x1E ends a Yes/No question.
-  // These identify supported dialogue windows without guessing menu semantics.
-  return originalBytes.includes(0x03) || originalBytes.includes(0x1e);
+  // Inspect actual control codes, not their opaque parameter bytes. A 0x1E
+  // inside the argument of 0x11 must never turn a menu string into dialogue.
+  for (let i = 0; i < originalBytes.length;) {
+    const code = originalBytes[i];
+    if (code >= 0x20) { i++; continue; }
+    if (code === 0x03 || code === 0x1e) return true;
+    i += 1 + goldensunControlCodeArgBytes(code);
+  }
+  return false;
 }
 
 /** Reflow a translation without changing a single existing control code.

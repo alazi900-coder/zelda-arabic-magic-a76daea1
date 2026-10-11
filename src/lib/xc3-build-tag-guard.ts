@@ -43,7 +43,10 @@ function extractTechnicalTags(text: string): string[] {
 
 /** Source-of-truth token locations used by the non-destructive deep-diagnostic fixer. */
 export function getBuildTechnicalTagMatches(text: string): { token: string; start: number; end: number }[] {
-  return [...text.matchAll(new RegExp(BUILD_TECH_TAG_REGEX.source, BUILD_TECH_TAG_REGEX.flags))]
+  // $N placeholders belong to the editor's source-position restoration too,
+  // although the older build-tag guard checks them using a separate routine.
+  const positions = new RegExp(BUILD_TECH_TAG_REGEX.source + "|\\$\\d+", "g");
+  return [...text.matchAll(positions)]
     .map((match) => ({ token: match[0], start: match.index!, end: match.index! + match[0].length }));
 }
 

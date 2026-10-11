@@ -336,10 +336,10 @@ export default function GoldenSun() {
         {selectedPart === "second" && lostAgeAudit && (
           <section className="mt-5 space-y-3 rounded-xl border p-4" aria-label="فحص Golden Sun الجزء الثاني">
             <h2 className="font-semibold">Golden Sun: The Lost Age — الجزء الثاني</h2>
-            <p className="text-sm">تعرّفت الأداة على AGFE وحجم {lostAgeAudit.romSize.toLocaleString("ar")} بايت. هذه مرحلة فحص فقط، وليست استخراجًا كاملًا للحوارات: نصوص القصة مضغوطة بصيغة تحتاج مفككًا خاصًا بها.</p>
-            <p className="text-sm text-amber-600">لن تستخدم الأداة مفكك Huffman الخاص بالجزء الأول أو تدّعي أن النصوص التشخيصية هي كل الحوارات. يمكنك استيراد كتالوج نصوص JSON مستخرج سابقًا إلى المحرر المشترك، ثم تصدير الترجمات مع فحص الوسوم دون بناء GBA غير مؤكدة.</p>
+            <p className="text-sm">ROM الجزء الثاني محفوظة بحجم {lostAgeAudit.romSize.toLocaleString("ar")} بايت. لإعادة استخراج ١٢٬٢٨٨ نصًا مضغوطًا وفتحها في المحرر، ارفع ROM عبر الصندوق بالأعلى أو استخدم زر استكمال المشروع المحفوظ.</p>
+            <p className="text-sm text-amber-600">أصبح استخراج AGFE وبناء GBA مدعومين بجداول الجزء الثاني المستقلة، مع الحفاظ على الرموز التقنية. يستخدم الجزآن تنسيق Huffman متوافقًا، لكن لكل منهما مؤشرات ونصوص وخط مختلف. الترجمة العربية تتطلب رقعة الخط والاتجاه المتوافقة مع الجزء الثاني.</p>
             <label className="flex cursor-pointer flex-col gap-2 rounded-lg border border-dashed p-3 text-sm">
-              <span className="font-semibold">{catalogBusy ? "جارٍ فتح النصوص…" : "فتح كتالوج نصوص الجزء الثاني في المحرر المشترك (.json؛ يدعم حقلي source وarabic)"}</span>
+              <span className="font-semibold">{catalogBusy ? "جارٍ فتح النصوص…" : "اختياري: استيراد كتالوج نصوص JSON سابق بدل استخراج ROM (.json، يدعم source وarabic)"}</span>
               <span className="text-xs text-muted-foreground">مثال: {"{\"entries\":[{\"index\":0,\"original\":\"Hello\\\\x03World\",\"translation\":\"مرحبًا\\\\x03بكم\"}]}"} — يُحفظ الرمز التقني كما هو.</span>
               <input className="text-xs" type="file" accept=".json,application/json" disabled={catalogBusy} onChange={e => {
                 const f = e.target.files?.[0]; if (f) void loadLostAgeCatalog(f); e.target.value = "";

@@ -25,7 +25,7 @@ describe("Gemini model freshness", () => {
         const relative = subdir + "/" + entry.name;
         if (entry.isDirectory()) {
           if (entry.name !== "node_modules") walk(relative);
-        } else if (entry.isFile() && /\\.(ts|tsx)$/.test(entry.name) &&
+        } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name) &&
           relative !== "src/test/gemini-model-freshness.test.ts" &&
           relative !== "src/lib/changelog.ts") {
           files.push(resolve(root, relative));

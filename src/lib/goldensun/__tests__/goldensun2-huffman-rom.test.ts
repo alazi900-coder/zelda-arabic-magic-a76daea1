@@ -64,7 +64,10 @@ describe("The Lost Age complete extraction and rebuild", () => {
 
     const { rom: unchanged, translatedLines: none } = buildGoldenSun2StringTable(rom, {});
     expect(none).toBe(0);
-    expect(unchanged).toEqual(rom);
+    // Never ask Vitest's deep comparator to enumerate 16 million typed-array
+    // indices: it can allocate gigabytes and OOM the test worker.
+    expect(unchanged.length).toBe(rom.length);
+    expect(unchanged.every((v, i) => v === rom[i])).toBe(true);
     const key = GS2_TEXT_FILE + ":45";
     const built = buildGoldenSun2StringTable(rom, { [key]: "Welcome!\\x03" });
     expect(built.translatedLines).toBe(1);

@@ -61,6 +61,15 @@ export function repairMissingTechnicalTokens(original: string, translation: stri
   const target = getBuildTechnicalTagMatches(translation);
   if (source.length === 0) return unchanged("لا توجد وسوم تقنية في الأصل");
 
+  // Broken/translated brackets can hide a token that the canonical matcher
+  // cannot see (e.g. [سلبي] instead of [Passive]). Do not add another token
+  // on top of the broken one: this needs targeted manual repair.
+  const unrecognizedBrackets = withoutTags(translation);
+  if (/[\\[\\]{}]/.test(unrecognizedBrackets) ||
+      /[٪％][a-z]/i.test(unrecognizedBrackets)) {
+    return unchanged("توجد أقواس أو صيغة رمز مترجمة/تالفة؛ لا نضيف رمزًا آخر فوقها");
+  }
+
   // Never silently remove or reinterpret a foreign/malformed translated token.
   const diff = diffTechnicalTags(original, translation);
   if (diff.extraTags.length > 0) {

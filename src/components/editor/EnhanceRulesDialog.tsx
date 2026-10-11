@@ -1,3 +1,4 @@
+import type { AiGameProfile } from "@/lib/ai-game-profiles";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertTriangle, Search, Shield, RotateCcw, Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import {
-  BUILTIN_RULES,
+  getProfileBuiltinRules,
   type EnhanceRule,
   type EnhanceRuleId,
   loadEnabledRules,
@@ -20,11 +21,11 @@ import {
   generateCustomRuleId,
   loadBuiltinOverrides,
   saveBuiltinOverrides,
-  getBuiltinRulesMerged,
   type BuiltinOverride,
 } from "@/lib/enhance-rules";
 
 interface EnhanceRulesDialogProps {
+  profile?: AiGameProfile;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: (enabled: Set<EnhanceRuleId>, allRules: EnhanceRule[]) => void;
@@ -41,24 +42,25 @@ interface EditState {
 
 const emptyEdit: EditState = { id: null, isBuiltin: false, label: '', description: '', prompt: '', kind: 'detect' };
 
-export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRulesDialogProps) {
-  const [enabled, setEnabled] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules());
-  const [customRules, setCustomRules] = useState<EnhanceRule[]>(() => loadCustomRules());
-  const [overrides, setOverrides] = useState<Record<string, BuiltinOverride>>(() => loadBuiltinOverrides());
+export function EnhanceRulesDialog({ open, onOpenChange, onSaved, profile = "xenoblade" }: EnhanceRulesDialogProps) {
+  const builtinRules = getProfileBuiltinRules(profile);
+  const [enabled, setEnabled] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules(profile));
+  const [customRules, setCustomRules] = useState<EnhanceRule[]>(() => loadCustomRules(profile));
+  const [overrides, setOverrides] = useState<Record<string, BuiltinOverride>>(() => loadBuiltinOverrides(profile));
   const [editing, setEditing] = useState<EditState | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
-      setEnabled(loadEnabledRules());
-      setCustomRules(loadCustomRules());
-      setOverrides(loadBuiltinOverrides());
+      setEnabled(loadEnabledRules(profile));
+      setCustomRules(loadCustomRules(profile));
+      setOverrides(loadBuiltinOverrides(profile));
       setEditing(null);
       setExpanded(new Set());
     }
-  }, [open]);
+  }, [open, profile]);
 
-  const builtinMerged = BUILTIN_RULES.map(r => {
+  const builtinMerged = builtinRules.map(r => {
     const o = overrides[r.id];
     return o ? { ...r, ...o } : r;
   });
@@ -81,15 +83,15 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRules
   };
 
   const handleSave = () => {
-    saveEnabledRules(enabled);
-    saveCustomRules(customRules);
-    saveBuiltinOverrides(overrides);
+    saveEnabledRules(enabled, profile);
+    saveCustomRules(customRules, profile);
+    saveBuiltinOverrides(overrides, profile);
     onSaved?.(enabled, allRules);
     onOpenChange(false);
   };
 
   const handleResetDefaults = () => {
-    const defaults = new Set<EnhanceRuleId>(BUILTIN_RULES.filter(r => r.defaultEnabled).map(r => r.id));
+    const defaults = new Set<EnhanceRuleId>(builtinRules.filter(r => r.defaultEnabled).map(r => r.id));
     for (const c of customRules) defaults.add(c.id);
     setEnabled(defaults);
   };
@@ -97,7 +99,7 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRules
   const startNew = () => setEditing({ ...emptyEdit });
 
   const startEdit = (r: EnhanceRule) => {
-    const isBuiltin = BUILTIN_RULES.some(b => b.id === r.id);
+    const isBuiltin = builtinRules.some(b => b.id === r.id);
     setEditing({
       id: r.id, isBuiltin,
       label: r.label, description: r.description, prompt: r.prompt, kind: r.kind,
@@ -154,7 +156,7 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRules
   const protectRules = allRules.filter(r => r.kind === 'protect');
 
   const renderRow = (rule: EnhanceRule) => {
-    const isBuiltin = BUILTIN_RULES.some(b => b.id === rule.id);
+    const isBuiltin = builtinRules.some(b => b.id === rule.id);
     const hasOverride = isBuiltin && !!overrides[rule.id];
     return (
       <RuleRow
@@ -178,7 +180,7 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved }: EnhanceRules
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Shield className="w-5 h-5 text-primary" />
-            قواعد الذكاء الاصطناعي
+            قواعد الذكاء الاصطناعي — {profile}
           </DialogTitle>
           <DialogDescription className="text-xs">
             شغّل/أوقف، عدّل البروميت، أو أنشئ قواعد جديدة.{" "}

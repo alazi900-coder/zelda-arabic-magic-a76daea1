@@ -10,6 +10,7 @@ import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-p
 import { preservesLumenTaleTechnicalTokenSequence } from "../_shared/lumentale-token-guard.ts";
 import { PLAT_TAG_RE, PLAT_BREAK_RE } from "../_shared/plat-tag-mask.ts";
 import { mergeByIndex } from "../_shared/merge-issues.ts";
+import { goldenSunAllTechnicalTagsUnchanged } from "../_shared/goldensun-cerebras.ts";
 import { callGeminiWithRecovery, extractGeminiText } from "../_shared/gemini-recovery.ts";
 
 const corsHeaders = {
@@ -438,15 +439,13 @@ function preservesGtaIvDollarAmountSequence(original: string, candidate: string)
 /** The GBA control bytes are never prose. This guard runs AFTER every AI response,
  * not merely inside a prompt which an LLM is free to disregard.
  */
+// Review proposals are checked after every AI call; the user may disable
+// prompt-only rules but not core Golden Sun runtime-tag safety.
 function preservesGoldenSunCodes(original: string, suggested: string): boolean {
-  const token = /\\x[0-9a-fA-F]{2}/g;
-  const before = (original.match(token) || []).map(t => t.toUpperCase());
-  const after = (suggested.match(token) || []).map(t => t.toUpperCase());
-  if (/\\x(?![0-9a-fA-F]{2})/i.test(suggested)) return false;
-  return before.length === after.length && before.every((t, i) => t === after[i]);
+  return goldenSunAllTechnicalTagsUnchanged(original, suggested);
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false): boolean {
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false, isGoldenSun = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
@@ -465,7 +464,7 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
     (!isFranBow || preservesFranBowTokenSequence(original, suggested)) &&
     (!isTwom || preservesTwomTokens(original, suggested)) &&
     (!isGtaSa || preservesGtaSaTokenSequence(original, suggested)) &&
-    preservesGoldenSunCodes(original, suggested);
+    (!isGoldenSun || preservesGoldenSunCodes(original, suggested));
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -1357,7 +1356,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
           isCategoryEnabled(i.category, ruleSections.detectRuleIds, i.ruleId) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1479,7 +1478,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
             isTypeEnabled(r.type, ruleSections.detectRuleIds, r.ruleId) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1569,7 +1568,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
               .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1578,7 +1577,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
         isTypeEnabled(s.type, ruleSections.detectRuleIds, s.ruleId) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

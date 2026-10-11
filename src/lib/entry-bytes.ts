@@ -84,6 +84,11 @@ export function measureEntryBytes(msbtFile: string | undefined, text: string): n
   if (msbtFile && INAZUMA_FILE_RE.test(msbtFile)) {
     return measureInazumaLine(msbtFile, text);
   }
+  // AGFE has no verified character encoder yet. Display a neutral UTF-8
+  // length estimate only; maxBytes=0 prevents this being treated as ROM fit.
+  if (msbtFile?.startsWith("goldensun/lost-age/")) {
+    return new TextEncoder().encode(text).length;
+  }
   if (msbtFile && GOLDENSUN_FILE_RE.test(msbtFile)) {
     return measureGoldenSunBytes(text);
   }

@@ -534,9 +534,18 @@ export function useEditorState() {
             const storedCount = Object.values(stored?.translations || {}).filter(v => v?.trim()).length;
             if (!stored || !stored.entries?.length) {
               stored = snap;
-            } else if (snapCount > storedCount) {
-              // Same game, richer snapshot → merge snapshot translations in
-              // without overwriting anything already filled in.
+            } else if (snapCount > storedCount && (
+              currentGame !== "goldensun2" ||
+              (snap.entries.length === stored.entries.length &&
+                snap.entries.every((entry, i) =>
+                  entry.msbtFile === stored!.entries[i].msbtFile &&
+                  entry.index === stored!.entries[i].index &&
+                  entry.original === stored!.entries[i].original
+                ))
+            )) {
+              // Lost Age catalogue IDs can repeat across unrelated dumps.
+              // Never merge translations from a different source catalogue.
+              // For other games retain the existing richer-snapshot recovery.
               const merged: Record<string, string> = { ...(snap.translations || {}) };
               for (const [k, v] of Object.entries(stored.translations || {})) {
                 if (v?.trim()) merged[k] = v;
@@ -622,8 +631,8 @@ export function useEditorState() {
           setState({
             entries: finalEntries,
             translations: mergedTranslations,
-            protectedEntries: new Set(),
-            technicalBypass: new Set(),
+            protectedEntries: new Set(stored.protectedEntries || []),
+            technicalBypass: new Set(stored.technicalBypass || []),
             clearedKeys: freshClearedSet,
             isDemo: false,
           });
@@ -631,6 +640,8 @@ export function useEditorState() {
           await idbSet("editorState", {
             entries: finalEntries,
             translations: mergedTranslations,
+            protectedEntries: Array.from(stored.protectedEntries || []),
+            technicalBypass: Array.from(stored.technicalBypass || []),
             clearedKeys: Array.from(freshClearedSet),
           });
           const autoCount = Object.keys(autoTranslations).length;
@@ -718,6 +729,13 @@ export function useEditorState() {
       try {
         const game = await idbGet<string>("editor-source-game");
         if (game) await idbSet(`editorState:${game}`, payload);
+        if (game === "goldensun2") {
+          const fingerprint = await idbGet<string>("goldensun2CatalogFingerprint");
+          if (fingerprint) {
+            await idbSet(`editorState:goldensun2:${fingerprint}`, payload);
+            await idbSet("goldensun2Translations:" + fingerprint, payload.translations);
+          }
+        }
       } catch (err) {
         console.error("[idb] per-game snapshot failed:", err);
       }
@@ -1189,7 +1207,7 @@ export function useEditorState() {
     if (!state) return { keys, keysByCharacter, characters: [] as GoldenSunUnsupportedCharacter[] };
 
     for (const entry of state.entries) {
-      if (!entry.msbtFile.startsWith("goldensun/")) continue;
+      if (!entry.msbtFile.startsWith("goldensun/") || entry.msbtFile.startsWith("goldensun/lost-age/")) continue;
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key] || "";
       if (!translation.trim()) continue;

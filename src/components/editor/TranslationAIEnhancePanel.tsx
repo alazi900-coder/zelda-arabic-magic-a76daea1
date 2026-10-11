@@ -1667,11 +1667,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         {/* Workspaces: keep settings/rules out of the review results canvas. */}
         <div role="tablist" aria-label="أقسام تحسين الترجمة" className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 rounded-lg border p-1.5">
           {([
-            ["scan", "الفحص", "scan"],
-            ["rules", "القواعد", "shield-check"],
-            ["results", "النتائج", "list-check"],
-            ["history", "السجل", "history"],
-            ["settings", "الإعدادات", "settings"],
+            ["scan", "الفحص"],
+            ["rules", "القواعد"],
+            ["results", "النتائج"],
+            ["history", "السجل"],
+            ["settings", "الإعدادات"],
           ] as const).map(([tab, label]) => (
             <Button key={tab} role="tab" aria-selected={workspaceTab === tab}
               data-testid={`enhance-tab-${tab}`} variant={workspaceTab === tab ? "default" : "ghost"}
@@ -1939,24 +1939,26 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         </div>
 
         )}
-        {/* Controls row */}
+        {/* Essential stop control stays visible during active scans. Other
+            controls appear only on their corresponding workspace. */}
+        {(workspaceTab === "scan" || workspaceTab === "results" || isAnalyzing) && (
         <div className="flex items-center gap-2 flex-wrap">
           {isAnalyzing && (
             <Button variant="destructive" size="sm" onClick={stopAnalysis} className="gap-1.5">
               <Square className="w-3 h-3" /> إيقاف
             </Button>
           )}
-          {!isAnalyzing && processedCount > 0 && (
+          {!isAnalyzing && workspaceTab === "scan" && processedCount > 0 && (
             <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); setSeverityFilter(null); void enhanceCacheClear(); }} className="gap-1.5" title="فحص كامل من جديد (يتجاهل نتائج الفحص المخزَّنة سابقاً)">
               <RotateCcw className="w-3.5 h-3.5" /> إعادة فحص
             </Button>
           )}
-          {appliedHistory.length > 0 && (
+          {workspaceTab === "scan" && appliedHistory.length > 0 && (
             <Button variant="ghost" size="sm" onClick={undoLast} className="gap-1.5" title="تراجع آخر إصلاح">
               <Undo2 className="w-3.5 h-3.5" /> تراجع ({appliedHistory.length})
             </Button>
           )}
-          {(suggestions.length > 0 || grammarIssues.length > 0) && !isAnalyzing && (
+          {workspaceTab === "results" && (suggestions.length > 0 || grammarIssues.length > 0) && !isAnalyzing && (
             <>
               <Button size="sm" variant="outline" onClick={exportCSV} className="gap-1.5" title="تصدير CSV">
                 <Download className="w-3.5 h-3.5" /> CSV
@@ -1978,6 +1980,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           )}
         </div>
 
+        )}
         {/* Progress bar */}
         {progress && (
           <div className="space-y-1.5">

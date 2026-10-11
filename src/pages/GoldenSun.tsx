@@ -14,6 +14,7 @@ import {
   GOLDENSUN_UNKNOWN_ROM_MESSAGE,
 } from "@/lib/goldensun/goldensun-editor-bridge";
 import { APP_VERSION } from "@/lib/version";
+import { auditGoldenSun2Rom, looksLikeGoldenSun2Rom, type GoldenSun2Audit } from "@/lib/goldensun/goldensun2-rom";
 
 /**
  * Golden Sun opener: reads the cartridge's Huffman-compressed string table
@@ -24,6 +25,7 @@ import { APP_VERSION } from "@/lib/version";
  */
 export default function GoldenSun() {
   const [busy, setBusy] = useState(false);
+  const [lostAgeAudit, setLostAgeAudit] = useState<GoldenSun2Audit | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const navigate = useNavigate();
 
@@ -32,6 +34,13 @@ export default function GoldenSun() {
       setBusy(true);
       try {
         const rom = new Uint8Array(await file.arrayBuffer());
+        if (looksLikeGoldenSun2Rom(rom)) {
+          const audit = auditGoldenSun2Rom(rom);
+          setLostAgeAudit(audit);
+          toast.info("تعرّفنا على الجزء الثاني AGFE. فحص ROM متاح، لكن استخراج الحوارات المضغوطة والبناء غير مفعّلين لحين تأكيد خريطتهما.");
+          return;
+        }
+        setLostAgeAudit(null);
         const layout = detectGoldenSunLayout(rom);
         if (!layout) throw new Error(isBrokenGoldenSunRtlRom(rom) ? GOLDENSUN_BROKEN_RTL_MESSAGE : GOLDENSUN_UNKNOWN_ROM_MESSAGE);
         const entries = extractGoldenSunEditorEntries(rom, layout);
@@ -118,6 +127,22 @@ export default function GoldenSun() {
             }}
           />
         </label>
+
+        {lostAgeAudit && (
+          <section className="mt-5 space-y-3 rounded-xl border p-4" aria-label="فحص Golden Sun الجزء الثاني">
+            <h2 className="font-semibold">Golden Sun: The Lost Age — الجزء الثاني</h2>
+            <p className="text-sm">تعرّفت الأداة على AGFE وحجم {lostAgeAudit.romSize.toLocaleString("ar")} بايت. هذه مرحلة فحص فقط، وليست استخراجًا كاملًا للحوارات: نصوص القصة مضغوطة بصيغة تحتاج مفككًا خاصًا بها.</p>
+            <p className="text-sm text-amber-600">البناء معطّل عمدًا لحماية ROM. لن تستخدم الأداة مفكك Huffman الخاص بالجزء الأول أو تدّعي أن النصوص التشخيصية هي كل الحوارات.</p>
+            <button type="button" className="rounded-lg border px-3 py-2 text-sm hover:bg-muted" onClick={() => {
+              const blob = new Blob([JSON.stringify(lostAgeAudit, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url; link.download = "golden-sun-2-rom-audit.json"; link.click();
+              URL.revokeObjectURL(url);
+            }}>تنزيل تقرير فحص ROM</button>
+            <p className="text-xs text-muted-foreground">عُثر على {lostAgeAudit.samplePlainStrings.length} سلسلة ASCII تشخيصية. لا تُعدّ ترجمة للحوار.</p>
+          </section>
+        )}
 
         <div className="mt-6 space-y-2 text-xs text-muted-foreground">
           <p>

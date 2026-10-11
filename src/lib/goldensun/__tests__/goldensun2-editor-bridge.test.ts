@@ -14,8 +14,8 @@ describe("The Lost Age shared editor protection", () => {
 
   it("preserves the exact ordered technical tag sequence", () => {
     expect(goldenSun2TechnicalTokens(original)).toEqual([
-      String.raw`\X03`, String.raw`\X02`,
-      "{GS2:0011}", "[NAME:FELIX]",
+      String.raw`\x03`, String.raw`\x02`,
+      "{GS2:0011}", "[Name:Felix]",
     ]);
     expect(validateGoldenSun2Translation(
       original, String.raw`أهلًا\x03بك\x02 {GS2:0011} [Name:Felix]`
@@ -24,6 +24,7 @@ describe("The Lost Age shared editor protection", () => {
       original, String.raw`أهلًا\x02بك\x03 {GS2:0011} [Name:Felix]`
     ).valid).toBe(false);
     expect(validateGoldenSun2Translation(original, "أهلًا بلا وسوم").valid).toBe(false);
+    expect(validateGoldenSun2Translation(original, String.raw`نص\x03\x02 {GS2:0011} [Name:felix]`).valid).toBe(false);
     expect(validateGoldenSun2Translation(original, String.raw`أهلًا\xGG`).valid).toBe(false);
   });
 

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
-import { glob } from "glob";
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * Google retired `gemini-2.0-flash` and every request naming it came back 404.
@@ -19,17 +18,22 @@ function read(p: string): string {
 
 describe("Gemini model freshness", () => {
   it("names the retired model nowhere in src or supabase", async () => {
-    const files = await glob("{src,supabase}/**/*.{ts,tsx}", {
-      cwd: resolve(__dirname, "../.."),
-      absolute: true,
-      // the changelog's job is to record that this model was retired, so it
-      // names it on purpose — scanning it would forbid describing the fix
-      ignore: [
-        "**/node_modules/**",
-        "**/gemini-model-freshness.test.ts",
-        "src/lib/changelog.ts",
-      ],
-    });
+    const root = resolve(__dirname, "../..");
+    const files: string[] = [];
+    const walk = (subdir: string): void => {
+      for (const entry of readdirSync(resolve(root, subdir), { withFileTypes: true })) {
+        const relative = subdir + "/" + entry.name;
+        if (entry.isDirectory()) {
+          if (entry.name !== "node_modules") walk(relative);
+        } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name) &&
+          relative !== "src/test/gemini-model-freshness.test.ts" &&
+          relative !== "src/lib/changelog.ts") {
+          files.push(resolve(root, relative));
+        }
+      }
+    };
+    walk("src");
+    walk("supabase");
     // the quoted form only: the comments explaining this bug name the model on
     // purpose, and a test that forbids describing it would push the reason out
     const asValue = /['"`]gemini-2\.0-flash['"`]/;

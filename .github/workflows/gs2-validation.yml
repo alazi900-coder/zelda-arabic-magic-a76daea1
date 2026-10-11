@@ -1,0 +1,42 @@
+name: تحقق محرك Golden Sun The Lost Age
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/goldensun/**'
+      - 'src/pages/GoldenSun.tsx'
+      - 'src/components/editor/EditorBuildSection.tsx'
+      - '.github/workflows/gs2-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/goldensun/**'
+      - 'src/pages/GoldenSun.tsx'
+      - 'src/components/editor/EditorBuildSection.tsx'
+      - '.github/workflows/gs2-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: اختبار Golden Sun 2 وأنواع TypeScript وبناء المتصفح
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: اختبار محرك الجزء الثاني وعزل النصوص
+        run: pnpm exec vitest run src/lib/goldensun/__tests__/goldensun2-huffman-rom.test.ts src/lib/goldensun/__tests__/goldensun2-editor-bridge.test.ts src/lib/goldensun/__tests__/goldensun2-rom.test.ts --maxWorkers=1 --testTimeout=30000
+      - name: فحص TypeScript
+        run: pnpm run typecheck
+      - name: بناء تطبيق المتصفح
+        run: pnpm run build

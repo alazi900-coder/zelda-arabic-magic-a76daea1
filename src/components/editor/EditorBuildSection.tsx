@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast, toast as sonnerToast } from "sonner";
 /** STYLE: تبقى أدوات البناء مقتصرة على اللعبة المختارة؛ تعرض مراجعة LumenTale حقائق الجلسة ولا تعد بنتيجة قبل تحقق UnityFS الفعلي. */
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,10 @@ import { buildGtaIvRuOutput, GTAIV_BUFFER_KEY, GTAIV_CONTAINER_BUFFER_KEY } from
 import { buildFireEmblem12Rom, FE12_BUFFER_KEY, type Fe12UnsupportedCharacter } from "@/lib/fireemblem12/fe12-editor-bridge";
 import { buildPhRom, PH_BUFFER_KEY } from "@/lib/ph/ph-editor-bridge";
 import { buildGoldenSunRom, GOLDENSUN_BUFFER_KEY } from "@/lib/goldensun/goldensun-editor-bridge";
+import {
+  buildGoldenSun2StringTable, GS2_TEXT_FILE,
+} from "@/lib/goldensun/goldensun2-huffman-rom";
+import { GOLDENSUN2_BUFFER_KEY } from "@/lib/goldensun/goldensun2-editor-bridge";
 import { buildSteinsGateIso, STEINSGATE_WORKSPACE_KEY, type SteinsGateWorkspace } from "@/lib/steinsgate/steinsgate-format";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
@@ -797,6 +801,28 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const handleGoldenSunBuild = async () => {
     setGsBuilding(true);
     try {
+      if (goldenSunSource === GOLDENSUN2_SOURCE_GAME &&
+          editor.state?.entries?.[0]?.msbtFile === GS2_TEXT_FILE) {
+        await editor.forceSave();
+        const buffer = await idbGet<ArrayBuffer>(GOLDENSUN2_BUFFER_KEY);
+        if (!buffer) throw new Error("ROM الجزء الثاني غير محفوظة — ارفعها من صفحة Golden Sun");
+        const { rom, translatedLines, fontReady } = buildGoldenSun2StringTable(
+          new Uint8Array(buffer), editor.state?.translations || {}
+        );
+        const blob = new Blob([rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "GoldenSun_The_Lost_Age_Arabic.gba";
+        link.click();
+        URL.revokeObjectURL(url);
+        sonnerToast.success(translatedLines
+          ? "تم بناء AGFE: " + translatedLines +
+              " نصًا مترجمًا. نجح فحص جميع النصوص الـ 12,288 بعد إعادة ضغطها."
+          : "لم توجد ترجمات جديدة — ROM المنزّلة مطابقة للمدخلة.");
+        if (!fontReady) sonnerToast.warning("النسخة المبنية بلا خط عربي/RTL؛ لتظهر الحروف العربية استخدم ROM ذات رقعة الخط المتوافقة.");
+        return;
+      }
       if (goldenSunSource === GOLDENSUN2_SOURCE_GAME) {
         const entries = editor.state?.entries || [];
         const translations = editor.state?.translations || {};
@@ -812,7 +838,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         link.download = "GoldenSun2_Arabic_Translations.json";
         link.click();
         URL.revokeObjectURL(url);
-        toast.success("تم تصدير ترجمات الجزء الثاني مع فحص الوسوم — لم يُعدّل ملف GBA");
+        sonnerToast.success("تم تصدير ترجمات الجزء الثاني مع فحص الوسوم — لم يُعدّل ملف GBA");
         return;
       }
       if (goldenSunSource !== "goldensun") {
@@ -1548,7 +1574,9 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           <Button size="lg" onClick={handleGoldenSunBuild} disabled={gsBuilding || !goldenSunSource} className="flex-1 min-w-[200px] font-display font-bold" title={goldenSunSource === GOLDENSUN2_SOURCE_GAME ? "يصدر كتالوج الترجمات بعد فحص الرموز، ولا يبني ROM الجزء الثاني بعد" : "يعيد ضغط النص المترجم للجزء الأول داخل الروم ثم ينزّله"}>
             {gsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />}
             {goldenSunSource === GOLDENSUN2_SOURCE_GAME
-              ? "فحص الوسوم وتصدير ترجمات الجزء الثاني JSON (بدون بناء ROM)"
+              ? editor.state?.entries?.[0]?.msbtFile === GS2_TEXT_FILE
+                ? "بناء GBA للجزء الثاني مع فحص النصوص الـ ١٢٬٢٨٨"
+                : "فحص الوسوم وتصدير كتالوج الجزء الثاني JSON"
               : "بناء روم Golden Sun الجزء الأول معرّب وتنزيله"}
           </Button>
         ) : isMother3 ? (

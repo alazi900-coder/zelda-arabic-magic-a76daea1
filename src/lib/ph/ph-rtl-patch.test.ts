@@ -16,8 +16,10 @@ function arm9(rom: Uint8Array): Uint8Array {
 }
 
 describe.skipIf(!existsSync(BASE))("applyPhRtlPatch (local USA ROM)", () => {
-  const base = new Uint8Array(readFileSync(BASE));
-  const patched = applyPhRtlPatch(base);
+  // Vitest evaluates describe() even when skipIf() skips its tests.
+  // Do not read the local ROM until the file is confirmed present.
+  const base = existsSync(BASE) ? new Uint8Array(readFileSync(BASE)) : new Uint8Array();
+  const patched = base.length ? applyPhRtlPatch(base) : base;
 
   it("reorders the pen block and writes the patch words, nothing else of the ARM9", () => {
     const before = arm9(base), after = arm9(patched);

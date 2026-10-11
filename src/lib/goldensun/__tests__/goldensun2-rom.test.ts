@@ -25,7 +25,8 @@ describe("Golden Sun: The Lost Age (AGFE) safety", () => {
     expect(report.sizeMatches).toBe(true);
     expect(report.status).toBe("inspection-only");
     expect(report.samplePlainStrings.some((e) => e.text === example)).toBe(true);
-    expect(rom).toEqual(before);
+    expect(rom.length).toBe(before.length);
+    expect(rom.every((value, offset) => value === before[offset])).toBe(true);
   });
 
   it("refuses to build using unverified GS1 tables", () => {

@@ -104,3 +104,15 @@ export function saveAiProfilePrompt(profile: AiGameProfile, value: string): void
     else localStorage.removeItem(aiProfileStorageKey("prompt", profile));
   } catch { /* private browsing / storage unavailable */ }
 }
+
+/** Compact deterministic fingerprint for a potentially large per-game glossary
+ * in the enhancement cache key. Not used for security or authentication.
+ */
+export function fingerprintAiContext(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return value.length.toString(36) + "-" + hash.toString(36);
+}

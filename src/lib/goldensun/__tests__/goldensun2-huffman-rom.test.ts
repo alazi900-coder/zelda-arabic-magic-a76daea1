@@ -17,6 +17,11 @@ function ptr(at: number) { return (0x08000000 + at) >>> 0; }
 function makeFixture(): Uint8Array {
   const rom = new Uint8Array(GS2_ORIGINAL_ROM_SIZE);
   rom.set([65, 71, 70, 69], 0xac); // AGFE
+  // Include realistic large-font width records for the new pixel-wrap gate.
+  // The real ROM always carries this table; the synthetic ROM did not.
+  for (let code = 0x21; code <= 0xff; code++) {
+    rom[0x5a4e0 + (code - 0x20) * 32] = 5;
+  }
   const texts = Array.from({ length: GS2_STRING_COUNT }, (_, i) =>
     [i % 2 ? 66 : 65, 3]);
   const corpus = new Uint8Array(texts.length * 3);

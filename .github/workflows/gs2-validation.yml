@@ -35,7 +35,7 @@ jobs:
           node-version: "22"
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: اختبار محرك الجزء الثاني وعزل النصوص
-        run: pnpm exec vitest run src/lib/goldensun/__tests__/goldensun2-huffman-rom.test.ts src/lib/goldensun/__tests__/goldensun2-editor-bridge.test.ts src/lib/goldensun/__tests__/goldensun2-rom.test.ts --maxWorkers=1 --testTimeout=30000
+        run: pnpm exec vitest run src/lib/goldensun/__tests__/goldensun2-huffman-rom.test.ts src/lib/goldensun/__tests__/goldensun2-dialogue-layout.test.ts src/lib/goldensun/__tests__/goldensun2-editor-bridge.test.ts src/lib/goldensun/__tests__/goldensun2-rom.test.ts --maxWorkers=1 --testTimeout=30000
       - name: فحص TypeScript
         run: pnpm run typecheck
       - name: بناء تطبيق المتصفح

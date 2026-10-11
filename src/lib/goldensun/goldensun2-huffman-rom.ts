@@ -13,6 +13,7 @@ import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
 import { validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
 import { tokenizeGoldenSunBytes, isGoldenSunPlainAscii } from "./goldensun-tags";
+import { layoutGoldenSun2Dialogue } from "./goldensun2-dialogue-layout";
 import { GOLDENSUN_ARABIC_BYTE_MAP } from "./goldensun-arabic-font";
 
 export const GS2_STRING_COUNT = 12288;
@@ -220,9 +221,10 @@ function readGoldenSun2Strings(rom: Uint8Array): number[][] {
 /** Build and verify an extended GBA ROM without touching the original code. */
 export function buildGoldenSun2StringTable(
   rom: Uint8Array, translations: Record<string, string>
-): { rom: Uint8Array; translatedLines: number; fontReady: boolean } {
+): { rom: Uint8Array; translatedLines: number; autoWrappedLines: number; fontReady: boolean } {
   const originals = readGoldenSun2Strings(rom);
   let translatedLines = 0;
+  let autoWrappedLines = 0;
   const fontReady = isGoldenSun2ArabicFontRom(rom);
   const contents = originals.map((raw, index) => {
     const original = goldenSun2BytesToText(raw, fontReady);
@@ -238,10 +240,21 @@ export function buildGoldenSun2StringTable(
     }
     const bytes = goldenSun2TextToBytes(changed);
     if (bytes.includes(0)) throw new Error("GS2: embedded NUL in string " + index);
+    // Once code tags are validated against the original, a safe layout pass
+    // can insert only 0x03 at a word boundary to prevent window overflow.
+    // It never synthesizes 0x02 (dialogue terminator) and never cuts glyphs.
+    let layout;
+    try {
+      layout = layoutGoldenSun2Dialogue(rom, raw, bytes);
+    } catch (cause) {
+      throw new Error("GS2 text #" + index + ": " +
+        (cause instanceof Error ? cause.message : String(cause)));
+    }
+    autoWrappedLines += layout.insertedLineBreaks;
     translatedLines++;
-    return bytes;
+    return layout.bytes;
   });
-  if (!translatedLines) return { rom: rom.slice(), translatedLines: 0, fontReady };
+  if (!translatedLines) return { rom: rom.slice(), translatedLines: 0, autoWrappedLines: 0, fontReady };
 
   const total = contents.reduce((n, c) => n + c.length + 1, 0);
   const corpus = new Uint8Array(total);
@@ -322,5 +335,5 @@ export function buildGoldenSun2StringTable(
       throw new Error("GS2: rebuilt text #" + i + " failed byte-for-byte roundtrip");
     }
   }
-  return { rom: rebuilt, translatedLines, fontReady };
+  return { rom: rebuilt, translatedLines, autoWrappedLines, fontReady };
 }

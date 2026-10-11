@@ -1389,9 +1389,17 @@ async function translateWithMyMemory(
       const norm = textToTranslate.toLowerCase();
       const hit = glossaryMap.get(norm);
       if (hit) {
-        result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
-        stats.directMatches++;
-        continue;
+        const resolved = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
+        const goldenSun = _game === 'goldensun2' || _game === 'goldensun';
+        if (!goldenSun || (goldenSunAllTechnicalTagsUnchanged(entry.original, resolved) &&
+            /[\u0600-\u06FF]/.test(resolved))) {
+          result[entry.key] = resolved;
+          stats.directMatches++;
+          continue;
+        }
+        // Invalid glossary matches must NEVER replace a Golden Sun Arabic
+        // translation with the English source. Ask AI instead.
+        console.warn(`[Golden Sun] ignoring unsafe direct glossary match at ${entry.key}`);
       }
     }
 

@@ -936,7 +936,8 @@ Deno.serve(async (req) => {
     const isDeepSeek = provider === 'deepseek' || (!!aiModel && aiModel in DEEPSEEK_NAME_MAP);
     const isTokenRouter = provider === 'tokenrouter' || aiModel === 'tokenrouter-glm-5.2';
     const isGmiCloud = provider === 'gmicloud' || (!!aiModel && aiModel in GMICLOUD_NAME_MAP);
-    const resolvedModel = isDeepSeek
+    const isCerebras = provider === 'cerebras' || aiModel === 'gpt-oss-120b';
+    const resolvedModel = isCerebras ? 'gpt-oss-120b' : isDeepSeek
       ? (aiModel && DEEPSEEK_NAME_MAP[aiModel]) || 'deepseek-v4-flash'
       : isTokenRouter
       ? 'z-ai/glm-5.2-free'
@@ -956,6 +957,16 @@ Deno.serve(async (req) => {
     const CHUNK = deepSeekThinkingEnabled ? 6 : Infinity;
     const CONCURRENCY = deepSeekThinkingEnabled ? 4 : 1;
 
+    if (isCerebras && !(providerApiKey && providerApiKey.trim())) {
+      return new Response(JSON.stringify({ error: 'أضف مفتاح Cerebras API في المحرر. لا يُخزّن المفتاح بين الجلسات.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (isCerebras && aiModel && aiModel !== 'gpt-oss-120b') {
+      return new Response(JSON.stringify({ error: 'Cerebras: النموذج الوحيد المفعّل هو GPT-OSS 120B.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     if (isDeepSeek && !DEEPSEEK_API_KEY) {
       // 200 مع error field لـ supabase-js حتّى تصل رسالة الخطأ للواجهة.
       return new Response(JSON.stringify({ error: 'DeepSeek غير مُكوّن — أضف DEEPSEEK_API_KEY في أسرار Lovable Cloud' }), {
@@ -977,7 +988,7 @@ Deno.serve(async (req) => {
     // paid → skip Gemini direct entirely, use Lovable Gateway only.
     const geminiDirectKey = (userGeminiKey && userGeminiKey.trim()) || Deno.env.get('GEMINI_API_KEY') || '';
     const isGeminiAiModel = !aiModel || /^gemini-[a-z0-9.-]+$/.test(aiModel);
-    const useGeminiDirect = !isDeepSeek && !isTokenRouter && !isGmiCloud && isGeminiAiModel && normalizedRouting !== 'paid' && !!geminiDirectKey;
+    const useGeminiDirect = !isCerebras && !isDeepSeek && !isTokenRouter && !isGmiCloud && isGeminiAiModel && normalizedRouting !== 'paid' && !!geminiDirectKey;
     const allowLovableFallback = normalizedRouting !== 'free';
 
     if (normalizedRouting === 'free' && !isDeepSeek && !isTokenRouter && !isGmiCloud && !geminiDirectKey) {
@@ -985,7 +996,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (!useGeminiDirect && !isDeepSeek && !isTokenRouter && !isGmiCloud && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+    if (!useGeminiDirect && !isCerebras && !isDeepSeek && !isTokenRouter && !isGmiCloud && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
     console.log('[enhance] request', { mode: mode || 'enhance', provider: provider || 'auto', model: resolvedModel, isDeepSeek, isTokenRouter, isGmiCloud, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
 
@@ -1042,6 +1053,24 @@ Deno.serve(async (req) => {
     // مساعد لاستدعاء مزوّد الـ AI (Lovable Gateway، Gemini المباشر، أو DeepSeek).
     const FALLBACK_STATUSES = new Set([429, 402, 500, 502, 503, 504]);
     const callAI = async (messages: Array<{ role: string; content: string }>): Promise<Response> => {
+      if (isCerebras) {
+        // Never route Cerebras requests through Gemini/Lovable or another paid
+        // provider; the user explicitly chose to spend Cerebras credits.
+        return await fetch('https://api.cerebras.ai/v1/chat/completions', {
+          method: 'POST',
+          signal: AbortSignal.timeout(90_000),
+          headers: {
+            'Authorization': `Bearer ${providerApiKey!.trim()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-oss-120b',
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            messages,
+          }),
+        });
+      }
       if (isGmiCloud) {
         return await fetch('https://api.gmi-serving.com/v1/chat/completions', {
           method: 'POST',
@@ -1141,7 +1170,7 @@ Deno.serve(async (req) => {
       }
       if (!response.ok) {
         const errText = await response.text();
-        const provider = isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : useGeminiDirect && !usedProviderFallback ? 'Google Gemini' : 'Lovable Gateway';
+        const provider = isCerebras ? 'Cerebras' : isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : useGeminiDirect && !usedProviderFallback ? 'Google Gemini' : 'Lovable Gateway';
         console.error(`[enhance] ${modeLabel} ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
         // Diagnostic marker: reveals which function version is live + how the
         // request was routed, so a "Lovable" error on a TokenRouter request is
@@ -1157,7 +1186,7 @@ Deno.serve(async (req) => {
       if (aiResult?.error) {
         const errMsg = typeof aiResult.error === 'string' ? aiResult.error : (aiResult.error.message || JSON.stringify(aiResult.error));
         console.error(`[enhance] ${modeLabel} AI inner error:`, errMsg);
-        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ من ${isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : 'AI Gateway'}: ${errMsg}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+        return { items: [], errorResponse: new Response(JSON.stringify({ error: `خطأ من ${isCerebras ? 'Cerebras' : isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : 'AI Gateway'}: ${errMsg}` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
       }
       if (!Array.isArray(aiResult?.choices) || aiResult.choices.length === 0) {
         console.error(`[enhance] ${modeLabel}: no choices in AI response`, JSON.stringify(aiResult).slice(0, 500));

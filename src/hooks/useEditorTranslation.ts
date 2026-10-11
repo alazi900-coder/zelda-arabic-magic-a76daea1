@@ -105,7 +105,7 @@ const LUMENTALE_TOKEN_RULE =
 
 export function useEditorTranslation({
   state, setState, setLastSaved, setTranslateProgress, setPreviousTranslations, updateTranslation,
-  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, userOpenRouterKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
+  filterCategory, activeGlossary, parseGlossaryMap, paginatedEntries, filteredEntries, totalPages, setCurrentPage, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, userOpenRouterKey, translationProvider, myMemoryEmail, addMyMemoryChars, addAiRequest, rebalanceNewlines, npcMaxLines, npcMode, npcSplitCharLimit, aiModel, aiThrottleEnabled, customPromptInstructions, categoryPromptTemplates, aiRoutingMode, aiBatchSize, translationCacheEnabled, legacyCommaSplitEnabled, risenVariant,
 }: UseEditorTranslationProps) {
 
   // Keep all outbound translation paths on the same key policy. In particular,

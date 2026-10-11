@@ -65,7 +65,7 @@ export function repairMissingTechnicalTokens(original: string, translation: stri
   // cannot see (e.g. [سلبي] instead of [Passive]). Do not add another token
   // on top of the broken one: this needs targeted manual repair.
   const unrecognizedBrackets = withoutTags(translation);
-  if (/[\\[\\]{}]/.test(unrecognizedBrackets) ||
+  if (["[", "]", "{", "}"].some((char) => unrecognizedBrackets.includes(char)) ||
       /[٪％][a-z]/i.test(unrecognizedBrackets)) {
     return unchanged("توجد أقواس أو صيغة رمز مترجمة/تالفة؛ لا نضيف رمزًا آخر فوقها");
   }

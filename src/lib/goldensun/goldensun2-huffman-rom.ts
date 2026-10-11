@@ -12,6 +12,7 @@
 import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
 import { validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
+import { tokenizeGoldenSunBytes } from "./goldensun-tags";
 
 export const GS2_STRING_COUNT = 12288;
 export const GS2_CHUNK_COUNT = 48;
@@ -95,10 +96,16 @@ export function hasGoldenSun2TextTables(rom: Uint8Array): boolean {
 /** No visual reversal: the existing AGFE right-to-left hook owns screen flow. */
 export function goldenSun2BytesToText(bytes: number[]): string {
   let out = "";
-  for (const b of bytes) {
-    // 0x5C is escaped to avoid ambiguous literal \xNN sequences.
-    if (b >= 0x20 && b <= 0x7e && b !== 0x5c) out += String.fromCharCode(b);
-    else out += "\\x" + b.toString(16).toUpperCase().padStart(2, "0");
+  // Golden Sun 2's controls follow the same parameter-byte grammar as GS1.
+  // Protect arguments as \xNN, even when their raw value is printable ASCII.
+  for (const token of tokenizeGoldenSunBytes(bytes)) {
+    for (const b of token.bytes) {
+      if (token.kind === "text" && b >= 0x20 && b <= 0x7e && b !== 0x5c) {
+        out += String.fromCharCode(b);
+      } else {
+        out += "\\x" + b.toString(16).toUpperCase().padStart(2, "0");
+      }
+    }
   }
   return out;
 }

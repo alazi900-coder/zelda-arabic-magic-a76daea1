@@ -11,7 +11,7 @@
  * is a best-effort estimate. Callers must show the before/after preview.
  * Ambiguous alignment, foreign tags and broken tags require manual review.
  */
-import { diffTechnicalTags, getBuildTechnicalTagMatches } from "@/lib/xc3-build-tag-guard";
+import { getBuildTechnicalTagMatches } from "@/lib/xc3-build-tag-guard";
 
 interface TokenMatch {
   token: string;
@@ -70,13 +70,20 @@ export function repairMissingTechnicalTokens(original: string, translation: stri
     return unchanged("توجد أقواس أو صيغة رمز مترجمة/تالفة؛ لا نضيف رمزًا آخر فوقها");
   }
 
-  // Never silently remove or reinterpret a foreign/malformed translated token.
-  const diff = diffTechnicalTags(original, translation);
-  if (diff.extraTags.length > 0) {
-    return unchanged("توجد وسوم زائدة أو مختلفة؛ تحتاج مراجعة يدوية بدل التخمين");
+  // Compare all tokens through ONE grammar, including $N placeholders.
+  // The older build-tag diff intentionally omits $N (it has its own checker),
+  // so using it here would incorrectly treat a missing $1 as "already fixed".
+  const remaining = new Map<string, number>();
+  for (const t of source) remaining.set(t.token, (remaining.get(t.token) || 0) + 1);
+  for (const t of target) {
+    const count = remaining.get(t.token) || 0;
+    if (!count) return unchanged("يوجد وسم زائد أو مختلف؛ يحتاج مراجعة يدوية");
+    remaining.set(t.token, count - 1);
   }
-  if (diff.missingTags.length === 0) {
-    return unchanged(diff.sequenceMatch ? "الوسوم الأصلية موجودة بالفعل" : "ترتيب الوسوم مختلف؛ لا يُعاد توزيع الكلمات آليًا");
+  if (source.length === target.length) {
+    return unchanged(source.every((t, i) => t.token === target[i].token)
+      ? "الوسوم الأصلية موجودة بالفعل"
+      : "ترتيب الوسوم مختلف؛ لا يُعاد توزيع الكلمات آليًا");
   }
 
   // Find an order-preserving alignment for the surviving source tokens.
@@ -134,8 +141,9 @@ export function repairMissingTechnicalTokens(original: string, translation: stri
     output = output.slice(0, item.at) + item.token + output.slice(item.at);
   }
 
-  const finalDiff = diffTechnicalTags(original, output);
-  if (!finalDiff.exactTagMatch || !finalDiff.sequenceMatch ||
+  const repairedTokens = getBuildTechnicalTagMatches(output);
+  if (repairedTokens.length !== source.length ||
+      source.some((t, i) => t.token !== repairedTokens[i].token) ||
       withoutTags(output) !== withoutTags(translation)) {
     return unchanged("لم يجتز الإصلاح فحص ترتيب الرموز وحفظ النص العربي");
   }

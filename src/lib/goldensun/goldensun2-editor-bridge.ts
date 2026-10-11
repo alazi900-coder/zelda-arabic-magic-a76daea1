@@ -11,6 +11,7 @@ import type { ExtractedEntry } from "@/components/editor/types";
 export const GOLDENSUN2_SOURCE_GAME = "goldensun2";
 export const GOLDENSUN2_BUFFER_KEY = "goldensun2RomBuffer";
 export const GOLDENSUN2_TRANSLATIONS_KEY = "goldensun2Translations";
+export const GOLDENSUN2_CATALOG_SIG_KEY = "goldensun2CatalogFingerprint";
 export const GOLDENSUN2_FILE = "goldensun/lost-age/catalog";
 export const GOLDENSUN2_CATALOG_MAX_ENTRIES = 30000;
 
@@ -34,7 +35,10 @@ const WRONG_ESCAPE = /\\x(?![0-9a-fA-F]{2})/i;
 const WRONG_GS2 = /\{GS2:(?![0-9A-Fa-f]{2,8}\})/i;
 
 export function goldenSun2TechnicalTokens(text: string): string[] {
-  return (text.match(CONTROL_TAG) || []).map(t => t.toUpperCase());
+  return (text.match(CONTROL_TAG) || []).map(tag =>
+    /^\\x/i.test(tag) ? "\\x" + tag.slice(-2).toUpperCase() :
+    /^\{GS2:/i.test(tag) ? "{GS2:" + tag.slice(5, -1).toUpperCase() + "}" : tag
+  );
 }
 
 /** Control-code sequence must match EXACTLY, not just the count.
@@ -79,7 +83,7 @@ export function parseGoldenSun2Catalog(value: unknown): GoldenSun2Catalog {
       throw new Error(`معرّف مكرر أو غير صالح في السجل ${i + 1}`);
     if (typeof source !== "string" || !source.length || source.length > 10000 || WRONG_ESCAPE.test(source) || WRONG_GS2.test(source))
       throw new Error(`النص الإنجليزي الأصلي مفقود أو طويل جدًا في السجل ${i + 1}`);
-    const translation = row.translation;
+    const translation = row.translation ?? row.arabic;
     if (translation !== undefined && (typeof translation !== "string" || translation.length > 10000))
       throw new Error(`ترجمة غير صالحة في السجل ${i + 1}`);
     if (translation && !validateGoldenSun2Translation(source, translation).valid)
@@ -88,6 +92,19 @@ export function parseGoldenSun2Catalog(value: unknown): GoldenSun2Catalog {
     return { index: Number(idx), original: source, ...(translation ? { translation } : {}) };
   });
   return { format: "goldensun2-translation-catalog-v1", entries: parsed };
+}
+
+/** Stable fingerprint avoids mixing translations from different source dumps. */
+export function goldenSun2CatalogFingerprint(catalog: GoldenSun2Catalog): string {
+  let value = 2166136261;
+  for (const row of catalog.entries) {
+    const raw = String(row.index) + ":" + row.original + "\\n";
+    for (let i = 0; i < raw.length; i++) {
+      value ^= raw.charCodeAt(i);
+      value = Math.imul(value, 16777619);
+    }
+  }
+  return (value >>> 0).toString(16).padStart(8, "0");
 }
 
 export function goldenSun2ToEditorEntries(catalog: GoldenSun2Catalog): ExtractedEntry[] {

@@ -1545,7 +1545,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         passes || 1,
         () => callOnceParse(
           [
-	            { role: 'system', content: isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv || isPlatinum
+	            { role: 'system', content: isGoldenSun || isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv || isPlatinum
               ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
               : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
             { role: 'user', content: enhancePrompt },

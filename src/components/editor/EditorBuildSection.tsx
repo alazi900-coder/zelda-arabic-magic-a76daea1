@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast, toast as sonnerToast } from "sonner";
 /** STYLE: تبقى أدوات البناء مقتصرة على اللعبة المختارة؛ تعرض مراجعة LumenTale حقائق الجلسة ولا تعد بنتيجة قبل تحقق UnityFS الفعلي. */
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -816,11 +816,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         link.download = "GoldenSun_The_Lost_Age_Arabic.gba";
         link.click();
         URL.revokeObjectURL(url);
-        toast.success(translatedLines
+        sonnerToast.success(translatedLines
           ? "تم بناء AGFE: " + translatedLines +
               " نصًا مترجمًا. نجح فحص جميع النصوص الـ 12,288 بعد إعادة ضغطها."
           : "لم توجد ترجمات جديدة — ROM المنزّلة مطابقة للمدخلة.");
-        if (!fontReady) toast.warning("النسخة المبنية بلا خط عربي/RTL؛ لتظهر الحروف العربية استخدم ROM ذات رقعة الخط المتوافقة.");
+        if (!fontReady) sonnerToast.warning("النسخة المبنية بلا خط عربي/RTL؛ لتظهر الحروف العربية استخدم ROM ذات رقعة الخط المتوافقة.");
         return;
       }
       if (goldenSunSource === GOLDENSUN2_SOURCE_GAME) {
@@ -838,7 +838,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         link.download = "GoldenSun2_Arabic_Translations.json";
         link.click();
         URL.revokeObjectURL(url);
-        toast.success("تم تصدير ترجمات الجزء الثاني مع فحص الوسوم — لم يُعدّل ملف GBA");
+        sonnerToast.success("تم تصدير ترجمات الجزء الثاني مع فحص الوسوم — لم يُعدّل ملف GBA");
         return;
       }
       if (goldenSunSource !== "goldensun") {

@@ -23,6 +23,8 @@ const lazyWithIgnoredRef = (
   });
 
 const Home = lazyWithIgnoredRef(() => import("./pages/Home"));
+const GameLibrary = lazyWithIgnoredRef(() => import("./pages/GameLibrary"));
+const GameWorkspace = lazyWithIgnoredRef(() => import("./pages/GameWorkspace"));
 const Xenoblade = lazyWithIgnoredRef(() => import("./pages/Xenoblade"));
 const XenobladeProcess = lazyWithIgnoredRef(() => import("./pages/XenobladeProcess"));
 const WilayViewer = lazyWithIgnoredRef(() => import("./pages/WilayViewer"));
@@ -93,7 +95,9 @@ const App = () => (
           <ErrorBoundary fallbackTitle="حدث خطأ في التطبيق">
             <Suspense fallback={<PageLoader />}>
               <Routes>
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={<GameLibrary />} />
+                <Route path="/classic" element={<Home />} />
+                <Route path="/games/:gameId" element={<GameWorkspace />} />
                 <Route path="/xenoblade" element={<Xenoblade />} />
                 <Route path="/process" element={<ErrorBoundary fallbackTitle="خطأ في المعالجة"><XenobladeProcess /></ErrorBoundary>} />
                 <Route path="/editor" element={<ErrorBoundary fallbackTitle="خطأ في المحرر"><Editor /></ErrorBoundary>} />

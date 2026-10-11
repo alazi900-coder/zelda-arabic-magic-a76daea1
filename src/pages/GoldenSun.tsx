@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Upload, Loader2, ArrowRight } from "lucide-react";
+import { Upload, Loader2, ArrowRight, BookOpen, BookMarked, ShieldCheck, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { idbSet, idbGet } from "@/lib/idb-storage";
 import {
@@ -28,12 +28,42 @@ import { auditGoldenSun2Rom, looksLikeGoldenSun2Rom, type GoldenSun2Audit } from
  * applied: it already has the Arabic font and right-to-left engine, so the
  * build only changes the text.
  */
+type GoldenSunPart = "first" | "second";
+
 export default function GoldenSun() {
+  const [selectedPart, setSelectedPart] = useState<GoldenSunPart>("first");
+  const [savedCounts, setSavedCounts] = useState({ first: 0, second: 0 });
   const [busy, setBusy] = useState(false);
   const [lostAgeAudit, setLostAgeAudit] = useState<GoldenSun2Audit | null>(null);
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([
+      idbGet<{ translations?: Record<string, string> }>("editorState:goldensun"),
+      idbGet<{ translations?: Record<string, string> }>("editorState:goldensun2"),
+    ]).then(([first, second]) => {
+      if (active) setSavedCounts({
+        first: Object.keys(first?.translations || {}).filter(k => first?.translations?.[k]?.trim()).length,
+        second: Object.keys(second?.translations || {}).filter(k => second?.translations?.[k]?.trim()).length,
+      });
+    });
+    return () => { active = false; };
+  }, [selectedPart]);
+
+  useEffect(() => {
+    if (selectedPart !== "second") return;
+    let active = true;
+    void idbGet<ArrayBuffer>(GOLDENSUN2_BUFFER_KEY).then(buf => {
+      if (!active || !buf) return;
+      const rom = new Uint8Array(buf);
+      if (looksLikeGoldenSun2Rom(rom)) setLostAgeAudit(auditGoldenSun2Rom(rom));
+    });
+    return () => { active = false; };
+  }, [selectedPart]);
+
 
   // The shared editor stores its active document globally, so preserve each
   // Golden Sun game's translations before switching to the other game.
@@ -50,7 +80,34 @@ export default function GoldenSun() {
     }
   }, []);
 
+  const openSavedProject = useCallback(async () => {
+    try {
+      const game = selectedPart === "first" ? GOLDENSUN_SOURCE_GAME : GOLDENSUN2_SOURCE_GAME;
+      const buffer = await idbGet<ArrayBuffer>(selectedPart === "first" ? GOLDENSUN_BUFFER_KEY : GOLDENSUN2_BUFFER_KEY);
+      if (!buffer) throw new Error("لم يُحفظ ROM لهذا الجزء بعد. ارفعه أولًا.");
+      const snapshot = await idbGet<{
+        entries?: Array<{ msbtFile: string; index: number; original: string }>;
+        translations?: Record<string, string>;
+        protectedEntries?: string[]; technicalBypass?: string[]; clearedKeys?: string[];
+      }>("editorState:" + game);
+      if (!snapshot?.entries?.length) throw new Error("لا توجد جلسة سابقة محفوظة لهذا الجزء.");
+      await storePreviousGoldenSunTranslations();
+      await idbSet("editorState", { ...snapshot, freshExtraction: true });
+      await idbSet("editor-source-game", game);
+      const originals = { ...((await idbGet<Record<string, string>>("originalTexts")) || {}) };
+      for (const e of snapshot.entries) originals[`${e.msbtFile}:${e.index}`] = e.original;
+      await idbSet("originalTexts", originals);
+      navigate("/editor");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  }, [selectedPart, navigate, storePreviousGoldenSunTranslations]);
+
   const loadLostAgeCatalog = useCallback(async (file: File) => {
+    if (selectedPart !== "second") {
+      toast.error("اختر قسم الجزء الثاني أولًا");
+      return;
+    }
     setCatalogBusy(true);
     try {
       const rom = await idbGet<ArrayBuffer>(GOLDENSUN2_BUFFER_KEY);
@@ -64,6 +121,9 @@ export default function GoldenSun() {
       const signature = goldenSun2CatalogFingerprint(catalog);
       const previousSignature = await idbGet<string>(GOLDENSUN2_CATALOG_SIG_KEY);
       const saved = await idbGet<Record<string, string>>(GOLDENSUN2_TRANSLATIONS_KEY + ":" + signature);
+      const savedSnapshot = await idbGet<{
+        protectedEntries?: string[]; technicalBypass?: string[]; clearedKeys?: string[];
+      }>("editorState:goldensun2:" + signature);
       await storePreviousGoldenSunTranslations();
       const translations = goldenSun2Translations(catalog, {
         ...(saved || {}),
@@ -71,7 +131,12 @@ export default function GoldenSun() {
           ? active?.translations || {} : {}),
       });
       await idbSet(GOLDENSUN2_CATALOG_SIG_KEY, signature);
-      await idbSet("editorState", { entries, translations, freshExtraction: true });
+      await idbSet("editorState", {
+        entries, translations, freshExtraction: true,
+        protectedEntries: savedSnapshot?.protectedEntries || [],
+        technicalBypass: savedSnapshot?.technicalBypass || [],
+        clearedKeys: savedSnapshot?.clearedKeys || [],
+      });
       await idbSet("editor-source-game", GOLDENSUN2_SOURCE_GAME);
       const originals = { ...((await idbGet<Record<string, string>>("originalTexts")) || {}) };
       for (const e of entries) originals[`${e.msbtFile}:${e.index}`] = e.original;
@@ -83,14 +148,17 @@ export default function GoldenSun() {
     } finally {
       setCatalogBusy(false);
     }
-  }, [navigate, storePreviousGoldenSunTranslations]);
+  }, [navigate, storePreviousGoldenSunTranslations, selectedPart]);
 
   const loadRom = useCallback(
     async (file: File) => {
       setBusy(true);
       try {
         const rom = new Uint8Array(await file.arrayBuffer());
-        if (looksLikeGoldenSun2Rom(rom)) {
+        const isSecond = looksLikeGoldenSun2Rom(rom);
+        if (selectedPart === "first" && isSecond) throw new Error("هذا ملف الجزء الثاني؛ اختر قسم The Lost Age أولًا");
+        if (selectedPart === "second" && !isSecond) throw new Error("هذا ليس ROM الجزء الثاني AGFE؛ اختر ملفه الصحيح");
+        if (isSecond) {
           const audit = auditGoldenSun2Rom(rom);
           if (!audit.sizeMatches) throw new Error("حجم ROM الجزء الثاني ليس 16 ميجابايت — لن تُقبل نسخة غير معروفة");
           await idbSet(GOLDENSUN2_BUFFER_KEY, rom.buffer.slice(0));
@@ -107,13 +175,21 @@ export default function GoldenSun() {
         const existing = await idbGet<{ translations?: Record<string, string> }>("editorState");
         const previousGame = await idbGet<string>("editor-source-game");
         const saved = await idbGet<Record<string, string>>("goldensun1Translations");
+        const savedSnapshot = await idbGet<{
+          protectedEntries?: string[]; technicalBypass?: string[]; clearedKeys?: string[];
+        }>("editorState:goldensun");
         await storePreviousGoldenSunTranslations();
         const translations = restoreGoldenSunTranslations(entries, {
           ...(saved || {}),
           ...(previousGame === GOLDENSUN_SOURCE_GAME ? existing?.translations || {} : {}),
         });
 
-        await idbSet("editorState", { entries, translations, freshExtraction: true });
+        await idbSet("editorState", {
+          entries, translations, freshExtraction: true,
+          protectedEntries: savedSnapshot?.protectedEntries || [],
+          technicalBypass: savedSnapshot?.technicalBypass || [],
+          clearedKeys: savedSnapshot?.clearedKeys || [],
+        });
         await idbSet("editor-source-game", GOLDENSUN_SOURCE_GAME);
         await idbSet(GOLDENSUN_BUFFER_KEY, rom.buffer.slice(0));
 
@@ -138,7 +214,7 @@ export default function GoldenSun() {
         setBusy(false);
       }
     },
-    [navigate, storePreviousGoldenSunTranslations]
+    [navigate, storePreviousGoldenSunTranslations, selectedPart]
   );
 
   return (
@@ -154,13 +230,38 @@ export default function GoldenSun() {
           </Link>
         </div>
 
-        <p className="mb-4 text-sm text-muted-foreground">
-          <strong>الجزء الأول (AGSE):</strong> يعمل استخراج النصوص الـ ١٠,٧٢٢ وحمايتها وبناء ROM
-          باستخدام رقعة <code>GoldenSun-AR-RTL-FONT-v8.ups</code> كما كان.
-          <strong> الجزء الثاني (AGFE):</strong> يتعرف على ROM الأصلية (١٦ ميجابايت)،
-          ويسمح بفتح كتالوج نصوص مستخرج خارجيًا داخل نفس المحرر، مع حماية الوسوم وحفظ العمل؛
-          لكن فك جميع النصوص مباشرة من ROM والبناء النهائي لم يكتمل بعد.
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2" role="group" aria-label="اختر جزء Golden Sun">
+          <button type="button" aria-pressed={selectedPart === "first"} disabled={busy || catalogBusy}
+            onClick={() => { setSelectedPart("first"); setLostAgeAudit(null); }}
+            className={`rounded-xl border-2 p-4 text-right transition-colors ${selectedPart === "first" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}>
+            <div className="mb-2 flex items-center gap-2"><BookOpen className="h-5 w-5" /><strong>الجزء الأول</strong></div>
+            <p className="text-sm text-muted-foreground">Golden Sun · AGSE · 8 MB</p>
+            <p className="mt-2 text-xs">استخراج النصوص، الترجمة، الحماية وبناء GBA</p>
+            <p className="mt-2 text-xs text-muted-foreground">الترجمات المحفوظة: {savedCounts.first.toLocaleString("ar")}</p>
+          </button>
+          <button type="button" aria-pressed={selectedPart === "second"} disabled={busy || catalogBusy}
+            onClick={() => setSelectedPart("second")}
+            className={`rounded-xl border-2 p-4 text-right transition-colors ${selectedPart === "second" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}>
+            <div className="mb-2 flex items-center gap-2"><BookMarked className="h-5 w-5" /><strong>الجزء الثاني</strong></div>
+            <p className="text-sm text-muted-foreground">The Lost Age · AGFE · 16 MB</p>
+            <p className="mt-2 text-xs">محرر مشترك وحماية وسوم؛ بناء GBA قيد التطوير</p>
+            <p className="mt-2 text-xs text-muted-foreground">الترجمات المحفوظة: {savedCounts.second.toLocaleString("ar")}</p>
+          </button>
+        </div>
+
+        <div className="mb-5 flex items-start gap-2 rounded-lg border p-3 text-sm">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <span>البرومبتات، مزوّدو الترجمة، أدوات المراجعة، إعدادات المحرر وقواعد حماية الوسوم مشتركة. محفوظات النصوص والترجمات لكل جزء مستقلة.</span>
+        </div>
+        <p className="mb-3 text-sm text-muted-foreground">
+          {selectedPart === "first"
+            ? "الجزء الأول: افتح ROM الأصلية أو النسخة التي تحتوي على رقعة GoldenSun-AR-RTL-FONT-v8.ups. يُفتح المحرر ثم يمكنك بناء GBA."
+            : "الجزء الثاني: افتح ROM AGFE بحجم 16 MB ثم حمّل كتالوج نصوص JSON إلى نفس المحرر. يمكن تصدير الترجمة، لكن إعادة بناء GBA لم تُتحقق بعد."}
         </p>
+        <button type="button" className="mb-4 flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted" onClick={() => void openSavedProject()}>
+          <FileText className="h-4 w-4" />
+          متابعة آخر ترجمات محفوظة للجزء {selectedPart === "first" ? "الأول" : "الثاني"}
+        </button>
 
         <label
           onDragOver={(e) => {
@@ -180,7 +281,7 @@ export default function GoldenSun() {
         >
           {busy ? <Loader2 className="h-8 w-8 animate-spin" /> : <Upload className="h-8 w-8 text-muted-foreground" />}
           <span className="font-medium">{busy ? "يُقرأ الروم…" : "أفلت ملف ‎.gba‎ هنا أو اضغط للاختيار"}</span>
-          <span className="text-xs text-muted-foreground">الملف ٨ ميغابايت ويُقرأ في المتصفّح</span>
+          <span className="text-xs text-muted-foreground">{selectedPart === "first" ? "الجزء الأول — ٨ ميجابايت" : "الجزء الثاني — ١٦ ميجابايت"} ويُقرأ في المتصفح</span>
           <input
             type="file"
             accept=".gba"
@@ -194,7 +295,7 @@ export default function GoldenSun() {
           />
         </label>
 
-        {lostAgeAudit && (
+        {selectedPart === "second" && lostAgeAudit && (
           <section className="mt-5 space-y-3 rounded-xl border p-4" aria-label="فحص Golden Sun الجزء الثاني">
             <h2 className="font-semibold">Golden Sun: The Lost Age — الجزء الثاني</h2>
             <p className="text-sm">تعرّفت الأداة على AGFE وحجم {lostAgeAudit.romSize.toLocaleString("ar")} بايت. هذه مرحلة فحص فقط، وليست استخراجًا كاملًا للحوارات: نصوص القصة مضغوطة بصيغة تحتاج مفككًا خاصًا بها.</p>
@@ -223,10 +324,11 @@ export default function GoldenSun() {
             (مثلاً <code>{"\\x02"}</code> نهاية الصندوق، <code>{"\\x03"}</code> سطر جديد،
             <code>{"\\x11\\x01"}</code> اسم البطل). السطر الذي يسقط منه واحد منها يُرفض ولا يُكتب.
           </p>
-          <p>
-            <strong className="text-foreground">حد الطول</strong> فعلي: كل سطر يُضغَط بعد الترجمة
-            ويجب ألا يتجاوز ٢٥٤ بايتاً مضغوطاً — البناء يرفض ويسمّي أي سطر يتجاوزه.
-          </p>
+          {selectedPart === "first" ? (
+            <p><strong className="text-foreground">حد الطول للجزء الأول:</strong> ٢٥٤ بايتاً مضغوطاً للسطر؛ البناء يرفض ما يتجاوز ذلك.</p>
+          ) : (
+            <p><strong className="text-foreground">الجزء الثاني:</strong> لم يُحدد حد النصوص المضغوطة بعد؛ لن تدّعي الأداة أن ترجمات JSON قابلة للبناء حتى يكتمل محرك AGFE.</p>
+          )}
         </div>
       </div>
     </div>

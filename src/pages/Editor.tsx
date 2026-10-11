@@ -140,6 +140,7 @@ const Editor = () => {
               entries: [{ key: 'test:0', original: 'Hello' }],
               provider,
               userApiKey: provider === 'gemini' ? (editor.userGeminiKey || undefined) : undefined,
+              routingMode: provider === 'gemini' ? editor.aiRoutingMode : undefined,
               providerApiKey: providerApiKey || undefined,
               aiModel: editor.aiModel,
             }),
@@ -157,7 +158,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.userCodeCraftKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.userCodeCraftKey, editor.aiModel, editor.aiRoutingMode]);
 
   const workspaceGame = LIBRARY_GAMES.find(game => game.sourceId === (sourceGame === "risen" ? "risen1" : sourceGame));
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";

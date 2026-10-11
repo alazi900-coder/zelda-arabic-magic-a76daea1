@@ -40,14 +40,19 @@ export function hasExactMaskedTechnicalSequence(sourceMasked: string, translatio
 
 const GS_FULL_TECH_RE = /\\x[0-9a-fA-F]{2}|\{[A-Za-z][A-Za-z0-9_]*(?::[^{}\r\n]*)?\}|\[[A-Za-z/][A-Za-z0-9_/]*(?:[:=][^\]\r\n]*)?\]|<\/?[A-Za-z][^>]*>|%(?:\d+\$)?[\d.$-]*[sdif]|[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
 
+// Reject visual Arabic presentation forms and invisible direction characters:
+// the game renderer, not the translation text, performs Arabic shaping/RTL.
+const GS_UNSAFE_UNICODE_RE = /[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const GS_NEWLINE_RE = /\r\n|\n|\\n/g;
+
 export function goldenSunAllTechnicalTagsUnchanged(source: string, translation: string): boolean {
-  if (!goldenSunCodesUnchanged(source, translation)) return false;
-  const norm = (text: string) => (text.match(GS_FULL_TECH_RE) || []).map(tag =>
-    /^\\x/i.test(tag) ? tag.toLowerCase() : tag,
-  );
+  if (!goldenSunCodesUnchanged(source, translation) || GS_UNSAFE_UNICODE_RE.test(translation)) return false;
+  // Compare line breaks in the *same* sequence as runtime tokens, not as an
+  // independent count that could miss a line break moved past a page marker.
+  const norm = (text: string) => [...text.matchAll(new RegExp(
+    GS_FULL_TECH_RE.source + "|" + GS_NEWLINE_RE.source, "g",
+  ))].map(match => /^\\x/i.test(match[0]) ? match[0].toLowerCase() : match[0].replace(/^\r\n$/, "\n"));
   const a = norm(source);
   const b = norm(translation);
-  if (a.length !== b.length || a.some((tag, i) => tag !== b[i])) return false;
-  // Real hard line breaks have an independent meaning from the GBA \x03 byte.
-  return (source.match(/\n/g) || []).length === (translation.match(/\n/g) || []).length;
+  return a.length === b.length && a.every((tag, i) => tag === b[i]);
 }

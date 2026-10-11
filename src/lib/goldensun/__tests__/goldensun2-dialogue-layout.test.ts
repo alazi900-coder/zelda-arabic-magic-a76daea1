@@ -51,6 +51,14 @@ describe("AGFE pixel-safe dialogue wrapping", () => {
       [...Array.from({ length: 50 }, () => 0xf0), 0x1e])).toThrow(/كلمة واحدة/);
   });
 
+  it("does not treat opaque argument 0x1E as a dialogue terminator", () => {
+    const source = [0x11, 0x1e, 0x41];
+    const bytes = words(12);
+    const result = layoutGoldenSun2Dialogue(font(), source, bytes);
+    expect(result.eligible).toBe(false);
+    expect(result.bytes).toEqual(bytes);
+  });
+
   it("does not guess layout or insert controls in an unknown menu string", () => {
     const bytes = words(20);
     const r = layoutGoldenSun2Dialogue(font(), [0x41, 0x42], bytes);

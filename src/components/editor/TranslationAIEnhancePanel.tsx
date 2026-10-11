@@ -748,7 +748,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب
     // تكرار نفس نمط الخطأ. نجلبها مرّة واحدة قبل كل الدفعات (نفس القائمة لكلّها).
-    const learnedFeedback = await getRecentFeedbackForPrompt().catch(() => "");
+    const learnedFeedback = await getRecentFeedbackForPrompt(8, gameParam).catch(() => "");
 
     // توقيع سياق الفحص — أي تغيير فيه (موديل/وضع/قواعد/تعليمات) يُبطل الكاش تلقائياً.
     const cacheContextSignature = [
@@ -1127,7 +1127,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const type = 'suggested' in item ? item.type : (item.category || 'wrong');
     if (!applyOne(item.key, editingText, item.original)) return;
     if (editingText.trim() !== aiSuggested.trim()) {
-      recordFeedback({ type, original: item.original, aiSuggested, userAction: "edited", userFinal: editingText });
+      recordFeedback({ profile: gameParam, type, original: item.original, aiSuggested, userAction: "edited", userFinal: editingText });
     }
     setEditingKey(null);
     setEditingText("");
@@ -1184,7 +1184,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     if (cur) markReviewed(key, cur, "dismissed").then(() => loadReviewMemory().then(setReviewMem));
     const aiSuggested = 'suggested' in item ? item.suggested : item.suggestion;
     const type = 'suggested' in item ? item.type : (item.category || 'wrong');
-    recordFeedback({ type, original: item.original, aiSuggested, userAction: "dismissed" });
+    recordFeedback({ profile: gameParam, type, original: item.original, aiSuggested, userAction: "dismissed" });
     setSuggestions(prev => prev.filter(s => s.key !== key));
     setGrammarIssues(prev => prev.filter(g => g.key !== key));
   };

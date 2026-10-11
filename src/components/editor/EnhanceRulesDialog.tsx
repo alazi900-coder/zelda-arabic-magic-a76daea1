@@ -1,5 +1,6 @@
 import { AI_PROFILE_NAMES, type AiGameProfile } from "@/lib/ai-game-profiles";
 import { useState, useEffect } from "react";
+import { GoldenSunRuleSafetyTester } from "./GoldenSunRuleSafetyTester";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -265,6 +266,8 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved, profile = "xen
                 </div>
               </div>
             )}
+
+            {profile === "goldensun2" && <GoldenSunRuleSafetyTester />}
 
             {/* زرّ إضافة دائم */}
             {!editing && (

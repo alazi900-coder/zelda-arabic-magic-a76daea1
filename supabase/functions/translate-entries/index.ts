@@ -1,6 +1,6 @@
 import { RISEN_TAG_REGEX } from "../_shared/risen-tag-mask.ts";
 import { PLAT_TAG_RE } from "../_shared/plat-tag-mask.ts";
-import { GOLDEN_SUN_2_SYSTEM_PROMPT, goldenSunCodesUnchanged, hasExactMaskedTechnicalSequence } from "../_shared/goldensun-cerebras.ts";
+import { GOLDEN_SUN_2_SYSTEM_PROMPT, goldenSunCodesUnchanged, goldenSunAllTechnicalTagsUnchanged, hasExactMaskedTechnicalSequence } from "../_shared/goldensun-cerebras.ts";
 import { callGeminiWithRecovery, extractGeminiText } from "../_shared/gemini-recovery.ts";
 import { GMICLOUD_OPENAI_BASE_URL, resolveGmiCloudTextModel } from "../_shared/gmicloud.ts";
 
@@ -761,7 +761,7 @@ function restoreAndEnforce(original: string, translated: string, tags: Map<strin
   // Golden Sun must not undergo generic AI line balancing: \x03 and \x1E are
   // game-engine layout/control bytes, not ordinary paragraph separators.
   if (_game === 'goldensun2' || _game === 'goldensun') {
-    return goldenSunCodesUnchanged(original, restored) ? restored : original;
+    return goldenSunAllTechnicalTagsUnchanged(original, restored) ? restored : original;
   }
   const enforced = enforceTagIntegrity(original, restored);
 
@@ -1825,7 +1825,7 @@ async function translateWithOpenAICompat(
     if (glossaryMap) translated = applyGlossaryPost(translated, glossaryMap);
     const output = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
     if ((_game === 'goldensun2' || _game === 'goldensun') &&
-        (!goldenSunCodesUnchanged(item.entry.original, output) ||
+        (!goldenSunAllTechnicalTagsUnchanged(item.entry.original, output) ||
           !/[\u0600-\u06FF]/.test(output.replace(/\\x[0-9a-fA-F]{2}/g, '')))) {
       console.warn(`[Golden Sun] rejected non-Arabic or damaged control-code output at ${item.entry.key}`);
       continue;

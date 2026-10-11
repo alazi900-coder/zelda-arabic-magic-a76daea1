@@ -10,11 +10,14 @@
  */
 
 import { idbGet, idbSet } from "./idb-storage";
+import type { AiGameProfile } from "./ai-game-profiles";
 
 const KEY = "enhance-feedback-memory-v1";
 const MAX_ENTRIES = 300;
 
 export interface FeedbackEntry {
+  /** The game that produced this feedback. Legacy records belong to Xenoblade. */
+  profile?: AiGameProfile;
   /** EnhanceSuggestion.type أو GrammarIssue.category — تصنيف حرّ، لا نفرض تطابقاً بين الاثنين. */
   type: string;
   original: string;
@@ -82,9 +85,10 @@ export function formatFeedbackForPrompt(entries: FeedbackEntry[]): string {
 }
 
 /** آخر N إدخال، جاهزة كنصّ مباشر للحقن في الـ prompt. */
-export async function getRecentFeedbackForPrompt(limit = 8): Promise<string> {
+export async function getRecentFeedbackForPrompt(limit = 8, profile: AiGameProfile = "xenoblade"): Promise<string> {
   const store = await loadStore();
-  const recent = [...store].sort((a, b) => b.ts - a.ts).slice(0, limit);
+  const recent = store.filter(e => (e.profile || "xenoblade") === profile)
+    .sort((a, b) => b.ts - a.ts).slice(0, limit);
   return formatFeedbackForPrompt(recent);
 }
 

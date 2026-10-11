@@ -403,6 +403,17 @@ function preservesGtaIvDollarAmountSequence(original: string, candidate: string)
   return before.length === after.length && before.every((amount, index) => normalize(amount) === normalize(after[index] || ''));
 }
 
+/** The GBA control bytes are never prose. This guard runs AFTER every AI response,
+ * not merely inside a prompt which an LLM is free to disregard.
+ */
+function preservesGoldenSunCodes(original: string, suggested: string): boolean {
+  const token = /\\x[0-9a-fA-F]{2}/g;
+  const before = (original.match(token) || []).map(t => t.toUpperCase());
+  const after = (suggested.match(token) || []).map(t => t.toUpperCase());
+  if (/\\x(?![0-9a-fA-F]{2})/i.test(suggested)) return false;
+  return before.length === after.length && before.every((t, i) => t === after[i]);
+}
+
 function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
@@ -421,7 +432,8 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
     (!isInazuma || preservesInazumaTokenSequence(original, suggested)) &&
     (!isFranBow || preservesFranBowTokenSequence(original, suggested)) &&
     (!isTwom || preservesTwomTokens(original, suggested)) &&
-    (!isGtaSa || preservesGtaSaTokenSequence(original, suggested));
+    (!isGtaSa || preservesGtaSaTokenSequence(original, suggested)) &&
+    preservesGoldenSunCodes(original, suggested);
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -644,7 +656,11 @@ Deno.serve(async (req) => {
     const isFranBow = game === 'franbow';
     const isTwom = game === 'twom';
     const isGtaSa = game === 'gtasa';
-    const gameLabel = isGtaSa
+    const isGoldenSun = game === 'goldensun' || game === 'goldensun2';
+    const gameLabel = isGoldenSun
+      ? game === 'goldensun2' ? 'Golden Sun: The Lost Age (GBA)' : 'Golden Sun (GBA)'
+      : game === 'generic' ? 'مشروع ألعاب عام غير محدد'
+      : isGtaSa
       ? 'GTA San Andreas'
       : isTwom
       ? 'This War of Mine: Stories'
@@ -671,7 +687,11 @@ Deno.serve(async (req) => {
       : isFranBow
       ? 'Fran Bow'
       : isMetroidPrime ? 'Metroid Prime Remastered' : isMother3 ? 'MOTHER 3' : isRisen ? 'Risen' : 'Xenoblade Chronicles 1';
-    const forgetOtherGame = isGtaSa
+    const forgetOtherGame = isGoldenSun
+      ? '\nمراجعة خاصة بلعبة Golden Sun على GBA. كن دقيقاً في معنى الحوار، ولا تستخدم شخصيات أو مصطلحات من أي لعبة أخرى. جميع رموز التحكم على هيئة \\xNN محمية ولا يجوز حذف أي منها أو إضافته أو تغيير ترتيبه. لا تعكس حروف العربية ولا تضف محارف BiDi أو Presentation Forms؛ تنسيق العرض مسؤولية بناء ROM.\n'
+      : game === 'generic'
+      ? '\nمراجعة عامة غير مرتبطة بأي لعبة محددة. لا تفترض أسماء أو مصطلحات أو وسوماً من ألعاب أخرى؛ استند حصراً إلى النص والقاموس.\n'
+      : isGtaSa
       ? '\nهذه مراجعة خاصة بـ GTA San Andreas — جريمة وعصابات في لوس سانتوس وسان فييرو ولاس فنتورا عام 1992، بلغة شارع خشنة وسخرية. لا تفترض مصطلحات أو شخصيات أو وسوماً من Xenoblade أو أي لعبة أخرى، ولا من ألعاب Grand Theft Auto الأخرى؛ استند فقط إلى النص والقاموس المعطى. كل ما بين علامتين ~…~ رمز تقني تضعه اللعبة وليس كلاماً، فأبقِه بعدده وترتيبه.'
       : isTwom
       ? '\nهذه مراجعة خاصة بـ This War of Mine: Stories — مدنيون يحاولون النجاة في مدينة محاصرة. لا تفترض مصطلحات أو شخصيات من Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. وسوم الجنس `{mr|…}` `{fr|…}` `{ms|…}` `{fs|…}`: أبقِ بداية الوسم ونهايته حرفياً وترجم ما بينهما، ويجوز نقل الفعل كاملاً داخل الوسم. الرموز `^CharacterName^` و`<BR>` و`|XPadA|` و`|#color=…|` تبقى بنفس العدد حرفياً.\n'
@@ -802,7 +822,7 @@ Deno.serve(async (req) => {
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow || isTwom || isGtaSa
+    const properNounsSection = isGoldenSun || game === 'generic' || isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow || isTwom || isGtaSa
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -820,6 +840,15 @@ Deno.serve(async (req) => {
         'من الشكل {NAME} أو {NAME N} أو {NAME N, N, N} بأحرف كبيرة — وهي وسوم محرّك Platinum نفسه مثل {COLOR 1} و{STRVAR_1 3, 0, 0}، قيمٌ يضعها الأصل حرفياً. انقلها كما هي حرفاً بحرف بنفس عددها وترتيبها. لا وسوم أخرى في هذه اللعبة، فلا تُضِف وسماً من لعبة أخرى'
       );
     }
+    if (isGoldenSun || game === 'generic') {
+      // Never send Xenoblade's technical tag examples to unrelated games.
+      ruleSections.protect = ruleSections.protect.replace(
+        '⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.',
+        isGoldenSun
+          ? '⚠️ حافظ على رموز Golden Sun \\xNN الموجودة في المصدر بالعدد والترتيب نفسه.'
+          : '⚠️ حافظ على الرموز التقنية الموجودة في المصدر كما هي، ولا تضف رموز ألعاب أخرى.'
+      );
+    }
     if (isPokemonXp) {
       ruleSections.protect = `${ruleSections.protect}\n⚠️ عقد Pokémon Essentials ثابت: كل __PXPTOKEN_n__ يمثل أمراً من الأصل مثل \\PN أو \\v[1] أو \\c[2] أو \\n أو \\wt[10] أو \\dxn[Name] أو \\b. انقله كما هو وبالعدد والترتيب نفسه؛ لا تضف placeholder ولا تحذفه ولا تغيّر رقمه أو محتواه.`;
     }
@@ -829,7 +858,9 @@ Deno.serve(async (req) => {
         '⚠️ عقد LumenTale التقني ثابت: انقل كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل حرفاً بحرف وبالترتيب نفسه. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
       );
     }
-    const strictTokenSafetyRule = isPokemonXp
+    const strictTokenSafetyRule = isGoldenSun
+      ? 'قاعدة أمان Golden Sun: كل رمز من الشكل \\xNN في النص الأصلي يجب أن يبقى بالقيمة والعدد والترتيب نفسه حرفياً في كل اقتراح وبديل. لا تعكس العربية ولا تخترع وسماً من لعبة أخرى.'
+      : isPokemonXp
       ? 'قاعدة أمان غير قابلة للتجاوز في Pokémon Essentials: كل __PXPTOKEN_n__ في الأصل يجب أن يظهر في suggestion وكل بديل بالقيمة والترتيب نفسيهما. لا تضف أو تحذف أو تعيد ترتيب placeholder، ولا تضف علامات BiDi خفية أو تشكيلًا عربياً أو Presentation Forms.'
       : isLumenTale
       ? 'قاعدة أمان غير قابلة للتجاوز في LumenTale: يجب أن يحتوي الاقتراح على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
@@ -837,8 +868,12 @@ Deno.serve(async (req) => {
       ? 'قاعدة أمان غير قابلة للتجاوز في GTA IV: يجب أن يحتوي الاقتراح على كل رمز بين ~...~ وكل مبلغ دولار ظاهر من الأصل (مثل $100 و$20m) بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تنقل أيّاً منها، ولا تترك علامة ~ منفردة.'
       : isPlatinum
       ? 'قاعدة أمان غير قابلة للتجاوز في Pokémon Platinum: إذا كان الأصل يحتوي وسوماً من الشكل {NAME} أو {NAME N} أو {NAME N, N, N} مثل {COLOR 1} أو {STRVAR_1 3, 0, 0}، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالقيمة والعدد والترتيب نفسه حرفاً بحرف. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.'
-      : 'قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
-    const strictTokenSafetyBullet = isPokemonXp
+      : game === 'xenoblade'
+      ? 'قاعدة أمان غير قابلة للتجاوز: إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالعدد والترتيب نفسه.'
+      : 'قاعدة أمان غير قابلة للتجاوز: احفظ رموز التحكم والوسوم التقنية الموجودة في النص الأصلي بالقيمة والعدد والترتيب نفسها، دون إضافة رموز من ألعاب أخرى.';
+    const strictTokenSafetyBullet = isGoldenSun
+      ? '- في Golden Sun كل \\xNN جزء من صيغة ROM التقنية؛ لا تضف أو تحذف أو تغيّر أو تعيد ترتيب أي رمز، ولا تولّد وسوماً من الألعاب الأخرى.'
+      : isPokemonXp
       ? '- في Pokémon Essentials يجب أن يحتوي suggested وكل بديل على كل __PXPTOKEN_n__ من الأصل بالقيمة والترتيب نفسيهما، ومن دون علامات BiDi خفية أو تشكيل أو Presentation Forms.'
       : isLumenTale
       ? '- في LumenTale يجب أن يحتوي suggested وكل بديل على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف.'
@@ -846,7 +881,9 @@ Deno.serve(async (req) => {
       ? '- في GTA IV يجب أن يحتوي suggested وكل بديل على كل رمز بين ~...~ وكل مبلغ دولار ظاهر بالقيمة والترتيب نفسيهما حرفاً بحرف، ومن دون علامة ~ منفردة.'
       : isPlatinum
       ? '- في Pokémon Platinum يجب أن يحتوي suggested وكل بديل على كل وسم من الشكل {NAME} أو {NAME N, ...} مثل {COLOR 1} من الأصل بالقيمة والعدد والترتيب نفسه حرفاً بحرف.'
-      : '- إذا كان الأصل يحتوي وسوماً تقنية مثل [XENO:n] أو [XENO:wait ...] أو [ML:...] أو رموز PUA، فيجب أن يحتوي suggested على نفس الوسوم بالعدد والترتيب نفسه. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.';
+      : game === 'xenoblade'
+      ? '- احفظ وسوم Xenoblade مثل [XENO:n] و[ML:...] بالقيمة والترتيب نفسيهما.'
+      : '- احفظ فقط الرموز التقنية الموجودة فعلاً في النص الأصلي، ولا تخترع رموزاً من ألعاب أخرى.';
     if (ruleSections.detectCount === 0) {
       return new Response(JSON.stringify({ suggestions: [], issues: [], results: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

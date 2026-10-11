@@ -1,3 +1,4 @@
+import { resolveAiGameProfile } from "@/lib/ai-game-profiles";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
 import { idbSet, idbGet, checkAndMigrateSchema } from "@/lib/idb-storage";
@@ -147,6 +148,12 @@ export function useEditorState() {
 
   // === Core state ===
   const [state, setState] = useState<EditorState | null>(null);
+  useEffect(() => {
+    const first = state?.entries[0]?.msbtFile;
+    if (!first) return;
+    settings.setActiveAiGameProfile(resolveAiGameProfile(first, risenVariant));
+  }, [state?.entries, risenVariant, settings.setActiveAiGameProfile]);
+
   const [search, setSearch] = useState("");
   const [filterFile, setFilterFile] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string[]>([]);

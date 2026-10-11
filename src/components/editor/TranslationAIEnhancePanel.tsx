@@ -10,7 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { resolveGameParam } from "@/lib/game-param";
+import {
+  resolveAiGameProfile, AI_PROFILE_NAMES, profileDefaultPrompt,
+  loadAiProfilePrompt, saveAiProfilePrompt, fingerprintAiContext,
+} from "@/lib/ai-game-profiles";
+import { validateGoldenSun2Translation } from "@/lib/goldensun/goldensun2-editor-bridge";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
 import { requestCodeCraftJson, fetchCodeCraftModels } from "@/lib/codecraft-direct";
 import { requestAlborihiJson } from "@/lib/alborihi-direct";
@@ -274,7 +278,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 }) => {
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
   const isRisen = /\.tab$/i.test(entries[0]?.msbtFile || "");
-  const gameParam = resolveGameParam(entries[0]?.msbtFile, risenVariant);
+  const gameParam = resolveAiGameProfile(entries[0]?.msbtFile, risenVariant);
+  const isGoldenSun = gameParam === "goldensun" || gameParam === "goldensun2";
   const isLumenTale = gameParam === "lumentale";
   const isGtaIv = gameParam === "gtaiv";
   const isPokemonXp = gameParam === "pokemon-xp";
@@ -286,6 +291,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const unsafeSuggestionReason = (original: string, previous: string, suggestion: string): string | null => {
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
+    }
+    if (isGoldenSun && !validateGoldenSun2Translation(original, suggestion).valid) {
+      return "اقتراح Golden Sun يغيّر أو يحذف رمز تحكم محمياً مثل \\x03 أو \\x1E.";
     }
     if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
     if (isPokemonXp) return validatePokemonXpTechnicalTokens(original, suggestion).reason;
@@ -379,11 +387,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [editingText, setEditingText] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showRulesDialog, setShowRulesDialog] = useState(false);
-  const [enabledRules, setEnabledRules] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules());
-  const [customRules, setCustomRules] = useState<EnhanceRule[]>(() => loadCustomRules());
+  const [profilePrompt, setProfilePrompt] = useState(() => loadAiProfilePrompt(gameParam));
+  const gameReviewInstructions = gameParam === "xenoblade"
+    ? extraInstructions?.trim() || ""
+    : [profileDefaultPrompt(gameParam), extraInstructions?.trim() || "", profilePrompt.trim()].filter(Boolean).join("\n\n");
+  const [enabledRules, setEnabledRules] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules(gameParam));
+  const [customRules, setCustomRules] = useState<EnhanceRule[]>(() => loadCustomRules(gameParam));
   // تعديلات المستخدم على prompts القواعد المبنيّة. تُرسل إلى الـedge function
   // حتى يُطبّقها على نسخته المثبّتة من RULES قبل إرسالها للـAI.
-  const [builtinOverrides, setBuiltinOverrides] = useState<Record<string, BuiltinOverride>>(() => loadBuiltinOverrides());
+  const [builtinOverrides, setBuiltinOverrides] = useState<Record<string, BuiltinOverride>>(() => loadBuiltinOverrides(gameParam));
   const [appliedHistory, setAppliedHistory] = useState<{ key: string; previous: string; applied: string; ts: number }[]>([]);
   const [deepSeekThinking, setDeepSeekThinking] = useState<boolean>(() => {
     try {
@@ -409,6 +421,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   /** Maps key → translation text at the time of last scan. */
   const processedKeysRef = useRef<Map<string, string>>(new Map());
 
+  // A new ROM belongs to a different profile, not a new tab of Xenoblade.
+  React.useEffect(() => {
+    setEnabledRules(loadEnabledRules(gameParam));
+    setCustomRules(loadCustomRules(gameParam));
+    setBuiltinOverrides(loadBuiltinOverrides(gameParam));
+    setProfilePrompt(loadAiProfilePrompt(gameParam));
+    setSuggestions([]);
+    setGrammarIssues([]);
+    processedKeysRef.current.clear();
+    abortControllerRef.current?.abort();
+    setIsAnalyzing(false);
+  }, [gameParam]);
+
   // Load persistent review memory once
   React.useEffect(() => {
     loadReviewMemory().then(setReviewMem);
@@ -428,7 +453,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     switch (scope) {
       case "short": return t.length < 30;
       case "long": return t.length >= 100;
-      case "with_tags": return /[\uE000-\uF8FF]|\[[A-Z][^\]]*\]/.test(e.original);
+      case "with_tags": return /[\uE000-\uF8FF]|\[[A-Z][^\]]*\]|\\x[0-9a-fA-F]{2}/.test(e.original);
       case "no_arabic": return !/[\u0600-\u06FF]/.test(t);
       default: return true;
     }
@@ -436,9 +461,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
   const analyzeTranslations = async (mode: "enhance" | "grammar" | "combined") => {
     fallbackNoticeShownRef.current = false;
-    const currentEnabledRules = loadEnabledRules();
-    const currentCustomRules = loadCustomRules();
-    const currentBuiltinOverrides = loadBuiltinOverrides();
+    const currentEnabledRules = loadEnabledRules(gameParam);
+    const currentCustomRules = loadCustomRules(gameParam);
+    const currentBuiltinOverrides = loadBuiltinOverrides(gameParam);
     setEnabledRules(currentEnabledRules);
     setCustomRules(currentCustomRules);
     setBuiltinOverrides(currentBuiltinOverrides);
@@ -723,15 +748,16 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
     // أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة — تُحقن في الـ prompt لتجنّب
     // تكرار نفس نمط الخطأ. نجلبها مرّة واحدة قبل كل الدفعات (نفس القائمة لكلّها).
-    const learnedFeedback = await getRecentFeedbackForPrompt().catch(() => "");
+    const learnedFeedback = await getRecentFeedbackForPrompt(8, gameParam).catch(() => "");
 
     // توقيع سياق الفحص — أي تغيير فيه (موديل/وضع/قواعد/تعليمات) يُبطل الكاش تلقائياً.
     const cacheContextSignature = [
-      mode, requestModel, effectiveProvider, aiRoutingMode,
+      "profiles-v1", gameParam, mode, requestModel, effectiveProvider, aiRoutingMode,
       Array.from(currentEnabledRules).sort().join(","),
       JSON.stringify(currentCustomRules),
       JSON.stringify(currentBuiltinOverrides),
-      extraInstructions?.trim() || "",
+      gameReviewInstructions,
+      fingerprintAiContext(glossary || ""),
     ].join("~");
 
     // مرّ على الكاش المحلّي أولاً — تخطَّ أي نصّ سبق فحصه بنفس السياق ولم يتغيّر
@@ -814,7 +840,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       builtinOverrides: currentBuiltinOverrides,
       passes: SCAN_PASSES,
       game: gameParam,
-      extraInstructions: extraInstructions?.trim() || undefined,
+      extraInstructions: gameReviewInstructions || undefined,
       learnedFeedback: learnedFeedback || undefined,
       routingMode: aiRoutingMode,
       userGeminiKey: userGeminiKey || undefined,
@@ -836,7 +862,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           model: requestModel,
           signal: abortSignal,
           system: `You are an Arabic video-game localization QA editor. Analyze only the supplied translations. Preserve every technical token, variable, control code, placeholder, rich-text tag, number, and line-break marker exactly. Return ONLY valid JSON with this exact top-level shape: ${responseShape}. Include an item only when a genuine improvement is needed. Reasons must be concise Arabic.${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,
-          user: JSON.stringify({ mode, entries: textsToAnalyze, glossary, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules, builtinOverrides: currentBuiltinOverrides, game: gameParam, extraInstructions: extraInstructions?.trim() || undefined, learnedFeedback: learnedFeedback || undefined }),
+          user: JSON.stringify({ mode, entries: textsToAnalyze, glossary, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules, builtinOverrides: currentBuiltinOverrides, game: gameParam, extraInstructions: gameReviewInstructions || undefined, learnedFeedback: learnedFeedback || undefined }),
         });
         return { data, error: null };
       }
@@ -1101,7 +1127,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const type = 'suggested' in item ? item.type : (item.category || 'wrong');
     if (!applyOne(item.key, editingText, item.original)) return;
     if (editingText.trim() !== aiSuggested.trim()) {
-      recordFeedback({ type, original: item.original, aiSuggested, userAction: "edited", userFinal: editingText });
+      recordFeedback({ profile: gameParam, type, original: item.original, aiSuggested, userAction: "edited", userFinal: editingText });
     }
     setEditingKey(null);
     setEditingText("");
@@ -1158,7 +1184,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     if (cur) markReviewed(key, cur, "dismissed").then(() => loadReviewMemory().then(setReviewMem));
     const aiSuggested = 'suggested' in item ? item.suggested : item.suggestion;
     const type = 'suggested' in item ? item.type : (item.category || 'wrong');
-    recordFeedback({ type, original: item.original, aiSuggested, userAction: "dismissed" });
+    recordFeedback({ profile: gameParam, type, original: item.original, aiSuggested, userAction: "dismissed" });
     setSuggestions(prev => prev.filter(s => s.key !== key));
     setGrammarIssues(prev => prev.filter(g => g.key !== key));
   };
@@ -1577,13 +1603,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
 
         {/* Rules dialog */}
         <EnhanceRulesDialog
+          profile={gameParam}
           open={showRulesDialog}
           onOpenChange={setShowRulesDialog}
           onSaved={(enabled, allRules) => {
             setEnabledRules(enabled);
             setCustomRules(allRules.filter(r => r.custom));
             // أعد تحميل overrides بعد الحفظ حتى يجري إرسالها للـAI في الطلبات التالية.
-            setBuiltinOverrides(loadBuiltinOverrides());
+            setBuiltinOverrides(loadBuiltinOverrides(gameParam));
             resetProcessedKeys();
             setSuggestions([]);
             setGrammarIssues([]);
@@ -1594,6 +1621,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         />
 
 
+
+        <div className="mt-2 text-xs text-muted-foreground flex items-center justify-between gap-2 flex-wrap">
+          <span>ملف التحسين: <strong className="text-foreground">{AI_PROFILE_NAMES[gameParam]}</strong></span>
+          <span>القواعد والبرومبتات خاصة بهذه اللعبة فقط</span>
+        </div>
 
         {/* Stats bar */}
         <div className="flex items-center gap-4 mt-2 flex-wrap">
@@ -1613,6 +1645,24 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         {/* Settings panel */}
         {showSettings && (
           <div className="mt-3 p-3 rounded-lg border bg-muted/20 space-y-2">
+            <div className="space-y-1.5 rounded-md border p-2">
+              <label className="text-xs font-semibold">برومبت مراجعة {AI_PROFILE_NAMES[gameParam]}</label>
+              <p className="text-[10px] text-muted-foreground">
+                يُستخدم مع قواعد اللعبة المختارة فقط. النموذج ومفاتيح الذكاء الاصطناعي مشتركة.
+              </p>
+              <Textarea
+                value={profilePrompt}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setProfilePrompt(value);
+                  saveAiProfilePrompt(gameParam, value);
+                  processedKeysRef.current.clear();
+                }}
+                placeholder={profileDefaultPrompt(gameParam) || "تعليمات إضافية خاصة بهذه اللعبة"}
+                dir="rtl"
+                className="min-h-[88px] text-xs"
+              />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-muted-foreground mb-1 block">النموذج</label>

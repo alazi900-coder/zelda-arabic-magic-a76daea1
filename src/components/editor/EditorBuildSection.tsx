@@ -30,7 +30,7 @@ import { buildSteinsGateIso, STEINSGATE_WORKSPACE_KEY, type SteinsGateWorkspace 
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
 import { idbGet, idbSet } from "@/lib/idb-storage";
-import { exportGoldenSun2Catalog, GOLDENSUN2_SOURCE_GAME, GOLDENSUN2_TRANSLATIONS_KEY } from "@/lib/goldensun/goldensun2-editor-bridge";
+import { exportGoldenSun2Catalog, GOLDENSUN2_SOURCE_GAME, GOLDENSUN2_TRANSLATIONS_KEY, GOLDENSUN2_CATALOG_SIG_KEY } from "@/lib/goldensun/goldensun2-editor-bridge";
 import { exportCrashlandsJson } from "@/lib/crashlands/crashlands-editor-bridge";
 import { exportNinthDawnJson } from "@/lib/ninthdawn/ninthdawn-editor-bridge";
 import { exportFranBowJson } from "@/lib/franbow/franbow-editor-bridge";
@@ -803,6 +803,8 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         const catalog = exportGoldenSun2Catalog(entries, translations);
         if (!catalog.entries.length) throw new Error("لم تُفتح أي نصوص للجزء الثاني");
         await idbSet(GOLDENSUN2_TRANSLATIONS_KEY, translations);
+        const signature = await idbGet<string>(GOLDENSUN2_CATALOG_SIG_KEY);
+        if (signature) await idbSet(GOLDENSUN2_TRANSLATIONS_KEY + ":" + signature, translations);
         const blob = new Blob([JSON.stringify(catalog, null, 2)], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");

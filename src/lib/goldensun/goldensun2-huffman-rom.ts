@@ -12,7 +12,8 @@
 import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
 import { validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
-import { tokenizeGoldenSunBytes } from "./goldensun-tags";
+import { tokenizeGoldenSunBytes, isGoldenSunPlainAscii } from "./goldensun-tags";
+import { GOLDENSUN_ARABIC_BYTE_MAP } from "./goldensun-arabic-font";
 
 export const GS2_STRING_COUNT = 12288;
 export const GS2_CHUNK_COUNT = 48;
@@ -58,10 +59,17 @@ const align2 = (v: number) => (v + 1) & ~1;
 export function isGoldenSun2ArabicFontRom(rom: Uint8Array): boolean {
   // Signature from the previously tested experimental AGFE RTL/font v1 patch.
   // Not a general declaration that every Arabic letter displays correctly.
+  // Require the ported menu renderer and both large/small GS1 font slots,
+  // not merely the older dialogue-only RTL experiment.
   return rom.length >= GS2_ORIGINAL_ROM_SIZE &&
     rom[0x10d000] === 0xf0 && rom[0x10d001] === 0xb5 &&
     rom[0x10d002] === 0x04 && rom[0x10d003] === 0x1c &&
-    rom[0x39e00] === 0xd3;
+    rom[0x39e00] === 0xd3 &&
+    rom[0x10d100] === 0xf0 && rom[0x10d101] === 0xb5 &&
+    rom[0x10d102] === 0xff && rom[0x10d103] === 0xb0 &&
+    rom[0x682010 + 0xf0 * 32] === 0x44 &&
+    rom[0x5a4e0 + (0xf0 - 0x20) * 32] === 4 &&
+    rom[0x4209a] !== 0xff;
 }
 
 export function hasGoldenSun2TextTables(rom: Uint8Array): boolean {
@@ -94,13 +102,22 @@ export function hasGoldenSun2TextTables(rom: Uint8Array): boolean {
 }
 
 /** No visual reversal: the existing AGFE right-to-left hook owns screen flow. */
-export function goldenSun2BytesToText(bytes: number[]): string {
+const GS2_ARABIC_BYTE_TO_CODEPOINT: Record<number, number> = Object.fromEntries(
+  Object.entries(GOLDENSUN_ARABIC_BYTE_MAP).map(([cp, byte]) => [Number(byte), Number(cp)])
+);
+
+/** Return readable Arabic on ROMs patched with the matching two GS1 fonts.
+ * Raw, unpatched AGFE bytes remain escaped as \xNN when they occupy font slots.
+ */
+export function goldenSun2BytesToText(bytes: number[], arabicFont = false): string {
   let out = "";
-  // Golden Sun 2's controls follow the same parameter-byte grammar as GS1.
-  // Protect arguments as \xNN, even when their raw value is printable ASCII.
   for (const token of tokenizeGoldenSunBytes(bytes)) {
     for (const b of token.bytes) {
-      if (token.kind === "text" && b >= 0x20 && b <= 0x7e && b !== 0x5c) {
+      if (token.kind === "code") {
+        out += "\\x" + b.toString(16).toUpperCase().padStart(2, "0");
+      } else if (arabicFont && GS2_ARABIC_BYTE_TO_CODEPOINT[b] !== undefined) {
+        out += String.fromCharCode(GS2_ARABIC_BYTE_TO_CODEPOINT[b]);
+      } else if (isGoldenSunPlainAscii(b)) {
         out += String.fromCharCode(b);
       } else {
         out += "\\x" + b.toString(16).toUpperCase().padStart(2, "0");
@@ -111,8 +128,8 @@ export function goldenSun2BytesToText(bytes: number[]): string {
 }
 
 const GS2_NORMALIZATION: Record<string, string> = {
-  "ی": "ي", "ک": "ك", "،": "،", "؟": "؟",
-  "؛": ";", "…": "...", "ـ": "ـ",
+  "ی": "ي", "ک": "ك", "،": ",", "؟": "?",
+  "؛": ";", "…": "...", "ـ": "",
   "–": "-", "—": "-", "−": "-", "٪": "%",
 };
 for (let d = 0; d <= 9; d++) {
@@ -135,16 +152,11 @@ export function goldenSun2TextToBytes(text: string): number[] {
     const shaped = reshapeArabic(normalized);
     for (const c of shaped) {
       const cp = c.codePointAt(0)!;
-      if (cp >= 0x20 && cp <= 0x7e && cp !== 0x5c) {
+      const mapped = GOLDENSUN_ARABIC_BYTE_MAP[cp];
+      if (mapped !== undefined) {
+        result.push(mapped);
+      } else if (isGoldenSunPlainAscii(cp)) {
         result.push(cp);
-      } else if (cp >= 0xfe80 && cp <= 0xfefc) {
-        result.push(0x80 + cp - 0xfe80);
-      } else if (cp === 0x60c) {
-        result.push(0xfd);
-      } else if (cp === 0x61f) {
-        result.push(0xfe);
-      } else if (cp === 0x640) {
-        result.push(0xff);
       } else {
         throw new Error("GS2: unsupported character " + JSON.stringify(c) +
           " U+" + cp.toString(16).toUpperCase() + " — no silent deletion");
@@ -171,8 +183,9 @@ function romTextTreePointers(rom: Uint8Array): { trees: number; offsets: number 
 
 /** Read all 12,288 real compressed strings, including control codes. */
 export function extractGoldenSun2Strings(rom: Uint8Array): GoldenSun2TextEntry[] {
+  const arabicFont = isGoldenSun2ArabicFontRom(rom);
   return readGoldenSun2Strings(rom).map((r, i) => ({
-    index: i, msbtFile: GS2_TEXT_FILE, original: goldenSun2BytesToText(r),
+    index: i, msbtFile: GS2_TEXT_FILE, original: goldenSun2BytesToText(r, arabicFont),
   }));
 }
 
@@ -204,7 +217,7 @@ export function buildGoldenSun2StringTable(
   let translatedLines = 0;
   const fontReady = isGoldenSun2ArabicFontRom(rom);
   const contents = originals.map((raw, index) => {
-    const original = goldenSun2BytesToText(raw);
+    const original = goldenSun2BytesToText(raw, fontReady);
     const key = GS2_TEXT_FILE + ":" + index;
     const changed = translations[key];
     if (!changed || changed === original) return raw;

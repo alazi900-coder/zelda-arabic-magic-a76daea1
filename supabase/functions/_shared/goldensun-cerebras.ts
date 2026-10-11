@@ -37,3 +37,17 @@ export function hasExactMaskedTechnicalSequence(sourceMasked: string, translatio
   const b = translationMasked.match(re) || [];
   return a.length === b.length && a.every((item, i) => item === b[i]);
 }
+
+const GS_FULL_TECH_RE = /\\x[0-9a-fA-F]{2}|\{[A-Za-z][A-Za-z0-9_]*:[^{}\r\n]*\}|\[[A-Za-z/][A-Za-z0-9_/]*(?:[:=][^\]\r\n]*)?\]|<\/?[A-Za-z][^>]*>|%(?:\d+\$)?[\d.$-]*[sdif]|[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
+
+export function goldenSunAllTechnicalTagsUnchanged(source: string, translation: string): boolean {
+  if (!goldenSunCodesUnchanged(source, translation)) return false;
+  const norm = (text: string) => (text.match(GS_FULL_TECH_RE) || []).map(tag =>
+    /^\\x/i.test(tag) ? tag.toLowerCase() : tag,
+  );
+  const a = norm(source);
+  const b = norm(translation);
+  if (a.length !== b.length || a.some((tag, i) => tag !== b[i])) return false;
+  // Real hard line breaks have an independent meaning from the GBA \x03 byte.
+  return (source.match(/\n/g) || []).length === (translation.match(/\n/g) || []).length;
+}

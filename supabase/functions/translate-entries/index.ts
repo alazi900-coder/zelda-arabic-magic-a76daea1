@@ -2365,6 +2365,27 @@ Deno.serve(async (req) => {
         'https://api.tokenrouter.com/v1', 'z-ai/glm-5.2-free',
       );
       return buildSuccessResponse(entries, result);
+    } else if (provider === 'openrouterfree') {
+      // The entire point of this mode is *never* to charge the user's account.
+      // Do not forward non-free model IDs, even if an old/stale client sends one.
+      const model = aiModel || 'openrouter/free';
+      if (model !== 'openrouter/free' && !/^[a-z0-9._/-]+:free$/i.test(model)) {
+        return new Response(JSON.stringify({ error: 'يُسمح في وضع OpenRouter المجاني بالنماذج :free فقط، ولا يمكن تشغيل نموذج مدفوع' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const key = providerApiKey?.trim();
+      if (!key) {
+        return new Response(JSON.stringify({ error: 'أضف مفتاح OpenRouter API المجاني في إعدادات المحرر' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const result = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, key,
+        'https://openrouter.ai/api/v1', model, 'OpenRouter Free',
+      );
+      return buildSuccessResponse(entries, { ...result, providerUsed: 'openrouterfree' });
     } else if (provider === 'codecraft') {
       // No server-side fallback secret: this is the translator's own
       // subscription key, held in their browser and sent for this request

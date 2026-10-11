@@ -20,6 +20,9 @@ import {
   GOLDENSUN2_CATALOG_SIG_KEY, goldenSun2CatalogFingerprint,
 } from "@/lib/goldensun/goldensun2-editor-bridge";
 import { auditGoldenSun2Rom, looksLikeGoldenSun2Rom, type GoldenSun2Audit } from "@/lib/goldensun/goldensun2-rom";
+import {
+  extractGoldenSun2Strings, hasGoldenSun2TextTables, isGoldenSun2ArabicFontRom,
+} from "@/lib/goldensun/goldensun2-huffman-rom";
 
 /**
  * Golden Sun opener: reads the cartridge's Huffman-compressed string table
@@ -159,11 +162,46 @@ export default function GoldenSun() {
         if (selectedPart === "first" && isSecond) throw new Error("هذا ملف الجزء الثاني؛ اختر قسم The Lost Age أولًا");
         if (selectedPart === "second" && !isSecond) throw new Error("هذا ليس ROM الجزء الثاني AGFE؛ اختر ملفه الصحيح");
         if (isSecond) {
-          const audit = auditGoldenSun2Rom(rom);
-          if (!audit.sizeMatches) throw new Error("حجم ROM الجزء الثاني ليس 16 ميجابايت — لن تُقبل نسخة غير معروفة");
+          if (!hasGoldenSun2TextTables(rom)) {
+            throw new Error("جداول نصوص AGFE لا تطابق نسخة USA/Europe المدعومة؛ لم يُغيّر الملف");
+          }
+          const extracted = extractGoldenSun2Strings(rom);
+          const entries = extracted.map(e => ({
+            msbtFile: e.msbtFile, index: e.index,
+            original: e.original, label: e.original.slice(0, 60), maxBytes: 0,
+          }));
+          const previousGame = await idbGet<string>("editor-source-game");
+          const active = await idbGet<{ translations?: Record<string, string> }>("editorState");
+          const previous = await idbGet<{
+            entries: typeof entries; translations?: Record<string, string>;
+            protectedEntries?: string[]; technicalBypass?: string[]; clearedKeys?: string[];
+          }>("editorState:goldensun2");
+          const sameRomText = previous?.entries?.length === entries.length &&
+            previous.entries.every((e, i) => e.msbtFile === entries[i].msbtFile &&
+              e.index === entries[i].index && e.original === entries[i].original);
+          await storePreviousGoldenSunTranslations();
+          const translations = {
+            ...(sameRomText ? previous?.translations || {} : {}),
+            ...(sameRomText && previousGame === GOLDENSUN2_SOURCE_GAME
+              ? active?.translations || {} : {}),
+          };
+          await idbSet("editorState", {
+            entries, translations, freshExtraction: true,
+            protectedEntries: sameRomText ? previous?.protectedEntries || [] : [],
+            technicalBypass: sameRomText ? previous?.technicalBypass || [] : [],
+            clearedKeys: sameRomText ? previous?.clearedKeys || [] : [],
+          });
+          await idbSet("editor-source-game", GOLDENSUN2_SOURCE_GAME);
           await idbSet(GOLDENSUN2_BUFFER_KEY, rom.buffer.slice(0));
-          setLostAgeAudit(audit);
-          toast.info("تعرّفنا على الجزء الثاني AGFE. فحص ROM متاح، لكن استخراج الحوارات المضغوطة والبناء غير مفعّلين لحين تأكيد خريطتهما.");
+          const originals = { ...((await idbGet<Record<string, string>>("originalTexts")) || {}) };
+          for (const e of entries) originals[e.msbtFile + ":" + e.index] = e.original;
+          await idbSet("originalTexts", originals);
+          setLostAgeAudit(null);
+          if (!isGoldenSun2ArabicFontRom(rom)) {
+            toast.warning("نصوص AGFE جاهزة، لكن تحتاج رقعة الخط العربي للجزء الثاني قبل بناء نص عربي.");
+          }
+          toast.success("نجح استخراج جميع النصوص المضغوطة: " + entries.length + " رسالة");
+          navigate("/editor");
           return;
         }
         setLostAgeAudit(null);
@@ -244,7 +282,7 @@ export default function GoldenSun() {
             className={`rounded-xl border-2 p-4 text-right transition-colors ${selectedPart === "second" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}>
             <div className="mb-2 flex items-center gap-2"><BookMarked className="h-5 w-5" /><strong>الجزء الثاني</strong></div>
             <p className="text-sm text-muted-foreground">The Lost Age · AGFE · 16 MB</p>
-            <p className="mt-2 text-xs">محرر مشترك وحماية وسوم؛ بناء GBA قيد التطوير</p>
+            <p className="mt-2 text-xs">استخراج ١٢٬٢٨٨ نصًا حقيقيًا، ترجمتها وبناء GBA</p>
             <p className="mt-2 text-xs text-muted-foreground">الترجمات المحفوظة: {savedCounts.second.toLocaleString("ar")}</p>
           </button>
         </div>
@@ -256,7 +294,7 @@ export default function GoldenSun() {
         <p className="mb-3 text-sm text-muted-foreground">
           {selectedPart === "first"
             ? "الجزء الأول: افتح ROM الأصلية أو النسخة التي تحتوي على رقعة GoldenSun-AR-RTL-FONT-v8.ups. يُفتح المحرر ثم يمكنك بناء GBA."
-            : "الجزء الثاني: افتح ROM AGFE بحجم 16 MB ثم حمّل كتالوج نصوص JSON إلى نفس المحرر. يمكن تصدير الترجمة، لكن إعادة بناء GBA لم تُتحقق بعد."}
+            : "الجزء الثاني: ارفع ROM AGFE لاستخراج ١٢٬٢٨٨ نصًا مضغوطًا إلى المحرر، ثم بناء GBA بعد الترجمة والتحقق. تعريب الحروف يحتاج رقعة الخط العربي المتوافقة."}
         </p>
         <button type="button" className="mb-4 flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-muted" onClick={() => void openSavedProject()}>
           <FileText className="h-4 w-4" />
@@ -327,7 +365,7 @@ export default function GoldenSun() {
           {selectedPart === "first" ? (
             <p><strong className="text-foreground">حد الطول للجزء الأول:</strong> ٢٥٤ بايتاً مضغوطاً للسطر؛ البناء يرفض ما يتجاوز ذلك.</p>
           ) : (
-            <p><strong className="text-foreground">الجزء الثاني:</strong> لم يُحدد حد النصوص المضغوطة بعد؛ لن تدّعي الأداة أن ترجمات JSON قابلة للبناء حتى يكتمل محرك AGFE.</p>
+            <p><strong className="text-foreground">الجزء الثاني:</strong> ٢٥٤ بايتًا مضغوطًا حد أعلى لكل رسالة؛ يعيد المحرك فحص النصوص عند البناء.</p>
           )}
         </div>
       </div>

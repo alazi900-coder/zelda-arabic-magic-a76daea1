@@ -284,6 +284,23 @@ export function extractGoldenSun2Strings(rom: Uint8Array): GoldenSun2TextEntry[]
   });
 }
 
+/** Discard only fake "translations" that exactly repeat the OLD escaped
+ * source spelling (e.g. Japanese \\x83A...). These were never Arabic edits.
+ * Every genuinely edited translation and its control codes is preserved.
+ */
+export function removeLegacyGoldenSun2SourceCopies(
+  entries: GoldenSun2TextEntry[], saved: Record<string, string>
+): Record<string, string> {
+  const next = { ...saved };
+  for (const entry of entries) {
+    const key = entry.msbtFile + ":" + entry.index;
+    if (entry.legacyOriginal !== undefined && next[key] === entry.legacyOriginal) {
+      delete next[key];
+    }
+  }
+  return next;
+}
+
 function readGoldenSun2Strings(rom: Uint8Array): number[][] {
   if (!hasGoldenSun2TextTables(rom)) {
     throw new Error("لم تُطابق جداول نصوص AGFE المعروفة — رفض الاستخراج لحماية بيانات ROM");

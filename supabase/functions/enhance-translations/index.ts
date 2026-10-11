@@ -105,6 +105,14 @@ const RULES: RuleDef[] = [
   // the 17,165-entry export contains: everything between two tildes.
   { id: 'detect_gtasa_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـGTA San Andreas] في نصّ هذه اللعبة رمز واحد لا غير: أي شيء بين علامتين `~…~` هو تحكم يقرؤه المحرّك وليس كلاماً. `~s~` `~m~` `~r~` `~y~` `~b~` `~w~` `~g~` `~h~` تبدّل لون النص (والحرف الكبير مثل `~S~` رمز مختلف)، و`~n~` فاصل سطر، و`~1~` رقم أو مبلغ تضعه اللعبة (وعلامة `$` قبله نص عادي)، و`~widget_…~` أيقونة زر تظهر مكانها، و`~<~` `~>~` `~u~` `~d~` أسهم. أبقِ كل رمز بحرفه وعدده وترتيبه بين الرموز الأخرى، ولا تنقله ولا تترجمه ولا تضع كلمة داخله. الرمز الذي يحيط بكلمة (`~b~SWAT Tank~s~`) يبقى حول الكلمة العربية المقابلة نفسها. أبقِ `$` والأرقام كما في الأصل.' },
   { id: 'detect_gtasa_names', kind: 'detect', prompt: '**accuracy** — [خاص بـGTA San Andreas] اللعبة تدور في لوس سانتوس وسان فييرو ولاس فنتورا عام 1992 بلغة شارع وعصابات (Grove Street وBallas وVagos وAztecas وLoco Syndicate وBig Smoke وRyder وSweet وCJ وCesar وWu Zi Mu). أسماء الأحياء والعصابات والشخصيات والمحلات والسيارات والأسلحة تبقى إنجليزية أو تُنقل صوتياً بالطريقة نفسها في كل نص، ولا تعتبر تعدد صيغتها خطأ إلا إن اختلفت بين سطر وآخر. لغة الشارع الخشنة والشتائم جزء من نبرة الشخصية: لا تقترح تلطيفها ولا تضف ما ليس في الأصل. لا تحكم على مصطلح بأنه خطأ اعتماداً على ألعاب Grand Theft Auto الأخرى.' },
+  // Golden Sun II only — same rule IDs as enhance-rules.ts, never used for GS1.
+  { id: 'detect_gs2_control_codes', kind: 'detect', prompt: '**split_and_tags** — [Golden Sun: The Lost Age فقط] افحص رموز \\xNN مثل \\x03 و\\x1E و\\x11 ومعاملاتها: أصلح الناقص أو المتغير مع الاحتفاظ بالقيمة والعدد والترتيب دون استحداث \\x02 كفاصل صفحة.' },
+  { id: 'detect_gs2_line_fit', kind: 'detect', prompt: '**style** — [Golden Sun: The Lost Age فقط] راجع إطالة الحوار، اختصر الحشو دون فقد المعنى. GBA يقيّد عرض صندوق النص بالبكسل والبناء يفحصه؛ لا تضف \\x03 أو \\x02 أو فواصل تحكم جديدة.' },
+  { id: 'detect_gs2_dialogue_voice', kind: 'detect', prompt: '**style** — [Golden Sun: The Lost Age فقط] حافظ على فصحى عربية طبيعية في حوارات مغامرة فانتازيا JRPG؛ قصر الجمل حسب الموقف ولا تفترض شخصية المتحدث أو أحداثاً غير واردة في الأصل.' },
+  { id: 'detect_gs2_names_terms', kind: 'detect', prompt: '**terminology** — [Golden Sun: The Lost Age فقط] راجع أسماء Felix وJenna وSheba وPiers وWeyard وثبات مصطلحات Psynergy وDjinn وAdept وAlchemy حسب القاموس المرفق أولاً دون فرض تعريب غير معتمد.' },
+  { id: 'detect_gs2_ui_consistency', kind: 'detect', prompt: '**consistency** — [Golden Sun: The Lost Age فقط] راجع إيجاز أسماء العناصر والتعاويذ والقوائم وثباتها؛ لا تضف معلومات أو أرقاماً أو مصطلحات غير موجودة بالأصل.' },
+  { id: 'protect_gs2_rtl_unicode', kind: 'protect', prompt: '🚫 [Golden Sun: The Lost Age فقط] استخدم Unicode عربي منطقي دون قلب بصري أو Arabic Presentation Forms أو علامات BiDi خفية. محرك اللعبة يتولى رسم العربية.' },
+  { id: 'protect_gs2_dialogue_structure', kind: 'protect', prompt: '🚫 [Golden Sun: The Lost Age فقط] أكواد \\xNN ومتغيرات الأسماء وفواصل الحوار بيانات تنفيذية. لا تغيّر ترتيبها أو عددها أو قيمتها، ولا تستخدم \\x02 بديلاً عن \\x03؛ ضوابط السلامة البنيوية إلزامية ولو أوقفت هذه القاعدة.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -136,6 +144,11 @@ const FRANBOW_ONLY_RULE_IDS = new Set(['detect_franbow_tags']);
 const TWOM_ONLY_RULE_IDS = new Set(['detect_twom_tags']);
 /** Rules whose prompt text only makes sense for GTA San Andreas — never injected elsewhere. */
 const GTASA_ONLY_RULE_IDS = new Set(['detect_gtasa_tags', 'detect_gtasa_names']);
+const GOLDENSUN2_ONLY_RULE_IDS = new Set([
+  'detect_gs2_control_codes', 'detect_gs2_line_fit', 'detect_gs2_dialogue_voice',
+  'detect_gs2_names_terms', 'detect_gs2_ui_consistency',
+  'protect_gs2_rtl_unicode', 'protect_gs2_dialogue_structure',
+]);
 /**
  * Rules that teach the model Xenoblade's tag syntax, withheld from Pokémon.
  *
@@ -466,7 +479,9 @@ function buildRuleSections(
   isFranBow = false,
   isTwom = false,
   isGtaSa = false,
-): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
+  isGoldenSun = false,
+  isGoldenSun2 = false,
+): { detect: string; protect: string; detectCount: number; enabledSet: Set<string>; detectRuleIds: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
   const builtinWithOverrides: RuleDef[] = RULES.map(r => {
@@ -505,15 +520,16 @@ function buildRuleSections(
     (!FRANBOW_ONLY_RULE_IDS.has(r.id) || isFranBow) &&
     (!TWOM_ONLY_RULE_IDS.has(r.id) || isTwom) &&
     (!GTASA_ONLY_RULE_IDS.has(r.id) || isGtaSa) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa));
-  const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
-    .map((r, i) => `${i + 1}. ${r.prompt}`);
+    (!GOLDENSUN2_ONLY_RULE_IDS.has(r.id) || isGoldenSun2) &&
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa && !isGoldenSun));
+  const activeDetectRules = all.filter(r => r.kind === 'detect' && isActive(r));
+  const detectLines = activeDetectRules.map((r, i) => `${i + 1}. [rule_id: ${r.id}] ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
   const detect = detectLines.length > 0
     ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
     : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
   const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
-  return { detect, protect, detectCount: detectLines.length, enabledSet: enabled };
+  return { detect, protect, detectCount: detectLines.length, enabledSet: enabled, detectRuleIds: new Set(activeDetectRules.map(r => r.id)) };
 }
 
 // ─── Smart glossary filter ──────────────────────────────────────────────────
@@ -818,7 +834,7 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, game === 'goldensun2');
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان

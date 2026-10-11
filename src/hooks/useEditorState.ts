@@ -534,9 +534,18 @@ export function useEditorState() {
             const storedCount = Object.values(stored?.translations || {}).filter(v => v?.trim()).length;
             if (!stored || !stored.entries?.length) {
               stored = snap;
-            } else if (snapCount > storedCount) {
-              // Same game, richer snapshot → merge snapshot translations in
-              // without overwriting anything already filled in.
+            } else if (snapCount > storedCount && (
+              currentGame !== "goldensun2" ||
+              (snap.entries.length === stored.entries.length &&
+                snap.entries.every((entry, i) =>
+                  entry.msbtFile === stored!.entries[i].msbtFile &&
+                  entry.index === stored!.entries[i].index &&
+                  entry.original === stored!.entries[i].original
+                ))
+            )) {
+              // Lost Age catalogue IDs can repeat across unrelated dumps.
+              // Never merge translations from a different source catalogue.
+              // For other games retain the existing richer-snapshot recovery.
               const merged: Record<string, string> = { ...(snap.translations || {}) };
               for (const [k, v] of Object.entries(stored.translations || {})) {
                 if (v?.trim()) merged[k] = v;

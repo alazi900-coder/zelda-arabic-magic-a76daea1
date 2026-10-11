@@ -17,6 +17,7 @@ import { APP_VERSION } from "@/lib/version";
 import {
   parseGoldenSun2Catalog, goldenSun2ToEditorEntries, goldenSun2Translations,
   GOLDENSUN2_SOURCE_GAME, GOLDENSUN2_BUFFER_KEY, GOLDENSUN2_TRANSLATIONS_KEY,
+  GOLDENSUN2_CATALOG_SIG_KEY, goldenSun2CatalogFingerprint,
 } from "@/lib/goldensun/goldensun2-editor-bridge";
 import { auditGoldenSun2Rom, looksLikeGoldenSun2Rom, type GoldenSun2Audit } from "@/lib/goldensun/goldensun2-rom";
 
@@ -42,6 +43,8 @@ export default function GoldenSun() {
     if (!state?.translations) return;
     if (source === GOLDENSUN2_SOURCE_GAME) {
       await idbSet(GOLDENSUN2_TRANSLATIONS_KEY, state.translations);
+      const signature = await idbGet<string>(GOLDENSUN2_CATALOG_SIG_KEY);
+      if (signature) await idbSet(GOLDENSUN2_TRANSLATIONS_KEY + ":" + signature, state.translations);
     } else if (source === GOLDENSUN_SOURCE_GAME) {
       await idbSet("goldensun1Translations", state.translations);
     }
@@ -58,12 +61,16 @@ export default function GoldenSun() {
       const entries = goldenSun2ToEditorEntries(catalog);
       const existingGame = await idbGet<string>("editor-source-game");
       const active = await idbGet<{ translations?: Record<string, string> }>("editorState");
-      const saved = await idbGet<Record<string, string>>(GOLDENSUN2_TRANSLATIONS_KEY);
+      const signature = goldenSun2CatalogFingerprint(catalog);
+      const previousSignature = await idbGet<string>(GOLDENSUN2_CATALOG_SIG_KEY);
+      const saved = await idbGet<Record<string, string>>(GOLDENSUN2_TRANSLATIONS_KEY + ":" + signature);
       await storePreviousGoldenSunTranslations();
       const translations = goldenSun2Translations(catalog, {
         ...(saved || {}),
-        ...(existingGame === GOLDENSUN2_SOURCE_GAME ? active?.translations || {} : {}),
+        ...(existingGame === GOLDENSUN2_SOURCE_GAME && previousSignature === signature
+          ? active?.translations || {} : {}),
       });
+      await idbSet(GOLDENSUN2_CATALOG_SIG_KEY, signature);
       await idbSet("editorState", { entries, translations, freshExtraction: true });
       await idbSet("editor-source-game", GOLDENSUN2_SOURCE_GAME);
       const originals = { ...((await idbGet<Record<string, string>>("originalTexts")) || {}) };
@@ -193,7 +200,7 @@ export default function GoldenSun() {
             <p className="text-sm">تعرّفت الأداة على AGFE وحجم {lostAgeAudit.romSize.toLocaleString("ar")} بايت. هذه مرحلة فحص فقط، وليست استخراجًا كاملًا للحوارات: نصوص القصة مضغوطة بصيغة تحتاج مفككًا خاصًا بها.</p>
             <p className="text-sm text-amber-600">لن تستخدم الأداة مفكك Huffman الخاص بالجزء الأول أو تدّعي أن النصوص التشخيصية هي كل الحوارات. يمكنك استيراد كتالوج نصوص JSON مستخرج سابقًا إلى المحرر المشترك، ثم تصدير الترجمات مع فحص الوسوم دون بناء GBA غير مؤكدة.</p>
             <label className="flex cursor-pointer flex-col gap-2 rounded-lg border border-dashed p-3 text-sm">
-              <span className="font-semibold">{catalogBusy ? "جارٍ فتح النصوص…" : "فتح كتالوج نصوص الجزء الثاني في المحرر المشترك (.json)"}</span>
+              <span className="font-semibold">{catalogBusy ? "جارٍ فتح النصوص…" : "فتح كتالوج نصوص الجزء الثاني في المحرر المشترك (.json؛ يدعم حقلي source وarabic)"}</span>
               <span className="text-xs text-muted-foreground">مثال: {"{\"entries\":[{\"index\":0,\"original\":\"Hello\\\\x03World\",\"translation\":\"مرحبًا\\\\x03بكم\"}]}"} — يُحفظ الرمز التقني كما هو.</span>
               <input className="text-xs" type="file" accept=".json,application/json" disabled={catalogBusy} onChange={e => {
                 const f = e.target.files?.[0]; if (f) void loadLostAgeCatalog(f); e.target.value = "";

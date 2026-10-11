@@ -30,7 +30,10 @@ export interface GoldenSun2TokenProblem {
   actual: string[];
 }
 
-const CONTROL_TAG = /\\x[0-9a-fA-F]{2}|\{GS2:[0-9A-Fa-f]{2,8}\}|\[[A-Za-z][A-Za-z0-9_]*:[^\]\r\n]*\]/g;
+// Keep the exact structural tokens already recognized by the shared editor:
+ // backslash byte escapes, bracket tags, named placeholders, and private-use
+ // markers. Only the HEX digits of \xNN are case-normalized below.
+const CONTROL_TAG = /\\x[0-9a-fA-F]{2}|\{[A-Za-z][A-Za-z0-9_]*:[^{}\r\n]*\}|\[[A-Za-z\/][A-Za-z0-9_\/]*(?:[:=][^\]\r\n]*)?\]|[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
 const WRONG_ESCAPE = /\\x(?![0-9a-fA-F]{2})/i;
 const WRONG_GS2 = /\{GS2:(?![0-9A-Fa-f]{2,8}\})/i;
 

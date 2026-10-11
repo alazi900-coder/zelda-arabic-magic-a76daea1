@@ -68,6 +68,28 @@ export function layoutGoldenSun2Dialogue(
   if (!Number.isInteger(maxWidth) || maxWidth < 24 || maxWidth > 192) {
     throw new Error("GS2: invalid safe dialogue width");
   }
+  // For an ordinary two-line question whose only controls are the
+  // existing newline (0x03) and question end (0x1E), we may MOVE that one
+  // newline to an earlier word boundary instead of adding a third row.
+  // Never apply this to dynamic speaker/name/color controls.
+  const controls: number[] = [];
+  for (let p = 0; p < translatedBytes.length;) {
+    const code = translatedBytes[p];
+    if (code < 0x20) {
+      controls.push(code);
+      p += 1 + goldensunControlCodeArgBytes(code);
+    } else p++;
+  }
+  if (controls.filter(code => code === 0x03).length === 1 &&
+      controls.every(code => code === 0x03 || code === 0x1e)) {
+    const flattened = translatedBytes.filter(code => code !== 0x03);
+    // Use a source marker that still enables the dialogue layout engine,
+    // without recursively entering this one-newline relocation branch.
+    const balanced = layoutGoldenSun2Dialogue(rom, [0x41, 0x1e], flattened, maxWidth);
+    if (balanced.insertedLineBreaks === 1) {
+      return { ...balanced, insertedLineBreaks: 0 };
+    }
+  }
 
   const out: number[] = [];
   const lineWidths: number[] = [];

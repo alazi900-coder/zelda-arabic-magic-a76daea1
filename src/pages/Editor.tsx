@@ -1,4 +1,6 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
+import { LIBRARY_GAMES } from "@/lib/game-library";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -75,6 +77,7 @@ const ContextSuggestPanel = React.lazy(() => import("@/components/editor/Context
 
 const Editor = () => {
   const editor = useEditorState();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [showDiffView, setShowDiffView] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -156,6 +159,7 @@ const Editor = () => {
     }
   }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.userCodeCraftKey, editor.aiModel]);
 
+  const workspaceGame = LIBRARY_GAMES.find(game => game.sourceId === (sourceGame === "risen" ? "risen1" : sourceGame));
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";
   // Derived from the actually-loaded entries (not the "editor-source-game" idb
   // flag above, which is never reset and can go stale across projects) — used
@@ -401,6 +405,18 @@ const Editor = () => {
       >
         {/* Drop overlay */}
         <EditorDragOverlay visible={isDragging} />
+
+        {workspaceGame && (
+          <div dir="rtl" className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-3 pt-3 md:px-4">
+            <span className="text-xs text-muted-foreground">المشروع الحالي: <strong className="text-foreground">{workspaceGame.title}</strong></span>
+            <Button type="button" variant="outline" size="sm"
+              disabled={editor.translating || editor.building}
+              onClick={() => { void editor.forceSave().then(() => navigate(`/games/${workspaceGame.id}`)); }}
+              className="text-xs">
+              حفظ والعودة إلى مساحة اللعبة
+            </Button>
+          </div>
+        )}
 
         {/* Hero header */}
         <EditorHeroHeader

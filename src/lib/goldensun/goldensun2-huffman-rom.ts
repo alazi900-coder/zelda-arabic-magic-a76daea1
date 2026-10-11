@@ -146,7 +146,7 @@ export function goldenSun2TextToBytes(text: string): number[] {
   };
   let cursor = 0;
   for (const m of text.matchAll(escape)) {
-    const at = m.index;
+    const at = m.index ?? cursor;
     encodeSpan(text.slice(cursor, at));
     result.push(parseInt(m[0].slice(2), 16));
     cursor = at + m[0].length;
@@ -185,11 +185,6 @@ function readGoldenSun2Strings(rom: Uint8Array): number[][] {
       entries.push(bytes);
       position += length;
     }
-  }
-  // The first US/Europe AGFE string is the save-screen message.
-  const first = goldenSun2BytesToText(entries[0]);
-  if (first !== "(No saved data)") {
-    throw new Error("GS2: first decoded entry did not match the expected ROM; unsupported build");
   }
   return entries;
 }

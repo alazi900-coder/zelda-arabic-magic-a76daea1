@@ -176,9 +176,16 @@ export default function GoldenSun() {
             entries: typeof entries; translations?: Record<string, string>;
             protectedEntries?: string[]; technicalBypass?: string[]; clearedKeys?: string[];
           }>("editorState:goldensun2");
+          // The decoder formerly exposed genuine Shift-JIS Japanese messages
+          // as \x83...; after this fix their source is readable Japanese.
+          // Treat the old display as the SAME ROM, so opening it again never
+          // discards the user's 12,288-entry translation project.
           const sameRomText = previous?.entries?.length === entries.length &&
             previous.entries.every((e, i) => e.msbtFile === entries[i].msbtFile &&
-              e.index === entries[i].index && e.original === entries[i].original);
+              e.index === entries[i].index &&
+              (e.original === entries[i].original ||
+                (extracted[i].legacyOriginal !== undefined &&
+                  e.original === extracted[i].legacyOriginal)));
           await storePreviousGoldenSunTranslations();
           const translations = {
             ...(sameRomText ? previous?.translations || {} : {}),

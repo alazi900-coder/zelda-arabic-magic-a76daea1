@@ -82,12 +82,22 @@ export function layoutGoldenSun2Dialogue(
   }
   if (controls.filter(code => code === 0x03).length === 1 &&
       controls.every(code => code === 0x03 || code === 0x1e)) {
-    const flattened = translatedBytes.filter(code => code !== 0x03);
-    // Use a source marker that still enables the dialogue layout engine,
-    // without recursively entering this one-newline relocation branch.
-    const balanced = layoutGoldenSun2Dialogue(rom, [0x41, 0x1e], flattened, maxWidth);
-    if (balanced.insertedLineBreaks === 1) {
-      return { ...balanced, insertedLineBreaks: 0 };
+    const breakAt = translatedBytes.indexOf(0x03);
+    const beforeWidth = translatedBytes.slice(0, breakAt)
+      .reduce((total, code) => total + goldenSun2LargeGlyphWidth(rom, code), 0);
+    if (beforeWidth > maxWidth) {
+      // Replace the existing newline with ONE word-separating space. Never
+      // join the last word of the first line to the next word by accident.
+      const flattened = [
+        ...translatedBytes.slice(0, breakAt),
+        0x20,
+        ...translatedBytes.slice(breakAt + 1),
+      ];
+      // A fake terminator keeps eligibility without recursively rebalancing.
+      const balanced = layoutGoldenSun2Dialogue(rom, [0x41, 0x1e], flattened, maxWidth);
+      if (balanced.insertedLineBreaks === 1) {
+        return { ...balanced, insertedLineBreaks: 0 };
+      }
     }
   }
 

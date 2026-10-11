@@ -72,18 +72,18 @@ export function parseGoldenSun2Catalog(value: unknown): GoldenSun2Catalog {
     throw new Error("الكتالوج يجب أن يحتوي على 1 إلى 30000 نص مع المصدر الأصلي");
   const used = new Set<number>();
   const parsed: GoldenSun2CatalogRow[] = rows.map((row: unknown, i: number) => {
-    if (!isRow(row)) throw new Error(\`سجل غير صالح عند السطر \${i + 1}\`);
+    if (!isRow(row)) throw new Error(`سجل غير صالح عند السطر ${i + 1}`);
     const idx = row.index ?? row.id ?? i;
     const source = row.original ?? row.source;
     if (!Number.isSafeInteger(idx) || Number(idx) < 0 || Number(idx) > 999999 || used.has(Number(idx)))
-      throw new Error(\`معرّف مكرر أو غير صالح في السجل \${i + 1}\`);
+      throw new Error(`معرّف مكرر أو غير صالح في السجل ${i + 1}`);
     if (typeof source !== "string" || !source.length || source.length > 10000)
-      throw new Error(\`النص الإنجليزي الأصلي مفقود أو طويل جدًا في السجل \${i + 1}\`);
+      throw new Error(`النص الإنجليزي الأصلي مفقود أو طويل جدًا في السجل ${i + 1}`);
     const translation = row.translation;
     if (translation !== undefined && (typeof translation !== "string" || translation.length > 10000))
-      throw new Error(\`ترجمة غير صالحة في السجل \${i + 1}\`);
+      throw new Error(`ترجمة غير صالحة في السجل ${i + 1}`);
     if (translation && !validateGoldenSun2Translation(source, translation).valid)
-      throw new Error(\`الترجمة في السطر \${idx} فقدت أو غيّرت رمزًا تقنيًا؛ أعد الوسوم كما هي\`);
+      throw new Error(`الترجمة في السطر ${idx} فقدت أو غيّرت رمزًا تقنيًا؛ أعد الوسوم كما هي`);
     used.add(Number(idx));
     return { index: Number(idx), original: source, ...(translation ? { translation } : {}) };
   });
@@ -105,7 +105,7 @@ export function goldenSun2Translations(
 ): Record<string, string> {
   const translations: Record<string, string> = {};
   for (const row of catalog.entries) {
-    const key = \`\${GOLDENSUN2_FILE}:\${row.index}\`;
+    const key = `${GOLDENSUN2_FILE}:${row.index}`;
     const proposed = previouslySaved[key] ?? row.translation;
     if (typeof proposed === "string" &&
         proposed.length > 0 &&
@@ -122,9 +122,9 @@ export function exportGoldenSun2Catalog(
   translations: Record<string, string>
 ): GoldenSun2Catalog {
   const rows = entries.filter(e => e.msbtFile === GOLDENSUN2_FILE).map(e => {
-    const candidate = translations[\`\${e.msbtFile}:\${e.index}\`];
+    const candidate = translations[`${e.msbtFile}:${e.index}`];
     if (candidate && !validateGoldenSun2Translation(e.original, candidate).valid)
-      throw new Error(\`السطر \${e.index}: اختلاف أكواد التحكم التقنية. أعد الوسوم بالترتيب الأصلي قبل التصدير.\`);
+      throw new Error(`السطر ${e.index}: اختلاف أكواد التحكم التقنية. أعد الوسوم بالترتيب الأصلي قبل التصدير.`);
     return { index: e.index, original: e.original, ...(candidate ? { translation: candidate } : {}) };
   });
   return { format: "goldensun2-translation-catalog-v1", entries: rows };

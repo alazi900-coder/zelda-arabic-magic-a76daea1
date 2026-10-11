@@ -68,8 +68,8 @@ export function useEditorSettings() {
     try { localStorage.setItem('aiModel', m); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft' | 'alborihi';
-  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter', 'gmicloud', 'codecraft', 'alborihi'];
+  type TranslationProvider = 'gemini' | 'mymemory' | 'google' | 'deepseek' | 'tokenrouter' | 'gmicloud' | 'codecraft' | 'alborihi' | 'cerebras';
+  const VALID_PROVIDERS: TranslationProvider[] = ['gemini', 'mymemory', 'google', 'deepseek', 'tokenrouter', 'gmicloud', 'codecraft', 'alborihi', 'cerebras'];
   const [translationProvider, _setTranslationProvider] = useState<TranslationProvider>(() => {
     try {
       const saved = localStorage.getItem('translationProvider') as TranslationProvider | null;
@@ -114,6 +114,10 @@ export function useEditorSettings() {
   // A refresh or closing the tab clears the key, while translation requests receive it
   // only as providerApiKey for the current HTTPS request to the edge function.
   const [userGmiCloudKey, setUserGmiCloudKey] = useState('');
+
+  // Cerebras promotional credits can be billed; keep its key session-only.
+  // This key is never stored in localStorage, a database or game projects.
+  const [userCerebrasKey, setUserCerebrasKey] = useState('');
 
   const [myMemoryEmail, _setMyMemoryEmail] = useState(() => {
     try { return localStorage.getItem('myMemoryEmail') || ''; } catch { return ''; }
@@ -384,6 +388,7 @@ export function useEditorSettings() {
     userDeepSeekKey, setUserDeepSeekKey,
     userTokenRouterKey, setUserTokenRouterKey,
     userGmiCloudKey, setUserGmiCloudKey,
+    userCerebrasKey, setUserCerebrasKey,
     userCodeCraftKey, setUserCodeCraftKey,
     aiModel, setAiModel,
     translationProvider, setTranslationProvider,

@@ -116,7 +116,8 @@ const Editor = () => {
         provider === 'deepseek' ? editor.userDeepSeekKey :
         provider === 'tokenrouter' ? editor.userTokenRouterKey :
         provider === 'gmicloud' ? editor.userGmiCloudKey :
-        provider === 'codecraft' ? editor.userCodeCraftKey : undefined;
+        provider === 'codecraft' ? editor.userCodeCraftKey :
+        provider === 'cerebras' ? editor.userCerebrasKey : undefined;
       // Both direct providers skip the Edge Function entirely: their key lives
       // in the browser, and routing through a deployed function means a
       // provider it does not know falls into its Gemini branch and fails
@@ -144,7 +145,7 @@ const Editor = () => {
               // credits — force free routing even if the editor is in paid mode.
               routingMode: provider === 'gemini' ? 'free' : undefined,
               providerApiKey: providerApiKey || undefined,
-              aiModel: editor.aiModel,
+              aiModel: provider === 'cerebras' ? 'gpt-oss-120b' : editor.aiModel,
             }),
           });
       const data = await response.json();
@@ -160,7 +161,7 @@ const Editor = () => {
       setTestConnStatus(prev => ({ ...prev, [provider]: 'error' }));
       setTestConnMsg(prev => ({ ...prev, [provider]: err instanceof Error ? err.message : 'فشل الاتصال' }));
     }
-  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.userCodeCraftKey, editor.aiModel]);
+  }, [editor.userGeminiKey, editor.userDeepSeekKey, editor.userTokenRouterKey, editor.userGmiCloudKey, editor.userCodeCraftKey, editor.userCerebrasKey, editor.aiModel]);
 
   const workspaceGame = LIBRARY_GAMES.find(game => game.sourceId === (sourceGame === "risen" ? "risen1" : sourceGame));
   const isRisen = sourceGame === "risen" || sourceGame === "risen1" || sourceGame === "risen2" || sourceGame === "risen3";
@@ -643,6 +644,7 @@ const Editor = () => {
                 userDeepSeekKey={editor.userDeepSeekKey}
                 userTokenRouterKey={editor.userTokenRouterKey}
                 userGmiCloudKey={editor.userGmiCloudKey}
+                userCerebrasKey={editor.userCerebrasKey}
                 aiRoutingMode={editor.aiRoutingMode}
               />
             </EditorAsyncBoundary>

@@ -66,6 +66,7 @@ interface TranslationAIEnhancePanelProps {
   userDeepSeekKey?: string;
   userTokenRouterKey?: string;
   userGmiCloudKey?: string;
+  userCerebrasKey?: string;
   aiRoutingMode?: 'free' | 'paid' | 'auto';
 }
 
@@ -119,10 +120,11 @@ const PARALLEL_REQUESTS = 3;
 const SCAN_PASSES = 1;
 const TECHNICAL_TAGS_ONLY_ISSUE = "إصلاح وسوم تقنية فقط";
 
-interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "tokenrouter" | "gmicloud" | "alborihi" | "local" | "free"; }
+interface ModelOption { value: string; label: string; group: "google" | "openai" | "deepseek" | "tokenrouter" | "gmicloud" | "alborihi" | "cerebras" | "local" | "free"; }
 
 const MODEL_OPTIONS: ModelOption[] = [
   { value: "google-translate-check", label: "Google Translate — فحص دقة (مجاني)", group: "free" },
+  { value: "gpt-oss-120b", label: "⚡ Cerebras GPT-OSS 120B (يستهلك الرصيد)", group: "cerebras" },
   { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash (مفتاح مجاني)", group: "google" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview (سريع — مُوصى)", group: "google" },
   { value: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview (دقة عالية)", group: "google" },
@@ -146,7 +148,8 @@ const GOOGLE_CHECK_CONCURRENCY = 3;
 const GOOGLE_PRESENCE_THRESHOLD = 0.7;
 const GOOGLE_ORDER_THRESHOLD = 0.4;
 
-function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | "gmicloud" | "alborihi" | null {
+function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | "gmicloud" | "alborihi" | "cerebras" | null {
+  if (model === "gpt-oss-120b") return "cerebras";
   if (model.startsWith("alborihi/")) return "alborihi";
   if (model.startsWith("deepseek")) return "deepseek";
   if (model.startsWith("tokenrouter")) return "tokenrouter";
@@ -157,6 +160,7 @@ function inferProviderFromModel(model: string): "deepseek" | "tokenrouter" | "gm
 const CODECRAFT_DEFAULT_MODEL = "claude-opus-5";
 
 function resolveEnhanceModelForProvider(provider: string | null | undefined, currentModel: string | null | undefined): string {
+  if (provider === "cerebras") return "gpt-oss-120b";
   if (provider === "tokenrouter") return "tokenrouter-glm-5.2";
   if (provider === "deepseek") return currentModel?.startsWith("deepseek") ? currentModel : "deepseek-v4-flash";
   if (provider === "gmicloud") return currentModel?.startsWith("MiniMaxAI/MiniMax-") ? currentModel : "MiniMaxAI/MiniMax-M2.7";
@@ -274,6 +278,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   userDeepSeekKey: userDeepSeekKeyProp,
   userTokenRouterKey: userTokenRouterKeyProp,
   userGmiCloudKey: userGmiCloudKeyProp,
+  userCerebrasKey: userCerebrasKeyProp,
   aiRoutingMode: aiRoutingModeProp,
 }) => {
   // نفس أسلوب اكتشاف Risen المستخدم في بقية المحرر (فحص امتداد .tab في اسم الملف).
@@ -730,6 +735,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // مفتاح GMI Cloud مقصود أن يبقى في حالة المحرر الحالية فقط؛ لا نقرأه من
     // localStorage كي لا نستعيد مفتاحاً قديماً أو نحفظ بيانات حساسة بين الجلسات.
     const gmiCloudKey = userGmiCloudKeyProp?.trim() || "";
+    // Cerebras key is intentionally session-only, never read from localStorage.
+    const cerebrasKey = userCerebrasKeyProp?.trim() || "";
     // CodeCraft is stored like DeepSeek and TokenRouter, so it is read the same
     // way — the panel is reached without the editor passing keys down.
     const codeCraftKey = readLocalStorage('userCodeCraftKey');
@@ -742,6 +749,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     })() as 'free' | 'paid' | 'auto';
     const providerApiKey = effectiveProvider === 'deepseek' ? (deepseekKey || undefined)
       : effectiveProvider === 'tokenrouter' ? (tokenRouterKey || undefined)
+      : effectiveProvider === 'cerebras' ? (cerebrasKey || undefined)
       : effectiveProvider === 'gmicloud' ? (gmiCloudKey || undefined)
       : effectiveProvider === 'codecraft' ? (codeCraftKey || undefined)
       : undefined;
@@ -1676,6 +1684,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                     <SelectGroup>
                       <SelectLabel className="text-[10px]">Google Gemini</SelectLabel>
                       {MODEL_OPTIONS.filter(m => m.group === "google").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px]">Cerebras Cloud — رصيد تجريبي</SelectLabel>
+                      {MODEL_OPTIONS.filter(m => m.group === "cerebras").map(m => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
                     </SelectGroup>
                     <SelectGroup>
                       <SelectLabel className="text-[10px]">OpenAI</SelectLabel>

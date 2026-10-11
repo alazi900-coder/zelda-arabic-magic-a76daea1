@@ -20,6 +20,7 @@ type EditorSubset = Pick<
   | "userTokenRouterKey" | "setUserTokenRouterKey"
   | "userGmiCloudKey" | "setUserGmiCloudKey"
   | "userCodeCraftKey" | "setUserCodeCraftKey"
+  | "userCerebrasKey" | "setUserCerebrasKey"
   | "translationProvider" | "setTranslationProvider"
   | "myMemoryEmail" | "setMyMemoryEmail"
   | "myMemoryCharsUsed"
@@ -154,6 +155,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               { id: 'deepseek' as const, label: '🐋 DeepSeek', badge: editor.userDeepSeekKey ? '✅' : '⚠️' },
               { id: 'tokenrouter' as const, label: '🔀 TokenRouter', badge: editor.userTokenRouterKey ? '✅' : '⚠️' },
               { id: 'gmicloud' as const, label: '☁️ GMICLOUD', badge: editor.userGmiCloudKey ? '✅' : '⚠️' },
+              { id: 'cerebras' as const, label: '⚡ Cerebras GPT-OSS 120B', badge: editor.userCerebrasKey ? '✅' : '🔑' },
               { id: 'codecraft' as const, label: '🛠️ CodeCraft', badge: editor.userCodeCraftKey ? '✅' : '⚠️' },
               { id: 'alborihi' as const, label: '🌙 البريهي', badge: '✅' },
             ].map(({ id, label, badge }) => (
@@ -164,6 +166,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                 onClick={() => {
                   editor.setTranslationProvider(id);
                   if (id === 'gmicloud') editor.setAiModel('MiniMaxAI/MiniMax-M2.7');
+                  if (id === 'cerebras') editor.setAiModel('gpt-oss-120b');
                   // Otherwise a model name belonging to the previous provider
                   // would be sent to CodeCraft and come back 404.
                   if (id === 'codecraft') editor.setAiModel('claude-opus-5');
@@ -360,6 +363,54 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
                 </a>
               )}
             </div>
+          </div>
+        )}
+
+        {editor.translationProvider === 'cerebras' && (
+          <div className="flex flex-col gap-3">
+            <div className="text-sm font-display font-semibold">⚡ Cerebras — GPT-OSS 120B</div>
+            <p className="text-xs text-muted-foreground font-body">
+              يستخدم رصيد Cerebras التجريبي (5 دولارات إن كان مفعّلاً في حسابك). كل طلب يستهلك من الرصيد حسب الرموز المستخدمة.
+              عند تحميل ملف Golden Sun: The Lost Age تُفعّل تعليمات ترجمة اللعبة وحماية أكواد التحكم تلقائياً.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="password"
+                name="cerebras-api-key"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                placeholder="الصق مفتاح Cerebras API هنا..."
+                value={editor.userCerebrasKey}
+                onChange={e => editor.setUserCerebrasKey(e.target.value)}
+                className="flex-1 min-w-[160px] px-3 py-1.5 rounded bg-background border border-border font-body text-sm"
+                dir="ltr"
+              />
+              <Button variant="outline" size="sm" onClick={() => handleTestConnection('cerebras')}
+                disabled={!editor.userCerebrasKey || testConnStatus['cerebras'] === 'testing'} className="text-xs gap-1">
+                {testConnStatus['cerebras'] === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                  <Wifi className="w-3 h-3" />}
+                تجربة
+              </Button>
+              {editor.userCerebrasKey && (
+                <Button variant="ghost" size="sm" onClick={() => editor.setUserCerebrasKey('')} className="text-xs text-destructive">
+                  مسح
+                </Button>
+              )}
+            </div>
+            {testConnMsg['cerebras'] && (
+              <p className={`text-xs font-body ${testConnStatus['cerebras'] === 'ok' ? 'text-green-500' : 'text-red-500'}`}>
+                {testConnMsg['cerebras']}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground font-body">
+              المفتاح يبقى في ذاكرة الصفحة فقط، ويُمحى عند إعادة تحميلها. لا تتحول الخدمة تلقائياً إلى نموذج مدفوع آخر.
+              الترجمات المحفوظة لا تتأثر.
+            </p>
+            <a href="https://cloud.cerebras.ai/" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline w-fit">
+              لوحة Cerebras وإدارة الرصيد والمفاتيح ↗
+            </a>
           </div>
         )}
 

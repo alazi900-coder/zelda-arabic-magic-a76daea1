@@ -1,5 +1,6 @@
 import { RISEN_TAG_REGEX } from "../_shared/risen-tag-mask.ts";
 import { PLAT_TAG_RE } from "../_shared/plat-tag-mask.ts";
+import { GOLDEN_SUN_2_SYSTEM_PROMPT, goldenSunCodesUnchanged, goldenSunAllTechnicalTagsUnchanged, hasExactMaskedTechnicalSequence } from "../_shared/goldensun-cerebras.ts";
 import { callGeminiWithRecovery, extractGeminiText } from "../_shared/gemini-recovery.ts";
 import { GMICLOUD_OPENAI_BASE_URL, resolveGmiCloudTextModel } from "../_shared/gmicloud.ts";
 
@@ -296,18 +297,24 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv';
+  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'goldensun' | 'goldensun2';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
+  const isGoldenSun2 = game === 'goldensun2';
+  const isGoldenSun = game === 'goldensun';
   const isRisen = game === 'risen' || game === 'risen1' || game === 'risen2';
   const isRisen2 = game === 'risen2';
   const isMother3 = game === 'mother3';
   const isPokemonXp = game === 'pokemon-xp';
   const isGtaIv = game === 'gtaiv';
-  const gameLabel = isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isGtaIv ? 'Grand Theft Auto IV' : isMother3 ? 'MOTHER 3' : isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
+  const gameLabel = isGoldenSun2 ? 'Golden Sun: The Lost Age' : isGoldenSun ? 'Golden Sun' : isPokemonXp ? 'Pokémon Unbreakable Ties (Pokémon Essentials / RPG Maker XP)' : isGtaIv ? 'Grand Theft Auto IV' : isMother3 ? 'MOTHER 3' : isRisen2 ? 'Risen 2' : isRisen ? 'Risen 1' : 'Xenoblade Chronicles 1';
 
-  const universeBlock = isGtaIv
+  const universeBlock = isGoldenSun2
+    ? `GOLDEN SUN: THE LOST AGE (GBA): Felix, Jenna, Sheba and Piers travel through Weyard. Golden Sun's elemental powers, Psynergy, Djinn and Alchemy are relevant only where supported by the English original. This is NOT Xenoblade; never use Shulk, Monado or Colony lore. Style: concise, fluent, vivid modern standard Arabic with a JRPG fantasy tone; preserve all protected technical code placeholders and their order, and never manually reshape Arabic.`
+    : isGoldenSun
+    ? `GOLDEN SUN (GBA, first game): Isaac, Garet, Ivan and Mia. Fantasy exploration, Psynergy and elemental magic; use the English source and approved glossary. This is NOT Xenoblade, Risen or Pokémon.`
+    : isGtaIv
     ? `GRAND THEFT AUTO IV — KEY KNOWLEDGE:
 • Setting: Liberty City, a satirical parody of New York City. Protagonist Niko Bellic, an Eastern-European immigrant war veteran, is drawn into organized crime by his cousin Roman Bellic (who runs a struggling taxi company and gets into gambling debt).
 • Recurring characters (transliterate consistently): Niko Bellic (نيكو بيليتش), Roman Bellic (رومان بيليتش), Packie McReary (باكي مكريري), Brucie Kibbutz (بروسي كيبوتز), Little Jacob (ليتل جايكوب), Dwayne Forge (دوين فورج), Playboy X (بلاي بوي إكس).
@@ -352,7 +359,9 @@ function buildXC1UserPrompt(opts: {
 • Antagonists: Zanza (زانزا), Egil (إيجل), Metal Face (الوجه المعدني).
 • Key terms: Monado (المونادو), Ether (إيثر), Colony 9 (المستعمرة 9), Mechon (ميكون), Homs (هومس), Nopon (نوبون), High Entia (عليا إنتيا).`;
 
-  const npcVoiceRule = isGtaIv
+  const npcVoiceRule = isGoldenSun2 || isGoldenSun
+    ? 'Golden Sun JRPG dialogue — fluent concise modern standard Arabic, lively but faithful to each speaker; no imported character lore, no invented dialogue. Keep every technical placeholder exactly once in its original sequence.'
+    : isGtaIv
     ? "Mission/street dialogue — blunt, streetwise modern spoken Arabic, sarcastic where the English is sarcastic. Do not soften profanity into overly polite phrasing, and do not invent profanity the source doesn't imply. Radio/TV/web parody text keeps its mocking, exaggerated tone."
     : isPokemonXp
     ? 'Pokémon Essentials dialogue — use natural, warm everyday Arabic matching the source tone. Do not assume speakers, locations, or Pokémon names that were not provided.'
@@ -375,14 +384,16 @@ RULES — ordered by priority (top = most critical):
 4. Every translation value MUST contain Arabic characters. NEVER return English source as the "translation". Unknown names → transliterate to Arabic phonetically. Returning English unchanged is a hard failure rejected by validation.
 
 [B] FORMATTING:
-5. Do NOT insert literal newline characters (\\n) in your translations. Use a single space instead — line wrapping is handled by a post-processing step that re-balances lines to fit in-game text boxes. If the source has multiple lines (cutscene), still return one continuous string; the splitter will rebuild the lines.
+5. ${isGoldenSun2 || isGoldenSun
+  ? 'Preserve exactly every NEWLINE_N placeholder and each protected GBA control-code TAG_N, in source order. Never create real extra line breaks. Golden Sun game-engine layout, not generic text wrapping, controls the dialogue box.'
+  : 'Do NOT insert literal newline characters (\\n) in your translations. Use a single space instead — line wrapping is handled by a post-processing step that re-balances lines to fit in-game text boxes. If the source has multiple lines (cutscene), still return one continuous string; the splitter will rebuild the lines.'}
 6. NEVER add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ). The game font cannot render them.
 7. Keep translation length close to the original to fit in-game text boxes.
 
 [C] TERMINOLOGY & STYLE:
-8. Glossary terms — if a term appears in the glossary section, you MUST use its EXACT Arabic translation. No alternatives, no synonyms, no paraphrasing. Match possessive forms too (e.g. "Noah's" uses the glossary entry for "Noah"). NON-NEGOTIABLE.
+8. Glossary terms — if a term appears in the glossary section, you MUST use its EXACT Arabic translation. No alternatives, no synonyms, no paraphrasing. Match possessive forms for any glossary proper nouns. NON-NEGOTIABLE.
 9. Consistency — if a word/phrase was translated a certain way in "Previously Translated Texts", you MUST translate it the same way.
-10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب)${isRisen || isMother3 ? '' : ' consistent with the Arabic Xenoblade Chronicles 1 community'} — not overly formal classical Arabic.
+10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب)${isGoldenSun2 || isGoldenSun || isRisen || isMother3 ? '' : ' consistent with the Arabic Xenoblade Chronicles 1 community'} — not overly formal classical Arabic. Golden Sun uses a concise fantasy-JRPG register when applicable.
 11. Preserve proper nouns using the Arabic forms listed above. Unknown names → transliterate phonetically.
 12. ${npcVoiceRule}${npcRule}${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
 
@@ -469,6 +480,13 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
   // the generic Xenoblade patterns below (e.g. <Exit> would otherwise also
   // match the generic HTML-like-tag pattern and get a TAG_N instead of ⟦N⟧).
   const matches: { start: number; end: number; original: string; risen?: boolean; pokemonXp?: boolean; gtaiv?: boolean }[] = [];
+  if (_game === 'goldensun2' || _game === 'goldensun') {
+    // GBA binary engine control bytes, exposed as literal \xNN escapes in the
+    // editor. These must be shielded BEFORE AI sees them.
+    for (const match of shielded.matchAll(/\\x[0-9a-fA-F]{2}/g)) {
+      matches.push({ start: match.index!, end: match.index! + match[0].length, original: match[0] });
+    }
+  }
   if (_game === 'steinsgate') {
     const commands = /%(?:CF[0-9A-Fa-f]{4}|CE|B\d[SE]|[Ot]\d{3}|L[1CER]|T\d|W\d+|[KPNn])|\\n/g;
     for (const match of shielded.matchAll(commands)) {
@@ -656,11 +674,13 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' | 'inazuma' | 'gtasa' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' | 'inazuma' | 'gtasa' | 'goldensun' | 'goldensun2' = 'xenoblade';
 
 const STEINSGATE_SYSTEM_PROMPT = `أنت مترجم محترف للعبة Steins;Gate على PSP. استخدم فصحى طبيعية حديثة تحافظ على التوتر العلمي والكوميديا وشخصيات العمل: أوكابي مسرحي، كوريسو ذكية ولاذعة، مايوري لطيفة، ودارو ساخر تقني. ثبّت أسماء الشخصيات ومصطلحات خط العالم وD-Mail وPhoneWave وReading Steiner. القوائم قصيرة ومباشرة. كل رمز يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك: انسخه حرفياً وبالعدد والترتيب والموضع نفسه ولا تترجمه.`;
 
 function getGameSystemPrompt(): string {
+  if (_game === 'goldensun2') return GOLDEN_SUN_2_SYSTEM_PROMPT;
+  if (_game === 'goldensun') return 'You are a professional Arabic translator for Golden Sun (GBA, first game). Preserve ALL GBA technical codes and placeholders exactly once in order. Keep dialogue in fluent, concise Arabic and do not use lore or terms from other games. Output only valid JSON with the requested keys.';
   if (_game === 'steinsgate') return STEINSGATE_SYSTEM_PROMPT;
   if (_game === 'gtaiv') return GTAIV_SYSTEM_PROMPT;
   if (_game === 'gtasa') return GTASA_SYSTEM_PROMPT;
@@ -740,6 +760,11 @@ function detectCategoryHint(sampleKey: string, sampleText: string): string {
 
 function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>, entryKey?: string): string {
   const restored = restoreTags(translated, tags);
+  // Golden Sun must not undergo generic AI line balancing: \x03 and \x1E are
+  // game-engine layout/control bytes, not ordinary paragraph separators.
+  if (_game === 'goldensun2' || _game === 'goldensun') {
+    return goldenSunAllTechnicalTagsUnchanged(original, restored) ? restored : original;
+  }
   const enforced = enforceTagIntegrity(original, restored);
 
   // Essentials commands are executable and their relative order is meaningful.
@@ -1364,9 +1389,17 @@ async function translateWithMyMemory(
       const norm = textToTranslate.toLowerCase();
       const hit = glossaryMap.get(norm);
       if (hit) {
-        result[entry.key] = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
-        stats.directMatches++;
-        continue;
+        const resolved = restoreAndEnforce(entry.original, hit, pe.tags, entry.key);
+        const goldenSun = _game === 'goldensun2' || _game === 'goldensun';
+        if (!goldenSun || (goldenSunAllTechnicalTagsUnchanged(entry.original, resolved) &&
+            /[\u0600-\u06FF]/.test(resolved))) {
+          result[entry.key] = resolved;
+          stats.directMatches++;
+          continue;
+        }
+        // Invalid glossary matches must NEVER replace a Golden Sun Arabic
+        // translation with the English source. Ask AI instead.
+        console.warn(`[Golden Sun] ignoring unsafe direct glossary match at ${entry.key}`);
       }
     }
 
@@ -1786,6 +1819,11 @@ async function translateWithOpenAICompat(
     }
     translated = normalizeTagPlaceholders(translated);
     translated = normalizeLockedTermPlaceholders(translated);
+    if ((_game === 'goldensun2' || _game === 'goldensun') &&
+        !hasExactMaskedTechnicalSequence(item.pe.cleaned, translated)) {
+      console.warn(`[Golden Sun] rejected mismatched or reordered technical placeholders at ${item.entry.key}`);
+      continue; // Do not save an English fallback or silently reinsert misplaced codes.
+    }
     // كشف تكدّس الوسوم في النهاية قبل فك القفل — نتفقّد على نسخة TAG_N الخام
     if (isTagPositionCorrupted(item.pe.cleaned, translated)) {
       droppedTagCluster++;
@@ -1795,7 +1833,14 @@ async function translateWithOpenAICompat(
     translated = unlockTerms(translated, item.termLocks.locks);
     translated = stripUnexpectedPlaceholders(translated, new Set(item.pe.tags.keys()));
     if (glossaryMap) translated = applyGlossaryPost(translated, glossaryMap);
-    result[item.entry.key] = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
+    const output = restoreAndEnforce(item.entry.original, translated, item.pe.tags, item.entry.key);
+    if ((_game === 'goldensun2' || _game === 'goldensun') &&
+        (!goldenSunAllTechnicalTagsUnchanged(item.entry.original, output) ||
+          !/[\u0600-\u06FF]/.test(output.replace(/\\x[0-9a-fA-F]{2}/g, '')))) {
+      console.warn(`[Golden Sun] rejected non-Arabic or damaged control-code output at ${item.entry.key}`);
+      continue;
+    }
+    result[item.entry.key] = output;
   }
   if (droppedForeign > 0) {
     console.warn(`[${providerName}] dropped ${droppedForeign}/${needsAI.length} translations containing non-Arabic scripts (CJK/Cyrillic/etc.)`);
@@ -2243,7 +2288,7 @@ Deno.serve(async (req) => {
       extraInstructions?: string;
       routingMode?: 'free' | 'paid' | 'auto';
       /** Which game these entries are from — swaps AI prompt lore/terminology. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'inazuma' | 'gtasa';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'inazuma' | 'gtasa' | 'goldensun' | 'goldensun2';
     };
     const effectiveRoutingMode: 'free' | 'paid' | 'auto' =
       routingMode === 'free' || routingMode === 'paid' || routingMode === 'auto' ? routingMode : 'auto';
@@ -2255,7 +2300,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : game === 'inazuma' ? 'inazuma' : game === 'gtasa' ? 'gtasa' : 'xenoblade';
+    _game = game === 'goldensun2' ? 'goldensun2' : game === 'goldensun' ? 'goldensun' : game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : game === 'inazuma' ? 'inazuma' : game === 'gtasa' ? 'gtasa' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {
@@ -2290,6 +2335,27 @@ Deno.serve(async (req) => {
         });
       }
       return buildSuccessResponse(entries, result);
+    } else if (provider === 'cerebras') {
+      // Cerebras credit is billable even when promotional. No paid fallback,
+      // no key persistence; model is fixed so a stale saved setting cannot
+      // switch the user to a more expensive model.
+      const cerebrasKey = providerApiKey?.trim();
+      if (!cerebrasKey) {
+        return new Response(JSON.stringify({ error: 'أضف مفتاح Cerebras API من لوحة حسابك. يُستخدم لهذه الجلسة فقط.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (aiModel && aiModel !== 'gpt-oss-120b') {
+        return new Response(JSON.stringify({ error: 'نموذج Cerebras المختار غير معتمد: اختر GPT-OSS 120B.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const glossaryMap = glossary ? parseGlossaryToMap(glossary) : undefined;
+      const result = await translateWithOpenAICompat(
+        entries, protectedEntries, glossaryMap, cerebrasKey,
+        'https://api.cerebras.ai/v1', 'gpt-oss-120b', 'Cerebras GPT-OSS 120B',
+      );
+      return buildSuccessResponse(entries, { ...result, providerUsed: 'cerebras' });
     } else if (provider === 'deepseek') {
       const dsKey = providerApiKey || Deno.env.get('DEEPSEEK_API_KEY');
       if (!dsKey) {

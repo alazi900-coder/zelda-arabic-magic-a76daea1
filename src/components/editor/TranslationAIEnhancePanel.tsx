@@ -440,6 +440,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setProfilePrompt(loadAiProfilePrompt(gameParam));
     setSuggestions([]);
     setGrammarIssues([]);
+    // Never carry an undo stack or active tab from another game's project:
+    // undoing an old game's suggestion could target an unrelated entry.
+    setAppliedHistory([]);
+    setWorkspaceTab("scan");
     processedKeysRef.current.clear();
     abortControllerRef.current?.abort();
     setIsAnalyzing(false);

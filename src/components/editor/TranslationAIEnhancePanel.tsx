@@ -15,6 +15,7 @@ import {
   loadAiProfilePrompt, saveAiProfilePrompt, fingerprintAiContext,
 } from "@/lib/ai-game-profiles";
 import { validateGoldenSun2Translation } from "@/lib/goldensun/goldensun2-editor-bridge";
+import { goldenSunAllTechnicalTagsUnchanged } from "../../../supabase/functions/_shared/goldensun-cerebras";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
 import { requestCodeCraftJson, fetchCodeCraftModels } from "@/lib/codecraft-direct";
 import { requestAlborihiJson } from "@/lib/alborihi-direct";
@@ -301,8 +302,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     if (isUnsafeEnglishReplacement(original, previous, suggestion)) {
       return "الاقتراح يحذف العربية أو يستبدلها بالإنجليزية.";
     }
-    if (isGoldenSun && !validateGoldenSun2Translation(original, suggestion).valid) {
-      return "اقتراح Golden Sun يغيّر أو يحذف رمز تحكم محمياً مثل \\x03 أو \\x1E.";
+    if (isGoldenSun && (!validateGoldenSun2Translation(original, suggestion).valid ||
+      !goldenSunAllTechnicalTagsUnchanged(original, suggestion))) {
+      return "اقتراح Golden Sun يُغيّر وسماً أو ترتيب فاصل سطر، أو يُدخل علامات اتجاه/أشكال Unicode غير آمنة.";
     }
     if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
     if (isPokemonXp) return validatePokemonXpTechnicalTokens(original, suggestion).reason;
@@ -394,7 +396,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [diffMode, setDiffMode] = useState<"word" | "sentence">("word");
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<"scan" | "rules" | "results" | "history" | "settings">("scan");
   const [showRulesDialog, setShowRulesDialog] = useState(false);
   const [profilePrompt, setProfilePrompt] = useState(() => loadAiProfilePrompt(gameParam));
   const gameReviewInstructions = gameParam === "xenoblade"
@@ -438,6 +440,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setProfilePrompt(loadAiProfilePrompt(gameParam));
     setSuggestions([]);
     setGrammarIssues([]);
+    // Never carry an undo stack or active tab from another game's project:
+    // undoing an old game's suggestion could target an unrelated entry.
+    setAppliedHistory([]);
+    setWorkspaceTab("scan");
     processedKeysRef.current.clear();
     abortControllerRef.current?.abort();
     setIsAnalyzing(false);
@@ -1018,6 +1024,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setIsAnalyzing(false);
     setProgress(null);
     setStatusMessage(null);
+    if (!abortRef.current && (allSuggestions.length > 0 || allIssues.length > 0)) setWorkspaceTab("results");
 
     const enhanceCount = allSuggestions.length;
     const grammarCount = allIssues.length;
@@ -1604,15 +1611,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               variant="outline"
               size="sm"
               className="h-7 px-2 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10"
-              onClick={() => setShowRulesDialog(true)}
-              title="قواعد الذكاء الاصطناعي"
+              onClick={() => setWorkspaceTab("rules")}
+              title="إدارة قواعد الذكاء الاصطناعي"
             >
               <Shield className="w-3.5 h-3.5" />
               <span>القواعد</span>
               <Badge variant="secondary" className="h-4 px-1 text-[9px]">{enabledRules.size}</Badge>
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowSettings(s => !s)} title="إعدادات">
-              {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWorkspaceTab("settings")} title="إعدادات">
+              <ChevronDown className="w-4 h-4" />
             </Button>
           </div>
         </CardTitle>
@@ -1658,8 +1665,75 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           )}
         </div>
 
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* Workspaces: keep settings/rules out of the review results canvas. */}
+        <div role="tablist" aria-label="أقسام تحسين الترجمة" className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 rounded-lg border p-1.5">
+          {([
+            ["scan", "الفحص"],
+            ["rules", "القواعد"],
+            ["results", "النتائج"],
+            ["history", "السجل"],
+            ["settings", "الإعدادات"],
+          ] as const).map(([tab, label]) => (
+            <Button key={tab} role="tab" aria-selected={workspaceTab === tab}
+              data-testid={`enhance-tab-${tab}`} variant={workspaceTab === tab ? "default" : "ghost"}
+              size="sm" className="h-9 text-xs gap-1 min-w-0"
+              onClick={() => setWorkspaceTab(tab)}>
+              {label}
+              {tab === "results" && suggestions.length + grammarIssues.length > 0 && (
+                <Badge variant="secondary" className="text-[10px] px-1">{suggestions.length + grammarIssues.length}</Badge>
+              )}
+            </Button>
+          ))}
+        </div>
+        {workspaceTab === "rules" && (
+          <section role="tabpanel" aria-label="قواعد تحسين الترجمة" className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <p className="text-sm font-semibold">قواعد {AI_PROFILE_NAMES[gameParam]}</p>
+                <p className="text-xs text-muted-foreground">مفصولة لكل لعبة. لا يُرسَل إلى الذكاء الاصطناعي إلا ما شغّلته.</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setShowRulesDialog(true)} className="gap-1.5">
+                <Shield className="w-4 h-4" /> تحرير القواعد وتشغيلها
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">{enabledRules.size} قاعدة مفعّلة؛ يمكنك تحرير برومبت كل قاعدة وإنشاء قواعد خاصة.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {getActiveEnhancementRules(gameParam, enabledRules, customRules, builtinOverrides).map(rule => (
+                <Badge key={rule.id} variant="outline" className="text-xs max-w-full whitespace-normal">{rule.label}</Badge>
+              ))}
+              {enabledRules.size === 0 && <span className="text-xs text-muted-foreground">لا توجد قواعد مفعّلة.</span>}
+            </div>
+          </section>
+        )}
+        {workspaceTab === "history" && (
+          <section role="tabpanel" aria-label="سجل التعديلات" className="space-y-2 rounded-lg border p-3">
+            <div className="flex justify-between items-center gap-2">
+              <p className="text-sm font-semibold">سجل التعديلات في هذه الجلسة</p>
+              <Button size="sm" variant="outline" disabled={!appliedHistory.length || isAnalyzing}
+                onClick={undoLast}><Undo2 className="w-3.5 h-3.5 ml-1" /> تراجع عن آخر تعديل</Button>
+            </div>
+            {appliedHistory.length ? (
+              <ScrollArea className="max-h-64">
+                <div className="space-y-2">
+                  {appliedHistory.slice(-20).reverse().map((entry, index) => (
+                    <div key={entry.key + ":" + entry.ts + ":" + index} className="rounded border p-2 text-xs space-y-1">
+                      <p dir="ltr" className="font-mono text-muted-foreground truncate">{entry.key}</p>
+                      <p className="text-muted-foreground line-through" dir="auto">{entry.previous}</p>
+                      <p dir="auto">{entry.applied}</p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : <p className="text-xs text-muted-foreground">لم تُطبَّق تعديلات في هذه الجلسة بعد.</p>}
+            <p className="text-xs text-muted-foreground">إدارة ذاكرة المراجعة والتصدير والاستيراد موجودة ضمن الإعدادات.</p>
+          </section>
+        )}
+
         {/* Settings panel */}
-        {showSettings && (
+        {workspaceTab === "settings" && (
           <div className="mt-3 p-3 rounded-lg border bg-muted/20 space-y-2">
             <div className="space-y-1.5 rounded-md border p-2">
               <label className="text-xs font-semibold">برومبت مراجعة {AI_PROFILE_NAMES[gameParam]}</label>
@@ -1813,9 +1887,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             </div>
           </div>
         )}
-      </CardHeader>
 
-      <CardContent className="space-y-4">
         {/* Inline error banner — أظهر أسباب الفشل داخل الأداة (ليس فقط toast) */}
         {lastError && (
           <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive">
@@ -1831,6 +1903,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         )}
 
         {/* Action buttons */}
+        {workspaceTab === "scan" && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <Button variant="outline" size="sm" onClick={() => setShowRulesDialog(true)} className="gap-1.5 h-10 border-primary/30 text-primary hover:bg-primary/10">
             <Shield className="w-4 h-4" />
@@ -1869,24 +1942,27 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           </Button>
         </div>
 
-        {/* Controls row */}
+        )}
+        {/* Essential stop control stays visible during active scans. Other
+            controls appear only on their corresponding workspace. */}
+        {(workspaceTab === "scan" || workspaceTab === "results" || isAnalyzing) && (
         <div className="flex items-center gap-2 flex-wrap">
           {isAnalyzing && (
             <Button variant="destructive" size="sm" onClick={stopAnalysis} className="gap-1.5">
               <Square className="w-3 h-3" /> إيقاف
             </Button>
           )}
-          {!isAnalyzing && processedCount > 0 && (
+          {!isAnalyzing && workspaceTab === "scan" && processedCount > 0 && (
             <Button variant="ghost" size="sm" onClick={() => { resetProcessedKeys(); setSuggestions([]); setGrammarIssues([]); setFilterType(null); setSeverityFilter(null); void enhanceCacheClear(); }} className="gap-1.5" title="فحص كامل من جديد (يتجاهل نتائج الفحص المخزَّنة سابقاً)">
               <RotateCcw className="w-3.5 h-3.5" /> إعادة فحص
             </Button>
           )}
-          {appliedHistory.length > 0 && (
+          {workspaceTab === "scan" && appliedHistory.length > 0 && (
             <Button variant="ghost" size="sm" onClick={undoLast} className="gap-1.5" title="تراجع آخر إصلاح">
               <Undo2 className="w-3.5 h-3.5" /> تراجع ({appliedHistory.length})
             </Button>
           )}
-          {(suggestions.length > 0 || grammarIssues.length > 0) && !isAnalyzing && (
+          {workspaceTab === "results" && (suggestions.length > 0 || grammarIssues.length > 0) && !isAnalyzing && (
             <>
               <Button size="sm" variant="outline" onClick={exportCSV} className="gap-1.5" title="تصدير CSV">
                 <Download className="w-3.5 h-3.5" /> CSV
@@ -1908,6 +1984,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           )}
         </div>
 
+        )}
         {/* Progress bar */}
         {progress && (
           <div className="space-y-1.5">
@@ -1919,6 +1996,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           </div>
         )}
 
+        {workspaceTab === "results" && (
+          <section role="tabpanel" aria-label="نتائج تحسين الترجمة" className="space-y-3">
         {/* Search inside results */}
         {(suggestions.length > 0 || grammarIssues.length > 0) && (
           <div className="relative">
@@ -2063,6 +2142,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             )}
           </TabsContent>
         </Tabs>
+          </section>
+        )}
       </CardContent>
     </Card>
   );

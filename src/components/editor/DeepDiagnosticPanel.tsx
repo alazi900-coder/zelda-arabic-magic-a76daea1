@@ -8,6 +8,7 @@ import { ExtractedEntry, EditorState } from "@/components/editor/types";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { repairTranslationTagsForBuild, applyRlmIsolation } from "@/lib/xc3-build-tag-guard";
+import { repairMissingTechnicalTokens } from "@/lib/repair-missing-technical-tokens";
 import { restoreRisenTags } from "@/lib/risen-tag-guard";
 import { repairSteinsGateTags } from "@/lib/steinsgate/steinsgate-tags";
 import { repairCrashlandsTags } from "@/lib/crashlands/crashlands-tags";
@@ -174,7 +175,7 @@ const repairGtaIvProtectedSequence = (category: string, original: string, candid
 // Categories fixable by repairing $N variables
 const DOLLAR_VAR_FIXABLE_CATEGORIES = new Set(["corrupted_vars"]);
 // Categories fixable by restoring original text
-const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "null_char", "unmatched_ruby", "broken_tag_syntax", "control_extra", "double_shaped", "missing_vars", "pkm_var_mismatch", "technical_mismatch", "format_specifier_mismatch", "format_specifier_reordered"]);
+const RESTORE_ORIGINAL_CATEGORIES = new Set(["control_chars", "pua_chars", "missing_vars", "technical_mismatch", "format_specifier_mismatch"]);
 // Categories fixable by stripping invisible chars
 const STRIP_INVISIBLE_CATEGORIES = new Set(["invisible_chars"]);
 // Categories fixable by inserting \n after [XENO:n ]
@@ -375,24 +376,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       const repaired = repairTwomTags(entry.original, text);
       return { finalText: repaired.text, repairedText: repaired.text, changed: repaired.changed, restoredOriginal: false, repairedIssues: detectIssues(entry, repaired.text) };
     }
-    const repaired = repairTranslationTagsForBuild(entry.original, text);
-    const repairedIssues = detectIssues(entry, repaired.text);
-    const stillCritical = repairedIssues.some((issue) => issue.severity === "critical");
-    const mustRestoreOriginal =
-      !repaired.exactTagMatch ||
-      !repaired.sequenceMatch ||
-      repaired.missingClosingTags ||
-      repaired.missingControlOrPua ||
-      stillCritical;
-
-    const finalText = mustRestoreOriginal ? entry.original : repaired.text;
-
+    const repaired = repairMissingTechnicalTokens(entry.original, text);
+    const finalText = repaired.safe ? repaired.text : text;
     return {
       finalText,
-      repairedText: repaired.text,
+      repairedText: finalText,
       changed: finalText !== text,
-      restoredOriginal: mustRestoreOriginal && entry.original !== text,
-      repairedIssues,
+      restoredOriginal: false,
+      repairedIssues: detectIssues(entry, finalText),
     };
   }, []);
 
@@ -475,7 +466,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     }
 
     if (RESTORE_ORIGINAL_CATEGORIES.has(issue.category)) {
-      return { fixResult: entry.original, reason: '↩️ سيتم استعادة النص الأصلي الإنجليزي' };
+      const safeRepair = getSafeTagRepair(entry, trans);
+      return {
+        fixResult: safeRepair.finalText,
+        reason: safeRepair.changed
+          ? '🏷️ سيُعاد الرمز المفقود إلى موضعه التقريبي من الأصل، دون حذف الترجمة العربية'
+          : '⚠️ موضع الرمز غير مضمون؛ راجعه يدوياً بدل فقدان الترجمة العربية',
+      };
     }
 
     if (RISEN_TAG_FIXABLE_CATEGORIES.has(issue.category)) {
@@ -728,10 +725,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       return;
     }
 
-    if (onApplyFix) {
-      onApplyFix(issue.key, entry.original);
-      toast({ title: '↩️ استعادة النص الأصلي' });
-    }
+    toast({ title: '⚠️ مراجعة يدوية مطلوبة', description: 'لن يُستبدل النص العربي بالأصل الإنجليزي تلقائياً' });
   }, [applyTagFixes, entryMap, getSafeTagRepair, onApplyFix]);
 
   /** Fix all issues in active category */
@@ -801,10 +795,13 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
       const updates: Record<string, string> = {};
       for (const key of uniqueKeys) {
         const entry = entryMap.get(key);
-        if (entry) updates[key] = entry.original;
+        const trans = state.translations[key];
+        if (!entry || !trans) continue;
+        const repaired = getSafeTagRepair(entry, trans);
+        if (repaired.changed) updates[key] = repaired.finalText;
       }
       const count = applyBatchUpdates(updates);
-      toast({ title: '↩️ استعادة جماعية', description: `تم استعادة النص الأصلي لـ ${count} نص` });
+      toast({ title: '🏷️ استعادة الوسوم فقط', description: `تم إصلاح ${count} نص مع إبقاء العربية؛ البقية تحتاج مراجعة يدوية` });
       setTimeout(() => runScan(true), 250);
       return;
     }
@@ -1048,9 +1045,14 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
           const entry = entryMap.get(issue.key);
           if (entry) {
             const trans = state.translations[issue.key] || '';
-            updates[issue.key] = entry.original;
-            counters.restore++;
-            reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'restored', reason: '↩️ تمت استعادة النص الأصلي الإنجليزي (المشكلة غير قابلة للإصلاح مع الحفاظ على الترجمة)', before: trans, after: entry.original });
+            const repaired = getSafeTagRepair(entry, trans);
+            if (repaired.changed) {
+              updates[issue.key] = repaired.finalText;
+              counters.tagFixed++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: 'fixed', reason: '🏷️ أُعيدت الوسوم الناقصة دون حذف الكلمات العربية؛ راجع موضعها', before: trans, after: repaired.finalText });
+            } else {
+              reportEntries.push({ key: issue.key, label: entry.label, category: catLabel, action: 'unchanged', reason: '⚠️ إصلاح غير مؤكد؛ تبقى الترجمة العربية دون تغيير', before: trans, after: trans });
+            }
           }
           processedKeys.add(issue.key);
           continue;
@@ -1430,7 +1432,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                           <Button size="sm" variant="default" className="text-xs h-7" onClick={handleLocalFixAll}>
                             <Wrench className="w-3 h-3 ml-1" />
                             {RESTORE_ORIGINAL_CATEGORIES.has(activeFilter)
-                              ? `↩️ استعادة الأصل (${activeFilterKeys.size})`
+                              ? `🏷️ استعادة الرموز فقط (${activeFilterKeys.size})`
                               : DOLLAR_VAR_FIXABLE_CATEGORIES.has(activeFilter)
                               ? `💲 إصلاح المتغيرات (${activeFilterKeys.size})`
                               : RISEN_TAG_FIXABLE_CATEGORIES.has(activeFilter)

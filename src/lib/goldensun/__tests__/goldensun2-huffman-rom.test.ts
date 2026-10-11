@@ -5,6 +5,7 @@ import {
   GS2_STRING_POINTERS, GS2_ORIGINAL_ROM_SIZE, GS2_STRING_COUNT,
   hasGoldenSun2TextTables, extractGoldenSun2Strings,
   goldenSun2TextToBytes, goldenSun2BytesToText, buildGoldenSun2StringTable, isGoldenSun2ArabicFontRom,
+  removeLegacyGoldenSun2SourceCopies,
 } from "../goldensun2-huffman-rom";
 
 function write32(data: Uint8Array, at: number, number: number) {
@@ -58,6 +59,25 @@ function makeFixture(): Uint8Array {
 }
 
 describe("The Lost Age complete extraction and rebuild", () => {
+  it("removes only source byte-dump copies, preserving genuine old Arabic translations", () => {
+    const entries = [
+      { index: 5471, msbtFile: GS2_TEXT_FILE, original: "アイテム！", legacyOriginal: "\\x83A\\x83C" },
+      { index: 5472, msbtFile: GS2_TEXT_FILE, original: "まほう", legacyOriginal: "\\x82\\xDC" },
+      { index: 0, msbtFile: GS2_TEXT_FILE, original: "(No saved data)" },
+    ];
+    const base = GS2_TEXT_FILE + ":";
+    const input = {
+      [base + 5471]: "\\x83A\\x83C",
+      [base + 5472]: "سحر",
+      [base + 0]: "لا توجد بيانات محفوظة",
+    };
+    const after = removeLegacyGoldenSun2SourceCopies(entries, input);
+    expect(after[base + 5471]).toBeUndefined();
+    expect(after[base + 5472]).toBe("سحر");
+    expect(after[base + 0]).toBe("لا توجد بيانات محفوظة");
+    expect(input[base + 5471]).toBe("\\x83A\\x83C");
+  });
+
   it("decodes the exact Japanese item dialogue from the real AGFE ROM", () => {
     // Actual line #5471 of the stock US/Europe cartridge, formerly displayed
     // in the editor as \x83A\x83C\x83e..., including real control bytes.

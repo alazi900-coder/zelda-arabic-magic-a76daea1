@@ -56,6 +56,7 @@ interface UseAutoPilotProps {
   userTokenRouterKey?: string;
   userGmiCloudKey?: string;
   userCodeCraftKey?: string;
+  userCerebrasKey?: string;
   myMemoryEmail: string;
   rebalanceNewlines: boolean;
   npcMaxLines: number;
@@ -83,7 +84,7 @@ function pickFreeProvider(): { provider: string; model?: string; label: string }
 
 export function useAutoPilot({
   state, setState, activeGlossary, parseGlossaryMap,
-  translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey,
+  translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, userCerebrasKey,
   myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel,
   addAiRequest, addMyMemoryChars, qualityStats, filteredEntries,
   customPromptInstructions, aiRoutingMode = 'paid', risenVariant,
@@ -127,6 +128,8 @@ export function useAutoPilot({
       ? userGmiCloudKey
       : prov === 'codecraft'
       ? userCodeCraftKey
+      : prov === 'cerebras'
+      ? userCerebrasKey
       : undefined;
     return JSON.stringify({
       entries,
@@ -138,12 +141,12 @@ export function useAutoPilot({
       rebalanceNewlines: rebalanceNewlines || undefined,
       npcMaxLines,
       npcMode: npcMode || undefined,
-      aiModel: forceModel || ((prov === 'gemini' || prov === 'gmicloud' || prov === 'alborihi') ? aiModel : undefined),
+      aiModel: forceModel || ((prov === 'gemini' || prov === 'gmicloud' || prov === 'alborihi' || prov === 'cerebras') ? aiModel : undefined),
       extraInstructions: customPromptInstructions || undefined,
       routingMode: aiRoutingMode,
       game: resolveGameParam(state?.entries?.[0]?.msbtFile, risenVariant),
     });
-  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey,
+  }, [activeGlossary, translationProvider, userGeminiKey, userDeepSeekKey, userTokenRouterKey, userGmiCloudKey, userCodeCraftKey, userCerebrasKey,
       myMemoryEmail, rebalanceNewlines, npcMaxLines, npcMode, aiModel, customPromptInstructions, aiRoutingMode, state]);
 
   const run = useCallback(async (runMode: AutoPilotMode = mode) => {

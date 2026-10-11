@@ -237,8 +237,9 @@ export function useEditorSettings() {
   // === Per-game translation prompts (with legacy Xenoblade migration) ===
   // These settings follow the loaded ROM. Provider and model settings remain
   // global, but prompt text and category overrides must never leak between games.
-  // Unknown or unimported sessions must not inherit Xenoblade instructions.
-  const [activeAiGameProfile, setActiveAiGameProfile] = useState<AiGameProfile>("generic");
+  // Keep the original legacy Xenoblade prompt visible until a loaded game
+  // selects its own isolated profile; existing saved data must remain readable.
+  const [activeAiGameProfile, setActiveAiGameProfile] = useState<AiGameProfile>("xenoblade");
   const gamePromptKey = (field: "translationPrompt" | "categoryPrompts"): string => {
     if (activeAiGameProfile === "xenoblade")
       return field === "translationPrompt" ? "customPromptInstructions" : "categoryPromptTemplates";

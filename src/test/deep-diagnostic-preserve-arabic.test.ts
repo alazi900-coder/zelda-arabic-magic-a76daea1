@@ -40,6 +40,14 @@ describe("deep diagnostic repairs without deleting Arabic", () => {
     expect(result.text).toBe("أولًا %s ثم");
   });
 
+  it("does not duplicate a translated or malformed bracket tag", () => {
+    const original = "Hello [Passive] world";
+    const translation = "مرحبا [سلبي] بالعالم";
+    const result = repairMissingTechnicalTokens(original, translation);
+    expect(result.safe).toBe(false);
+    expect(result.text).toBe(translation);
+  });
+
   it("never overwrites Arabic if a different runtime token is present", () => {
     const result = repairMissingTechnicalTokens("Hi [XENO:wait]", "مرحبًا [XENO:bad]");
     expect(result.safe).toBe(false);

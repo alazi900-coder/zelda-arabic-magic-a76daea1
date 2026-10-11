@@ -1,4 +1,4 @@
-import type { AiGameProfile } from "@/lib/ai-game-profiles";
+import { AI_PROFILE_NAMES, type AiGameProfile } from "@/lib/ai-game-profiles";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -83,10 +83,13 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved, profile = "xen
   };
 
   const handleSave = () => {
-    saveEnabledRules(enabled, profile);
+    // The enabled-ID serializer filters out IDs it cannot yet find in storage.
+    // Persist newly created custom rules FIRST; otherwise "enabled" switches
+    // for new rules silently disappear the first time the dialog is saved.
     saveCustomRules(customRules, profile);
     saveBuiltinOverrides(overrides, profile);
-    onSaved?.(enabled, allRules);
+    saveEnabledRules(enabled, profile);
+    onSaved?.(loadEnabledRules(profile), allRules);
     onOpenChange(false);
   };
 
@@ -180,7 +183,7 @@ export function EnhanceRulesDialog({ open, onOpenChange, onSaved, profile = "xen
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Shield className="w-5 h-5 text-primary" />
-            قواعد الذكاء الاصطناعي — {profile}
+            قواعد الذكاء الاصطناعي — {AI_PROFILE_NAMES[profile]}
           </DialogTitle>
           <DialogDescription className="text-xs">
             شغّل/أوقف، عدّل البروميت، أو أنشئ قواعد جديدة.{" "}

@@ -75,9 +75,9 @@ export function parseGoldenSun2Catalog(value: unknown): GoldenSun2Catalog {
     if (!isRow(row)) throw new Error(`سجل غير صالح عند السطر ${i + 1}`);
     const idx = row.index ?? row.id ?? i;
     const source = row.original ?? row.source;
-    if (!Number.isSafeInteger(idx) || Number(idx) < 0 || Number(idx) > 999999 || used.has(Number(idx)))
+    if (typeof idx !== "number" || !Number.isSafeInteger(idx) || idx < 0 || idx > 999999 || used.has(idx))
       throw new Error(`معرّف مكرر أو غير صالح في السجل ${i + 1}`);
-    if (typeof source !== "string" || !source.length || source.length > 10000)
+    if (typeof source !== "string" || !source.length || source.length > 10000 || WRONG_ESCAPE.test(source) || WRONG_GS2.test(source))
       throw new Error(`النص الإنجليزي الأصلي مفقود أو طويل جدًا في السجل ${i + 1}`);
     const translation = row.translation;
     if (translation !== undefined && (typeof translation !== "string" || translation.length > 10000))

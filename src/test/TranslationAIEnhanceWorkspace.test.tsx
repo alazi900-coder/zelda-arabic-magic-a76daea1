@@ -1,4 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+// JSDOM deliberately has no IndexedDB. The workspace only reads review
+// memory on mount; no real persistence is part of this view-switching test.
+vi.mock("@/lib/idb-storage", () => ({
+  idbGet: vi.fn().mockResolvedValue(undefined),
+  idbSet: vi.fn().mockResolvedValue(undefined),
+}));
 import { fireEvent, render, screen } from "@testing-library/react";
 import TranslationAIEnhancePanel from "@/components/editor/TranslationAIEnhancePanel";
 import type { ExtractedEntry } from "@/components/editor/types";

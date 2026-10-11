@@ -22,6 +22,7 @@ import {
 import { auditGoldenSun2Rom, looksLikeGoldenSun2Rom, type GoldenSun2Audit } from "@/lib/goldensun/goldensun2-rom";
 import {
   extractGoldenSun2Strings, hasGoldenSun2TextTables, isGoldenSun2ArabicFontRom,
+  removeLegacyGoldenSun2SourceCopies,
 } from "@/lib/goldensun/goldensun2-huffman-rom";
 
 /**
@@ -187,11 +188,15 @@ export default function GoldenSun() {
                 (extracted[i].legacyOriginal !== undefined &&
                   e.original === extracted[i].legacyOriginal)));
           await storePreviousGoldenSunTranslations();
-          const translations = {
+          // A few old editor snapshots had the raw Japanese source
+          // (\\x83A...) copied verbatim into the translation box. That is
+          // not a translation; remove ONLY exact copies of that old source.
+          // All genuine Arabic work and edits stay untouched.
+          const translations = removeLegacyGoldenSun2SourceCopies(extracted, {
             ...(sameRomText ? previous?.translations || {} : {}),
             ...(sameRomText && previousGame === GOLDENSUN2_SOURCE_GAME
               ? active?.translations || {} : {}),
-          };
+          });
           await idbSet("editorState", {
             entries, translations, freshExtraction: true,
             protectedEntries: sameRomText ? previous?.protectedEntries || [] : [],

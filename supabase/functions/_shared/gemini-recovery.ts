@@ -22,12 +22,14 @@ export interface GeminiCallResult {
 }
 
 export function extractGeminiText(data: unknown): string {
-  const candidates = (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }> } | null)?.candidates;
+  const candidates = (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: unknown; thought?: boolean }> } }> } | null)?.candidates;
   if (!Array.isArray(candidates)) return "";
   for (const candidate of candidates) {
     const parts = candidate?.content?.parts;
     if (!Array.isArray(parts)) continue;
-    const text = parts.map(part => typeof part?.text === "string" ? part.text : "").join("");
+    // Gemini thinking models can include thought parts alongside the answer.
+    // Their contents are not the translation JSON and must never be concatenated.
+    const text = parts.map(part => !part?.thought && typeof part?.text === "string" ? part.text : "").join("");
     if (text.trim()) return text;
   }
   return "";

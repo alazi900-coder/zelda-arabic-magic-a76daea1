@@ -58,6 +58,37 @@ function makeFixture(): Uint8Array {
 }
 
 describe("The Lost Age complete extraction and rebuild", () => {
+  it("decodes the exact Japanese item dialogue from the real AGFE ROM", () => {
+    // Actual line #5471 of the stock US/Europe cartridge, formerly displayed
+    // in the editor as \x83A\x83C\x83e..., including real control bytes.
+    const bytes = [
+      0x83, 0x41, 0x83, 0x43, 0x83, 0x65, 0x83, 0x80, 0x81, 0x49,
+      0x03, 0x14, 0x01, 0x03,
+      0x83, 0x51, 0x83, 0x62, 0x83, 0x67, 0x81, 0x5b, 0x02,
+    ];
+    const text = "アイテム！\\x03\\x14\\x01\\x03ゲットー\\x02";
+    expect(goldenSun2BytesToText(bytes, false)).toBe(text);
+    expect(goldenSun2BytesToText(bytes, true)).toBe(text);
+  });
+
+  it("decodes other original Japanese lines, including 0x96DA kanji", () => {
+    expect(goldenSun2BytesToText([0x82, 0xb1])).toBe("こ");
+    expect(goldenSun2BytesToText([
+      0x82, 0x6d, 0x82, 0xce, 0x82, 0xf1, 0x96, 0xda,
+    ], true)).toBe("Ｎばん目");
+  });
+
+  it("does not mistake isolated 0xB0 punctuation in English for Arabic", () => {
+    expect(goldenSun2BytesToText([0x59, 0x65, 0x73, 0xb0, 0x4e, 0x6f], true))
+      .toBe("Yes\\xB0No");
+  });
+
+  it("displays contiguous verified Arabic font glyph codes as normal Arabic", () => {
+    expect(goldenSun2BytesToText([0xf0, 0xd3, 0xeb], true)).toBe("نعم");
+    // Do not invent Arabic characters on an unpatched cartridge.
+    expect(goldenSun2BytesToText([0xf0, 0xd3, 0xeb], false))
+      .toBe("\\xF0\\xD3\\xEB");
+  });
   it("retains argument bytes as immutable technical tags even when ASCII", () => {
     expect(goldenSun2BytesToText([0x11, 0x41, 0x03, 0x42]))
       .toBe(String.raw`\x11\x41\x03B`);

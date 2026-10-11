@@ -1,5 +1,6 @@
 import { RISEN_TAG_REGEX } from "../_shared/risen-tag-mask.ts";
 import { PLAT_TAG_RE } from "../_shared/plat-tag-mask.ts";
+import { callGeminiWithRecovery, extractGeminiText } from "../_shared/gemini-recovery.ts";
 import { GMICLOUD_OPENAI_BASE_URL, resolveGmiCloudTextModel } from "../_shared/gmicloud.ts";
 
 const corsHeaders = {
@@ -2049,67 +2050,47 @@ async function translateWithAI(
     const isGeminiModelId = (m?: string) => typeof m === 'string' && /^gemini-[a-z0-9.-]+$/.test(m);
     const requestedModel = isGeminiModelId(aiModel) ? aiModel as string : DEFAULT_GEMINI_MODEL;
     // On free tier each model has its own daily quota (200/250/100 req/day).
-    // When the chosen one is exhausted (429), auto-rotate through the others
-    // before bubbling up so the user gets ~550 req/day combined.
-    const ROTATION = [DEFAULT_GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+    // Try the user's selected model first. A transient Google outage/timeout
+    // must not strand the entire translation; shared transport retries briefly,
+    // then rotates only to explicitly named Gemini models (never a paid service).
+    const ROTATION = [DEFAULT_GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
     const modelSequence = [requestedModel, ...ROTATION.filter(m => m !== requestedModel)];
-
-    const callGemini = async (modelName: string) => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${effectiveKey}`;
-      return await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: getGameSystemPrompt() }] },
-          generationConfig: { temperature: 0.3 },
-        }),
-      });
-    };
-
-    let geminiResponse: Response | null = null;
-    let lastErrText = '';
-    let lastStatus = 0;
-    for (const modelName of modelSequence) {
-      const resp = await callGemini(modelName);
-      if (resp.ok) {
-        geminiResponse = resp;
-        if (modelName !== requestedModel) {
-          console.log(`Gemini auto-rotated: ${requestedModel} → ${modelName}`);
-        }
-        break;
-      }
-      lastStatus = resp.status;
-      lastErrText = await resp.text();
-      // Only rotate on rate-limit / overloaded errors when the user supplied
-      // their own key; other errors (auth/invalid key) should fail fast.
-      const isQuotaErr = resp.status === 429 || resp.status === 503;
-      if (!isQuotaErr || !userApiKey?.trim()) {
-        geminiResponse = resp;
-        break;
-      }
-      console.log(`Gemini ${modelName} hit ${resp.status} — trying next model...`);
+    const geminiAttempt = await callGeminiWithRecovery({
+      apiKey: effectiveKey,
+      models: modelSequence,
+      body: {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: getGameSystemPrompt() }] },
+        generationConfig: { temperature: 0.3 },
+      },
+    });
+    const geminiResponse = geminiAttempt.response;
+    const lastStatus = geminiResponse.status;
+    const lastErrText = geminiResponse.ok ? '' : await geminiResponse.clone().text();
+    if (geminiResponse.ok && geminiAttempt.modelUsed !== requestedModel) {
+      console.warn(`[gemini] selected ${requestedModel} temporarily unavailable; used ${geminiAttempt.modelUsed}`);
     }
 
-    if (!geminiResponse || !geminiResponse.ok) {
-      console.error('Gemini API error:', lastErrText);
-      if (lastStatus === 429 || lastStatus === 503) {
-        // Free routing mode: never fallback to paid Lovable Gateway
+    if (!geminiResponse.ok) {
+      console.warn('[gemini] request failed', { status: lastStatus, attempts: geminiAttempt.attempts });
+      if ([429, 500, 502, 503, 504].includes(lastStatus)) {
         if (!allowLovableFallback) {
-          throw new Error('🆓 وضع "مجاني فقط": تجاوزت الحد اليومي لـ Gemini Free — انتظر ساعات قليلة أو بدّل الوضع إلى "تلقائي" أو "مدفوع"');
+          if (lastStatus === 429) {
+            throw new Error('429: انتهت حصة Gemini أو تجاوزت معدل الطلبات مؤقتاً. انتظر موعد إعادة تعيين الحصة أو غيّر النموذج');
+          }
+          throw new Error(`502: تعذّر الاتصال مؤقتاً بخادم Gemini (HTTP ${lastStatus}) بعد إعادة المحاولة — لم تتضرر الترجمات`);
         }
-        if (userApiKey?.trim()) {
-          throw new Error(`تجاوزت الحد المجاني لـ Gemini اليومي على كل الموديلات (${modelSequence.join(' + ')}) — انتظر ساعات قليلة أو استخدم موفّراً آخر (DeepSeek أو Google Translate)`);
-        }
-        console.log(`Gemini ${lastStatus} (server key), falling back to Lovable AI...`);
+        console.warn(`[gemini] temporary HTTP ${lastStatus}; auto mode will try Lovable Gateway`);
       } else {
-        if (lastStatus === 400) throw new Error('مفتاح Gemini غير صالح — تحقق منه في Google AI Studio (aistudio.google.com)');
-        if (lastStatus === 403) throw new Error('مفتاح Gemini محظور أو منتهي — أنشئ مفتاحاً جديداً من Google AI Studio');
-        throw new Error(`خطأ Gemini: ${lastStatus} — ${lastErrText.slice(0, 200)}`);
+        if (lastStatus === 400) throw new Error(`400: طلب Gemini غير مقبول — ${lastErrText.slice(0, 180)}`);
+        if (lastStatus === 401 || lastStatus === 403) throw new Error('401: مفتاح Gemini غير صالح أو لا يملك صلاحية هذا النموذج — تحقّق من Google AI Studio');
+        if (lastStatus === 404) throw new Error(`404: نموذج Gemini غير متاح لهذا المفتاح (${requestedModel}) — اختر نموذجاً من قائمة النماذج الحية`);
+        if (lastStatus === 422) throw new Error(`422: رفض Gemini الرد — ${lastErrText.slice(0, 180)}`);
+        throw new Error(`خطأ Gemini: ${lastStatus} — ${lastErrText.slice(0, 180)}`);
       }
     } else {
       const geminiData = await geminiResponse.json();
-      const content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const content = extractGeminiText(geminiData);
       if (detectTruncation(content)) {
         console.warn('Gemini response truncated, results may be incomplete');
       }

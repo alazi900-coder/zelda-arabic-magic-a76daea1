@@ -1189,7 +1189,7 @@ export function useEditorState() {
     if (!state) return { keys, keysByCharacter, characters: [] as GoldenSunUnsupportedCharacter[] };
 
     for (const entry of state.entries) {
-      if (!entry.msbtFile.startsWith("goldensun/")) continue;
+      if (!entry.msbtFile.startsWith("goldensun/") || entry.msbtFile.startsWith("goldensun/lost-age/")) continue;
       const key = `${entry.msbtFile}:${entry.index}`;
       const translation = state.translations[key] || "";
       if (!translation.trim()) continue;

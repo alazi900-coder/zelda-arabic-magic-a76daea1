@@ -37,6 +37,10 @@ import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } fro
 import { isTranslationExcludedText, type ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
 import {
+  getActiveEnhancementRules, buildActiveEnhancementInstructions,
+  filterDirectEnhancementFindings,
+} from "@/lib/enhance-rule-execution";
+import {
   loadEnabledRules, loadCustomRules, loadBuiltinOverrides,
   type EnhanceRuleId, type EnhanceRule, type BuiltinOverride,
 } from "@/lib/enhance-rules";
@@ -759,9 +763,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const learnedFeedback = await getRecentFeedbackForPrompt(8, gameParam).catch(() => "");
 
     // توقيع سياق الفحص — أي تغيير فيه (موديل/وضع/قواعد/تعليمات) يُبطل الكاش تلقائياً.
+    const activeRulesForThisRun = getActiveEnhancementRules(gameParam, currentEnabledRules, currentCustomRules, currentBuiltinOverrides);
+    const activeDetectIds = new Set(activeRulesForThisRun.filter(r => r.kind === 'detect').map(r => r.id));
+    const activeRulesPrompt = buildActiveEnhancementInstructions(activeRulesForThisRun);
     const cacheContextSignature = [
-      "profiles-v1", gameParam, mode, requestModel, effectiveProvider, aiRoutingMode,
+      "profiles-v2", gameParam, mode, requestModel, effectiveProvider, aiRoutingMode,
       Array.from(currentEnabledRules).sort().join(","),
+      fingerprintAiContext(JSON.stringify(activeRulesForThisRun.map(r => [r.id, r.kind, r.prompt]))),
       JSON.stringify(currentCustomRules),
       JSON.stringify(currentBuiltinOverrides),
       gameReviewInstructions,
@@ -860,19 +868,19 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       // at all, so routing there would silently land on another provider.
       if (effectiveProvider === 'gmicloud' || effectiveProvider === 'codecraft' || effectiveProvider === 'alborihi') {
         const responseShape = mode === 'enhance'
-          ? '{"suggestions":[{"key":"","original":"","current":"","suggested":"","reason":"","type":"style"}]}'
+          ? '{"suggestions":[{"key":"","original":"","current":"","suggested":"","reason":"","type":"style","rule_id":"enabled-rule-id"}]}'
           : mode === 'grammar'
-            ? '{"issues":[{"key":"","original":"","translation":"","issue":"","suggestion":"","severity":"medium","category":"wrong"}]}'
-            : '{"results":[{"key":"","original":"","current":"","suggested":"","category":"style","reason":"","type":"style"}]}'
+            ? '{"issues":[{"key":"","original":"","translation":"","issue":"","suggestion":"","severity":"medium","category":"wrong","rule_id":"enabled-rule-id"}]}'
+            : '{"results":[{"key":"","original":"","current":"","suggested":"","category":"style","reason":"","type":"style","rule_id":"enabled-rule-id"}]}'
         const askJson = effectiveProvider === 'codecraft' ? requestCodeCraftJson : effectiveProvider === 'alborihi' ? requestAlborihiJson : requestGmiCloudJson;
         const data = await askJson<Record<string, unknown>>({
           apiKey: effectiveProvider === 'codecraft' ? codeCraftKey : gmiCloudKey,
           model: requestModel,
           signal: abortSignal,
-          system: `You are an Arabic video-game localization QA editor. Analyze only the supplied translations. Preserve every technical token, variable, control code, placeholder, rich-text tag, number, and line-break marker exactly. Return ONLY valid JSON with this exact top-level shape: ${responseShape}. Include an item only when a genuine improvement is needed. Reasons must be concise Arabic.${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,
+          system: `You are an Arabic video-game localization QA editor. Analyze only the supplied translations. Preserve every technical token, variable, control code, placeholder, rich-text tag, number, and line-break marker exactly. Return ONLY valid JSON with this exact top-level shape: ${responseShape}. Include an item only when a genuine improvement is needed. Reasons must be concise Arabic.\n\n${activeRulesPrompt}\n\n${gameReviewInstructions}${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,
           user: JSON.stringify({ mode, entries: textsToAnalyze, glossary, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules, builtinOverrides: currentBuiltinOverrides, game: gameParam, extraInstructions: gameReviewInstructions || undefined, learnedFeedback: learnedFeedback || undefined }),
         });
-        return { data, error: null };
+        return { data: filterDirectEnhancementFindings(data, mode, activeDetectIds), error: null };
       }
       if (!isTokenRouterActive) {
         return supabase.functions.invoke('enhance-translations', {

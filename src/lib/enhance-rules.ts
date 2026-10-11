@@ -251,6 +251,67 @@ export const BUILTIN_RULES: EnhanceRule[] = [
       '   • لا تُغيّر معنى أو كلمات أو ترتيب النصّ — فقط أعِد ضبط فواصل الأسطر فقط لا غير.',
   },
 
+  // ───── Golden Sun: The Lost Age (GBA, second game) ─────
+  // Each rule is independent: the user may enable, disable, or edit its prompt.
+  {
+    id: 'detect_gs2_control_codes',
+    label: 'Golden Sun II — أكواد التحكم',
+    description: 'يفحص \\xNN مثل \\x03 و\\x1E و\\x11 وفواصل الحوار، دون إنشاء رموز جديدة أو تحريك الموجودة',
+    kind: 'detect',
+    defaultEnabled: true,
+    prompt: '**split_and_tags** — [Golden Sun: The Lost Age فقط] قارن الرموز الحرفية \\xNN وأكواد التحكم وسلاسل معاملاتِها في الأصل والترجمة؛ إن اختلّت قيمتها أو عددها أو ترتيبها، بلّغ عن المشكلة وقدّم اقتراحاً يحتفظ بكل رمز كما في المصدر. \\x03 فاصل حوار، و\\x1E قد يكون نهاية سؤال، فلا تحوّل \\x02 إلى فاصل صفحة، ولا تضف أي رمز للتحسين الأسلوبي.',
+  },
+  {
+    id: 'detect_gs2_line_fit',
+    label: 'Golden Sun II — طول الحوارات',
+    description: 'يراجع الإطالة والحشو مع ترك تقسيم الأسطر الحقيقي لقياسات خط اللعبة وقت البناء',
+    kind: 'detect',
+    defaultEnabled: true,
+    prompt: '**style** — [Golden Sun: The Lost Age فقط] راجع طول الحوارات والرسائل: إن كانت العربية محشوة أو ملتوية، اقترح صياغة أقصر طبيعية بلا فقد معنى. صناديق حوار GBA محدودة والبناء يفحص عرض الحروف بالبكسل، فلا تخترع حدوداً حرفية تقريبية ولا تدخل \\x03 أو \\x02 أو فواصل جديدة بنفسك. أبلغ عن النص الذي قد يكون مطوّلاً؛ اختصار صياغته شيء وتغيير أكواد المحرك شيء آخر.',
+  },
+  {
+    id: 'detect_gs2_dialogue_voice',
+    label: 'Golden Sun II — أسلوب الشخصيات',
+    description: 'يحسّن الحوار إلى فصحى عربية طبيعية مناسبة لفانتازيا RPG دون اختراع أحداث أو أصوات',
+    kind: 'detect',
+    defaultEnabled: true,
+    prompt: '**style** — [Golden Sun: The Lost Age فقط] راجع سلاسة الحوارات ونبرتها في سياق مغامرة تقمّص أدوار كلاسيكية (JRPG): فصحى طبيعية وجمل قصيرة، حماسة عند الخطر ولطف بين الأصدقاء ووقار عند الحاجة. لا تخترع متحدثاً أو دعابة أو مشهداً، ولا تنسب جملة إلى Felix أو Jenna أو Sheba أو Piers ما لم يدلّ النص أو السياق عليها. ابتعد عن الحرفية الإنجليزية والتكلّف الفصيح الزائد.',
+  },
+  {
+    id: 'detect_gs2_names_terms',
+    label: 'Golden Sun II — الأسماء والمصطلحات',
+    description: 'يراجع ثبات أسماء Felix وJenna وSheba وPiers ومصطلحات Psynergy وDjinn مع أولوية القاموس',
+    kind: 'detect',
+    defaultEnabled: true,
+    prompt: '**terminology** — [Golden Sun: The Lost Age فقط] ثبّت أسماء Felix وJenna وSheba وPiers وعالم Weyard وأسماء الأماكن والقدرات حين تظهر في النص. راجع مفاهيم Psynergy وDjinn وAdept وAlchemy وفق القاموس العربي المعتمد أولاً؛ لا تفرض تعريباً من عندك أو من لعبة أخرى، ولا تصحح مصطلحاً لمجرد اختلافه عن اقتراحك الشخصي.',
+  },
+  {
+    id: 'detect_gs2_ui_consistency',
+    label: 'Golden Sun II — القوائم والأغراض',
+    description: 'يراجع اختصار أسماء المهارات والأغراض والقوائم واتساقها دون تغيير المعلومات أو الوسوم',
+    kind: 'detect',
+    defaultEnabled: true,
+    prompt: '**consistency** — [Golden Sun: The Lost Age فقط] راجع اتساق أسماء الأدوات والتعاويذ والقدرات واختصارات الواجهة بين النصوص، مع أولوية القاموس. أسماء القوائم ينبغي أن تكون قصيرة وواضحة؛ لا تحوّل اسم عنصر إلى جملة طويلة ولا تبتكر خصائص أو أرقاماً أو تعليمات غير موجودة في الأصل.',
+  },
+  {
+    id: 'protect_gs2_rtl_unicode',
+    label: 'Golden Sun II — سلامة العربية',
+    description: 'يمنع القلب اليدوي واتجاه BiDi الخفي وأشكال عرض الحروف؛ المحرك يتولى تشكيل العربية',
+    kind: 'protect',
+    defaultEnabled: true,
+    critical: true,
+    prompt: '🚫 [Golden Sun: The Lost Age فقط] أبقِ العربية بترتيبها المنطقي Unicode دون قلب بصري للحروف أو الكلمات. لا تولّد Arabic Presentation Forms (U+FB50–U+FDFF أو U+FE70–U+FEFF)، ولا تضف علامات اتجاه خفية U+200E/U+200F/U+202A–U+202E/U+2066–U+2069. المحرك المعدّل يتولى رسم العربية واتجاهها.',
+  },
+  {
+    id: 'protect_gs2_dialogue_structure',
+    label: 'Golden Sun II — بنية الرسائل',
+    description: 'يحافظ على فواصل الحوار والصفحات ومواضع المتغيرات كما في النص الأصلي',
+    kind: 'protect',
+    defaultEnabled: true,
+    critical: true,
+    prompt: '🚫 [Golden Sun: The Lost Age فقط] أكواد \\xNN ومتغيرات الأسماء وأكواد التحكم بيانات تنفيذية وليست كلمات. لا تغيّر قيمة أي رمز أو عدد مرات ظهوره أو ترتيبه، ولا تبدّل \\x03 بصفحة جديدة أو تستخدم \\x02 بدل فاصل سطر. لا تُضف أو تحذف سطراً ثابتاً أو تنقل علامة داخل نص دون دليل من الأصل. يرفض فحص البناء الخلل بصرف النظر عن تفعيل هذا التنبيه.',
+  },
+
   // ───── Protection ─────
   {
     id: 'block_tashkeel',

@@ -105,6 +105,14 @@ const RULES: RuleDef[] = [
   // the 17,165-entry export contains: everything between two tildes.
   { id: 'detect_gtasa_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـGTA San Andreas] في نصّ هذه اللعبة رمز واحد لا غير: أي شيء بين علامتين `~…~` هو تحكم يقرؤه المحرّك وليس كلاماً. `~s~` `~m~` `~r~` `~y~` `~b~` `~w~` `~g~` `~h~` تبدّل لون النص (والحرف الكبير مثل `~S~` رمز مختلف)، و`~n~` فاصل سطر، و`~1~` رقم أو مبلغ تضعه اللعبة (وعلامة `$` قبله نص عادي)، و`~widget_…~` أيقونة زر تظهر مكانها، و`~<~` `~>~` `~u~` `~d~` أسهم. أبقِ كل رمز بحرفه وعدده وترتيبه بين الرموز الأخرى، ولا تنقله ولا تترجمه ولا تضع كلمة داخله. الرمز الذي يحيط بكلمة (`~b~SWAT Tank~s~`) يبقى حول الكلمة العربية المقابلة نفسها. أبقِ `$` والأرقام كما في الأصل.' },
   { id: 'detect_gtasa_names', kind: 'detect', prompt: '**accuracy** — [خاص بـGTA San Andreas] اللعبة تدور في لوس سانتوس وسان فييرو ولاس فنتورا عام 1992 بلغة شارع وعصابات (Grove Street وBallas وVagos وAztecas وLoco Syndicate وBig Smoke وRyder وSweet وCJ وCesar وWu Zi Mu). أسماء الأحياء والعصابات والشخصيات والمحلات والسيارات والأسلحة تبقى إنجليزية أو تُنقل صوتياً بالطريقة نفسها في كل نص، ولا تعتبر تعدد صيغتها خطأ إلا إن اختلفت بين سطر وآخر. لغة الشارع الخشنة والشتائم جزء من نبرة الشخصية: لا تقترح تلطيفها ولا تضف ما ليس في الأصل. لا تحكم على مصطلح بأنه خطأ اعتماداً على ألعاب Grand Theft Auto الأخرى.' },
+  // Golden Sun II only — same rule IDs as enhance-rules.ts, never used for GS1.
+  { id: 'detect_gs2_control_codes', kind: 'detect', prompt: '**split_and_tags** — [Golden Sun: The Lost Age فقط] افحص رموز \\xNN مثل \\x03 و\\x1E و\\x11 ومعاملاتها: أصلح الناقص أو المتغير مع الاحتفاظ بالقيمة والعدد والترتيب دون استحداث \\x02 كفاصل صفحة.' },
+  { id: 'detect_gs2_line_fit', kind: 'detect', prompt: '**style** — [Golden Sun: The Lost Age فقط] راجع إطالة الحوار، اختصر الحشو دون فقد المعنى. GBA يقيّد عرض صندوق النص بالبكسل والبناء يفحصه؛ لا تضف \\x03 أو \\x02 أو فواصل تحكم جديدة.' },
+  { id: 'detect_gs2_dialogue_voice', kind: 'detect', prompt: '**style** — [Golden Sun: The Lost Age فقط] حافظ على فصحى عربية طبيعية في حوارات مغامرة فانتازيا JRPG؛ قصر الجمل حسب الموقف ولا تفترض شخصية المتحدث أو أحداثاً غير واردة في الأصل.' },
+  { id: 'detect_gs2_names_terms', kind: 'detect', prompt: '**terminology** — [Golden Sun: The Lost Age فقط] راجع أسماء Felix وJenna وSheba وPiers وWeyard وثبات مصطلحات Psynergy وDjinn وAdept وAlchemy حسب القاموس المرفق أولاً دون فرض تعريب غير معتمد.' },
+  { id: 'detect_gs2_ui_consistency', kind: 'detect', prompt: '**consistency** — [Golden Sun: The Lost Age فقط] راجع إيجاز أسماء العناصر والتعاويذ والقوائم وثباتها؛ لا تضف معلومات أو أرقاماً أو مصطلحات غير موجودة بالأصل.' },
+  { id: 'protect_gs2_rtl_unicode', kind: 'protect', prompt: '🚫 [Golden Sun: The Lost Age فقط] أبقِ العربية بترتيبها المنطقي Unicode دون قلب بصري للحروف أو الكلمات. لا تولّد Arabic Presentation Forms (U+FB50–U+FDFF أو U+FE70–U+FEFF)، ولا تضف علامات اتجاه خفية U+200E/U+200F/U+202A–U+202E/U+2066–U+2069. المحرك المعدّل يتولى رسم العربية واتجاهها.' },
+  { id: 'protect_gs2_dialogue_structure', kind: 'protect', prompt: '🚫 [Golden Sun: The Lost Age فقط] أكواد \\xNN ومتغيرات الأسماء وأكواد التحكم بيانات تنفيذية وليست كلمات. لا تغيّر قيمة أي رمز أو عدد مرات ظهوره أو ترتيبه، ولا تبدّل \\x03 بصفحة جديدة أو تستخدم \\x02 بدل فاصل سطر. لا تُضف أو تحذف سطراً ثابتاً أو تنقل علامة داخل نص دون دليل من الأصل. يرفض فحص البناء الخلل بصرف النظر عن تفعيل هذا التنبيه.' },
   { id: 'block_tashkeel',      kind: 'protect', prompt: '🚫 لا تستخدم في اقتراحاتك: التنوين (ً ٌ ٍ)، الحركات (َ ُ ِ)، الشدّة (ّ)، السكون (ْ). خطّ اللعبة لا يدعم هذه الرموز.' },
   { id: 'protect_proper_nouns', kind: 'protect', prompt: `🚫 لا تقترح تغيير {{PROPER_NOUNS_SECTION}} سواء بقيت إنجليزيّة أو نُقلت صوتياً.` },
   { id: 'protect_no_outside_franchise_lore', kind: 'protect', prompt: '🚫 لا تحكم على مصطلح بأنه خاطئ أو "غريب عن اللعبة" اعتماداً على معرفتك العامة بألعاب أو فرنشايزات أخرى (مثل افتراض أن لعبة معيّنة "تستخدم Ether لا Mana" أو ما شابه). استند فقط إلى القاموس المُعطى فعلياً في هذا الطلب — إن لم يكن المصطلح فيه، فوجوده وحده ليس خطأً يستوجب تغييره.' },
@@ -136,6 +144,11 @@ const FRANBOW_ONLY_RULE_IDS = new Set(['detect_franbow_tags']);
 const TWOM_ONLY_RULE_IDS = new Set(['detect_twom_tags']);
 /** Rules whose prompt text only makes sense for GTA San Andreas — never injected elsewhere. */
 const GTASA_ONLY_RULE_IDS = new Set(['detect_gtasa_tags', 'detect_gtasa_names']);
+const GOLDENSUN2_ONLY_RULE_IDS = new Set([
+  'detect_gs2_control_codes', 'detect_gs2_line_fit', 'detect_gs2_dialogue_voice',
+  'detect_gs2_names_terms', 'detect_gs2_ui_consistency',
+  'protect_gs2_rtl_unicode', 'protect_gs2_dialogue_structure',
+]);
 /**
  * Rules that teach the model Xenoblade's tag syntax, withheld from Pokémon.
  *
@@ -163,6 +176,8 @@ const TYPE_TO_RULE_ID: Record<string, string> = {
   untranslated: 'detect_untranslated',
   line_breaks: 'detect_line_breaks',
   split_and_tags: 'detect_split_and_tags',
+  weak: 'detect_phrasing',
+  wrong: 'detect_accuracy',
 };
 
 /**
@@ -188,25 +203,41 @@ const PLATINUM_TYPE_TO_RULE_ID: Record<string, string> = {
   split_and_tags: 'detect_plat_tags',
 };
 
-function isTypeEnabled(type: string | undefined, enabledSet: Set<string>): boolean {
-  const ruleId = TYPE_TO_RULE_ID[type || ''];
-  const pkmRuleId = PKM_TYPE_TO_RULE_ID[type || ''];
-  const platRuleId = PLATINUM_TYPE_TO_RULE_ID[type || ''];
-  if (!ruleId && !pkmRuleId && !platRuleId) return true; // نوع غير معروف/مخصّص — لا نحظره احتياطاً.
-  return (!!ruleId && enabledSet.has(ruleId)) || (!!pkmRuleId && enabledSet.has(pkmRuleId)) || (!!platRuleId && enabledSet.has(platRuleId));
-}
-
-// وضع "القواعد" (grammar) يُرجع فئة خشنة فقط (wrong/reorder/weak) لا نوعاً دقيقاً،
-// لذا الإنفاذ هنا تقريبيّ: نربط كلّ فئة بمجموعة القواعد التي غالباً تنتجها.
-const CATEGORY_RULE_FAMILY: Record<string, string[]> = {
-  reorder: ['detect_word_order'],
-  weak: ['detect_phrasing'],
-  wrong: ['detect_missing_char', 'detect_accuracy', 'detect_terminology', 'detect_untranslated', 'detect_risen_gendered_pickup'],
+/** Each result can identify its triggering active rule via rule_id.
+ * This is required for custom rules, whose arbitrary prompts cannot be
+ * reliably inferred from a generic result type. For legacy models lacking
+ * rule_id, fall back to the known built-in type/category families only. */
+const GS2_TYPE_TO_RULE_IDS: Record<string, string[]> = {
+  split_and_tags: ['detect_gs2_control_codes'],
+  line_breaks: ['detect_gs2_control_codes'],
+  style: ['detect_gs2_line_fit', 'detect_gs2_dialogue_voice'],
+  terminology: ['detect_gs2_names_terms'],
+  consistency: ['detect_gs2_ui_consistency'],
 };
 
-function isCategoryEnabled(category: string | undefined, enabledSet: Set<string>): boolean {
+function isTypeEnabled(type: string | undefined, activeDetectIds: Set<string>, ruleId?: string): boolean {
+  if (ruleId) return activeDetectIds.has(ruleId);
+  const possible = [
+    TYPE_TO_RULE_ID[type || ''],
+    PKM_TYPE_TO_RULE_ID[type || ''],
+    PLATINUM_TYPE_TO_RULE_ID[type || ''],
+    ...(GS2_TYPE_TO_RULE_IDS[type || ''] || []),
+  ].filter(Boolean);
+  // Unknown model-generated categories are not treated as an implicit
+  // authorization for a rule the user explicitly disabled.
+  return possible.some(id => activeDetectIds.has(id));
+}
+
+const CATEGORY_RULE_FAMILY: Record<string, string[]> = {
+  reorder: ['detect_word_order', 'detect_gs2_control_codes'],
+  weak: ['detect_phrasing', 'detect_gs2_line_fit', 'detect_gs2_dialogue_voice'],
+  wrong: ['detect_missing_char', 'detect_accuracy', 'detect_terminology', 'detect_untranslated', 'detect_risen_gendered_pickup', 'detect_gs2_control_codes', 'detect_gs2_names_terms', 'detect_gs2_ui_consistency'],
+};
+
+function isCategoryEnabled(category: string | undefined, activeDetectIds: Set<string>, ruleId?: string): boolean {
+  if (ruleId) return activeDetectIds.has(ruleId);
   const family = CATEGORY_RULE_FAMILY[category || 'wrong'] || CATEGORY_RULE_FAMILY.wrong;
-  return family.some(id => enabledSet.has(id));
+  return family.some(id => activeDetectIds.has(id));
 }
 // Platinum's own {COLOR 2}, {STRVAR_1 3, 0, 0} \u2014 folded in via PLAT_TAG_RE.source
 // so this stays the single source of truth (see _shared/plat-tag-mask.ts).
@@ -466,7 +497,9 @@ function buildRuleSections(
   isFranBow = false,
   isTwom = false,
   isGtaSa = false,
-): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
+  isGoldenSun = false,
+  isGoldenSun2 = false,
+): { detect: string; protect: string; detectCount: number; enabledSet: Set<string>; detectRuleIds: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
   const builtinWithOverrides: RuleDef[] = RULES.map(r => {
@@ -505,15 +538,16 @@ function buildRuleSections(
     (!FRANBOW_ONLY_RULE_IDS.has(r.id) || isFranBow) &&
     (!TWOM_ONLY_RULE_IDS.has(r.id) || isTwom) &&
     (!GTASA_ONLY_RULE_IDS.has(r.id) || isGtaSa) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa));
-  const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
-    .map((r, i) => `${i + 1}. ${r.prompt}`);
+    (!GOLDENSUN2_ONLY_RULE_IDS.has(r.id) || isGoldenSun2) &&
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa && !isGoldenSun));
+  const activeDetectRules = all.filter(r => r.kind === 'detect' && isActive(r));
+  const detectLines = activeDetectRules.map((r, i) => `${i + 1}. [rule_id: ${r.id}] ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
   const detect = detectLines.length > 0
     ? `**أنواع المشاكل المسموح بها:**\n${detectLines.join('\n')}`
     : '(لا توجد قواعد اكتشاف مُفعَّلة — أرجِع قائمة فارغة).';
   const protect = protectLines.length > 0 ? protectLines.join('\n') : '';
-  return { detect, protect, detectCount: detectLines.length, enabledSet: enabled };
+  return { detect, protect, detectCount: detectLines.length, enabledSet: enabled, detectRuleIds: new Set(activeDetectRules.map(r => r.id)) };
 }
 
 // ─── Smart glossary filter ──────────────────────────────────────────────────
@@ -818,7 +852,7 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, game === 'goldensun2');
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
@@ -1268,6 +1302,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
   "issues": [
     {
       "index": 0,
+      "rule_id": "معرف إحدى قواعد الاكتشاف المفعّلة أعلاه (إلزامي)",
       "category": "wrong|reorder|weak",
       "issue": "وصف مختصر جداً للمشكلة (3-7 كلمات)",
       "detail": "اشرح بدقّة: ما المشكلة؟ ولماذا هي مشكلة؟ (سطر أو سطرَين)",
@@ -1291,7 +1326,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
 4. **Multi-Issue:** يُسمح بإصدار عدّة سجلّات لنفس index كلٌّ بفئة مختلفة (wrong / reorder / weak)، شرط أن يكون suggestion في كلٍّ منها نصّاً عربيّاً نهائيّاً كاملاً يصلح المشكلة المعنيّة. النظام يدمجها تلقائيّاً.
 5. سجّل الترجمات السليمة فعلاً فقط بحذفها من الإخراج (لا تُعِدها بدون تغيير).`;
 
-        const passResult = await runPasses<{ index?: number; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string }>(
+        const passResult = await runPasses<{ index?: number; rule_id?: string; category?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggestion?: string; severity?: string }>(
           passes || 1,
           () => callOnceParse(
             [
@@ -1311,6 +1346,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
             original: entry?.original || '',
             translation: entry?.translation || '',
             category: i.category && ['wrong', 'reorder', 'weak'].includes(i.category) ? i.category : 'wrong',
+            ruleId: i.rule_id,
             issue: i.issue,
             detail: i.detail || '',
             fixExplanation: i.fix_explanation || i.fixExplanation || '',
@@ -1322,7 +1358,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
 	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
-          isCategoryEnabled(i.category, ruleSections.enabledSet) &&
+          isCategoryEnabled(i.category, ruleSections.detectRuleIds, i.ruleId) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
         return { items: mappedIssues };
@@ -1373,8 +1409,10 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
   "results": [
     {
       "index": 0,
+      "rule_id": "معرف إحدى قواعد الاكتشاف المفعّلة أعلاه (إلزامي)",
       "category": "wrong|reorder|weak|style",
-      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation|line_breaks|split_and_tags|reorder",
+      "rule_id": "معرف إحدى قواعد الاكتشاف المفعّلة أعلاه (إلزامي)",
+      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation|line_breaks|split_and_tags|reorder|custom",
       "issue": "وصف مختصر جداً (3-7 كلمات)",
       "detail": "اشرح المشكلة بدقّة (سطر أو سطرَين)",
       "fix_explanation": "اشرح كلّ الإصلاحات المطبَّقة في suggested (قواعد + صياغة معاً) في سطر واحد",
@@ -1399,7 +1437,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
 5. اختر فئة واحدة لكلّ سجلّ، الأخطر إن كانت المشكلة الواحدة قابلة للتصنيف بأكثر من فئة (wrong > reorder > weak > style).
 6. الترجمات السليمة فعلاً: لا تُدرجها في النتائج.`;
 
-        const passResult = await runPasses<{ index?: number; category?: string; type?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggested?: string; alternatives?: unknown; severity?: string }>(
+        const passResult = await runPasses<{ index?: number; rule_id?: string; category?: string; type?: string; issue?: string; detail?: string; fix_explanation?: string; fixExplanation?: string; suggested?: string; alternatives?: unknown; severity?: string }>(
           passes || 1,
           () => callOnceParse(
             [
@@ -1430,6 +1468,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
             suggestion: cleanedSuggested,
             alternatives: cleanedAlternatives,
             category: r.category && ['wrong', 'reorder', 'weak', 'style'].includes(r.category) ? r.category : 'style',
+            ruleId: r.rule_id,
             type: r.type || 'style',
             issue: r.issue || '',
             reason: r.issue || '',
@@ -1441,7 +1480,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
 	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
-            isTypeEnabled(r.type, ruleSections.enabledSet) &&
+            isTypeEnabled(r.type, ruleSections.detectRuleIds, r.ruleId) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
         return { items: mappedResults };
@@ -1482,7 +1521,8 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
       "alternatives": ["بديل ثانٍ", "بديل ثالث"],
       "reason": "وصف مختصر للمشكلة (3-7 كلمات)",
       "detail": "شرح أطول يوضّح لماذا هذه مشكلة وأيّ قاعدة خالفتها الترجمة الحالية",
-      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation|line_breaks|split_and_tags|reorder"
+      "rule_id": "معرف إحدى قواعد الاكتشاف المفعّلة أعلاه (إلزامي)",
+      "type": "missing_char|grammar|terminology|accuracy|style|consistency|punctuation|line_breaks|split_and_tags|reorder|custom"
     }
   ]
 }
@@ -1501,11 +1541,11 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
 2. **هدفك إيجاد جميع المشاكل في مرور واحد** — لا تكتفِ بأبرز 3-5 اقتراحات.
 3. **Multi-Issue:** يُسمح بإصدار عدّة سجلّات لنفس index لمشاكل من فئات/أنواع مختلفة، شرط أن يكون suggested في كلٍّ منها نصّاً عربيّاً نهائيّاً كاملاً. النظام يدمجها تلقائيّاً.`;
 
-      const passResult = await runPasses<{ index?: number; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string }>(
+      const passResult = await runPasses<{ index?: number; rule_id?: string; suggested?: string; alternatives?: unknown; reason?: string; detail?: string; type?: string }>(
         passes || 1,
         () => callOnceParse(
           [
-	            { role: 'system', content: isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv || isPlatinum
+	            { role: 'system', content: isGoldenSun || isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv || isPlatinum
               ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
               : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
             { role: 'user', content: enhancePrompt },
@@ -1534,11 +1574,12 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           reason: s.reason,
           detail: s.detail || '',
           type: s.type || 'style',
+          ruleId: s.rule_id,
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
 	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
-        isTypeEnabled(s.type, ruleSections.enabledSet) &&
+        isTypeEnabled(s.type, ruleSections.detectRuleIds, s.ruleId) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );
       return { items: mappedSuggestions };

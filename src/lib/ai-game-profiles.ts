@@ -77,6 +77,14 @@ const ONLY: Record<string, readonly AiGameProfile[]> = {
   detect_twom_tags: ["twom"],
   detect_gtasa_tags: ["gtasa"],
   detect_gtasa_names: ["gtasa"],
+  // Golden Sun II: none of these optional QA rules apply to GS1 or other games.
+  detect_gs2_control_codes: ["goldensun2"],
+  detect_gs2_line_fit: ["goldensun2"],
+  detect_gs2_dialogue_voice: ["goldensun2"],
+  detect_gs2_names_terms: ["goldensun2"],
+  detect_gs2_ui_consistency: ["goldensun2"],
+  protect_gs2_rtl_unicode: ["goldensun2"],
+  protect_gs2_dialogue_structure: ["goldensun2"],
   // The text of these built-ins contains literal [XENO:n]. Other games
   // must not see it in the rules dialog or in an AI request.
   detect_split_and_tags: ["xenoblade"],

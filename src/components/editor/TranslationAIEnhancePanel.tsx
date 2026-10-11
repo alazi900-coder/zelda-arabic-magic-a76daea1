@@ -390,7 +390,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [profilePrompt, setProfilePrompt] = useState(() => loadAiProfilePrompt(gameParam));
   const gameReviewInstructions = gameParam === "xenoblade"
     ? extraInstructions?.trim() || ""
-    : [profileDefaultPrompt(gameParam), profilePrompt.trim()].filter(Boolean).join("\n\n");
+    : [profileDefaultPrompt(gameParam), extraInstructions?.trim() || "", profilePrompt.trim()].filter(Boolean).join("\n\n");
   const [enabledRules, setEnabledRules] = useState<Set<EnhanceRuleId>>(() => loadEnabledRules(gameParam));
   const [customRules, setCustomRules] = useState<EnhanceRule[]>(() => loadCustomRules(gameParam));
   // تعديلات المستخدم على prompts القواعد المبنيّة. تُرسل إلى الـedge function

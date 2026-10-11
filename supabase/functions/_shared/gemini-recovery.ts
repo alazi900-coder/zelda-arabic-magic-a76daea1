@@ -63,6 +63,10 @@ export async function callGeminiWithRecovery(options: GeminiCallOptions): Promis
       if (remaining < 2000) return { response: lastResponse, modelUsed: model, attempts };
       attempts++;
       let response: Response;
+      // Do not rely on AbortSignal.timeout: several Android browsers and the
+      // app's jsdom test environment do not implement that static method.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), Math.min(timeoutMs, remaining));
       try {
         response = await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: "POST",
@@ -71,7 +75,7 @@ export async function callGeminiWithRecovery(options: GeminiCallOptions): Promis
             "x-goog-api-key": apiKey,
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(Math.min(timeoutMs, remaining)),
+          signal: controller.signal,
         });
       } catch (error) {
         console.warn("[gemini] transient network/timeout error", model, (error as Error)?.name);
@@ -81,6 +85,8 @@ export async function callGeminiWithRecovery(options: GeminiCallOptions): Promis
           continue;
         }
         break;
+      } finally {
+        clearTimeout(timeout);
       }
 
       if (response.ok) {

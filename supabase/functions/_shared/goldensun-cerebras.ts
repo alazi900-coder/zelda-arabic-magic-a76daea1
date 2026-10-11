@@ -38,7 +38,7 @@ export function hasExactMaskedTechnicalSequence(sourceMasked: string, translatio
   return a.length === b.length && a.every((item, i) => item === b[i]);
 }
 
-const GS_FULL_TECH_RE = /\\x[0-9a-fA-F]{2}|\{[A-Za-z][A-Za-z0-9_]*:[^{}\r\n]*\}|\[[A-Za-z/][A-Za-z0-9_/]*(?:[:=][^\]\r\n]*)?\]|<\/?[A-Za-z][^>]*>|%(?:\d+\$)?[\d.$-]*[sdif]|[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
+const GS_FULL_TECH_RE = /\\x[0-9a-fA-F]{2}|\{[A-Za-z][A-Za-z0-9_]*(?::[^{}\r\n]*)?\}|\[[A-Za-z/][A-Za-z0-9_/]*(?:[:=][^\]\r\n]*)?\]|<\/?[A-Za-z][^>]*>|%(?:\d+\$)?[\d.$-]*[sdif]|[\uFFF9-\uFFFC\uE000-\uE0FF]/g;
 
 export function goldenSunAllTechnicalTagsUnchanged(source: string, translation: string): boolean {
   if (!goldenSunCodesUnchanged(source, translation)) return false;

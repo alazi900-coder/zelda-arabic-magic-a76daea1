@@ -91,3 +91,16 @@ export function isRuleForAiProfile(ruleId: string, profile: AiGameProfile): bool
 export function aiProfileStorageKey(field: "rules" | "custom" | "overrides" | "prompt" | "review" | "feedback", profile: AiGameProfile): string {
   return "aiGameProfile:v1:" + profile + ":" + field;
 }
+
+/** User-editable review prompt, stored independently from the universal AI model/API settings. */
+export function loadAiProfilePrompt(profile: AiGameProfile): string {
+  try { return localStorage.getItem(aiProfileStorageKey("prompt", profile)) ?? ""; }
+  catch { return ""; }
+}
+
+export function saveAiProfilePrompt(profile: AiGameProfile, value: string): void {
+  try {
+    if (value.trim()) localStorage.setItem(aiProfileStorageKey("prompt", profile), value);
+    else localStorage.removeItem(aiProfileStorageKey("prompt", profile));
+  } catch { /* private browsing / storage unavailable */ }
+}

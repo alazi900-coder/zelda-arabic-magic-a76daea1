@@ -93,14 +93,19 @@ describe("The Lost Age complete extraction and rebuild", () => {
     })).toThrow(/الخط العربي/);
   }, 30000);
 
-  it("encodes Arabic forms in the verified AGFE custom 0x80–0xFF font range", () => {
+  it("encodes Arabic using precisely the same glyph codes as the user-provided Golden Sun I font", () => {
     const bytes = goldenSun2TextToBytes("مرحبا");
     expect(bytes).toHaveLength(5);
     expect(bytes.every(v => v >= 0x80 && v <= 0xff)).toBe(true);
     const rom = makeFixture();
     rom.set([0xf0, 0xb5, 0x04, 0x1c], 0x10d000);
+    rom.set([0xf0, 0xb5, 0xff, 0xb0], 0x10d100);
     rom[0x39e00] = 0xd3;
+    rom[0x682010 + 0xf0 * 32] = 0x44;
+    rom[0x5a4e0 + (0xf0 - 0x20) * 32] = 4;
     expect(isGoldenSun2ArabicFontRom(rom)).toBe(true);
+    expect(goldenSun2TextToBytes("نعم")).toEqual([0xf0, 0xd3, 0xeb]);
+    expect(goldenSun2TextToBytes("لا")).toEqual([0xfe]);
     const output = buildGoldenSun2StringTable(rom, {
       [GS2_TEXT_FILE + ":1"]: "مرحبا\\x03",
     });

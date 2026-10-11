@@ -29,7 +29,8 @@ import { buildGoldenSunRom, GOLDENSUN_BUFFER_KEY } from "@/lib/goldensun/goldens
 import { buildSteinsGateIso, STEINSGATE_WORKSPACE_KEY, type SteinsGateWorkspace } from "@/lib/steinsgate/steinsgate-format";
 import type { PkmGame } from "@/lib/pokemon/pkm-codec";
 import type { EmeraldRtlScope } from "@/lib/gba/emerald-rtl";
-import { idbGet } from "@/lib/idb-storage";
+import { idbGet, idbSet } from "@/lib/idb-storage";
+import { exportGoldenSun2Catalog, GOLDENSUN2_SOURCE_GAME, GOLDENSUN2_TRANSLATIONS_KEY } from "@/lib/goldensun/goldensun2-editor-bridge";
 import { exportCrashlandsJson } from "@/lib/crashlands/crashlands-editor-bridge";
 import { exportNinthDawnJson } from "@/lib/ninthdawn/ninthdawn-editor-bridge";
 import { exportFranBowJson } from "@/lib/franbow/franbow-editor-bridge";
@@ -240,6 +241,15 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [fe12UnsupportedCharacters, setFe12UnsupportedCharacters] = useState<Fe12UnsupportedCharacter[]>([]);
   const [phBuilding, setPhBuilding] = useState(false);
   const [gsBuilding, setGsBuilding] = useState(false);
+  const [goldenSunSource, setGoldenSunSource] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isGoldenSun) { setGoldenSunSource(null); return; }
+    let mounted = true;
+    void idbGet<string>("editor-source-game").then(source => {
+      if (mounted) setGoldenSunSource(source || null);
+    });
+    return () => { mounted = false; };
+  }, [isGoldenSun]);
   const khbbsIsoInputRef = useRef<HTMLInputElement>(null);
   const [pkmRtl, setPkmRtl] = useState<EmeraldRtlScope | "off">("off");
   const [pkmKeyboard, setPkmKeyboard] = useState(false);
@@ -787,6 +797,25 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const handleGoldenSunBuild = async () => {
     setGsBuilding(true);
     try {
+      if (goldenSunSource === GOLDENSUN2_SOURCE_GAME) {
+        const entries = editor.state?.entries || [];
+        const translations = editor.state?.translations || {};
+        const catalog = exportGoldenSun2Catalog(entries, translations);
+        if (!catalog.entries.length) throw new Error("لم تُفتح أي نصوص للجزء الثاني");
+        await idbSet(GOLDENSUN2_TRANSLATIONS_KEY, translations);
+        const blob = new Blob([JSON.stringify(catalog, null, 2)], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "GoldenSun2_Arabic_Translations.json";
+        link.click();
+        URL.revokeObjectURL(url);
+        toast.success("تم تصدير ترجمات الجزء الثاني مع فحص الوسوم — لم يُعدّل ملف GBA");
+        return;
+      }
+      if (goldenSunSource !== "goldensun") {
+        throw new Error("لم تُحدد هوية الجزء الحالي؛ أعد فتح اللعبة من صفحة Golden Sun");
+      }
       const buf = await idbGet<ArrayBuffer>(GOLDENSUN_BUFFER_KEY);
       if (!buf) throw new Error("لم يُعثر على الروم — أعد فتحه من صفحة Golden Sun");
       const { rom, rtl } = buildGoldenSunRom(new Uint8Array(buf), editor.state?.translations || {});
@@ -1514,8 +1543,11 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             {phBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم Phantom Hourglass معرّب وتنزيله
           </Button>
         ) : isGoldenSun ? (
-          <Button size="lg" onClick={handleGoldenSunBuild} disabled={gsBuilding} className="flex-1 min-w-[200px] font-display font-bold" title="يعيد ضغط النص المترجم داخل الروم ثم ينزّله">
-            {gsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم Golden Sun معرّب وتنزيله
+          <Button size="lg" onClick={handleGoldenSunBuild} disabled={gsBuilding || !goldenSunSource} className="flex-1 min-w-[200px] font-display font-bold" title={goldenSunSource === GOLDENSUN2_SOURCE_GAME ? "يصدر كتالوج الترجمات بعد فحص الرموز، ولا يبني ROM الجزء الثاني بعد" : "يعيد ضغط النص المترجم للجزء الأول داخل الروم ثم ينزّله"}>
+            {gsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />}
+            {goldenSunSource === GOLDENSUN2_SOURCE_GAME
+              ? "فحص الوسوم وتصدير ترجمات الجزء الثاني JSON (بدون بناء ROM)"
+              : "بناء روم Golden Sun الجزء الأول معرّب وتنزيله"}
           </Button>
         ) : isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">

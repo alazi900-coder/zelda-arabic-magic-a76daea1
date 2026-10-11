@@ -50,13 +50,13 @@ describe("a line break that belongs right after a tag", () => {
     expect(fixTagNewlines(original, translation)).toBe("خذها.[XENO:n ]\nإنها لك.");
   });
 
-  it("ignores tags the translation does not have", () => {
-    // A translation whose tags do not line up has a different problem, and the
-    // build reports that one. This must not add breaks in the wrong places.
+  it("does not guess a newline when repeated matching tags are missing", () => {
+    // A single {fb} could be either of two identical source tokens.
+    // The diagnostic must leave that ambiguity to the tag fixer/reviewer.
     const original = "a{fb}\nb{fb}\nc";
     const translation = "أ{fb} ب ج";
-    expect(countMissingTagNewlines(original, translation)).toBe(1);
-    expect(fixTagNewlines(original, translation)).toBe("أ{fb}\nب ج");
+    expect(countMissingTagNewlines(original, translation)).toBe(0);
+    expect(fixTagNewlines(original, translation)).toBe(translation);
   });
 
   it("does nothing to a line with no tags at all", () => {

@@ -34,6 +34,8 @@
 import { editorTagPattern } from "@/lib/editor-tag-pattern";
 
 interface Anchor {
+  /** Exact source tag spelling; never align unrelated tags by array index. */
+  tag: string;
   /** Index just past the tag. */
   after: number;
   /** Whether a line break follows it there. */
@@ -45,7 +47,7 @@ function anchors(text: string): Anchor[] {
   const out: Anchor[] = [];
   for (const m of text.matchAll(editorTagPattern())) {
     const after = m.index! + m[0].length;
-    out.push({ after, hasNewline: text[after] === "\n" });
+    out.push({ tag: m[0], after, hasNewline: text[after] === "\n" });
   }
   return out;
 }
@@ -62,6 +64,7 @@ export function countMissingTagNewlines(original: string, translation: string): 
   const o = anchors(original);
   if (o.length === 0) return 0;
   const t = anchors(translation);
+  if (o.length !== t.length || o.some((a, i) => a.tag !== t[i].tag)) return 0;
   let missing = 0;
   for (let i = 0; i < Math.min(o.length, t.length); i++) {
     if (o[i].hasNewline && !t[i].hasNewline) missing++;
@@ -82,6 +85,7 @@ export function fixTagNewlines(original: string, translation: string): string {
   const o = anchors(original);
   if (o.length === 0) return translation;
   const t = anchors(translation);
+  if (o.length !== t.length || o.some((a, i) => a.tag !== t[i].tag)) return translation;
 
   // Right to left, so an insertion never moves an anchor not yet handled.
   let out = translation;

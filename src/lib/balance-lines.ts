@@ -662,6 +662,19 @@ export function rebalanceTranslationLines(original: string, translation: string,
   if (!hasEngineLineBreakTags(original) && englishLineCount > 1) {
     const mapped = mapTranslationToLineSkeleton(original, translation);
     if (mapped.ok && mapped.text !== undefined) return mapped.text;
+
+    // A squished translation of a source with intentional empty paragraphs must
+    // never lose those blank slots. Reflow ONLY the content slots, then lay
+    // those lines onto the original skeleton, including blank lines and CRLF.
+    // Decline this special case if there are not enough lexical tokens; a
+    // best-effort ordinary split would silently destroy the paragraph layout.
+    const skeleton = buildLineSkeleton(original);
+    if (skeleton.includes("empty")) {
+      const contentSlots = skeleton.filter((slot) => slot !== "empty").length;
+      const candidate = splitChunkEvenly(translation, contentSlots);
+      const reflowed = mapTranslationToLineSkeleton(original, candidate);
+      return reflowed.ok && reflowed.text !== undefined ? reflowed.text : translation;
+    }
   }
   return hasEngineLineBreakTags(original) || englishLineCount <= 1
     ? balanceLines(translation)

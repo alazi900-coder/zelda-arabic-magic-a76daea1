@@ -82,6 +82,26 @@ describe("safe switching between editor workspaces", () => {
     expect(await getWorkspaceProgress(lost)).toEqual({ ready: true, total: 1, translated: 0 });
   });
 
+  it("recognizes a legacy Xenoblade session without an editor-source-game flag", async () => {
+    const xeno = { entries: [{ msbtFile: "bdat_quest", index: 0, original: "Hello" }],
+      translations: { "bdat_quest:0": "مرحباً" } };
+    const game = findLibraryGame("xenoblade")!;
+    memory.set("editorState", xeno);
+    expect(await getWorkspaceProgress(game)).toEqual({ ready: true, total: 1, translated: 1 });
+    expect(await activateGameWorkspace(game)).toBe(true);
+    expect(memory.get("editorState:xenoblade")).toEqual(xeno);
+    expect(memory.get("editor-source-game")).toBe("xenoblade");
+  });
+
+  it("archives an unlabelled legacy session rather than dropping it during a switch", async () => {
+    const legacy = record("unknown-game", { [key("unknown-game")]: "قديم" });
+    memory.set("editorState", legacy);
+    memory.set("editorState:goldensun2", record("goldensun/lost-age"));
+    expect(await activateGameWorkspace(lost)).toBe(true);
+    expect([...memory.entries()].some(([id, value]) =>
+      id.startsWith("gameWorkspace:v2:legacy-session:") && value === legacy)).toBe(true);
+  });
+
   it("keeps project notes independent and doesn't delete on navigation", () => {
     saveWorkspaceNotes("goldensun", "اكتمال القائمة");
     saveWorkspaceNotes("goldensun2", "الخط الصغير");

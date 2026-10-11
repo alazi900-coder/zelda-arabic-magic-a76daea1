@@ -4,6 +4,7 @@ import {
   GOLDEN_SUN_2_SYSTEM_PROMPT,
   goldenSunCodeSequence,
   goldenSunCodesUnchanged,
+  goldenSunAllTechnicalTagsUnchanged,
   hasExactMaskedTechnicalSequence,
 } from "../../supabase/functions/_shared/goldensun-cerebras";
 
@@ -37,6 +38,25 @@ describe("Cerebras Golden Sun: The Lost Age safety", () => {
     expect(goldenSunCodesUnchanged(original, "فيليكس\\x0Zهل أنت مستعد؟\\x1e")).toBe(false);
   });
 
+  it("rejects invented or lost markup tags and unintended physical line breaks", () => {
+    expect(goldenSunAllTechnicalTagsUnchanged(
+      "Felix\\x03[name] wait {party:id}",
+      "فيليكس\\x03[name] انتظر {party:id}",
+    )).toBe(true);
+    expect(goldenSunAllTechnicalTagsUnchanged(
+      "Felix\\x03[name] wait {party:id}",
+      "فيليكس\\x03 انتظر {party:id}",
+    )).toBe(false);
+    expect(goldenSunAllTechnicalTagsUnchanged(
+      "Felix\\x03[name] wait {party:id}",
+      "فيليكس\\x03[name] انتظر {party:id} <b>",
+    )).toBe(false);
+    expect(goldenSunAllTechnicalTagsUnchanged(
+      "Hi\\x03there",
+      "مرحباً\\x03\nكيف الحال",
+    )).toBe(false);
+  });
+
   it("preserves repeated placeholders, line breaks, count and order", () => {
     expect(hasExactMaskedTechnicalSequence(
       "TAG_0 Hello TAG_1 NEWLINE_2 fine TAG_0",
@@ -57,7 +77,7 @@ describe("Cerebras Golden Sun: The Lost Age safety", () => {
     expect(backend).toContain("'gpt-oss-120b'");
     expect(backend).toContain("GOLDEN_SUN_2_SYSTEM_PROMPT");
     expect(backend).toContain("hasExactMaskedTechnicalSequence(item.pe.cleaned, translated)");
-    expect(backend).toContain("goldenSunCodesUnchanged(item.entry.original, output)");
+    expect(backend).toContain("goldenSunAllTechnicalTagsUnchanged(item.entry.original, output)");
   });
 
   it("keeps Cerebras session key out of localStorage and tests via API", () => {

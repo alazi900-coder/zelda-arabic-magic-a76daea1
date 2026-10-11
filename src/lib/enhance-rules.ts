@@ -1,3 +1,4 @@
+import { aiProfileStorageKey, isRuleForAiProfile, type AiGameProfile } from "./ai-game-profiles";
 // =============================================================================
 // قواعد التحسين بالذكاء الاصطناعي
 // قواعد مبنيّة (built-in) + قواعد مخصّصة (custom) يضيفها المستخدم.
@@ -340,53 +341,74 @@ const STORAGE_KEY = 'xc1_enhance_rules_v1';
 const CUSTOM_STORAGE_KEY = 'xc1_enhance_custom_rules_v1';
 const OVERRIDES_STORAGE_KEY = 'xc1_enhance_builtin_overrides_v1';
 
-// ───── Built-in rule overrides ───────────────────────────────────────────────
+const profileKey = (field: "rules" | "custom" | "overrides", game: AiGameProfile): string =>
+  // For Xenoblade, continue reading/writing the existing storage unchanged.
+  game === "xenoblade"
+    ? ({ rules: STORAGE_KEY, custom: CUSTOM_STORAGE_KEY, overrides: OVERRIDES_STORAGE_KEY })[field]
+    : aiProfileStorageKey(field, game);
+
 export type BuiltinOverride = Partial<Pick<EnhanceRule, 'label' | 'description' | 'prompt'>>;
 
-export function loadBuiltinOverrides(): Record<string, BuiltinOverride> {
+export function getProfileBuiltinRules(profile: AiGameProfile = "xenoblade"): EnhanceRule[] {
+  return BUILTIN_RULES.filter(rule => isRuleForAiProfile(rule.id, profile)).map(rule => {
+    if (profile !== "xenoblade" && rule.id === "protect_tech_tags") {
+      return {
+        ...rule,
+        label: "حماية رموز اللعبة التقنية",
+        description: "حافظ على رموز محرك اللعبة الحالية فقط، دون وسوم ألعاب أخرى",
+        prompt: profile === "goldensun" || profile === "goldensun2"
+          ? "⚠️ احفظ كل رمز \\xNN كما هو وبالترتيب نفسه. لا تحذف أو تضف أو تعكس رموز التحكم. لا تستخدم [XENO:n]."
+          : "⚠️ احفظ رموز محرك اللعبة الظاهرة في النص الأصلي حرفياً وبالترتيب نفسه؛ لا تضف وسوماً من ألعاب أخرى.",
+      };
+    }
+    return rule;
+  });
+}
+
+// Legacy Xenoblade values stay in their original keys. Every other game has
+// its own persistent namespace, so migration cannot erase existing edits.
+export function loadBuiltinOverrides(profile: AiGameProfile = "xenoblade"): Record<string, BuiltinOverride> {
   try {
-    const raw = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+    const raw = localStorage.getItem(profileKey("overrides", profile));
     if (!raw) return {};
     const obj = JSON.parse(raw);
-    return (obj && typeof obj === 'object') ? obj : {};
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
+    const allowed = new Set(getProfileBuiltinRules(profile).map(r => r.id));
+    return Object.fromEntries(Object.entries(obj).filter(([id]) => allowed.has(id))) as Record<string, BuiltinOverride>;
   } catch { return {}; }
 }
 
-export function saveBuiltinOverrides(overrides: Record<string, BuiltinOverride>): void {
+export function saveBuiltinOverrides(overrides: Record<string, BuiltinOverride>, profile: AiGameProfile = "xenoblade"): void {
   try {
-    localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(overrides));
-  } catch { /* تجاهل */ }
+    localStorage.setItem(profileKey("overrides", profile), JSON.stringify(overrides));
+  } catch { /* ignore */ }
 }
 
-export function getBuiltinRulesMerged(): EnhanceRule[] {
-  const overrides = loadBuiltinOverrides();
-  return BUILTIN_RULES.map(r => {
+export function getBuiltinRulesMerged(profile: AiGameProfile = "xenoblade"): EnhanceRule[] {
+  const overrides = loadBuiltinOverrides(profile);
+  return getProfileBuiltinRules(profile).map(r => {
     const o = overrides[r.id];
     return o ? { ...r, ...o } : r;
   });
 }
 
-// ───── Custom rules CRUD ─────────────────────────────────────────────────────
-
-export function loadCustomRules(): EnhanceRule[] {
+export function loadCustomRules(profile: AiGameProfile = "xenoblade"): EnhanceRule[] {
   try {
-    const raw = localStorage.getItem(CUSTOM_STORAGE_KEY);
+    const raw = localStorage.getItem(profileKey("custom", profile));
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    return arr
-      .filter((r): r is EnhanceRule =>
-        r && typeof r.id === 'string' && typeof r.label === 'string' &&
-        typeof r.prompt === 'string' && (r.kind === 'detect' || r.kind === 'protect')
-      )
-      .map(r => ({ ...r, custom: true }));
+    return arr.filter((r): r is EnhanceRule =>
+      r && typeof r.id === "string" && typeof r.label === "string" &&
+      typeof r.prompt === "string" && (r.kind === "detect" || r.kind === "protect")
+    ).map(r => ({ ...r, custom: true }));
   } catch { return []; }
 }
 
-export function saveCustomRules(rules: EnhanceRule[]): void {
+export function saveCustomRules(rules: EnhanceRule[], profile: AiGameProfile = "xenoblade"): void {
   try {
-    localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(rules.map(r => ({ ...r, custom: true }))));
-  } catch { /* تجاهل */ }
+    localStorage.setItem(profileKey("custom", profile), JSON.stringify(rules.map(r => ({ ...r, custom: true }))));
+  } catch { /* ignore */ }
 }
 
 export function generateCustomRuleId(): string {
@@ -395,38 +417,41 @@ export function generateCustomRuleId(): string {
 
 // ───── Combined access ──────────────────────────────────────────────────────
 
-/** كلّ القواعد (مبنيّة مع الـ overrides + مخصّصة). */
-export function getAllRules(): EnhanceRule[] {
-  return [...getBuiltinRulesMerged(), ...loadCustomRules()];
+/** Rules shared by the UI and AI request builder, limited to the selected game. */
+export function getAllRules(profile: AiGameProfile = "xenoblade"): EnhanceRule[] {
+  return [...getBuiltinRulesMerged(profile), ...loadCustomRules(profile)];
 }
 
-/** للتوافق مع الكود القديم. */
+/** Legacy export for existing callers. */
 export const ENHANCE_RULES = BUILTIN_RULES;
 
-// ───── Enabled set ──────────────────────────────────────────────────────────
-
-export function loadEnabledRules(): Set<EnhanceRuleId> {
+export function loadEnabledRules(profile: AiGameProfile = "xenoblade"): Set<EnhanceRuleId> {
+  const allowed = new Set(getProfileBuiltinRules(profile).map(rule => rule.id));
+  for (const rule of loadCustomRules(profile)) allowed.add(rule.id);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(profileKey("rules", profile));
     if (raw) {
-      const arr = JSON.parse(raw) as EnhanceRuleId[];
-      if (Array.isArray(arr)) return new Set(arr);
+      const arr: unknown = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr.filter((id): id is string => typeof id === "string" && allowed.has(id)));
+      }
     }
-  } catch { /* تجاهل */ }
-  // الافتراضي: كلّ المبنيّة المُفعَّلة + كلّ المخصّصة (لأنّها أُضيفت يدوياً)
+  } catch { /* ignore */ }
   const defaults = new Set<EnhanceRuleId>(
-    BUILTIN_RULES.filter(r => r.defaultEnabled).map(r => r.id)
+    getProfileBuiltinRules(profile).filter(rule => rule.defaultEnabled).map(rule => rule.id)
   );
-  for (const r of loadCustomRules()) defaults.add(r.id);
+  for (const rule of loadCustomRules(profile)) defaults.add(rule.id);
   return defaults;
 }
 
-export function saveEnabledRules(ids: Set<EnhanceRuleId>): void {
+export function saveEnabledRules(ids: Set<EnhanceRuleId>, profile: AiGameProfile = "xenoblade"): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(ids)));
-  } catch { /* تجاهل */ }
+    const allowed = new Set(getAllRules(profile).map(rule => rule.id));
+    localStorage.setItem(profileKey("rules", profile),
+      JSON.stringify(Array.from(ids).filter(id => allowed.has(id))));
+  } catch { /* ignore */ }
 }
 
-export function isAllDefaultsEnabled(ids: Set<EnhanceRuleId>): boolean {
-  return BUILTIN_RULES.filter(r => r.defaultEnabled).every(r => ids.has(r.id));
+export function isAllDefaultsEnabled(ids: Set<EnhanceRuleId>, profile: AiGameProfile = "xenoblade"): boolean {
+  return getProfileBuiltinRules(profile).filter(r => r.defaultEnabled).every(r => ids.has(r.id));
 }

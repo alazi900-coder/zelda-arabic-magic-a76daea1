@@ -10,6 +10,7 @@ import { METROID_PRIME_FORGET_OTHER_GAME_RULE } from '../_shared/metroid-prime-p
 import { preservesLumenTaleTechnicalTokenSequence } from "../_shared/lumentale-token-guard.ts";
 import { PLAT_TAG_RE, PLAT_BREAK_RE } from "../_shared/plat-tag-mask.ts";
 import { mergeByIndex } from "../_shared/merge-issues.ts";
+import { callGeminiWithRecovery, extractGeminiText } from "../_shared/gemini-recovery.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -975,7 +976,8 @@ Deno.serve(async (req) => {
     // ─── Routing: free/auto → try direct Gemini first (server or user key). ──
     // paid → skip Gemini direct entirely, use Lovable Gateway only.
     const geminiDirectKey = (userGeminiKey && userGeminiKey.trim()) || Deno.env.get('GEMINI_API_KEY') || '';
-    const useGeminiDirect = !isDeepSeek && !isTokenRouter && !isGmiCloud && normalizedRouting !== 'paid' && !!geminiDirectKey;
+    const isGeminiAiModel = !aiModel || /^gemini-[a-z0-9.-]+$/.test(aiModel);
+    const useGeminiDirect = !isDeepSeek && !isTokenRouter && !isGmiCloud && isGeminiAiModel && normalizedRouting !== 'paid' && !!geminiDirectKey;
     const allowLovableFallback = normalizedRouting !== 'free';
 
     if (normalizedRouting === 'free' && !isDeepSeek && !isTokenRouter && !isGmiCloud && !geminiDirectKey) {
@@ -995,31 +997,25 @@ Deno.serve(async (req) => {
     // ─── Direct Gemini call (Google generative-language API) ─────────────────
     // نُحوّل الرسائل بصيغة OpenAI إلى صيغة Google، ثم نُغلّف الردّ بشكل OpenAI
     // حتى يعمل باقي الكود (choices[0].message.content) بلا تغيير.
-    const GEMINI_MODEL_MAP: Record<string, string> = {
-      'gemini-3-flash-preview': 'gemini-2.5-flash',
-      'gemini-3-pro-preview': 'gemini-2.5-pro',
-      'gemini-2.5-flash': 'gemini-2.5-flash',
-      'gemini-2.5-flash-lite': 'gemini-2.5-flash',
-      'gemini-2.5-pro': 'gemini-2.5-pro',
-    };
-    const directGeminiModel = (aiModel && GEMINI_MODEL_MAP[aiModel]) || 'gemini-2.5-flash';
+    const directGeminiModel = aiModel && /^gemini-[a-z0-9.-]+$/.test(aiModel) ? aiModel : 'gemini-2.5-flash';
     const callGeminiDirect = async (messages: Array<{ role: string; content: string }>): Promise<Response> => {
       const systemText = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
       const userText = messages.filter(m => m.role !== 'system').map(m => m.content).join('\n\n');
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${directGeminiModel}:generateContent?key=${geminiDirectKey}`;
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await callGeminiWithRecovery({
+        apiKey: geminiDirectKey,
+        models: [directGeminiModel, 'gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+        body: {
           contents: [{ role: 'user', parts: [{ text: userText }] }],
           systemInstruction: systemText ? { parts: [{ text: systemText }] } : undefined,
           generationConfig: { temperature: 0.3, responseMimeType: 'application/json' },
-        }),
+        },
       });
-      if (!resp.ok) return resp; // pass through error status
-      const data = await resp.json();
-      const content = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '';
-      const wrapped = { choices: [{ message: { content } }] };
+      if (!result.response.ok) return result.response;
+      if (result.modelUsed !== directGeminiModel) {
+        console.warn(`[enhance] Gemini model rotated: ${directGeminiModel} → ${result.modelUsed}`);
+      }
+      const data = await result.response.json();
+      const wrapped = { choices: [{ message: { content: extractGeminiText(data) } }] };
       return new Response(JSON.stringify(wrapped), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
 
@@ -1145,7 +1141,7 @@ Deno.serve(async (req) => {
       }
       if (!response.ok) {
         const errText = await response.text();
-        const provider = isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : 'Lovable Gateway';
+        const provider = isDeepSeek ? 'DeepSeek' : isTokenRouter ? 'TokenRouter' : useGeminiDirect && !usedProviderFallback ? 'Google Gemini' : 'Lovable Gateway';
         console.error(`[enhance] ${modeLabel} ${provider} HTTP ${response.status}:`, errText.slice(0, 500));
         // Diagnostic marker: reveals which function version is live + how the
         // request was routed, so a "Lovable" error on a TokenRouter request is

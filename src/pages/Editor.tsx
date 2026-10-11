@@ -140,6 +140,9 @@ const Editor = () => {
               entries: [{ key: 'test:0', original: 'Hello' }],
               provider,
               userApiKey: provider === 'gemini' ? (editor.userGeminiKey || undefined) : undefined,
+              // This button tests the user's Google API key, not paid Lovable
+              // credits — force free routing even if the editor is in paid mode.
+              routingMode: provider === 'gemini' ? 'free' : undefined,
               providerApiKey: providerApiKey || undefined,
               aiModel: editor.aiModel,
             }),

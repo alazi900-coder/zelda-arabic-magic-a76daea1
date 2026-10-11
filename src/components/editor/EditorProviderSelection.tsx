@@ -696,7 +696,7 @@ const EditorProviderSelection: React.FC<EditorProviderSelectionProps> = ({
               </p>
             )}
             {editor.userGeminiKey ? (
-              <p className="text-xs text-secondary font-body">✅ سيتم استخدام مفتاحك الشخصي للترجمة بدون حدود</p>
+              <p className="text-xs text-secondary font-body">✅ سيتم استخدام مفتاحك الشخصي مع احترام حدود Google اليومية وحدود سرعة الطلبات</p>
             ) : (
               <p className="text-xs text-muted-foreground font-body">بدون مفتاح: يستخدم نقاط Lovable AI المدمجة</p>
             )}

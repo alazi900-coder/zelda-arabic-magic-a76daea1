@@ -651,12 +651,23 @@ export function useEditorTranslation({
             return fetchBatchWithRetry(batchEntries, signal, depth, retriesLeft - 1);
           }
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'تجاوزت حد الطلبات');
+          throw Object.assign(new Error(errData.error || 'تجاوزت حد الطلبات'), { skipBatchSplit: true });
         }
-        if (response.status === 401) {
-          // Auth: never retry
+        // An overloaded or temporarily unreachable provider cannot be fixed
+        // by multiplying simultaneous requests into smaller batches.
+        if ([502, 503, 504].includes(response.status)) {
+          if (retriesLeft > 0) {
+            const waitMs = retriesLeft === 2 ? 2000 : 5000;
+            setTranslateProgress(`⏳ خادم Google مشغول — إعادة محاولة بعد ${waitMs / 1000} ثوانٍ...`);
+            await sleepWithAbort(waitMs, signal);
+            return fetchBatchWithRetry(batchEntries, signal, depth, retriesLeft - 1);
+          }
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'مفتاح API غير صالح');
+          throw Object.assign(new Error(errData.error || `تعذر الاتصال بالخادم (HTTP ${response.status})`), { skipBatchSplit: true });
+        }
+        if ([400, 401, 403, 404, 422].includes(response.status)) {
+          const errData = await response.json().catch(() => ({}));
+          throw Object.assign(new Error(errData.error || `طلب غير صالح أو نموذج غير متاح (HTTP ${response.status})`), { skipBatchSplit: true });
         }
         if (response.status >= 500 && batchEntries.length > 1 && depth < 3) {
           // Auto-split: divide batch in half and retry each sub-batch
@@ -680,6 +691,9 @@ export function useEditorTranslation({
         { const _d = await response.json(); recordBatchQuality(_d); return _d; }
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw err;
+        // Retrying a quota or authentication failure by splitting the same
+        // request simply burns more provider quota and looks like a hang.
+        if ((err as Error & { skipBatchSplit?: boolean }).skipBatchSplit) throw err;
         // Network-level errors (TypeError) are usually transient — wait + retry before splitting
         const isNetworkError = err instanceof TypeError;
         if (isNetworkError && retriesLeft > 0) {

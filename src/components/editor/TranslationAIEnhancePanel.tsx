@@ -37,7 +37,6 @@ import { makeEnhanceCacheKey, enhanceCacheLookup, enhanceCacheStore, enhanceCach
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import { isTranslationExcludedText, type ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
-import { getActiveEnhancementRules } from "@/lib/enhance-rule-execution";
 import {
   getActiveEnhancementRules, buildActiveEnhancementInstructions,
   filterDirectEnhancementFindings,

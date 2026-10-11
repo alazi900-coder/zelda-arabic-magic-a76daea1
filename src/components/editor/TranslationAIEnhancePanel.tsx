@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import {
   resolveAiGameProfile, AI_PROFILE_NAMES, profileDefaultPrompt,
-  loadAiProfilePrompt, saveAiProfilePrompt,
+  loadAiProfilePrompt, saveAiProfilePrompt, fingerprintAiContext,
 } from "@/lib/ai-game-profiles";
 import { validateGoldenSun2Translation } from "@/lib/goldensun/goldensun2-editor-bridge";
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
@@ -757,7 +757,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       JSON.stringify(currentCustomRules),
       JSON.stringify(currentBuiltinOverrides),
       gameReviewInstructions,
-      glossary || "",
+      fingerprintAiContext(glossary || ""),
     ].join("~");
 
     // مرّ على الكاش المحلّي أولاً — تخطَّ أي نصّ سبق فحصه بنفس السياق ولم يتغيّر

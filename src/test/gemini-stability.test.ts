@@ -22,6 +22,15 @@ describe("Gemini retry and model rotation", () => {
     })).toBe('{"K0":"مرحبا"}');
   });
 
+  it("excludes thinking parts from the final translation JSON", () => {
+    expect(extractGeminiText({
+      candidates: [{ content: { parts: [
+        { thought: true, text: "I should think about the phrase." },
+        { text: '{"K0":"ترجمة سليمة"}' },
+      ] } }],
+    })).toBe('{"K0":"ترجمة سليمة"}');
+  });
+
   it("retries the same model once after a temporary 503", async () => {
     const fetchStub = vi.fn().mockResolvedValueOnce(new Response("busy", { status: 503 })).mockResolvedValueOnce(good(['{"K0":"مرحبا"}']));
     const result = await run(fetchStub);

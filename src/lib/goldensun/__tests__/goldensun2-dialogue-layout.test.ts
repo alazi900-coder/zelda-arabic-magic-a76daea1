@@ -41,6 +41,18 @@ describe("AGFE pixel-safe dialogue wrapping", () => {
       (i + 1 < bytes.length && bytes[i + 1] !== 0x03 && bytes[i + 1] !== 0x1e)));
   });
 
+  it("repositions the original newline to balance long Arabic dialogue without adding a control tag", () => {
+    const input = [...words(12), 0x03, ...words(2), 0x1e];
+    const result = layoutGoldenSun2Dialogue(font(), [0x41, 0x03, 0x42, 0x1e], input);
+    expect(result.eligible).toBe(true);
+    expect(result.insertedLineBreaks).toBe(0);
+    expect(result.bytes.filter(code => code === 0x03)).toHaveLength(1);
+    expect(result.bytes.filter(code => code === 0xf0)).toHaveLength(14);
+    expect(result.lineWidths).toHaveLength(2);
+    expect(result.lineWidths.every(width => width <= GS2_DIALOGUE_LINE_MAX_PX)).toBe(true);
+    expect(result.bytes).not.toEqual(input);
+  });
+
   it("blocks an overlong two-line string instead of painting beyond GBA video", () => {
     expect(() => layoutGoldenSun2Dialogue(font(), [0x41, 0x1e],
       [...words(20), 0x1e])).toThrow(/أكثر من سطرين/);

@@ -34,6 +34,21 @@ describe("deep diagnostic repairs without deleting Arabic", () => {
     expect(result.inserted).toEqual(["%d"]);
   });
 
+  it("restores missing $1 in the source-relative place without deleting Arabic", () => {
+    const original = "Price: $1 coins";
+    const translation = "السعر: عملة";
+    const result = repairMissingTechnicalTokens(original, translation);
+    expect(result.safe).toBe(true);
+    expect(result.inserted).toEqual(["$1"]);
+    expect(result.text.replace("$1", "")).toBe(translation);
+  });
+
+  it("refuses replacing a different existing dollar variable", () => {
+    const result = repairMissingTechnicalTokens("Name $1", "الاسم $2");
+    expect(result.safe).toBe(false);
+    expect(result.text).toBe("الاسم $2");
+  });
+
   it("does not guess where a repeated identical missing slot belongs", () => {
     const result = repairMissingTechnicalTokens("First %s and then %s", "أولًا %s ثم");
     expect(result.safe).toBe(false);

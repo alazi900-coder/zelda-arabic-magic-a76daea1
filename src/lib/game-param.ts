@@ -43,6 +43,7 @@ export type GameParam =
   | "ninthdawn"
   | "inazuma"
   | "goldensun"
+  | "goldensun2"
   | "franbow"
   | "twom"
   | "gtasa";
@@ -64,6 +65,7 @@ export function resolveGameParam(
   if (f.startsWith("steinsgate/")) return "steinsgate";
   if (f.startsWith("crashlands/")) return "crashlands";
   if (f.startsWith("inazuma/")) return "inazuma";
+  if (f.startsWith("goldensun/lost-age/")) return "goldensun2";
   if (f.startsWith("goldensun/")) return "goldensun";
   if (f.startsWith("ninthdawn/")) return "ninthdawn";
   if (f.startsWith("franbow/")) return "franbow";

@@ -384,14 +384,16 @@ RULES — ordered by priority (top = most critical):
 4. Every translation value MUST contain Arabic characters. NEVER return English source as the "translation". Unknown names → transliterate to Arabic phonetically. Returning English unchanged is a hard failure rejected by validation.
 
 [B] FORMATTING:
-5. Do NOT insert literal newline characters (\\n) in your translations. Use a single space instead — line wrapping is handled by a post-processing step that re-balances lines to fit in-game text boxes. If the source has multiple lines (cutscene), still return one continuous string; the splitter will rebuild the lines.
+5. ${isGoldenSun2 || isGoldenSun
+  ? 'Preserve exactly every NEWLINE_N placeholder and each protected GBA control-code TAG_N, in source order. Never create real extra line breaks. Golden Sun game-engine layout, not generic text wrapping, controls the dialogue box.'
+  : 'Do NOT insert literal newline characters (\\n) in your translations. Use a single space instead — line wrapping is handled by a post-processing step that re-balances lines to fit in-game text boxes. If the source has multiple lines (cutscene), still return one continuous string; the splitter will rebuild the lines.'}
 6. NEVER add Arabic diacritics/tashkeel (ً ٌ ٍ َ ُ ِ ّ ْ). The game font cannot render them.
 7. Keep translation length close to the original to fit in-game text boxes.
 
 [C] TERMINOLOGY & STYLE:
-8. Glossary terms — if a term appears in the glossary section, you MUST use its EXACT Arabic translation. No alternatives, no synonyms, no paraphrasing. Match possessive forms too (e.g. "Noah's" uses the glossary entry for "Noah"). NON-NEGOTIABLE.
+8. Glossary terms — if a term appears in the glossary section, you MUST use its EXACT Arabic translation. No alternatives, no synonyms, no paraphrasing. Match possessive forms for any glossary proper nouns. NON-NEGOTIABLE.
 9. Consistency — if a word/phrase was translated a certain way in "Previously Translated Texts", you MUST translate it the same way.
-10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب)${isRisen || isMother3 ? '' : ' consistent with the Arabic Xenoblade Chronicles 1 community'} — not overly formal classical Arabic.
+10. Use natural modern Arabic for gaming (العربية الحديثة للألعاب)${isGoldenSun2 || isGoldenSun || isRisen || isMother3 ? '' : ' consistent with the Arabic Xenoblade Chronicles 1 community'} — not overly formal classical Arabic. Golden Sun uses a concise fantasy-JRPG register when applicable.
 11. Preserve proper nouns using the Arabic forms listed above. Unknown names → transliterate phonetically.
 12. ${npcVoiceRule}${npcRule}${categorySection}${userInstructionsSection}${glossarySection}${contextSection}
 

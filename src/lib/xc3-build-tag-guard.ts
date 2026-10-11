@@ -41,6 +41,12 @@ function extractTechnicalTags(text: string): string[] {
   return [...text.matchAll(new RegExp(BUILD_TECH_TAG_REGEX.source, BUILD_TECH_TAG_REGEX.flags))].map((match) => match[0]);
 }
 
+/** Source-of-truth token locations used by the non-destructive deep-diagnostic fixer. */
+export function getBuildTechnicalTagMatches(text: string): { token: string; start: number; end: number }[] {
+  return [...text.matchAll(new RegExp(BUILD_TECH_TAG_REGEX.source, BUILD_TECH_TAG_REGEX.flags))]
+    .map((match) => ({ token: match[0], start: match.index!, end: match.index! + match[0].length }));
+}
+
 function countRegexMatches(text: string, regex: RegExp): number {
   return (text.match(new RegExp(regex.source, regex.flags)) || []).length;
 }

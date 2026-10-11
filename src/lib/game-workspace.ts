@@ -1,4 +1,5 @@
 import { idbGet, idbSet } from "./idb-storage";
+import { resolveAiGameProfile } from "./ai-game-profiles";
 import type { LibraryGame } from "./game-library";
 
 /** The shared editor keeps using the legacy 'editorState' key.
@@ -20,6 +21,9 @@ const EMPTY: WorkspaceProgress = { total: 0, translated: 0, ready: false };
 const noteKey = (id: string) => `gameWorkspace:v2:${id}:notes`;
 const originalKey = (id: string) => `gameWorkspace:v2:${id}:originalTexts`;
 const snapshotKey = (id: string) => `editorState:${id}`;
+const normalizeSource = (source: string | undefined) => source === "risen" ? "risen1" : source;
+const legacyXenoblade = (data: unknown) => isSnapshot(data) &&
+  resolveAiGameProfile(data.entries[0]?.msbtFile) === "xenoblade";
 
 function isSnapshot(data: unknown): data is WorkspaceEditorSnapshot {
   if (!data || typeof data !== "object") return false;
@@ -45,12 +49,17 @@ function countTranslated(data: WorkspaceEditorSnapshot): number {
 /** Read-only, including when the game was imported by an older build. */
 export async function getWorkspaceProgress(game: LibraryGame): Promise<WorkspaceProgress> {
   if (!game.sourceId) return EMPTY;
-  const [sourceId, active, saved] = await Promise.all([
+  const [source, saved] = await Promise.all([
     idbGet<string>("editor-source-game"),
-    idbGet<unknown>("editorState"),
     idbGet<unknown>(snapshotKey(game.sourceId)),
   ]);
-  const current = sourceId === game.sourceId && isSnapshot(active) ? active : undefined;
+  // Avoid cloning the (possibly huge) active editor for every library card.
+  // Read it only for that game's card, or for an untagged legacy Xenoblade session.
+  const sourceId = normalizeSource(source);
+  const mayBeCurrent = sourceId === game.sourceId || (!sourceId && game.id === "xenoblade");
+  const active = mayBeCurrent ? await idbGet<unknown>("editorState") : undefined;
+  const current = (sourceId === game.sourceId || (!sourceId && game.id === "xenoblade" && legacyXenoblade(active))) &&
+    isSnapshot(active) ? active : undefined;
   const stored = isSnapshot(saved) ? saved : undefined;
   const session = current && stored && sameCatalog(current, stored)
     ? countTranslated(current) >= countTranslated(stored) ? current : stored
@@ -67,23 +76,39 @@ export async function getWorkspaceProgress(game: LibraryGame): Promise<Workspace
 export async function activateGameWorkspace(game: LibraryGame): Promise<boolean> {
   if (!game.sourceId) return false;
   const desired = game.sourceId;
-  const [currentSource, active, stored] = await Promise.all([
+  const [rawSource, active, stored] = await Promise.all([
     idbGet<string>("editor-source-game"),
     idbGet<unknown>("editorState"),
     idbGet<unknown>(snapshotKey(desired)),
   ]);
   const current = isSnapshot(active) ? active : undefined;
-  if (currentSource === desired && current) return true;
+  const currentSource = normalizeSource(rawSource) ??
+    (legacyXenoblade(active) ? "xenoblade" : undefined);
+
+  if (currentSource === desired && current) {
+    // Bring pre-profile Xenoblade sessions under the normal snapshot key
+    // without changing a single translation.
+    if (!rawSource) {
+      await idbSet(snapshotKey(desired), current);
+      await idbSet("editor-source-game", desired);
+    }
+    return true;
+  }
   if (!isSnapshot(stored)) return false; // Never open another game's texts.
 
-  if (currentSource && current && currentSource !== desired) {
-    const previous = await idbGet<unknown>(snapshotKey(currentSource));
-    if (!isSnapshot(previous) ||
-        (sameCatalog(previous, current) && countTranslated(current) >= countTranslated(previous))) {
-      await idbSet(snapshotKey(currentSource), current);
+  if (current) {
+    if (currentSource && currentSource !== desired) {
+      const previous = await idbGet<unknown>(snapshotKey(currentSource));
+      if (!isSnapshot(previous) ||
+          (sameCatalog(previous, current) && countTranslated(current) >= countTranslated(previous))) {
+        await idbSet(snapshotKey(currentSource), current);
+      }
+      const originals = await idbGet<unknown>("originalTexts");
+      if (originals) await idbSet(originalKey(currentSource), originals);
+    } else if (!currentSource) {
+      // Unknown old session: archive it instead of silently losing translations.
+      await idbSet(`gameWorkspace:v2:legacy-session:${Date.now()}`, current);
     }
-    const originals = await idbGet<unknown>("originalTexts");
-    if (originals) await idbSet(originalKey(currentSource), originals);
   }
 
   // Restore originals per-game so identically named entries across games

@@ -622,8 +622,8 @@ export function useEditorState() {
           setState({
             entries: finalEntries,
             translations: mergedTranslations,
-            protectedEntries: new Set(),
-            technicalBypass: new Set(),
+            protectedEntries: new Set(stored.protectedEntries || []),
+            technicalBypass: new Set(stored.technicalBypass || []),
             clearedKeys: freshClearedSet,
             isDemo: false,
           });
@@ -631,6 +631,8 @@ export function useEditorState() {
           await idbSet("editorState", {
             entries: finalEntries,
             translations: mergedTranslations,
+            protectedEntries: Array.from(stored.protectedEntries || []),
+            technicalBypass: Array.from(stored.technicalBypass || []),
             clearedKeys: Array.from(freshClearedSet),
           });
           const autoCount = Object.keys(autoTranslations).length;
@@ -718,6 +720,13 @@ export function useEditorState() {
       try {
         const game = await idbGet<string>("editor-source-game");
         if (game) await idbSet(`editorState:${game}`, payload);
+        if (game === "goldensun2") {
+          const fingerprint = await idbGet<string>("goldensun2CatalogFingerprint");
+          if (fingerprint) {
+            await idbSet(`editorState:goldensun2:${fingerprint}`, payload);
+            await idbSet("goldensun2Translations:" + fingerprint, payload.translations);
+          }
+        }
       } catch (err) {
         console.error("[idb] per-game snapshot failed:", err);
       }

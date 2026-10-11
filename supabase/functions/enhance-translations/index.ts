@@ -414,7 +414,7 @@ function preservesGoldenSunCodes(original: string, suggested: string): boolean {
   return before.length === after.length && before.every((t, i) => t === after[i]);
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false, isGoldenSun = false): boolean {
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
@@ -433,7 +433,7 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
     (!isFranBow || preservesFranBowTokenSequence(original, suggested)) &&
     (!isTwom || preservesTwomTokens(original, suggested)) &&
     (!isGtaSa || preservesGtaSaTokenSequence(original, suggested)) &&
-    (!isGoldenSun || preservesGoldenSunCodes(original, suggested));
+    preservesGoldenSunCodes(original, suggested);
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -465,7 +465,6 @@ function buildRuleSections(
   isFranBow = false,
   isTwom = false,
   isGtaSa = false,
-  isGoldenSun = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -505,7 +504,7 @@ function buildRuleSections(
     (!FRANBOW_ONLY_RULE_IDS.has(r.id) || isFranBow) &&
     (!TWOM_ONLY_RULE_IDS.has(r.id) || isTwom) &&
     (!GTASA_ONLY_RULE_IDS.has(r.id) || isGtaSa) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isGoldenSun && !isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa));
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa));
   const detectLines = all.filter(r => r.kind === 'detect' && isActive(r))
     .map((r, i) => `${i + 1}. ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -818,7 +817,7 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun);
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
@@ -1297,7 +1296,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
           isCategoryEnabled(i.category, ruleSections.enabledSet) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1416,7 +1415,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
             isTypeEnabled(r.type, ruleSections.enabledSet) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1505,7 +1504,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
               .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1513,7 +1512,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa) &&
         isTypeEnabled(s.type, ruleSections.enabledSet) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

@@ -1,3 +1,4 @@
+import type { AiGameProfile } from "@/lib/ai-game-profiles";
 import { useState, useCallback, useEffect } from "react";
 
 // One-time migration from removed multi-key feature. If a user has the old
@@ -233,36 +234,55 @@ export function useEditorSettings() {
     try { localStorage.setItem('autoSmartReview', String(v)); } catch { /* localStorage unavailable - ignore */ }
   }, []);
 
-  // === Custom prompt instructions (appended to every AI prompt, all categories) ===
-  const [customPromptInstructions, _setCustomPromptInstructions] = useState<string>(() => {
-    try { return localStorage.getItem('customPromptInstructions') || ''; } catch { return ''; }
-  });
-  const setCustomPromptInstructions = useCallback((v: string) => {
-    _setCustomPromptInstructions(v);
+  // === Per-game translation prompts (with legacy Xenoblade migration) ===
+  // These settings follow the loaded ROM. Provider and model settings remain
+  // global, but prompt text and category overrides must never leak between games.
+  const [activeAiGameProfile, setActiveAiGameProfile] = useState<AiGameProfile>("xenoblade");
+  const gamePromptKey = (field: "translationPrompt" | "categoryPrompts"): string => {
+    if (activeAiGameProfile === "xenoblade")
+      return field === "translationPrompt" ? "customPromptInstructions" : "categoryPromptTemplates";
+    return "aiGameProfile:v1:" + activeAiGameProfile + ":" + field;
+  };
+  const readGamePrompt = (key: string): string => {
+    try { return localStorage.getItem(key) || ""; } catch { return ""; }
+  };
+  const readCategoryPrompts = (key: string): Record<string, string> => {
     try {
-      if (v.trim()) localStorage.setItem('customPromptInstructions', v);
-      else localStorage.removeItem('customPromptInstructions');
-    } catch { /* ignore */ }
-  }, []);
-
-  // === Per-category prompt instructions (one dedicated prompt per filter card id) ===
-  const [categoryPromptTemplates, _setCategoryPromptTemplates] = useState<Record<string, string>>(() => {
-    try {
-      const raw = localStorage.getItem('categoryPromptTemplates');
-      return raw ? JSON.parse(raw) : {};
+      const value = JSON.parse(localStorage.getItem(key) || "{}");
+      return value && typeof value === "object" && !Array.isArray(value) ? value : {};
     } catch { return {}; }
-  });
-  const setCategoryPromptTemplate = useCallback((categoryId: string, v: string) => {
-    _setCategoryPromptTemplates(prev => {
-      const next = { ...prev };
-      if (v.trim()) next[categoryId] = v; else delete next[categoryId];
+  };
+  const [customPromptInstructions, _setCustomPromptInstructions] = useState<string>(
+    () => readGamePrompt("customPromptInstructions")
+  );
+  const [categoryPromptTemplates, _setCategoryPromptTemplates] = useState<Record<string, string>>(
+    () => readCategoryPrompts("categoryPromptTemplates")
+  );
+  useEffect(() => {
+    _setCustomPromptInstructions(readGamePrompt(gamePromptKey("translationPrompt")));
+    _setCategoryPromptTemplates(readCategoryPrompts(gamePromptKey("categoryPrompts")));
+  }, [activeAiGameProfile]);
+  const setCustomPromptInstructions = useCallback((value: string) => {
+    _setCustomPromptInstructions(value);
+    const key = gamePromptKey("translationPrompt");
+    try {
+      if (value.trim()) localStorage.setItem(key, value);
+      else localStorage.removeItem(key);
+    } catch { /* private browsing */ }
+  }, [activeAiGameProfile]);
+  const setCategoryPromptTemplate = useCallback((categoryId: string, value: string) => {
+    _setCategoryPromptTemplates(previous => {
+      const next = { ...previous };
+      if (value.trim()) next[categoryId] = value;
+      else delete next[categoryId];
       try {
-        if (Object.keys(next).length) localStorage.setItem('categoryPromptTemplates', JSON.stringify(next));
-        else localStorage.removeItem('categoryPromptTemplates');
-      } catch { /* ignore */ }
+        const key = gamePromptKey("categoryPrompts");
+        if (Object.keys(next).length) localStorage.setItem(key, JSON.stringify(next));
+        else localStorage.removeItem(key);
+      } catch { /* private browsing */ }
       return next;
     });
-  }, []);
+  }, [activeAiGameProfile]);
 
   // === AI Routing Mode: free (مفتاح المستخدم فقط) | paid (بوابة Lovable) | auto ===
   const [aiRoutingMode, _setAiRoutingMode] = useState<'free' | 'paid' | 'auto'>(() => {
@@ -375,6 +395,7 @@ export function useEditorSettings() {
     newlineSplitCharLimit, setNewlineSplitCharLimit,
     autoSmartReview, setAutoSmartReview,
     aiThrottleEnabled, setAiThrottleEnabled,
+    activeAiGameProfile, setActiveAiGameProfile,
     customPromptInstructions, setCustomPromptInstructions,
     categoryPromptTemplates, setCategoryPromptTemplate,
     aiRoutingMode, setAiRoutingMode,

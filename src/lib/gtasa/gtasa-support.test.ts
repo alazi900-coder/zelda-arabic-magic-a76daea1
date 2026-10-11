@@ -140,7 +140,7 @@ describe("GTA San Andreas rules in the AI enhancement tool", () => {
   it("refuses a suggestion that loses a token, before it is returned", () => {
     expect(EDGE_SOURCE).toContain("(!isGtaSa || preservesGtaSaTokenSequence(original, suggested))");
     expect(EDGE_SOURCE.match(/isSafeSuggestion\(/g)?.length).toBe(
-      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa\)/g)?.length ?? 0) + 1
+      (EDGE_SOURCE.match(/isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun\)/g)?.length ?? 0) + 1
     );
   });
   it("checks the panel before counting a suggestion as applied", () => {

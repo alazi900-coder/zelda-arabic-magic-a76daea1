@@ -19,6 +19,7 @@ import { repairGtaSaTags } from "@/lib/gtasa/gtasa-tags";
 import { repairGtaIvDollarAmountSequence, repairGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { repairPlatTags } from "@/lib/nds/plat-tag-mask";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
+import { diagnoseGoldenSun2Translation, isGoldenSun2DiagnosticEntry } from "@/lib/goldensun/goldensun2-deep-diagnostic";
 import { balanceLines, rebalanceTranslationLines } from "@/lib/balance-lines";
 import { fixTagNewlines } from "@/lib/tag-newline-anchor";
 import { countEffectiveLines } from "@/lib/text-tokens";
@@ -83,6 +84,8 @@ interface DiagnosticCategory {
 }
 
 const CATEGORIES: DiagnosticCategory[] = [
+  { id: "gs2_unexpected_controls", label: "Golden Sun II: رموز مخفية زائدة", icon: "🧹", severity: "critical", description: "يكشف U+001B وأكواد التحكم الزائدة عن الأصل وعلامات الاتجاه المخفية. لا يحذف أي رمز أصلي ضروري للعبة." },
+  { id: "gs2_token_mismatch", label: "Golden Sun II: رموز مختلفة", icon: "🛡️", severity: "critical", description: "رموز التحكم \\xNN غير مطابقة لترتيب الأصل. لا تُصلح تلقائياً إذا كان أحد رموز اللعبة الأصليّة مفقوداً." },
   { id: "control_chars", label: "رموز تحكم مفقودة", icon: "⛔", severity: "critical", description: "رموز تحكم (U+FFF9-FFFC) مفقودة من الترجمة — تسبب توقف اللعبة وخلل الرسوميات" },
   { id: "pua_chars", label: "رموز خاصة مفقودة", icon: "🔴", severity: "critical", description: "رموز المنطقة الخاصة (U+E000-E0FF) مفقودة — تتحكم بالأيقونات والألوان" },
   { id: "byte_overflow", label: "تجاوز حد البايت", icon: "📏", severity: "critical", description: "الترجمة تتجاوز الحد الأقصى للبايتات — تُفسد جدول النصوص" },
@@ -206,7 +209,7 @@ const INAZUMA_TAG_FIXABLE_CATEGORIES = new Set(["inazuma_tag_mismatch", "inazuma
 /** This War of Mine: `repairTwomTags` fixes the tag frame only and never the word inside a gender tag. */
 const TWOM_TAG_FIXABLE_CATEGORIES = new Set(["twom_tag_mismatch"]);
 // All locally fixable categories
-const LOCAL_FIXABLE_CATEGORIES = new Set([...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...SOURCE_TOKEN_REPAIR_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, ...INAZUMA_TAG_FIXABLE_CATEGORIES, ...TWOM_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
+const LOCAL_FIXABLE_CATEGORIES = new Set(["gs2_unexpected_controls", ...TAG_FIXABLE_CATEGORIES, ...GTAIV_TOKEN_FIXABLE_CATEGORIES, ...GTAIV_LINE_BREAK_DISPLAY_FIXABLE_CATEGORIES, ...PLAT_TAG_FIXABLE_CATEGORIES, ...DOLLAR_VAR_FIXABLE_CATEGORIES, ...SOURCE_TOKEN_REPAIR_CATEGORIES, ...STRIP_INVISIBLE_CATEGORIES, ...XENO_N_FIXABLE_CATEGORIES, ...TAG_NEWLINE_FIXABLE_CATEGORIES, ...RLM_ISOLATION_CATEGORIES, ...LINE_REBALANCE_CATEGORIES, ...RISEN_TAG_FIXABLE_CATEGORIES, ...PKM_WIDTH_FIXABLE_CATEGORIES, ...INAZUMA_TAG_FIXABLE_CATEGORIES, ...TWOM_TAG_FIXABLE_CATEGORIES, "empty_translation"]);
 
 export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyFix, onApplyFixesBatch, onFilterByKeys, onFixSelectedLocally, scopeKeys, scopeLabel }: DeepDiagnosticPanelProps) {
   const [open, setOpen] = useState(false);
@@ -393,6 +396,16 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const trans = state.translations[issue.key] || '';
     if (!trans.trim()) return { fixResult: '', reason: '❌ الترجمة فارغة' };
 
+    if (isGoldenSun2DiagnosticEntry(entry.msbtFile)) {
+      const check = diagnoseGoldenSun2Translation(entry.original, trans);
+      return {
+        fixResult: check.safeToRepair ? check.proposed : trans,
+        reason: check.safeToRepair
+          ? "🧹 سيُحذف فقط رمز التحكم الزائد عن المصدر؛ تبقى العربية والوسوم الأصلية كما هي"
+          : "⚠️ يحتاج الرمز الأصلي المفقود أو ترتيب الوسوم إلى مراجعة يدوية؛ لا حذف ولا تخمين",
+      };
+    }
+
     // Inazuma rows are repaired by their own function and nothing else. This
     // sits ahead of every strategy below because several of them end in
     // "restore the English original", which is what the fix button used to do
@@ -573,6 +586,17 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const entry = entryMap.get(issue.key);
     if (!entry) return;
 
+    if (isGoldenSun2DiagnosticEntry(entry.msbtFile)) {
+      const check = diagnoseGoldenSun2Translation(entry.original, issue.translation);
+      if (check.safeToRepair && onApplyFix) {
+        onApplyFix(issue.key, check.proposed);
+        toast({ title: "🧹 إصلاح Golden Sun II", description: "أُزيلت الرموز الزائدة فقط؛ بقيت أكواد المصدر والعبارة العربية" });
+      } else {
+        toast({ title: "⚠️ مراجعة يدوية مطلوبة", description: "رموز المصدر غير متطابقة أو الإصلاح غير آمن؛ لم تُعدّل الترجمة" });
+      }
+      return;
+    }
+
     // Same rule as the preview above: an Inazuma row is only ever repaired by
     // its own function, never restored to English and never re-wrapped by the
     // XENO-aware balancer, which cannot see this game's `\n`.
@@ -744,6 +768,23 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const categoryIssues = visibleIssues.filter(issue => issue.category === activeFilter);
     const uniqueKeys = [...new Set(categoryIssues.map(issue => issue.key))];
     if (uniqueKeys.length === 0) return;
+
+    if (activeFilter === "gs2_unexpected_controls" && (onApplyFix || onApplyFixesBatch)) {
+      const updates: Record<string, string> = {};
+      let needsReview = 0;
+      for (const key of uniqueKeys) {
+        const entry = entryMap.get(key);
+        const trans = state.translations[key];
+        if (!entry || !trans || !isGoldenSun2DiagnosticEntry(entry.msbtFile)) continue;
+        const check = diagnoseGoldenSun2Translation(entry.original, trans);
+        if (check.safeToRepair) updates[key] = check.proposed;
+        else needsReview++;
+      }
+      const count = applyBatchUpdates(updates);
+      toast({ title: "🧹 تنظيف Golden Sun II", description: "نُظّفت " + count + " ترجمة من رموز زائدة دون المساس بأكواد اللعبة؛ " + needsReview + " تحتاج مراجعة يدوية" });
+      setTimeout(() => runScan(true), 250);
+      return;
+    }
 
     if (GTAIV_TOKEN_FIXABLE_CATEGORIES.has(activeFilter) && (onApplyFix || onApplyFixesBatch)) {
       const updates: Record<string, string> = {};
@@ -972,7 +1013,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
     const processedKeys = new Set<string>();
     const tagFixKeys: string[] = [];
     const reportEntries: FixReportEntry[] = [];
-    const counters = { restore: 0, strip: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0, gtaIv: 0, gtaIvLines: 0, gtaIvNeedsReview: 0, rlm: 0, risenTag: 0 };
+    const counters = { restore: 0, strip: 0, gs2: 0, clear: 0, dollar: 0, xenoN: 0, tagFixed: 0, gtaIv: 0, gtaIvLines: 0, gtaIvNeedsReview: 0, rlm: 0, risenTag: 0 };
 
     const totalToProcess = allFixableIssues.length;
     toast({
@@ -991,6 +1032,23 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
         const issue = allFixableIssues[idx];
         if (processedKeys.has(issue.key)) continue;
         const catLabel = CATEGORIES.find(c => c.id === issue.category)?.label || issue.category;
+
+        if (issue.category === "gs2_unexpected_controls") {
+          const entry = entryMap.get(issue.key);
+          const trans = state.translations[issue.key];
+          if (entry && trans && isGoldenSun2DiagnosticEntry(entry.msbtFile)) {
+            const check = diagnoseGoldenSun2Translation(entry.original, trans);
+            if (check.safeToRepair) {
+              updates[issue.key] = check.proposed;
+              counters.gs2++;
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: "fixed", reason: "🧹 أُزيلت رموز زائدة عن مصدر Golden Sun II دون تغيير الترجمة أو الوسوم الأصلية", before: trans, after: check.proposed });
+            } else {
+              reportEntries.push({ key: issue.key, label: issue.label, category: catLabel, action: "unchanged", reason: "⚠️ لا يمكن إثبات سلامة الإزالة؛ راجع الوسوم يدوياً", before: trans, after: trans });
+            }
+          }
+          processedKeys.add(issue.key);
+          continue;
+        }
 
         if (GTAIV_TOKEN_FIXABLE_CATEGORIES.has(issue.category)) {
           const entry = entryMap.get(issue.key);
@@ -1253,7 +1311,7 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
             });
           }
 
-          const totalFixed = counters.tagFixed + counters.gtaIv + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN + counters.rlm + counters.risenTag;
+          const totalFixed = counters.tagFixed + counters.gtaIv + counters.gs2 + counters.restore + counters.strip + counters.clear + counters.dollar + counters.xenoN + counters.rlm + counters.risenTag;
           const totalUnchanged = reportEntries.filter(e => e.action === 'unchanged').length;
           const totalRestored = reportEntries.filter(e => e.action === 'restored').length;
           const report: FixReport = {
@@ -1449,6 +1507,8 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
                               ? `🏷️ إلحاق وسوم Risen (${activeFilterKeys.size})`
                               : GTAIV_TOKEN_FIXABLE_CATEGORIES.has(activeFilter)
                               ? `🛡️ إصلاح حماية GTA IV الآمنة (${activeFilterKeys.size})`
+                               : activeFilter === "gs2_unexpected_controls"
+                              ? "🧹 إزالة الرموز الزائدة عن Golden Sun II"
                               : activeFilter === "invisible_chars"
                               ? `🧹 تنظيف (${activeFilterKeys.size})`
                               : `🔧 إصلاح الكل محلياً (${activeFilterKeys.size})`

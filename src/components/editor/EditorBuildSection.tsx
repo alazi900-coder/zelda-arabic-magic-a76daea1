@@ -809,7 +809,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         if (!buffer) throw new Error("ROM الجزء الثاني غير محفوظة — ارفعها من صفحة Golden Sun");
         const {
           rom, translatedLines, fontReady, removedHiddenControls,
-          removedExtraControlTags, omittedUnsupportedCharacters,
+          removedInvisibleFormatting, removedExtraControlTags, omittedUnsupportedCharacters,
           skippedUnsafeTranslations, skippedIndexes,
         } = buildGoldenSun2StringTable(
           new Uint8Array(buffer), editor.state?.translations || {},
@@ -826,16 +826,17 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           ? "تم بناء AGFE: " + translatedLines +
               " نصًا مترجمًا؛ كُتبت الحوارات كما هي دون فحص أو تعديل عدد الأسطر أو عرضها، ونجح التحقق من البيانات بعد الضغط."
           : "لم توجد ترجمات جديدة — ROM المنزّلة مطابقة للمدخلة.");
-        if (removedHiddenControls > 0) sonnerToast.info(
-          "تنظيف رموز تحكم مخفية زائدة",
-          { description: "أُزيل " + removedHiddenControls + " رمز تحكم غير موجود في النصوص الأصلية من نسخة ROM فقط. ترجمات المحرر المحفوظة لم تتغير." }
+        if (removedHiddenControls + removedInvisibleFormatting > 0) sonnerToast.info(
+          "تنظيف الرموز المخفية الزائدة",
+          { description: "أُزيل " + removedHiddenControls + " رمز تحكم و" +
+              removedInvisibleFormatting + " علامة تنسيق Unicode لا توجد في النصوص الأصلية، من نسخة ROM فقط. ترجمات المحرر المحفوظة لم تتغير." }
         );
         if (gs2ForceBuild) {
           sonnerToast.warning("اكتمل البناء الإجباري لروم Golden Sun II", {
             description: "الترجمات المقبولة: " + translatedLines +
               " | نصوص غير آمنة أُبقيت بلغتها الأصلية: " + skippedUnsafeTranslations +
               (skippedIndexes.length ? " (أرقامها: " + skippedIndexes.slice(0, 10).join("، ") + (skippedIndexes.length > 10 ? "…" : "") + ")" : "") +
-              " | رموز تقنية زائدة حُذفت: " + (removedHiddenControls + removedExtraControlTags) +
+              " | رموز مخفية وتقنية زائدة حُذفت: " + (removedHiddenControls + removedInvisibleFormatting + removedExtraControlTags) +
               " | حروف بلا خانة حُذفت: " + omittedUnsupportedCharacters +
               ". لم تتغيّر الترجمات المحفوظة.",
             duration: 15000,

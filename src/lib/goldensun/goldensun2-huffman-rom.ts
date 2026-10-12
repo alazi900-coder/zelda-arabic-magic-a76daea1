@@ -11,7 +11,7 @@
  */
 import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
-import { normalizeGoldenSun2EmbeddedControls, validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
+import { normalizeGoldenSun2EmbeddedControls, stripUnexpectedGoldenSun2RawControls, validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
 import { tokenizeGoldenSunBytes, isGoldenSunPlainAscii } from "./goldensun-tags";
 import { GOLDENSUN_ARABIC_BYTE_MAP } from "./goldensun-arabic-font";
 
@@ -326,24 +326,25 @@ function readGoldenSun2Strings(rom: Uint8Array): number[][] {
 /** Build and verify an extended GBA ROM without touching the original code. */
 export function buildGoldenSun2StringTable(
   rom: Uint8Array, translations: Record<string, string>
-): { rom: Uint8Array; translatedLines: number; fontReady: boolean } {
+): { rom: Uint8Array; translatedLines: number; fontReady: boolean; removedHiddenControls: number } {
   const originals = readGoldenSun2Strings(rom);
   let translatedLines = 0;
+  let removedHiddenControls = 0;
   const fontReady = isGoldenSun2ArabicFontRom(rom);
   const contents = originals.map((raw, index) => {
     const original = goldenSun2BytesToText(raw, fontReady);
     const key = GS2_TEXT_FILE + ":" + index;
     const changed = translations[key];
     if (!changed || changed === original) return raw;
-    const normalizedChanged = normalizeGoldenSun2EmbeddedControls(changed);
+    // Source-aware cleanup: a stray raw ESC (U+001B) injected by AI is
+    // removed from the output copy only when the original doesn't need it.
+    // Preserve every actual source token, literal \xNN and stored translation.
+    const sanitized = stripUnexpectedGoldenSun2RawControls(original, changed);
+    const normalizedChanged = normalizeGoldenSun2EmbeddedControls(sanitized.text);
     if (!validateGoldenSun2Translation(original, normalizedChanged).valid) {
-      const rawControl = changed.match(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/)?.[0];
-      const detail = rawControl
-        ? " — يوجد رمز تحكم مخفي U+" + rawControl.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") +
-          " غير مطابق للرموز في النص الأصلي؛ أصلح هذا النص ولا تحذف الرمز بلا تحقق."
-        : "";
-      throw new Error("GS2: technical control codes differ from the original at text #" + index + detail);
+      throw new Error("GS2: technical control codes differ from the original at text #" + index);
     }
+    removedHiddenControls += sanitized.removed;
     if (!fontReady && /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\uFB50-\uFDFF\uFE70-\uFEFF]/.test(changed)) {
       throw new Error("النص " + index +
         ": أضف رقعة الخط العربي وRTL للجزء الثاني إلى ROM قبل بناء نصوص عربية");
@@ -363,7 +364,7 @@ export function buildGoldenSun2StringTable(
     translatedLines++;
     return bytes;
   });
-  if (!translatedLines) return { rom: rom.slice(), translatedLines: 0, fontReady };
+  if (!translatedLines) return { rom: rom.slice(), translatedLines: 0, fontReady, removedHiddenControls: 0 };
 
   const total = contents.reduce((n, c) => n + c.length + 1, 0);
   const corpus = new Uint8Array(total);
@@ -444,5 +445,5 @@ export function buildGoldenSun2StringTable(
       throw new Error("GS2: rebuilt text #" + i + " failed byte-for-byte roundtrip");
     }
   }
-  return { rom: rebuilt, translatedLines, fontReady };
+  return { rom: rebuilt, translatedLines, fontReady, removedHiddenControls };
 }

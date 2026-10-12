@@ -15,7 +15,7 @@ function write32(data: Uint8Array, at: number, number: number) {
   data[at + 3] = number >>> 24 & 255;
 }
 function ptr(at: number) { return (0x08000000 + at) >>> 0; }
-function makeFixture(): Uint8Array {
+function makeFixture(overrides: Record<number, number[]> = {}): Uint8Array {
   const rom = new Uint8Array(GS2_ORIGINAL_ROM_SIZE);
   rom.set([65, 71, 70, 69], 0xac); // AGFE
   // Include the large-font table even though the ROM builder no longer
@@ -24,7 +24,7 @@ function makeFixture(): Uint8Array {
     rom[0x5a4e0 + (code - 0x20) * 32] = 5;
   }
   const texts = Array.from({ length: GS2_STRING_COUNT }, (_, i) =>
-    [i % 2 ? 66 : 65, 3]);
+    overrides[i] ?? [i % 2 ? 66 : 65, 3]);
   const corpus = new Uint8Array(texts.length * 3);
   texts.forEach((b, i) => corpus.set(b, i * 3));
   const built = buildTrees(corpus);
@@ -154,6 +154,26 @@ describe("The Lost Age complete extraction and rebuild", () => {
     expect(entries[8].original).toBe("A\\x03");
     expect(entries[10].original).toBe("A\\x03");
   }, 60000);
+
+  it("encodes a real pasted U+001B into an unchanged original ESC command", () => {
+    const rom = makeFixture({ 9: [0x41, 0x1b, 0x03] });
+    const esc = String.fromCharCode(0x1b);
+    const key = GS2_TEXT_FILE + ":9";
+    // No Arabic font needed: this proves the control byte remains intact.
+    const changed = "Welcome" + esc + String.raw`\x03`;
+    expect(goldenSun2TextToBytes("A" + esc)).toEqual([0x41, 0x1b]);
+    const built = buildGoldenSun2StringTable(rom, { [key]: changed });
+    expect(built.translatedLines).toBe(1);
+    expect(extractGoldenSun2Strings(built.rom)[9].original).toBe(String.raw`Welcome\x1B\x03`);
+  }, 60000);
+
+  it("names the offending record if AI inserted an unrecognized hidden ESC", () => {
+    const rom = makeFixture();
+    const extraEsc = String.fromCharCode(0x1b);
+    expect(() => buildGoldenSun2StringTable(rom, {
+      [GS2_TEXT_FILE + ":9"]: "Welcome" + extraEsc + String.raw`\x03`,
+    })).toThrow(/text #9.*U[+]001B/);
+  }, 30000);
 
   it("refuses broken control tags and Arabic without the game's patched font", () => {
     const rom = makeFixture();

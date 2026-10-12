@@ -11,7 +11,7 @@
  */
 import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
-import { validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
+import { normalizeGoldenSun2EmbeddedControls, validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
 import { tokenizeGoldenSunBytes, isGoldenSunPlainAscii } from "./goldensun-tags";
 import { GOLDENSUN_ARABIC_BYTE_MAP } from "./goldensun-arabic-font";
 
@@ -232,6 +232,9 @@ for (let d = 0; d <= 9; d++) {
  * can be encoded into the 0x80..0xFF font overlay only on a verified ROM.
  */
 export function goldenSun2TextToBytes(text: string): number[] {
+  // Preserve real control bytes pasted by an editor / returned by an AI.
+  // Structural verification against the ROM source happens in the builder.
+  text = normalizeGoldenSun2EmbeddedControls(text);
   const result: number[] = [];
   const escape = /\\x[0-9a-fA-F]{2}/g;
   const encodeSpan = (span: string) => {
@@ -332,14 +335,26 @@ export function buildGoldenSun2StringTable(
     const key = GS2_TEXT_FILE + ":" + index;
     const changed = translations[key];
     if (!changed || changed === original) return raw;
-    if (!validateGoldenSun2Translation(original, changed).valid) {
-      throw new Error("GS2: technical control codes differ from the original at text #" + index);
+    const normalizedChanged = normalizeGoldenSun2EmbeddedControls(changed);
+    if (!validateGoldenSun2Translation(original, normalizedChanged).valid) {
+      const rawControl = changed.match(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/)?.[0];
+      const detail = rawControl
+        ? " — يوجد رمز تحكم مخفي U+" + rawControl.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") +
+          " غير مطابق للرموز في النص الأصلي؛ أصلح هذا النص ولا تحذف الرمز بلا تحقق."
+        : "";
+      throw new Error("GS2: technical control codes differ from the original at text #" + index + detail);
     }
     if (!fontReady && /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\uFB50-\uFDFF\uFE70-\uFEFF]/.test(changed)) {
       throw new Error("النص " + index +
         ": أضف رقعة الخط العربي وRTL للجزء الثاني إلى ROM قبل بناء نصوص عربية");
     }
-    const bytes = goldenSun2TextToBytes(changed);
+    let bytes: number[];
+    try {
+      bytes = goldenSun2TextToBytes(normalizedChanged);
+    } catch (cause) {
+      throw new Error("GS2 text #" + index + ": " +
+        (cause instanceof Error ? cause.message : String(cause)));
+    }
     if (bytes.includes(0)) throw new Error("GS2: embedded NUL in string " + index);
     // Dialogue width / two-line auto-wrap gate intentionally disabled.
     // Write the translator's exact bytes; never synthesize, shift or remove

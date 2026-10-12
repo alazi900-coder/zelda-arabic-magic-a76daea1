@@ -11,7 +11,7 @@
  */
 import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
-import { normalizeGoldenSun2EmbeddedControls, stripUnexpectedGoldenSun2RawControls, validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
+import { normalizeGoldenSun2EmbeddedControls, stripUnexpectedGoldenSun2RawControls, stripSurplusGoldenSun2ExplicitControls, validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
 import { tokenizeGoldenSunBytes, isGoldenSunPlainAscii } from "./goldensun-tags";
 import { GOLDENSUN_ARABIC_BYTE_MAP } from "./goldensun-arabic-font";
 
@@ -231,7 +231,10 @@ for (let d = 0; d <= 9; d++) {
  * those as \xNN, preserving their exact original binary code. Arabic text
  * can be encoded into the 0x80..0xFF font overlay only on a verified ROM.
  */
-export function goldenSun2TextToBytes(text: string): number[] {
+export function goldenSun2TextToBytes(
+  text: string,
+  options: { dropUnsupported?: boolean; onUnsupported?: (char: string) => void } = {},
+): number[] {
   // Preserve real control bytes pasted by an editor / returned by an AI.
   // Structural verification against the ROM source happens in the builder.
   text = normalizeGoldenSun2EmbeddedControls(text);
@@ -249,6 +252,9 @@ export function goldenSun2TextToBytes(text: string): number[] {
         result.push(mapped);
       } else if (isGoldenSunPlainAscii(cp)) {
         result.push(cp);
+      } else if (options.dropUnsupported && cp >= 0x20) {
+        // Explicit force-build mode only: report, never silently omit a glyph.
+        options.onUnsupported?.(c);
       } else {
         throw new Error("GS2: unsupported character " + JSON.stringify(c) +
           " U+" + cp.toString(16).toUpperCase() + " — no silent deletion");
@@ -324,47 +330,90 @@ function readGoldenSun2Strings(rom: Uint8Array): number[][] {
 }
 
 /** Build and verify an extended GBA ROM without touching the original code. */
+export interface GoldenSun2BuildOptions {
+  /** Best-effort build; never disables ROM structure, decompression or source-token protection. */
+  forceBuild?: boolean;
+}
+export interface GoldenSun2BuildResult {
+  rom: Uint8Array;
+  translatedLines: number;
+  fontReady: boolean;
+  removedHiddenControls: number;
+  removedExtraControlTags: number;
+  omittedUnsupportedCharacters: number;
+  skippedUnsafeTranslations: number;
+  skippedIndexes: number[];
+}
+
 export function buildGoldenSun2StringTable(
-  rom: Uint8Array, translations: Record<string, string>
-): { rom: Uint8Array; translatedLines: number; fontReady: boolean; removedHiddenControls: number } {
+  rom: Uint8Array,
+  translations: Record<string, string>,
+  options: GoldenSun2BuildOptions = {},
+): GoldenSun2BuildResult {
   const originals = readGoldenSun2Strings(rom);
+  const forceBuild = options.forceBuild === true;
   let translatedLines = 0;
   let removedHiddenControls = 0;
+  let removedExtraControlTags = 0;
+  let omittedUnsupportedCharacters = 0;
+  const skippedIndexes: number[] = [];
   const fontReady = isGoldenSun2ArabicFontRom(rom);
   const contents = originals.map((raw, index) => {
     const original = goldenSun2BytesToText(raw, fontReady);
     const key = GS2_TEXT_FILE + ":" + index;
     const changed = translations[key];
     if (!changed || changed === original) return raw;
-    // Source-aware cleanup: a stray raw ESC (U+001B) injected by AI is
-    // removed from the output copy only when the original doesn't need it.
-    // Preserve every actual source token, literal \xNN and stored translation.
+
+    // This source-aware cleanup is safe in either build mode: real invisible
+    // controls absent from the original cannot become in-game commands.
     const sanitized = stripUnexpectedGoldenSun2RawControls(original, changed);
-    const normalizedChanged = normalizeGoldenSun2EmbeddedControls(sanitized.text);
+    const withoutRawControls = normalizeGoldenSun2EmbeddedControls(sanitized.text);
+    // In forced mode also remove EXTRA textual \x1B-like controls. Required
+    // original controls remain protected and verified in original order.
+    const explicitCleanup = forceBuild
+      ? stripSurplusGoldenSun2ExplicitControls(original, withoutRawControls)
+      : { text: withoutRawControls, removed: 0 };
+    const normalizedChanged = explicitCleanup.text;
+    const skipUnsafe = () => { skippedIndexes.push(index); return raw; };
+
     if (!validateGoldenSun2Translation(original, normalizedChanged).valid) {
+      if (forceBuild) return skipUnsafe();
       throw new Error("GS2: technical control codes differ from the original at text #" + index);
     }
-    removedHiddenControls += sanitized.removed;
     if (!fontReady && /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\uFB50-\uFDFF\uFE70-\uFEFF]/.test(changed)) {
+      if (forceBuild) return skipUnsafe();
       throw new Error("النص " + index +
         ": أضف رقعة الخط العربي وRTL للجزء الثاني إلى ROM قبل بناء نصوص عربية");
     }
     let bytes: number[];
+    let unsupported = 0;
     try {
-      bytes = goldenSun2TextToBytes(normalizedChanged);
+      bytes = goldenSun2TextToBytes(normalizedChanged, {
+        dropUnsupported: forceBuild,
+        onUnsupported: () => { unsupported++; },
+      });
     } catch (cause) {
+      if (forceBuild) return skipUnsafe();
       throw new Error("GS2 text #" + index + ": " +
         (cause instanceof Error ? cause.message : String(cause)));
     }
-    if (bytes.includes(0)) throw new Error("GS2: embedded NUL in string " + index);
-    // Dialogue width / two-line auto-wrap gate intentionally disabled.
-    // Write the translator's exact bytes; never synthesize, shift or remove
-    // 0x03 line breaks. Technical tag, glyph and Huffman integrity checks above
-    // and below stay enabled to avoid corrupting game data.
+    if (bytes.includes(0)) {
+      if (forceBuild) return skipUnsafe();
+      throw new Error("GS2: embedded NUL in string " + index);
+    }
+    // Dialogue width / two-line auto-wrap gate is disabled in ALL build modes.
+    // Force mode does not bypass technical token safety or Huffman integrity.
+    removedHiddenControls += sanitized.removed;
+    removedExtraControlTags += explicitCleanup.removed;
+    omittedUnsupportedCharacters += unsupported;
     translatedLines++;
     return bytes;
   });
-  if (!translatedLines) return { rom: rom.slice(), translatedLines: 0, fontReady, removedHiddenControls: 0 };
+  if (!translatedLines) return {
+    rom: rom.slice(), translatedLines: 0, fontReady, removedHiddenControls: 0,
+    removedExtraControlTags: 0, omittedUnsupportedCharacters: 0,
+    skippedUnsafeTranslations: skippedIndexes.length, skippedIndexes,
+  };
 
   const total = contents.reduce((n, c) => n + c.length + 1, 0);
   const corpus = new Uint8Array(total);
@@ -445,5 +494,9 @@ export function buildGoldenSun2StringTable(
       throw new Error("GS2: rebuilt text #" + i + " failed byte-for-byte roundtrip");
     }
   }
-  return { rom: rebuilt, translatedLines, fontReady, removedHiddenControls };
+  return {
+    rom: rebuilt, translatedLines, fontReady, removedHiddenControls,
+    removedExtraControlTags, omittedUnsupportedCharacters,
+    skippedUnsafeTranslations: skippedIndexes.length, skippedIndexes,
+  };
 }

@@ -93,6 +93,41 @@ export function stripUnexpectedGoldenSun2RawControls(
   return { text, removed };
 }
 
+/**
+ * FORCE BUILD ONLY: remove surplus explicit \xNN control tags which the
+ * original ROM never contained, while retaining the original number of each
+ * control. Any remaining missing or reordered tokens will still be rejected
+ * by validateGoldenSun2Translation, then that specific source row is kept.
+ */
+export function stripSurplusGoldenSun2ExplicitControls(
+  source: string, translation: string,
+): { text: string; removed: number } {
+  const expected = new Map<string, number>();
+  for (const tag of goldenSun2TechnicalTokens(source)) {
+    const match = /^\\x([0-9a-fA-F]{2})$/.exec(tag);
+    if (!match) continue;
+    const value = parseInt(match[1], 16);
+    if (value < 1 || value >= 0x20) continue;
+    const key = match[1].toUpperCase();
+    expected.set(key, (expected.get(key) ?? 0) + 1);
+  }
+  const used = new Map<string, number>();
+  let removed = 0;
+  const text = translation.replace(/\\x([0-9a-fA-F]{2})/g, (token, code: string) => {
+    const key = code.toUpperCase();
+    const value = parseInt(key, 16);
+    if (value < 1 || value >= 0x20) return token;
+    const count = used.get(key) ?? 0;
+    if (count >= (expected.get(key) ?? 0)) {
+      removed++;
+      return "";
+    }
+    used.set(key, count + 1);
+    return token;
+  });
+  return { text, removed };
+}
+
 export function goldenSun2TechnicalTokens(text: string): string[] {
   return (normalizeGoldenSun2EmbeddedControls(text).match(CONTROL_TAG) || []).map(tag =>
     /^\\x/i.test(tag) ? "\\x" + tag.slice(-2).toUpperCase() :

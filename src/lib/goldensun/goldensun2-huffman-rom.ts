@@ -402,6 +402,13 @@ export function buildGoldenSun2StringTable(
       if (forceBuild) return skipUnsafe();
       throw new Error("GS2: embedded NUL in string " + index);
     }
+    // The common Golden Sun Huffman decoder stops after 2000 decoded bytes,
+    // including the terminator. This is a codec safety limit, not the old
+    // dialogue box's optional two-line wrapping check.
+    if (bytes.length > 1999) {
+      if (forceBuild) return skipUnsafe();
+      throw new Error("GS2 text #" + index + ": النص أطول من 1999 بايت؛ لا يستطيع محرك فك الضغط استعادته.");
+    }
     // Dialogue width / two-line auto-wrap gate is disabled in ALL build modes.
     // Force mode does not bypass technical token safety or Huffman integrity.
     removedHiddenControls += sanitized.removed;

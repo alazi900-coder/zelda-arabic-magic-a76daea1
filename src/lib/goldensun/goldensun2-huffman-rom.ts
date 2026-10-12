@@ -357,6 +357,7 @@ export function buildGoldenSun2StringTable(
   let removedExtraControlTags = 0;
   let omittedUnsupportedCharacters = 0;
   const skippedIndexes: number[] = [];
+  const appliedEffects = new Map<number, { hidden: number; extra: number; unsupported: number }>();
   const fontReady = isGoldenSun2ArabicFontRom(rom);
   const contents = originals.map((raw, index) => {
     const original = goldenSun2BytesToText(raw, fontReady);
@@ -406,6 +407,9 @@ export function buildGoldenSun2StringTable(
     removedHiddenControls += sanitized.removed;
     removedExtraControlTags += explicitCleanup.removed;
     omittedUnsupportedCharacters += unsupported;
+    appliedEffects.set(index, {
+      hidden: sanitized.removed, extra: explicitCleanup.removed, unsupported,
+    });
     translatedLines++;
     return bytes;
   });
@@ -415,27 +419,65 @@ export function buildGoldenSun2StringTable(
     skippedUnsafeTranslations: skippedIndexes.length, skippedIndexes,
   };
 
-  const total = contents.reduce((n, c) => n + c.length + 1, 0);
-  const corpus = new Uint8Array(total);
-  let at = 0;
-  for (const c of contents) {
-    corpus.set(c, at);
-    at += c.length + 1;
-  }
-  const huff = buildTrees(corpus);
-  for (const n of huff.offsets) {
-    if (n !== 0x8000 && n >= 0x8000) {
-      throw new Error("GS2: Huffman tree offsets exceed the 15-bit limit");
+  const compressCurrent = () => {
+    const total = contents.reduce((n, c) => n + c.length + 1, 0);
+    const corpus = new Uint8Array(total);
+    let at = 0;
+    for (const c of contents) {
+      corpus.set(c, at);
+      at += c.length + 1;
     }
-  }
-  const compressed = contents.map((b, i) => {
-    const encoded = compressString(huff, b);
-    if (encoded.length < 1 || encoded.length >= 255) {
-      throw new Error("النص " + i + " حجمه بعد الضغط " + encoded.length +
+    const huff = buildTrees(corpus);
+    for (const n of huff.offsets) {
+      if (n !== 0x8000 && n >= 0x8000) {
+        throw new Error("GS2: Huffman tree offsets exceed the 15-bit limit");
+      }
+    }
+    const compressed = contents.map(b => compressString(huff, b));
+    return { huff, compressed };
+  };
+  let packed = compressCurrent();
+  // A 254-byte length field is part of the ROM format and cannot be
+  // overridden. In force mode retain the source text for every overlong
+  // translation, then recalculate the shared Huffman tree; a new tree can
+  // slightly change neighbouring compressed lengths.
+  for (let pass = 0; pass < 12; pass++) {
+    const oversized = packed.compressed.flatMap((encoded, i) =>
+      encoded.length < 1 || encoded.length >= 255 ? [i] : [],
+    );
+    if (!oversized.length) break;
+    if (!forceBuild) {
+      const i = oversized[0];
+      throw new Error("النص " + i + " حجمه بعد الضغط " + packed.compressed[i].length +
         " بايت؛ الحد 254. اختصر الترجمة");
     }
-    return encoded;
-  });
+    const toRestore = oversized.filter(i => contents[i] !== originals[i]);
+    if (!toRestore.length) {
+      throw new Error("GS2: original text cannot fit a ROM compression length field");
+    }
+    for (const i of toRestore) {
+      contents[i] = originals[i];
+      skippedIndexes.push(i);
+      translatedLines--;
+      const effect = appliedEffects.get(i);
+      if (effect) {
+        removedHiddenControls -= effect.hidden;
+        removedExtraControlTags -= effect.extra;
+        omittedUnsupportedCharacters -= effect.unsupported;
+        appliedEffects.delete(i);
+      }
+    }
+    if (translatedLines === 0) return {
+      rom: rom.slice(), translatedLines, fontReady, removedHiddenControls,
+      removedExtraControlTags, omittedUnsupportedCharacters,
+      skippedUnsafeTranslations: skippedIndexes.length, skippedIndexes,
+    };
+    packed = compressCurrent();
+    if (pass === 11) {
+      throw new Error("GS2: تكرّر تجاوز طول النص المضغوط رغم البناء الإجباري. تحقّق من سلامة المصدر.");
+    }
+  }
+  const { huff, compressed } = packed;
 
   // Always repack from the original 16 MiB cartridge image. Any previous
   // rebuilt text region is replaced, not appended a second time.

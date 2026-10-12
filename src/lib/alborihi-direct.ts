@@ -93,7 +93,7 @@ Preserve every technical token, control code, placeholder, rich-text tag, variab
  * validated against a frozen allow-list here. A wrong name comes back as
  * البريهي's own error naming that model, which is the useful failure.
  */
-async function requestCompletion(request: AlborihiDirectRequest & { system: string; user: string }): Promise<string> {
+async function requestCompletion(request: AlborihiDirectRequest & { system: string; user: string; noNetworkRetry?: boolean }): Promise<string> {
   const model = request.model?.trim() || ALBORIHI_DEFAULT_MODEL;
 
   let response: Response | undefined;
@@ -117,6 +117,10 @@ async function requestCompletion(request: AlborihiDirectRequest & { system: stri
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
       if (request.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       if (!(error instanceof TypeError)) throw error;
+      // A long request cut by the server timeout must not be resent: it would bill the same work again.
+      if (request.noNetworkRetry) {
+        throw new AlborihiDirectError('البريهي بطيء جداً وانقطع الطلب — اختر نموذجاً أسرع أو نطاقاً أصغر.', 504);
+      }
       if (attempt === 2) {
         // A TypeError here is the browser refusing a response it could not
         // read, not necessarily an unreachable host. The case seen in
@@ -188,7 +192,7 @@ export interface AlborihiJsonRequest {
  * depend on a deploy.
  */
 export async function requestAlborihiJson<T extends Record<string, unknown>>(request: AlborihiJsonRequest): Promise<T> {
-  const content = await requestCompletion({ ...request, entries: [] });
+  const content = await requestCompletion({ ...request, entries: [], noNetworkRetry: true });
   const parsed = safeJson(content);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new AlborihiDirectError('استجابة البريهي ليست كائن JSON صالحاً.', 502);

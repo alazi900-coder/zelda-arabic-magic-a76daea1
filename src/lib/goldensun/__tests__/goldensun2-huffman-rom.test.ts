@@ -252,6 +252,24 @@ describe("The Lost Age complete extraction and rebuild", () => {
     expect(result.skippedIndexes).toEqual([2]);
   }, 30000);
 
+  it("forced build skips only a ROM-format overlong compressed record and repacks other edits", () => {
+    const rom = makeFixture();
+    const key9 = GS2_TEXT_FILE + ":9";
+    const key10 = GS2_TEXT_FILE + ":10";
+    const veryLong = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ".repeat(100) + "\x03";
+    expect(() => buildGoldenSun2StringTable(rom, { [key9]: veryLong }))
+      .toThrow(/حجمه بعد الضغط/);
+    const built = buildGoldenSun2StringTable(rom, {
+      [key9]: veryLong, [key10]: "Working\x03",
+    }, { forceBuild: true });
+    expect(built.skippedIndexes).toEqual([9]);
+    expect(built.skippedUnsafeTranslations).toBe(1);
+    expect(built.translatedLines).toBe(1);
+    const extracted = extractGoldenSun2Strings(built.rom);
+    expect(extracted[9].original).toBe(String.raw`B\x03`);
+    expect(extracted[10].original).toBe(String.raw`Working\x03`);
+  }, 60000);
+
   it("refuses broken control tags and Arabic without the game's patched font", () => {
     const rom = makeFixture();
     expect(() => buildGoldenSun2StringTable(rom, {

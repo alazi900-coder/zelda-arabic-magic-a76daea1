@@ -60,6 +60,7 @@ import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categorie
 import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { categorizeGoldenSunEntry } from "@/lib/goldensun/goldensun-categories";
 import { analyzeGoldenSunUnsupportedCharacters, type GoldenSunUnsupportedCharacter } from "@/lib/goldensun/goldensun-rom";
+import { scanGoldenSun2BuildTranslations } from "@/lib/goldensun/goldensun2-build-scan";
 import { analyzeInazumaUnsupportedCharacters, type InazumaUnsupportedCharacter } from "@/lib/inazuma/inazuma-arabic-font";
 import { fromInazumaBreakTokens } from "@/lib/inazuma/inazuma-break-tokens";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
@@ -1863,8 +1864,19 @@ export function useEditorState() {
       original: e.original,
     }));
     const report = scanTranslationsForRestore(entriesForScan, state.translations);
-    setRestoreReport(report);
-    if (report.autoFixable === 0 && report.needsReview === 0) {
+    const gs2Findings = scanGoldenSun2BuildTranslations(state.entries, state.translations);
+    if (gs2Findings.length) {
+      setSmartReviewFindings(gs2Findings.map(f => ({
+        key: f.key, original: f.original, current: f.current,
+        type: "inconsistency" as const, issue: f.issue, fix: f.fix,
+      })));
+      toast({
+        title: "⚠️ فحص Golden Sun II وجد " + gs2Findings.length + " مشكلة بناء",
+        description: "تظهر النصوص المتأثرة في لوحة المراجعة، ويمكن تطبيق تنظيف الرموز المخفية الزائدة دون تغيير الوسوم الأصلية.",
+      });
+    }
+    setRestoreReport(report.autoFixable === 0 && report.needsReview === 0 && gs2Findings.length ? null : report);
+    if (report.autoFixable === 0 && report.needsReview === 0 && gs2Findings.length === 0) {
       toast({
         title: "✅ كلّ الترجمات سليمة",
         description: `تمّ فحص ${report.scanned} ترجمة — لا توجد رموز مفقودة ولا فواصل أسطر ناقصة.`,

@@ -1024,14 +1024,14 @@ Deno.serve(async (req) => {
     const useGeminiDirect = !isCerebras && !isDeepSeek && !isTokenRouter && !isGmiCloud && isGeminiAiModel && normalizedRouting !== 'paid' && !!geminiDirectKey;
     const allowLovableFallback = normalizedRouting !== 'free';
 
-    if (normalizedRouting === 'free' && !isDeepSeek && !isTokenRouter && !isGmiCloud && !geminiDirectKey) {
+    if (normalizedRouting === 'free' && !isCerebras && !isDeepSeek && !isTokenRouter && !isGmiCloud && !geminiDirectKey) {
       return new Response(JSON.stringify({ error: '🆓 وضع "مجاني فقط": لم يُكوَّن مفتاح Gemini (لا في إعدادات المستخدم ولا في أسرار السيرفر) — أضف مفتاحك من Google AI Studio أو بدّل الوضع' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     if (!useGeminiDirect && !isCerebras && !isDeepSeek && !isTokenRouter && !isGmiCloud && !LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    console.log('[enhance] request', { mode: mode || 'enhance', provider: provider || 'auto', model: resolvedModel, isDeepSeek, isTokenRouter, isGmiCloud, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
+    console.log('[enhance] request', { mode: mode || 'enhance', provider: provider || 'auto', model: resolvedModel, isCerebras, isDeepSeek, isTokenRouter, isGmiCloud, thinkingMode: thinkingMode || 'default', deepSeekThinkingEnabled, entriesCount: entries?.length || 0, routing: normalizedRouting, useGeminiDirect });
 
     // يُرفَع لـ true إن اضطُررنا للتحويل من DeepSeek إلى Gemini بسبب فشل مؤقّت —
     // نُضمّنه في الردّ النهائي (_meta.providerFallback) ليعرف المستخدم أنّ
@@ -1208,7 +1208,7 @@ Deno.serve(async (req) => {
         // Diagnostic marker: reveals which function version is live + how the
         // request was routed, so a "Lovable" error on a TokenRouter request is
         // immediately traceable to old deployed code vs a real provider error.
-        const diag = ` [fn=enh-1.95.0 · aiModel=${aiModel ?? '∅'} · tr=${isTokenRouter} · ds=${isDeepSeek}]`;
+        const diag = ` [fn=enh-1.96.0-cb · provider=${provider ?? '∅'} · aiModel=${aiModel ?? '∅'} · cb=${isCerebras} · tr=${isTokenRouter} · ds=${isDeepSeek}]`;
         let errMsg: string;
         if (response.status === 429) errMsg = `تم تجاوز حدّ الطلبات على ${provider} (نموذج ${resolvedModel})${diag}`;
         else if (response.status === 402) errMsg = `الرصيد غير كافٍ على ${provider}${diag}`;

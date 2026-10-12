@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GOLDENSUN2_FILE,
   goldenSun2TechnicalTokens,
+  normalizeGoldenSun2EmbeddedControls,
   validateGoldenSun2Translation,
   parseGoldenSun2Catalog,
   goldenSun2ToEditorEntries,
@@ -26,6 +27,19 @@ describe("The Lost Age shared editor protection", () => {
     expect(validateGoldenSun2Translation(original, "أهلًا بلا وسوم").valid).toBe(false);
     expect(validateGoldenSun2Translation(original, String.raw`نص\x03\x02 {GS2:0011} [Name:felix]`).valid).toBe(false);
     expect(validateGoldenSun2Translation(original, String.raw`أهلًا\xGG`).valid).toBe(false);
+  });
+
+  it("normalizes a real U+001B ESC to a literal GS2 tag without losing the byte", () => {
+    const rawEsc = String.fromCharCode(0x1b);
+    expect(normalizeGoldenSun2EmbeddedControls("Hi" + rawEsc + "!")).toBe(String.raw`Hi\\x1B!`);
+    expect(goldenSun2TechnicalTokens("Hi" + rawEsc + "!")).toEqual([String.raw`\\x1B`]);
+    expect(validateGoldenSun2Translation(
+      String.raw`Hello\\x1B\\x03`, "أهلا" + rawEsc + String.raw`\\x03`
+    ).valid).toBe(true);
+    // An inserted ESC not present in the source MUST NOT be silently injected.
+    expect(validateGoldenSun2Translation(
+      String.raw`Hello\\x03`, "أهلا" + rawEsc + String.raw`\\x03`
+    ).valid).toBe(false);
   });
 
   it("imports explicit source rows into the same editor namespace", () => {

@@ -19,6 +19,7 @@ import { goldenSunAllTechnicalTagsUnchanged } from "../../../supabase/functions/
 import { requestGmiCloudJson } from "@/lib/gmicloud-direct";
 import { requestCodeCraftJson, fetchCodeCraftModels } from "@/lib/codecraft-direct";
 import { requestAlborihiJson } from "@/lib/alborihi-direct";
+import { relevantReviewGlossary, isReviewRateLimit, waitForReviewCooldown } from "@/lib/enhance-provider-recovery";
 import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
@@ -822,11 +823,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const isCerebrasActive = effectiveProvider === 'cerebras';
     const effectiveBatchSize = isTokenRouterActive || isAlborihiActive ? TOKENROUTER_BATCH_SIZE : isGmiCloudActive ? 4 : isCerebrasActive ? 10 : BATCH_SIZE;
     const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : isGmiCloudActive || isAlborihiActive || isCerebrasActive ? 1 : PARALLEL_REQUESTS;
-    const waitAbortable = (ms: number) => new Promise<void>((resolve) => {
-      const t = window.setTimeout(resolve, ms);
-      abortSignal.addEventListener('abort', () => { window.clearTimeout(t); resolve(); }, { once: true });
-    });
-    const isRateLimitText = (s: unknown) => /429|حد الطلبات|حدّ الطلبات|rate|limit|quota/i.test(String(s ?? ''));
+    // Cerebras already uses 10-text serial batches; its TPM quota still
+    // requires pacing plus a retry on actual HTTP 429 (never on HTTP 402).
     const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
     for (let i = 0; i < cacheMissEntries.length; i += effectiveBatchSize) {
       batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + effectiveBatchSize) });
@@ -889,14 +887,32 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             ? '{"issues":[{"key":"","original":"","translation":"","issue":"","suggestion":"","severity":"medium","category":"wrong","rule_id":"enabled-rule-id"}]}'
             : '{"results":[{"key":"","original":"","current":"","suggested":"","category":"style","reason":"","type":"style","rule_id":"enabled-rule-id"}]}'
         const askJson = effectiveProvider === 'codecraft' ? requestCodeCraftJson : effectiveProvider === 'alborihi' ? requestAlborihiJson : requestGmiCloudJson;
+        // The shared translation path already limits its glossary. AI review
+        // used to send ALL project terms in every Alborihi batch (twice!).
+        const batchGlossary = effectiveProvider === 'alborihi'
+          ? relevantReviewGlossary(glossary, textsToAnalyze)
+          : glossary;
         const data = await askJson<Record<string, unknown>>({
           apiKey: effectiveProvider === 'codecraft' ? codeCraftKey : gmiCloudKey,
           model: requestModel,
           signal: abortSignal,
+          ...(effectiveProvider === 'alborihi' ? { timeoutMs: 110_000 } : {}),
           system: `You are an Arabic video-game localization QA editor. Analyze only the supplied translations. Preserve every technical token, variable, control code, placeholder, rich-text tag, number, and line-break marker exactly. Return ONLY valid JSON with this exact top-level shape: ${responseShape}. Include an item only when a genuine improvement is needed. Reasons must be concise Arabic.\n\n${activeRulesPrompt}\n\n${gameReviewInstructions}${isPokemonXp ? `\n\n${POKEMON_XP_TOKEN_RULE}` : ""}`,
-          user: JSON.stringify({ mode, entries: textsToAnalyze, glossary, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules, builtinOverrides: currentBuiltinOverrides, game: gameParam, extraInstructions: gameReviewInstructions || undefined, learnedFeedback: learnedFeedback || undefined }),
+          user: JSON.stringify({ mode, entries: textsToAnalyze, glossary: batchGlossary, enabledRules: Array.from(currentEnabledRules), customRules: currentCustomRules, builtinOverrides: currentBuiltinOverrides, game: gameParam, extraInstructions: gameReviewInstructions || undefined, learnedFeedback: learnedFeedback || undefined }),
         });
-        return { data: filterDirectEnhancementFindings(data, mode, activeDetectIds), error: null };
+        // A wrong JSON schema must be an error, not silently treated as
+        // "zero findings", which would permanently mark these entries done.
+        const expectedField = mode === 'enhance' ? 'suggestions' : mode === 'grammar' ? 'issues' : 'results';
+        const findings = data[expectedField];
+        if (!Array.isArray(findings)) {
+          throw new Error(`رد ${effectiveProvider === 'alborihi' ? 'البريهي' : 'المزود'} غير صالح: القائمة ${expectedField} مفقودة. لم تُعلَّم النصوص كمفحوصة.`);
+        }
+        const filtered = filterDirectEnhancementFindings(data, mode, activeDetectIds);
+        if (effectiveProvider === 'alborihi' && findings.length > 0 &&
+            Array.isArray(filtered[expectedField]) && filtered[expectedField].length === 0) {
+          throw new Error('أعاد البريهي اقتراحات لا تتطابق مع معرّفات القواعد المفعلة. لم تُحفظ نتائج وهمية؛ جرّب قاعدة أو نموذجاً آخر.');
+        }
+        return { data: filtered, error: null };
       }
       if (!isTokenRouterActive) {
         return supabase.functions.invoke('enhance-translations', {
@@ -930,18 +946,42 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       }
     };
 
+    // A 429 can arrive as an Edge Function error or as {data.error}.
+    // Re-try only quota errors, at most twice, with an abortable 30s wait.
+    // Never send Cerebras work to Lovable or another model as a fallback.
+    const invokeWithQuotaRecovery = async (textsToAnalyze: { key: string; original: string; translation: string; category?: string }[]) => {
+      for (let retry = 0; retry <= 2; retry++) {
+        if (abortSignal.aborted) throw new DOMException('Aborted', 'AbortError');
+        let result: Awaited<ReturnType<typeof invokeEnhance>>;
+        try {
+          result = await invokeEnhance(textsToAnalyze);
+        } catch (err) {
+          if (!isCerebrasActive || retry === 2 || !isReviewRateLimit(err)) throw err;
+          setStatusMessage(`Cerebras تجاوز حد الرموز في الدقيقة؛ انتظار 30 ثانية قبل المحاولة ${retry + 2} من 3…`);
+          await waitForReviewCooldown(30_000, abortSignal);
+          continue;
+        }
+        if (!isCerebrasActive || retry === 2 ||
+            !isReviewRateLimit(result.error) && !isReviewRateLimit(result.data?.error)) return result;
+        setStatusMessage(`Cerebras تجاوز حد الرموز في الدقيقة؛ انتظار 30 ثانية قبل المحاولة ${retry + 2} من 3…`);
+        await waitForReviewCooldown(30_000, abortSignal);
+      }
+      throw new Error('Cerebras: تم تجاوز حد الرموز بعد إعادة المحاولة.');
+    };
+
     for (let i = 0; i < batches.length; i += effectiveParallel) {
       if (abortRef.current) break;
 
       const chunk = batches.slice(i, i + effectiveParallel);
       const promises = chunk.map(async ({ textsToAnalyze }) => {
         try {
-          if (isTokenRouterActive) {
-            const batchNumber = Math.floor(i / effectiveParallel) + 1;
-            const batchTotal = Math.ceil(batches.length / effectiveParallel);
-            setStatusMessage(`GLM يفحص الدفعة ${batchNumber} من ${batchTotal} (${textsToAnalyze.length} نص)`);
+          const batchNumber = Math.floor(i / effectiveParallel) + 1;
+          const batchTotal = Math.ceil(batches.length / effectiveParallel);
+          if (isTokenRouterActive || isAlborihiActive || isCerebrasActive) {
+            const label = isAlborihiActive ? 'البريهي' : isCerebrasActive ? 'Cerebras' : 'GLM';
+            setStatusMessage(`${label} يفحص الدفعة ${batchNumber} من ${batchTotal} (${textsToAnalyze.length} نص)`);
           }
-          const { data, error } = await invokeEnhance(textsToAnalyze);
+          const { data, error } = await invokeWithQuotaRecovery(textsToAnalyze);
           if (error) throw error;
           if (data?.error) {
             // أظهر الخطأ في الأداة وفي toast لضمان رؤيته (الـ toast قد يُفوت).
@@ -971,12 +1011,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           if (abortSignal.aborted || (err instanceof Error && err.name === 'AbortError') || errStr.includes('AbortError') || errStr.includes('aborted')) {
             return { data: null, count: textsToAnalyze.length };
           }
-          if (errStr.includes('429')) {
+          if (!isCerebrasActive && errStr.includes('429')) {
             toast({ title: "تم تجاوز حد الطلبات، جاري الانتظار...", variant: "destructive" });
-            await new Promise(r => setTimeout(r, 5000));
+            try { await waitForReviewCooldown(5_000, abortSignal); }
+            catch { return { data: null, count: 0 }; }
             if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
             try {
-              const { data, error: retryError } = await invokeEnhance(textsToAnalyze);
+              const { data, error: retryError } = await invokeWithQuotaRecovery(textsToAnalyze);
               if (retryError) throw retryError;
               if (data?.error) {
                 encounteredError = true;
@@ -1031,6 +1072,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       }
 
       setProgress({ current: Math.min(processed, translatedEntries.length), total: translatedEntries.length });
+      if (isCerebrasActive && i + effectiveParallel < batches.length && !abortSignal.aborted) {
+        setStatusMessage('Cerebras: انتظار 3 ثوانٍ بين دفعات المراجعة…');
+        try { await waitForReviewCooldown(3_000, abortSignal); }
+        catch { break; }
+      }
     }
 
     setIsAnalyzing(false);

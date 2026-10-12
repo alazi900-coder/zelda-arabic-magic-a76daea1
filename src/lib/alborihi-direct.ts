@@ -141,7 +141,7 @@ async function requestCompletion(request: AlborihiDirectRequest & { system: stri
 
     const raw = await response.text();
     try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
-    if (response.ok || !isRetryableStatus(response.status) || attempt === 2) break;
+    if (response.ok || !isRetryableStatus(response.status) || request.noNetworkRetry || attempt === 2) break;
     await waitForRetry(700 * (attempt + 1), request.signal);
   }
   if (!response) throw new AlborihiDirectError('تعذر بدء طلب البريهي.', 502);
@@ -183,6 +183,8 @@ export interface AlborihiJsonRequest {
   system: string;
   user: string;
   signal?: AbortSignal;
+  /** Limits slow QA calls without imposing a deadline on ordinary translation. */
+  timeoutMs?: number;
 }
 
 /**
@@ -192,12 +194,33 @@ export interface AlborihiJsonRequest {
  * depend on a deploy.
  */
 export async function requestAlborihiJson<T extends Record<string, unknown>>(request: AlborihiJsonRequest): Promise<T> {
-  const content = await requestCompletion({ ...request, entries: [], noNetworkRetry: true });
-  const parsed = safeJson(content);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new AlborihiDirectError('استجابة البريهي ليست كائن JSON صالحاً.', 502);
+  if (request.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  const controller = new AbortController();
+  let timedOut = false;
+  const forwardAbort = () => controller.abort();
+  request.signal?.addEventListener('abort', forwardAbort, { once: true });
+  const deadline = request.timeoutMs ?? 110_000;
+  const timer = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, deadline);
+  try {
+    const content = await requestCompletion({ ...request, entries: [], noNetworkRetry: true, signal: controller.signal });
+    const parsed = safeJson(content);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new AlborihiDirectError('استجابة البريهي ليست كائن JSON صالحاً.', 502);
+    }
+    return parsed as T;
+  } catch (error) {
+    if (timedOut && !request.signal?.aborted) {
+      throw new AlborihiDirectError('انتهت مهلة البريهي بعد ' + Math.ceil(deadline / 1000) +
+        ' ثانية دون نتيجة. جرّب دفعة أصغر أو نموذجاً أسرع.', 504);
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timer);
+    request.signal?.removeEventListener('abort', forwardAbort);
   }
-  return parsed as T;
 }
 
 /** Returns a Response so the caller can treat it exactly like the Edge Function's. */

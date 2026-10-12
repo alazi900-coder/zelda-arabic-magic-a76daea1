@@ -67,7 +67,7 @@ export function stripUnexpectedGoldenSun2RawControls(
 ): { text: string; removed: number } {
   const expected = new Map<string, number>();
   for (const token of goldenSun2TechnicalTokens(source)) {
-    if (!/^\\x(?:0[1-8BC]|1[0-9A-F])$/i.test(token)) continue;
+    if (!/^\\x(?:0[1-8BCEF]|1[0-9A-F])$/i.test(token)) continue;
     const code = token.slice(-2).toUpperCase();
     expected.set(code, (expected.get(code) ?? 0) + 1);
   }

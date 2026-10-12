@@ -172,7 +172,7 @@ describe("The Lost Age complete extraction and rebuild", () => {
     const extraEsc = String.fromCharCode(0x1b);
     expect(() => buildGoldenSun2StringTable(rom, {
       [GS2_TEXT_FILE + ":9"]: "Welcome" + extraEsc + String.raw`\x03`,
-    })).toThrow(/text #9.*U\\+001B/);
+    })).toThrow(/text #9.*U[+]001B/);
   }, 30000);
 
   it("refuses broken control tags and Arabic without the game's patched font", () => {

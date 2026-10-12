@@ -31,14 +31,14 @@ describe("The Lost Age shared editor protection", () => {
 
   it("normalizes a real U+001B ESC to a literal GS2 tag without losing the byte", () => {
     const rawEsc = String.fromCharCode(0x1b);
-    expect(normalizeGoldenSun2EmbeddedControls("Hi" + rawEsc + "!")).toBe(String.raw`Hi\\x1B!`);
-    expect(goldenSun2TechnicalTokens("Hi" + rawEsc + "!")).toEqual([String.raw`\\x1B`]);
+    expect(normalizeGoldenSun2EmbeddedControls("Hi" + rawEsc + "!")).toBe(String.raw`Hi\x1B!`);
+    expect(goldenSun2TechnicalTokens("Hi" + rawEsc + "!")).toEqual([String.raw`\x1B`]);
     expect(validateGoldenSun2Translation(
-      String.raw`Hello\\x1B\\x03`, "أهلا" + rawEsc + String.raw`\\x03`
+      String.raw`Hello\x1B\x03`, "أهلا" + rawEsc + String.raw`\x03`
     ).valid).toBe(true);
     // An inserted ESC not present in the source MUST NOT be silently injected.
     expect(validateGoldenSun2Translation(
-      String.raw`Hello\\x03`, "أهلا" + rawEsc + String.raw`\\x03`
+      String.raw`Hello\x03`, "أهلا" + rawEsc + String.raw`\x03`
     ).valid).toBe(false);
   });
 

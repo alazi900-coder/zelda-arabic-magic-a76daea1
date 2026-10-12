@@ -167,12 +167,35 @@ describe("The Lost Age complete extraction and rebuild", () => {
     expect(extractGoldenSun2Strings(built.rom)[9].original).toBe(String.raw`Welcome\x1B\x03`);
   }, 60000);
 
-  it("names the offending record if AI inserted an unrecognized hidden ESC", () => {
+  it("drops a stray raw ESC absent from the original and still produces a valid ROM", () => {
     const rom = makeFixture();
     const extraEsc = String.fromCharCode(0x1b);
+    const key = GS2_TEXT_FILE + ":9";
+    const translation = "Welcome" + extraEsc + String.raw`\x03`;
+    const built = buildGoldenSun2StringTable(rom, { [key]: translation });
+    expect(built.translatedLines).toBe(1);
+    expect(built.removedHiddenControls).toBe(1);
+    expect(extractGoldenSun2Strings(built.rom)[9].original).toBe(String.raw`Welcome\x03`);
+    // Editor text stays immutable: cleanup happens on ROM output.
+    expect(translation).toContain(extraEsc);
+    expect(extractGoldenSun2Strings(built.rom)[8].original).toBe(String.raw`A\x03`);
+  }, 60000);
+
+  it("removes duplicates but retains an actual original ESC command", () => {
+    const rom = makeFixture({ 9: [0x41, 0x1b, 0x03] });
+    const esc = String.fromCharCode(0x1b);
+    const built = buildGoldenSun2StringTable(rom, {
+      [GS2_TEXT_FILE + ":9"]: "Hi" + esc + esc + String.raw`\x03`,
+    });
+    expect(built.removedHiddenControls).toBe(1);
+    expect(extractGoldenSun2Strings(built.rom)[9].original).toBe(String.raw`Hi\x1B\x03`);
+  }, 60000);
+
+  it("still refuses explicit extra technical tags, never deletes written tags", () => {
+    const rom = makeFixture();
     expect(() => buildGoldenSun2StringTable(rom, {
-      [GS2_TEXT_FILE + ":9"]: "Welcome" + extraEsc + String.raw`\x03`,
-    })).toThrow(/text #9.*U[+]001B/);
+      [GS2_TEXT_FILE + ":9"]: String.raw`Hello\x1B\x03`,
+    })).toThrow(/technical control codes differ/);
   }, 30000);
 
   it("refuses broken control tags and Arabic without the game's patched font", () => {

@@ -256,11 +256,11 @@ describe("The Lost Age complete extraction and rebuild", () => {
     const rom = makeFixture();
     const key9 = GS2_TEXT_FILE + ":9";
     const key10 = GS2_TEXT_FILE + ":10";
-    const veryLong = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ".repeat(100) + "\x03";
+    const veryLong = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ".repeat(100) + "\\x03";
     expect(() => buildGoldenSun2StringTable(rom, { [key9]: veryLong }))
       .toThrow(/حجمه بعد الضغط/);
     const built = buildGoldenSun2StringTable(rom, {
-      [key9]: veryLong, [key10]: "Working\x03",
+      [key9]: veryLong, [key10]: "Working\\x03",
     }, { forceBuild: true });
     expect(built.skippedIndexes).toEqual([9]);
     expect(built.skippedUnsafeTranslations).toBe(1);

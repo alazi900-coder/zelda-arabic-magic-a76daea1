@@ -231,7 +231,13 @@ for (let d = 0; d <= 9; d++) {
  * those as \xNN, preserving their exact original binary code. Arabic text
  * can be encoded into the 0x80..0xFF font overlay only on a verified ROM.
  */
-export function goldenSun2TextToBytes(text: string): number[] {
+export interface GoldenSun2EncodeOptions {
+  /** Opt-in: omit unencodable display glyphs but never alter control tags. */
+  force?: boolean;
+  onUnsupportedCharacter?: (character: string) => void;
+}
+
+export function goldenSun2TextToBytes(text: string, options: GoldenSun2EncodeOptions = {}): number[] {
   // Preserve real control bytes pasted by an editor / returned by an AI.
   // Structural verification against the ROM source happens in the builder.
   text = normalizeGoldenSun2EmbeddedControls(text);
@@ -249,6 +255,11 @@ export function goldenSun2TextToBytes(text: string): number[] {
         result.push(mapped);
       } else if (isGoldenSunPlainAscii(cp)) {
         result.push(cp);
+      } else if (options.force) {
+        // Drop only the current unencodable *display* character. The regex
+        // extracts all technical \\xNN sequences BEFORE this loop, and ROM
+        // building still requires the original controls to match exactly.
+        options.onUnsupportedCharacter?.(c);
       } else {
         throw new Error("GS2: unsupported character " + JSON.stringify(c) +
           " U+" + cp.toString(16).toUpperCase() + " — no silent deletion");
@@ -324,12 +335,31 @@ function readGoldenSun2Strings(rom: Uint8Array): number[][] {
 }
 
 /** Build and verify an extended GBA ROM without touching the original code. */
+export interface GoldenSun2BuildOptions {
+  /** Must be explicitly enabled by the translator: skip unencodable glyphs. */
+  force?: boolean;
+}
+
+export interface GoldenSun2BuildResult {
+  rom: Uint8Array;
+  translatedLines: number;
+  fontReady: boolean;
+  removedHiddenControls: number;
+  removedUnsupportedCharacters: number;
+  affectedTextIndexes: number[];
+}
+
+/** Missing original technical codes, invalid compression and ROM overflows
+ * remain hard errors in both standard and force builds. */
 export function buildGoldenSun2StringTable(
-  rom: Uint8Array, translations: Record<string, string>
-): { rom: Uint8Array; translatedLines: number; fontReady: boolean; removedHiddenControls: number } {
+  rom: Uint8Array, translations: Record<string, string>,
+  options: GoldenSun2BuildOptions = {},
+): GoldenSun2BuildResult {
   const originals = readGoldenSun2Strings(rom);
   let translatedLines = 0;
   let removedHiddenControls = 0;
+  let removedUnsupportedCharacters = 0;
+  const affectedTextIndexes: number[] = [];
   const fontReady = isGoldenSun2ArabicFontRom(rom);
   const contents = originals.map((raw, index) => {
     const original = goldenSun2BytesToText(raw, fontReady);
@@ -351,7 +381,15 @@ export function buildGoldenSun2StringTable(
     }
     let bytes: number[];
     try {
-      bytes = goldenSun2TextToBytes(normalizedChanged);
+      let removedFromText = 0;
+      bytes = goldenSun2TextToBytes(normalizedChanged, {
+        force: options.force === true,
+        onUnsupportedCharacter: () => { removedFromText++; },
+      });
+      if (removedFromText > 0) {
+        removedUnsupportedCharacters += removedFromText;
+        affectedTextIndexes.push(index);
+      }
     } catch (cause) {
       throw new Error("GS2 text #" + index + ": " +
         (cause instanceof Error ? cause.message : String(cause)));
@@ -364,7 +402,10 @@ export function buildGoldenSun2StringTable(
     translatedLines++;
     return bytes;
   });
-  if (!translatedLines) return { rom: rom.slice(), translatedLines: 0, fontReady, removedHiddenControls: 0 };
+  if (!translatedLines) return {
+    rom: rom.slice(), translatedLines: 0, fontReady,
+    removedHiddenControls: 0, removedUnsupportedCharacters: 0, affectedTextIndexes: [],
+  };
 
   const total = contents.reduce((n, c) => n + c.length + 1, 0);
   const corpus = new Uint8Array(total);
@@ -445,5 +486,6 @@ export function buildGoldenSun2StringTable(
       throw new Error("GS2: rebuilt text #" + i + " failed byte-for-byte roundtrip");
     }
   }
-  return { rom: rebuilt, translatedLines, fontReady, removedHiddenControls };
+  return { rom: rebuilt, translatedLines, fontReady,
+    removedHiddenControls, removedUnsupportedCharacters, affectedTextIndexes };
 }

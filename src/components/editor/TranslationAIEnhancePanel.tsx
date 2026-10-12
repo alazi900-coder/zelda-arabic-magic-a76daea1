@@ -818,8 +818,15 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // and let its direct-only transport retry only the same GMI Cloud model.
     // البريهي بطيء (~90 ث لسطر واحد) فالدفعات الكبيرة تتجاوز حدّ الخادم وتنقطع بصمت.
     const isAlborihiActive = effectiveProvider === 'alborihi';
-    const effectiveBatchSize = isTokenRouterActive || isAlborihiActive ? TOKENROUTER_BATCH_SIZE : isGmiCloudActive ? 4 : BATCH_SIZE;
-    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : isGmiCloudActive || isAlborihiActive ? 1 : PARALLEL_REQUESTS;
+    // Cerebras يحدّ عدد الكلمات في الدقيقة — دفعة واحدة في كل مرة مع فاصل زمني.
+    const isCerebrasActive = effectiveProvider === 'cerebras';
+    const effectiveBatchSize = isTokenRouterActive || isAlborihiActive ? TOKENROUTER_BATCH_SIZE : isGmiCloudActive ? 4 : isCerebrasActive ? 10 : BATCH_SIZE;
+    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : isGmiCloudActive || isAlborihiActive || isCerebrasActive ? 1 : PARALLEL_REQUESTS;
+    const waitAbortable = (ms: number) => new Promise<void>((resolve) => {
+      const t = window.setTimeout(resolve, ms);
+      abortSignal.addEventListener('abort', () => { window.clearTimeout(t); resolve(); }, { once: true });
+    });
+    const isRateLimitText = (s: unknown) => /429|حد الطلبات|حدّ الطلبات|rate|limit|quota/i.test(String(s ?? ''));
     const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
     for (let i = 0; i < cacheMissEntries.length; i += effectiveBatchSize) {
       batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + effectiveBatchSize) });

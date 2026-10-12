@@ -37,8 +37,21 @@ const CONTROL_TAG = /\\x[0-9a-fA-F]{2}|\{[A-Za-z][A-Za-z0-9_]*:[^{}\r\n]*\}|\[[A
 const WRONG_ESCAPE = /\\x(?![0-9a-fA-F]{2})/i;
 const WRONG_GS2 = /\{GS2:(?![0-9A-Fa-f]{2,8}\})/i;
 
+/**
+ * Imported JSON or AI output can contain REAL ASCII control characters such
+ * as ESC (U+001B), rather than their editor spelling \\x1B. Treat them as
+ * game bytes only if the original record contains that very control code in
+ * the same sequence. Never quietly delete or insert a technical byte.
+ * Actual newlines/tabs and NUL are intentionally NOT auto-converted.
+ */
+export function normalizeGoldenSun2EmbeddedControls(text: string): string {
+  return text.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, char =>
+    "\\x" + char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")
+  );
+}
+
 export function goldenSun2TechnicalTokens(text: string): string[] {
-  return (text.match(CONTROL_TAG) || []).map(tag =>
+  return (normalizeGoldenSun2EmbeddedControls(text).match(CONTROL_TAG) || []).map(tag =>
     /^\\x/i.test(tag) ? "\\x" + tag.slice(-2).toUpperCase() :
     /^\{GS2:/i.test(tag) ? "{GS2:" + tag.slice(5, -1).toUpperCase() + "}" : tag
   );
@@ -52,7 +65,8 @@ export function validateGoldenSun2Translation(
 ): { valid: boolean; missingOrChanged: string[] } {
   const expected = goldenSun2TechnicalTokens(source);
   const actual = goldenSun2TechnicalTokens(translation);
-  const syntaxBad = WRONG_ESCAPE.test(translation) || WRONG_GS2.test(translation);
+  const normalized = normalizeGoldenSun2EmbeddedControls(translation);
+  const syntaxBad = WRONG_ESCAPE.test(normalized) || WRONG_GS2.test(normalized);
   const valid = !syntaxBad &&
     expected.length === actual.length &&
     expected.every((tag, i) => actual[i] === tag);

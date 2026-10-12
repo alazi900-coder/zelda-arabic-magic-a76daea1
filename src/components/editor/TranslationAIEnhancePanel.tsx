@@ -37,6 +37,7 @@ import { makeEnhanceCacheKey, enhanceCacheLookup, enhanceCacheStore, enhanceCach
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import { isTranslationExcludedText, type ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
+import { explainEnhancementProviderError } from "@/lib/enhance-provider-error";
 import {
   getActiveEnhancementRules, buildActiveEnhancementInstructions,
   filterDirectEnhancementFindings,
@@ -936,8 +937,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           if (data?.error) {
             // أظهر الخطأ في الأداة وفي toast لضمان رؤيته (الـ toast قد يُفوت).
             encounteredError = true;
-            setLastError(data.error);
-            toast({ title: data.error, variant: "destructive" });
+            const displayError = explainEnhancementProviderError(effectiveProvider, data.error);
+            setLastError(displayError);
+            toast({ title: displayError, variant: "destructive" });
             return { data: null, count: 0 };
           }
           if (data?._meta?.providerFallback && !fallbackNoticeShownRef.current) {
@@ -969,8 +971,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               if (retryError) throw retryError;
               if (data?.error) {
                 encounteredError = true;
-                setLastError(data.error);
-                toast({ title: data.error, variant: "destructive" });
+                const displayError = explainEnhancementProviderError(effectiveProvider, data.error);
+                setLastError(displayError);
+                toast({ title: displayError, variant: "destructive" });
                 return { data: null, count: 0 };
               }
               {
@@ -1003,7 +1006,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               if (body?.error) detail = String(body.error);
             }
           } catch { /* ignore body-read failures */ }
-          const msg = `فشل الاتصال بـ enhance-translations: ${detail.slice(0, 400)}`;
+          const msg = explainEnhancementProviderError(effectiveProvider, `فشل الاتصال بـ enhance-translations: ${detail.slice(0, 400)}`);
           encounteredError = true;
           setLastError(msg);
           toast({ title: msg, variant: "destructive" });

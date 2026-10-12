@@ -1318,10 +1318,16 @@ export function useEditorState() {
   }, [state?.entries]);
   const gtaIvNeedsModCount = gtaIvNeedsModKeys.size;
 
+  // Golden Sun II: show the same exact problematic rows in the deep filter
+  // that will be encountered by the ROM builder (hidden Unicode included).
+  const gs2BuildIssueKeys = useMemo(() => new Set(
+    state ? scanGoldenSun2BuildTranslations(state.entries, state.translations).map(f => f.key) : [],
+  ), [state?.entries, state?.translations]);
+
   // === Deep diagnostic counts — uses shared predicates so the dropdown
   // badge count is GUARANTEED to match the filteredEntries length. ===
   const deepDiagnosticCounts = useMemo(() => {
-    const counts = { xenoNMissing: 0, excessiveLines: 0, byteBudget: 0, newlineDiff: 0, breakMissing: 0, identicalOriginal: 0 };
+    const counts = { xenoNMissing: 0, excessiveLines: 0, byteBudget: 0, newlineDiff: 0, breakMissing: 0, identicalOriginal: 0, gs2BuildIssues: gs2BuildIssueKeys.size };
     if (!state) return counts;
     for (const e of state.entries) {
       const key = `${e.msbtFile}:${e.index}`;
@@ -1335,7 +1341,7 @@ export function useEditorState() {
       if (deepDiagPredicates.identicalOriginal(e.original, translation)) counts.identicalOriginal++;
     }
     return counts;
-  }, [state?.entries, state?.translations]);
+  }, [state?.entries, state?.translations, gs2BuildIssueKeys]);
 
   // === Extract unique BDAT table and column names from labels ===
   const bdatTableNames = useMemo(() => {
@@ -1461,6 +1467,7 @@ export function useEditorState() {
         (filterStatus === "steinsgate-unsupported" && steinsGateUnsupportedFilterKeys.has(key)) ||
         (filterStatus === "inazuma-unsupported" && inazumaUnsupportedFilterKeys.has(key)) ||
         (filterStatus === "goldensun-unsupported" && goldenSunUnsupportedFilterKeys.has(key)) ||
+        (filterStatus === "gs2-build-issues" && gs2BuildIssueKeys.has(key)) ||
         (filterStatus === "crashlands-chinese" && crashlandsChineseKeys.has(key)) ||
         // Rows written entirely in capitals — move and ability names, menu
         // labels. Latin letters must be present and none may be lowercase; a
@@ -1490,7 +1497,7 @@ export function useEditorState() {
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
       return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenSection;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys, platUnsupportedKeys, inazumaUnsupportedFilterKeys, goldenSunUnsupportedFilterKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys, platUnsupportedKeys, inazumaUnsupportedFilterKeys, goldenSunUnsupportedFilterKeys, gs2BuildIssueKeys]);
 
   useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection]);
 

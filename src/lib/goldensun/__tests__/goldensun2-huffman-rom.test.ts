@@ -150,7 +150,7 @@ describe("The Lost Age complete extraction and rebuild", () => {
     expect(result.translatedLines).toBe(1);
     const entries = extractGoldenSun2Strings(result.rom);
     expect(entries[9].original).toBe(longText);
-    expect(entries[9].original.match(/\\\\x03/g)).toHaveLength(1);
+    expect(entries[9].original.match(/\\x03/g)).toHaveLength(1);
     expect(entries[8].original).toBe("A\\x03");
     expect(entries[10].original).toBe("A\\x03");
   }, 60000);

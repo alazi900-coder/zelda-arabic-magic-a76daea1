@@ -28,6 +28,8 @@ export interface AlborihiDirectRequest {
   extraInstructions?: string;
   game?: string;
   signal?: AbortSignal;
+  /** Optional total deadline for the whole request including retries; used by QA scans. */
+  timeoutMs?: number;
 }
 
 class AlborihiDirectError extends Error {
@@ -95,14 +97,28 @@ Preserve every technical token, control code, placeholder, rich-text tag, variab
  */
 async function requestCompletion(request: AlborihiDirectRequest & { system: string; user: string }): Promise<string> {
   const model = request.model?.trim() || ALBORIHI_DEFAULT_MODEL;
-
+  // Enhancement checks may hit slow models. Unlike a user cancel, a timeout
+  // must be reported as a visible error, never silently treated as 'stopped'.
+  const limit = request.timeoutMs && Number.isFinite(request.timeoutMs) && request.timeoutMs > 0
+    ? request.timeoutMs : 0;
+  const deadlineController = limit ? new AbortController() : null;
+  let expired = false;
+  const cancelFromParent = () => deadlineController?.abort();
+  if (request.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  request.signal?.addEventListener('abort', cancelFromParent, { once: true });
+  const deadlineTimer = deadlineController ? globalThis.setTimeout(() => {
+    expired = true;
+    deadlineController.abort();
+  }, limit) : null;
+  const signal = deadlineController?.signal || request.signal;
+  try {
   let response: Response | undefined;
   let payload: unknown = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       response = await fetch(ALBORIHI_PROXY_URL(), {
         method: 'POST',
-        signal: request.signal,
+        signal,
         headers: getSupabaseHeaders(),
         body: JSON.stringify({
           action: 'chat',
@@ -115,7 +131,7 @@ async function requestCompletion(request: AlborihiDirectRequest & { system: stri
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
-      if (request.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (request.signal?.aborted || signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       if (!(error instanceof TypeError)) throw error;
       if (attempt === 2) {
         // A TypeError here is the browser refusing a response it could not
@@ -131,14 +147,14 @@ async function requestCompletion(request: AlborihiDirectRequest & { system: stri
           502,
         );
       }
-      await waitForRetry(700 * (attempt + 1), request.signal);
+      await waitForRetry(700 * (attempt + 1), signal);
       continue;
     }
 
     const raw = await response.text();
     try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
     if (response.ok || !isRetryableStatus(response.status) || attempt === 2) break;
-    await waitForRetry(700 * (attempt + 1), request.signal);
+    await waitForRetry(700 * (attempt + 1), signal);
   }
   if (!response) throw new AlborihiDirectError('تعذر بدء طلب البريهي.', 502);
   if (!response.ok) throw new AlborihiDirectError(errorMessage(payload, response.status), response.status);
@@ -150,6 +166,15 @@ async function requestCompletion(request: AlborihiDirectRequest & { system: stri
     throw new AlborihiDirectError('استجابة البريهي لا تحتوي نصاً صالحاً.', 502);
   }
   return content;
+  } catch (error) {
+    if (expired) {
+      throw new AlborihiDirectError(`انتهت مهلة انتظار البريهي بعد ${Math.ceil(limit / 1000)} ثانية. خفّض حجم الفحص أو جرّب نموذجاً أسرع.`, 504);
+    }
+    throw error;
+  } finally {
+    if (deadlineTimer !== null) globalThis.clearTimeout(deadlineTimer);
+    request.signal?.removeEventListener('abort', cancelFromParent);
+  }
 }
 
 /**
@@ -179,6 +204,7 @@ export interface AlborihiJsonRequest {
   system: string;
   user: string;
   signal?: AbortSignal;
+  timeoutMs?: number;
 }
 
 /**

@@ -198,6 +198,60 @@ describe("The Lost Age complete extraction and rebuild", () => {
     })).toThrow(/technical control codes differ/);
   }, 30000);
 
+  it("forced build strips an extra explicit ESC, while strict build refuses it", () => {
+    const rom = makeFixture();
+    const key = GS2_TEXT_FILE + ":9";
+    const translation = String.raw`Welcome\x1B\x03`;
+    expect(() => buildGoldenSun2StringTable(rom, { [key]: translation }))
+      .toThrow(/technical control codes differ/);
+    const result = buildGoldenSun2StringTable(rom, { [key]: translation }, { forceBuild: true });
+    expect(result.translatedLines).toBe(1);
+    expect(result.removedExtraControlTags).toBe(1);
+    expect(result.skippedUnsafeTranslations).toBe(0);
+    expect(extractGoldenSun2Strings(result.rom)[9].original).toBe(String.raw`Welcome\x03`);
+    expect(translation).toContain(String.raw`\x1B`);
+  }, 60000);
+
+  it("forced build omits unsupported glyphs, reports deletions, and leaves saved edits untouched", () => {
+    const rom = makeFixture();
+    const key = GS2_TEXT_FILE + ":9";
+    const translation = "Welcome🙂!" + String.raw`\x03`;
+    expect(() => buildGoldenSun2StringTable(rom, { [key]: translation }))
+      .toThrow(/unsupported character/);
+    const result = buildGoldenSun2StringTable(rom, { [key]: translation }, { forceBuild: true });
+    expect(result.omittedUnsupportedCharacters).toBe(1);
+    expect(result.translatedLines).toBe(1);
+    expect(extractGoldenSun2Strings(result.rom)[9].original).toBe(String.raw`Welcome!\x03`);
+    expect(translation).toContain("🙂");
+  }, 60000);
+
+  it("forced build keeps original text if an essential command was removed", () => {
+    const rom = makeFixture();
+    const original = String.raw`B\x03`;
+    const missing = "Broken";
+    const good = String.raw`Working\x03`;
+    const edits = { [GS2_TEXT_FILE + ":9"]: missing, [GS2_TEXT_FILE + ":10"]: good };
+    const result = buildGoldenSun2StringTable(rom, edits, { forceBuild: true });
+    expect(result.skippedUnsafeTranslations).toBe(1);
+    expect(result.skippedIndexes).toEqual([9]);
+    expect(result.translatedLines).toBe(1);
+    const entries = extractGoldenSun2Strings(result.rom);
+    expect(entries[9].original).toBe(original);
+    expect(entries[10].original).toBe(good);
+    expect(edits[GS2_TEXT_FILE + ":9"]).toBe(missing);
+  }, 60000);
+
+  it("forced build skips Arabic without the required font patch rather than destroying text", () => {
+    const rom = makeFixture();
+    const result = buildGoldenSun2StringTable(rom, {
+      [GS2_TEXT_FILE + ":2"]: String.raw`مرحبًا\x03`,
+    }, { forceBuild: true });
+    expect(result.skippedUnsafeTranslations).toBe(1);
+    expect(result.translatedLines).toBe(0);
+    expect(result.rom.length).toBe(rom.length);
+    expect(result.skippedIndexes).toEqual([2]);
+  }, 30000);
+
   it("refuses broken control tags and Arabic without the game's patched font", () => {
     const rom = makeFixture();
     expect(() => buildGoldenSun2StringTable(rom, {

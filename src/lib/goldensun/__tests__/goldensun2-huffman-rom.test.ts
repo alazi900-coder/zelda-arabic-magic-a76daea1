@@ -18,8 +18,8 @@ function ptr(at: number) { return (0x08000000 + at) >>> 0; }
 function makeFixture(): Uint8Array {
   const rom = new Uint8Array(GS2_ORIGINAL_ROM_SIZE);
   rom.set([65, 71, 70, 69], 0xac); // AGFE
-  // Include realistic large-font width records for the new pixel-wrap gate.
-  // The real ROM always carries this table; the synthetic ROM did not.
+  // Include the large-font table even though the ROM builder no longer
+  // examines dialogue widths. Other font-specific tests use this fixture.
   for (let code = 0x21; code <= 0xff; code++) {
     rom[0x5a4e0 + (code - 0x20) * 32] = 5;
   }
@@ -137,6 +137,22 @@ describe("The Lost Age complete extraction and rebuild", () => {
     const after = extractGoldenSun2Strings(built.rom);
     expect(after[45].original).toBe("Welcome!\\x03");
     expect(after[46].original).toBe("A\\x03");
+  }, 60000);
+
+  it("builds dialogue beyond two lines without inserting breaks or refusing its width", () => {
+    const rom = makeFixture();
+    const key = GS2_TEXT_FILE + ":9";
+    const sentence = "This sentence intentionally runs far beyond the old GBA dialogue window. ";
+    const longText = sentence.repeat(3).trim() + "\\x03";
+    // Previous builder rejected this as needing more than two physical rows,
+    // despite the translation preserving the exact original 0x03 token.
+    const result = buildGoldenSun2StringTable(rom, { [key]: longText });
+    expect(result.translatedLines).toBe(1);
+    const entries = extractGoldenSun2Strings(result.rom);
+    expect(entries[9].original).toBe(longText);
+    expect(entries[9].original.match(/\\\\x03/g)).toHaveLength(1);
+    expect(entries[8].original).toBe("A\\x03");
+    expect(entries[10].original).toBe("A\\x03");
   }, 60000);
 
   it("refuses broken control tags and Arabic without the game's patched font", () => {

@@ -256,7 +256,16 @@ describe("The Lost Age complete extraction and rebuild", () => {
     const rom = makeFixture();
     const key9 = GS2_TEXT_FILE + ":9";
     const key10 = GS2_TEXT_FILE + ":10";
-    const veryLong = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ".repeat(45) + "\\x03";
+    // Repeat-pattern strings compress extremely well under the game's
+    // context-dependent Huffman coding. Use deterministic varied characters
+    // so the resulting 1700-byte text stays under the 2000-byte decoder
+    // guard but exceeds its per-record 254-byte compressed length field.
+    let seed = 127381;
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+    const veryLong = Array.from({ length: 1700 }, () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return alphabet[(seed >>> 16) % alphabet.length];
+    }).join("") + "\\x03";
     expect(() => buildGoldenSun2StringTable(rom, { [key9]: veryLong }))
       .toThrow(/حجمه بعد الضغط/);
     const built = buildGoldenSun2StringTable(rom, {

@@ -33,6 +33,7 @@ import { measureEntryBytes } from "@/lib/entry-bytes";
 import { extractFormatSpecifiers, diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { gtaIvRuntimeTextToEditorText } from "@/lib/gtaiv/gtaiv-line-split";
+import { diagnoseGoldenSun2Translation, isGoldenSun2DiagnosticEntry } from "@/lib/goldensun/goldensun2-deep-diagnostic";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types
@@ -189,6 +190,32 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   const issues: DiagnosticIssue[] = [];
   const base = { key, label: entry.label, original: entry.original, translation };
   const isGtaIv = entry.msbtFile.startsWith("gtaiv/");
+  // AGFE is NOT Xenoblade: it uses ordered \\xNN command bytes, its own RTL
+  // renderer, and no two-line layout gate. Generic bracket/byte-budget/line
+  // repair rules can corrupt a correct Golden Sun translation, so route to
+  // the cartridge-specific checks before any generic diagnostics run.
+  if (isGoldenSun2DiagnosticEntry(entry.msbtFile)) {
+    const check = diagnoseGoldenSun2Translation(entry.original, translation);
+    if (check.unexpectedCount > 0) {
+      issues.push({
+        ...base, severity: "critical", category: "gs2_unexpected_controls",
+        message: check.unexpectedCount + " رمز زائد/مخفي في Golden Sun II: " +
+          check.unexpectedCodes.join("، ") +
+          (check.safeToRepair ? " — يمكن حذفه مع الحفاظ على وسوم اللعبة الأصلية" : " — راجع الوسوم الأصلية قبل الإصلاح"),
+      });
+    }
+    if (!check.validTokens && !check.safeToRepair) {
+      issues.push({
+        ...base, severity: "critical", category: "gs2_token_mismatch",
+        message: "رموز التحكم في Golden Sun II لا تطابق المصدر؛ المتوقع: " +
+          (check.expectedTokens.join(" ") || "لا توجد") +
+          "، الموجود: " + (check.actualTokens.join(" ") || "لا توجد") +
+          " — لا تُحذف أكواد المصدر ولا تُبدّل ترتيبها",
+      });
+    }
+    return issues;
+  }
+
   if (entry.msbtFile.startsWith("steinsgate/") && trimmed) {
     const check = validateSteinsGateTags(entry.original, translation);
     if (!check.valid) issues.push({ ...base, severity: "critical", category: "tag_mismatch", message: `وسوم Steins;Gate أو فواصل الأسطر مختلفة: ${check.reason}` });

@@ -245,6 +245,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   const [fe12UnsupportedCharacters, setFe12UnsupportedCharacters] = useState<Fe12UnsupportedCharacter[]>([]);
   const [phBuilding, setPhBuilding] = useState(false);
   const [gsBuilding, setGsBuilding] = useState(false);
+  const [gs2ForceBuild, setGs2ForceBuild] = useState(false);
   const [goldenSunSource, setGoldenSunSource] = useState<string | null>(null);
   useEffect(() => {
     if (!isGoldenSun) { setGoldenSunSource(null); return; }
@@ -806,8 +807,13 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         await editor.forceSave();
         const buffer = await idbGet<ArrayBuffer>(GOLDENSUN2_BUFFER_KEY);
         if (!buffer) throw new Error("ROM الجزء الثاني غير محفوظة — ارفعها من صفحة Golden Sun");
-        const { rom, translatedLines, fontReady, removedHiddenControls } = buildGoldenSun2StringTable(
-          new Uint8Array(buffer), editor.state?.translations || {}
+        const {
+          rom, translatedLines, fontReady, removedHiddenControls,
+          removedExtraControlTags, omittedUnsupportedCharacters,
+          skippedUnsafeTranslations, skippedIndexes,
+        } = buildGoldenSun2StringTable(
+          new Uint8Array(buffer), editor.state?.translations || {},
+          { forceBuild: gs2ForceBuild },
         );
         const blob = new Blob([rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
         const url = URL.createObjectURL(blob);
@@ -824,6 +830,17 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           "تنظيف رموز تحكم مخفية زائدة",
           { description: "أُزيل " + removedHiddenControls + " رمز تحكم غير موجود في النصوص الأصلية من نسخة ROM فقط. ترجمات المحرر المحفوظة لم تتغير." }
         );
+        if (gs2ForceBuild) {
+          sonnerToast.warning("اكتمل البناء الإجباري لروم Golden Sun II", {
+            description: "الترجمات المقبولة: " + translatedLines +
+              " | نصوص غير آمنة أُبقيت بلغتها الأصلية: " + skippedUnsafeTranslations +
+              (skippedIndexes.length ? " (أرقامها: " + skippedIndexes.slice(0, 10).join("، ") + (skippedIndexes.length > 10 ? "…" : "") + ")" : "") +
+              " | رموز تقنية زائدة حُذفت: " + (removedHiddenControls + removedExtraControlTags) +
+              " | حروف بلا خانة حُذفت: " + omittedUnsupportedCharacters +
+              ". لم تتغيّر الترجمات المحفوظة.",
+            duration: 15000,
+          });
+        }
         if (!fontReady) sonnerToast.warning("النسخة المبنية بلا خط عربي/RTL؛ لتظهر الحروف العربية استخدم ROM ذات رقعة الخط المتوافقة.");
         return;
       }
@@ -1575,14 +1592,37 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
             {phBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء روم Phantom Hourglass معرّب وتنزيله
           </Button>
         ) : isGoldenSun ? (
-          <Button size="lg" onClick={handleGoldenSunBuild} disabled={gsBuilding || !goldenSunSource} className="flex-1 min-w-[200px] font-display font-bold" title={goldenSunSource === GOLDENSUN2_SOURCE_GAME ? "يصدر كتالوج الترجمات بعد فحص الرموز، ولا يبني ROM الجزء الثاني بعد" : "يعيد ضغط النص المترجم للجزء الأول داخل الروم ثم ينزّله"}>
-            {gsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />}
-            {goldenSunSource === GOLDENSUN2_SOURCE_GAME
-              ? editor.state?.entries?.[0]?.msbtFile === GS2_TEXT_FILE
-                ? "بناء GBA للجزء الثاني مع فحص النصوص الـ ١٢٬٢٨٨"
-                : "فحص الوسوم وتصدير كتالوج الجزء الثاني JSON"
-              : "بناء روم Golden Sun الجزء الأول معرّب وتنزيله"}
-          </Button>
+          <>
+            {goldenSunSource === GOLDENSUN2_SOURCE_GAME &&
+             editor.state?.entries?.[0]?.msbtFile === GS2_TEXT_FILE && (
+              <label className="basis-full flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm font-body cursor-pointer">
+                <input
+                  type="checkbox"
+                  data-testid="gs2-force-build"
+                  checked={gs2ForceBuild}
+                  onChange={(e) => setGs2ForceBuild(e.target.checked)}
+                  disabled={gsBuilding}
+                  className="mt-1 shrink-0"
+                />
+                <span>
+                  <strong className="block">🛠️ البناء الإجباري — Golden Sun II</strong>
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    عند التفعيل: يتجاوز أخطاء الحروف غير المدعومة والرموز التقنية الزائدة.
+                    إذا فقد نصٌّ رمزًا أصليًا ضروريًا يُبقي ذلك النص بلغته الأصلية بدلاً من إفساد بيانات الروم.
+                    ستظهر أعداد النصوص المتجاوزة والمحذوفات بعد البناء. لا يغيّر الترجمات المحفوظة.
+                  </span>
+                </span>
+              </label>
+            )}
+            <Button size="lg" onClick={handleGoldenSunBuild} disabled={gsBuilding || !goldenSunSource} className="flex-1 min-w-[200px] font-display font-bold" title={goldenSunSource === GOLDENSUN2_SOURCE_GAME ? "يعيد بناء روم الجزء الثاني أو يصدّر الكتالوج بحسب المصدر المفتوح" : "يعيد ضغط النص المترجم للجزء الأول داخل الروم ثم ينزّله"}>
+              {gsBuilding ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />}
+              {goldenSunSource === GOLDENSUN2_SOURCE_GAME
+                ? editor.state?.entries?.[0]?.msbtFile === GS2_TEXT_FILE
+                  ? gs2ForceBuild ? "🛠️ بناء روم GBA للجزء الثاني إجباريًا" : "بناء GBA للجزء الثاني مع فحص النصوص الـ ١٢٬٢٨٨"
+                  : "فحص الوسوم وتصدير كتالوج الجزء الثاني JSON"
+                : "بناء روم Golden Sun الجزء الأول معرّب وتنزيله"}
+            </Button>
+          </>
         ) : isMother3 ? (
           <Button size="lg" onClick={handleMother3Build} disabled={m3Building} className="flex-1 min-w-[200px] font-display font-bold">
             {m3Building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء ROM معرّب وتنزيله
